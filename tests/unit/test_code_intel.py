@@ -932,8 +932,56 @@ class TestInstaller:
 
         entry = _build_server_entry("/tmp/project")
         assert entry["command"] is not None
+        assert "--local-only" in entry["args"]
         assert "--project" in entry["args"]
         assert "/tmp/project" in entry["args"]
+
+    def test_build_server_entry_local_only_false_omits_flag(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from attocode.code_intel.installer import _build_server_entry
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        entry = _build_server_entry("/tmp/project", local_only=False)
+        assert "--local-only" not in entry["args"]
+        assert "--project" in entry["args"]
+
+    def test_find_command_uv_when_pyproject_has_entry(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from attocode.code_intel.installer import _find_command
+
+        (tmp_path / "pyproject.toml").write_text(
+            "[project.scripts]\nattocode-code-intel = \"attocode.code_intel.server:main\"\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/fake/bin/uv" if name == "uv" else None,
+        )
+        assert _find_command(str(tmp_path)) == "uv run attocode-code-intel"
+
+    def test_find_command_prefers_uv_over_path_binary_when_pyproject_declares_script(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        """MCP hosts often lack the same PATH as an interactive shell."""
+        from attocode.code_intel.installer import _find_command
+
+        (tmp_path / "pyproject.toml").write_text(
+            "[project.scripts]\nattocode-code-intel = \"attocode.code_intel.server:main\"\n",
+            encoding="utf-8",
+        )
+
+        def _which(name: str) -> str | None:
+            if name == "uv":
+                return "/fake/bin/uv"
+            if name == "attocode-code-intel":
+                return "/fake/bin/attocode-code-intel"
+            return None
+
+        monkeypatch.setattr("shutil.which", _which)
+        assert _find_command(str(tmp_path)) == "uv run attocode-code-intel"
 
     def test_install_json_cursor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import install_json_config
@@ -949,6 +997,7 @@ class TestInstaller:
         data = json.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcpServers"]
         server = data["mcpServers"]["attocode-code-intel"]
+        assert "--local-only" in server["args"]
         assert "--project" in server["args"]
 
     def test_install_json_windsurf(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1029,6 +1078,7 @@ class TestInstaller:
         assert result is True
         assert len(captured_cmds) == 1
         assert "--project" not in captured_cmds[0]
+        assert "--local-only" in captured_cmds[0]
 
     def test_install_claude_global_with_explicit_project(self, monkeypatch: pytest.MonkeyPatch):
         """Global install with explicit --project should include --project."""
@@ -1055,6 +1105,7 @@ class TestInstaller:
         assert len(captured_cmds) == 1
         assert "--project" in captured_cmds[0]
         assert "/some/path" in captured_cmds[0]
+        assert "--local-only" in captured_cmds[0]
 
     def test_install_codex_local(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import install_codex
@@ -1070,6 +1121,7 @@ class TestInstaller:
         data = tomllib.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcp_servers"]
         server = data["mcp_servers"]["attocode-code-intel"]
+        assert "--local-only" in server["args"]
         assert "--project" in server["args"]
 
     def test_install_codex_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1103,7 +1155,7 @@ class TestInstaller:
         server = data["mcp_servers"]["attocode-code-intel"]
         assert "--project" in server["args"]
         assert "/some/project" in server["args"]
-        assert "--local-only" not in server["args"]
+        assert "--local-only" in server["args"]
 
     def test_install_codex_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import tomli_w
@@ -1160,6 +1212,7 @@ class TestInstaller:
         assert result is True
         assert len(captured_cmds) == 1
         assert "--project" in captured_cmds[0]
+        assert "--local-only" in captured_cmds[0]
 
     # -- VS Code --
 
@@ -1177,6 +1230,7 @@ class TestInstaller:
         data = json.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcpServers"]
         server = data["mcpServers"]["attocode-code-intel"]
+        assert "--local-only" in server["args"]
         assert "--project" in server["args"]
 
     def test_uninstall_json_vscode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1297,6 +1351,7 @@ class TestInstaller:
         assert "command" in entry
         assert "path" in entry["command"]
         assert "args" in entry["command"]
+        assert "--local-only" in entry["command"]["args"]
 
     def test_install_zed_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import install_zed
@@ -1614,6 +1669,48 @@ class TestInstaller:
         assert config_path.exists()
         data = json.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_gsd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install("gsd", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".gsd" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["servers"]
+        gsd_entry = data["servers"]["attocode-code-intel"]
+        assert "--local-only" in gsd_entry["args"]
+        assert "--project" in gsd_entry["args"]
+
+    def test_install_gsd_global(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install("gsd", project_dir=str(tmp_path / "proj"), scope="user")
+        assert result is True
+
+        config_path = tmp_path / ".gsd" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["servers"]
+        gsd_entry = data["servers"]["attocode-code-intel"]
+        assert "--local-only" in gsd_entry["args"]
+
+    def test_uninstall_gsd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install, uninstall
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install("gsd", project_dir=str(tmp_path))
+        result = uninstall("gsd", project_dir=str(tmp_path))
+        assert result is True
+        data = json.loads((tmp_path / ".gsd" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("servers", {})
 
     def test_install_dispatch_opencode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """install('opencode') should auto-install, not print manual instructions."""
@@ -1933,7 +2030,7 @@ class TestCLIDispatch:
 
         dispatch_code_intel(["status"])
         captured = capsys.readouterr()
-        for target_name in ["Claude Code", "Cursor", "Windsurf", "VS Code", "Codex",
+        for target_name in ["Claude Code", "Cursor", "Windsurf", "VS Code", "GSD", "Codex",
                             "Claude Desktop", "Cline", "Zed"]:
             assert target_name in captured.out, f"Missing '{target_name}' in status output"
 

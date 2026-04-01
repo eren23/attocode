@@ -1,11 +1,18 @@
 {
   "mcpServers": {
     "attocode-code-intel": {
-      "command": "attocode-code-intel",
+      "command": "uv",
       "args": [
+        "run",
+        "attocode-code-intel",
         "--project",
-        "/Users/eren/Documents/AI/first-principles-agent"
-      ]
+        "${workspaceFolder}",
+        "--local-only"
+      ],
+      "type": "stdio",
+      "env": {
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:${env:PATH}"
+      }
     }
   }
 }

@@ -63,38 +63,86 @@ ALL_TARGETS: tuple[str, ...] = AUTO_INSTALL_TARGETS + MANUAL_TARGETS
 ALL_TARGETS_STR: str = ", ".join(ALL_TARGETS)
 
 
-def _find_command() -> str:
+def _find_command(project_dir: str | None = None) -> str:
     """Determine the right command to invoke the MCP server.
 
-    Checks for the installed entry point first, then falls back to
-    `python -m attocode.code_intel.server`.
+    Resolution order:
+    1. ``uv run attocode-code-intel`` when ``uv`` is available and the target
+       project's ``pyproject.toml`` declares the script — MCP hosts often spawn
+       subprocesses with a minimal PATH, so this is preferred for dev clones.
+    2. ``attocode-code-intel`` on PATH (pipx / global install).
+    3. ``python -m attocode.code_intel.server`` using the current interpreter.
     """
-    # Check if attocode-code-intel entry point is on PATH
+    base = Path(project_dir or ".").resolve()
+    pyproject = base / "pyproject.toml"
+    if shutil.which("uv") and pyproject.is_file():
+        try:
+            text = pyproject.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        if "attocode-code-intel" in text:
+            return "uv run attocode-code-intel"
+
     if shutil.which("attocode-code-intel"):
         return "attocode-code-intel"
 
-    # Fall back to module invocation
     return f"{sys.executable} -m attocode.code_intel.server"
 
 
 def _build_server_entry(
     project_dir: str | None,
     *,
-    local_only: bool = False,
+    local_only: bool = True,
+    vscode_cursor_stdio: bool = False,
 ) -> dict:
-    """Build the MCP server config dict for JSON/TOML-based configs."""
-    cmd = _find_command()
+    """Build the MCP server config dict for JSON/TOML-based configs.
+
+    By default, ``--local-only`` is included so the stdio MCP process does not
+    auto-load ``.attocode/config.toml`` remote settings (which often point at
+    ``http://127.0.0.1:8080`` and break tools with connection refused when no
+    HTTP server is running). Pass ``local_only=False`` only if you intentionally
+    proxy MCP tools through a reachable remote code-intel API.
+
+    When ``vscode_cursor_stdio`` is True (Cursor, VS Code family, etc.), the
+    entry matches `Cursor MCP stdio requirements`_:
+
+    - ``"type": "stdio"`` (required for correct routing in Cursor)
+    - ``--project`` set to ``${workspaceFolder}`` so the subprocess always
+      indexes the folder that contains ``.cursor/mcp.json``, even when the
+      MCP host's cwd differs from the workspace root
+    - On macOS, ``PATH`` is prefixed with Homebrew locations so ``uv`` is
+      found when the host spawns the server with a minimal environment
+
+    .. _Cursor MCP stdio requirements: https://cursor.com/docs/mcp
+    """
+    resolve_dir = project_dir if project_dir is not None else "."
+    cmd = _find_command(resolve_dir)
     parts = cmd.split()
     command = parts[0]
     args = parts[1:]
     if local_only:
         args.append("--local-only")
     if project_dir is not None:
-        args += ["--project", os.path.abspath(project_dir)]
-    return {
+        if vscode_cursor_stdio:
+            args += ["--project", "${workspaceFolder}"]
+        else:
+            args += ["--project", os.path.abspath(project_dir)]
+
+    entry: dict = {
         "command": command,
         "args": args,
     }
+    if vscode_cursor_stdio:
+        entry["type"] = "stdio"
+        if platform.system() == "Darwin":
+            entry["env"] = {
+                "PATH": "/opt/homebrew/bin:/usr/local/bin:${env:PATH}",
+            }
+        elif platform.system() != "Windows":
+            entry["env"] = {
+                "PATH": "/usr/local/bin:/usr/bin:${env:PATH}",
+            }
+    return entry
 
 
 def install_claude(project_dir: str = ".", scope: str = "local") -> bool:
@@ -111,10 +159,11 @@ def install_claude(project_dir: str = ".", scope: str = "local") -> bool:
         print("Error: `claude` CLI not found. Install Claude Code first.", file=sys.stderr)
         return False
 
-    cmd = _find_command()
+    cmd = _find_command(project_dir)
     parts = cmd.split()
     command = parts[0]
     server_args = parts[1:]
+    server_args.append("--local-only")
 
     # For local installs (or explicit --project), bake in the absolute path.
     # For global installs without explicit --project, omit it so the server
@@ -190,7 +239,10 @@ def install_json_config(
             existing = json.loads(config_path.read_text(encoding="utf-8"))
 
     servers = existing.setdefault("mcpServers", {})
-    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+    servers["attocode-code-intel"] = _build_server_entry(
+        project_dir,
+        vscode_cursor_stdio=True,
+    )
 
     config_path.write_text(
         json.dumps(existing, indent=2) + "\n",
@@ -286,11 +338,8 @@ def install_codex(project_dir: str = ".", scope: str = "local") -> bool:
         with contextlib.suppress(tomllib.TOMLDecodeError, OSError):
             existing = tomllib.loads(config_path.read_text(encoding="utf-8"))
 
-    local_only = scope == "user" and project_dir == "."
-    entry = _build_server_entry(
-        None if local_only else project_dir,
-        local_only=local_only,
-    )
+    omit_project = scope == "user" and project_dir == "."
+    entry = _build_server_entry(None if omit_project else project_dir)
     servers = existing.setdefault("mcp_servers", {})
     servers["attocode-code-intel"] = {
         "command": entry["command"],
@@ -550,10 +599,14 @@ def _build_zed_server_entry(project_dir: str) -> dict:
 
     Zed uses a nested ``{"command": {"path": ..., "args": [...]}}`` schema.
     """
-    cmd = _find_command()
+    cmd = _find_command(project_dir)
     parts = cmd.split()
     command = parts[0]
-    args = parts[1:] + ["--project", os.path.abspath(project_dir)]
+    args = parts[1:] + [
+        "--local-only",
+        "--project",
+        os.path.abspath(project_dir),
+    ]
     return {
         "command": {
             "path": command,

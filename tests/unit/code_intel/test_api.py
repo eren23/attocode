@@ -1,4 +1,4 @@
-"""Integration tests for the HTTP API (38 routes).
+"""Integration tests for the HTTP API (analysis + health routes).
 
 Uses httpx.AsyncClient + ASGITransport with a mocked CodeIntelService.
 Tests HTTP routing, status codes, request parsing, and auth — NOT the
@@ -45,8 +45,28 @@ def _make_mock_service(project_dir: str = "/tmp/test-project") -> MagicMock:
     ):
         getattr(svc, method).return_value = f"stub:{method}"
 
+    svc.hydration_status.return_value = {
+        "tier": "small",
+        "phase": "ready",
+        "parse_coverage": 1.0,
+        "reference_coverage": 1.0,
+        "embedding_coverage": 0.5,
+        "total_files": 10,
+        "parsed_files": 10,
+        "elapsed_ms": 1.0,
+    }
+
     # Async methods
-    for method in ("lsp_definition", "lsp_references", "lsp_hover", "lsp_enrich"):
+    for method in (
+        "lsp_definition",
+        "lsp_references",
+        "lsp_hover",
+        "lsp_enrich",
+        "lsp_completions",
+        "lsp_workspace_symbol",
+        "lsp_incoming_calls",
+        "lsp_outgoing_calls",
+    ):
         setattr(svc, method, AsyncMock(return_value=f"stub:{method}"))
 
     # Internal methods used by reindex
@@ -280,6 +300,15 @@ async def test_bootstrap(client):
     r = await client.post("/api/v1/projects/default/bootstrap", json={})
     assert r.status_code == 200
     assert r.json()["result"] == "stub:bootstrap"
+
+
+@pytest.mark.asyncio
+async def test_hydration(client):
+    r = await client.get("/api/v1/projects/default/hydration")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tier"] == "small"
+    assert body["phase"] == "ready"
 
 
 @pytest.mark.asyncio
@@ -519,6 +548,47 @@ async def test_lsp_enrich(client):
     r = await client.post("/api/v1/projects/default/lsp/enrich", json={"files": ["a.py"]})
     assert r.status_code == 200
     assert r.json()["result"] == "stub:lsp_enrich"
+
+
+@pytest.mark.asyncio
+async def test_lsp_completions_v1(client):
+    r = await client.post(
+        "/api/v1/projects/default/lsp/completions",
+        json={"file": "a.py", "line": 0, "col": 0},
+        params={"limit": 10},
+    )
+    assert r.status_code == 200
+    assert r.json()["result"] == "stub:lsp_completions"
+
+
+@pytest.mark.asyncio
+async def test_lsp_workspace_symbol_v1(client):
+    r = await client.post(
+        "/api/v1/projects/default/lsp/workspace_symbol",
+        params={"query": "foo", "limit": 5},
+    )
+    assert r.status_code == 200
+    assert r.json()["result"] == "stub:lsp_workspace_symbol"
+
+
+@pytest.mark.asyncio
+async def test_lsp_incoming_calls_v1(client):
+    r = await client.post(
+        "/api/v1/projects/default/lsp/incoming_calls",
+        json={"file": "a.py", "line": 1, "col": 0},
+    )
+    assert r.status_code == 200
+    assert r.json()["result"] == "stub:lsp_incoming_calls"
+
+
+@pytest.mark.asyncio
+async def test_lsp_outgoing_calls_v1(client):
+    r = await client.post(
+        "/api/v1/projects/default/lsp/outgoing_calls",
+        json={"file": "a.py", "line": 1, "col": 0},
+    )
+    assert r.status_code == 200
+    assert r.json()["result"] == "stub:lsp_outgoing_calls"
 
 
 # ---------------------------------------------------------------------------
@@ -855,6 +925,7 @@ async def test_learning_feedback_non_integer_id_422(client):
     ("method", "path", "payload"),
     [
         ("get", "/api/v1/projects/default/map?branch=feature", None),
+        ("get", "/api/v1/projects/default/hydration?branch=feature", None),
         ("post", "/api/v1/projects/default/bootstrap?branch=feature", {}),
         ("post", "/api/v1/projects/default/search?branch=feature", {"query": "auth"}),
         ("post", "/api/v1/projects/default/graph/query?branch=feature", {"file": "foo.py"}),

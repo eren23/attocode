@@ -396,6 +396,25 @@ def _cmd_status() -> None:
         else:
             print(f"  {name}: not installed")
 
+    # GSD — project `.gsd/mcp.json` and user `~/.gsd/mcp.json` use ``servers`` key
+    gsd_project = Path(".gsd") / "mcp.json"
+    gsd_user = Path.home() / ".gsd" / "mcp.json"
+    gsd_found = False
+    for gsd_path, label in [(gsd_project, "installed"), (gsd_user, "installed (user)")]:
+        if gsd_path.exists():
+            try:
+                data = json.loads(gsd_path.read_text())
+                if "attocode-code-intel" in data.get("servers", {}):
+                    print(f"  GSD: {label}")
+                    gsd_found = True
+                    break
+            except Exception:
+                print("  GSD: unable to check")
+                gsd_found = True
+                break
+    if not gsd_found:
+        print("  GSD: not installed")
+
     # Check Codex (project-level)
     codex_cfg = Path(".codex/config.toml")
     if codex_cfg.exists():
@@ -478,11 +497,14 @@ def _cmd_status() -> None:
         print("  Zed: not installed")
 
     # Check if entry point is available
+    from attocode.code_intel.installer import _find_command
+
     print()
-    if shutil.which("attocode-code-intel"):
+    resolved = _find_command(".")
+    if resolved == "attocode-code-intel":
         print("  Entry point: attocode-code-intel (on PATH)")
     else:
-        print(f"  Entry point: {sys.executable} -m attocode.code_intel.server")
+        print(f"  Entry point: {resolved}")
 
 
 def _cmd_notify(args: list[str]) -> None:

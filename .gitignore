@@ -68,3 +68,6 @@ scripts/
 #gsd
 .gsd/
 .bg-shell/
+
+#cursor
+.cursor/

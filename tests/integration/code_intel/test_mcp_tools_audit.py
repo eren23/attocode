@@ -390,7 +390,7 @@ class TestAnalysisTools:
 
 
 class TestNavigationTools:
-    """navigation_tools.py: 8 tools."""
+    """navigation_tools.py: navigation + hydration + reindex."""
 
     @pytest.fixture(autouse=True)
     def _setup(self, tmp_path, monkeypatch):
@@ -430,6 +430,12 @@ class TestNavigationTools:
         from attocode.code_intel.tools.navigation_tools import bootstrap
         result = bootstrap(task_hint="testing", max_tokens=4000)
         assert isinstance(result, str)
+
+    def test_hydration_status(self):
+        from attocode.code_intel.tools.navigation_tools import hydration_status
+        result = hydration_status()
+        assert isinstance(result, str)
+        assert "Tier:" in result
 
     def test_conventions(self):
         from attocode.code_intel.tools.navigation_tools import conventions

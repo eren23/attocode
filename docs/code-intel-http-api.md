@@ -145,6 +145,7 @@ curl http://localhost:8080/api/v1/projects
 | `GET` | `/{id}/map` | `include_symbols`, `max_tokens` | Token-budgeted repository map |
 | `GET` | `/{id}/summary` | `max_tokens` | High-level project overview |
 | `POST` | `/{id}/bootstrap` | `task_hint`, `max_tokens` | All-in-one codebase orientation |
+| `GET` | `/{id}/hydration` | — | Progressive AST / embedding indexing status (JSON) |
 | `GET` | `/{id}/symbols` | `path` (required) | List symbols in a file |
 | `GET` | `/{id}/search-symbols` | `name` (required) | Fuzzy symbol search |
 | `GET` | `/{id}/dependencies` | `path` (required) | File dependencies (forward/reverse) |
