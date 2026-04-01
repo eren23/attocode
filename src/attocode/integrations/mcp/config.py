@@ -2,8 +2,10 @@
 
 Loads MCP server configs from multiple locations with a priority system:
 1. ~/.attocode/mcp.json (user-level defaults)
-2. <project_dir>/.attocode/mcp.json (project-level overrides)
-3. <project_dir>/.mcp.json (backward compatibility)
+2. ~/.gsd/mcp.json (GSD global defaults)
+3. <project_dir>/.attocode/mcp.json (project-level overrides)
+4. <project_dir>/.gsd/mcp.json (GSD project-level)
+5. <project_dir>/.mcp.json (backward compatibility)
 
 Later entries override earlier entries by server name.
 """
@@ -86,8 +88,10 @@ def load_mcp_configs(project_dir: str) -> list[MCPServerConfig]:
 
     Priority (later overrides earlier by server name):
     1. ``~/.attocode/mcp.json`` -- user-level defaults
-    2. ``<project_dir>/.attocode/mcp.json`` -- project-level overrides
-    3. ``<project_dir>/.mcp.json`` -- backward compatibility
+    2. ``~/.gsd/mcp.json`` -- GSD global defaults
+    3. ``<project_dir>/.attocode/mcp.json`` -- project-level overrides
+    4. ``<project_dir>/.gsd/mcp.json`` -- GSD project-level
+    5. ``<project_dir>/.mcp.json`` -- backward compatibility
 
     Returns:
         Deduplicated list of server configs with the highest-priority
@@ -98,7 +102,9 @@ def load_mcp_configs(project_dir: str) -> list[MCPServerConfig]:
 
     sources = [
         home / ".attocode" / "mcp.json",          # user-level
+        home / ".gsd" / "mcp.json",                # GSD global
         project / ".attocode" / "mcp.json",        # project-level
+        project / ".gsd" / "mcp.json",              # GSD project-level
         project / ".mcp.json",                      # backward compat
     ]
 

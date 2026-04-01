@@ -22,6 +22,7 @@ Supports:
 - Continue.dev: via `.continue/mcp.json`
 - Hermes Agent: via `~/.hermes/config.yaml`
 - Goose: via `~/.config/goose/config.yaml`
+- GSD: via `.gsd/mcp.json` or `~/.gsd/mcp.json`
 - IntelliJ: manual instructions
 """
 
@@ -49,7 +50,7 @@ AUTO_INSTALL_TARGETS: tuple[str, ...] = (
     # New targets:
     "opencode", "gemini-cli", "roo-code", "amazon-q",
     "copilot-cli", "junie", "kiro", "trae", "firebase",
-    "amp", "continue", "hermes", "goose",
+    "amp", "continue", "hermes", "goose", "gsd",
 )
 
 #: Targets that only support manual setup instructions.
@@ -1167,6 +1168,72 @@ def uninstall_goose() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# GSD — .gsd/mcp.json (project) or ~/.gsd/mcp.json (global)
+# ---------------------------------------------------------------------------
+
+
+def install_gsd(project_dir: str = ".", scope: str = "local") -> bool:
+    """Install into GSD via ``mcp.json``.
+
+    Args:
+        project_dir: Path to the project to index.
+        scope: "local" (project) or "user" (global ~/.gsd/).
+    """
+    if scope == "user":
+        config_path = Path.home() / ".gsd" / "mcp.json"
+    else:
+        config_path = Path(project_dir) / ".gsd" / "mcp.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    effective_dir = None if project_dir == "." and scope == "user" else project_dir
+    entry = _build_server_entry(effective_dir)
+
+    servers = existing.setdefault("servers", {})
+    servers["attocode-code-intel"] = entry
+
+    config_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_gsd(project_dir: str = ".", scope: str = "local") -> bool:
+    """Uninstall from GSD."""
+    if scope == "user":
+        config_path = Path.home() / ".gsd" / "mcp.json"
+    else:
+        config_path = Path(project_dir) / ".gsd" / "mcp.json"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    servers = existing.get("servers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Manual instruction targets (IntelliJ only)
 # ---------------------------------------------------------------------------
 
@@ -1252,6 +1319,8 @@ def install(target: str, project_dir: str = ".", scope: str = "local") -> bool:
         return install_hermes(project_dir)
     elif target == "goose":
         return install_goose(project_dir)
+    elif target == "gsd":
+        return install_gsd(project_dir, scope=scope)
     elif target in MANUAL_TARGETS:
         return print_manual_instructions(target, project_dir)
     else:
@@ -1292,6 +1361,8 @@ def uninstall(target: str, project_dir: str = ".", scope: str = "local") -> bool
         return uninstall_hermes()
     elif target == "goose":
         return uninstall_goose()
+    elif target == "gsd":
+        return uninstall_gsd(project_dir, scope=scope)
     elif target in MANUAL_TARGETS:
         print(f"Nothing to uninstall — {target} uses manual configuration.")
         return True
