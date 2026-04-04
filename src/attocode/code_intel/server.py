@@ -626,7 +626,12 @@ _instrument_all_tools()
 
 # Subcommands that should be dispatched to the CLI handler instead of
 # starting the MCP server.
-_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h", "query", "symbols", "impact", "hotspots", "deps", "dead-code", "gc", "verify", "reindex"}
+_CLI_SUBCOMMANDS = {
+    "install", "uninstall", "serve", "status", "probe-install", "notify",
+    "connect", "test-connection", "watch", "help", "--help", "-h",
+    "query", "symbols", "impact", "hotspots", "deps", "dead-code",
+    "gc", "verify", "reindex", "bundle",
+}
 
 
 def main() -> None:

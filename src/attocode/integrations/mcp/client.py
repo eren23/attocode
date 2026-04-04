@@ -30,7 +30,7 @@ def _expand_env(env: dict[str, str] | None) -> dict[str, str] | None:
     base = os.environ.copy()
     for key, val in env.items():
         expanded = re.sub(
-            r"\$\{(\w+)\}",
+            r"\$\{(?:env:)?(\w+)\}",
             lambda m: os.environ.get(m.group(1), ""),
             val,
         )
@@ -70,11 +70,13 @@ class MCPClient:
         server_args: list[str] | None = None,
         server_name: str = "",
         env: dict[str, str] | None = None,
+        cwd: str | None = None,
     ) -> None:
         self._command = server_command
         self._args = server_args or []
         self._server_name = server_name
         self._env = env
+        self._cwd = cwd
         self._process: asyncio.subprocess.Process | None = None
         self._tools: list[MCPTool] = []
         self._initialized = False
@@ -89,6 +91,7 @@ class MCPClient:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=_expand_env(self._env),
+            cwd=self._cwd,
         )
 
         # Send initialize request
