@@ -1,8 +1,7 @@
 """SQLite-backed vector store for semantic search.
 
-Stores embeddings as packed float32 BLOBs in SQLite. Uses linear scan
-for similarity — sufficient for typical codebases (5000 vectors,
-384-dim ~2ms scan).
+Stores embeddings as packed float32 BLOBs in SQLite. Uses numpy-accelerated
+batch cosine similarity with in-memory caching for fast retrieval.
 """
 
 from __future__ import annotations
@@ -15,6 +14,14 @@ import struct
 import threading
 from dataclasses import dataclass, field
 from typing import Any
+
+try:
+    import numpy as np
+
+    _HAS_NUMPY = True
+except ImportError:
+    np = None  # type: ignore[assignment]
+    _HAS_NUMPY = False
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +61,7 @@ def _unpack_vector(data: bytes, dim: int) -> list[float]:
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two vectors."""
+    """Compute cosine similarity between two vectors (pure Python fallback)."""
     if len(a) != len(b) or not a:
         return 0.0
     dot = sum(x * y for x, y in zip(a, b, strict=False))
@@ -65,9 +72,30 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
+def _batch_cosine_similarity(
+    query: np.ndarray,
+    matrix: np.ndarray,
+) -> np.ndarray:
+    """Vectorized cosine similarity: query (D,) vs matrix (N, D) → scores (N,).
+
+    Uses numpy BLAS for a single matrix-vector multiply instead of N Python loops.
+    """
+    query_norm = np.linalg.norm(query)
+    if query_norm == 0.0 or len(matrix) == 0:
+        return np.zeros(len(matrix), dtype=np.float32)
+
+    query_normed = query / query_norm
+    norms = np.linalg.norm(matrix, axis=1)
+
+    scores = np.zeros(len(matrix), dtype=np.float32)
+    mask = norms > 0
+    scores[mask] = (matrix[mask] @ query_normed) / norms[mask]
+    return scores
+
+
 @dataclass(slots=True)
 class VectorStore:
-    """SQLite-backed vector store.
+    """SQLite-backed vector store with numpy-accelerated search.
 
     Usage::
 
@@ -80,6 +108,11 @@ class VectorStore:
     dimension: int
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    # In-memory vector cache for numpy batch search
+    _vec_matrix: Any = field(default=None, repr=False)  # np.ndarray (N, D)
+    _vec_meta: list[tuple] | None = field(default=None, repr=False)
+    _vec_cache_version: int = field(default=0, repr=False)
+    _vec_loaded_version: int = field(default=-1, repr=False)
 
     def __post_init__(self) -> None:
         # Ensure directory exists
@@ -148,6 +181,7 @@ class VectorStore:
                     (str(self.dimension),),
                 )
                 conn.commit()
+                self._vec_cache_version += 1
         else:
             conn.execute(
                 "INSERT OR REPLACE INTO store_metadata (key, value) VALUES ('dimension', ?)",
@@ -167,6 +201,7 @@ class VectorStore:
                 (entry.id, entry.file_path, entry.chunk_type, entry.name, entry.text, packed),
             )
             conn.commit()
+            self._vec_cache_version += 1
 
     def upsert_batch(self, entries: list[VectorEntry]) -> None:
         """Batch insert/update vector entries."""
@@ -183,6 +218,7 @@ class VectorStore:
                 rows,
             )
             conn.commit()
+            self._vec_cache_version += 1
 
     def delete_by_file(self, file_path: str) -> int:
         """Delete all entries for a file. Returns count deleted."""
@@ -192,7 +228,52 @@ class VectorStore:
                 "DELETE FROM vectors WHERE file_path = ?", (file_path,),
             )
             conn.commit()
+            self._vec_cache_version += 1
             return cursor.rowcount
+
+    # ------------------------------------------------------------------
+    # In-memory vector cache for numpy batch search
+    # ------------------------------------------------------------------
+
+    def _load_vector_cache(self) -> None:
+        """Load all vectors from SQLite into a numpy matrix."""
+        conn = self._get_conn()
+        with self._lock:
+            rows = conn.execute(
+                "SELECT id, file_path, chunk_type, name, text, vector FROM vectors",
+            ).fetchall()
+
+        if not rows:
+            self._vec_matrix = np.empty((0, self.dimension), dtype=np.float32)
+            self._vec_meta = []
+            self._vec_loaded_version = self._vec_cache_version
+            return
+
+        meta: list[tuple] = []
+        vecs: list[np.ndarray] = []
+        for row in rows:
+            try:
+                v = np.frombuffer(row[5], dtype=np.float32)
+                if len(v) == self.dimension:
+                    vecs.append(v)
+                    meta.append((row[0], row[1], row[2], row[3], row[4]))
+            except (ValueError, struct.error):
+                logger.warning("Skipping corrupt vector row id=%s", row[0])
+
+        if vecs:
+            self._vec_matrix = np.vstack(vecs)
+        else:
+            self._vec_matrix = np.empty((0, self.dimension), dtype=np.float32)
+        self._vec_meta = meta
+        self._vec_loaded_version = self._vec_cache_version
+        logger.debug(
+            "Vector cache loaded: %d vectors (%d dim)",
+            len(meta), self.dimension,
+        )
+
+    # ------------------------------------------------------------------
+    # Search
+    # ------------------------------------------------------------------
 
     def search(
         self,
@@ -201,7 +282,11 @@ class VectorStore:
         file_filter: str = "",
         existing_files: set[str] | None = None,
     ) -> list[SearchResult]:
-        """Search for similar vectors using linear scan.
+        """Search for similar vectors.
+
+        Uses numpy batch cosine similarity when available (100-1000x faster
+        than pure Python), with automatic in-memory caching of the vector
+        matrix. Falls back to per-vector Python loop if numpy is unavailable.
 
         Args:
             query_vector: Query embedding vector.
@@ -214,12 +299,77 @@ class VectorStore:
         Returns:
             Top-k results sorted by similarity score (highest first).
         """
-        conn = self._get_conn()
         if not query_vector:
             return []
 
+        if _HAS_NUMPY:
+            return self._search_numpy(query_vector, top_k, file_filter, existing_files)
+        return self._search_python(query_vector, top_k, file_filter, existing_files)
+
+    def _search_numpy(
+        self,
+        query_vector: list[float],
+        top_k: int,
+        file_filter: str,
+        existing_files: set[str] | None,
+    ) -> list[SearchResult]:
+        """Numpy-accelerated vector search with in-memory cache."""
+        # Ensure cache is current
+        if self._vec_loaded_version != self._vec_cache_version or self._vec_matrix is None:
+            self._load_vector_cache()
+
+        if self._vec_matrix is None or len(self._vec_matrix) == 0:
+            return []
+
+        query_np = np.array(query_vector, dtype=np.float32)
+
+        # Batch cosine similarity — single BLAS matmul
+        scores = _batch_cosine_similarity(query_np, self._vec_matrix)
+
+        # Apply filters by zeroing out excluded entries
+        if file_filter or existing_files is not None:
+            import fnmatch
+
+            for i, meta in enumerate(self._vec_meta):
+                fp = meta[1]  # file_path
+                if existing_files is not None and fp not in existing_files:
+                    scores[i] = -1.0
+                elif file_filter and not fnmatch.fnmatch(fp, file_filter):
+                    scores[i] = -1.0
+
+        # Top-k selection: argpartition is O(N) vs O(N log N) for full sort
+        n = len(scores)
+        if n <= top_k:
+            top_indices = np.argsort(scores)[::-1]
+        else:
+            top_indices = np.argpartition(scores, -top_k)[-top_k:]
+            top_indices = top_indices[np.argsort(scores[top_indices])[::-1]]
+
+        results: list[SearchResult] = []
+        for idx in top_indices:
+            s = float(scores[idx])
+            if s <= 0:
+                break
+            m = self._vec_meta[idx]
+            results.append(SearchResult(
+                id=m[0], file_path=m[1], chunk_type=m[2],
+                name=m[3], text=m[4], score=round(s, 4),
+            ))
+        return results
+
+    def _search_python(
+        self,
+        query_vector: list[float],
+        top_k: int,
+        file_filter: str,
+        existing_files: set[str] | None,
+    ) -> list[SearchResult]:
+        """Pure Python fallback when numpy is unavailable."""
+        conn = self._get_conn()
+
         if file_filter:
             import fnmatch
+
             def _file_filter_fn(fp: str) -> bool:
                 return fnmatch.fnmatch(fp, file_filter)
         else:
@@ -251,7 +401,6 @@ class VectorStore:
                 score=round(score, 4),
             ))
 
-        # Sort by score descending
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:top_k]
 

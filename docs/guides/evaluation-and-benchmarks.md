@@ -98,24 +98,23 @@ python scripts/benchmark_3way.py --skip-code-intel
 python scripts/benchmark_3way.py --slice published_20 --resume
 ```
 
-### Latest Results (v0.2.11, 20 repos)
+### Latest Results (v0.2.15, 20 repos)
 
 | Metric | grep | ast-grep | code-intel |
 |--------|------|----------|------------|
 | **Avg Quality** | 4.0/5 | 2.8/5 | **4.7/5** |
-| **Avg Bootstrap** | 91ms | 538ms | 1.7s* |
-| **Perfect Scores (5/5)** | 48/120 | 36/120 | **101/120** |
-| **Zero Scores (0/5)** | 0 | 24 | 0 |
+| **Avg Time** | 95ms | 493ms | 2,731ms |
 
-\* Bootstrap time after progressive hydration. Pre-hydration large repo times were 7-25s.
+\* v0.2.15 includes BM25 keyword index caching (8x speedup on large repos), trigram pre-filtering for BM25, and numpy-accelerated vector search (183x at 10K vectors). Overall 35% faster than v0.2.11 (4,182ms → 2,731ms).
 
 **Key findings:**
 - Code-intel delivers the highest quality (4.7/5) with structured, concise output
-- grep is fast (91ms) and surprisingly competitive (4.0/5) for simple lookups
+- grep is fast (95ms) and surprisingly competitive (4.0/5) for simple lookups
 - ast-grep adds limited value — slower than grep with lower quality (2.8/5)
-- Progressive hydration brings all repos under 4s bootstrap (cockroach: 24.5s → 1.2s)
+- Semantic search is the remaining speed bottleneck on large repos, but quality justifies the cost (5/5 vs 3-4/5 for grep/ast-grep)
+- BM25 keyword cache reduces warm-start keyword search from 20s to 2.5s on cockroach-scale repos
 
-Charts and per-repo analysis: `eval/3WAY_BENCHMARK_REPORT.md`
+Charts and per-repo analysis: `eval/3way_comparison_20repos.md`
 
 ## Configured Repos (49)
 

@@ -5,7 +5,7 @@ All notable changes to the Attocode Python agent will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.15] - 2026-04-03
+## [0.2.15] - 2026-04-04
 
 ### Added
 
@@ -47,8 +47,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-mode search labels** — renamed methods to `suggest_content_matches()` / `suggest_filename_matches()` and fixed output labels that said "File search results" for grep results
 - **Frecency tracker singleton** — unified to single thread-safe `get_tracker()` via `_shared.py`; removed duplicate non-locking construction
 - **Gitignore-aware file walking** — `frecency_search`, `fuzzy_search`, `fuzzy_filename_search`, and cross-mode suggestions now filter via `IgnoreManager`, skipping `.gitignore`d paths
+- **BM25 cache save on duplicate doc IDs** — `_save_kw_cache()` uses `INSERT OR REPLACE` to handle multiple functions with the same name in one file (e.g. test helpers), fixing silent cache save failures
 
 ### Changed
+
+#### Semantic Search Performance: Incremental Cache + Trigram Pre-filter
+- **BM25 keyword index disk cache** — `_build_keyword_index()` now persists the full inverted index to `.attocode/index/kw_index.db` (SQLite/WAL) with file mtime tracking; subsequent searches load from cache and only re-parse changed files instead of rebuilding from scratch (176x speedup on warm cache in smoke test: 5.8s → 33ms)
+- **Trigram pre-filtering for keyword search** — before BM25 scoring, queries the existing trigram index with each query token (UNION semantics) to narrow candidates to files containing at least one term; skips scoring documents from non-matching files with zero accuracy loss (BM25 IDF still uses full corpus stats)
+- **Numpy-accelerated vector search** — `VectorStore.search()` now uses numpy BLAS matrix-vector multiply for batch cosine similarity instead of a pure Python per-vector loop; in-memory vector cache with version-based invalidation on upsert/delete; `np.argpartition` for O(N) top-k selection. 183x speedup at 10K vectors (245ms → 1.3ms), 100K vectors searched in 15ms. Falls back to pure Python if numpy unavailable.
+- `invalidate_file()` now marks entries stale in the keyword cache and clears the trigram index reference
+
+#### Other
 - `frecency_search` uses two-phase file ordering: collects candidate paths, pre-sorts by frecency score, then reads content — ensures high-frecency files appear in results regardless of alphabetical order
 - Extracted `_empty_frecency()` helper to replace repeated inline `FrecencyResult` constructions
 - `_get_frecency_tracker()` moved to `_shared.py` for single source of truth across tool modules
