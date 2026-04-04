@@ -60,23 +60,24 @@ import sys
 import threading
 from pathlib import Path
 
+import attocode.code_intel._shared as _shared  # noqa: F401
+
 # ---------------------------------------------------------------------------
 # Shared deps (mcp instance, lazy singletons, getters) live in _shared.py
 # to break the circular import: server.py → tool modules → server.py.
 # Re-exported here for backward compatibility.
 # ---------------------------------------------------------------------------
 from attocode.code_intel._shared import (  # noqa: F401
-    mcp,
-    clear_remote_service,
-    configure_remote_service,
+    _get_ast_service,
+    _get_code_analyzer,
+    _get_context_mgr,
+    _get_explorer,
     _get_project_dir,
     _walk_up,
-    _get_ast_service,
-    _get_context_mgr,
-    _get_code_analyzer,
-    _get_explorer,
+    clear_remote_service,
+    configure_remote_service,
+    mcp,
 )
-import attocode.code_intel._shared as _shared  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -556,12 +557,17 @@ def _instrument_all_tools() -> None:
 
 import attocode.code_intel.tools.adr_tools as _adr_tools  # noqa: E402, F401
 import attocode.code_intel.tools.analysis_tools as _analysis_tools  # noqa: E402, F401
+import attocode.code_intel.tools.cross_mode_tools as _cross_mode_tools  # noqa: E402, F401
 import attocode.code_intel.tools.dead_code_tools as _dead_code_tools  # noqa: E402, F401
 import attocode.code_intel.tools.distill_tools as _distill_tools  # noqa: E402, F401
+import attocode.code_intel.tools.frecency_tools as _frecency_tools  # noqa: E402, F401
+import attocode.code_intel.tools.fuzzy_tools as _fuzzy_tools  # noqa: E402, F401
 import attocode.code_intel.tools.history_tools as _history_tools  # noqa: E402, F401
 import attocode.code_intel.tools.learning_tools as _learning_tools  # noqa: E402, F401
 import attocode.code_intel.tools.lsp_tools as _lsp_tools  # noqa: E402, F401
 import attocode.code_intel.tools.navigation_tools as _navigation_tools  # noqa: E402, F401
+import attocode.code_intel.tools.query_constraints_tools as _query_constraints_tools  # noqa: E402, F401
+import attocode.code_intel.tools.query_history_tools as _query_history_tools  # noqa: E402, F401
 import attocode.code_intel.tools.readiness_tools as _readiness_tools  # noqa: E402, F401
 import attocode.code_intel.tools.search_tools as _search_tools  # noqa: E402, F401
 from attocode.code_intel.helpers import (  # noqa: E402, F401
