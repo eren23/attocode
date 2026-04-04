@@ -20,6 +20,19 @@
 7. **Go-specific search improvements** -- Go MRR 0.200 lags Python 0.725; index package docs, use module paths
 8. **ast-grep integration** -- optional structural pattern searches alongside tree-sitter parsing
 
+## v0.2.15 -- Search Performance & New Search Modes (Released 2026-04-04)
+
+1. ~~**BM25 keyword index disk cache**~~ -- DONE: SQLite cache with incremental mtime-based updates; 8x speedup on cockroach-scale repos (20s → 2.5s warm)
+2. ~~**Trigram pre-filtering for BM25**~~ -- DONE: narrows candidate docs before scoring; zero accuracy loss (full corpus IDF preserved)
+3. ~~**Numpy-accelerated vector search**~~ -- DONE: BLAS matmul replaces Python loop; 183x speedup at 10K vectors; in-memory cache with version invalidation; pure Python fallback
+4. ~~**Frecency-boosted search**~~ -- DONE: SQLite-backed file access scoring with exponential decay; `frecency_search` MCP tool with two-phase file ordering
+5. ~~**Fuzzy search (Smith-Waterman)**~~ -- DONE: typo-resistant search via local sequence alignment; `fuzzy_search`, `fuzzy_filename_search`, `fuzzy_score` tools
+6. ~~**Cross-mode search suggestions**~~ -- DONE: "did you mean" fallbacks between filename and content search
+7. ~~**Query constraints (fff-style)**~~ -- DONE: `git:modified`, `!pattern`, `path/`, `*.ext` filters with git porcelain XY parsing
+8. ~~**Query history & combo boosting**~~ -- DONE: SQLite-backed query-to-file tracking; 3+ selections activate combo boost
+9. ~~**Code-intel testing infrastructure**~~ -- DONE: fixtures, mocks, helpers; 9 tool test modules
+10. ~~**Overall benchmark improvement**~~ -- DONE: 35% faster (4,182ms → 2,731ms avg), quality stable at 4.7/5
+
 ## v0.2.x -- Code Intel Infrastructure
 
 1. **Cross-repo search in org** -- aggregate embeddings across repositories, org-scoped vector queries

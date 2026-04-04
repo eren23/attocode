@@ -5,6 +5,63 @@ All notable changes to the Attocode Python agent will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.15] - 2026-04-04
+
+### Added
+
+#### Frecency-Boosted Search
+- Frecency tracker (`integrations/context/frecency.py`) — SQLite-backed file access scoring with exponential decay (10-day human / 3-day AI half-life), git modification bonuses, and batch scoring
+- `frecency_search` MCP tool — regex search with frecency-boosted ranking, two-phase file ordering (high-frecency files searched first), trigram pre-filtering
+- `track_file_access`, `get_file_frecency`, `get_frecency_leaderboard`, `get_frecency_stats`, `clear_frecency` MCP tools
+- Frecency leaderboard implementation with ranked output by score
+
+#### Fuzzy Search (Smith-Waterman)
+- Smith-Waterman fuzzy matcher (`integrations/context/fuzzy.py`) — typo-resistant search via local sequence alignment with affine gap penalties
+- `fuzzy_search` MCP tool — line-level fuzzy matching across files with configurable score threshold
+- `fuzzy_filename_search` MCP tool — find files by partial/typo'd filename
+- `fuzzy_score` MCP tool — debug tool for inspecting match quality between pattern and text
+
+#### Cross-Mode Search Suggestions
+- Cross-mode search engine (`integrations/context/cross_mode.py`) — "did you mean" suggestions across file-name and content search modes
+- `suggest_when_file_search_finds_nothing` MCP tool — grep fallback when filename search returns no results
+- `suggest_when_grep_finds_nothing` MCP tool — filename fallback when content search returns no results
+- `cross_mode_search` MCP tool — combined search across both modes
+
+#### Query Constraints (fff-style Filters)
+- Query constraint parser (`integrations/context/query_constraints.py`) — supports `git:modified`, `git:staged`, `!pattern`, `path/`, `*.ext`, `./**/*.py` filters
+- `parse_query_with_constraints`, `filter_files_with_constraints`, `list_modified_files` MCP tools
+- Git porcelain XY parsing — reads both index and worktree columns for accurate status
+
+#### Query History & Combo Boosting
+- Query history tracker (`integrations/context/query_history.py`) — SQLite-backed tracking of query-to-file selections with combo boost scoring (3+ selections trigger boost)
+- `track_query_result`, `get_query_combo_boost`, `get_top_results_for_query`, `get_query_history_stats`, `clear_query_history` MCP tools
+
+#### Code-Intel Testing Infrastructure
+- `code_intel/testing/` package — fixtures, helpers, and mocks for MCP tool tests
+- 9 new tool test modules covering ADR, analysis, dead code, distill, history, learning, LSP, navigation, readiness, search, and server tools
+- Test conftest with shared project fixtures and mock services
+
+### Fixed
+- **Git argument injection** — added `--` separator before file paths in git subprocess calls (`frecency_tools.py`, `query_constraints.py`)
+- **Git status parsing** — `_run_git_status()` and `list_modified_files()` now read both XY columns of porcelain output, fixing invisible working-tree-only modifications
+- **Cross-mode search labels** — renamed methods to `suggest_content_matches()` / `suggest_filename_matches()` and fixed output labels that said "File search results" for grep results
+- **Frecency tracker singleton** — unified to single thread-safe `get_tracker()` via `_shared.py`; removed duplicate non-locking construction
+- **Gitignore-aware file walking** — `frecency_search`, `fuzzy_search`, `fuzzy_filename_search`, and cross-mode suggestions now filter via `IgnoreManager`, skipping `.gitignore`d paths
+- **BM25 cache save on duplicate doc IDs** — `_save_kw_cache()` uses `INSERT OR REPLACE` to handle multiple functions with the same name in one file (e.g. test helpers), fixing silent cache save failures
+
+### Changed
+
+#### Semantic Search Performance: Incremental Cache + Trigram Pre-filter
+- **BM25 keyword index disk cache** — `_build_keyword_index()` now persists the full inverted index to `.attocode/index/kw_index.db` (SQLite/WAL) with file mtime tracking; subsequent searches load from cache and only re-parse changed files instead of rebuilding from scratch (176x speedup on warm cache in smoke test: 5.8s → 33ms)
+- **Trigram pre-filtering for keyword search** — before BM25 scoring, queries the existing trigram index with each query token (UNION semantics) to narrow candidates to files containing at least one term; skips scoring documents from non-matching files with zero accuracy loss (BM25 IDF still uses full corpus stats)
+- **Numpy-accelerated vector search** — `VectorStore.search()` now uses numpy BLAS matrix-vector multiply for batch cosine similarity instead of a pure Python per-vector loop; in-memory vector cache with version-based invalidation on upsert/delete; `np.argpartition` for O(N) top-k selection. 183x speedup at 10K vectors (245ms → 1.3ms), 100K vectors searched in 15ms. Falls back to pure Python if numpy unavailable.
+- `invalidate_file()` now marks entries stale in the keyword cache and clears the trigram index reference
+
+#### Other
+- `frecency_search` uses two-phase file ordering: collects candidate paths, pre-sorts by frecency score, then reads content — ensures high-frecency files appear in results regardless of alphabetical order
+- Extracted `_empty_frecency()` helper to replace repeated inline `FrecencyResult` constructions
+- `_get_frecency_tracker()` moved to `_shared.py` for single source of truth across tool modules
+
 ## [0.2.14] - 2026-04-01
 
 ### Added

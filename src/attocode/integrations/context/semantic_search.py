@@ -7,11 +7,13 @@ embedding provider is available.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
 import queue
 import re
+import sqlite3
 import threading
 from dataclasses import dataclass, field
 from typing import Any
@@ -114,6 +116,9 @@ class SemanticSearchManager:
     _kw_df: dict[str, int] = field(default_factory=dict, repr=False)
     _kw_avg_dl: float = field(default=0.0, repr=False)
     _kw_index_built: bool = field(default=False, repr=False)
+    _kw_cache_db_path: str = field(default="", repr=False)
+    _kw_cache_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _trigram_index: Any = field(default=None, repr=False)
     _bg_indexer: Any = field(default=None, repr=False)
     _bg_thread: Any = field(default=None, repr=False)
     _index_progress: IndexProgress = field(default_factory=IndexProgress, repr=False)
@@ -124,6 +129,9 @@ class SemanticSearchManager:
         # 5-15s model-load latency on construction.
         self._provider = None
         self._keyword_fallback = True  # assume keyword-only until provider loads
+        self._kw_cache_db_path = os.path.join(
+            self.root_dir, ".attocode", "index", "kw_index.db",
+        )
         if not self.nl_mode:
             self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none")
 
@@ -512,6 +520,63 @@ class SemanticSearchManager:
         reranked = reranker.rerank(query, candidates, top_k=top_k)
         return [(cid, score) for cid, _text, score in reranked]
 
+    # ------------------------------------------------------------------
+    # Trigram pre-filtering for keyword search
+    # ------------------------------------------------------------------
+
+    def _get_trigram_index(self) -> Any | None:
+        """Get a loaded TrigramIndex instance, or None if unavailable."""
+        if self._trigram_index is not None:
+            return self._trigram_index
+        try:
+            from attocode.integrations.context.trigram_index import TrigramIndex
+
+            index_dir = os.path.join(self.root_dir, ".attocode", "index")
+            if not os.path.isdir(index_dir):
+                return None
+            idx = TrigramIndex(index_dir=index_dir)
+            if idx.load():
+                self._trigram_index = idx
+                return idx
+        except Exception:
+            logger.debug("Failed to load trigram index for kw pre-filter", exc_info=True)
+        return None
+
+    def _trigram_prefilter(self, query_tokens: list[str]) -> set[str] | None:
+        """Use trigram index to find candidate files containing query terms.
+
+        Returns set of candidate file paths, or None to fall back to full scan.
+        Uses UNION semantics: a file matching ANY query term is included.
+        """
+        idx = self._get_trigram_index()
+        if idx is None or not idx.is_ready():
+            return None
+
+        filterable = [t for t in query_tokens if len(t) >= 3]
+        if not filterable:
+            return None
+
+        candidates: set[str] = set()
+        any_definitive = False
+
+        for token in filterable:
+            escaped = re.escape(token)
+            try:
+                result = idx.query(escaped, selectivity_threshold=0.5)
+            except Exception:
+                logger.debug("Trigram query failed for '%s'", token, exc_info=True)
+                return None
+
+            if result is None:
+                continue  # too common or no trigrams — skip this token
+            any_definitive = True
+            candidates.update(result)
+
+        if not any_definitive:
+            return None  # no token could be filtered, full scan needed
+
+        return candidates
+
     def _keyword_search(
         self,
         query: str,
@@ -531,16 +596,29 @@ class SemanticSearchManager:
         if not query_tokens:
             return []
 
+        # Trigram pre-filter: narrow to files containing query terms
+        candidate_files = self._trigram_prefilter(query_tokens)
+        if candidate_files is not None:
+            docs_to_score = [
+                d for d in self._kw_docs if d.file_path in candidate_files
+            ]
+            logger.debug(
+                "Trigram pre-filter: %d/%d docs from %d candidate files",
+                len(docs_to_score), len(self._kw_docs), len(candidate_files),
+            )
+        else:
+            docs_to_score = self._kw_docs
+
         query_lower = query.lower()
 
-        # BM25 parameters
+        # BM25 parameters — N and avg_dl use FULL corpus for correct IDF
         k1 = 1.5
         b = 0.75
         N = len(self._kw_docs)  # noqa: N806
         avg_dl = self._kw_avg_dl or 1.0
 
         scored: list[tuple[float, _KeywordDoc]] = []
-        for doc in self._kw_docs:
+        for doc in docs_to_score:
             if file_filter and not fnmatch.fnmatch(doc.file_path, file_filter):
                 continue
 
@@ -657,8 +735,177 @@ class SemanticSearchManager:
 
         return results
 
+    # ------------------------------------------------------------------
+    # BM25 keyword index disk cache
+    # ------------------------------------------------------------------
+
+    def _open_kw_cache_db(self) -> sqlite3.Connection | None:
+        """Open the keyword index cache database. Returns None on failure."""
+        try:
+            os.makedirs(os.path.dirname(self._kw_cache_db_path), exist_ok=True)
+            conn = sqlite3.connect(self._kw_cache_db_path, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS metadata (
+                    key TEXT PRIMARY KEY, value TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS kw_files (
+                    file_path TEXT PRIMARY KEY, mtime REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS kw_docs (
+                    id TEXT PRIMARY KEY, file_path TEXT NOT NULL,
+                    chunk_type TEXT NOT NULL, name TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    is_config INTEGER NOT NULL DEFAULT 0,
+                    is_test INTEGER NOT NULL DEFAULT 0,
+                    term_freqs TEXT NOT NULL, doc_len INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE INDEX IF NOT EXISTS ix_kw_docs_file ON kw_docs(file_path);
+            """)
+            row = conn.execute(
+                "SELECT value FROM metadata WHERE key='schema_version'",
+            ).fetchone()
+            if row is None:
+                conn.execute(
+                    "INSERT INTO metadata (key, value) VALUES ('schema_version', '1')",
+                )
+                conn.commit()
+            elif row[0] != "1":
+                conn.executescript(
+                    "DROP TABLE IF EXISTS kw_files; DROP TABLE IF EXISTS kw_docs;"
+                )
+                conn.executescript("""
+                    CREATE TABLE kw_files (
+                        file_path TEXT PRIMARY KEY, mtime REAL NOT NULL
+                    );
+                    CREATE TABLE kw_docs (
+                        id TEXT PRIMARY KEY, file_path TEXT NOT NULL,
+                        chunk_type TEXT NOT NULL, name TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        is_config INTEGER NOT NULL DEFAULT 0,
+                        is_test INTEGER NOT NULL DEFAULT 0,
+                        term_freqs TEXT NOT NULL, doc_len INTEGER NOT NULL DEFAULT 0
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_kw_docs_file ON kw_docs(file_path);
+                """)
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) "
+                    "VALUES ('schema_version', '1')",
+                )
+                conn.commit()
+            return conn
+        except Exception:
+            logger.debug("Failed to open kw cache db", exc_info=True)
+            return None
+
+    def _save_kw_cache(
+        self,
+        docs: list[_KeywordDoc],
+        file_mtimes: dict[str, float],
+    ) -> None:
+        """Persist keyword index docs to disk cache."""
+        conn = self._open_kw_cache_db()
+        if conn is None:
+            return
+        try:
+            with self._kw_cache_lock:
+                conn.execute("DELETE FROM kw_files")
+                conn.execute("DELETE FROM kw_docs")
+                for fpath, mtime in file_mtimes.items():
+                    conn.execute(
+                        "INSERT INTO kw_files (file_path, mtime) VALUES (?, ?)",
+                        (fpath, mtime),
+                    )
+                for doc in docs:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO kw_docs "
+                        "(id, file_path, chunk_type, name, text, is_config, "
+                        "is_test, term_freqs, doc_len) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            doc.id, doc.file_path, doc.chunk_type, doc.name,
+                            doc.text, int(doc.is_config), int(doc.is_test),
+                            json.dumps(doc.term_freqs), doc.doc_len,
+                        ),
+                    )
+                conn.commit()
+        except Exception:
+            logger.debug("Failed to save kw cache", exc_info=True)
+        finally:
+            conn.close()
+
+    def _load_kw_cache(
+        self,
+        current_files: dict[str, tuple[str, float]],
+    ) -> tuple[list[_KeywordDoc], set[str]] | None:
+        """Load cached keyword docs, identify files that need re-parsing.
+
+        Args:
+            current_files: dict of rel_path -> (abs_path, mtime)
+
+        Returns:
+            (cached_docs, files_to_parse) or None if cache unavailable.
+        """
+        conn = self._open_kw_cache_db()
+        if conn is None:
+            return None
+        try:
+            with self._kw_cache_lock:
+                rows = conn.execute(
+                    "SELECT file_path, mtime FROM kw_files",
+                ).fetchall()
+                if not rows:
+                    conn.close()
+                    return None
+
+                cached_mtimes = {r[0]: r[1] for r in rows}
+
+                # Identify stale (modified/new) and deleted files
+                stale: set[str] = set()
+                for fpath, (_, current_mtime) in current_files.items():
+                    cached_mtime = cached_mtimes.get(fpath)
+                    if cached_mtime is None or current_mtime > cached_mtime:
+                        stale.add(fpath)
+                deleted = set(cached_mtimes.keys()) - set(current_files.keys())
+                exclude = stale | deleted
+
+                # Load docs for unchanged files
+                doc_rows = conn.execute(
+                    "SELECT id, file_path, chunk_type, name, text, "
+                    "is_config, is_test, term_freqs, doc_len FROM kw_docs",
+                ).fetchall()
+
+                docs: list[_KeywordDoc] = []
+                for row in doc_rows:
+                    if row[1] in exclude:
+                        continue
+                    docs.append(_KeywordDoc(
+                        id=row[0], file_path=row[1], chunk_type=row[2],
+                        name=row[3], text=row[4], is_config=bool(row[5]),
+                        is_test=bool(row[6]),
+                        term_freqs=json.loads(row[7]), doc_len=row[8],
+                    ))
+
+            conn.close()
+            return (docs, stale)
+        except Exception:
+            logger.debug("Failed to load kw cache", exc_info=True)
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return None
+
+    # ------------------------------------------------------------------
+    # BM25 keyword index builder (incremental with cache)
+    # ------------------------------------------------------------------
+
     def _build_keyword_index(self) -> None:
-        """Build BM25 inverted index from AST-extracted data."""
+        """Build BM25 inverted index from AST-extracted data.
+
+        Uses disk cache to avoid re-parsing unchanged files.
+        """
         from attocode.integrations.context.codebase_ast import parse_file
         from attocode.integrations.context.codebase_context import CodebaseContextManager
 
@@ -673,22 +920,48 @@ class SemanticSearchManager:
             "setup.py", "readme.md", "readme.rst", "changelog.md", "license",
         })
 
-        docs: list[_KeywordDoc] = []
-        df: dict[str, int] = {}
-
+        # Discover current files with mtimes
+        current_files: dict[str, tuple[str, float]] = {}
+        file_meta: dict[str, tuple[bool, bool]] = {}  # rel -> (is_config, is_test)
         for f in ctx._files:
-            rel = f.relative_path
-            basename = os.path.basename(rel).lower()
+            try:
+                mtime = os.path.getmtime(f.path)
+            except OSError:
+                continue
+            current_files[f.relative_path] = (f.path, mtime)
+            basename = os.path.basename(f.relative_path).lower()
             ext = os.path.splitext(basename)[1]
             is_config = ext in _CONFIG_EXTS or basename in _CONFIG_NAMES
-            is_test = f.is_test
+            file_meta[f.relative_path] = (is_config, f.is_test)
+
+        # Try incremental update from cache
+        cache_result = self._load_kw_cache(current_files)
+
+        if cache_result is not None:
+            docs, files_to_parse = cache_result
+            logger.debug(
+                "kw_index incremental: %d cached docs, %d files to parse",
+                len(docs), len(files_to_parse),
+            )
+        else:
+            docs = []
+            files_to_parse = set(current_files.keys())
+            logger.debug("kw_index full rebuild: %d files", len(files_to_parse))
+
+        # Parse only files that need updating
+        for rel in files_to_parse:
+            entry = current_files.get(rel)
+            if entry is None:
+                continue
+            abs_path, _ = entry
+            is_config, is_test = file_meta.get(rel, (False, False))
 
             try:
-                ast = parse_file(f.path)
+                ast = parse_file(abs_path)
             except Exception:
                 continue
 
-            # File-level doc: path components + import modules + symbol names
+            # File-level doc
             file_text_parts = list(re.split(r"[/\\]", rel))
             file_text_parts.extend(imp.module for imp in ast.imports[:30])
             file_text_parts.extend(ast.get_symbols()[:30])
@@ -714,7 +987,6 @@ class SemanticSearchManager:
             # Function-level docs
             for func in ast.functions:
                 parts: list[str] = []
-                # Name with 3x weight
                 parts.extend([func.name] * 3)
                 if func.docstring:
                     parts.append(func.docstring[:300])
@@ -814,12 +1086,12 @@ class SemanticSearchManager:
                         doc_len=len(m_tokens),
                     ))
 
-        # Build document frequencies
+        # Build document frequencies (always recomputed from full doc list)
+        df: dict[str, int] = {}
         for doc in docs:
             for term in doc.term_freqs:
                 df[term] = df.get(term, 0) + 1
 
-        # Average document length
         total_len = sum(doc.doc_len for doc in docs)
         avg_dl = total_len / len(docs) if docs else 1.0
 
@@ -827,7 +1099,15 @@ class SemanticSearchManager:
         self._kw_df = df
         self._kw_avg_dl = avg_dl
         self._kw_index_built = True
-        logger.debug("BM25 keyword index built: %d docs, %d terms", len(docs), len(df))
+
+        # Persist to cache
+        file_mtimes = {rel: mt for rel, (_, mt) in current_files.items()}
+        self._save_kw_cache(docs, file_mtimes)
+
+        logger.debug(
+            "BM25 keyword index built: %d docs, %d terms (%d files parsed)",
+            len(docs), len(df), len(files_to_parse),
+        )
 
     def _chunk_single_file(
         self, rel_path: str, abs_path: str,
@@ -1026,11 +1306,25 @@ class SemanticSearchManager:
     def invalidate_file(self, file_path: str) -> None:
         """Remove embeddings for a changed file."""
         self._kw_index_built = False  # Force rebuild on next keyword search
+        self._trigram_index = None  # Reload on next use
+        try:
+            rel = os.path.relpath(file_path, self.root_dir)
+        except ValueError:
+            rel = file_path
+        # Mark stale in keyword cache
+        try:
+            conn = self._open_kw_cache_db()
+            if conn:
+                with self._kw_cache_lock:
+                    conn.execute(
+                        "UPDATE kw_files SET mtime = 0 WHERE file_path = ?",
+                        (rel,),
+                    )
+                    conn.commit()
+                conn.close()
+        except Exception:
+            pass
         if self._store:
-            try:
-                rel = os.path.relpath(file_path, self.root_dir)
-            except ValueError:
-                rel = file_path
             self._store.delete_by_file(rel)
 
     def reindex_stale_files(self, context_manager: Any = None) -> int:

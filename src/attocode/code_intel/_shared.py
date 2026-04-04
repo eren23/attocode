@@ -222,3 +222,12 @@ def _get_explorer():
         ast_svc = _get_ast_service()
         _explorer = HierarchicalExplorer(ctx, ast_service=ast_svc)
     return _explorer
+
+
+def _get_frecency_tracker():
+    """Get shared frecency tracker (thread-safe via get_tracker lock)."""
+    from attocode.integrations.context.frecency import get_tracker
+
+    project_dir = _get_project_dir()
+    db_path = os.path.join(project_dir, ".attocode", "frecency")
+    return get_tracker(db_path=db_path)

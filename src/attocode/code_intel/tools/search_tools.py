@@ -5,16 +5,24 @@ Tools: semantic_search, semantic_search_status, security_scan, fast_search.
 
 from __future__ import annotations
 
+import os
 import threading
 
 from attocode.code_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
+    _get_frecency_tracker,
     _get_project_dir,
     _get_remote_service,
     _get_service,
     mcp,
 )
+from attocode.integrations.context.frecency import FrecencyResult
+
+
+def _empty_frecency(ai_mode: bool) -> FrecencyResult:
+    """Create a zero-score FrecencyResult."""
+    return FrecencyResult(score=0, accesses=0, last_access=None, is_ai_mode=ai_mode)
 
 # ---------------------------------------------------------------------------
 # Lazy singletons
@@ -378,5 +386,214 @@ def fast_search(
             f"Mode:               {qr.mode}",
         ]
         result += "\n".join(diag_lines)
+
+    return result
+
+
+@mcp.tool()
+def frecency_search(
+    pattern: str,
+    path: str = "",
+    max_results: int = 50,
+    case_insensitive: bool = False,
+    selectivity_threshold: float = 0.10,
+    use_frecency: bool = True,
+    ai_mode: bool = True,
+) -> str:
+    """Frecency-boosted regex search for AI agents.
+
+    Like fast_search but boosts results by frecency score (how often and
+    recently files were accessed). This helps prioritize commonly-used files
+    when there are many matches.
+
+    The frecency score is calculated from:
+    - Access frequency (exponential decay with 10-day or 3-day half-life)
+    - Recency (more recent = higher score)
+    - Git modification bonus (recently modified files get +1-16 points)
+
+    Args:
+        pattern: Regex pattern to search for.
+        path: Subdirectory to search (relative to project root, empty for all).
+        max_results: Maximum number of matching lines to return (default 50).
+        case_insensitive: Whether to match case-insensitively.
+        selectivity_threshold: Skip trigram index when matching files exceeds
+            this fraction (0.0-1.0, default 0.10).
+        use_frecency: Whether to apply frecency boosting (default True).
+        ai_mode: Use AI mode decay (3-day half-life) vs human mode (10-day).
+
+    Returns:
+        Search results with frecency-boosted ranking.
+    """
+    import re
+    from collections import defaultdict
+    from pathlib import Path
+
+    project_dir = _get_project_dir()
+    root = Path(project_dir)
+    if path:
+        root = root / path
+    root = root.resolve()
+
+    if not root.exists():
+        return f"Error: Path not found: {root}"
+
+    flags = re.IGNORECASE if case_insensitive else 0
+    try:
+        regex = re.compile(pattern, flags)
+    except re.error as e:
+        return f"Error: Invalid regex pattern: {e}"
+
+    # Get trigram candidates
+    trigram_idx = _get_trigram_index()
+    candidates: list[str] | None = None
+    index_status = "no index"
+
+    if trigram_idx is not None and trigram_idx.is_ready():
+        candidates = trigram_idx.query(
+            pattern,
+            case_insensitive=case_insensitive,
+            selectivity_threshold=selectivity_threshold,
+        )
+        if candidates is not None:
+            index_status = f"trigram filter: {len(candidates)} candidates"
+        else:
+            index_status = "no trigrams, full scan"
+    else:
+        index_status = "no index, full scan"
+
+    # Get frecency scores
+    frecency_tracker = _get_frecency_tracker() if use_frecency else None
+
+    # Determine files to search
+    if candidates is not None:
+        files = sorted(root / c for c in candidates)
+    else:
+        all_files = sorted(root.rglob("*"))
+        try:
+            from attocode.integrations.utilities.ignore import IgnoreManager
+
+            ignore_mgr = IgnoreManager(root=Path(project_dir))
+            files = [
+                f
+                for f in all_files
+                if f.is_file()
+                and not f.name.startswith(".")
+                and not ignore_mgr.is_ignored(
+                    str(f.relative_to(Path(project_dir)))
+                )
+            ]
+        except (ImportError, ValueError):
+            files = [
+                f
+                for f in all_files
+                if f.is_file() and not f.name.startswith(".")
+            ]
+
+    # Phase 1: Collect candidate file paths
+    candidate_paths: list[Path] = []
+    for file in files:
+        if not file.is_file() or file.name.startswith("."):
+            continue
+        candidate_paths.append(file)
+
+    # Phase 2: Pre-sort by frecency so high-value files are searched first
+    _FRECENCY_PRESORT_LIMIT = 10_000
+    file_scores: dict[str, FrecencyResult] = {}
+    if (
+        frecency_tracker is not None
+        and use_frecency
+        and len(candidate_paths) <= _FRECENCY_PRESORT_LIMIT
+    ):
+        path_strs: list[str] = []
+        path_map: dict[str, Path] = {}
+        for f in candidate_paths:
+            try:
+                rel = str(f.relative_to(Path(project_dir)))
+            except ValueError:
+                rel = str(f)
+            path_strs.append(rel)
+            path_map[rel] = f
+
+        file_scores = frecency_tracker.get_scores_batch(path_strs, ai_mode=ai_mode)
+
+        # Build reverse lookup to avoid recomputing relative_to() in sort
+        path_to_rel: dict[Path, str] = {v: k for k, v in path_map.items()}
+
+        # Sort: high-frecency files first, then alphabetical as tiebreaker
+        candidate_paths.sort(
+            key=lambda f: (
+                -file_scores.get(
+                    path_to_rel.get(f, str(f)),
+                    _empty_frecency(ai_mode),
+                ).score,
+                str(f),
+            ),
+        )
+
+    # Phase 3: Read content from frecency-sorted files
+    file_matches: dict[str, list[tuple[int, str]]] = defaultdict(list)
+
+    for file in candidate_paths:
+        try:
+            content = file.read_text(encoding="utf-8", errors="strict")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for i, line in enumerate(content.splitlines(), 1):
+            if regex.search(line):
+                try:
+                    rel = str(file.relative_to(Path(project_dir)))
+                except ValueError:
+                    rel = file.name
+                file_matches[rel].append((i, line.strip()))
+                if sum(len(v) for v in file_matches.values()) >= max_results * 3:
+                    break
+        if sum(len(v) for v in file_matches.values()) >= max_results * 3:
+            break
+
+    if not file_matches:
+        return f"No matches found ({index_status})"
+
+    # Fetch scores for any files not yet scored (e.g. from trigram path)
+    unscored = [p for p in file_matches if p not in file_scores]
+    if unscored and frecency_tracker is not None:
+        file_scores.update(
+            frecency_tracker.get_scores_batch(unscored, ai_mode=ai_mode)
+        )
+    # Fill in defaults for unscored files
+    for p in file_matches:
+        if p not in file_scores:
+            file_scores[p] = _empty_frecency(ai_mode)
+
+    # Sort files by frecency score (descending), then by match count
+    sorted_files = sorted(
+        file_matches.items(),
+        key=lambda kv: (
+            -file_scores.get(kv[0], _empty_frecency(ai_mode)).score,
+            -len(kv[1]),
+        ),
+    )
+
+    # Build results respecting max_results
+    results: list[str] = []
+    for file_path, matches in sorted_files:
+        score = file_scores.get(file_path, _empty_frecency(ai_mode)).score
+        for line_num, line_content in matches[:5]:  # Max 5 matches per file
+            results.append(f"{file_path}:{line_num}: [{score}] {line_content}")
+            if len(results) >= max_results:
+                break
+        if len(results) >= max_results:
+            break
+
+    if not results:
+        return f"No matches found ({index_status})"
+
+    result = "\n".join(results)
+    if len(results) >= max_results:
+        result += f"\n... (limited to {max_results} results)"
+
+    # Add frecency stats header
+    total_files = len(file_matches)
+    avg_score = sum(s.score for s in file_scores.values()) / max(len(file_scores), 1)
+    result += f"\n({index_status}, {total_files} files matched, avg frecency: {avg_score:.1f})"
 
     return result
