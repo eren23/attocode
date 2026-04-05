@@ -35,7 +35,9 @@ import shutil
 import subprocess
 import sys
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import tomli_w
 
@@ -61,6 +63,340 @@ ALL_TARGETS: tuple[str, ...] = AUTO_INSTALL_TARGETS + MANUAL_TARGETS
 
 #: Friendly string for error messages.
 ALL_TARGETS_STR: str = ", ".join(ALL_TARGETS)
+
+
+@dataclass(frozen=True)
+class ResolvedInstallSpec:
+    """Normalized read-only view of an installed MCP target config."""
+
+    target: str
+    scope: str
+    config_path: str | None
+    command: str
+    args: list[str]
+    env: dict[str, str]
+    source_kind: str
+    unsupported_reason: str | None = None
+
+    @property
+    def is_supported(self) -> bool:
+        return self.unsupported_reason is None
+
+
+def _read_json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _read_toml_file(path: Path) -> dict[str, Any] | None:
+    try:
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, OSError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _read_yaml_file(path: Path) -> dict[str, Any] | None:
+    import yaml
+
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _normalize_standard_entry(
+    target: str,
+    scope: str,
+    config_path: Path,
+    entry: dict[str, Any],
+    *,
+    source_kind: str,
+) -> ResolvedInstallSpec | None:
+    command = entry.get("command")
+    args = entry.get("args", [])
+    env = entry.get("env", {})
+    if not isinstance(command, str):
+        return None
+    if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+        return None
+    if not isinstance(env, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()):
+        return None
+    return ResolvedInstallSpec(
+        target=target,
+        scope=scope,
+        config_path=str(config_path),
+        command=command,
+        args=list(args),
+        env=dict(env),
+        source_kind=source_kind,
+    )
+
+
+def _normalize_zed_entry(
+    target: str,
+    scope: str,
+    config_path: Path,
+    entry: dict[str, Any],
+) -> ResolvedInstallSpec | None:
+    command_block = entry.get("command")
+    if not isinstance(command_block, dict):
+        return None
+    command = command_block.get("path")
+    args = command_block.get("args", [])
+    if not isinstance(command, str):
+        return None
+    if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+        return None
+    return ResolvedInstallSpec(
+        target=target,
+        scope=scope,
+        config_path=str(config_path),
+        command=command,
+        args=list(args),
+        env={},
+        source_kind="custom-json",
+    )
+
+
+def _normalize_opencode_entry(
+    target: str,
+    scope: str,
+    config_path: Path,
+    entry: dict[str, Any],
+) -> ResolvedInstallSpec | None:
+    command_parts = entry.get("command")
+    if not isinstance(command_parts, list) or not command_parts or not all(isinstance(part, str) for part in command_parts):
+        return None
+    env = entry.get("env", {})
+    if not isinstance(env, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()):
+        env = {}
+    return ResolvedInstallSpec(
+        target=target,
+        scope=scope,
+        config_path=str(config_path),
+        command=command_parts[0],
+        args=list(command_parts[1:]),
+        env=dict(env),
+        source_kind="custom-json",
+    )
+
+
+def _normalize_goose_entry(
+    target: str,
+    scope: str,
+    config_path: Path,
+    entry: dict[str, Any],
+) -> ResolvedInstallSpec | None:
+    import shlex
+
+    cmd = entry.get("cmd")
+    if not isinstance(cmd, str) or not cmd.strip():
+        return None
+    parts = shlex.split(cmd)
+    if not parts:
+        return None
+    envs = entry.get("envs", {})
+    if not isinstance(envs, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in envs.items()):
+        envs = {}
+    return ResolvedInstallSpec(
+        target=target,
+        scope=scope,
+        config_path=str(config_path),
+        command=parts[0],
+        args=parts[1:],
+        env=dict(envs),
+        source_kind="yaml",
+    )
+
+
+def _unsupported_spec(target: str, scope: str, reason: str) -> ResolvedInstallSpec:
+    return ResolvedInstallSpec(
+        target=target,
+        scope=scope,
+        config_path=None,
+        command="",
+        args=[],
+        env={},
+        source_kind="unsupported",
+        unsupported_reason=reason,
+    )
+
+
+def resolve_install_spec(target: str, project_dir: str = ".", scope: str = "local") -> ResolvedInstallSpec | None:
+    """Resolve the installed config for a target into a normalized spec.
+
+    Returns ``None`` when the target is supported but not currently installed.
+    Returns a ``ResolvedInstallSpec`` with ``unsupported_reason`` for targets
+    that are intentionally excluded from probing in the non-breaking phase.
+    """
+    project_root = Path(project_dir)
+
+    if target == "claude":
+        return _unsupported_spec(
+            target,
+            scope,
+            "claude uses CLI-managed installs; probe-install only supports file-based targets in v1.",
+        )
+    if target == "intellij":
+        return _unsupported_spec(
+            target,
+            scope,
+            "intellij is manual-only; probe-install only supports file-based targets in v1.",
+        )
+    if target not in ALL_TARGETS:
+        return _unsupported_spec(target, scope, f"Unknown target '{target}'.")
+
+    if target in _JSON_CONFIG_TARGETS:
+        config_dirs = {
+            "cursor": ".cursor",
+            "windsurf": ".windsurf",
+            "vscode": ".vscode",
+            "roo-code": ".roo",
+            "trae": ".trae",
+            "kiro": os.path.join(".kiro", "settings"),
+            "firebase": ".idx",
+            "continue": ".continue",
+        }
+        config_path = project_root / config_dirs[target] / "mcp.json"
+        data = _read_json_file(config_path)
+        entry = data.get("mcpServers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="json")
+
+    if target == "codex":
+        config_path = Path.home() / ".codex" / "config.toml" if scope == "user" else project_root / ".codex" / "config.toml"
+        data = _read_toml_file(config_path)
+        entry = data.get("mcp_servers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="toml")
+
+    if target == "claude-desktop":
+        config_dir = _get_user_config_dir("claude-desktop")
+        if config_dir is None:
+            return None
+        config_path = config_dir / "claude_desktop_config.json"
+        data = _read_json_file(config_path)
+        entry = data.get("mcpServers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="json")
+
+    if target == "cline":
+        config_dir = _get_user_config_dir("cline")
+        if config_dir is None:
+            return None
+        config_path = config_dir / "cline_mcp_settings.json"
+        data = _read_json_file(config_path)
+        entry = data.get("mcpServers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="json")
+
+    if target == "zed":
+        config_path = (
+            Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "zed" / "settings.json"
+            if scope == "user"
+            else project_root / ".zed" / "settings.json"
+        )
+        data = _read_json_file(config_path)
+        entry = data.get("context_servers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_zed_entry(target, scope, config_path, entry)
+
+    if target == "opencode":
+        config_path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "opencode" / "config.json"
+        data = _read_json_file(config_path)
+        entry = data.get("mcp", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_opencode_entry(target, scope, config_path, entry)
+
+    if target == "gemini-cli":
+        config_path = Path.home() / ".gemini" / "settings.json" if scope == "user" else project_root / ".gemini" / "settings.json"
+        data = _read_json_file(config_path)
+        entry = data.get("mcpServers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="json")
+
+    if target == "amazon-q":
+        config_path = Path.home() / ".aws" / "amazonq" / "mcp.json"
+        data = _read_json_file(config_path)
+        entry = data.get("mcpServers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="json")
+
+    if target == "copilot-cli":
+        config_path = Path.home() / ".copilot" / "mcp-config.json"
+        data = _read_json_file(config_path)
+        entry = data.get("mcpServers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="json")
+
+    if target == "junie":
+        config_path = Path.home() / ".junie" / "mcp" / "mcp.json" if scope == "user" else project_root / ".junie" / "mcp" / "mcp.json"
+        data = _read_json_file(config_path)
+        entry = data.get("mcpServers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="json")
+
+    if target == "amp":
+        config_path = (
+            Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "amp" / "settings.json"
+            if scope == "user"
+            else project_root / ".amp" / "settings.json"
+        )
+        data = _read_json_file(config_path)
+        entry = data.get("amp", {}).get("mcpServers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="custom-json")
+
+    if target == "hermes":
+        config_path = Path.home() / ".hermes" / "config.yaml"
+        data = _read_yaml_file(config_path)
+        entry = data.get("mcp_servers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="yaml")
+
+    if target == "goose":
+        config_path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "goose" / "config.yaml"
+        data = _read_yaml_file(config_path)
+        extensions = data.get("extensions", []) if data else []
+        if not isinstance(extensions, list):
+            return None
+        entry = next(
+            (
+                ext for ext in extensions
+                if isinstance(ext, dict) and ext.get("name") == "attocode-code-intel"
+            ),
+            None,
+        )
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_goose_entry(target, scope, config_path, entry)
+
+    if target == "gsd":
+        config_path = Path.home() / ".gsd" / "mcp.json" if scope == "user" else project_root / ".gsd" / "mcp.json"
+        data = _read_json_file(config_path)
+        entry = data.get("servers", {}).get("attocode-code-intel") if data else None
+        if not isinstance(entry, dict):
+            return None
+        return _normalize_standard_entry(target, scope, config_path, entry, source_kind="custom-json")
+
+    return None
 
 
 def _find_command(project_dir: str | None = None) -> str:

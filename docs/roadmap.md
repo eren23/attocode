@@ -1,5 +1,13 @@
 # Attocode Roadmap
 
+## v0.2.16 -- Install Probing, Portable Bundles & Supply-Chain Hardening (Released 2026-04-05)
+
+1. ~~**Installed-target runtime probing**~~ -- DONE: `attocode code-intel probe-install` validates file-based MCP installs by launching the configured stdio command, resolving `${workspaceFolder}`, and optionally exercising `project_summary`
+2. ~~**Portable code-intel bundles**~~ -- DONE: `attocode code-intel bundle export` / `bundle inspect` package local artifacts with metadata, hashes, and version stamping for offline transfer and debugging
+3. ~~**Shared install config resolution**~~ -- DONE: `ResolvedInstallSpec` and `resolve_install_spec()` unify JSON/TOML/YAML-backed assistant config parsing for install, status, and probe flows
+4. ~~**Supply-chain malware detection expansion**~~ -- DONE: new `security_scan` anti-patterns for invisible Unicode payloads, eval-on-decoded-data obfuscation, dynamic `require()` assembly, and string-based timer execution
+5. ~~**Install-hook auditing**~~ -- DONE: dependency audit now flags suspicious `preinstall`/`install`/`postinstall` scripts and shares matcher behavior between local and DB-backed scanners
+
 ## v0.2.6 -- Language Support, Search Quality & Architecture (Released 2026-03-24)
 
 1. ~~**Language-specific symbol extraction**~~ -- DONE: 11 new tree-sitter configs (Erlang, Clojure, Perl, Crystal, Dart, OCaml, F#, Julia, Nim, R, Objective-C); total 36 languages supported

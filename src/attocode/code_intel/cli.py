@@ -41,6 +41,8 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
         _cmd_serve(args[1:], debug=debug)
     elif cmd == "status":
         _cmd_status()
+    elif cmd == "probe-install":
+        _cmd_probe_install(args[1:])
     elif cmd == "notify":
         _cmd_notify(args[1:])
     elif cmd == "index":
@@ -69,6 +71,8 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
         _cmd_verify(args[1:])
     elif cmd == "reindex":
         _cmd_reindex(args[1:])
+    elif cmd == "bundle":
+        _cmd_bundle(args[1:])
     else:
         print(f"Unknown code-intel command: {cmd}", file=sys.stderr)
         _print_help()
@@ -86,6 +90,7 @@ def _print_help() -> None:
         "  serve               Run MCP server directly (stdio or SSE)\n"
         "  index               Build or check embedding index for semantic search\n"
         "  status              Check installation status across all targets\n"
+        "  probe-install       Run a runtime MCP probe for an installed target\n"
         "  notify              Notify server about changed files (for hooks)\n"
         "  test-connection     Verify connectivity to the remote server\n"
         "  watch               Watch filesystem for changes and notify remote server\n"
@@ -99,6 +104,8 @@ def _print_help() -> None:
         "  deps <file>         Show file dependencies and dependents\n"
         "\n"
         "Maintenance commands:\n"
+        "  bundle export       Export local code-intel artifacts into a bundle\n"
+        "  bundle inspect      Inspect bundle metadata and artifacts\n"
         "  gc                  Run garbage collection (orphaned embeddings + content)\n"
         "  verify              Run integrity checks on the index\n"
         "  reindex             Force a full reindex of the project\n"
@@ -134,6 +141,11 @@ def _print_help() -> None:
         "  --global            Install globally (Claude, Codex, Zed, Gemini, Junie, Amp)\n"
         "  --hooks             Also install PostToolUse hooks (Claude Code)\n"
         "\n"
+        "Probe options:\n"
+        "  probe-install <t>   Probe an installed file-based target by launching MCP stdio\n"
+        "  --project <path>    Project directory to substitute for ${workspaceFolder}\n"
+        "  --global            Read the user/global config when the target supports it\n"
+        "\n"
         "Serve options:\n"
         "  --transport <type>  Transport protocol: stdio (default), sse, or http\n"
         "  --host <addr>       Server host address (default: 127.0.0.1)\n"
@@ -167,6 +179,10 @@ def _print_help() -> None:
         "  --top <N>           Number of results (query: default 10, hotspots: default 15)\n"
         "  --filter <glob>     File filter glob for semantic search (e.g. '*.py')\n"
         "  --search <name>     Search for symbol by name (symbols command)\n"
+        "\n"
+        "Bundle options:\n"
+        "  bundle export --output <bundle.tar.gz> [--project <path>]\n"
+        "  bundle inspect <bundle.tar.gz>\n"
     )
 
 
@@ -203,6 +219,10 @@ def _parse_opts(args: list[str]) -> tuple[str | None, str, str, bool]:
             i += 1
 
     return target, project_dir, scope, hooks
+
+
+def _args_include_project_flag(args: list[str]) -> bool:
+    return any(arg == "--project" or arg.startswith("--project=") for arg in args)
 
 
 def _cmd_install(args: list[str]) -> None:
@@ -505,6 +525,102 @@ def _cmd_status() -> None:
         print("  Entry point: attocode-code-intel (on PATH)")
     else:
         print(f"  Entry point: {resolved}")
+
+
+def _cmd_probe_install(args: list[str]) -> None:
+    """Run a runtime MCP probe for a file-based installed target."""
+    from attocode.code_intel.installer import ALL_TARGETS_STR
+    from attocode.code_intel.probe import probe_install
+
+    target, project_dir, scope, _hooks = _parse_opts(args)
+    if not target:
+        print(f"Error: specify a target ({ALL_TARGETS_STR})", file=sys.stderr)
+        sys.exit(1)
+
+    exit_code = probe_install(
+        target,
+        project_dir=project_dir,
+        scope=scope,
+        force_project_probe=_args_include_project_flag(args),
+    )
+    if exit_code:
+        sys.exit(exit_code)
+
+
+def _cmd_bundle(args: list[str]) -> None:
+    """Export or inspect local code-intel bundles."""
+    if not args or args[0] in {"-h", "--help", "help"}:
+        print(
+            "Usage:\n"
+            "  attocode code-intel bundle export [--project <path>] [--output <bundle.tar.gz>]\n"
+            "  attocode code-intel bundle inspect <bundle.tar.gz>\n"
+        )
+        return
+
+    subcmd = args[0]
+    if subcmd == "export":
+        from attocode.code_intel.bundle import export_bundle
+
+        _, project_dir, _, _ = _parse_opts(args[1:])
+        output_path = ""
+        tail = args[1:]
+        i = 0
+        while i < len(tail):
+            arg = tail[i]
+            if arg == "--output" and i + 1 < len(tail):
+                output_path = tail[i + 1]
+                i += 2
+            elif arg.startswith("--output="):
+                output_path = arg.split("=", 1)[1]
+                i += 1
+            else:
+                i += 1
+
+        if not output_path:
+            bundle_name = f"attocode-bundle-{os.path.basename(os.path.abspath(project_dir))}.tar.gz"
+            output_path = os.path.join(os.getcwd(), bundle_name)
+
+        destination = export_bundle(project_dir, output_path)
+        print(f"Bundle exported to {destination}")
+        return
+
+    if subcmd == "inspect":
+        import json as json_mod
+        import tarfile
+
+        from attocode.code_intel.bundle import inspect_bundle
+
+        bundle_path = ""
+        for arg in args[1:]:
+            if not arg.startswith("-"):
+                bundle_path = arg
+                break
+        if not bundle_path:
+            print("Error: specify a bundle path.", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            metadata = inspect_bundle(bundle_path)
+        except (FileNotFoundError, OSError, tarfile.TarError, KeyError, json_mod.JSONDecodeError) as exc:
+            print(f"Error: could not inspect bundle: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Bundle: {os.path.abspath(bundle_path)}")
+        print(f"  Schema version: {metadata.get('schema_version')}")
+        print(f"  Created at: {metadata.get('created_at')}")
+        print(f"  Project: {metadata.get('project_name')}")
+        print(f"  Attocode version: {metadata.get('attocode_version')}")
+        print("  Artifacts:")
+        for artifact in metadata.get("artifacts", []):
+            status = "present" if artifact.get("present") else "missing"
+            print(
+                "    "
+                f"{artifact.get('path')}: {status}, "
+                f"size={artifact.get('size_bytes')}, sha256={artifact.get('sha256')}"
+            )
+        return
+
+    print(f"Error: unknown bundle command '{subcmd}'", file=sys.stderr)
+    sys.exit(1)
 
 
 def _cmd_notify(args: list[str]) -> None:

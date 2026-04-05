@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import tarfile
 import threading
 import tomllib
 from typing import TYPE_CHECKING
@@ -1995,6 +1996,342 @@ class TestInstaller:
 
 
 # ---------------------------------------------------------------------------
+# Install probing and bundles
+# ---------------------------------------------------------------------------
+
+
+class TestInstallProbeAndBundle:
+    def test_resolve_install_spec_cursor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config, resolve_install_spec
+
+        monkeypatch.setattr("attocode.code_intel.installer._find_command", lambda _project_dir=None: "uv run attocode-code-intel")
+        install_json_config("cursor", project_dir=str(tmp_path))
+
+        spec = resolve_install_spec("cursor", project_dir=str(tmp_path))
+        assert spec is not None
+        assert spec.command == "uv"
+        assert spec.source_kind == "json"
+        assert spec.args[-2:] == ["--project", "${workspaceFolder}"]
+
+    def test_resolve_install_spec_codex(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_codex, resolve_install_spec
+
+        monkeypatch.setattr("attocode.code_intel.installer._find_command", lambda _project_dir=None: "uv run attocode-code-intel")
+        install_codex(project_dir=str(tmp_path))
+
+        spec = resolve_install_spec("codex", project_dir=str(tmp_path), scope="local")
+        assert spec is not None
+        assert spec.source_kind == "toml"
+        assert spec.args[-2:] == ["--project", str(tmp_path)]
+
+    def test_resolve_install_spec_zed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_zed, resolve_install_spec
+
+        monkeypatch.setattr("attocode.code_intel.installer._find_command", lambda _project_dir=None: "uv run attocode-code-intel")
+        install_zed(project_dir=str(tmp_path), scope="local")
+
+        spec = resolve_install_spec("zed", project_dir=str(tmp_path), scope="local")
+        assert spec is not None
+        assert spec.source_kind == "custom-json"
+        assert spec.command == "uv"
+        assert spec.args[-2:] == ["--project", str(tmp_path)]
+
+    def test_resolve_install_spec_goose(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_goose, resolve_install_spec
+
+        monkeypatch.setattr("attocode.code_intel.installer._find_command", lambda _project_dir=None: "uv run attocode-code-intel")
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        install_goose(project_dir=str(tmp_path))
+
+        spec = resolve_install_spec("goose", project_dir=str(tmp_path))
+        assert spec is not None
+        assert spec.source_kind == "yaml"
+        assert spec.command == "uv"
+        assert "--project" in spec.args
+
+    def test_resolve_install_spec_amp(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_amp, resolve_install_spec
+
+        monkeypatch.setattr("attocode.code_intel.installer._find_command", lambda _project_dir=None: "uv run attocode-code-intel")
+        install_amp(project_dir=str(tmp_path), scope="local")
+
+        spec = resolve_install_spec("amp", project_dir=str(tmp_path), scope="local")
+        assert spec is not None
+        assert spec.source_kind == "custom-json"
+        assert spec.command == "uv"
+
+    def test_resolve_install_spec_unsupported_targets(self):
+        from attocode.code_intel.installer import resolve_install_spec
+
+        claude = resolve_install_spec("claude")
+        intellij = resolve_install_spec("intellij")
+
+        assert claude is not None and claude.is_supported is False
+        assert intellij is not None and intellij.is_supported is False
+        assert "file-based targets" in claude.unsupported_reason
+        assert "manual-only" in intellij.unsupported_reason
+
+    def test_probe_install_runs_handshake_and_substitutes_workspace(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.installer import install_json_config
+        from attocode.code_intel.probe import probe_install
+
+        monkeypatch.setattr("attocode.code_intel.installer._find_command", lambda _project_dir=None: "uv run attocode-code-intel")
+        monkeypatch.setattr("attocode.code_intel.installer.platform.system", lambda: "Darwin")
+        install_json_config("cursor", project_dir=str(tmp_path))
+
+        observed: dict[str, object] = {}
+
+        class _FakeStdIn:
+            def __init__(self):
+                self.messages: list[str] = []
+
+            def write(self, data: bytes) -> None:
+                self.messages.append(data.decode("utf-8"))
+
+            async def drain(self) -> None:
+                return None
+
+            def close(self) -> None:
+                return None
+
+        class _FakeStdOut:
+            def __init__(self, responses: list[dict[str, object]]):
+                self._lines = [json.dumps(item).encode("utf-8") + b"\n" for item in responses]
+
+            async def readline(self) -> bytes:
+                return self._lines.pop(0) if self._lines else b""
+
+        class _FakeProcess:
+            def __init__(self, responses: list[dict[str, object]]):
+                self.stdin = _FakeStdIn()
+                self.stdout = _FakeStdOut(responses)
+                self.stderr = _FakeStdOut([])
+
+            def terminate(self) -> None:
+                return None
+
+            def kill(self) -> None:
+                return None
+
+            async def wait(self) -> int:
+                return 0
+
+        async def _fake_create_subprocess_exec(command, *args, stdin=None, stdout=None, stderr=None, env=None, cwd=None):
+            observed["command"] = command
+            observed["args"] = list(args)
+            observed["env"] = dict(env or {})
+            observed["cwd"] = cwd
+            observed["stdin"] = stdin
+            observed["stdout"] = stdout
+            observed["stderr"] = stderr
+            return _FakeProcess([
+                {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2024-11-05"}},
+                {"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "project_summary", "description": "summary", "inputSchema": {}}]}},
+                {"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "ok"}]}},
+            ])
+
+        monkeypatch.setattr(
+            "attocode.integrations.mcp.client.asyncio.create_subprocess_exec",
+            _fake_create_subprocess_exec,
+        )
+
+        exit_code = probe_install("cursor", project_dir=str(tmp_path))
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert "probe succeeded" in captured.out
+        assert observed["command"] == "uv"
+        assert str(tmp_path) in observed["args"]
+        assert observed["cwd"] == str(tmp_path)
+        assert observed["env"]["PATH"] != "/opt/homebrew/bin:/usr/local/bin:${env:PATH}"
+
+    def test_probe_install_explicit_project_uses_cwd_and_project_summary_for_user_scope(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.installer import install_codex
+        from attocode.code_intel.probe import probe_install
+
+        monkeypatch.setattr("attocode.code_intel.installer._find_command", lambda _project_dir=None: "uv run attocode-code-intel")
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        install_codex(project_dir=".", scope="user")
+
+        observed: dict[str, object] = {"requests": []}
+
+        class _FakeStdIn:
+            def __init__(self):
+                self.messages: list[str] = []
+
+            def write(self, data: bytes) -> None:
+                text = data.decode("utf-8")
+                self.messages.append(text)
+                payload = json.loads(text)
+                if "method" in payload:
+                    observed["requests"].append(payload["method"])
+
+            async def drain(self) -> None:
+                return None
+
+            def close(self) -> None:
+                return None
+
+        class _FakeStdOut:
+            def __init__(self, responses: list[dict[str, object]]):
+                self._lines = [json.dumps(item).encode("utf-8") + b"\n" for item in responses]
+
+            async def readline(self) -> bytes:
+                return self._lines.pop(0) if self._lines else b""
+
+        class _FakeProcess:
+            def __init__(self, responses: list[dict[str, object]]):
+                self.stdin = _FakeStdIn()
+                self.stdout = _FakeStdOut(responses)
+                self.stderr = _FakeStdOut([])
+
+            def terminate(self) -> None:
+                return None
+
+            def kill(self) -> None:
+                return None
+
+            async def wait(self) -> int:
+                return 0
+
+        async def _fake_create_subprocess_exec(command, *args, stdin=None, stdout=None, stderr=None, env=None, cwd=None):
+            observed["command"] = command
+            observed["args"] = list(args)
+            observed["cwd"] = cwd
+            observed["env"] = dict(env or {})
+            return _FakeProcess([
+                {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2024-11-05"}},
+                {"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "project_summary", "description": "summary", "inputSchema": {}}]}},
+                {"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "ok"}]}},
+            ])
+
+        monkeypatch.setattr(
+            "attocode.integrations.mcp.client.asyncio.create_subprocess_exec",
+            _fake_create_subprocess_exec,
+        )
+
+        target_project = tmp_path / "target-project"
+        target_project.mkdir()
+        exit_code = probe_install(
+            "codex",
+            project_dir=str(target_project),
+            scope="user",
+            force_project_probe=True,
+        )
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert "with project_summary probe" in captured.out
+        assert observed["cwd"] == str(target_project)
+        assert observed["requests"] == [
+            "initialize",
+            "notifications/initialized",
+            "tools/list",
+            "tools/call",
+        ]
+
+    def test_bundle_inspect_missing_file_exits_cleanly(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        with pytest.raises(SystemExit) as exc_info:
+            dispatch_code_intel(["bundle", "inspect", str(tmp_path / "missing.tar.gz")])
+        captured = capsys.readouterr()
+
+        assert exc_info.value.code == 1
+        assert "could not inspect bundle" in captured.err
+
+    def test_bundle_inspect_non_tar_file_exits_cleanly(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        bad_bundle = tmp_path / "not-a-tar.tar.gz"
+        bad_bundle.write_text("nope", encoding="utf-8")
+
+        with pytest.raises(SystemExit) as exc_info:
+            dispatch_code_intel(["bundle", "inspect", str(bad_bundle)])
+        captured = capsys.readouterr()
+
+        assert exc_info.value.code == 1
+        assert "could not inspect bundle" in captured.err
+
+    def test_bundle_inspect_missing_metadata_exits_cleanly(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        bundle_path = tmp_path / "missing-metadata.tar.gz"
+        payload_dir = tmp_path / "payload"
+        payload_dir.mkdir()
+        (payload_dir / "dummy.txt").write_text("x", encoding="utf-8")
+        with tarfile.open(bundle_path, "w:gz") as archive:
+            archive.add(payload_dir, arcname="attocode-bundle")
+
+        with pytest.raises(SystemExit) as exc_info:
+            dispatch_code_intel(["bundle", "inspect", str(bundle_path)])
+        captured = capsys.readouterr()
+
+        assert exc_info.value.code == 1
+        assert "could not inspect bundle" in captured.err
+
+    def test_bundle_export_and_inspect(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        (tmp_path / ".attocode" / "index").mkdir(parents=True)
+        (tmp_path / ".attocode" / "index" / "symbols.db").write_text("symbols")
+        (tmp_path / ".attocode" / "cache").mkdir(parents=True)
+        (tmp_path / ".attocode" / "cache" / "memory.db").write_text("memory")
+
+        bundle_path = tmp_path / "bundle.tar.gz"
+        dispatch_code_intel(["bundle", "export", "--project", str(tmp_path), "--output", str(bundle_path)])
+        captured = capsys.readouterr()
+        assert "Bundle exported" in captured.out
+        assert bundle_path.exists()
+
+        with tarfile.open(bundle_path, "r:gz") as archive:
+            names = set(archive.getnames())
+            assert "attocode-bundle/metadata.json" in names
+            assert "attocode-bundle/artifacts/index/symbols.db" in names
+            assert "attocode-bundle/artifacts/cache/memory.db" in names
+            assert "attocode-bundle/artifacts/vectors/embeddings.db" not in names
+            metadata = json.loads(
+                archive.extractfile("attocode-bundle/metadata.json").read().decode("utf-8")
+            )
+            assert metadata["schema_version"] == 1
+            assert metadata["project_name"] == tmp_path.name
+            manifest = {item["path"]: item for item in metadata["artifacts"]}
+            assert manifest["artifacts/index/symbols.db"]["present"] is True
+            assert manifest["artifacts/vectors/embeddings.db"]["present"] is False
+
+        dispatch_code_intel(["bundle", "inspect", str(bundle_path)])
+        captured = capsys.readouterr()
+        assert "Schema version: 1" in captured.out
+        assert "artifacts/index/symbols.db: present" in captured.out
+
+
+# ---------------------------------------------------------------------------
 # CLI dispatch
 # ---------------------------------------------------------------------------
 
@@ -2008,6 +2345,8 @@ class TestCLIDispatch:
         assert "install" in captured.out
         assert "uninstall" in captured.out
         assert "serve" in captured.out
+        assert "probe-install" in captured.out
+        assert "bundle export" in captured.out
 
     def test_dispatch_status(
         self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
@@ -2033,6 +2372,67 @@ class TestCLIDispatch:
         for target_name in ["Claude Code", "Cursor", "Windsurf", "VS Code", "GSD", "Codex",
                             "Claude Desktop", "Cline", "Zed"]:
             assert target_name in captured.out, f"Missing '{target_name}' in status output"
+
+    def test_dispatch_probe_install_routes(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        observed: dict[str, str] = {}
+
+        def _fake_probe_install(
+            target: str,
+            project_dir: str = ".",
+            scope: str = "local",
+            *,
+            force_project_probe: bool = False,
+        ) -> int:
+            observed["target"] = target
+            observed["project_dir"] = project_dir
+            observed["scope"] = scope
+            observed["force_project_probe"] = force_project_probe
+            print("probe ok")
+            return 0
+
+        monkeypatch.setattr("attocode.code_intel.probe.probe_install", _fake_probe_install)
+
+        dispatch_code_intel(["probe-install", "cursor", "--project", "/tmp/demo", "--global"])
+        captured = capsys.readouterr()
+        assert "probe ok" in captured.out
+        assert observed == {
+            "target": "cursor",
+            "project_dir": "/tmp/demo",
+            "scope": "user",
+            "force_project_probe": True,
+        }
+
+    def test_dispatch_probe_install_unsupported_target_exits_2(
+        self,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        with pytest.raises(SystemExit) as exc_info:
+            dispatch_code_intel(["probe-install", "claude"])
+        captured = capsys.readouterr()
+
+        assert exc_info.value.code == 2
+        assert "file-based targets in v1" in captured.err
+
+    def test_dispatch_probe_install_manual_target_exits_2(
+        self,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        with pytest.raises(SystemExit) as exc_info:
+            dispatch_code_intel(["probe-install", "intellij"])
+        captured = capsys.readouterr()
+
+        assert exc_info.value.code == 2
+        assert "manual-only" in captured.err
 
 
 class TestVerifyCLI:
