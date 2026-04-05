@@ -7,13 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-04-05
+
 ### Added
+
+#### Code-Intel Install Validation & Bundles
+- `attocode code-intel probe-install <target>` — runtime MCP probing for installed file-based assistant configs; resolves `${workspaceFolder}` placeholders, supports local/user scopes, and optionally exercises `project_summary` when the install config pins a project path
+- `ResolvedInstallSpec` in `installer.py` plus `resolve_install_spec()` helpers — normalizes installed MCP target configs across JSON/TOML/YAML-backed assistants so install status and probe flows share one source of truth
+- `attocode code-intel bundle export` / `bundle inspect` — export portable local code-intel bundles and inspect bundle metadata, artifact presence, sizes, and SHA-256 hashes
+- Bundle metadata now records schema version, creation timestamp, project name, bundled artifact inventory, and the shipping `attocode` version for release/debugging workflows
 
 #### GlassWorm-Class Supply-Chain Detection
 - 7 new anti-pattern rules in `security_scan` targeting stealth supply-chain malware (NPM/VS Code marketplace attacks):
   - `invisible_unicode_run` (HIGH, CWE-506) — detects runs of zero-width / variation-selector / tag-character steganographic payloads; scans comment lines since that is a common hiding spot
   - `js_eval_on_decoded`, `js_eval_on_buffer`, `js_eval_on_fromcharcode` (CRITICAL, CWE-94) — compound obfuscation patterns where JavaScript runs dynamic code on `atob`/`Buffer.from(..., 'base64')`/`String.fromCharCode` output
   - `python_eval_on_b64decode`, `python_exec_on_codecs_decode`, `python_exec_on_marshal_loads` (CRITICAL, CWE-94) — Python equivalents covering base64 decode, codecs/zlib/bytes.fromhex, and marshal.loads
+- Additional JavaScript obfuscation heuristics: `js_dynamic_require_concat` for Shai-Hulud-style dynamic `require()` string assembly and `js_settimer_string_arg` for string-based `setTimeout`/`setInterval` execution
 - `scan_comments` field on `SecurityPattern` dataclass — allows individual patterns to opt into scanning comment lines (previously all comments were globally skipped)
 - Install-hook scanner in `DependencyAuditor._audit_install_hooks` — flags `package.json` `preinstall`/`install`/`postinstall` scripts containing obfuscation or remote-fetch indicators (curl-piped-to-shell, remote scripts, inline `node -e`, `child_process` require, eval/atob/base64)
 - Shared `iter_pattern_matches` generator in new `src/attocode/integrations/security/matcher.py` — consolidates comment-skip, language-filter, and per-pattern iteration logic used by both the filesystem scanner and the DB-backed scanner
