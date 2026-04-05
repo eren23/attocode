@@ -421,7 +421,7 @@ The MCP server exposes 27 tools across 6 categories:
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `semantic_search` | `query`, `top_k`, `file_filter` | Natural language code search (vector + keyword RRF) |
-| `security_scan` | `mode`, `path` | Secret detection, anti-patterns, dependency issues |
+| `security_scan` | `mode`, `path` | Secret detection, anti-patterns (incl. supply-chain obfuscation), dependency & install-hook issues |
 
 #### LSP
 

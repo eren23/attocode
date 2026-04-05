@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from attocode.integrations.security.matcher import iter_pattern_matches
 from attocode.integrations.security.patterns import (
     ANTI_PATTERNS,
     SECRET_PATTERNS,
@@ -35,6 +36,7 @@ _SCANNABLE_DOTFILES = {".env", ".envrc", ".env.local", ".env.production", ".env.
 _EXTRA_IGNORED_DIRS = {"site"}
 _PATTERN_DEFINITION_FILES = {
     os.path.normpath("src/attocode/integrations/security/patterns.py"),
+    os.path.normpath("tests/unit/code_intel/test_supply_chain_rules.py"),
 }
 
 
@@ -234,32 +236,19 @@ class SecurityScanner:
         language: str,
     ) -> list[SecurityFinding]:
         """Scan file content against a set of patterns."""
-        findings: list[SecurityFinding] = []
-
-        for pat in patterns:
-            # Skip language-specific patterns that don't apply
-            if pat.languages and language not in pat.languages:
-                continue
-
-            for i, line in enumerate(content.split("\n"), 1):
-                # Skip comment lines (basic heuristic)
-                stripped = line.lstrip()
-                if stripped.startswith("#") or stripped.startswith("//"):
-                    continue
-
-                if pat.pattern.search(line):
-                    findings.append(SecurityFinding(
-                        severity=pat.severity,
-                        category=pat.category,
-                        file_path=file_path,
-                        line=i,
-                        message=pat.message,
-                        recommendation=pat.recommendation,
-                        cwe_id=pat.cwe_id,
-                        pattern_name=pat.name,
-                    ))
-
-        return findings
+        return [
+            SecurityFinding(
+                severity=pat.severity,
+                category=pat.category,
+                file_path=file_path,
+                line=line_no,
+                message=pat.message,
+                recommendation=pat.recommendation,
+                cwe_id=pat.cwe_id,
+                pattern_name=pat.name,
+            )
+            for line_no, _line, pat in iter_pattern_matches(content, patterns, language)
+        ]
 
     @staticmethod
     def _compute_score(summary: dict[str, int]) -> int:

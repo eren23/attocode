@@ -24,6 +24,46 @@ _DEFAULT_CACHE_DIR = os.path.expanduser("~/.attocode")
 _OSV_CACHE_FILE = "osv-cache.json"
 _OSV_CACHE_TTL = 86400  # 24 hours
 
+# Suspicious tokens in package.json install hooks (GlassWorm-class supply-chain attacks)
+_SUSPICIOUS_HOOK_TOKENS: list[tuple[str, "re.Pattern[str]", str]] = [
+    ("hook_eval", re.compile(r"\beval\b"), "dynamic evaluation in install hook"),
+    ("hook_atob", re.compile(r"\batob\s*\("), "atob decoder in install hook"),
+    ("hook_buffer_b64", re.compile(r"Buffer\.from\s*\([^)]*base64", re.IGNORECASE),
+     "Buffer.from base64 decode in install hook"),
+    ("hook_child_process", re.compile(r"require\s*\(\s*['\"]child_process['\"]\s*\)"),
+     "child_process require in install hook"),
+    ("hook_node_dash_e", re.compile(r"\bnode\s+-e\b"),
+     "node -e inline script in install hook"),
+    ("hook_curl_pipe_sh", re.compile(r"\b(?:curl|wget|fetch)\b[^|]*\|\s*(?:ba)?sh\b", re.IGNORECASE),
+     "curl/wget piped to shell in install hook"),
+    ("hook_remote_script", re.compile(r"https?://\S+\.(?:sh|py|exe|dll|so|dylib)\b", re.IGNORECASE),
+     "remote script fetch in install hook"),
+    ("hook_popen", re.compile(r"\bpopen\s*\("),
+     "popen call in install hook"),
+    ("hook_system_call", re.compile(r"\bsystem\s*\("),
+     "system call in install hook"),
+    ("hook_child_spawn", re.compile(r"\b(?:spawnSync|execSync|execFile|execFileSync)\s*\("),
+     "child_process spawn/exec variant in install hook"),
+]
+
+# Suspicious patterns in setup.py (supply-chain attacks: ctx, W4SP, LiteLLM).
+# setup.py should never make network calls; install-time fetches are a classic
+# vector for staged-payload delivery.
+_SUSPICIOUS_SETUP_PY_PATTERNS: list[tuple[str, "re.Pattern[str]", str]] = [
+    ("setup_urllib_fetch",
+     re.compile(r"\burllib(?:\.request)?\.urlopen\s*\("),
+     "urllib network fetch"),
+    ("setup_urlretrieve",
+     re.compile(r"\burlretrieve\s*\("),
+     "urlretrieve fetch"),
+    ("setup_http_client_call",
+     re.compile(r"\b(?:requests|httpx|aiohttp)\.(?:get|post|put|delete|head)\s*\("),
+     "HTTP client call"),
+    ("setup_socket_connect",
+     re.compile(r"\bsocket\.create_connection\s*\("),
+     "raw socket connection"),
+]
+
 
 @dataclass(slots=True)
 class DependencyFinding:
@@ -69,6 +109,11 @@ class DependencyAuditor:
         pkg_json = root / "package.json"
         if pkg_json.exists():
             findings.extend(self._audit_package_json(pkg_json))
+
+        # Python: setup.py (supply-chain network-at-install-time check)
+        setup_py = root / "setup.py"
+        if setup_py.exists():
+            findings.extend(self._audit_setup_py(setup_py))
 
         return findings
 
@@ -155,6 +200,73 @@ class DependencyAuditor:
                         source_file=str(path),
                     ))
 
+        findings.extend(self._audit_install_hooks(data, path))
+        return findings
+
+    def _audit_install_hooks(self, data: dict, path: Path) -> list[DependencyFinding]:
+        """Flag package.json install hooks with obfuscation/remote-fetch patterns.
+
+        Supply-chain attackers (GlassWorm-class) place obfuscated one-liners in
+        preinstall/postinstall/install scripts that execute automatically on
+        ``npm install``. This detects the most common indicators.
+
+        Note: only the root-level package.json is audited (same as pinning check).
+        Monorepo workspace package.json files are not traversed.
+        """
+        findings: list[DependencyFinding] = []
+        scripts = data.get("scripts", {})
+        if not isinstance(scripts, dict):
+            return findings
+        for hook in ("preinstall", "install", "postinstall"):
+            script = scripts.get(hook)
+            if not isinstance(script, str) or not script.strip():
+                continue
+            for _name, regex, description in _SUSPICIOUS_HOOK_TOKENS:
+                if regex.search(script):
+                    findings.append(DependencyFinding(
+                        package=hook,
+                        version_spec=script[:200],
+                        severity=Severity.HIGH,
+                        cwe_id="CWE-506",
+                        message=f"Suspicious {hook} script: {description}",
+                        recommendation=(
+                            f"Review the '{hook}' script in package.json; "
+                            "supply-chain attackers use install hooks to run "
+                            "obfuscated one-liners on `npm install`"
+                        ),
+                        source_file=str(path),
+                    ))
+                    break  # one finding per hook is enough
+        return findings
+
+    def _audit_setup_py(self, path: Path) -> list[DependencyFinding]:
+        """Flag network calls in setup.py (supply-chain attack vector).
+
+        setup.py executes arbitrary Python at install time. Legitimate setup
+        scripts only define metadata and dependencies; network fetches there
+        are almost always a staged-payload delivery mechanism (ctx/W4SP/
+        LiteLLM style attacks).
+        """
+        findings: list[DependencyFinding] = []
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError:
+            return findings
+        for name, regex, description in _SUSPICIOUS_SETUP_PY_PATTERNS:
+            if regex.search(content):
+                findings.append(DependencyFinding(
+                    package="setup.py",
+                    version_spec=name,
+                    severity=Severity.HIGH,
+                    cwe_id="CWE-506",
+                    message=f"setup.py contains {description} — supply-chain attack pattern",
+                    recommendation=(
+                        "Setup scripts should not make network calls; "
+                        "install-time fetches are a classic supply-chain "
+                        "vector (cf. PyPI ctx, W4SP stealer)"
+                    ),
+                    source_file=str(path),
+                ))
         return findings
 
     def _check_pinning(self, dep_spec: str, source_file: str) -> DependencyFinding | None:

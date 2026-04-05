@@ -59,7 +59,7 @@
 | Tool | Purpose | When to Use |
 |------|---------|-------------|
 | `semantic_search` | Natural language code search. Optional `mode`: "auto" (default), "keyword" (fast), "vector" (wait for embeddings) | Find code by description, not name |
-| `security_scan` | Secret detection, anti-patterns, dependency issues | Security review |
+| `security_scan` | Secret detection (13 patterns), anti-patterns (21 rules incl. supply-chain obfuscation: invisible Unicode, eval-on-decoded-data, install-hook scrutiny), dependency issues | Security review, supply-chain hardening |
 
 ### Memory & Recall (50–500 tokens each)
 

@@ -11,6 +11,8 @@ import logging
 import uuid
 from typing import TYPE_CHECKING
 
+from attocode.integrations.security.matcher import iter_pattern_matches
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,31 +128,20 @@ async def db_security_scan(
         files_scanned += 1
         file_lang = _detect_language(path)
 
-        for line_no, line in enumerate(text.splitlines(), 1):
-            # Skip comment lines
-            stripped = line.strip()
-            if stripped.startswith("#") or stripped.startswith("//"):
-                continue
-
-            for pat in patterns:
-                # Filter by language if pattern is language-specific
-                if pat.languages and file_lang not in pat.languages:
-                    continue
-
-                if pat.pattern.search(line):
-                    sev = str(pat.severity)
-                    severity_counts[sev] = severity_counts.get(sev, 0) + 1
-                    findings.append({
-                        "pattern": pat.name,
-                        "severity": sev,
-                        "category": str(pat.category),
-                        "cwe_id": pat.cwe_id,
-                        "file": path,
-                        "line": line_no,
-                        "message": pat.message,
-                        "recommendation": pat.recommendation,
-                        "snippet": stripped[:200],
-                    })
+        for line_no, line, pat in iter_pattern_matches(text, patterns, file_lang):
+            sev = str(pat.severity)
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+            findings.append({
+                "pattern": pat.name,
+                "severity": sev,
+                "category": str(pat.category),
+                "cwe_id": pat.cwe_id,
+                "file": path,
+                "line": line_no,
+                "message": pat.message,
+                "recommendation": pat.recommendation,
+                "snippet": line.strip()[:200],
+            })
 
     # Compute compliance score
     score = 100 - (

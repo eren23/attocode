@@ -5,6 +5,19 @@ All notable changes to the Attocode Python agent will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### GlassWorm-Class Supply-Chain Detection
+- 7 new anti-pattern rules in `security_scan` targeting stealth supply-chain malware (NPM/VS Code marketplace attacks):
+  - `invisible_unicode_run` (HIGH, CWE-506) — detects runs of zero-width / variation-selector / tag-character steganographic payloads; scans comment lines since that is a common hiding spot
+  - `js_eval_on_decoded`, `js_eval_on_buffer`, `js_eval_on_fromcharcode` (CRITICAL, CWE-94) — compound obfuscation patterns where JavaScript runs dynamic code on `atob`/`Buffer.from(..., 'base64')`/`String.fromCharCode` output
+  - `python_eval_on_b64decode`, `python_exec_on_codecs_decode`, `python_exec_on_marshal_loads` (CRITICAL, CWE-94) — Python equivalents covering base64 decode, codecs/zlib/bytes.fromhex, and marshal.loads
+- `scan_comments` field on `SecurityPattern` dataclass — allows individual patterns to opt into scanning comment lines (previously all comments were globally skipped)
+- Install-hook scanner in `DependencyAuditor._audit_install_hooks` — flags `package.json` `preinstall`/`install`/`postinstall` scripts containing obfuscation or remote-fetch indicators (curl-piped-to-shell, remote scripts, inline `node -e`, `child_process` require, eval/atob/base64)
+- Shared `iter_pattern_matches` generator in new `src/attocode/integrations/security/matcher.py` — consolidates comment-skip, language-filter, and per-pattern iteration logic used by both the filesystem scanner and the DB-backed scanner
+
 ## [0.2.15] - 2026-04-04
 
 ### Added
