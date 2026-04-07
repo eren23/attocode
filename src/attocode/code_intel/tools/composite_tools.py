@@ -547,3 +547,64 @@ def suggest_tests(
     )
 
     return "\n".join(lines)
+
+
+@mcp.tool()
+def architecture_drift(
+    config_path: str = "",
+) -> str:
+    """Detect architecture boundary violations in the codebase.
+
+    Compares actual file dependencies against rules defined in
+    .attocode/architecture.yaml. Reports layering violations,
+    unauthorized imports, and circular dependencies.
+
+    Args:
+        config_path: Path to architecture config (default: .attocode/architecture.yaml).
+    """
+    from attocode.integrations.context.architecture_drift import (
+        check_drift,
+        format_report,
+        load_architecture,
+    )
+
+    project_dir = _get_project_dir()
+
+    # If a custom config_path is given, verify it exists
+    if config_path:
+        if not os.path.isfile(config_path):
+            return (
+                f"Error: Architecture config not found at '{config_path}'.\n"
+                "Create a .attocode/architecture.yaml file defining your layers and rules.\n"
+                "See documentation for the expected YAML format."
+            )
+
+    # Check that the default config exists when no override is given
+    if not config_path:
+        default_path = os.path.join(project_dir, ".attocode", "architecture.yaml")
+        if not os.path.isfile(default_path):
+            return (
+                "No architecture config found at .attocode/architecture.yaml.\n\n"
+                "Create this file to define your architecture boundaries. Example:\n\n"
+                "  layers:\n"
+                '    - name: presentation\n'
+                '      paths: ["src/api/", "src/routes/"]\n'
+                '    - name: business\n'
+                '      paths: ["src/services/", "src/domain/"]\n'
+                '    - name: data\n'
+                '      paths: ["src/models/", "src/repositories/"]\n\n'
+                "  rules:\n"
+                "    - from: presentation\n"
+                "      to: [business]\n"
+                "      deny: [data]\n"
+                "    - from: business\n"
+                "      to: [data]\n"
+                "      deny: [presentation]\n"
+            )
+
+    try:
+        report = check_drift(project_dir)
+        return format_report(report)
+    except Exception as exc:
+        logger.exception("Architecture drift check failed")
+        return f"Error running architecture drift check: {exc}"

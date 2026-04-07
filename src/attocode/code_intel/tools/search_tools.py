@@ -208,6 +208,48 @@ def security_scan(
 
 
 @mcp.tool()
+def dataflow_scan(
+    files: list[str] | None = None,
+    path: str = "",
+) -> str:
+    """Scan for data flow vulnerabilities using taint analysis.
+
+    Tracks user-controlled data (request parameters, input, argv) through
+    variable assignments to dangerous sinks (SQL execution, shell commands,
+    file operations, HTML output). Detects SQL injection (CWE-89), command
+    injection (CWE-78), XSS (CWE-79), path traversal (CWE-22), and SSRF
+    (CWE-918).
+
+    Currently supports Python and JavaScript/TypeScript. Analysis is
+    intra-procedural (within individual functions).
+
+    Args:
+        files: Specific files to analyze (relative paths). Default: all.
+        path: Subdirectory to restrict analysis to.
+    """
+    from attocode.integrations.security.dataflow import analyze_project, format_report
+
+    project_dir = _get_project_dir()
+    if path and not files:
+        import os
+        scan_dir = os.path.join(project_dir, path)
+        if not os.path.isdir(scan_dir):
+            return f"Error: Path not found: {path}"
+        # Discover files in subdirectory
+        _EXTS = {".py", ".js", ".ts", ".jsx", ".tsx"}
+        files = []
+        for dirpath, _, filenames in os.walk(scan_dir):
+            for fname in filenames:
+                if os.path.splitext(fname)[1].lower() in _EXTS:
+                    files.append(os.path.relpath(
+                        os.path.join(dirpath, fname), project_dir,
+                    ))
+
+    report = analyze_project(project_dir, paths=files or None)
+    return format_report(report)
+
+
+@mcp.tool()
 def fast_search(
     pattern: str,
     path: str = "",

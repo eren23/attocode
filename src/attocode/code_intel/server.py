@@ -616,6 +616,7 @@ recent_changes = _history_tools.recent_changes  # noqa: E402
 review_change = _composite_tools.review_change  # noqa: E402
 explain_impact = _composite_tools.explain_impact  # noqa: E402
 suggest_tests = _composite_tools.suggest_tests  # noqa: E402
+architecture_drift = _composite_tools.architecture_drift  # noqa: E402
 
 bootstrap = _navigation_tools.bootstrap  # noqa: E402
 conventions = _navigation_tools.conventions  # noqa: E402
