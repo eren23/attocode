@@ -20,6 +20,10 @@ from attocode.integrations.security.patterns import (
     SecurityPattern,
     Severity,
 )
+from attocode.integrations.security.custom_rules import (
+    get_autofix_from_rules,
+    load_custom_rules,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +56,17 @@ class SecurityFinding:
     recommendation: str
     cwe_id: str = ""
     pattern_name: str = ""
+    fix_diff: str = ""  # unified diff suggestion for mechanical fixes
+
+
+# Autofix templates: pattern_name -> (search, replace) for mechanical fixes.
+# These are safe, deterministic transformations for common patterns.
+_AUTOFIX_TEMPLATES: dict[str, tuple[str, str]] = {
+    "python_yaml_unsafe": ("yaml.load(", "yaml.safe_load("),
+    "python_shell_true": ("shell=True", "shell=False"),
+    "python_tempfile_insecure": ("tempfile.mktemp(", "tempfile.mkstemp("),
+    "python_verify_false": ("verify=False", "verify=True"),
+}
 
 
 @dataclass(slots=True)
@@ -79,10 +94,14 @@ class SecurityScanner:
 
     root_dir: str
     _language_map: dict[str, str] = field(default_factory=dict, repr=False)
+    _custom_patterns: list[SecurityPattern] = field(default_factory=list, repr=False)
+    _custom_autofixes: dict[str, tuple[str, str]] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         from attocode.integrations.context.codebase_context import EXTENSION_LANGUAGES
         self._language_map = dict(EXTENSION_LANGUAGES)
+        self._custom_patterns = load_custom_rules(self.root_dir)
+        self._custom_autofixes = get_autofix_from_rules(self.root_dir)
 
     def scan(
         self,
@@ -225,6 +244,10 @@ class SecurityScanner:
                     findings.extend(
                         self._scan_content(content, rel_path, ANTI_PATTERNS, language),
                     )
+                    if self._custom_patterns:
+                        findings.extend(
+                            self._scan_content(content, rel_path, self._custom_patterns, language),
+                        )
 
         return files_scanned, findings
 
@@ -236,8 +259,21 @@ class SecurityScanner:
         language: str,
     ) -> list[SecurityFinding]:
         """Scan file content against a set of patterns."""
-        return [
-            SecurityFinding(
+        findings: list[SecurityFinding] = []
+        for line_no, line_text, pat in iter_pattern_matches(content, patterns, language):
+            fix_diff = ""
+            template = _AUTOFIX_TEMPLATES.get(pat.name) or self._custom_autofixes.get(pat.name)
+            if template and template[0] in line_text:
+                old_line = line_text
+                new_line = line_text.replace(template[0], template[1], 1)
+                fix_diff = (
+                    f"--- a/{file_path}\n"
+                    f"+++ b/{file_path}\n"
+                    f"@@ -{line_no},1 +{line_no},1 @@\n"
+                    f"-{old_line}\n"
+                    f"+{new_line}"
+                )
+            findings.append(SecurityFinding(
                 severity=pat.severity,
                 category=pat.category,
                 file_path=file_path,
@@ -246,9 +282,9 @@ class SecurityScanner:
                 recommendation=pat.recommendation,
                 cwe_id=pat.cwe_id,
                 pattern_name=pat.name,
-            )
-            for line_no, _line, pat in iter_pattern_matches(content, patterns, language)
-        ]
+                fix_diff=fix_diff,
+            ))
+        return findings
 
     @staticmethod
     def _compute_score(summary: dict[str, int]) -> int:
@@ -304,6 +340,10 @@ class SecurityScanner:
                 lines.append(f"  {f.file_path}:{f.line}{cwe}")
                 lines.append(f"    {f.message}")
                 lines.append(f"    → {f.recommendation}")
+                if f.fix_diff:
+                    lines.append(f"    Autofix:")
+                    for dl in f.fix_diff.splitlines():
+                        lines.append(f"      {dl}")
             if len(group) > 20:
                 lines.append(f"  ... and {len(group) - 20} more {sev} findings")
             lines.append("")

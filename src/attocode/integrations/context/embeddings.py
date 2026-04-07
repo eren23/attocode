@@ -1,9 +1,10 @@
 """Embedding provider abstraction for semantic search.
 
 Tries providers in order:
-1. Local: sentence-transformers (no API cost, ~22MB model)
-2. API: OpenAI text-embedding-3-small (if OPENAI_API_KEY set)
-3. None: graceful degradation (returns empty vectors)
+1. Local: sentence-transformers with code-optimized model (no API cost)
+2. Local: sentence-transformers with general model (smaller fallback)
+3. API: OpenAI text-embedding-3-small (if OPENAI_API_KEY set)
+4. None: graceful degradation (returns empty vectors)
 """
 
 from __future__ import annotations
@@ -106,6 +107,33 @@ class NomicEmbeddingProvider(EmbeddingProvider):
         return "local:nomic-embed-text-v1.5"
 
 
+class CodeEmbeddingProvider(EmbeddingProvider):
+    """Local embeddings via BAAI/bge-base-en-v1.5 (768-dim, ~440MB model).
+
+    Significantly outperforms all-MiniLM-L6-v2 on code search tasks due to
+    larger model capacity and better handling of code tokens (identifiers,
+    camelCase, snake_case, function signatures).
+
+    Note: Switching models requires reindexing (different vector dimensions).
+    """
+
+    def __init__(self) -> None:
+        from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
+        self._model = SentenceTransformer("BAAI/bge-base-en-v1.5")
+        self._dim = 768
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        embeddings = self._model.encode(texts, convert_to_numpy=True)
+        return [e.tolist() for e in embeddings]
+
+    def dimension(self) -> int:
+        return self._dim
+
+    @property
+    def name(self) -> str:
+        return "local:bge-base-en-v1.5"
+
+
 class NullEmbeddingProvider(EmbeddingProvider):
     """Fallback provider that returns empty vectors."""
 
@@ -130,19 +158,34 @@ def create_embedding_provider(
 
     Args:
         model: Preferred model name. Options:
-            - "all-MiniLM-L6-v2" (default, 384-dim, fast)
+            - "bge" (768-dim, recommended for code search)
+            - "all-MiniLM-L6-v2" (384-dim, fast, smaller)
             - "nomic-embed-text" (768-dim, better code understanding)
             - "openai" (API-based, requires OPENAI_API_KEY)
             - "" (auto-detect best available)
 
-    Tries in order: local sentence-transformers, OpenAI API, null fallback.
+    Auto-detect order: bge (code-optimized) > MiniLM > OpenAI API > null.
+    Note: switching models requires reindexing (different vector dims).
     """
     model = model or os.environ.get("ATTOCODE_EMBEDDING_MODEL", "")
 
     if model in _provider_cache:
         return _provider_cache[model]
 
-    # Explicit local default request
+    # Explicit BGE request (code-optimized)
+    if model == "bge":
+        try:
+            provider = CodeEmbeddingProvider()
+            logger.info("Using embedding provider: %s", provider.name)
+            _provider_cache[model] = provider
+            return provider
+        except ImportError:
+            raise ImportError(
+                f"Embedding model '{model}' requires sentence-transformers. "
+                "Install with: pip install attocode[semantic]"
+            )
+
+    # Explicit MiniLM request
     if model == "all-MiniLM-L6-v2":
         try:
             provider = LocalEmbeddingProvider()
@@ -183,17 +226,26 @@ def create_embedding_provider(
         except Exception as e:
             raise RuntimeError(f"OpenAI embedding provider failed: {e}") from e
 
-    # Auto-detect: try local first (no API cost)
+    # Auto-detect: try code-optimized BGE first, then MiniLM (no API cost)
     try:
-        provider = LocalEmbeddingProvider()
-        logger.info("Using local embedding provider: %s", provider.name)
+        provider = CodeEmbeddingProvider()
+        logger.info("Using code-optimized embedding provider: %s", provider.name)
         _provider_cache[model] = provider
         return provider
     except ImportError:
         logger.debug("sentence-transformers not installed, trying OpenAI")
     except Exception as exc:
-        logger.warning("Local embedding provider unavailable: %s", exc)
-        logger.debug("Local embedding provider traceback", exc_info=True)
+        logger.info("BGE model unavailable (%s), falling back to MiniLM", exc)
+        try:
+            provider = LocalEmbeddingProvider()
+            logger.info("Using local embedding provider: %s", provider.name)
+            _provider_cache[model] = provider
+            return provider
+        except ImportError:
+            logger.debug("sentence-transformers not installed, trying OpenAI")
+        except Exception as exc2:
+            logger.warning("Local embedding provider unavailable: %s", exc2)
+            logger.debug("Local embedding provider traceback", exc_info=True)
 
     # Try OpenAI API
     if os.environ.get("OPENAI_API_KEY"):

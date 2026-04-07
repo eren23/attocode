@@ -34,6 +34,20 @@ _STOP_WORDS = frozenset({
 
 _CAMEL_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 
+# Mapping from common query terms to code construct types for query expansion
+_CONSTRUCT_HINTS: dict[str, list[str]] = {
+    "function": ["def", "func", "fn"],
+    "class": ["class", "struct", "type"],
+    "method": ["def", "func", "method"],
+    "import": ["import", "require", "from", "use"],
+    "test": ["test", "spec", "assert", "expect"],
+    "error": ["error", "exception", "raise", "throw", "catch"],
+    "config": ["config", "settings", "env", "option"],
+    "api": ["route", "endpoint", "handler", "controller"],
+    "auth": ["auth", "login", "password", "token", "session"],
+    "database": ["query", "model", "schema", "migration", "table"],
+}
+
 
 def _tokenize(text: str) -> list[str]:
     """Tokenize text: split camelCase/snake_case, lowercase, remove stop words."""
@@ -48,6 +62,60 @@ def _tokenize(text: str) -> list[str]:
             if len(sp_lower) >= 2 and sp_lower not in _STOP_WORDS:
                 tokens.append(sp_lower)
     return tokens
+
+
+def _expand_query(query: str, language: str = "") -> str:
+    """Expand a search query with language and construct hints.
+
+    Prepends language context and adds related terms for known constructs,
+    improving recall for code-specific embedding models.
+
+    Examples:
+        "auth middleware" + "python" -> "python auth middleware login token session"
+        "parse config" -> "parse config settings env option"
+    """
+    query_lower = query.lower()
+    tokens = _tokenize(query)
+    expansions: list[str] = []
+
+    # Add language hint if known
+    if language:
+        expansions.append(language)
+
+    # Add construct-related terms for each matching concept
+    for concept, hints in _CONSTRUCT_HINTS.items():
+        if concept in query_lower or any(t == concept for t in tokens):
+            for hint in hints:
+                if hint not in query_lower and hint not in expansions:
+                    expansions.append(hint)
+
+    if not expansions:
+        return query
+
+    return f"{query} {' '.join(expansions)}"
+
+
+def _summarize_code_to_nl(name: str, chunk_type: str, text: str) -> str:
+    """Generate a heuristic NL summary from code structure.
+
+    Converts code identifiers into natural language fragments to improve
+    BM25 matching between NL queries and code symbols.
+
+    Examples:
+        "parseConfigFile" -> "parse config file"
+        "UserAuthMiddleware" -> "user auth middleware"
+    """
+    # Tokenize the name into natural language words
+    name_words = _CAMEL_RE.sub(" ", name).replace("_", " ").lower().strip()
+
+    if chunk_type == "function":
+        return f"function {name_words} {text[:200]}"
+    elif chunk_type == "class":
+        return f"class {name_words} {text[:200]}"
+    elif chunk_type == "method":
+        return f"method {name_words} {text[:200]}"
+    else:
+        return f"{name_words} {text[:200]}"
 
 
 @dataclass(slots=True)
@@ -323,6 +391,7 @@ class SemanticSearchManager:
         file_filter: str = "",
         two_stage: bool = True,
         rerank: bool = False,
+        expand_query: bool = True,
     ) -> list[SemanticSearchResult]:
         """Search the codebase by natural language query.
 
@@ -341,37 +410,51 @@ class SemanticSearchManager:
             file_filter: Optional glob pattern (e.g. "*.py").
             two_stage: Whether to use two-stage retrieval (default True).
             rerank: Whether to apply cross-encoder reranking after fusion.
+            expand_query: Whether to expand query with code construct hints.
 
         Returns:
             List of search results sorted by relevance.
         """
+        # Detect language from file_filter for query expansion
+        _lang = ""
+        if file_filter:
+            _ext_map = {".py": "python", ".js": "javascript", ".ts": "typescript",
+                        ".go": "go", ".rs": "rust", ".java": "java", ".rb": "ruby"}
+            for ext, lang in _ext_map.items():
+                if file_filter.endswith(ext):
+                    _lang = lang
+                    break
+
+        # Apply query expansion for better recall
+        expanded_query = _expand_query(query, _lang) if expand_query else query
+
         self._ensure_provider()
         if self._keyword_fallback:
-            return self._keyword_search(query, top_k, file_filter)
+            return self._keyword_search(expanded_query, top_k, file_filter)
 
         # Coverage-based switchover: use keyword fallback while indexing
         if not self._indexed and self._store:
             count = self._store.count()
             if count == 0 and self._bg_indexer is None:
                 # No embeddings and no background indexer — use keyword fallback
-                return self._keyword_search(query, top_k, file_filter)
+                return self._keyword_search(expanded_query, top_k, file_filter)
             elif not self.is_index_ready() and self._bg_indexer is not None:
                 # Indexer running but coverage < 80% — use keyword fallback
-                return self._keyword_search(query, top_k, file_filter)
+                return self._keyword_search(expanded_query, top_k, file_filter)
 
-        # Embed query
+        # Embed query — use expanded query for better recall
         try:
-            query_vectors = self._provider.embed([query])
+            query_vectors = self._provider.embed([expanded_query])
             if not query_vectors or not query_vectors[0]:
                 self._index_progress.degraded_reason = "query_embedding_failed"
                 self._index_progress.last_error = "Query embedding returned no vector."
-                return self._keyword_search(query, top_k, file_filter)
+                return self._keyword_search(expanded_query, top_k, file_filter)
             query_vec = query_vectors[0]
         except Exception as exc:
             logger.warning("Query embedding failed, falling back to keyword", exc_info=True)
             self._index_progress.degraded_reason = "query_embedding_failed"
             self._index_progress.last_error = f"Query embedding failed: {type(exc).__name__}: {exc}"
-            return self._keyword_search(query, top_k, file_filter)
+            return self._keyword_search(expanded_query, top_k, file_filter)
 
         # Build set of files that exist on disk to filter out stale branch data.
         # In local mode the filesystem is the source of truth — vectors from
@@ -407,7 +490,7 @@ class SemanticSearchManager:
             ]
 
         # Stage 1b: Keyword search (complementary recall) — always run
-        keyword_results = self._keyword_search(query, top_k=wide_k, file_filter=file_filter)
+        keyword_results = self._keyword_search(expanded_query, top_k=wide_k, file_filter=file_filter)
 
         # If both pipelines returned nothing, bail out early
         if not raw_results and not keyword_results:
@@ -988,6 +1071,9 @@ class SemanticSearchManager:
             for func in ast.functions:
                 parts: list[str] = []
                 parts.extend([func.name] * 3)
+                # Add NL summary of the function name for better query matching
+                nl_summary = _summarize_code_to_nl(func.name, "function", "")
+                parts.append(nl_summary)
                 if func.docstring:
                     parts.append(func.docstring[:300])
                 parts.extend(p.name for p in func.parameters[:10])
@@ -1024,6 +1110,9 @@ class SemanticSearchManager:
             # Class + method-level docs
             for cls in ast.classes:
                 cls_parts: list[str] = [cls.name] * 3
+                # Add NL summary of the class name
+                cls_nl = _summarize_code_to_nl(cls.name, "class", "")
+                cls_parts.append(cls_nl)
                 if cls.bases:
                     cls_parts.extend(cls.bases)
                 if cls.docstring:
