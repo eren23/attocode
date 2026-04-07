@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.17] - 2026-04-07
+
+### Added
+
+#### Security Scanning Expansion (35 to 101 Rules)
+- 30 new OWASP Top 10 anti-pattern rules across Python, JS/TS, Go, Java/Kotlin, Ruby: SQL injection (%-formatting, concatenation), command injection, SSRF (dynamic URL construction), path traversal, insecure deserialization (marshal), weak PRNG, debug mode, hardcoded IPs, CORS wildcard, NoSQL injection, prototype pollution, open redirects, unsafe RegExp, jQuery .html() XSS, Go fmt.Sprintf SQL, Go InsecureSkipVerify, Java XXE/deserialization/weak ciphers, Ruby system/send
+- 35 framework-specific rules: Django (8), Flask (5), Express (7), Spring (6), Rails (5), General (4) covering mark_safe, csrf_exempt, debug toolbar, hardcoded secrets, ALLOWED_HOSTS wildcard, insecure session cookies, send_file traversal, default CORS, template literal SQL, JWT decode without verify, actuator exposure, html_safe, permit!, GraphQL introspection, httpOnly=false, and more
+
+#### Custom Security Rule Language
+- `.attocode/rules/*.yaml` user-defined security patterns with id, pattern (regex), message, severity, cwe, languages, scan_comments, and optional fix (search/replace autofix template)
+- `custom_rules.py` module: `load_custom_rules()` validates and loads YAML rule files; `get_autofix_from_rules()` extracts fix templates; rules merged into scanner pipeline at scan time
+- Support for single-rule and multi-rule YAML files, graceful handling of missing PyYAML
+
+#### Security Autofix Diff Generation
+- `fix_diff` field on `SecurityFinding` dataclass with unified diff format for mechanical fixes
+- `_AUTOFIX_TEMPLATES` for 4 built-in patterns: yaml.safe_load, shell=False, tempfile.mkstemp, verify=True
+- Custom rule autofixes from YAML `fix` field merged into pipeline
+- `format_report()` renders autofix diffs inline with findings
+
+#### Intra-Procedural Data Flow Analysis
+- `dataflow.py` taint tracking engine: tracks sources (request params, input(), sys.argv, environ) through variable assignments to sinks (SQL, shell, file I/O, HTTP, HTML) within individual functions
+- Supports Python and JavaScript/TypeScript with const/let/var declaration handling
+- `dataflow_scan` MCP tool: reports CWE-89 (SQLi), CWE-78 (CMDi), CWE-79 (XSS), CWE-22 (path traversal), CWE-918 (SSRF)
+- Variable extraction from f-strings, .format(), %-formatting, template literals, and concatenation
+
+#### Code-Optimized Embedding Model
+- `CodeEmbeddingProvider` class with BAAI/bge-base-en-v1.5 (768-dim, ~440MB) for code-specific semantic search
+- Auto-detect order: BGE (code-optimized) > all-MiniLM-L6-v2 > OpenAI > null fallback
+- Explicit `"bge"` option via `ATTOCODE_EMBEDDING_MODEL=bge`
+
+#### Semantic Search Quality Uplift
+- `_expand_query()`: AST-aware query expansion with language hints and construct-related terms (e.g. "auth" expands with "login", "token", "session")
+- `_summarize_code_to_nl()`: heuristic NL summarization of code symbols for BM25 index
+- All search paths (vector, keyword, two-stage, fallback) now use expanded queries
+
+#### regex_search MCP Tool
+- User-facing trigram-accelerated regex search with clean file:line: text output format
+- Hardcoded selectivity threshold, brute-force fallback when trigram index unavailable
+
+#### Agent-Optimized Composite Tools
+- `review_change` MCP tool: unified security + conventions on changed files; auto-detects git-modified files
+- `explain_impact` MCP tool: impact analysis + community detection + temporal coupling narrative with risk assessment
+- `suggest_tests` MCP tool: test file discovery via naming conventions, imports, and indirect coverage
+
+#### Architecture Drift Detection
+- `architecture_drift.py` module: loads `.attocode/architecture.yaml` boundary definitions (layers, allowed/denied rules, file-level exceptions)
+- `check_drift()` compares actual dependency graph against declared rules; HIGH (deny) and MEDIUM (unlisted) severity
+- `architecture_drift` MCP tool registered in server
+
+#### Go Symbol Extraction Improvements
+- `_find_go_doc_comment()`: extracts consecutive // doc comment lines preceding declarations
+- `_extract_go_receiver()`: captures method receiver type as parent_class
+- Go visibility detection: uppercase = public, lowercase = private
+- `var_types` field on `_LangConfig`; Go config includes const_declaration, var_declaration
+- Doc comments wired through to FileAST via codebase_ast.py
+
+### Changed
+- `SecurityScanner` loads custom rules and autofixes from `.attocode/rules/` at init
+- `_scan_content()` checks both built-in and custom autofix templates
+- BM25 index builder includes NL summaries of function/class names for better query matching
+- `search()` method accepts `expand_query` parameter (default True)
+- Server tool count updated from 40 to 47
+
+### Tests
+- 284 new tests across 8 test files (283 pass, 1 xfail for Go parenthesized var block)
+- `test_embeddings.py` (21): CodeEmbeddingProvider, auto-detect routing, caching, NullEmbeddingProvider
+- `test_new_security_rules.py` (107): all 30 new OWASP rules with positive + negative assertions
+- `test_security_autofix.py` (37): autofix templates, fix_diff generation, unified diff format, report rendering
+- `test_search_tools.py` (+7): regex_search matching, case sensitivity, max_results, path filter
+- `test_go_symbols.py` (33): visibility, config, doc comments, method receivers, const/var, integration
+- `test_dataflow.py` (22): variable extraction, function parsing, Python/JS taint, report formatting
+- `test_architecture_drift.py` (23): layer classification, YAML loading, deny/allowed violations, exceptions, formatting
+
 ## [0.2.16] - 2026-04-05
 
 ### Added
