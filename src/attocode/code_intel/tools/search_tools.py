@@ -1,6 +1,7 @@
 """Search and security tools for the code-intel MCP server.
 
-Tools: semantic_search, semantic_search_status, security_scan, fast_search.
+Tools: semantic_search, semantic_search_status, security_scan, fast_search,
+       regex_search.
 """
 
 from __future__ import annotations
@@ -387,6 +388,106 @@ def fast_search(
         ]
         result += "\n".join(diag_lines)
 
+    return result
+
+
+@mcp.tool()
+def regex_search(
+    pattern: str,
+    path: str = "",
+    max_results: int = 50,
+    case_insensitive: bool = False,
+) -> str:
+    """Search code with regex, accelerated by trigram index.
+
+    A straightforward regex search tool that leverages the trigram inverted
+    index for 10-100x speedup over brute-force grep. Useful for finding
+    specific code patterns like function signatures, import statements,
+    or configuration values.
+
+    Args:
+        pattern: Regex pattern to search for.
+        path: Subdirectory to restrict search to (relative to project root).
+        max_results: Maximum number of matching lines to return.
+        case_insensitive: Whether to match case-insensitively.
+    """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.regex_search(
+            pattern=pattern,
+            path=path,
+            max_results=max_results,
+            case_insensitive=case_insensitive,
+        )
+
+    import re
+    from pathlib import Path
+
+    project_dir = _get_project_dir()
+    root = Path(project_dir)
+    if path:
+        root = root / path
+    root = root.resolve()
+
+    if not root.exists():
+        return f"Error: Path not found: {root}"
+
+    flags = re.IGNORECASE if case_insensitive else 0
+    try:
+        regex = re.compile(pattern, flags)
+    except re.error as e:
+        return f"Error: Invalid regex pattern: {e}"
+
+    # Try trigram pre-filtering
+    _SELECTIVITY_THRESHOLD = 0.10
+    trigram_idx = _get_trigram_index()
+    candidates: list[str] | None = None
+    used_index = False
+
+    if trigram_idx is not None and trigram_idx.is_ready():
+        candidates = trigram_idx.query(
+            pattern,
+            case_insensitive=case_insensitive,
+            selectivity_threshold=_SELECTIVITY_THRESHOLD,
+        )
+        if candidates is not None:
+            used_index = True
+
+    # Determine files to search
+    if candidates is not None:
+        files = sorted(root / c for c in candidates)
+    else:
+        files = sorted(root.rglob("*"))
+
+    matches: list[str] = []
+    for file in files:
+        if not file.is_file() or file.name.startswith("."):
+            continue
+        try:
+            content = file.read_text(encoding="utf-8", errors="strict")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for i, line in enumerate(content.splitlines(), 1):
+            if regex.search(line):
+                try:
+                    rel = file.relative_to(Path(project_dir))
+                except ValueError:
+                    rel = file.name
+                matches.append(f"{rel}:{i}: {line.strip()}")
+                if len(matches) >= max_results:
+                    break
+        if len(matches) >= max_results:
+            break
+
+    total = len(matches)
+    if not matches:
+        return "No matches found."
+
+    result = "\n".join(matches)
+    if total >= max_results:
+        result += f"\n... (limited to {max_results} results)"
+    index_note = "trigram-indexed" if used_index else "brute-force"
+    result += f"\n{total} match(es) found ({index_note})."
     return result
 
 

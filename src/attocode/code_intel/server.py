@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 40 tools for deep codebase understanding:
+Provides 43 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -39,6 +39,9 @@ Provides 40 tools for deep codebase understanding:
 - distill: Distill code into compressed representations
 - code_evolution: Trace how code has changed over time
 - recent_changes: Show recent file modifications
+- review_change: Unified change review (security + conventions)
+- explain_impact: Blast radius explanation with risk assessment
+- suggest_tests: Test file recommendations for changed files
 
 Usage::
 
@@ -569,6 +572,7 @@ import attocode.code_intel.tools.navigation_tools as _navigation_tools  # noqa: 
 import attocode.code_intel.tools.query_constraints_tools as _query_constraints_tools  # noqa: E402, F401
 import attocode.code_intel.tools.query_history_tools as _query_history_tools  # noqa: E402, F401
 import attocode.code_intel.tools.readiness_tools as _readiness_tools  # noqa: E402, F401
+import attocode.code_intel.tools.composite_tools as _composite_tools  # noqa: E402, F401
 import attocode.code_intel.tools.search_tools as _search_tools  # noqa: E402, F401
 from attocode.code_intel.helpers import (  # noqa: E402, F401
     _compute_file_metrics,
@@ -608,6 +612,10 @@ readiness_report = _readiness_tools.readiness_report  # noqa: E402
 
 code_evolution = _history_tools.code_evolution  # noqa: E402
 recent_changes = _history_tools.recent_changes  # noqa: E402
+
+review_change = _composite_tools.review_change  # noqa: E402
+explain_impact = _composite_tools.explain_impact  # noqa: E402
+suggest_tests = _composite_tools.suggest_tests  # noqa: E402
 
 bootstrap = _navigation_tools.bootstrap  # noqa: E402
 conventions = _navigation_tools.conventions  # noqa: E402

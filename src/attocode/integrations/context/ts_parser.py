@@ -38,6 +38,7 @@ class _LangConfig:
     class_types: tuple[str, ...]  # node types that represent classes
     import_types: tuple[str, ...]  # node types that represent imports
     method_types: tuple[str, ...] = ()  # method declarations inside classes
+    var_types: tuple[str, ...] = ()  # top-level variable/constant declarations
     name_field: str = "name"  # tree-sitter field for the identifier
     language_func: str = "language"  # function name to call on grammar module
 
@@ -71,6 +72,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         function_types=("function_declaration", "method_declaration"),
         class_types=("type_declaration",),
         import_types=("import_declaration",),
+        var_types=("const_declaration", "var_declaration"),
     ),
     "rust": _LangConfig(
         grammar_module="tree_sitter_rust",
@@ -191,6 +193,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         function_types=("function_declaration",),
         class_types=("struct_declaration", "enum_declaration", "union_declaration"),
         import_types=(),  # @import is a builtin call
+        var_types=("variable_declaration",),
     ),
     # ---------------------------------------------------------------
     # Phase 2: Data/config languages (20 → 25)
@@ -499,6 +502,66 @@ def _find_decorators(node, source_bytes: bytes) -> list[str]:
     return decorators
 
 
+def _find_go_doc_comment(node, source_bytes: bytes) -> str:
+    """Extract Go-style doc comment from comment lines immediately above a node.
+
+    Go doc comments are consecutive ``// Comment`` lines directly preceding a
+    declaration with no blank lines in between.  This walks backward through
+    previous named siblings collecting ``comment`` nodes whose end line is
+    adjacent to (or the same as) the start line of the next element.
+    """
+    comment_lines: list[str] = []
+    expected_line = node.start_point[0]  # 0-based line of the declaration
+
+    prev = node.prev_named_sibling
+    while prev is not None and prev.type == "comment":
+        # The comment must end exactly one line before the expected line
+        if prev.end_point[0] + 1 != expected_line:
+            break
+        text = _node_text(prev, source_bytes).strip()
+        # Strip leading "//" (single-line) or "/* ... */" (block)
+        if text.startswith("//"):
+            text = text[2:].strip()
+        elif text.startswith("/*") and text.endswith("*/"):
+            text = text[2:-2].strip()
+        comment_lines.insert(0, text)
+        expected_line = prev.start_point[0]
+        prev = prev.prev_named_sibling
+
+    return "\n".join(comment_lines) if comment_lines else ""
+
+
+def _extract_go_receiver(node, source_bytes: bytes) -> str:
+    """Extract receiver type name from a Go method_declaration node.
+
+    Go methods look like ``func (r *Receiver) MethodName(...) ...``.
+    The tree-sitter Go grammar exposes a ``receiver`` field containing a
+    ``parameter_list`` with one ``parameter_declaration`` whose ``type``
+    child holds the receiver type (possibly wrapped in ``pointer_type``).
+    """
+    receiver_node = node.child_by_field_name("receiver")
+    if receiver_node is None:
+        return ""
+
+    for child in receiver_node.children:
+        if child.type == "parameter_declaration":
+            type_node = child.child_by_field_name("type")
+            if type_node is None:
+                # Fallback: look for type_identifier or pointer_type child
+                for sub in child.children:
+                    if sub.type in ("type_identifier", "pointer_type"):
+                        type_node = sub
+                        break
+            if type_node is not None:
+                # pointer_type wraps the actual type_identifier
+                if type_node.type == "pointer_type":
+                    for sub in type_node.children:
+                        if sub.type == "type_identifier":
+                            return _node_text(sub, source_bytes)
+                return _node_text(type_node, source_bytes)
+    return ""
+
+
 def _get_visibility(name: str, language: str) -> str:
     """Determine visibility from name conventions."""
     if language == "python":
@@ -507,6 +570,11 @@ def _get_visibility(name: str, language: str) -> str:
         if name.startswith("_"):
             return "private"
         return "public"
+    elif language == "go":
+        # Go convention: uppercase first letter = exported (public)
+        if name and name[0].isupper():
+            return "public"
+        return "private"
     elif language in ("java", "typescript", "c", "cpp", "csharp", "kotlin", "swift", "scala",
                        "dart", "objc", "crystal", "fsharp"):
         # Would need modifier parsing; default to public
@@ -1122,6 +1190,18 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
             is_async_fn = _is_async(node, source_bytes)
             visibility = _get_visibility(name, language)
 
+            # Go: extract receiver type for method_declaration → parent_class
+            effective_parent = parent_class
+            if language == "go" and ntype == "method_declaration":
+                receiver_type = _extract_go_receiver(node, source_bytes)
+                if receiver_type:
+                    effective_parent = receiver_type
+
+            # Go: extract doc comment from preceding // comment lines
+            docstring = ""
+            if language == "go":
+                docstring = _find_go_doc_comment(node, source_bytes)
+
             fn_data = {
                 "name": name,
                 "parameters": params,
@@ -1131,15 +1211,21 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 "is_async": is_async_fn,
                 "decorators": decorators,
                 "visibility": visibility,
-                "parent_class": parent_class,
+                "parent_class": effective_parent,
             }
+            if docstring:
+                fn_data["docstring"] = docstring
 
-            if parent_class:
+            if effective_parent:
                 # Will be added as method to the class
                 for cls in classes:
-                    if cls["name"] == parent_class:
+                    if cls["name"] == effective_parent:
                         cls["methods"].append(fn_data)
                         break
+                else:
+                    # Go: receiver type may not have a matching type_declaration
+                    # in the same file; record as a standalone function with parent_class set
+                    functions.append(fn_data)
             else:
                 functions.append(fn_data)
             return
@@ -1206,6 +1292,13 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                     "start_line": node.start_point[0] + 1,
                     "end_line": node.end_point[0] + 1,
                 }
+
+                # Go: extract doc comment for type declarations
+                if language == "go":
+                    docstring = _find_go_doc_comment(node, source_bytes)
+                    if docstring:
+                        cls_data["docstring"] = docstring
+
                 classes.append(cls_data)
 
                 # Process children to find methods
@@ -1270,20 +1363,19 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                         top_level_vars.append(var_name)
             return
 
-        # Zig top-level const/var declarations: const Server = @This();
-        if language == "zig" and ntype == "variable_declaration" and not parent_class:
-            var_name = _find_name(node, source_bytes)
-            if var_name:
-                top_level_vars.append(var_name)
-            return
-
-        # Go top-level const/var blocks: const ( X = 1; Y = 2 )
-        if language == "go" and ntype in ("const_declaration", "var_declaration") and not parent_class:
-            for child in node.children:
-                if child.type in ("const_spec", "var_spec"):
-                    var_name = _find_name(child, source_bytes)
-                    if var_name:
-                        top_level_vars.append(var_name)
+        # Config-driven top-level variable/constant declarations (Go, Zig, etc.)
+        if config.var_types and ntype in config.var_types and not parent_class:
+            if language == "go":
+                # Go const/var blocks: const ( X = 1; Y = 2 )
+                for child in node.children:
+                    if child.type in ("const_spec", "var_spec"):
+                        var_name = _find_name(child, source_bytes)
+                        if var_name:
+                            top_level_vars.append(var_name)
+            else:
+                var_name = _find_name(node, source_bytes)
+                if var_name:
+                    top_level_vars.append(var_name)
             return
 
         # Elixir: macro calls (def, defmodule, import, etc.)

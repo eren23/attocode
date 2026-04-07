@@ -1180,6 +1180,7 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
             decorators=fn.get("decorators", []),
             is_async=fn.get("is_async", False),
             visibility=fn.get("visibility", "public"),
+            docstring=fn.get("docstring", ""),
         ))
 
     # Convert class dicts to ClassDef
@@ -1201,6 +1202,7 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
                 decorators=m.get("decorators", []),
                 is_async=m.get("is_async", False),
                 visibility=m.get("visibility", "public"),
+                docstring=m.get("docstring", ""),
             ))
         classes.append(ClassDef(
             name=cls["name"],
@@ -1209,6 +1211,7 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
             bases=cls.get("bases", []),
             methods=methods,
             decorators=cls.get("decorators", []),
+            docstring=cls.get("docstring", ""),
         ))
 
     # Convert import dicts to ImportDef
