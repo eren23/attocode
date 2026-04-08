@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to release (tag, branch, or commit SHA)"
+        required: true
+        default: "main"
 
 permissions:
   contents: read
@@ -12,12 +18,48 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve release ref
+        id: release_meta
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            release_ref="${{ inputs.ref }}"
+          else
+            release_ref="${GITHUB_REF}"
+          fi
+
+          expected_tag=""
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            expected_tag="${GITHUB_REF_NAME}"
+          elif [[ "$release_ref" == refs/tags/* ]]; then
+            expected_tag="${release_ref#refs/tags/}"
+          elif [[ "$release_ref" == v* ]]; then
+            expected_tag="$release_ref"
+          fi
+
+          echo "release_ref=$release_ref" >> "$GITHUB_OUTPUT"
+          echo "expected_tag=$expected_tag" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.release_meta.outputs.release_ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Validate release version
+        shell: bash
+        run: |
+          if [[ -n "${{ steps.release_meta.outputs.expected_tag }}" ]]; then
+            python scripts/validate_release_version.py \
+              --repo-root . \
+              --expected-tag "${{ steps.release_meta.outputs.expected_tag }}"
+          else
+            python scripts/validate_release_version.py --repo-root .
+          fi
 
       - name: Install build tools
         run: pip install --upgrade pip hatchling build

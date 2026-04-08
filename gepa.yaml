@@ -1,0 +1,26 @@
+# gepa-optim configuration for first-principles-agent (attocode)
+#
+# Generalized test-bed run for gepa-optim. Uses two trace sources
+# simultaneously (Claude Code sessions from ~/.claude/projects AND attocode's
+# own .attocode/traces/) to prove the pluggable TraceSource machinery works
+# end to end on a real repo.
+#
+# Target: README.md. attocode doesn't have a CLAUDE.md, and README.md is the
+# agent's de-facto project guide — evolving it is a meaningful test of the
+# FileTarget path on a non-Claude-Code-first repo.
+
+trace_sources:
+  - type: claude_code
+  - type: attocode
+
+targets:
+  - type: file
+    path: README.md
+
+# Use the default session evaluator; the merged Claude Code + attocode
+# signal gives it plenty of file importance and error signal to bite on.
+evaluator:
+  type: session
+
+max_evals: 30
+reflection_model: openrouter/google/gemini-3-flash-preview
