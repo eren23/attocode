@@ -404,6 +404,44 @@ class VectorStore:
             self._vec_cache_version += 1
             return cursor.rowcount
 
+    def clear_all(self) -> int:
+        """Delete every vector + file-metadata row. Returns count deleted.
+
+        Preserves the ``store_metadata`` table (schema version + stored
+        dimension) so a subsequent reopen doesn't trip the dim-mismatch
+        check. That's the whole point of clear_all vs ``rm -f embeddings.db``:
+        it's the safe reset path.
+        """
+        conn = self._get_conn()
+        with self._lock:
+            cursor = conn.execute("DELETE FROM vectors")
+            conn.execute("DELETE FROM file_metadata")
+            conn.commit()
+            self._vec_cache_version += 1
+            return cursor.rowcount
+
+    def clear_by_model(self, model_name: str, model_version: str = "") -> int:
+        """Delete only vectors for a given model (+ optional version).
+
+        Returns count deleted. Used during embedding rotation's GC phase —
+        drops old-model rows once the new model is live.
+        """
+        conn = self._get_conn()
+        with self._lock:
+            if model_version:
+                cursor = conn.execute(
+                    "DELETE FROM vectors WHERE model_name = ? AND model_version = ?",
+                    (model_name, model_version),
+                )
+            else:
+                cursor = conn.execute(
+                    "DELETE FROM vectors WHERE model_name = ?",
+                    (model_name,),
+                )
+            conn.commit()
+            self._vec_cache_version += 1
+            return cursor.rowcount
+
     # ------------------------------------------------------------------
     # In-memory vector cache for numpy batch search
     # ------------------------------------------------------------------

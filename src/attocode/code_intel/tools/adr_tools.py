@@ -278,6 +278,43 @@ class ADRStore:
         }
 
     # ------------------------------------------------------------------
+    # Deletion
+    # ------------------------------------------------------------------
+
+    def clear_all(self, status_filter: str = "") -> int:
+        """Hard-delete ADRs.
+
+        Args:
+            status_filter: If non-empty, only delete ADRs whose ``status``
+                matches (e.g. ``"superseded"``). Empty wipes every row.
+
+        Returns the count deleted.
+
+        Note: The ``superseded_by`` FK means deleting only some ADRs can
+        leave dangling references. Callers that care should either pass
+        no filter (delete everything) or only delete rows in a terminal
+        state like ``superseded``.
+        """
+        conn = self._get_conn()
+        # No threading lock on ADRStore — its existing methods don't use one.
+        if status_filter:
+            cursor = conn.execute(
+                "DELETE FROM adrs WHERE status = ?",
+                (status_filter,),
+            )
+        else:
+            cursor = conn.execute("DELETE FROM adrs")
+        conn.commit()
+        return cursor.rowcount
+
+    def delete_by_number(self, number: int) -> bool:
+        """Hard-delete one ADR by number. Returns True on success."""
+        conn = self._get_conn()
+        cursor = conn.execute("DELETE FROM adrs WHERE number = ?", (number,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 

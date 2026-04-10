@@ -578,6 +578,8 @@ import attocode.code_intel.tools.search_tools as _search_tools  # noqa: E402, F4
 # maintenance_tools imports _stamp_pin / _STORE_DEFS from it.
 import attocode.code_intel.tools.pin_tools as _pin_tools  # noqa: E402, F401
 import attocode.code_intel.tools.maintenance_tools as _maintenance_tools  # noqa: E402, F401
+# Phase 2a — snapshot tools
+import attocode.code_intel.tools.snapshot_tools as _snapshot_tools  # noqa: E402, F401
 from attocode.code_intel.helpers import (  # noqa: E402, F401
     _compute_file_metrics,
     _percentile_ranks,

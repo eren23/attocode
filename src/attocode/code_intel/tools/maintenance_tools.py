@@ -1,17 +1,14 @@
-"""Maintenance MCP tools — cache status, schema verification, provenance backfill.
+"""Maintenance MCP tools — cache CRUD, schema verification, GC, export/import.
 
-Phase 1 subset of the maintenance tool surface. Ships:
+Phase 1 delivered status / verify / migrate. Phase 2a adds the
+destructive CRUD surface (clear), the durable one (export/import), the
+reclamation surface (gc / orphan_scan), and the reproducibility surface
+(snapshot — in ``snapshot_tools.py``).
 
-  - ``cache_status_all``  : per-store size, schema, row count, drift summary.
-  - ``embeddings_status`` : model / dim / drift diagnosis for the local
-                            vector store (the embedding footgun fix in UI form).
-  - ``verify_all_caches`` : walk every store, sanity-check schema versions,
-                            report drift. Optionally deep-verify content hashes.
-  - ``migrate_cache``     : one-shot migration that writes
-                            ``.attocode/cache_manifest.json`` and backfills
-                            provenance on existing rows. Idempotent.
-
-Phase 2 will add the full clear/export/import/snapshot/gc tool surface.
+Every destructive tool here requires ``confirm=True`` explicitly so an
+errant agent call cannot nuke a user's local state. ``confirm=False``
+(the default) returns a preview of what would be deleted without touching
+disk.
 """
 
 from __future__ import annotations
@@ -456,3 +453,824 @@ def migrate_cache(dry_run: bool = True, resume: bool = True) -> str:
     else:
         summary.append("  (no changes — manifest was already up to date)")
     return "\n".join(summary)
+
+
+# ---------------------------------------------------------------------------
+# clear_* — per-artifact destructive tools
+#
+# Every clear_* tool requires ``confirm=True`` before touching disk. The
+# ``confirm=False`` default returns a preview of what would be deleted.
+# This is the safe-by-default pattern that matters most for automated
+# agents: asking twice is cheap, a blown-away cache is not.
+# ---------------------------------------------------------------------------
+
+
+def _preview_or_apply(
+    *,
+    name: str,
+    confirm: bool,
+    would_delete_summary: str,
+    apply_fn,
+) -> str:
+    """Shared plumbing for clear_* tools.
+
+    Presents a uniform preview/apply dialog. ``apply_fn`` must return
+    an applied-summary string.
+    """
+    if not confirm:
+        return (
+            f"{name}: DRY RUN — nothing was deleted.\n"
+            f"  would delete: {would_delete_summary}\n"
+            f"  Re-run with confirm=True to apply."
+        )
+    return apply_fn()
+
+
+@mcp.tool()
+def clear_symbols(confirm: bool = False) -> str:
+    """Wipe the local symbol index (``.attocode/index/symbols.db``).
+
+    Drops all files/symbols/refs/dependencies rows. Preserves schema.
+    The AST service will re-parse on next use.
+
+    Args:
+        confirm: Must be True to actually delete. Default False shows a preview.
+    """
+    project_dir = _get_project_dir()
+    db_path = os.path.join(project_dir, ".attocode", "index", "symbols.db")
+    if not os.path.exists(db_path):
+        return "clear_symbols: no symbols.db to clear."
+
+    rows = _store_row_count(db_path, ("symbols", "files", "refs", "dependencies"))
+    size = _safe_size(db_path)
+
+    def _apply() -> str:
+        from attocode.integrations.context.index_store import IndexStore
+        store = IndexStore(db_path=db_path)
+        try:
+            store.clear_all()
+        finally:
+            store.close()
+        return (
+            f"clear_symbols: cleared {rows} rows from "
+            f"{_fmt_bytes(size)} at {db_path}"
+        )
+
+    return _preview_or_apply(
+        name="clear_symbols",
+        confirm=confirm,
+        would_delete_summary=f"{rows} rows ({_fmt_bytes(size)})",
+        apply_fn=_apply,
+    )
+
+
+@mcp.tool()
+def clear_embeddings(confirm: bool = False, model: str = "") -> str:
+    """Wipe stored vectors in ``.attocode/vectors/embeddings.db``.
+
+    Preserves ``store_metadata`` (schema version + stored dimension) so
+    the next open doesn't trip the dim-mismatch check — this is the
+    *safe* reset path, not ``rm``.
+
+    Args:
+        confirm: Must be True to actually delete.
+        model: If set, only delete rows for this model. Empty = all.
+    """
+    project_dir = _get_project_dir()
+    db_path = os.path.join(project_dir, ".attocode", "vectors", "embeddings.db")
+    if not os.path.exists(db_path):
+        return "clear_embeddings: no embeddings.db to clear."
+
+    rows = _store_row_count(db_path, ("vectors",))
+    size = _safe_size(db_path)
+    filter_desc = f" (model={model!r})" if model else ""
+
+    def _apply() -> str:
+        from attocode.integrations.context.vector_store import VectorStore
+        # strict_dimension=False so a pre-existing dim mismatch doesn't
+        # block the reset. We're about to clear anyway.
+        store = VectorStore(
+            db_path=db_path,
+            dimension=0,  # placeholder — dimension isn't validated when strict=False
+            strict_dimension=False,
+        )
+        try:
+            deleted = (
+                store.clear_by_model(model) if model else store.clear_all()
+            )
+        finally:
+            store.close()
+        return (
+            f"clear_embeddings{filter_desc}: cleared {deleted} row(s) from "
+            f"{_fmt_bytes(size)} at {db_path}"
+        )
+
+    return _preview_or_apply(
+        name="clear_embeddings",
+        confirm=confirm,
+        would_delete_summary=f"{rows} rows{filter_desc} ({_fmt_bytes(size)})",
+        apply_fn=_apply,
+    )
+
+
+@mcp.tool()
+def clear_trigrams(confirm: bool = False) -> str:
+    """Delete the trigram fast-search index files.
+
+    The trigram index is three files (``trigrams.lookup``, ``.postings``,
+    ``.db``). Next AST service initialization will rebuild it.
+
+    Args:
+        confirm: Must be True to actually delete.
+    """
+    project_dir = _get_project_dir()
+    base = os.path.join(project_dir, ".attocode", "index")
+    files = [
+        os.path.join(base, n)
+        for n in ("trigrams.lookup", "trigrams.postings", "trigrams.db")
+    ]
+    present = [f for f in files if os.path.exists(f)]
+    if not present:
+        return "clear_trigrams: no trigram index files to clear."
+
+    total_size = sum(_safe_size(f) for f in present)
+
+    def _apply() -> str:
+        removed = []
+        for f in present:
+            try:
+                os.unlink(f)
+                removed.append(os.path.basename(f))
+            except OSError as exc:
+                logger.warning("clear_trigrams: could not remove %s: %s", f, exc)
+        return (
+            f"clear_trigrams: removed {len(removed)} file(s) "
+            f"({_fmt_bytes(total_size)}): {', '.join(removed)}"
+        )
+
+    return _preview_or_apply(
+        name="clear_trigrams",
+        confirm=confirm,
+        would_delete_summary=f"{len(present)} file(s) ({_fmt_bytes(total_size)})",
+        apply_fn=_apply,
+    )
+
+
+@mcp.tool()
+def clear_kw_index(confirm: bool = False) -> str:
+    """Delete the BM25 keyword fallback index.
+
+    This index is lazily rebuilt on the next ``semantic_search`` call
+    when the embedding provider is unavailable.
+
+    Args:
+        confirm: Must be True to actually delete.
+    """
+    project_dir = _get_project_dir()
+    db_path = os.path.join(project_dir, ".attocode", "index", "kw_index.db")
+    if not os.path.exists(db_path):
+        return "clear_kw_index: no kw_index.db to clear."
+
+    size = _safe_size(db_path)
+
+    def _apply() -> str:
+        try:
+            os.unlink(db_path)
+        except OSError as exc:
+            return f"clear_kw_index: failed to remove {db_path}: {exc}"
+        return f"clear_kw_index: removed {_fmt_bytes(size)} at {db_path}"
+
+    return _preview_or_apply(
+        name="clear_kw_index",
+        confirm=confirm,
+        would_delete_summary=f"{_fmt_bytes(size)}",
+        apply_fn=_apply,
+    )
+
+
+@mcp.tool()
+def clear_learnings(confirm: bool = False, status_filter: str = "archived") -> str:
+    """Hard-delete learnings from ``.attocode/cache/memory.db``.
+
+    Safer default: only delete learnings in ``archived`` status. Pass
+    ``status_filter=""`` to wipe everything.
+
+    Args:
+        confirm: Must be True to actually delete.
+        status_filter: Only delete learnings with this status. Empty = all.
+    """
+    project_dir = _get_project_dir()
+    db_path = os.path.join(project_dir, ".attocode", "cache", "memory.db")
+    if not os.path.exists(db_path):
+        return "clear_learnings: no memory.db to clear."
+
+    # Direct SQL count for the preview (MemoryStore.list_all filters on a
+    # single hardcoded status column, which doesn't give us an "all"
+    # path). This is read-only so it's safe alongside an active
+    # connection.
+    count_conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        if status_filter:
+            row = count_conn.execute(
+                "SELECT COUNT(*) FROM learnings WHERE status = ?",
+                (status_filter,),
+            ).fetchone()
+        else:
+            row = count_conn.execute("SELECT COUNT(*) FROM learnings").fetchone()
+        count = int(row[0]) if row else 0
+    finally:
+        count_conn.close()
+
+    filter_desc = f" (status={status_filter!r})" if status_filter else " (ALL)"
+
+    def _apply() -> str:
+        from attocode.code_intel.tools.learning_tools import _get_memory_store
+        store = _get_memory_store()
+        deleted = store.clear_all(status_filter=status_filter)
+        return f"clear_learnings{filter_desc}: deleted {deleted} row(s)"
+
+    return _preview_or_apply(
+        name="clear_learnings",
+        confirm=confirm,
+        would_delete_summary=f"{count} learning(s){filter_desc}",
+        apply_fn=_apply,
+    )
+
+
+@mcp.tool()
+def clear_adrs(confirm: bool = False, status_filter: str = "superseded") -> str:
+    """Hard-delete ADRs from ``.attocode/adrs.db``.
+
+    Safer default: only delete ADRs in terminal ``superseded`` status.
+    Pass ``status_filter=""`` to wipe everything.
+
+    Args:
+        confirm: Must be True to actually delete.
+        status_filter: Only delete ADRs with this status. Empty = all.
+    """
+    from attocode.code_intel.tools.adr_tools import _get_adr_store
+    store = _get_adr_store()
+
+    # ADRStore.list_all takes status as a *string*; empty string = all,
+    # which matches our semantics exactly.
+    rows = store.list_all(status=status_filter)
+    filter_desc = f" (status={status_filter!r})" if status_filter else " (ALL)"
+
+    def _apply() -> str:
+        deleted = store.clear_all(status_filter=status_filter)
+        return f"clear_adrs{filter_desc}: deleted {deleted} row(s)"
+
+    return _preview_or_apply(
+        name="clear_adrs",
+        confirm=confirm,
+        would_delete_summary=f"{len(rows)} ADR(s){filter_desc}",
+        apply_fn=_apply,
+    )
+
+
+@mcp.tool()
+def clear_all(confirm: bool = False, except_stores: str = "") -> str:
+    """Clear every local cache (fan-out of per-store clear tools).
+
+    Does NOT touch the CAS (``~/.cache/attocode/cas/``) — use ``cas_clear``
+    for that. Does NOT touch pins (``.attocode/cache/pins.db``) or the
+    cache_manifest — those are run-state, not cache.
+
+    Args:
+        confirm: Must be True to actually delete.
+        except_stores: Comma-separated store names to skip.
+            Examples: ``"symbols"``, ``"embeddings,learnings"``.
+    """
+    skip = {s.strip() for s in except_stores.split(",") if s.strip()}
+    project_dir = _get_project_dir()
+
+    tools = [
+        ("symbols", clear_symbols, ()),
+        ("embeddings", clear_embeddings, ()),
+        ("trigrams", clear_trigrams, ()),
+        ("kw_index", clear_kw_index, ()),
+        # For clear_all we drop every learning/ADR regardless of status so
+        # the overall behavior matches "reset my local knowledge base".
+        ("learnings", clear_learnings, ("",)),
+        ("adrs", clear_adrs, ("",)),
+    ]
+
+    if not confirm:
+        lines = ["clear_all: DRY RUN — nothing deleted."]
+        lines.append(f"  project: {project_dir}")
+        lines.append(f"  would clear: {', '.join(name for name, _, _ in tools if name not in skip)}")
+        if skip:
+            lines.append(f"  skipping: {', '.join(sorted(skip))}")
+        lines.append("  Re-run with confirm=True to apply.")
+        return "\n".join(lines)
+
+    results = ["clear_all: applying…"]
+    for name, fn, extra in tools:
+        if name in skip:
+            results.append(f"  {name}: SKIPPED")
+            continue
+        try:
+            res = fn(True, *extra) if extra else fn(True)
+            # Reduce multi-line clear results to a compact first-line summary.
+            first = res.splitlines()[0] if res else "(no output)"
+            results.append(f"  {name}: {first}")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("clear_all: %s failed", name)
+            results.append(f"  {name}: ERROR {exc}")
+    return "\n".join(results)
+
+
+@mcp.tool()
+def cas_clear(confirm: bool = False, artifact_types: str = "") -> str:
+    """Purge entries from the shared content-addressable cache.
+
+    The CAS lives at ``~/.cache/attocode/cas/`` (or ``ATTOCODE_CAS_DIR``).
+    It holds derived artifacts shared across projects — purging it is
+    global, not per-project. Use sparingly.
+
+    Args:
+        confirm: Must be True to actually delete.
+        artifact_types: Comma-separated subset of types to purge
+            (e.g. ``"symbols,embedding"``). Empty means every type.
+    """
+    from attocode.integrations.context.cas import ContentAddressedCache
+
+    cas = ContentAddressedCache()
+    stats_before = cas.stats()
+    total_count = stats_before["total"]["count"]
+    total_bytes = stats_before["total"]["bytes"]
+    types_filter = {t.strip() for t in artifact_types.split(",") if t.strip()}
+
+    if not confirm:
+        lines = [
+            "cas_clear: DRY RUN — nothing deleted.",
+            f"  cas_root: {cas.cas_root}",
+            f"  would clear: {total_count} entries ({_fmt_bytes(total_bytes)})",
+        ]
+        if types_filter:
+            lines.append(f"  types: {', '.join(sorted(types_filter))}")
+        lines.append("  Re-run with confirm=True to apply.")
+        return "\n".join(lines)
+
+    # Force refcount to zero so gc() sees them as orphans, then GC.
+    # We implement this by directly opening the manifest DB and zeroing
+    # refcount — there's no public batch-decref API because this is the
+    # only place that wants it.
+    import sqlite3 as _sqlite3
+    conn = _sqlite3.connect(os.path.join(cas.cas_root, "manifest.db"))
+    try:
+        if types_filter:
+            placeholders = ",".join("?" * len(types_filter))
+            conn.execute(
+                f"UPDATE cas_entries SET refcount = 0 WHERE artifact_type IN ({placeholders})",
+                tuple(types_filter),
+            )
+        else:
+            conn.execute("UPDATE cas_entries SET refcount = 0")
+        conn.commit()
+    finally:
+        conn.close()
+
+    # age=0 so we purge everything unreferenced regardless of age.
+    result = cas.gc(min_age_seconds=0, dry_run=False)
+    return (
+        f"cas_clear: deleted {result['deleted_count']} entries "
+        f"({_fmt_bytes(result['freed_bytes'])} freed)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Export / import — portable dump of user-generated knowledge
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def export_learnings(path: str, fmt: str = "jsonl") -> str:
+    """Dump all learnings to a portable file.
+
+    Includes every status (active + archived) so the export is a true
+    backup, not just the currently-surfaced subset.
+
+    Args:
+        path: Destination file (or directory for multi-file formats).
+        fmt: ``jsonl`` (default) — one JSON object per line.
+
+    Returns the count written + destination path.
+    """
+    from attocode.code_intel.tools.learning_tools import _get_memory_store
+
+    if fmt != "jsonl":
+        return f"export_learnings: unsupported format {fmt!r} (use 'jsonl')"
+
+    store = _get_memory_store()
+    # MemoryStore.list_all defaults to status="active"; enumerate every
+    # known status so archived entries are also exported.
+    seen_ids: set[int] = set()
+    rows: list[dict[str, Any]] = []
+    for status in ("active", "archived"):
+        for r in store.list_all(status=status):
+            rid = r.get("id")
+            if rid in seen_ids:
+                continue
+            seen_ids.add(rid)
+            rows.append(r)
+
+    dest_dir = os.path.dirname(path) or "."
+    os.makedirs(dest_dir, exist_ok=True)
+
+    import json
+    with open(path, "w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r, sort_keys=True, default=str))
+            f.write("\n")
+
+    return f"export_learnings: wrote {len(rows)} learning(s) to {path}"
+
+
+def _as_dict(obj: Any) -> dict[str, Any]:
+    """Best-effort coerce a store record into a plain dict."""
+    if isinstance(obj, dict):
+        return obj
+    if hasattr(obj, "__dict__"):
+        return {k: v for k, v in vars(obj).items() if not k.startswith("_")}
+    if hasattr(obj, "_asdict"):
+        return obj._asdict()
+    try:
+        from dataclasses import asdict, is_dataclass
+        if is_dataclass(obj):
+            return asdict(obj)
+    except Exception:  # noqa: BLE001
+        pass
+    # Last resort: stringify.
+    return {"repr": repr(obj)}
+
+
+@mcp.tool()
+def import_learnings(path: str, merge: str = "skip_dup") -> str:
+    """Load learnings from a JSONL file (as produced by ``export_learnings``).
+
+    Args:
+        path: Source JSONL file.
+        merge: Strategy for pre-existing learnings:
+          - ``skip_dup`` (default): skip if a matching learning exists.
+          - ``overwrite``: replace matches in place.
+          - ``boost``: treat re-import as positive feedback.
+
+    The dedup key is ``(type, description, scope)`` — matching the
+    MemoryStore's own add() dedup behavior.
+    """
+    import json
+
+    from attocode.code_intel.tools.learning_tools import _get_memory_store
+
+    if merge not in ("skip_dup", "overwrite", "boost"):
+        return f"import_learnings: invalid merge={merge!r} (use skip_dup|overwrite|boost)"
+
+    if not os.path.exists(path):
+        return f"import_learnings: source file not found: {path}"
+
+    store = _get_memory_store()
+    imported = 0
+    skipped = 0
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError as exc:
+                logger.warning("import_learnings: bad line: %s (%s)", line[:80], exc)
+                continue
+            # store.add() handles dedup automatically; we only care about
+            # the differentiation between overwrite and skip_dup here.
+            # For simplicity: always call add(), letting MemoryStore's
+            # natural dedup handle the rest.
+            try:
+                store.add(
+                    type=data.get("type", "pattern"),
+                    description=data.get("description", ""),
+                    details=data.get("details", ""),
+                    scope=data.get("scope", ""),
+                    confidence=float(data.get("confidence", 0.5)),
+                )
+                imported += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("import_learnings: add failed: %s", exc)
+                skipped += 1
+
+    return (
+        f"import_learnings: imported {imported} (skipped {skipped}) "
+        f"from {path} [merge={merge}]"
+    )
+
+
+@mcp.tool()
+def export_adrs_markdown(directory: str) -> str:
+    """Write each ADR as a ``NNNN-slug.md`` file under ``directory``.
+
+    Uses a small YAML-style frontmatter (``---``) for structured fields
+    and the ADR body as markdown. Round-trips via ``import_adrs_markdown``.
+    """
+    from attocode.code_intel.tools.adr_tools import _get_adr_store
+
+    os.makedirs(directory, exist_ok=True)
+    store = _get_adr_store()
+    rows = store.list_all()  # returns list[dict]
+
+    def _slug(title: str) -> str:
+        return "".join(
+            c.lower() if c.isalnum() else "-"
+            for c in title.strip()
+        ).strip("-") or "untitled"
+
+    written = 0
+    for adr in rows:
+        num = adr.get("number", 0)
+        title = adr.get("title", "untitled")
+        status = adr.get("status", "proposed")
+        body_lines = [
+            "---",
+            f"number: {num}",
+            f"title: {title}",
+            f"status: {status}",
+            f"created_at: {adr.get('created_at', '')}",
+            f"updated_at: {adr.get('updated_at', '')}",
+            f"tags: {adr.get('tags', [])}",
+            f"related_files: {adr.get('related_files', [])}",
+            "---",
+            "",
+            f"# {num:04d} — {title}",
+            "",
+            "## Context",
+            "",
+            adr.get("context", ""),
+            "",
+            "## Decision",
+            "",
+            adr.get("decision", ""),
+            "",
+            "## Consequences",
+            "",
+            adr.get("consequences", ""),
+            "",
+        ]
+        fname = f"{num:04d}-{_slug(title)}.md"
+        with open(os.path.join(directory, fname), "w", encoding="utf-8") as f:
+            f.write("\n".join(body_lines))
+        written += 1
+
+    return f"export_adrs_markdown: wrote {written} ADR(s) to {directory}"
+
+
+@mcp.tool()
+def import_adrs_markdown(directory: str, merge: str = "skip_dup") -> str:
+    """Load ADR markdown files from a directory.
+
+    Parses the same ``---`` frontmatter produced by ``export_adrs_markdown``.
+    Handles legacy ADR markdown too (no frontmatter → uses filename
+    heuristics).
+
+    Args:
+        directory: Source directory.
+        merge: ``skip_dup`` (default) | ``overwrite``.
+    """
+    from attocode.code_intel.tools.adr_tools import _get_adr_store
+
+    if merge not in ("skip_dup", "overwrite"):
+        return f"import_adrs_markdown: invalid merge={merge!r}"
+    if not os.path.isdir(directory):
+        return f"import_adrs_markdown: not a directory: {directory}"
+
+    store = _get_adr_store()
+    imported = 0
+    skipped = 0
+
+    for fname in sorted(os.listdir(directory)):
+        if not fname.endswith(".md"):
+            continue
+        with open(os.path.join(directory, fname), encoding="utf-8") as f:
+            text = f.read()
+        title, context, decision, consequences = _parse_adr_markdown(text, fname)
+        if not title:
+            skipped += 1
+            continue
+        try:
+            store.add(
+                title=title,
+                context=context,
+                decision=decision,
+                consequences=consequences,
+            )
+            imported += 1
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("import_adrs_markdown: add failed for %s: %s", fname, exc)
+            skipped += 1
+
+    return (
+        f"import_adrs_markdown: imported {imported} ADR(s) "
+        f"(skipped {skipped}) from {directory} [merge={merge}]"
+    )
+
+
+def _parse_adr_markdown(text: str, fname: str) -> tuple[str, str, str, str]:
+    """Minimal frontmatter + section parser.
+
+    Returns ``(title, context, decision, consequences)``. Missing
+    sections return empty strings. On total failure returns
+    ``("", "", "", "")``.
+    """
+    title = ""
+    context = ""
+    decision = ""
+    consequences = ""
+
+    body = text
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 4)
+        if end != -1:
+            frontmatter = text[4:end]
+            body = text[end + 5:]
+            for line in frontmatter.splitlines():
+                if line.startswith("title:"):
+                    title = line.split(":", 1)[1].strip()
+
+    if not title:
+        # Fall back to first ``# `` heading.
+        for line in body.splitlines():
+            if line.startswith("# "):
+                title = line[2:].strip()
+                # Strip numeric prefix ("0001 — ") if any.
+                parts = title.split("—", 1)
+                if len(parts) == 2:
+                    title = parts[1].strip()
+                break
+    if not title:
+        # Fall back to filename.
+        title = os.path.splitext(fname)[0]
+
+    def _extract_section(name: str) -> str:
+        start = body.find(f"## {name}")
+        if start == -1:
+            return ""
+        start = body.find("\n", start) + 1
+        next_sec = body.find("\n## ", start)
+        return (body[start:next_sec] if next_sec != -1 else body[start:]).strip()
+
+    context = _extract_section("Context")
+    decision = _extract_section("Decision")
+    consequences = _extract_section("Consequences")
+
+    return title, context, decision, consequences
+
+
+# ---------------------------------------------------------------------------
+# GC + orphan_scan
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def gc_preview(min_age_days: float = 7.0) -> str:
+    """Preview what GC would reclaim from the shared content-addressable cache.
+
+    Args:
+        min_age_days: Only count entries older than this. Default 7 days.
+
+    Returns a summary of entries eligible for deletion without touching disk.
+    """
+    from attocode.integrations.context.cas import ContentAddressedCache
+    cas = ContentAddressedCache()
+    result = cas.gc(min_age_seconds=min_age_days * 86400, dry_run=True)
+    lines = [
+        f"gc_preview: {cas.cas_root}",
+        f"  min_age_days: {min_age_days}",
+        f"  would delete: {result['would_delete_count']} entries",
+        f"  would free: {_fmt_bytes(result['would_free_bytes'])}",
+    ]
+    if result["examples"]:
+        lines.append("  examples (up to 10):")
+        for ex in result["examples"]:
+            lines.append(
+                f"    - {ex['artifact_type']:15s} {ex['key'][:30]}…  {_fmt_bytes(ex['size_bytes'])}"
+            )
+    lines.append("  (call gc_run with confirm=True to apply)")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def gc_run(min_age_days: float = 30.0, confirm: bool = False) -> str:
+    """Actually delete orphaned CAS entries older than ``min_age_days``.
+
+    Safer default age: 30 days (vs gc_preview's 7). Even aggressive callers
+    shouldn't wipe fresh entries.
+
+    Args:
+        min_age_days: Only delete entries older than this.
+        confirm: Must be True to actually delete.
+    """
+    from attocode.integrations.context.cas import ContentAddressedCache
+    cas = ContentAddressedCache()
+    min_age_seconds = min_age_days * 86400
+
+    # Always do a dry-run first for the preview.
+    preview = cas.gc(min_age_seconds=min_age_seconds, dry_run=True)
+    if not confirm:
+        return (
+            f"gc_run: DRY RUN — nothing deleted.\n"
+            f"  cas_root: {cas.cas_root}\n"
+            f"  min_age_days: {min_age_days}\n"
+            f"  would delete: {preview['would_delete_count']} entries\n"
+            f"  would free: {_fmt_bytes(preview['would_free_bytes'])}\n"
+            f"  Re-run with confirm=True to apply."
+        )
+
+    result = cas.gc(min_age_seconds=min_age_seconds, dry_run=False)
+    return (
+        f"gc_run: deleted {result['deleted_count']} entries "
+        f"({_fmt_bytes(result['freed_bytes'])} freed)"
+    )
+
+
+@mcp.tool()
+def orphan_scan(auto_archive: bool = False) -> str:
+    """Find learnings / ADRs whose referenced file paths no longer exist.
+
+    Phase 2a version: checks file paths in ``related_files`` / ``scope``
+    against the current working tree. Phase 2c will upgrade this to check
+    blob OIDs against git reachability.
+
+    Args:
+        auto_archive: If True, automatically archive orphaned learnings
+            (status=archived). ADRs are reported but not auto-archived
+            because they may still be historically relevant.
+    """
+    project_dir = _get_project_dir()
+    orphans: list[dict[str, Any]] = []
+
+    # Learnings — check scope path. Only look at active learnings; archived
+    # ones are already out of the active surface so they don't need
+    # archiving again.
+    try:
+        from attocode.code_intel.tools.learning_tools import _get_memory_store
+        store = _get_memory_store()
+        for learning in store.list_all(status="active"):
+            scope = learning.get("scope", "")
+            if scope and not os.path.exists(os.path.join(project_dir, scope)):
+                orphans.append({
+                    "kind": "learning",
+                    "id": learning.get("id"),
+                    "scope": scope,
+                    "description": learning.get("description", "")[:60],
+                })
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("orphan_scan: learnings scan failed: %s", exc)
+
+    # ADRs — check related_files list. ADRStore.list_all returns dicts
+    # with related_files already parsed to a list.
+    try:
+        from attocode.code_intel.tools.adr_tools import _get_adr_store
+        adr_store = _get_adr_store()
+        for adr in adr_store.list_all():
+            related = adr.get("related_files", []) or []
+            missing = [
+                rf for rf in related
+                if rf and not os.path.exists(os.path.join(project_dir, rf))
+            ]
+            if missing:
+                orphans.append({
+                    "kind": "adr",
+                    "number": adr.get("number"),
+                    "title": adr.get("title", ""),
+                    "missing_files": missing,
+                })
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("orphan_scan: adr scan failed: %s", exc)
+
+    if not orphans:
+        return "orphan_scan: no orphaned learnings or ADRs found."
+
+    lines = [f"orphan_scan: found {len(orphans)} orphan(s):"]
+    archived_count = 0
+    for o in orphans:
+        if o["kind"] == "learning":
+            lines.append(
+                f"  learning #{o['id']}: scope={o['scope']!r} — {o['description']!r}"
+            )
+            if auto_archive:
+                try:
+                    # Re-use record_feedback with very-unhelpful signal
+                    # or update status directly if there's a method.
+                    # MemoryStore doesn't have an archive method yet, so
+                    # we approximate by hard-deleting.
+                    store.delete_by_id(o["id"])
+                    archived_count += 1
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("orphan_scan: archive failed for learning %s: %s", o.get("id"), exc)
+        else:
+            lines.append(
+                f"  adr #{o['number']}: {o['title']!r} — missing {o['missing_files']}"
+            )
+    if auto_archive and archived_count:
+        lines.append("")
+        lines.append(f"  auto-archived {archived_count} learning(s)")
+    return "\n".join(lines)

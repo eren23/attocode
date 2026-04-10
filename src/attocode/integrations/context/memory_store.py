@@ -459,6 +459,44 @@ class MemoryStore:
         conn.commit()
 
     # ------------------------------------------------------------------
+    # Deletion
+    # ------------------------------------------------------------------
+
+    def clear_all(self, status_filter: str = "") -> int:
+        """Hard-delete learnings.
+
+        Args:
+            status_filter: If non-empty, only delete learnings whose
+                ``status`` matches (e.g. ``"archived"``). Empty string
+                wipes every row.
+
+        Returns the count deleted. FTS rows are removed via the existing
+        AFTER DELETE trigger on the ``learnings`` table. MemoryStore
+        doesn't serialize writes with a lock elsewhere (SQLite's own
+        busy handler is the contention path), so we follow the same
+        pattern here.
+        """
+        conn = self._get_conn()
+        if status_filter:
+            cursor = conn.execute(
+                "DELETE FROM learnings WHERE status = ?",
+                (status_filter,),
+            )
+        else:
+            cursor = conn.execute("DELETE FROM learnings")
+        conn.commit()
+        return cursor.rowcount
+
+    def delete_by_id(self, learning_id: int) -> bool:
+        """Hard-delete one learning by id. Returns True on success."""
+        conn = self._get_conn()
+        cursor = conn.execute(
+            "DELETE FROM learnings WHERE id = ?", (learning_id,),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
