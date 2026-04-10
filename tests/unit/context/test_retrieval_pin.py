@@ -164,14 +164,18 @@ class TestStampPinRoundTrip:
         """Stamping a result persists the pin so ``PinStore.get``
         returns it, and the footer contains the full 64-char
         ``manifest_hash`` (no more ``…`` truncation)."""
-        from attocode.code_intel.tools import pin_tools
+        from attocode.code_intel.tools import pin_store, pin_tools
 
         # Redirect the project dir to a temp location so the test
-        # doesn't read or write the user's real .attocode.
+        # doesn't read or write the user's real .attocode. Patch
+        # ``pin_store`` because that's where the pure helpers live
+        # after the round-3 refactor (``pin_tools`` now re-exports
+        # from it; patching ``pin_tools`` is ineffective).
         project = tmp_path / "proj"
         (project / ".attocode" / "cache").mkdir(parents=True)
-        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
-        monkeypatch.setattr(pin_tools, "_pin_store", None, raising=False)
+        monkeypatch.setattr(pin_store, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_store, "_pin_store", None, raising=False)
+        monkeypatch.setattr(pin_store, "_pin_store_project", "", raising=False)
 
         result = pin_tools._stamp_pin("hello world result")
         pin_id = self._extract_pin_id(result)
@@ -192,12 +196,13 @@ class TestStampPinRoundTrip:
     def test_stamp_is_idempotent(self, tmp_path, monkeypatch):
         """Two stamps on an unchanged state yield the same deterministic
         id and the PinStore collapses them to one row (no churn)."""
-        from attocode.code_intel.tools import pin_tools
+        from attocode.code_intel.tools import pin_store, pin_tools
 
         project = tmp_path / "proj"
         (project / ".attocode" / "cache").mkdir(parents=True)
-        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
-        monkeypatch.setattr(pin_tools, "_pin_store", None, raising=False)
+        monkeypatch.setattr(pin_store, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_store, "_pin_store", None, raising=False)
+        monkeypatch.setattr(pin_store, "_pin_store_project", "", raising=False)
 
         result1 = pin_tools._stamp_pin("first")
         result2 = pin_tools._stamp_pin("second")

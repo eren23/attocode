@@ -435,16 +435,23 @@ class TestSnapshotAuditLog:
 class TestLocalProviderPopulatesPinFields:
     @pytest.mark.asyncio
     async def test_semantic_search_includes_pin_fields(self, tmp_path, monkeypatch):
-        """Codex re-review follow-up: ``LocalSearchProvider.semantic_search``
+        """Codex re-review follow-up (round 2): ``LocalSearchProvider``
         must return a response with non-empty ``pin_id`` /
-        ``manifest_hash`` fields so clients can rely on them."""
-        import attocode.code_intel.tools.pin_tools as pin_tools
+        ``manifest_hash`` fields so clients can rely on them.
+
+        Round 3 follow-up: patch ``pin_store`` (not ``pin_tools``)
+        because the MCP-free helpers moved there, and assert that the
+        returned ``pin_id`` is actually persisted — the round-2 fix
+        computed it but never called ``PinStore.save()``, so
+        ``pin_resolve`` would have failed on the roundtrip.
+        """
+        import attocode.code_intel.tools.pin_store as pin_store
 
         project = tmp_path / "proj"
         (project / ".attocode" / "cache").mkdir(parents=True)
-        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
-        monkeypatch.setattr(pin_tools, "_pin_store", None, raising=False)
-        monkeypatch.setattr(pin_tools, "_pin_store_project", "", raising=False)
+        monkeypatch.setattr(pin_store, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_store, "_pin_store", None, raising=False)
+        monkeypatch.setattr(pin_store, "_pin_store_project", "", raising=False)
 
         from attocode.code_intel.api.providers.local_provider import (
             LocalSearchProvider,
@@ -466,3 +473,42 @@ class TestLocalProviderPopulatesPinFields:
         # M4: pin fields populated.
         assert resp.pin_id.startswith("pin_")
         assert len(resp.manifest_hash) == 64  # full sha256 hex
+
+        # Round 3: the pin MUST be persisted so a subsequent
+        # ``PinStore.get(pin_id)`` roundtrip succeeds. Without this,
+        # any client that takes ``resp.pin_id`` and passes it to
+        # ``pin_resolve`` / ``verify_pin`` gets "No pin with id …".
+        store = pin_store._get_pin_store()
+        persisted = store.get(resp.pin_id)
+        assert persisted is not None
+        assert persisted.pin_id == resp.pin_id
+        assert persisted.manifest_hash == resp.manifest_hash
+
+    def test_local_provider_does_not_import_mcp_runtime(self):
+        """Round 3 regression test for Codex P2 finding #1:
+        ``LocalSearchProvider.semantic_search`` must not transitively
+        import ``attocode.code_intel._shared`` (the MCP runtime stub).
+        Importing it pulls in ``mcp.server.fastmcp.FastMCP``, which
+        calls ``sys.exit(1)`` in environments without the ``mcp``
+        package — and ``SystemExit`` would escape any ``except
+        Exception`` block in the provider's best-effort pin
+        computation, turning a normal search request into a hard
+        failure.
+
+        Verified by inspecting the function's source: it must import
+        from ``pin_store`` (pure helpers), not ``pin_tools`` (MCP
+        runtime).
+        """
+        import inspect
+
+        from attocode.code_intel.api.providers.local_provider import (
+            LocalSearchProvider,
+        )
+
+        source = inspect.getsource(LocalSearchProvider.semantic_search)
+        # Allowed: import from the MCP-free helper module.
+        assert "tools.pin_store" in source
+        # Forbidden: importing from the MCP tool layer.
+        assert "tools.pin_tools" not in source
+        # Forbidden: importing the MCP runtime stub directly.
+        assert "code_intel._shared" not in source

@@ -198,21 +198,24 @@ class LocalSearchProvider:
         data = self._svc.semantic_search_data(
             query=query, top_k=top_k, file_filter=file_filter,
         )
-        # Codex M4: produce a pin compatible with the stdio MCP's
-        # ``_stamp_pin`` footer so local-mode HTTP clients see the
-        # same round-trippable state identifier. Best-effort — pin
-        # failure must never block the search result.
+        # Codex M4 (round 3): produce a pin compatible with the stdio
+        # MCP's ``_stamp_pin`` footer so local-mode HTTP clients see the
+        # same round-trippable state identifier. We import from the
+        # MCP-free ``pin_store`` module — NOT ``pin_tools`` — because
+        # ``pin_tools`` transitively imports ``_shared``, whose module
+        # body calls ``sys.exit(1)`` when ``mcp`` is unavailable and
+        # that ``SystemExit`` would escape any ``except Exception``.
+        # The pin is actually persisted via ``PinStore.save()`` so
+        # ``pin_resolve(pin_id)`` works end-to-end.
         pin_id = ""
         manifest_hash = ""
         try:
-            from attocode.code_intel.artifacts import RetrievalPin
-            from attocode.code_intel.tools.pin_tools import (
-                _compute_current_manifest_hashes,
+            from attocode.code_intel.tools.pin_store import (
+                compute_and_persist_pin,
             )
-            hashes = _compute_current_manifest_hashes()
-            pin = RetrievalPin.create(manifest_hashes=hashes, ttl_seconds=0)
-            pin_id = f"pin_{pin.manifest_hash[:20]}"
-            manifest_hash = pin.manifest_hash
+            server_pin = compute_and_persist_pin(ttl_seconds=0)
+            pin_id = server_pin.pin_id
+            manifest_hash = server_pin.manifest_hash
         except Exception:
             pass
         return SearchResultsResponse(
