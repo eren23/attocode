@@ -661,7 +661,8 @@ class TestGCRepoScoping:
 
         assert captured, "gc_unreferenced should issue at least one SQL statement"
         sql, binds = captured[0]
-        assert "branches b" in sql and "b.repo_id" in sql
+        assert "branches b" in sql
+        assert "b.repo_id" in sql
         assert binds.get("repo_id") is not None
 
     @pytest.mark.asyncio
@@ -686,7 +687,8 @@ class TestGCRepoScoping:
 
         assert captured
         sql, binds = captured[0]
-        assert "branches b" in sql and "b.repo_id" in sql
+        assert "branches b" in sql
+        assert "b.repo_id" in sql
         assert binds.get("repo_id") is not None
 
     @pytest.mark.asyncio
@@ -734,3 +736,94 @@ class TestSnapshotSizeSemantics:
         )
         assert c.size_bytes == 0
         assert c.extra["row_count"] == 42
+
+    @pytest.mark.asyncio
+    async def test_compute_components_puts_counts_in_extra(self):
+        """Codex re-review gap: Batch A's M2 test only checked the Pydantic
+        model shape. Verify the real ``_compute_components()`` emits
+        ``size_bytes=0`` for symbols / dependencies / embeddings
+        components and that the cardinality ends up in ``extra``.
+
+        We use an AsyncMock session whose ``execute`` returns scripted
+        aggregate results shaped like SQLAlchemy Row objects. The
+        function walks branch overlay → content shas → sum bytes →
+        group-by symbols / deps / embeddings — we provide deterministic
+        returns for each step so the output is predictable.
+        """
+        from attocode.code_intel.api.routes.snapshots import _compute_components
+
+        branch_id = uuid.uuid4()
+        branch = SimpleNamespace(id=branch_id)
+
+        # Scripted execute results:
+        # 1. branch overlay manifest lookup — handled by BranchOverlay
+        #    helpers which also call session.execute.
+        # 2. file_contents size SUM.
+        # 3. symbols group-by.
+        # 4. dependencies order_by rows.
+        # 5. embeddings group-by.
+
+        # Captured rows
+        symbol_rows = [("sha_a", 3), ("sha_b", 5)]   # 8 symbols total
+        dep_rows = [("sha_a", "sha_b", "import"), ("sha_b", "sha_a", "call")]
+        emb_rows = [("bge-small", "v1", 10), ("bge-small", "v2", 7)]
+
+        def _mk(rows=None, scalar=None, scalar_one=None):
+            r = MagicMock()
+            r.scalar_one = MagicMock(return_value=scalar_one if scalar_one is not None else 0)
+            r.scalar = MagicMock(return_value=scalar if scalar is not None else 0)
+            r.__iter__ = lambda self: iter(rows or [])
+            # Required to make ``for model, version, count in emb_result:``
+            # iterate correctly — SQLAlchemy Result proxies return row
+            # tuples when iterated.
+            return r
+
+        # Build a side_effect list. BranchOverlay.resolve_manifest
+        # internally calls execute a few times. We fake it by patching
+        # BranchOverlay.resolve_manifest directly.
+        from unittest.mock import patch
+        manifest = {"src/a.py": "sha_a", "src/b.py": "sha_b"}
+
+        async def fake_resolve(self_overlay, bid):
+            return manifest
+
+        with patch(
+            "attocode.code_intel.storage.branch_overlay.BranchOverlay.resolve_manifest",
+            new=fake_resolve,
+        ):
+            session = MagicMock()
+            session.execute = AsyncMock(side_effect=[
+                _mk(scalar_one=150),          # SUM(size_bytes) → 150
+                _mk(rows=symbol_rows),        # symbols group-by
+                _mk(rows=dep_rows),           # dependencies order_by
+                _mk(rows=emb_rows),           # embeddings group-by
+            ])
+
+            components, total_bytes = await _compute_components(session, branch)
+
+        # There should be at least content + symbols + dependencies +
+        # 2 embedding components (one per model version).
+        assert total_bytes == 150
+        by_name = {c.name: c for c in components}
+        assert "content" in by_name
+        assert "symbols" in by_name
+        assert "dependencies" in by_name
+        # M1: embedding components are per-version.
+        assert "embeddings.bge-small:v1" in by_name
+        assert "embeddings.bge-small:v2" in by_name
+
+        # M2: non-content components all report ``size_bytes=0`` with
+        # cardinality pushed into ``extra``.
+        assert by_name["symbols"].size_bytes == 0
+        assert by_name["symbols"].extra.get("row_count") == 8
+
+        assert by_name["dependencies"].size_bytes == 0
+        assert by_name["dependencies"].extra.get("edge_count") == 2
+
+        assert by_name["embeddings.bge-small:v1"].size_bytes == 0
+        assert by_name["embeddings.bge-small:v1"].extra.get("chunk_count") == 10
+        assert by_name["embeddings.bge-small:v2"].size_bytes == 0
+        assert by_name["embeddings.bge-small:v2"].extra.get("chunk_count") == 7
+
+        # Content component keeps real bytes.
+        assert by_name["content"].size_bytes == 150

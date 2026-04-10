@@ -557,6 +557,88 @@ class TestRotationLockoutAndCacheInvalidation:
         finally:
             store.close()
 
+    def test_delete_by_file_refused_during_rotation(self, seeded_db):
+        """Codex re-review gap: delete_by_file must also honor the
+        rotation lock, not just upsert/clear_all/clear_by_model."""
+        from attocode.integrations.context.vector_store import (
+            VectorStore,
+            VectorStoreRotationActiveError,
+        )
+
+        rot = EmbeddingRotator(seeded_db)
+        try:
+            rot.start(to_model="fake-model", to_version="v1", to_dim=8)
+        finally:
+            rot.close()
+
+        store = VectorStore(db_path=seeded_db, dimension=4)
+        try:
+            with pytest.raises(VectorStoreRotationActiveError):
+                store.delete_by_file("src/file_0.py")
+            # Row is still present.
+            assert store.count() == 5
+        finally:
+            store.close()
+
+    def test_clear_by_model_refused_during_rotation(self, seeded_db):
+        """Codex re-review gap: clear_by_model (used by the rotation
+        GC phase itself) still consults the rotation lock to prevent
+        concurrent accidental use — the rotation's own ``gc_old`` is
+        called from the rotator's post-cutover path after state has
+        already moved off the destructive states."""
+        from attocode.integrations.context.vector_store import (
+            VectorStore,
+            VectorStoreRotationActiveError,
+        )
+
+        rot = EmbeddingRotator(seeded_db)
+        try:
+            rot.start(to_model="fake-model", to_version="v1", to_dim=8)
+        finally:
+            rot.close()
+
+        store = VectorStore(db_path=seeded_db, dimension=4)
+        try:
+            with pytest.raises(VectorStoreRotationActiveError):
+                store.clear_by_model("old-model")
+            assert store.count() == 5
+        finally:
+            store.close()
+
+    def test_cache_invalidation_via_search_path(self, seeded_db):
+        """Codex re-review gap: the M5 fix must be reachable through
+        the public ``search()`` path, not only via a direct call to
+        ``_check_external_cache_bump``.
+
+        We open a store, run a first search to prime the in-memory
+        numpy cache, bump ``_rotator_cache_ver`` out-of-band (as a
+        cutover in another process would), then run a second search
+        and assert that ``_last_external_cache_ver`` was observed and
+        ``_vec_cache_version`` bumped.
+        """
+        from attocode.integrations.context.vector_store import VectorStore
+
+        store = VectorStore(db_path=seeded_db, dimension=4)
+        try:
+            _ = store.search([0.1, 0.2, 0.3, 0.4], top_k=5)
+            before_local = store._vec_cache_version
+            before_external = store._last_external_cache_ver
+
+            # Simulate another process bumping the shared cache version.
+            conn = store._get_conn()
+            conn.execute(
+                "INSERT OR REPLACE INTO store_metadata (key, value) VALUES (?, ?)",
+                ("_rotator_cache_ver", str(before_external + 1)),
+            )
+            conn.commit()
+
+            # Second search picks up the bump.
+            _ = store.search([0.1, 0.2, 0.3, 0.4], top_k=5)
+            assert store._last_external_cache_ver == before_external + 1
+            assert store._vec_cache_version == before_local + 1
+        finally:
+            store.close()
+
     def test_cache_invalidation_on_post_cutover_open_store(self, seeded_db):
         """Codex M5: an already-open VectorStore must reload its
         in-memory matrix after another process completes a cutover.
@@ -601,6 +683,36 @@ class TestRotationLockoutAndCacheInvalidation:
             assert store._last_external_cache_ver >= 1
         finally:
             store.close()
+
+
+class TestClearEmbeddingsToolRefusesDuringRotation:
+    """Surface-level Codex B3 regression: the ``clear_embeddings`` MCP
+    tool must return a readable refusal string when a rotation is
+    active, not raise an uncaught ``VectorStoreRotationActiveError``.
+    """
+
+    def test_tool_returns_refusal_during_rotation(self, seeded_db, tmp_path, monkeypatch):
+        from attocode.code_intel.tools import maintenance_tools as mt
+
+        # Point the tool at a project dir that contains our seeded
+        # vectors.db so the real VectorStore opens on it.
+        project = tmp_path / "proj"
+        (project / ".attocode" / "vectors").mkdir(parents=True)
+        import shutil
+        shutil.copy(seeded_db, project / ".attocode" / "vectors" / "embeddings.db")
+
+        monkeypatch.setattr(mt, "_get_project_dir", lambda: str(project))
+
+        # Start a rotation on the copied DB so the tool hits an active lock.
+        rot = EmbeddingRotator(str(project / ".attocode" / "vectors" / "embeddings.db"))
+        try:
+            rot.start(to_model="fake-model", to_version="v1", to_dim=8)
+        finally:
+            rot.close()
+
+        result = mt.clear_embeddings(confirm=True)
+        assert "REFUSED" in result
+        assert "rotation" in result.lower()
 
 
 # ---------------------------------------------------------------------------

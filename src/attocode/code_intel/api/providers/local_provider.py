@@ -22,8 +22,8 @@ from attocode.code_intel.api.models import (
     GraphQueryResponse,
     HotspotsResponse,
     ImpactAnalysisResponse,
-    LSPCompletionsResponse,
     LSPCompletionItem,
+    LSPCompletionsResponse,
     LSPDefinitionResponse,
     LSPDiagnosticItem,
     LSPDiagnosticsResponse,
@@ -198,10 +198,29 @@ class LocalSearchProvider:
         data = self._svc.semantic_search_data(
             query=query, top_k=top_k, file_filter=file_filter,
         )
+        # Codex M4: produce a pin compatible with the stdio MCP's
+        # ``_stamp_pin`` footer so local-mode HTTP clients see the
+        # same round-trippable state identifier. Best-effort — pin
+        # failure must never block the search result.
+        pin_id = ""
+        manifest_hash = ""
+        try:
+            from attocode.code_intel.artifacts import RetrievalPin
+            from attocode.code_intel.tools.pin_tools import (
+                _compute_current_manifest_hashes,
+            )
+            hashes = _compute_current_manifest_hashes()
+            pin = RetrievalPin.create(manifest_hashes=hashes, ttl_seconds=0)
+            pin_id = f"pin_{pin.manifest_hash[:20]}"
+            manifest_hash = pin.manifest_hash
+        except Exception:
+            pass
         return SearchResultsResponse(
             query=data["query"],
             results=[SearchResultItem(**r) for r in data["results"]],
             total=data["total"],
+            pin_id=pin_id,
+            manifest_hash=manifest_hash,
         )
 
     async def security_scan(

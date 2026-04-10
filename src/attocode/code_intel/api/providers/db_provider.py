@@ -5,6 +5,12 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from attocode.code_intel.api.deps import BranchContext
 
 from attocode.code_intel.api.models import (
     CodeChunkItem,
@@ -328,7 +334,7 @@ class DbAnalysisProvider:
 
         return DependencyGraphResponse(nodes=[], edges=[])
 
-    async def _compute_import_edges(self, session: "AsyncSession", branch_ctx: "BranchContext") -> list[dict]:
+    async def _compute_import_edges(self, session: AsyncSession, branch_ctx: BranchContext) -> list[dict]:
         """Fallback: compute edges on-the-fly from import extraction when Dependency table is empty."""
         import logging
 
@@ -651,10 +657,30 @@ class DbSearchProvider:
                             item.line = row[0]
                             break
 
+            # Codex M4: populate the ``pin_id`` + ``manifest_hash`` fields
+            # so search responses carry the same state-snapshot identifier
+            # the local stdio MCP emits via ``_stamp_pin``.
+            from attocode.code_intel.api.routes._pin_helper import (
+                build_retrieval_pin,
+            )
+            try:
+                server_pin = await build_retrieval_pin(
+                    session,
+                    repo_id=_uuid.UUID(self._project_id),
+                    branch_id=branch_ctx.branch_id,
+                )
+                pin_id = server_pin.pin_id
+                manifest_hash = server_pin.manifest_hash
+            except Exception:
+                pin_id = ""
+                manifest_hash = ""
+
             return SearchResultsResponse(
                 query=query,
                 results=items,
                 total=len(items),
+                pin_id=pin_id,
+                manifest_hash=manifest_hash,
             )
 
         raise RuntimeError("No database session available")
@@ -706,7 +732,7 @@ class DbGraphProvider:
 
     async def graph_query(
         self, file: str, edge_type: str, direction: str, depth: int, branch: str,
-    ) -> "GraphQueryResponse":
+    ) -> GraphQueryResponse:
         """Falls back to CodeIntelService (no DB-specific implementation)."""
         from attocode.code_intel.api.deps import get_service_or_404
         from attocode.code_intel.api.models import GraphQueryHop, GraphQueryResponse
@@ -725,7 +751,7 @@ class DbGraphProvider:
 
     async def find_related(
         self, file: str, top_k: int, branch: str,
-    ) -> "FindRelatedResponse":
+    ) -> FindRelatedResponse:
         """Falls back to CodeIntelService (no DB-specific implementation)."""
         from attocode.code_intel.api.deps import get_service_or_404
         from attocode.code_intel.api.models import FindRelatedResponse, RelatedFileItem
