@@ -1196,44 +1196,109 @@ def gc_run(min_age_days: float = 30.0, confirm: bool = False) -> str:
 
 @mcp.tool()
 def orphan_scan(auto_archive: bool = False) -> str:
-    """Find learnings / ADRs whose referenced file paths no longer exist.
+    """Find learnings / ADRs whose referenced content is no longer reachable.
 
-    Phase 2a version: checks file paths in ``related_files`` / ``scope``
-    against the current working tree. Phase 2c will upgrade this to check
-    blob OIDs against git reachability.
+    Phase 2c version: prefers content-addressed reachability via
+    ``anchor_blob_oid`` (learnings) / ``anchor_blob_oids`` (ADRs),
+    falling back to the Phase 2a path-exists check for entries that
+    don't carry an anchor yet. The two paths are complementary — a
+    learning survives a file rename *only* if it was recorded with an
+    anchor, so fresh Phase-2c records have stronger orphan tolerance.
 
     Args:
         auto_archive: If True, automatically archive orphaned learnings
             (status=archived). ADRs are reported but not auto-archived
             because they may still be historically relevant.
     """
+    from attocode.integrations.context.blob_oid import check_reachability
+
     project_dir = _get_project_dir()
     orphans: list[dict[str, Any]] = []
 
-    # Learnings — check scope path. Only look at active learnings; archived
-    # ones are already out of the active surface so they don't need
-    # archiving again.
+    # Two-pass strategy for each store:
+    #
+    # 1. Collect every anchor blob_oid across all active entries.
+    # 2. Ask git which are still reachable (one subprocess call).
+    # 3. An entry is orphaned if it has anchors AND none are reachable.
+    # 4. Entries without anchors fall through to the path-exists check.
+    #
+    # This keeps the git subprocess call count to 2 (one per store)
+    # regardless of how many records exist.
+
+    # --- Learnings ---
     try:
         from attocode.code_intel.tools.learning_tools import _get_memory_store
         store = _get_memory_store()
-        for learning in store.list_all(status="active"):
+        active_learnings = store.list_all(status="active")
+
+        all_anchors = {
+            lr.get("anchor_blob_oid", "")
+            for lr in active_learnings
+            if lr.get("anchor_blob_oid")
+        }
+        reachable = (
+            check_reachability(all_anchors, project_dir)
+            if all_anchors else set()
+        )
+
+        for learning in active_learnings:
+            anchor = learning.get("anchor_blob_oid", "")
+            if anchor:
+                # Trust the anchor — skip the path fallback entirely.
+                if anchor not in reachable:
+                    orphans.append({
+                        "kind": "learning",
+                        "id": learning.get("id"),
+                        "reason": "blob_unreachable",
+                        "anchor": anchor,
+                        "scope": learning.get("scope", ""),
+                        "description": learning.get("description", "")[:60],
+                    })
+                continue
+            # No anchor — fall back to scope path check.
             scope = learning.get("scope", "")
             if scope and not os.path.exists(os.path.join(project_dir, scope)):
                 orphans.append({
                     "kind": "learning",
                     "id": learning.get("id"),
+                    "reason": "scope_missing",
                     "scope": scope,
                     "description": learning.get("description", "")[:60],
                 })
     except Exception as exc:  # noqa: BLE001
         logger.warning("orphan_scan: learnings scan failed: %s", exc)
 
-    # ADRs — check related_files list. ADRStore.list_all returns dicts
-    # with related_files already parsed to a list.
+    # --- ADRs ---
     try:
         from attocode.code_intel.tools.adr_tools import _get_adr_store
         adr_store = _get_adr_store()
-        for adr in adr_store.list_all():
+        all_adrs = adr_store.list_all()
+
+        all_adr_anchors: set[str] = set()
+        for adr in all_adrs:
+            for a in adr.get("anchor_blob_oids", []) or []:
+                if a:
+                    all_adr_anchors.add(a)
+        reachable_adr = (
+            check_reachability(all_adr_anchors, project_dir)
+            if all_adr_anchors else set()
+        )
+
+        for adr in all_adrs:
+            anchors = adr.get("anchor_blob_oids", []) or []
+            if anchors:
+                missing_anchors = [a for a in anchors if a not in reachable_adr]
+                if missing_anchors and len(missing_anchors) == len(anchors):
+                    # Every anchor is unreachable — definitively orphaned.
+                    orphans.append({
+                        "kind": "adr",
+                        "number": adr.get("number"),
+                        "title": adr.get("title", ""),
+                        "reason": "all_anchors_unreachable",
+                        "missing_anchors": missing_anchors,
+                    })
+                continue
+            # No anchors — fall back to related_files path check.
             related = adr.get("related_files", []) or []
             missing = [
                 rf for rf in related
@@ -1244,6 +1309,7 @@ def orphan_scan(auto_archive: bool = False) -> str:
                     "kind": "adr",
                     "number": adr.get("number"),
                     "title": adr.get("title", ""),
+                    "reason": "related_files_missing",
                     "missing_files": missing,
                 })
     except Exception as exc:  # noqa: BLE001
@@ -1255,24 +1321,41 @@ def orphan_scan(auto_archive: bool = False) -> str:
     lines = [f"orphan_scan: found {len(orphans)} orphan(s):"]
     archived_count = 0
     for o in orphans:
+        reason = o.get("reason", "?")
         if o["kind"] == "learning":
-            lines.append(
-                f"  learning #{o['id']}: scope={o['scope']!r} — {o['description']!r}"
-            )
+            if reason == "blob_unreachable":
+                lines.append(
+                    f"  learning #{o['id']} [{reason}]: anchor={o['anchor'][:24]}… "
+                    f"— {o['description']!r}"
+                )
+            else:
+                lines.append(
+                    f"  learning #{o['id']} [{reason}]: scope={o['scope']!r} "
+                    f"— {o['description']!r}"
+                )
             if auto_archive:
                 try:
-                    # Re-use record_feedback with very-unhelpful signal
-                    # or update status directly if there's a method.
-                    # MemoryStore doesn't have an archive method yet, so
-                    # we approximate by hard-deleting.
+                    # MemoryStore doesn't have a soft-archive method yet,
+                    # so we hard-delete. The audit log / export_learnings
+                    # tool makes this reversible at the backup level.
                     store.delete_by_id(o["id"])
                     archived_count += 1
                 except Exception as exc:  # noqa: BLE001
-                    logger.warning("orphan_scan: archive failed for learning %s: %s", o.get("id"), exc)
+                    logger.warning(
+                        "orphan_scan: archive failed for learning %s: %s",
+                        o.get("id"), exc,
+                    )
         else:
-            lines.append(
-                f"  adr #{o['number']}: {o['title']!r} — missing {o['missing_files']}"
-            )
+            if reason == "all_anchors_unreachable":
+                lines.append(
+                    f"  adr #{o['number']} [{reason}]: {o['title']!r} "
+                    f"— unreachable anchors: {o['missing_anchors']}"
+                )
+            else:
+                lines.append(
+                    f"  adr #{o['number']} [{reason}]: {o['title']!r} "
+                    f"— missing {o['missing_files']}"
+                )
     if auto_archive and archived_count:
         lines.append("")
         lines.append(f"  auto-archived {archived_count} learning(s)")

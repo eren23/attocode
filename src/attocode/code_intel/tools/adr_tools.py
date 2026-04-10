@@ -89,12 +89,33 @@ class ADRStore:
                 superseded_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                anchor_blob_oids TEXT NOT NULL DEFAULT '[]',
                 FOREIGN KEY (superseded_by) REFERENCES adrs(number)
             );
 
             CREATE INDEX IF NOT EXISTS idx_adrs_status ON adrs(status);
         """)
+        self._migrate_schema()
         conn.commit()
+
+    def _migrate_schema(self) -> None:
+        """Add the ``anchor_blob_oids`` column if missing.
+
+        Phase 2c retrofit — older ADR databases created under Phase 1/2a/2b
+        don't have this column yet. This runs at every open and is
+        idempotent, so a fresh store is a no-op and an old store gets
+        the column added in place.
+        """
+        conn = self._get_conn()
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(adrs)").fetchall()
+        }
+        if "anchor_blob_oids" not in columns:
+            conn.execute(
+                "ALTER TABLE adrs ADD COLUMN anchor_blob_oids "
+                "TEXT NOT NULL DEFAULT '[]'"
+            )
 
     # ------------------------------------------------------------------
     # Write operations
@@ -109,16 +130,27 @@ class ADRStore:
         related_files: list[str] | None = None,
         tags: list[str] | None = None,
         author: str = "",
+        anchor_blob_oids: list[str] | None = None,
     ) -> int:
-        """Record a new ADR. Returns the ADR number."""
+        """Record a new ADR. Returns the ADR number.
+
+        Args:
+            anchor_blob_oids: Optional content-addressed anchors for the
+                files this ADR references (e.g. ``["git:abc123", "git:def456"]``).
+                When set, ``orphan_scan`` can check git reachability to
+                detect ADRs whose referenced content is no longer in the
+                repo. Pass an empty list to fall back to the path-based
+                ``related_files`` heuristic.
+        """
         conn = self._get_conn()
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
         cursor = conn.execute(
             """INSERT INTO adrs
                (title, status, context, decision, consequences,
-                related_files, tags, author, created_at, updated_at)
-               VALUES (?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?)""",
+                related_files, tags, author, created_at, updated_at,
+                anchor_blob_oids)
+               VALUES (?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 title,
                 context,
@@ -129,6 +161,7 @@ class ADRStore:
                 author,
                 now,
                 now,
+                json.dumps(anchor_blob_oids or []),
             ),
         )
         conn.commit()
@@ -201,7 +234,7 @@ class ADRStore:
         row = conn.execute(
             """SELECT number, title, status, context, decision, consequences,
                       related_files, tags, author, superseded_by,
-                      created_at, updated_at
+                      created_at, updated_at, anchor_blob_oids
                FROM adrs WHERE number = ?""",
             (number,),
         ).fetchone()
@@ -227,7 +260,7 @@ class ADRStore:
         query = (
             "SELECT number, title, status, context, decision, consequences,"
             " related_files, tags, author, superseded_by,"
-            " created_at, updated_at"
+            " created_at, updated_at, anchor_blob_oids"
             " FROM adrs WHERE 1=1"
         )
         params: list[str] = []
@@ -261,8 +294,13 @@ class ADRStore:
     # ------------------------------------------------------------------
 
     def _row_to_dict(self, row: tuple) -> dict:
-        """Convert a row tuple to a dict."""
-        return {
+        """Convert a row tuple to a dict.
+
+        Tolerant of the row length so older call sites that SELECT 12
+        columns (without ``anchor_blob_oids``) still work — the missing
+        anchors default to an empty list.
+        """
+        result = {
             "number": row[0],
             "title": row[1],
             "status": row[2],
@@ -276,6 +314,14 @@ class ADRStore:
             "created_at": row[10],
             "updated_at": row[11],
         }
+        if len(row) > 12 and row[12]:
+            try:
+                result["anchor_blob_oids"] = json.loads(row[12])
+            except (json.JSONDecodeError, TypeError):
+                result["anchor_blob_oids"] = []
+        else:
+            result["anchor_blob_oids"] = []
+        return result
 
     # ------------------------------------------------------------------
     # Deletion
@@ -369,6 +415,7 @@ def record_adr(
     consequences: str = "",
     related_files: list[str] | None = None,
     tags: list[str] | None = None,
+    anchor_blob_oids: list[str] | None = None,
 ) -> str:
     """Record an architecture decision.
 
@@ -383,6 +430,10 @@ def record_adr(
         consequences: What are the trade-offs and implications? (optional)
         related_files: List of file paths affected by this decision (optional).
         tags: List of tags for categorization, e.g. ["database", "performance"] (optional).
+        anchor_blob_oids: Optional list of content-addressed anchors
+            (``"git:<sha>"`` / ``"sha256:<hex>"``) for the files this ADR
+            references. If left empty, one is auto-computed per entry in
+            ``related_files`` that resolves to a real file.
     """
     remote = _get_remote_service()
     if remote is not None:
@@ -395,6 +446,30 @@ def record_adr(
             tags=tags,
         )
 
+    # Auto-compute anchors from related_files when caller didn't supply them.
+    resolved_anchors: list[str] = list(anchor_blob_oids or [])
+    if not resolved_anchors and related_files:
+        try:
+            from attocode.integrations.context.blob_oid import (
+                BlobOidCache,
+                compute_blob_oids_batch,
+            )
+            project_dir = _get_project_dir()
+            cache = BlobOidCache(project_dir=project_dir)
+            try:
+                oid_map = compute_blob_oids_batch(
+                    related_files, project_dir, cache=cache,
+                )
+                for rf in related_files:
+                    oid = oid_map.get(rf, "")
+                    if oid and not oid.startswith("sha256:missing:"):
+                        resolved_anchors.append(oid)
+            finally:
+                cache.close()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("record_adr: anchor compute failed: %s", exc)
+            resolved_anchors = []
+
     store = _get_adr_store()
     try:
         adr_number = store.add(
@@ -404,12 +479,16 @@ def record_adr(
             consequences=consequences,
             related_files=related_files,
             tags=tags,
+            anchor_blob_oids=resolved_anchors or None,
         )
     except Exception as e:
         return f"Error recording ADR: {e}"
 
+    anchor_suffix = (
+        f" ({len(resolved_anchors)} anchor(s))" if resolved_anchors else ""
+    )
     return (
-        f"Recorded ADR #{adr_number}: {title}\n"
+        f"Recorded ADR #{adr_number}: {title}{anchor_suffix}\n"
         f"Status: proposed\n"
         f"Use `update_adr_status` to accept, deprecate, or supersede this decision."
     )
