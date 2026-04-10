@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode.code_intel._shared import _get_project_dir, mcp
 from attocode.code_intel.tools.pin_tools import (
@@ -24,6 +24,9 @@ from attocode.code_intel.tools.pin_tools import (
     _compute_current_manifest_hashes,
     _hash_for_trigrams,
 )
+
+if TYPE_CHECKING:
+    from attocode.integrations.context.embedding_rotation import EmbeddingRotator
 
 logger = logging.getLogger(__name__)
 
@@ -1274,3 +1277,255 @@ def orphan_scan(auto_archive: bool = False) -> str:
         lines.append("")
         lines.append(f"  auto-archived {archived_count} learning(s)")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Embedding rotation — Phase 2b
+#
+# State machine lives in ``embedding_rotation.EmbeddingRotator``. These
+# tools are thin MCP wrappers over it that load a new embedding provider
+# on demand and dispatch to the rotator.
+# ---------------------------------------------------------------------------
+
+
+def _rotator() -> EmbeddingRotator:
+    """Build a rotator bound to the current project's vectors.db."""
+    from attocode.integrations.context.embedding_rotation import EmbeddingRotator
+    project_dir = _get_project_dir()
+    db_path = os.path.join(project_dir, ".attocode", "vectors", "embeddings.db")
+    return EmbeddingRotator(db_path=db_path)
+
+
+def _format_rotation_status(status: Any) -> str:
+    """Render a RotationStatus as a user-readable summary."""
+    lines = [
+        f"  state: {status.state.value}",
+        f"  from: {status.from_model or '<unknown>'} "
+        f"(v={status.from_version or '?'}, dim={status.from_dim})",
+        f"  to:   {status.to_model or '<unknown>'} "
+        f"(v={status.to_version or '?'}, dim={status.to_dim})",
+        f"  progress: {status.processed_rows}/{status.total_rows} "
+        f"({status.progress_pct():.1f}%)",
+    ]
+    if status.last_error:
+        lines.append(f"  last_error: {status.last_error}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def embeddings_rotate_start(
+    new_model: str,
+    new_version: str = "",
+    new_dim: int = 0,
+) -> str:
+    """Begin rotating all stored embeddings to a new model.
+
+    Creates a staging table (``vectors_rotating``) that will be
+    populated by repeated ``embeddings_rotate_step`` calls, then
+    swapped into place via ``embeddings_rotate_cutover``. The primary
+    ``vectors`` table is untouched until the atomic cutover.
+
+    Args:
+        new_model: Provider model identifier. See ``create_embedding_provider``
+            for accepted names (``"bge"``, ``"all-MiniLM-L6-v2"``,
+            ``"nomic-embed-text"``, ``"openai"``, or a local path).
+        new_version: Optional version tag stored alongside the rotation
+            (e.g. ``"v1.5"``). Free-form.
+        new_dim: Optional explicit target dimension. If 0, the rotator
+            loads the provider and queries its ``dimension()``.
+
+    Returns a human-readable summary of the new rotation state.
+
+    Note: during rotation, avoid concurrent ``semantic_search`` reindexes
+    — writes that land on the primary ``vectors`` table mid-rotation will
+    not be propagated to the new model and are effectively lost on cutover.
+    """
+    from attocode.integrations.context.embeddings import create_embedding_provider
+
+    rot = _rotator()
+    try:
+        # Load the provider once up-front to confirm it's importable +
+        # fail loud before any schema mutation.
+        try:
+            provider = create_embedding_provider(model=new_model)
+        except ImportError as exc:
+            return (
+                f"embeddings_rotate_start: provider for {new_model!r} not available: {exc}. "
+                f"Install the relevant extras, or try `pip install attocode[semantic]`."
+            )
+
+        effective_dim = new_dim or provider.dimension()
+        if effective_dim <= 0:
+            return (
+                f"embeddings_rotate_start: could not resolve a dimension for "
+                f"provider {new_model!r}; pass new_dim explicitly."
+            )
+
+        try:
+            status = rot.start(
+                to_model=provider.name,
+                to_version=new_version,
+                to_dim=effective_dim,
+            )
+        except RuntimeError as exc:
+            return f"embeddings_rotate_start: {exc}"
+
+        return "embeddings_rotate_start: rotation created\n" + _format_rotation_status(status)
+    finally:
+        rot.close()
+
+
+@mcp.tool()
+def embeddings_rotate_status() -> str:
+    """Report the current rotation state, or 'none' if nothing is active."""
+    rot = _rotator()
+    try:
+        status = rot.status()
+    finally:
+        rot.close()
+    if status.state.value == "none":
+        return "embeddings_rotate_status: no rotation active."
+    return "embeddings_rotate_status:\n" + _format_rotation_status(status)
+
+
+@mcp.tool()
+def embeddings_rotate_step(batch_size: int = 32, max_batches: int = 1) -> str:
+    """Process one or more batches of the backfill.
+
+    Args:
+        batch_size: Rows per batch. Larger batches amortize provider
+            load cost at the expense of wall-clock per call. Default 32.
+        max_batches: Loop up to this many batches in a single call.
+            Default 1 (one batch per invocation). Use a larger number
+            to run a whole rotation in one MCP call on a small repo.
+
+    Returns a summary of the rotation state after processing.
+    """
+    from attocode.integrations.context.embeddings import create_embedding_provider
+
+    rot = _rotator()
+    try:
+        status = rot.status()
+        if status.state.value not in ("pending", "backfilling"):
+            return (
+                f"embeddings_rotate_step: rotation is in state "
+                f"{status.state.value!r}, not pending|backfilling. Nothing to do."
+            )
+        try:
+            provider = create_embedding_provider(model=status.to_model)
+        except ImportError as exc:
+            return f"embeddings_rotate_step: provider import failed: {exc}"
+
+        total_processed = 0
+        for _ in range(max(1, max_batches)):
+            try:
+                processed = rot.step(provider, batch_size=batch_size)
+            except RuntimeError as exc:
+                return f"embeddings_rotate_step: {exc}"
+            total_processed += processed
+            if processed == 0:
+                break  # done
+
+        status = rot.status()
+    finally:
+        rot.close()
+
+    return (
+        f"embeddings_rotate_step: processed {total_processed} row(s)\n"
+        + _format_rotation_status(status)
+    )
+
+
+@mcp.tool()
+def embeddings_rotate_cutover(confirm: bool = False) -> str:
+    """Atomically swap ``vectors`` and ``vectors_rotating``.
+
+    The old table becomes ``vectors_archive`` (still on disk until
+    ``embeddings_rotate_gc_old``). Subsequent reads and writes target
+    the new table. Requires state ``ready_to_cutover`` and ``confirm=True``.
+    """
+    rot = _rotator()
+    try:
+        status = rot.status()
+        if status.state.value != "ready_to_cutover":
+            return (
+                f"embeddings_rotate_cutover: state is {status.state.value!r}, "
+                f"not ready_to_cutover. Run embeddings_rotate_step until done."
+            )
+        if not confirm:
+            return (
+                "embeddings_rotate_cutover: DRY RUN — nothing changed.\n"
+                + _format_rotation_status(status)
+                + "\n  Re-run with confirm=True to apply the swap."
+            )
+        try:
+            status = rot.cutover()
+        except (RuntimeError, Exception) as exc:  # noqa: BLE001
+            return f"embeddings_rotate_cutover: failed: {exc}"
+    finally:
+        rot.close()
+    return "embeddings_rotate_cutover: success\n" + _format_rotation_status(status)
+
+
+@mcp.tool()
+def embeddings_rotate_gc_old(confirm: bool = False) -> str:
+    """Drop the archived old-model vectors table and clear rotation state.
+
+    Requires state ``cutover_done``. This is the point of no return for
+    the old embeddings — once dropped, the only recovery is to re-embed
+    from scratch (or restore from a snapshot).
+    """
+    rot = _rotator()
+    try:
+        status = rot.status()
+        if status.state.value != "cutover_done":
+            return (
+                f"embeddings_rotate_gc_old: state is {status.state.value!r}, "
+                f"not cutover_done."
+            )
+        if not confirm:
+            return (
+                "embeddings_rotate_gc_old: DRY RUN — nothing changed.\n"
+                "  Re-run with confirm=True to drop the archived old vectors."
+            )
+        try:
+            status = rot.gc_old()
+        except RuntimeError as exc:
+            return f"embeddings_rotate_gc_old: {exc}"
+    finally:
+        rot.close()
+    return "embeddings_rotate_gc_old: done\n" + _format_rotation_status(status)
+
+
+@mcp.tool()
+def embeddings_rotate_abort(confirm: bool = False) -> str:
+    """Cancel a pre-cutover rotation.
+
+    Drops ``vectors_rotating`` and clears rotation state. The primary
+    ``vectors`` table is untouched — the user's embeddings stay live.
+    Cannot be called after ``cutover``; use ``gc_old`` or restore from
+    a snapshot instead.
+    """
+    rot = _rotator()
+    try:
+        status = rot.status()
+        if status.state.value in ("none", "gc_done"):
+            return "embeddings_rotate_abort: no rotation in progress."
+        if status.state.value in ("cutover_done",):
+            return (
+                "embeddings_rotate_abort: cannot abort after cutover. "
+                "Use embeddings_rotate_gc_old to finalize or restore a snapshot."
+            )
+        if not confirm:
+            return (
+                "embeddings_rotate_abort: DRY RUN — nothing changed.\n"
+                + _format_rotation_status(status)
+                + "\n  Re-run with confirm=True to abort."
+            )
+        try:
+            status = rot.abort()
+        except RuntimeError as exc:
+            return f"embeddings_rotate_abort: {exc}"
+    finally:
+        rot.close()
+    return "embeddings_rotate_abort: rotation aborted, primary vectors untouched"
