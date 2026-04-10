@@ -365,3 +365,95 @@ class BlameHunk(Base):
     start_line: Mapped[int] = mapped_column(Integer, nullable=False)
     end_line: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class RepoSnapshot(Base):
+    """A point-in-time manifest of a repo's code-intel state.
+
+    Phase 3a delivers creation / listing / deletion over this table.
+    Phase 3b will add an OCI adapter that pushes the same manifest +
+    component rows as an artifact to a registry.
+    """
+    __tablename__ = "repo_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    repo_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("branches.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    manifest_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    total_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    component_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    commit_oid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    extra: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+    components: Mapped[list[RepoSnapshotComponent]] = relationship(
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        __import__("sqlalchemy").UniqueConstraint(
+            "repo_id", "name", name="uq_repo_snapshots_repo_name",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_repo_snapshots_repo_created", "repo_id", "created_at",
+        ),
+        __import__("sqlalchemy").Index("ix_repo_snapshots_org", "org_id"),
+    )
+
+
+class RepoSnapshotComponent(Base):
+    """One artifact entry inside a :class:`RepoSnapshot`.
+
+    ``name`` is a logical identifier (``"content"`` / ``"symbols"`` /
+    ``"embeddings.bge-small-en-v1.5"``), ``media_type`` is the OCI-shaped
+    media type string, and ``digest`` is the SHA-256 content hash.
+    """
+    __tablename__ = "repo_snapshot_components"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("repo_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    media_type: Mapped[str] = mapped_column(Text, nullable=False)
+    digest: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    extra: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+    snapshot: Mapped[RepoSnapshot] = relationship(back_populates="components")
+
+    __table_args__ = (
+        __import__("sqlalchemy").Index(
+            "ix_repo_snapshot_components_snapshot", "snapshot_id",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_repo_snapshot_components_digest", "digest",
+        ),
+    )

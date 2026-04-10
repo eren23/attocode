@@ -86,6 +86,20 @@ class CreateRepoRequest(BaseModel):
     language: str | None = None
 
 
+class UpdateRepoRequest(BaseModel):
+    """Fields that can be updated after a repository is created.
+
+    ``None`` means "leave unchanged". Empty string explicitly clears a
+    nullable column. Immutable fields (``id``, ``org_id``, ``created_at``)
+    are not present.
+    """
+    name: str | None = None
+    clone_url: str | None = None
+    default_branch: str | None = None
+    language: str | None = None
+    local_path: str | None = None
+
+
 class RepoResponse(BaseModel):
     id: str
     name: str
@@ -602,6 +616,102 @@ async def delete_repo(
     await session.delete(repo)
     await session.commit()
     return {"detail": "Repository deleted"}
+
+
+@router.patch("/{org_id}/repos/{repo_id}", response_model=RepoResponse)
+async def update_repo(
+    org_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    req: UpdateRepoRequest,
+    auth: AuthContext = Depends(resolve_auth),
+    session: AsyncSession = Depends(get_db_session),
+) -> RepoResponse:
+    """Update mutable repository fields (admin+ required).
+
+    Supports renaming the repo, retargeting its ``clone_url``, changing
+    the default branch, or updating the declared language. Phase 3a
+    does NOT support moving a repo between orgs (that would require
+    re-checking quotas and audit logging across two orgs); use create +
+    delete for that case.
+
+    Returns the updated :class:`RepoResponse`.
+    """
+    await _require_membership(org_id, auth, session, min_role="admin")
+
+    result = await session.execute(
+        select(Repository).where(Repository.id == repo_id, Repository.org_id == org_id)
+    )
+    repo = result.scalar_one_or_none()
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    changes: dict[str, dict[str, str | None]] = {}
+
+    # Rename: enforce uniqueness within the org.
+    if req.name is not None and req.name != repo.name:
+        if not req.name:
+            raise HTTPException(status_code=422, detail="name cannot be empty")
+        existing = await session.execute(
+            select(Repository).where(
+                Repository.org_id == org_id,
+                Repository.name == req.name,
+                Repository.id != repo_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Repository '{req.name}' already exists in this org",
+            )
+        changes["name"] = {"from": repo.name, "to": req.name}
+        repo.name = req.name
+
+    if req.clone_url is not None and req.clone_url != repo.clone_url:
+        changes["clone_url"] = {"from": repo.clone_url, "to": req.clone_url or None}
+        repo.clone_url = req.clone_url or None
+
+    if req.default_branch is not None and req.default_branch != repo.default_branch:
+        if not req.default_branch:
+            raise HTTPException(status_code=422, detail="default_branch cannot be empty")
+        changes["default_branch"] = {
+            "from": repo.default_branch,
+            "to": req.default_branch,
+        }
+        repo.default_branch = req.default_branch
+
+    if req.language is not None and req.language != repo.language:
+        changes["language"] = {"from": repo.language, "to": req.language or None}
+        repo.language = req.language or None
+
+    if req.local_path is not None and req.local_path != repo.local_path:
+        changes["local_path"] = {"from": repo.local_path, "to": req.local_path or None}
+        repo.local_path = req.local_path or None
+
+    if changes:
+        from attocode.code_intel.audit import log_event
+
+        await log_event(
+            session,
+            org_id,
+            "repo.updated",
+            repo_id=repo_id,
+            user_id=auth.user_id,
+            detail={"changes": changes},
+        )
+        await session.commit()
+        await session.refresh(repo)
+
+    return RepoResponse(
+        id=str(repo.id),
+        name=repo.name,
+        clone_url=repo.clone_url,
+        local_path=repo.local_path,
+        default_branch=repo.default_branch,
+        language=repo.language,
+        index_status=repo.index_status,
+        last_indexed_at=repo.last_indexed_at.isoformat() if repo.last_indexed_at else None,
+        created_at=repo.created_at.isoformat(),
+    )
 
 
 @router.post("/{org_id}/repos/{repo_id}/reindex")
