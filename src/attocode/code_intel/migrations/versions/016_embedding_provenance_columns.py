@@ -106,6 +106,65 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Revert the non-destructive dual-column rewrite.
+
+    Codex review fix (M6): the naive downgrade — drop the wide unique
+    key, recreate the narrow one — fails outright when a dual-version
+    rotation has left multiple ``embedding_model_version`` values for
+    the same ``(content_sha, embedding_model, chunk_type)`` tuple.
+    Recreating the old narrow unique constraint would raise at DDL
+    time.
+
+    The safe-by-default behavior is to REFUSE the downgrade unless the
+    operator confirms via the ``ATTOCODE_ALLOW_DESTRUCTIVE_016_DOWNGRADE``
+    env var. When that flag is set, we delete every row whose
+    ``embedding_model_version`` is non-empty first, logging the count,
+    then proceed with the rewrite. Pre-rotation databases (where every
+    row has ``embedding_model_version = ''``) downgrade cleanly with
+    no data loss and no flag.
+    """
+    import logging
+    import os
+
+    logger = logging.getLogger("alembic.016")
+
+    bind = op.get_bind()
+    conflicts_row = bind.execute(
+        sa.text(
+            "SELECT COUNT(*) FROM embeddings "
+            "WHERE embedding_model_version IS NOT NULL "
+            "  AND embedding_model_version != ''"
+        )
+    ).fetchone()
+    conflict_count = int(conflicts_row[0] or 0) if conflicts_row else 0
+
+    if conflict_count > 0:
+        allow = os.environ.get(
+            "ATTOCODE_ALLOW_DESTRUCTIVE_016_DOWNGRADE", ""
+        ).lower() in {"1", "true", "yes"}
+        if not allow:
+            raise RuntimeError(
+                f"Refusing to downgrade migration 016: {conflict_count} "
+                f"embedding row(s) carry a non-empty "
+                f"embedding_model_version, which would violate the "
+                f"recreated (content_sha, embedding_model, chunk_type) "
+                f"unique constraint. Set "
+                f"ATTOCODE_ALLOW_DESTRUCTIVE_016_DOWNGRADE=1 to confirm "
+                f"the destructive downgrade (this will DELETE those rows)."
+            )
+        logger.warning(
+            "016 downgrade: destructive flag set, deleting %d "
+            "embedding row(s) with non-empty embedding_model_version",
+            conflict_count,
+        )
+        bind.execute(
+            sa.text(
+                "DELETE FROM embeddings "
+                "WHERE embedding_model_version IS NOT NULL "
+                "  AND embedding_model_version != ''"
+            )
+        )
+
     op.drop_index("ix_embeddings_model_version", table_name="embeddings")
     op.drop_constraint(
         "uq_embedding_content_model_version_chunk",

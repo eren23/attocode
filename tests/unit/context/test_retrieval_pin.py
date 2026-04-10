@@ -135,3 +135,115 @@ class TestRetrievalPinExpiry:
     def test_is_expired_future(self):
         pin = RetrievalPin.create(manifest_hashes={}, ttl_seconds=3600)
         assert not pin.is_expired()
+
+
+# ---------------------------------------------------------------------------
+# Codex M3 — _stamp_pin round-trip via PinStore
+# ---------------------------------------------------------------------------
+
+
+class TestStampPinRoundTrip:
+    """After Codex fix M3, ``_stamp_pin`` persists a deterministic pin
+    id on every call so ``verify_pin`` / ``pin_resolve`` can look it up
+    by the exact string that appears in the tool footer.
+    """
+
+    def _extract_pin_id(self, footer: str) -> str:
+        for line in footer.splitlines():
+            if line.startswith("index_pin:"):
+                return line.split(":", 1)[1].strip()
+        raise AssertionError(f"No index_pin in footer: {footer!r}")
+
+    def _extract_manifest_hash(self, footer: str) -> str:
+        for line in footer.splitlines():
+            if line.startswith("manifest_hash:"):
+                return line.split(":", 1)[1].strip()
+        raise AssertionError(f"No manifest_hash in footer: {footer!r}")
+
+    def test_stamp_persists_and_full_manifest_hash(self, tmp_path, monkeypatch):
+        """Stamping a result persists the pin so ``PinStore.get``
+        returns it, and the footer contains the full 64-char
+        ``manifest_hash`` (no more ``…`` truncation)."""
+        from attocode.code_intel.tools import pin_tools
+
+        # Redirect the project dir to a temp location so the test
+        # doesn't read or write the user's real .attocode.
+        project = tmp_path / "proj"
+        (project / ".attocode" / "cache").mkdir(parents=True)
+        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_tools, "_pin_store", None, raising=False)
+
+        result = pin_tools._stamp_pin("hello world result")
+        pin_id = self._extract_pin_id(result)
+        manifest_hash = self._extract_manifest_hash(result)
+
+        assert pin_id.startswith("pin_")
+        # Full 64-hex manifest hash — no ellipsis.
+        assert "…" not in manifest_hash
+        assert len(manifest_hash) == 64
+
+        # The persisted pin is findable via PinStore.get().
+        store = pin_tools._get_pin_store()
+        pin = store.get(pin_id)
+        assert pin is not None
+        assert pin.pin_id == pin_id
+        assert pin.manifest_hash == manifest_hash
+
+    def test_stamp_is_idempotent(self, tmp_path, monkeypatch):
+        """Two stamps on an unchanged state yield the same deterministic
+        id and the PinStore collapses them to one row (no churn)."""
+        from attocode.code_intel.tools import pin_tools
+
+        project = tmp_path / "proj"
+        (project / ".attocode" / "cache").mkdir(parents=True)
+        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_tools, "_pin_store", None, raising=False)
+
+        result1 = pin_tools._stamp_pin("first")
+        result2 = pin_tools._stamp_pin("second")
+        id1 = self._extract_pin_id(result1)
+        id2 = self._extract_pin_id(result2)
+        assert id1 == id2  # deterministic
+
+        store = pin_tools._get_pin_store()
+        # Only one row persisted — upsert collapsed the duplicate.
+        all_pins = store.list_all()
+        matching = [p for p in all_pins if p.pin_id == id1]
+        assert len(matching) == 1
+
+
+# ---------------------------------------------------------------------------
+# Codex M4 — SearchResultsResponse carries pin fields
+# ---------------------------------------------------------------------------
+
+
+class TestServerSearchResponsePinFields:
+    def test_default_empty_for_legacy_clients(self):
+        """Existing clients that don't set pin fields still construct
+        a valid SearchResultsResponse — the new fields default to
+        empty strings."""
+        from attocode.code_intel.api.models import (
+            SearchResultItem,
+            SearchResultsResponse,
+        )
+
+        resp = SearchResultsResponse(
+            query="auth middleware",
+            results=[SearchResultItem(file_path="src/auth.py", score=0.9)],
+            total=1,
+        )
+        assert resp.pin_id == ""
+        assert resp.manifest_hash == ""
+
+    def test_pin_fields_roundtrip(self):
+        from attocode.code_intel.api.models import SearchResultsResponse
+
+        resp = SearchResultsResponse(
+            query="x",
+            results=[],
+            total=0,
+            pin_id="pin_" + "a" * 20,
+            manifest_hash="b" * 64,
+        )
+        assert resp.pin_id == "pin_" + "a" * 20
+        assert resp.manifest_hash == "b" * 64

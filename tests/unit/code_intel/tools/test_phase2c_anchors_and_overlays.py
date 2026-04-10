@@ -170,7 +170,26 @@ def git_project(tmp_path, monkeypatch):
     import attocode.code_intel.server as _srv
     monkeypatch.setattr(_srv, "_memory_store", None, raising=False)
 
-    yield project
+    # Defensive: tools that go through @pin_stamped use
+    # _get_project_dir to compute the pin footer. If the maintenance
+    # test ended without patching them, they'd still point at the
+    # caller's CWD. Patch them all here for safety.
+    for mod_name in (
+        "attocode.code_intel.tools.search_tools",
+        "attocode.code_intel.tools.frecency_tools",
+        "attocode.code_intel.tools.query_history_tools",
+        "attocode.code_intel.tools.navigation_tools",
+        "attocode.code_intel.tools.cross_mode_tools",
+        "attocode.code_intel.tools.analysis_tools",
+    ):
+        import importlib
+        try:
+            mod = importlib.import_module(mod_name)
+        except ImportError:
+            continue
+        monkeypatch.setattr(mod, "_get_project_dir", fake, raising=False)
+
+    return project
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +515,96 @@ class TestOrphanScanV2:
         # without an anchor — it should be caught by the scope fallback.
         assert "scope_missing" in result
         assert "src/deleted_path.py" in result
+
+    def test_auto_archive_soft_deletes_not_hard(self, git_project):
+        """Codex fix B2: auto_archive=True must flip status to
+        'archived', not hard-delete the row. The archived row must
+        still be present via list_all(status='archived')."""
+        import sqlite3
+
+        from attocode.code_intel.tools.maintenance_tools import orphan_scan
+        from attocode.integrations.context.memory_store import MemoryStore
+
+        # Sanity: the fixture seeded a gotcha at src/deleted_path.py
+        # without an anchor. Count the active rows first.
+        db_path = git_project / ".attocode" / "cache" / "memory.db"
+        conn = sqlite3.connect(str(db_path))
+        try:
+            active_before = conn.execute(
+                "SELECT COUNT(*) FROM learnings WHERE status='active'"
+            ).fetchone()[0]
+            archived_before = conn.execute(
+                "SELECT COUNT(*) FROM learnings WHERE status='archived'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        assert active_before >= 1
+        assert archived_before == 0
+
+        # Archive orphans.
+        result = orphan_scan(auto_archive=True)
+        assert "auto-archived" in result
+
+        # Row still present, but status is now 'archived'.
+        conn = sqlite3.connect(str(db_path))
+        try:
+            active_after = conn.execute(
+                "SELECT COUNT(*) FROM learnings WHERE status='active'"
+            ).fetchone()[0]
+            archived_after = conn.execute(
+                "SELECT COUNT(*) FROM learnings WHERE status='archived'"
+            ).fetchone()[0]
+            # The orphan(s) moved from active → archived. Total rows
+            # should be unchanged.
+            total_after = conn.execute(
+                "SELECT COUNT(*) FROM learnings"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        # At least one orphan was archived (the fixture's
+        # src/deleted_path.py learning).
+        assert archived_after >= 1
+        assert active_after == active_before - archived_after
+        # Total unchanged — nothing was hard-deleted.
+        assert total_after == active_before + archived_before
+
+        # The archived row is listed via list_all(status='archived').
+        mem = MemoryStore(str(git_project))
+        try:
+            archived = mem.list_all(status="archived")
+        finally:
+            mem.close()
+        assert any(
+            r.get("scope") == "src/deleted_path.py" for r in archived
+        )
+
+    def test_auto_archive_false_does_not_touch_rows(self, git_project):
+        """Codex B2 regression guard: auto_archive=False is unchanged."""
+        import sqlite3
+
+        from attocode.code_intel.tools.maintenance_tools import orphan_scan
+
+        db_path = git_project / ".attocode" / "cache" / "memory.db"
+        conn = sqlite3.connect(str(db_path))
+        try:
+            before = conn.execute(
+                "SELECT id, status FROM learnings ORDER BY id"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        orphan_scan(auto_archive=False)
+
+        conn = sqlite3.connect(str(db_path))
+        try:
+            after = conn.execute(
+                "SELECT id, status FROM learnings ORDER BY id"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        assert before == after
 
 
 # ---------------------------------------------------------------------------

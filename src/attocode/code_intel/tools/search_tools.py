@@ -13,13 +13,31 @@ from attocode.code_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
     _get_frecency_tracker,
-    _get_project_dir,
     _get_remote_service,
     _get_service,
     mcp,
 )
 from attocode.code_intel.tools.pin_tools import pin_stamped
 from attocode.integrations.context.frecency import FrecencyResult
+
+
+def _get_project_dir() -> str:
+    """Dynamic dispatch to :func:`attocode.code_intel._shared._get_project_dir`.
+
+    Previously this module did ``from ..._shared import _get_project_dir``
+    which cached the original function reference at import time. That
+    made it invisible to test fixtures that monkeypatch
+    ``_shared._get_project_dir`` — the fixture's new function would be
+    installed in ``_shared`` but ``search_tools._get_project_dir`` would
+    keep returning the original.
+
+    Looking the function up fresh on every call keeps cross-module
+    monkeypatching consistent AND avoids a whole class of test
+    pollution where a fixture-scoped patch of ``_shared`` leaks into
+    search_tools via some other path.
+    """
+    from attocode.code_intel import _shared
+    return _shared._get_project_dir()
 
 
 def _empty_frecency(ai_mode: bool) -> FrecencyResult:
@@ -290,7 +308,6 @@ def fast_search(
             explain=explain,
         )
 
-    import os
     import re
     from pathlib import Path
 

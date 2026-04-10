@@ -59,6 +59,31 @@ class VectorStoreDimensionMismatchError(RuntimeError):
         )
 
 
+class VectorStoreRotationActiveError(RuntimeError):
+    """Raised when a destructive write hits the vectors table while an
+    embedding rotation is still active.
+
+    Codex review B3: the Phase 2b rotation state machine documented that
+    mid-rotation writes to the primary ``vectors`` table would be lost
+    after cutover. Documented but not enforced — which meant
+    ``clear_embeddings`` could silently destroy the rotation's source
+    data. This exception turns that soft limitation into a hard refusal:
+    any destructive write during ``pending|backfilling|ready_to_cutover|``
+    ``cutover_done`` now raises instead of corrupting the rotation.
+    """
+
+    def __init__(self, *, rotation_state: str, db_path: str) -> None:
+        self.rotation_state = rotation_state
+        self.db_path = db_path
+        super().__init__(
+            f"vector store at {db_path} has an active rotation "
+            f"(state={rotation_state}). Refusing destructive writes "
+            f"until the rotation completes or is aborted. Use "
+            f"embeddings_rotate_abort() to cancel, or wait for "
+            f"embeddings_rotate_cutover() + embeddings_rotate_gc_old()."
+        )
+
+
 @dataclass(slots=True)
 class VectorEntry:
     """A stored vector with metadata."""
@@ -163,6 +188,10 @@ class VectorStore:
     _vec_meta: list[tuple] | None = field(default=None, repr=False)
     _vec_cache_version: int = field(default=0, repr=False)
     _vec_loaded_version: int = field(default=-1, repr=False)
+    # Codex M5: last observed value of store_metadata._rotator_cache_ver.
+    # Checked before each search so a cutover in another process
+    # correctly invalidates this open store's in-memory cache.
+    _last_external_cache_ver: int = field(default=0, repr=False)
 
     def __post_init__(self) -> None:
         # Ensure directory exists
@@ -343,6 +372,66 @@ class VectorStore:
                 expected=self.dimension,
                 db_path=self.db_path,
             )
+        self._check_rotation_lock()
+
+    def _check_rotation_lock(self) -> None:
+        """Reject destructive writes while a rotation is mid-flight.
+
+        Codex review B3: ``clear_*`` / ``upsert*`` must not run when an
+        embedding rotation is still reading from the primary ``vectors``
+        table. Reads ``store_metadata.rotation_state`` and raises
+        :class:`VectorStoreRotationActiveError` for any of the active
+        states. Pre-rotation (``none``), aborted, failed, and fully
+        completed-and-GCed states all pass through.
+        """
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT value FROM store_metadata WHERE key = 'rotation_state'"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            # Pre-v2 store without a store_metadata row yet — treat as
+            # no rotation.
+            return
+        if row is None:
+            return
+        state = str(row[0])
+        active_states = {
+            "pending", "backfilling", "ready_to_cutover", "cutover_done",
+        }
+        if state in active_states:
+            raise VectorStoreRotationActiveError(
+                rotation_state=state, db_path=self.db_path,
+            )
+
+    def _check_external_cache_bump(self) -> None:
+        """Pick up cache invalidations from other processes.
+
+        Codex review M5: ``EmbeddingRotator.cutover()`` writes a
+        ``_rotator_cache_ver`` key into ``store_metadata`` to signal that
+        already-open ``VectorStore`` instances should reload their
+        in-memory numpy matrix. This helper compares the stored value
+        against the last one we saw and bumps the local
+        ``_vec_cache_version`` on drift so the next search call triggers
+        a reload.
+        """
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT value FROM store_metadata WHERE key = '_rotator_cache_ver'"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return
+        if row is None:
+            return
+        try:
+            external = int(row[0])
+        except (TypeError, ValueError):
+            return
+        if external > self._last_external_cache_ver:
+            self._last_external_cache_ver = external
+            # Bump the local version so _search_numpy reloads.
+            self._vec_cache_version += 1
 
     def upsert(self, entry: VectorEntry) -> None:
         """Insert or update a vector entry."""
@@ -395,6 +484,7 @@ class VectorStore:
 
     def delete_by_file(self, file_path: str) -> int:
         """Delete all entries for a file. Returns count deleted."""
+        self._guard_writes()
         conn = self._get_conn()
         with self._lock:
             cursor = conn.execute(
@@ -411,7 +501,10 @@ class VectorStore:
         dimension) so a subsequent reopen doesn't trip the dim-mismatch
         check. That's the whole point of clear_all vs ``rm -f embeddings.db``:
         it's the safe reset path.
+
+        Codex B3: refuses to run during an active rotation.
         """
+        self._guard_writes()
         conn = self._get_conn()
         with self._lock:
             cursor = conn.execute("DELETE FROM vectors")
@@ -425,7 +518,10 @@ class VectorStore:
 
         Returns count deleted. Used during embedding rotation's GC phase —
         drops old-model rows once the new model is live.
+
+        Codex B3: refuses to run during an active rotation.
         """
+        self._guard_writes()
         conn = self._get_conn()
         with self._lock:
             if model_version:
@@ -512,6 +608,11 @@ class VectorStore:
         """
         if not query_vector:
             return []
+
+        # Pick up any cache invalidation signal written by another
+        # process (e.g. EmbeddingRotator.cutover in a separate MCP
+        # worker) before consulting the in-memory cache.
+        self._check_external_cache_bump()
 
         if _HAS_NUMPY:
             return self._search_numpy(query_vector, top_k, file_filter, existing_files)

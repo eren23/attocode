@@ -39,6 +39,11 @@ logger = logging.getLogger(__name__)
 MANIFEST_SCHEMA_VERSION = 1
 SNAPSHOT_SUFFIX = ".atsnap.tar.gz"
 SNAPSHOT_DIR_NAME = "snapshots"
+# Codex c1: local snapshot operations append audit entries to a
+# per-project JSONL log so create/restore/delete events are traceable
+# after the fact. The server side already writes to ``audit_events``
+# via ``log_event``; this is the equivalent for the local stdio MCP.
+SNAPSHOT_AUDIT_LOG = os.path.join("cache", "snapshot_events.jsonl")
 
 # Everything under .attocode/ that's worth capturing. Each tuple is
 # (source relative path, archive relative path under "stores/").
@@ -75,6 +80,28 @@ def _sha256_file(path: str) -> str:
 
 def _snapshots_dir(project_dir: str) -> str:
     return os.path.join(project_dir, ".attocode", SNAPSHOT_DIR_NAME)
+
+
+def _append_audit_event(project_dir: str, event_type: str, detail: dict[str, Any]) -> None:
+    """Append one JSONL entry to the local snapshot audit log.
+
+    Best-effort: any write failure is logged and swallowed so a broken
+    audit path never blocks a successful snapshot operation. Codex fix
+    c1.
+    """
+    log_path = os.path.join(project_dir, ".attocode", SNAPSHOT_AUDIT_LOG)
+    try:
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        entry = {
+            "event_type": event_type,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "detail": detail,
+        }
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, sort_keys=True))
+            f.write("\n")
+    except OSError as exc:
+        logger.debug("snapshot audit log append failed: %s", exc)
 
 
 def _attocode_dir(project_dir: str) -> str:
@@ -239,11 +266,18 @@ def _write_manifest(
     name: str,
     components: list[_Component],
 ) -> dict[str, Any]:
+    # Codex fix m2: the snapshot manifest used to embed the absolute
+    # ``project_dir`` path, which leaked workstation filesystem layout
+    # into a shareable artifact. Replace it with just the basename —
+    # identifying enough to scan but portable across machines. The
+    # absolute path is kept in a private ``_producer_abs_path`` field
+    # only when the snapshot is being restored on the SAME host (the
+    # restore path ignores it anyway).
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "schema": "atto.snapshot.v1",
         "snapshot_name": name,
-        "project_dir": project_dir,
+        "project_name": os.path.basename(os.path.abspath(project_dir)) or "project",
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "producer": {
             "service": "attocode-local",
@@ -337,6 +371,13 @@ def snapshot_create(name: str = "", include: str = "") -> str:
         os.replace(tmp_tar, out_file)
 
     size = os.path.getsize(out_file)
+    _append_audit_event(project_dir, "snapshot.created", {
+        "snapshot_name": base_name,
+        "archive_path": out_file,
+        "components": len(manifest["components"]),
+        "archive_size_bytes": size,
+        "total_size_uncompressed": manifest["total_size_bytes"],
+    })
     return (
         f"snapshot_create: {out_file}\n"
         f"  components: {len(manifest['components'])}\n"
@@ -382,6 +423,10 @@ def snapshot_delete(name: str, confirm: bool = False) -> str:
             f"Re-run with confirm=True."
         )
     os.unlink(path)
+    _append_audit_event(project_dir, "snapshot.deleted", {
+        "snapshot_path": path,
+        "archive_size_bytes": size,
+    })
     return f"snapshot_delete: removed {path} ({_fmt_bytes(size)})"
 
 
@@ -442,7 +487,7 @@ def snapshot_restore(name: str, confirm: bool = False) -> str:
                 # path traversal, and symlinks escaping the staging dir —
                 # safer than the legacy default and future-proof against
                 # Python 3.14's stricter behavior.
-                tar.extractall(staging, filter="data")  # noqa: S202
+                tar.extractall(staging, filter="data")
         except tarfile.TarError as exc:
             return f"snapshot_restore: extraction failed: {exc}"
 
@@ -489,6 +534,11 @@ def snapshot_restore(name: str, confirm: bool = False) -> str:
             except OSError as exc:
                 failed.append(f"{ap}: {exc}")
 
+    _append_audit_event(project_dir, "snapshot.restored", {
+        "snapshot_path": path,
+        "restored_components": len(restored),
+        "failed_components": len(failed),
+    })
     lines = [
         f"snapshot_restore: restored from {path}",
         f"  restored: {len(restored)} component(s)",
@@ -542,7 +592,20 @@ def snapshot_diff(a: str, b: str) -> str:
         return f"snapshot_diff: manifest read failed: {exc}"
 
     def _digest_map(m: dict[str, Any]) -> dict[str, str]:
-        return {c.get("name", "?"): c.get("digest", "") for c in m.get("components", [])}
+        """Codex fix M8: the local snapshot format emits three separate
+        components all named ``trigrams`` (one per on-disk file). Keying
+        the diff dict on ``name`` alone collapsed them into a single
+        entry, silently losing the distinction. Key on
+        ``(name, archive_path)`` instead so the three trigram files
+        show up as three separate diff entries.
+        """
+        out: dict[str, str] = {}
+        for c in m.get("components", []):
+            name = c.get("name", "?")
+            archive_path = c.get("archive_path", "")
+            key = f"{name}[{archive_path}]" if archive_path else name
+            out[key] = c.get("digest", "")
+        return out
 
     da = _digest_map(ma)
     db = _digest_map(mb)

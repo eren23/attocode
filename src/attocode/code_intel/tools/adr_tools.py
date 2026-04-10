@@ -105,6 +105,10 @@ class ADRStore:
         don't have this column yet. This runs at every open and is
         idempotent, so a fresh store is a no-op and an old store gets
         the column added in place.
+
+        Codex fix M9: commits the DDL explicitly so callers that invoke
+        the helper standalone (not via ``_create_tables``) still see the
+        new column persisted on the same connection.
         """
         conn = self._get_conn()
         columns = {
@@ -116,6 +120,7 @@ class ADRStore:
                 "ALTER TABLE adrs ADD COLUMN anchor_blob_oids "
                 "TEXT NOT NULL DEFAULT '[]'"
             )
+            conn.commit()
 
     # ------------------------------------------------------------------
     # Write operations
@@ -466,7 +471,7 @@ def record_adr(
                         resolved_anchors.append(oid)
             finally:
                 cache.close()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.debug("record_adr: anchor compute failed: %s", exc)
             resolved_anchors = []
 

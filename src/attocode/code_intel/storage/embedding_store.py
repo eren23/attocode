@@ -162,11 +162,21 @@ class EmbeddingStore:
         replaces all rows for that triple. Other (model, version) pairs
         coexist peacefully (needed for the dual-write rotation flow).
 
+        Codex fix M7: every insert is mirrored into the ``provenance``
+        table so downstream tools can join on ``action_hash`` /
+        ``input_blob_oid``. The provenance write is batched alongside
+        the embedding insert and does not commit separately — the
+        caller's existing session lifecycle controls atomicity.
+
         Returns count of embeddings stored.
         """
         from sqlalchemy import delete
 
         from attocode.code_intel.db.models import Embedding
+        from attocode.code_intel.storage.provenance_store import (
+            embedding_provenance_dict,
+            write_provenance_rows,
+        )
 
         if not embeddings:
             return 0
@@ -189,14 +199,21 @@ class EmbeddingStore:
                 )
             )
 
-        # Insert new
+        # Insert new + collect provenance rows in parallel so they land
+        # in the same unit of work.
+        provenance_batch: list[dict] = []
         for emb_data in embeddings:
+            model = emb_data.get("embedding_model", "default")
+            version = emb_data.get("embedding_model_version", "")
+            dim = emb_data.get("embedding_dim")
+            provenance = emb_data.get("embedding_provenance", {}) or {}
+            action_hash = provenance.get("action_hash", "") if isinstance(provenance, dict) else ""
             kwargs = {
                 "content_sha": content_sha,
-                "embedding_model": emb_data.get("embedding_model", "default"),
-                "embedding_model_version": emb_data.get("embedding_model_version", ""),
-                "embedding_dim": emb_data.get("embedding_dim"),
-                "embedding_provenance": emb_data.get("embedding_provenance", {}),
+                "embedding_model": model,
+                "embedding_model_version": version,
+                "embedding_dim": dim,
+                "embedding_provenance": provenance,
                 "chunk_text": emb_data.get("chunk_text", ""),
                 "chunk_type": emb_data.get("chunk_type", "file"),
             }
@@ -205,6 +222,27 @@ class EmbeddingStore:
                 kwargs["vector"] = emb_data["vector"]
             emb = Embedding(**kwargs)
             self._session.add(emb)
+
+            # One provenance row per chunk. Empty action_hash is fine —
+            # it just means no dedup key was computed upstream; the row
+            # still provides the indexer + blob lineage needed for
+            # later audits.
+            provenance_batch.append(embedding_provenance_dict(
+                action_hash=action_hash,
+                content_sha=content_sha,
+                model_name=model,
+                model_version=version,
+                dimension=int(dim) if dim else None,
+                config_digest=(
+                    provenance.get("config_digest", "")
+                    if isinstance(provenance, dict)
+                    else ""
+                ),
+                chunk_type=emb_data.get("chunk_type", "file"),
+            ))
+
+        if provenance_batch:
+            await write_provenance_rows(self._session, provenance_batch)
 
         await self._session.flush()
         return len(embeddings)
@@ -505,26 +543,63 @@ class EmbeddingStore:
             })
         return results
 
-    async def gc_orphaned(self, min_age_minutes: int = 60) -> int:
+    async def gc_orphaned(
+        self,
+        min_age_minutes: int = 60,
+        *,
+        repo_id: uuid.UUID | None = None,
+    ) -> int:
         """Delete embeddings whose content_sha is not in any branch manifest.
 
         Only deletes embeddings older than *min_age_minutes* to avoid racing
         with concurrent indexers that are still writing references.
 
+        Codex review fix (B1): when ``repo_id`` is provided, restrict the
+        DELETE to embeddings whose content_sha was ever tracked by a branch
+        of the target repo AND is no longer tracked anywhere. Global GC
+        (``repo_id=None``) preserves the old behavior for background
+        workers.
+
         Returns count of deleted rows.
         """
         from sqlalchemy import text
 
-        result = await self._session.execute(
-            text("""
-            DELETE FROM embeddings
-            WHERE created_at < NOW() - make_interval(mins => :age)
-              AND content_sha NOT IN (
-                SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+        if repo_id is None:
+            result = await self._session.execute(
+                text("""
+                DELETE FROM embeddings
+                WHERE created_at < NOW() - make_interval(mins => :age)
+                  AND content_sha NOT IN (
+                    SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+                )
+                """).bindparams(age=min_age_minutes)
             )
-            """).bindparams(age=min_age_minutes)
-        )
+        else:
+            result = await self._session.execute(
+                text("""
+                DELETE FROM embeddings
+                WHERE created_at < NOW() - make_interval(mins => :age)
+                  AND content_sha IN (
+                    SELECT DISTINCT bf.content_sha
+                    FROM branch_files bf
+                    JOIN branches b ON b.id = bf.branch_id
+                    WHERE b.repo_id = :repo_id AND bf.content_sha IS NOT NULL
+                  )
+                  AND content_sha NOT IN (
+                    SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+                )
+                """).bindparams(age=min_age_minutes, repo_id=str(repo_id))
+            )
         count = result.rowcount
         if count:
-            logger.info("GC: removed %d orphaned embeddings (older than %dm)", count, min_age_minutes)
+            if repo_id is None:
+                logger.info(
+                    "GC: removed %d orphaned embeddings (older than %dm, global)",
+                    count, min_age_minutes,
+                )
+            else:
+                logger.info(
+                    "GC: removed %d orphaned embeddings (older than %dm, repo=%s)",
+                    count, min_age_minutes, repo_id,
+                )
         return count

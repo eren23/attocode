@@ -228,9 +228,11 @@ async def _compute_components(
 
     # --- Symbols component ---
     #
-    # Summarize per-content-sha symbol counts. Digest changes whenever
-    # (a) a file's symbols change, (b) a file is added/removed from the
-    # snapshot's sha set.
+    # Codex fix (M2): size_bytes is ALWAYS actual bytes. Row counts and
+    # other cardinalities go into ``extra``. Symbols / deps / embeddings
+    # components report ``size_bytes=0`` because there is no meaningful
+    # "on-disk byte count" for them yet — Phase 3b's OCI adapter will
+    # backfill these with real artifact sizes when it ships.
     if content_shas:
         sym_result = await session.execute(
             select(Symbol.content_sha, func.count()).where(
@@ -248,8 +250,8 @@ async def _compute_components(
         name="symbols",
         media_type=_MEDIA_SYMBOLS,
         digest=_sha256_of(_canonical_json_bytes({"counts": symbol_counts})),
-        size_bytes=symbol_total,
-        extra={"symbol_total": symbol_total},
+        size_bytes=0,
+        extra={"row_count": symbol_total},
     ))
 
     # --- Dependencies component ---
@@ -272,14 +274,17 @@ async def _compute_components(
         name="dependencies",
         media_type=_MEDIA_DEPS,
         digest=_sha256_of(_canonical_json_bytes({"edges": dep_rows})),
-        size_bytes=len(dep_rows),
+        size_bytes=0,
         extra={"edge_count": len(dep_rows)},
     ))
 
-    # --- Embeddings component ---
+    # --- Embeddings components ---
     #
-    # One component entry PER embedding model so a rotation mid-stream
-    # doesn't conflate two models into one digest.
+    # Codex fix (M1): component name now includes ``model_version`` so
+    # two versions of the same model (during a rotation) live under
+    # distinct names instead of colliding on ``embeddings.{model}``.
+    # Sort deterministically by (model, version) so DB iteration order
+    # can't leak into the manifest hash.
     if content_shas:
         emb_result = await session.execute(
             select(
@@ -290,18 +295,21 @@ async def _compute_components(
                 Embedding.content_sha.in_(content_shas),
             ).group_by(
                 Embedding.embedding_model, Embedding.embedding_model_version,
+            ).order_by(
+                Embedding.embedding_model, Embedding.embedding_model_version,
             )
         )
         for model, version, count in emb_result:
+            version_tag = version or "unversioned"
             components.append(SnapshotComponentModel(
-                name=f"embeddings.{model}",
+                name=f"embeddings.{model}:{version_tag}",
                 media_type=_MEDIA_EMBED,
                 digest=_sha256_of(_canonical_json_bytes({
                     "model": model,
                     "version": version,
                     "chunk_count": int(count),
                 })),
-                size_bytes=int(count),
+                size_bytes=0,
                 extra={
                     "model": model,
                     "model_version": version or "",
@@ -325,6 +333,13 @@ def _compute_manifest_hash(
     created_at, created_by) so two snapshots of identical state under
     different names produce the same hash — which is what Phase 3b's
     OCI dedup needs.
+
+    Codex fix (M1): sorts by ``(name, digest)`` so identical-name
+    components (should never happen after the M1 naming fix, but the
+    sort key defends against regressions) can't reorder based on DB
+    iteration. Also ``(name, digest)`` is stable even when two components
+    share the same logical name — if they did, their distinct digests
+    would still produce a deterministic ordering.
     """
     body = {
         "schema": SNAPSHOT_SCHEMA,
@@ -338,7 +353,7 @@ def _compute_manifest_hash(
                 "digest": c.digest,
                 "size_bytes": c.size_bytes,
             }
-            for c in sorted(components, key=lambda x: x.name)
+            for c in sorted(components, key=lambda x: (x.name, x.digest))
         ],
     }
     return _sha256_of(_canonical_json_bytes(body))

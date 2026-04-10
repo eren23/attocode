@@ -5,12 +5,11 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from attocode.code_intel.db.base import Base, TimestampMixin, generate_uuid
-
 
 try:
     from pgvector.sqlalchemy import Vector as _PgVector
@@ -365,6 +364,73 @@ class BlameHunk(Base):
     start_line: Mapped[int] = mapped_column(Integer, nullable=False)
     end_line: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Provenance(Base):
+    """Provenance row for a derived code-intel artifact.
+
+    Phase 1 Codex fix (M7): migration 017 created this table but the
+    original Phase 1 work never added an ORM model or write path. This
+    model + :mod:`attocode.code_intel.storage.provenance_store` close
+    that gap so embeddings actually carry provenance records that
+    downstream tools (snapshot restore, orphan scan, model rotation
+    audit) can join against.
+    """
+    __tablename__ = "provenance"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=generate_uuid,
+    )
+    action_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    artifact_type: Mapped[str] = mapped_column(Text, nullable=False)
+    input_blob_oid: Mapped[str] = mapped_column(Text, nullable=False)
+    input_tree_oid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    indexer_name: Mapped[str] = mapped_column(Text, nullable=False)
+    indexer_version: Mapped[str] = mapped_column(Text, nullable=False)
+    config_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    produced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    producer_service: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="attocode-server",
+    )
+    producer_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    producer_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("indexing_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    producer_host: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="",
+    )
+    extra: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+    __table_args__ = (
+        __import__("sqlalchemy").Index(
+            "ix_provenance_action_hash", "action_hash",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_provenance_input_blob", "input_blob_oid",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_provenance_job", "producer_job_id",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_provenance_indexer_version", "indexer_name", "indexer_version",
+        ),
+    )
 
 
 class RepoSnapshot(Base):

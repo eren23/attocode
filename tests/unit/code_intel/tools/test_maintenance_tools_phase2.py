@@ -161,7 +161,29 @@ def fake_project(tmp_path, monkeypatch):
     monkeypatch.setattr(at, "_get_project_dir", _fake_project_dir, raising=False)
     monkeypatch.setattr(at, "_adr_store", None, raising=False)
 
-    yield project
+    # Also patch search_tools + frecency_tools / query_history_tools /
+    # navigation_tools / cross_mode_tools / analysis_tools so the
+    # @pin_stamped decorator in those modules resolves ``_get_project_dir``
+    # to the test's temp project when a tool invocation goes through
+    # them. Without these, a ranked-result tool called during a
+    # maintenance test would reach out to the caller's CWD and produce
+    # flaky results.
+    for mod_name in (
+        "attocode.code_intel.tools.search_tools",
+        "attocode.code_intel.tools.frecency_tools",
+        "attocode.code_intel.tools.query_history_tools",
+        "attocode.code_intel.tools.navigation_tools",
+        "attocode.code_intel.tools.cross_mode_tools",
+        "attocode.code_intel.tools.analysis_tools",
+    ):
+        import importlib
+        try:
+            mod = importlib.import_module(mod_name)
+        except ImportError:
+            continue
+        monkeypatch.setattr(mod, "_get_project_dir", _fake_project_dir, raising=False)
+
+    return project
 
 
 # ---------------------------------------------------------------------------

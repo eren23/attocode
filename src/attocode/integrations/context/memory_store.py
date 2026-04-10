@@ -324,7 +324,7 @@ class MemoryStore:
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         values = list(updates.values()) + [learning_id]
         conn.execute(
-            f"UPDATE learnings SET {set_clause} WHERE id = ?",  # noqa: S608
+            f"UPDATE learnings SET {set_clause} WHERE id = ?",
             values,
         )
         conn.commit()
@@ -391,7 +391,7 @@ class MemoryStore:
                     WHERE status = 'active'
                       AND scope IN ({placeholders})
                     ORDER BY confidence DESC
-                    LIMIT ?""",  # noqa: S608
+                    LIMIT ?""",
                 [*scope_candidates, max_results * 2],
             )
             for row in cursor:
@@ -561,6 +561,29 @@ class MemoryStore:
         conn = self._get_conn()
         cursor = conn.execute(
             "DELETE FROM learnings WHERE id = ?", (learning_id,),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def archive_by_id(self, learning_id: int) -> bool:
+        """Soft-delete a learning by setting ``status='archived'``.
+
+        Codex fix B2: ``orphan_scan(auto_archive=True)`` used to hard-delete
+        rows because no soft-archive API existed. This method provides
+        the missing path — the row is preserved, its ``status`` flips to
+        ``archived``, and ``updated_at`` is bumped so consumers can
+        audit when the archival happened.
+
+        Returns True if a row was updated, False if no matching learning
+        was found.
+        """
+        conn = self._get_conn()
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        cursor = conn.execute(
+            """UPDATE learnings
+               SET status = 'archived', updated_at = ?
+               WHERE id = ?""",
+            (now, learning_id),
         )
         conn.commit()
         return cursor.rowcount > 0

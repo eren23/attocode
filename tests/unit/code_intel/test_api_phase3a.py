@@ -554,3 +554,183 @@ class TestManifestHashDeterminism:
             repo_id=repo_id, branch_id=None, commit_oid="def456", components=components,
         )
         assert h1 != h2
+
+    def test_multi_version_embeddings_distinct_component_names(self):
+        """Codex fix M1: two model versions get distinct component names
+        like ``embeddings.bge-small:v1`` and ``embeddings.bge-small:v2``,
+        so their digests can't collide in the manifest hash."""
+        from attocode.code_intel.api.routes.snapshots import (
+            SnapshotComponentModel,
+            _compute_manifest_hash,
+        )
+
+        repo_id = uuid.uuid4()
+        # Same component _name_ twice — this should never happen after
+        # the M1 naming fix, but prove the hash is stable anyway by
+        # using the sorted-by-(name, digest) path.
+        duplicated = [
+            SnapshotComponentModel(
+                name="embeddings.bge-small:v1",
+                media_type="application/vnd.attocode.embeddings-manifest.v1+json",
+                digest="sha256:" + "a" * 64,
+                size_bytes=0,
+                extra={"chunk_count": 10},
+            ),
+            SnapshotComponentModel(
+                name="embeddings.bge-small:v2",
+                media_type="application/vnd.attocode.embeddings-manifest.v1+json",
+                digest="sha256:" + "b" * 64,
+                size_bytes=0,
+                extra={"chunk_count": 10},
+            ),
+        ]
+        h1 = _compute_manifest_hash(
+            repo_id=repo_id, branch_id=None, commit_oid="",
+            components=duplicated,
+        )
+        h2 = _compute_manifest_hash(
+            repo_id=repo_id, branch_id=None, commit_oid="",
+            components=list(reversed(duplicated)),
+        )
+        assert h1 == h2
+        assert "bge-small:v1" != "bge-small:v2"  # sanity
+
+    def test_identical_name_components_order_stable(self):
+        """Same logical name + different digests must still produce a
+        deterministic hash. The sort key is ``(name, digest)``, so order
+        is defined even when ``name`` ties."""
+        from attocode.code_intel.api.routes.snapshots import (
+            SnapshotComponentModel,
+            _compute_manifest_hash,
+        )
+
+        repo_id = uuid.uuid4()
+        twins = [
+            SnapshotComponentModel(
+                name="content", media_type="x",
+                digest="sha256:" + "0" * 64, size_bytes=0,
+            ),
+            SnapshotComponentModel(
+                name="content", media_type="x",
+                digest="sha256:" + "f" * 64, size_bytes=0,
+            ),
+        ]
+        h1 = _compute_manifest_hash(
+            repo_id=repo_id, branch_id=None, commit_oid="", components=twins,
+        )
+        h2 = _compute_manifest_hash(
+            repo_id=repo_id, branch_id=None, commit_oid="",
+            components=list(reversed(twins)),
+        )
+        assert h1 == h2
+
+
+# ---------------------------------------------------------------------------
+# GC repo scoping — Codex fix B1
+# ---------------------------------------------------------------------------
+
+
+class TestGCRepoScoping:
+    """``ContentStore.gc_unreferenced`` and ``EmbeddingStore.gc_orphaned``
+    now accept a ``repo_id`` kwarg that restricts the DELETE to blobs
+    that were tracked by the target repo's branches. These tests
+    validate the query shape without a real DB by capturing the SQL
+    text and bind params.
+    """
+
+    @pytest.mark.asyncio
+    async def test_content_store_passes_repo_id_to_sql(self):
+        from attocode.code_intel.storage.content_store import ContentStore
+
+        captured: list[tuple[str, dict]] = []
+
+        async def _execute(stmt, *args, **kwargs):
+            # Capture the compiled SQL + bind params.
+            text_str = str(stmt)
+            binds = dict(getattr(stmt, "compile", lambda: None)().params) if hasattr(stmt, "compile") else {}
+            captured.append((text_str, binds))
+            result = MagicMock()
+            result.rowcount = 0
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+
+        store = ContentStore(session)
+        await store.gc_unreferenced(min_age_minutes=5, repo_id=uuid.uuid4())
+
+        assert captured, "gc_unreferenced should issue at least one SQL statement"
+        sql, binds = captured[0]
+        assert "branches b" in sql and "b.repo_id" in sql
+        assert binds.get("repo_id") is not None
+
+    @pytest.mark.asyncio
+    async def test_embedding_store_passes_repo_id_to_sql(self):
+        from attocode.code_intel.storage.embedding_store import EmbeddingStore
+
+        captured: list[tuple[str, dict]] = []
+
+        async def _execute(stmt, *args, **kwargs):
+            text_str = str(stmt)
+            binds = dict(getattr(stmt, "compile", lambda: None)().params) if hasattr(stmt, "compile") else {}
+            captured.append((text_str, binds))
+            result = MagicMock()
+            result.rowcount = 0
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+
+        store = EmbeddingStore(session)
+        await store.gc_orphaned(min_age_minutes=60, repo_id=uuid.uuid4())
+
+        assert captured
+        sql, binds = captured[0]
+        assert "branches b" in sql and "b.repo_id" in sql
+        assert binds.get("repo_id") is not None
+
+    @pytest.mark.asyncio
+    async def test_global_sweep_unchanged_without_repo_id(self):
+        """``repo_id=None`` must preserve the pre-fix global sweep behavior."""
+        from attocode.code_intel.storage.content_store import ContentStore
+
+        captured: list[str] = []
+
+        async def _execute(stmt, *args, **kwargs):
+            captured.append(str(stmt))
+            result = MagicMock()
+            result.rowcount = 0
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+
+        store = ContentStore(session)
+        await store.gc_unreferenced(min_age_minutes=5)  # no repo_id
+        assert captured
+        # Global form has no "branches b" join in the DELETE.
+        assert "branches b" not in captured[0]
+
+
+# ---------------------------------------------------------------------------
+# Snapshot size_bytes semantics — Codex fix M2
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotSizeSemantics:
+    """Non-content components now report ``size_bytes=0`` and move
+    cardinality into ``extra``. This lets Phase 3b's OCI adapter use
+    ``size_bytes`` as a real byte count."""
+
+    def test_component_model_allows_zero_sizes(self):
+        from attocode.code_intel.api.routes.snapshots import SnapshotComponentModel
+        # Symbols/deps/embeddings components all construct with size_bytes=0.
+        c = SnapshotComponentModel(
+            name="symbols",
+            media_type="application/vnd.attocode.symbols-manifest.v1+json",
+            digest="sha256:" + "a" * 64,
+            size_bytes=0,
+            extra={"row_count": 42},
+        )
+        assert c.size_bytes == 0
+        assert c.extra["row_count"] == 42

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
-from attocode.code_intel.api.deps import get_db_session, get_repo_service
+from attocode.code_intel.api.deps import get_db_session
 from attocode.code_intel.db.models import Organization, OrgMembership, Repository, User
 
 logger = logging.getLogger(__name__)
@@ -90,14 +90,20 @@ class UpdateRepoRequest(BaseModel):
     """Fields that can be updated after a repository is created.
 
     ``None`` means "leave unchanged". Empty string explicitly clears a
-    nullable column. Immutable fields (``id``, ``org_id``, ``created_at``)
-    are not present.
+    nullable column. Immutable fields (``id``, ``created_at``) are not
+    present.
+
+    Codex fix m4: ``target_org_id`` is now accepted so admins can move
+    a repo between orgs they have admin rights in. Both source and
+    target orgs are checked for membership, and the target org must
+    not already contain a repo with the same name.
     """
     name: str | None = None
     clone_url: str | None = None
     default_branch: str | None = None
     language: str | None = None
     local_path: str | None = None
+    target_org_id: uuid.UUID | None = None
 
 
 class RepoResponse(BaseModel):
@@ -182,7 +188,7 @@ async def create_org(
         org_id=org.id,
         user_id=auth.user_id,
         role="owner",
-        accepted_at=datetime.now(timezone.utc),
+        accepted_at=datetime.now(UTC),
     )
     session.add(membership)
     await session.commit()
@@ -687,6 +693,39 @@ async def update_repo(
         changes["local_path"] = {"from": repo.local_path, "to": req.local_path or None}
         repo.local_path = req.local_path or None
 
+    # Codex fix m4: optional cross-org move. Rejected if the caller
+    # doesn't hold admin in the target org, or if the target already
+    # has a repo with the same (post-rename) name.
+    moved_from_org: uuid.UUID | None = None
+    if req.target_org_id is not None and req.target_org_id != org_id:
+        # Verify target org membership (admin+).
+        await _require_membership(
+            req.target_org_id, auth, session, min_role="admin",
+        )
+        # Check name collision in the target org under the new name.
+        target_name = repo.name  # already reflects any rename above
+        existing = await session.execute(
+            select(Repository).where(
+                Repository.org_id == req.target_org_id,
+                Repository.name == target_name,
+                Repository.id != repo_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Target org already has a repository named "
+                    f"{target_name!r}; rename before moving."
+                ),
+            )
+        moved_from_org = repo.org_id
+        changes["org_id"] = {
+            "from": str(moved_from_org),
+            "to": str(req.target_org_id),
+        }
+        repo.org_id = req.target_org_id
+
     if changes:
         from attocode.code_intel.audit import log_event
 
@@ -698,6 +737,21 @@ async def update_repo(
             user_id=auth.user_id,
             detail={"changes": changes},
         )
+        if moved_from_org is not None:
+            # Emit a distinct ``repo.moved`` event in the TARGET org so
+            # target-org admins see the move in their audit feed.
+            await log_event(
+                session,
+                req.target_org_id,  # type: ignore[arg-type]
+                "repo.moved",
+                repo_id=repo_id,
+                user_id=auth.user_id,
+                detail={
+                    "from_org_id": str(moved_from_org),
+                    "to_org_id": str(req.target_org_id),
+                    "name": repo.name,
+                },
+            )
         await session.commit()
         await session.refresh(repo)
 

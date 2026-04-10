@@ -544,23 +544,70 @@ def clear_embeddings(confirm: bool = False, model: str = "") -> str:
     if not os.path.exists(db_path):
         return "clear_embeddings: no embeddings.db to clear."
 
-    rows = _store_row_count(db_path, ("vectors",))
+    # Codex fix m1: when ``model`` is set, the dry-run preview reports
+    # the count of rows matching the filter, not the total row count.
+    if model:
+        try:
+            count_conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            try:
+                row = count_conn.execute(
+                    "SELECT COUNT(*) FROM vectors WHERE model_name = ?",
+                    (model,),
+                ).fetchone()
+                rows = int(row[0]) if row else 0
+            finally:
+                count_conn.close()
+        except sqlite3.OperationalError:
+            rows = _store_row_count(db_path, ("vectors",))
+    else:
+        rows = _store_row_count(db_path, ("vectors",))
     size = _safe_size(db_path)
     filter_desc = f" (model={model!r})" if model else ""
 
     def _apply() -> str:
-        from attocode.integrations.context.vector_store import VectorStore
-        # strict_dimension=False so a pre-existing dim mismatch doesn't
-        # block the reset. We're about to clear anyway.
+        from attocode.integrations.context.vector_store import (
+            VectorStore,
+            VectorStoreRotationActiveError,
+        )
+
+        # Read the stored dimension first so we can open the store at
+        # the matching dim. Opening with ``dimension=0`` put the store
+        # into degraded mode, which after Batch B also blocks the
+        # subsequent clear_all/clear_by_model call.
+        stored_dim = 0
+        try:
+            probe_conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            try:
+                row = probe_conn.execute(
+                    "SELECT value FROM store_metadata WHERE key = 'dimension'"
+                ).fetchone()
+                if row:
+                    stored_dim = int(row[0])
+            finally:
+                probe_conn.close()
+        except (sqlite3.Error, ValueError):
+            stored_dim = 0
+
         store = VectorStore(
             db_path=db_path,
-            dimension=0,  # placeholder — dimension isn't validated when strict=False
+            dimension=stored_dim,
             strict_dimension=False,
         )
         try:
-            deleted = (
-                store.clear_by_model(model) if model else store.clear_all()
-            )
+            try:
+                deleted = (
+                    store.clear_by_model(model) if model else store.clear_all()
+                )
+            except VectorStoreRotationActiveError as exc:
+                # Codex fix B3: clear_embeddings would silently destroy
+                # rotation state. Surface the refusal as a readable tool
+                # response rather than an uncaught exception.
+                return (
+                    f"clear_embeddings: REFUSED — {exc}. Finish the "
+                    f"rotation first (embeddings_rotate_cutover + "
+                    f"embeddings_rotate_gc_old) or abort it "
+                    f"(embeddings_rotate_abort)."
+                )
         finally:
             store.close()
         return (
@@ -777,7 +824,7 @@ def clear_all(confirm: bool = False, except_stores: str = "") -> str:
             # Reduce multi-line clear results to a compact first-line summary.
             first = res.splitlines()[0] if res else "(no output)"
             results.append(f"  {name}: {first}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("clear_all: %s failed", name)
             results.append(f"  {name}: ERROR {exc}")
     return "\n".join(results)
@@ -902,7 +949,7 @@ def _as_dict(obj: Any) -> dict[str, Any]:
         from dataclasses import asdict, is_dataclass
         if is_dataclass(obj):
             return asdict(obj)
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     # Last resort: stringify.
     return {"repr": repr(obj)}
@@ -958,7 +1005,7 @@ def import_learnings(path: str, merge: str = "skip_dup") -> str:
                     confidence=float(data.get("confidence", 0.5)),
                 )
                 imported += 1
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("import_learnings: add failed: %s", exc)
                 skipped += 1
 
@@ -1066,7 +1113,7 @@ def import_adrs_markdown(directory: str, merge: str = "skip_dup") -> str:
                 consequences=consequences,
             )
             imported += 1
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("import_adrs_markdown: add failed for %s: %s", fname, exc)
             skipped += 1
 
@@ -1265,7 +1312,7 @@ def orphan_scan(auto_archive: bool = False) -> str:
                     "scope": scope,
                     "description": learning.get("description", "")[:60],
                 })
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("orphan_scan: learnings scan failed: %s", exc)
 
     # --- ADRs ---
@@ -1312,7 +1359,7 @@ def orphan_scan(auto_archive: bool = False) -> str:
                     "reason": "related_files_missing",
                     "missing_files": missing,
                 })
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("orphan_scan: adr scan failed: %s", exc)
 
     if not orphans:
@@ -1335,12 +1382,15 @@ def orphan_scan(auto_archive: bool = False) -> str:
                 )
             if auto_archive:
                 try:
-                    # MemoryStore doesn't have a soft-archive method yet,
-                    # so we hard-delete. The audit log / export_learnings
-                    # tool makes this reversible at the backup level.
-                    store.delete_by_id(o["id"])
+                    # Codex fix B2: archive (soft-delete) instead of
+                    # hard-deleting. MemoryStore.archive_by_id sets
+                    # status='archived' and preserves the row so the
+                    # learning can still be surfaced via
+                    # list_learnings(status='archived') and resurrected
+                    # via import_learnings if needed.
+                    store.archive_by_id(o["id"])
                     archived_count += 1
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
                         "orphan_scan: archive failed for learning %s: %s",
                         o.get("id"), exc,
@@ -1543,7 +1593,7 @@ def embeddings_rotate_cutover(confirm: bool = False) -> str:
             )
         try:
             status = rot.cutover()
-        except (RuntimeError, Exception) as exc:  # noqa: BLE001
+        except (RuntimeError, Exception) as exc:
             return f"embeddings_rotate_cutover: failed: {exc}"
     finally:
         rot.close()

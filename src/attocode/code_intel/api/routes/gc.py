@@ -142,22 +142,28 @@ async def gc_run(
     if "content" in selected:
         if req.dry_run:
             removed = await _preview_content_gc(
-                session, min_age_minutes=req.min_age_minutes,
+                session,
+                min_age_minutes=req.min_age_minutes,
+                repo_id=repo_id,
             )
         else:
             removed = await content_store.gc_unreferenced(
                 min_age_minutes=req.min_age_minutes,
+                repo_id=repo_id,
             )
         results.append(GCTypeResult(kind="content", removed=removed))
 
     if "embedding" in selected:
         if req.dry_run:
             removed = await _preview_embedding_gc(
-                session, min_age_minutes=req.embedding_min_age_minutes,
+                session,
+                min_age_minutes=req.embedding_min_age_minutes,
+                repo_id=repo_id,
             )
         else:
             removed = await embedding_store.gc_orphaned(
                 min_age_minutes=req.embedding_min_age_minutes,
+                repo_id=repo_id,
             )
         results.append(GCTypeResult(kind="embedding", removed=removed))
 
@@ -208,8 +214,12 @@ async def gc_stats(
     await _require_membership(org_id, auth, session)
     await _load_repo(org_id, repo_id, session)
 
-    content_count = await _preview_content_gc(session, min_age_minutes=5)
-    embedding_count = await _preview_embedding_gc(session, min_age_minutes=60)
+    content_count = await _preview_content_gc(
+        session, min_age_minutes=5, repo_id=repo_id,
+    )
+    embedding_count = await _preview_embedding_gc(
+        session, min_age_minutes=60, repo_id=repo_id,
+    )
 
     return GCStatsResponse(
         repo_id=str(repo_id),
@@ -220,51 +230,110 @@ async def gc_stats(
     )
 
 
-async def _preview_content_gc(session: AsyncSession, *, min_age_minutes: int) -> int:
+async def _preview_content_gc(
+    session: AsyncSession,
+    *,
+    min_age_minutes: int,
+    repo_id: uuid.UUID | None = None,
+) -> int:
     """Count how many ``file_contents`` rows are GC-eligible.
 
-    Mirrors the WHERE clause in
-    :func:`ContentStore.gc_unreferenced` but runs a ``SELECT COUNT(*)``
-    instead of a ``DELETE`` so the session is not mutated.
+    Mirrors :func:`ContentStore.gc_unreferenced` but with a
+    ``SELECT COUNT(*)`` that does not mutate the session. When
+    ``repo_id`` is set, the count is the same repo-scoped number the
+    apply path would delete.
     """
     from sqlalchemy import text
 
-    result = await session.execute(
-        text(
-            """
-            SELECT COUNT(*) FROM file_contents
-            WHERE created_at < NOW() - make_interval(mins => :age)
-              AND sha256 NOT IN (
-                SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
-                UNION
-                SELECT DISTINCT content_sha FROM symbols
-                UNION
-                SELECT DISTINCT source_sha FROM dependencies
-                UNION
-                SELECT DISTINCT target_sha FROM dependencies
-                UNION
-                SELECT DISTINCT content_sha FROM embeddings
-              )
-            """
-        ).bindparams(age=min_age_minutes)
-    )
+    if repo_id is None:
+        result = await session.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM file_contents
+                WHERE created_at < NOW() - make_interval(mins => :age)
+                  AND sha256 NOT IN (
+                    SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+                    UNION
+                    SELECT DISTINCT content_sha FROM symbols
+                    UNION
+                    SELECT DISTINCT source_sha FROM dependencies
+                    UNION
+                    SELECT DISTINCT target_sha FROM dependencies
+                    UNION
+                    SELECT DISTINCT content_sha FROM embeddings
+                  )
+                """
+            ).bindparams(age=min_age_minutes)
+        )
+    else:
+        result = await session.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM file_contents
+                WHERE created_at < NOW() - make_interval(mins => :age)
+                  AND sha256 IN (
+                    SELECT DISTINCT bf.content_sha
+                    FROM branch_files bf
+                    JOIN branches b ON b.id = bf.branch_id
+                    WHERE b.repo_id = :repo_id AND bf.content_sha IS NOT NULL
+                  )
+                  AND sha256 NOT IN (
+                    SELECT DISTINCT bf.content_sha
+                    FROM branch_files bf
+                    WHERE bf.content_sha IS NOT NULL
+                    UNION
+                    SELECT DISTINCT content_sha FROM symbols
+                    UNION
+                    SELECT DISTINCT source_sha FROM dependencies
+                    UNION
+                    SELECT DISTINCT target_sha FROM dependencies
+                    UNION
+                    SELECT DISTINCT content_sha FROM embeddings
+                  )
+                """
+            ).bindparams(age=min_age_minutes, repo_id=str(repo_id))
+        )
     return int(result.scalar_one() or 0)
 
 
-async def _preview_embedding_gc(session: AsyncSession, *, min_age_minutes: int) -> int:
+async def _preview_embedding_gc(
+    session: AsyncSession,
+    *,
+    min_age_minutes: int,
+    repo_id: uuid.UUID | None = None,
+) -> int:
     """Count embeddings that would be removed by
     :func:`EmbeddingStore.gc_orphaned`."""
     from sqlalchemy import text
 
-    result = await session.execute(
-        text(
-            """
-            SELECT COUNT(*) FROM embeddings
-            WHERE created_at < NOW() - make_interval(mins => :age)
-              AND content_sha NOT IN (
-                SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
-              )
-            """
-        ).bindparams(age=min_age_minutes)
-    )
+    if repo_id is None:
+        result = await session.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM embeddings
+                WHERE created_at < NOW() - make_interval(mins => :age)
+                  AND content_sha NOT IN (
+                    SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+                  )
+                """
+            ).bindparams(age=min_age_minutes)
+        )
+    else:
+        result = await session.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM embeddings
+                WHERE created_at < NOW() - make_interval(mins => :age)
+                  AND content_sha IN (
+                    SELECT DISTINCT bf.content_sha
+                    FROM branch_files bf
+                    JOIN branches b ON b.id = bf.branch_id
+                    WHERE b.repo_id = :repo_id AND bf.content_sha IS NOT NULL
+                  )
+                  AND content_sha NOT IN (
+                    SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+                  )
+                """
+            ).bindparams(age=min_age_minutes, repo_id=str(repo_id))
+        )
     return int(result.scalar_one() or 0)

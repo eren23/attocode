@@ -23,11 +23,24 @@ import os
 import sqlite3
 from typing import Any
 
-from attocode.code_intel._shared import _get_project_dir, mcp
+from attocode.code_intel._shared import mcp
 from attocode.code_intel.artifacts import (
     RetrievalPin,
     compute_store_hash,
 )
+
+
+def _get_project_dir() -> str:
+    """Dynamic dispatch to ``_shared._get_project_dir``.
+
+    Looks up the function on every call so monkeypatches in
+    ``_shared`` are observed by pin_tools without needing to also
+    patch pin_tools directly. Prevents the "stale binding across
+    test fixtures" class of pollution that a ``from _shared import``
+    binding would otherwise introduce.
+    """
+    from attocode.code_intel import _shared
+    return _shared._get_project_dir()
 
 logger = logging.getLogger(__name__)
 
@@ -310,12 +323,24 @@ class PinStore:
 
 
 _pin_store: PinStore | None = None
+_pin_store_project: str = ""
 
 
 def _get_pin_store() -> PinStore:
-    global _pin_store
-    if _pin_store is None:
-        _pin_store = PinStore(_get_project_dir())
+    """Return the per-project singleton PinStore, rebuilding on project change.
+
+    The old behavior was a process-wide singleton which meant a test
+    switching to a fresh temp project dir (or a CLI session that
+    re-discovered a different project root) would silently get a stale
+    connection pointing at a no-longer-existing sqlite file. Codex
+    review pointed out the resulting test pollution, so the singleton
+    is now keyed by the current project dir.
+    """
+    global _pin_store, _pin_store_project
+    current = _get_project_dir()
+    if _pin_store is None or _pin_store_project != current:
+        _pin_store = PinStore(current)
+        _pin_store_project = current
     return _pin_store
 
 
@@ -350,27 +375,35 @@ def pin_stamped(fn):  # type: ignore[no-untyped-def]
     return wrapper
 
 
-def _stamp_pin(result_text: str, *, persist: bool = False, ttl_seconds: int = 0) -> str:
+def _stamp_pin(result_text: str, *, persist: bool = True, ttl_seconds: int = 0) -> str:
     """Append an ``index_pin`` footer to a tool response.
 
-    Cheap path: compute the current manifest hashes, derive a content-addressed
-    pin id (``pin_<hex12>`` of the manifest hash), append a single line to the
-    response text. Does NOT persist the pin unless ``persist=True`` — that's
-    a separate opt-in step via ``pin_current``.
+    Computes the current per-store manifest hashes, derives a
+    content-addressed deterministic pin id (``pin_<hex20>`` of the
+    manifest hash), persists it via the :class:`PinStore`, and appends
+    the full 64-char manifest hash to the response footer so callers
+    can later look the pin up via ``verify_pin`` or ``pin_resolve``.
 
-    Idempotent: calling twice with no intervening writes produces the same
-    pin id.
+    Codex review fix M3: pin persistence is now the default (previously
+    the stamped footer was dropped and never re-findable) and the
+    ``manifest_hash`` printed in the footer is the complete hex string
+    (previously a ``...``-truncated prefix that couldn't be verified).
+
+    Idempotent: calling twice with no intervening writes produces the
+    same deterministic id, which collapses to a single upserted row in
+    the pin store.
     """
     try:
         hashes = _compute_current_manifest_hashes()
-    except Exception as exc:  # noqa: BLE001 — never let pin failure hide a result
+    except Exception as exc:
         logger.debug("pin: hash computation failed: %s", exc)
         return result_text
 
     pin = RetrievalPin.create(manifest_hashes=hashes, ttl_seconds=ttl_seconds)
     # Use a deterministic id derived from the manifest_hash so repeat calls
-    # on an unchanged state yield the same pin_id — enabling cheap "did the
-    # state change?" checks without persisting anything.
+    # on an unchanged state yield the same pin_id. The prefix length (20
+    # hex chars = 80 bits) is collision-resistant for single-project use
+    # while staying short enough to paste into an MCP prompt.
     deterministic_id = f"pin_{pin.manifest_hash[:20]}"
 
     if persist:
@@ -389,9 +422,12 @@ def _stamp_pin(result_text: str, *, persist: bool = False, ttl_seconds: int = 0)
         except sqlite3.Error as exc:
             logger.debug("pin: persist failed: %s", exc)
 
+    # Codex M3: no more truncation. The footer includes the full
+    # ``manifest_hash`` so downstream tools can look up or hand-verify
+    # the pin without round-tripping through pin_resolve.
     footer = (
         f"\n\n---\nindex_pin: {deterministic_id}\n"
-        f"manifest_hash: {pin.manifest_hash[:16]}…"
+        f"manifest_hash: {pin.manifest_hash}"
     )
     if result_text.endswith("\n"):
         return result_text + footer.lstrip("\n")
