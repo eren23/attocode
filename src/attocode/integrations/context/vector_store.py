@@ -12,6 +12,7 @@ import os
 import sqlite3
 import struct
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -25,6 +26,38 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Schema version for the vectors DB. Bump this when adding columns so the
+# store detects upgrades automatically and runs the appropriate ALTER
+# scripts at startup.
+VECTOR_STORE_SCHEMA_VERSION = "2"
+
+
+class VectorStoreDimensionMismatchError(RuntimeError):
+    """Raised when the running embedding provider's dimension does not match
+    the vectors already persisted on disk.
+
+    The old behavior in this store was to silently DELETE every row on
+    dim mismatch. That was the local-side sibling of the server-side
+    ``UPDATE embeddings SET vector = NULL`` footgun — quietly destroying
+    user data because the system couldn't figure out the right thing to do.
+
+    Now: loud error. Caller (``SemanticSearchManager``) catches it once,
+    logs a visible warning, and puts the store into a degraded read-only
+    mode until the user resolves it (via ``clear_embeddings`` once that
+    tool lands in phase 2, or by picking a provider that matches).
+    """
+
+    def __init__(self, *, stored: int, expected: int, db_path: str) -> None:
+        self.stored = stored
+        self.expected = expected
+        self.db_path = db_path
+        super().__init__(
+            f"vector store at {db_path} has stored dim {stored} but provider "
+            f"expects dim {expected}. Refusing to wipe the existing vectors. "
+            f"Resolve by choosing a provider with matching dim, or (phase 2) "
+            f"run embeddings_rotate_model() or clear_embeddings(confirm=True)."
+        )
+
 
 @dataclass(slots=True)
 class VectorEntry:
@@ -36,6 +69,10 @@ class VectorEntry:
     name: str
     text: str
     vector: list[float]
+    # Provenance — optional; empty defaults keep callers that don't care
+    # working. New indexers should fill these in.
+    blob_oid: str = ""
+    action_hash: str = ""
 
 
 @dataclass(slots=True)
@@ -106,6 +143,19 @@ class VectorStore:
 
     db_path: str
     dimension: int
+    # Optional provenance for new inserts. If set, every upsert records these
+    # fields into the vectors row so we can later answer "which model made
+    # this?" and detect silent drift.
+    model_name: str = ""
+    model_version: str = ""
+    # When True, a dimension mismatch puts the store in degraded read-only
+    # mode instead of raising. Used by callers that want to show a nice
+    # error in the UI rather than crash on import.
+    strict_dimension: bool = True
+    # Set by _validate_dimension on mismatch so callers can detect degraded
+    # mode without catching the exception.
+    degraded: bool = False
+    degraded_reason: str = ""
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     # In-memory vector cache for numpy batch search
@@ -120,6 +170,7 @@ class VectorStore:
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._create_tables()
+        self._migrate_schema()
         self._validate_dimension()
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -130,6 +181,8 @@ class VectorStore:
 
     def _create_tables(self) -> None:
         conn = self._get_conn()
+        # Schema v2 — includes provenance columns. Pre-v2 stores have the
+        # same base shape and are migrated in _migrate_schema().
         conn.execute("""
             CREATE TABLE IF NOT EXISTS vectors (
                 id TEXT PRIMARY KEY,
@@ -137,12 +190,21 @@ class VectorStore:
                 chunk_type TEXT NOT NULL,
                 name TEXT NOT NULL,
                 text TEXT NOT NULL,
-                vector BLOB NOT NULL
+                vector BLOB NOT NULL,
+                model_name TEXT NOT NULL DEFAULT '',
+                model_version TEXT NOT NULL DEFAULT '',
+                dimension INTEGER NOT NULL DEFAULT 0,
+                produced_at REAL NOT NULL DEFAULT 0,
+                blob_oid TEXT NOT NULL DEFAULT '',
+                action_hash TEXT NOT NULL DEFAULT ''
             )
         """)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_vectors_file ON vectors(file_path)"
         )
+        # The model/blob indexes reference columns that a pre-v2 table may not
+        # have yet — they're created in ``_migrate_schema`` after the columns
+        # are guaranteed to exist.
         # Metadata table for tracking index freshness per file
         conn.execute("""
             CREATE TABLE IF NOT EXISTS file_metadata (
@@ -152,7 +214,7 @@ class VectorStore:
                 chunk_count INTEGER NOT NULL DEFAULT 0
             )
         """)
-        # Store-level metadata (dimension, etc.)
+        # Store-level metadata (dimension, schema_version, active model, etc.)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS store_metadata (
                 key TEXT PRIMARY KEY,
@@ -161,8 +223,82 @@ class VectorStore:
         """)
         conn.commit()
 
+    def _migrate_schema(self) -> None:
+        """Additively migrate an older vectors table to the current schema.
+
+        Pre-v2 stores lack the provenance columns (``model_name``,
+        ``model_version``, ``dimension``, ``produced_at``, ``blob_oid``,
+        ``action_hash``). We ADD COLUMN each missing one with a safe default;
+        existing rows get a 'legacy' marker so later tools can identify
+        them for re-indexing.
+
+        Idempotent: running on a fresh v2 store is a no-op.
+        """
+        conn = self._get_conn()
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(vectors)").fetchall()
+        }
+        added: list[str] = []
+        additive_columns = [
+            ("model_name", "TEXT NOT NULL DEFAULT ''"),
+            ("model_version", "TEXT NOT NULL DEFAULT ''"),
+            ("dimension", "INTEGER NOT NULL DEFAULT 0"),
+            ("produced_at", "REAL NOT NULL DEFAULT 0"),
+            ("blob_oid", "TEXT NOT NULL DEFAULT ''"),
+            ("action_hash", "TEXT NOT NULL DEFAULT ''"),
+        ]
+        for col, ddl in additive_columns:
+            if col not in columns:
+                conn.execute(f"ALTER TABLE vectors ADD COLUMN {col} {ddl}")
+                added.append(col)
+
+        if added:
+            # Mark pre-v2 rows so callers can find and re-index them later.
+            conn.execute(
+                "UPDATE vectors SET model_name = 'legacy-pre-v2' "
+                "WHERE model_name = '' AND length(vector) > 0"
+            )
+            logger.info(
+                "vector_store: migrated v1 schema -> v2 (added columns: %s)",
+                ", ".join(added),
+            )
+
+        # Ensure indexes exist on newly-added columns.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vectors_model ON vectors(model_name, model_version)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vectors_blob ON vectors(blob_oid)"
+        )
+
+        # Record schema version.
+        conn.execute(
+            "INSERT OR REPLACE INTO store_metadata (key, value) VALUES ('schema_version', ?)",
+            (VECTOR_STORE_SCHEMA_VERSION,),
+        )
+        conn.commit()
+
     def _validate_dimension(self) -> None:
-        """Check stored dimension matches current; clear if mismatched."""
+        """Check stored dimension matches current.
+
+        Behavior change vs the old code: a mismatch NO LONGER silently wipes
+        ``vectors`` + ``file_metadata``. Instead:
+
+          - If ``strict_dimension`` is True (the default): raise
+            :class:`VectorStoreDimensionMismatchError`. The caller is expected
+            to handle this by switching providers, running a rotation, or
+            invoking the (phase-2) ``clear_embeddings`` tool.
+          - If ``strict_dimension`` is False: put the store into degraded
+            read-only mode by setting ``self.degraded`` and
+            ``self.degraded_reason``, and bail out of the constructor. Writes
+            then refuse to land.
+
+        Why change: silent wipe meant every `attocode` invocation with a
+        different env-var / model flag deleted the user's embedding index
+        without ever telling them. That's the exact footgun this whole
+        work item is fixing.
+        """
         conn = self._get_conn()
         row = conn.execute(
             "SELECT value FROM store_metadata WHERE key = 'dimension'"
@@ -170,18 +306,28 @@ class VectorStore:
         if row:
             stored_dim = int(row[0])
             if stored_dim != self.dimension:
+                # Non-destructive: refuse to proceed.
+                msg = (
+                    f"embedding dimension mismatch (stored={stored_dim}, "
+                    f"expected={self.dimension})"
+                )
+                if self.strict_dimension:
+                    logger.error(
+                        "%s; refusing to wipe vectors. Use embeddings_rotate_model "
+                        "or clear_embeddings(confirm=true) to resolve.", msg,
+                    )
+                    raise VectorStoreDimensionMismatchError(
+                        stored=stored_dim,
+                        expected=self.dimension,
+                        db_path=self.db_path,
+                    )
                 logger.warning(
-                    "Embedding dimension changed (%d -> %d), clearing vector index",
-                    stored_dim, self.dimension,
+                    "%s; store is in DEGRADED read-only mode. "
+                    "Existing vectors preserved.", msg,
                 )
-                conn.execute("DELETE FROM vectors")
-                conn.execute("DELETE FROM file_metadata")
-                conn.execute(
-                    "INSERT OR REPLACE INTO store_metadata (key, value) VALUES ('dimension', ?)",
-                    (str(self.dimension),),
-                )
-                conn.commit()
-                self._vec_cache_version += 1
+                self.degraded = True
+                self.degraded_reason = "dimension_mismatch"
+                return
         else:
             conn.execute(
                 "INSERT OR REPLACE INTO store_metadata (key, value) VALUES ('dimension', ?)",
@@ -189,32 +335,59 @@ class VectorStore:
             )
             conn.commit()
 
+    def _guard_writes(self) -> None:
+        """Refuse writes when the store is in degraded mode."""
+        if self.degraded:
+            raise VectorStoreDimensionMismatchError(
+                stored=0,
+                expected=self.dimension,
+                db_path=self.db_path,
+            )
+
     def upsert(self, entry: VectorEntry) -> None:
         """Insert or update a vector entry."""
+        self._guard_writes()
         conn = self._get_conn()
         packed = _pack_vector(entry.vector)
+        now = time.time()
         with self._lock:
             conn.execute(
                 """INSERT OR REPLACE INTO vectors
-                   (id, file_path, chunk_type, name, text, vector)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (entry.id, entry.file_path, entry.chunk_type, entry.name, entry.text, packed),
+                   (id, file_path, chunk_type, name, text, vector,
+                    model_name, model_version, dimension, produced_at,
+                    blob_oid, action_hash)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    entry.id, entry.file_path, entry.chunk_type, entry.name,
+                    entry.text, packed,
+                    self.model_name, self.model_version, self.dimension,
+                    now, entry.blob_oid, entry.action_hash,
+                ),
             )
             conn.commit()
             self._vec_cache_version += 1
 
     def upsert_batch(self, entries: list[VectorEntry]) -> None:
         """Batch insert/update vector entries."""
+        self._guard_writes()
         conn = self._get_conn()
+        now = time.time()
         rows = [
-            (e.id, e.file_path, e.chunk_type, e.name, e.text, _pack_vector(e.vector))
+            (
+                e.id, e.file_path, e.chunk_type, e.name, e.text,
+                _pack_vector(e.vector),
+                self.model_name, self.model_version, self.dimension,
+                now, e.blob_oid, e.action_hash,
+            )
             for e in entries
         ]
         with self._lock:
             conn.executemany(
                 """INSERT OR REPLACE INTO vectors
-                   (id, file_path, chunk_type, name, text, vector)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                   (id, file_path, chunk_type, name, text, vector,
+                    model_name, model_version, dimension, produced_at,
+                    blob_oid, action_hash)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 rows,
             )
             conn.commit()
@@ -332,7 +505,7 @@ class VectorStore:
 
             for i, meta in enumerate(self._vec_meta):
                 fp = meta[1]  # file_path
-                if existing_files is not None and fp not in existing_files:
+                if existing_files is not None and fp not in existing_files:  # noqa: SIM114 — clearer as two branches than one combined or
                     scores[i] = -1.0
                 elif file_filter and not fnmatch.fnmatch(fp, file_filter):
                     scores[i] = -1.0

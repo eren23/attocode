@@ -221,13 +221,49 @@ class SemanticSearchManager:
                 )
 
         if not self._keyword_fallback:
-            from attocode.integrations.context.vector_store import VectorStore
+            from attocode.integrations.context.vector_store import (
+                VectorStore,
+                VectorStoreDimensionMismatchError,
+            )
             db_dir = os.path.join(self.root_dir, ".attocode", "vectors")
             os.makedirs(db_dir, exist_ok=True)
-            self._store = VectorStore(
-                db_path=os.path.join(db_dir, "embeddings.db"),
-                dimension=self._provider.dimension(),
+            # strict_dimension=False: catch the mismatch as degraded mode
+            # instead of crashing the whole MCP server. The provider + store
+            # both stay available for diagnostic tools
+            # (`embeddings_status`, etc.) but writes refuse to land until
+            # the user resolves the mismatch.
+            provider_name = getattr(self._provider, "name", lambda: "unknown")
+            provider_name_str = provider_name() if callable(provider_name) else str(provider_name)
+            provider_version = getattr(self._provider, "version", lambda: "")
+            provider_version_str = (
+                provider_version() if callable(provider_version) else str(provider_version)
             )
+            try:
+                self._store = VectorStore(
+                    db_path=os.path.join(db_dir, "embeddings.db"),
+                    dimension=self._provider.dimension(),
+                    model_name=provider_name_str,
+                    model_version=provider_version_str,
+                    strict_dimension=False,
+                )
+            except VectorStoreDimensionMismatchError as exc:
+                logger.warning(
+                    "semantic_search: vector store unusable (%s); "
+                    "falling back to keyword-only mode",
+                    exc,
+                )
+                self._store = None
+                self._keyword_fallback = True
+                self._index_progress.degraded_reason = "dimension_mismatch"
+                self._index_progress.last_error = str(exc)
+            else:
+                if self._store.degraded:
+                    self._index_progress.degraded_reason = self._store.degraded_reason
+                    self._index_progress.last_error = (
+                        f"Vector store at {self._store.db_path} is in degraded mode: "
+                        f"{self._store.degraded_reason}. Existing vectors preserved; "
+                        f"writes disabled until resolved."
+                    )
 
         if not self.nl_mode:
             self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none")

@@ -18,6 +18,7 @@ from attocode.code_intel._shared import (
     _get_service,
     mcp,
 )
+from attocode.code_intel.tools.pin_tools import pin_stamped
 from attocode.integrations.context.frecency import FrecencyResult
 
 
@@ -91,6 +92,7 @@ def _get_trigram_index():
 
 
 @mcp.tool()
+@pin_stamped
 def semantic_search(
     query: str,
     top_k: int = 10,
@@ -250,6 +252,7 @@ def dataflow_scan(
 
 
 @mcp.tool()
+@pin_stamped
 def fast_search(
     pattern: str,
     path: str = "",
@@ -434,6 +437,7 @@ def fast_search(
 
 
 @mcp.tool()
+@pin_stamped
 def regex_search(
     pattern: str,
     path: str = "",
@@ -534,6 +538,7 @@ def regex_search(
 
 
 @mcp.tool()
+@pin_stamped
 def frecency_search(
     pattern: str,
     path: str = "",

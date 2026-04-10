@@ -194,20 +194,31 @@ class Embedding(Base):
     # N5 fix: CASCADE on FK so deleting file_contents cleans up embeddings
     content_sha: Mapped[str] = mapped_column(Text, ForeignKey("file_contents.sha256", ondelete="CASCADE"), nullable=False)
     embedding_model: Mapped[str] = mapped_column(Text, nullable=False, server_default="default")
+    # Migration 016: explicit model version + dim + provenance to replace the
+    # old "silently wipe on dim change" flow. embedding_model_version defaults
+    # to '' so pre-016 rows stay valid; new code should set it explicitly.
+    embedding_model_version: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    embedding_dim: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    embedding_provenance: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     chunk_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="file")
-    # Vector column — added at runtime by ensure_vector_column().
+    # Vector column — added at runtime by ensure_vector_columns().
     # Dimension depends on the configured embedding model (384/768/1536).
     # Column is nullable: rows without vectors are pre-pgvector or pending re-embedding.
     if _PgVector is not None:
         vector = mapped_column(_PgVector(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # C6 fix: DB-level guarantee of one embedding per (content_sha, model, chunk_type)
+    # Migration 016 replaced the old uq_embedding_content_model_chunk with
+    # one that also includes embedding_model_version, so two versions of the
+    # same model can coexist during a rotation.
     __table_args__ = (
         __import__("sqlalchemy").UniqueConstraint(
-            "content_sha", "embedding_model", "chunk_type",
-            name="uq_embedding_content_model_chunk",
+            "content_sha", "embedding_model", "embedding_model_version", "chunk_type",
+            name="uq_embedding_content_model_version_chunk",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_embeddings_model_version", "embedding_model", "embedding_model_version",
         ),
     )
 

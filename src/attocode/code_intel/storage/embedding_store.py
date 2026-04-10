@@ -3,67 +3,144 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import uuid
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 
-async def ensure_vector_column(session: AsyncSession, dimension: int) -> None:
-    """Ensure the embeddings table has a vector column of the right dimension.
+class EmbeddingDimensionMismatchError(RuntimeError):
+    """Raised when the running embedding provider's dimension does not match
+    the vectors already persisted in the ``embeddings`` table.
 
-    Called once at startup by generate_embeddings job. Handles:
-    - Column doesn't exist yet -> CREATE
-    - Column exists with wrong dimension -> DROP index, ALTER, recreate index
-    - Column exists with right dimension -> no-op
+    Migration 016 replaced the old behavior — which silently ran
+    ``UPDATE embeddings SET vector = NULL`` and dropped every stored
+    embedding — with a loud refusal. Callers must now explicitly rotate
+    to the new dimension via the (phase-4) embeddings rotation endpoint,
+    or clear the table manually. Silent data loss is never OK.
+    """
+
+    def __init__(self, *, stored: int, expected: int) -> None:
+        self.stored = stored
+        self.expected = expected
+        super().__init__(
+            f"embedding dimension mismatch: stored={stored} expected={expected}. "
+            f"Refusing to wipe existing vectors. "
+            f"Resolve by starting an embedding rotation (POST /embeddings/rotate), "
+            f"or explicitly re-dimensioning the column after backing up."
+        )
+
+
+async def ensure_vector_columns(
+    session: AsyncSession,
+    primary_dim: int,
+    shadow_dim: int | None = None,
+) -> None:
+    """Ensure ``embeddings.vector`` exists at ``primary_dim`` without destroying
+    data, and optionally ensure a ``vector_b`` shadow column at ``shadow_dim``.
+
+    Behavior:
+      - If ``vector`` does not exist: CREATE at ``primary_dim``, build HNSW index.
+      - If ``vector`` exists at ``primary_dim``: no-op.
+      - If ``vector`` exists at a DIFFERENT dim: **raise** ``EmbeddingDimensionMismatchError``.
+        Old code silently NULLed every row here; that was a footgun.
+      - If ``shadow_dim`` is given and differs from ``primary_dim``: ensure a
+        ``vector_b`` column at ``shadow_dim`` (used during rotation dual-write).
+        Never touches the primary column.
+
+    ``shadow_dim`` is accepted now so the rotation machinery in a later phase
+    doesn't have to re-touch this function.
     """
     from sqlalchemy import text
 
-    result = await session.execute(text(
-        "SELECT atttypmod FROM pg_attribute "
-        "WHERE attrelid = 'embeddings'::regclass AND attname = 'vector'"
-    ))
+    result = await session.execute(
+        text(
+            "SELECT atttypmod FROM pg_attribute "
+            "WHERE attrelid = 'embeddings'::regclass AND attname = 'vector'"
+        )
+    )
     row = result.first()
 
     if row is None:
-        # Column doesn't exist — add it
-        await session.execute(text(
-            f"ALTER TABLE embeddings ADD COLUMN vector vector({dimension})"
-        ))
-        await session.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_embeddings_vector_hnsw "
-            "ON embeddings USING hnsw (vector vector_cosine_ops) "
-            "WITH (m = 16, ef_construction = 64)"
-        ))
-        logger.info("Created vector column with dimension %d and HNSW index", dimension)
-    elif row[0] != dimension + 4:  # pgvector stores dim+4 in atttypmod
-        # Dimension mismatch — re-dimension
-        await session.execute(text("DROP INDEX IF EXISTS idx_embeddings_vector_hnsw"))
-        await session.execute(text("UPDATE embeddings SET vector = NULL"))
-        await session.execute(text(
-            f"ALTER TABLE embeddings ALTER COLUMN vector TYPE vector({dimension})"
-        ))
-        await session.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_embeddings_vector_hnsw "
-            "ON embeddings USING hnsw (vector vector_cosine_ops) "
-            "WITH (m = 16, ef_construction = 64)"
-        ))
-        logger.info("Re-dimensioned vector column to %d (old vectors cleared)", dimension)
+        # Column doesn't exist — safe to add.
+        await session.execute(
+            text(f"ALTER TABLE embeddings ADD COLUMN vector vector({primary_dim})")
+        )
+        await session.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_embeddings_vector_hnsw "
+                "ON embeddings USING hnsw (vector vector_cosine_ops) "
+                "WITH (m = 16, ef_construction = 64)"
+            )
+        )
+        logger.info(
+            "Created vector column with dimension %d and HNSW index", primary_dim
+        )
     else:
-        logger.debug("Vector column already has correct dimension %d", dimension)
+        stored_dim = row[0] - 4  # pgvector stores dim+4 in atttypmod
+        if stored_dim != primary_dim:
+            logger.error(
+                "Embedding dimension mismatch: stored=%d, expected=%d. "
+                "Refusing destructive UPDATE. Use embedding rotation flow.",
+                stored_dim, primary_dim,
+            )
+            raise EmbeddingDimensionMismatchError(
+                stored=stored_dim, expected=primary_dim,
+            )
+        logger.debug("Vector column already has correct dimension %d", primary_dim)
+
+    # Shadow column handling — used during a live rotation where new writes
+    # target vector_b with the new dimension while reads still hit vector.
+    if shadow_dim is not None and shadow_dim != primary_dim:
+        result_b = await session.execute(
+            text(
+                "SELECT atttypmod FROM pg_attribute "
+                "WHERE attrelid = 'embeddings'::regclass AND attname = 'vector_b'"
+            )
+        )
+        row_b = result_b.first()
+        if row_b is None:
+            await session.execute(
+                text(f"ALTER TABLE embeddings ADD COLUMN vector_b vector({shadow_dim})")
+            )
+            await session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS idx_embeddings_vector_b_hnsw "
+                    "ON embeddings USING hnsw (vector_b vector_cosine_ops) "
+                    "WITH (m = 16, ef_construction = 64)"
+                )
+            )
+            logger.info("Created shadow vector_b column at dimension %d", shadow_dim)
+        else:
+            stored_shadow = row_b[0] - 4
+            if stored_shadow != shadow_dim:
+                raise EmbeddingDimensionMismatchError(
+                    stored=stored_shadow, expected=shadow_dim,
+                )
 
     await session.commit()
+
+
+# Backwards-compatibility alias. Old callers that still invoke
+# ``ensure_vector_column(session, dim)`` get the new non-destructive
+# behavior automatically. They will now *raise* on dimension mismatch where
+# they previously silently wiped vectors — which is exactly the point of
+# this change. If you hit this error, use the rotation endpoint.
+async def ensure_vector_column(session: AsyncSession, dimension: int) -> None:
+    """Deprecated alias for :func:`ensure_vector_columns` (single-dim form)."""
+    await ensure_vector_columns(session, primary_dim=dimension)
 
 
 class EmbeddingStore:
     """Content-SHA-keyed embedding storage for semantic search.
 
-    Embeddings are keyed by (content_sha, embedding_model) for deduplication.
-    If content_sha+model already exists, skip — same content always produces
-    the same embeddings for a given model.
+    Embeddings are keyed by (content_sha, embedding_model, embedding_model_version)
+    for deduplication. If content_sha+model+version already exists, skip — same
+    content always produces the same embeddings for a given model version.
 
     Branch-aware queries resolve through BranchOverlay.
     """
@@ -78,8 +155,12 @@ class EmbeddingStore:
     ) -> int:
         """Store embeddings for a content hash.
 
-        Each embedding dict: {chunk_text, chunk_type, embedding_model, vector?}
-        Idempotent — if content_sha+model already has embeddings, replaces them.
+        Each embedding dict: {chunk_text, chunk_type, embedding_model,
+        embedding_model_version?, embedding_dim?, embedding_provenance?, vector?}
+
+        Idempotent within a (content_sha, model, model_version) triple —
+        replaces all rows for that triple. Other (model, version) pairs
+        coexist peacefully (needed for the dual-write rotation flow).
 
         Returns count of embeddings stored.
         """
@@ -90,13 +171,21 @@ class EmbeddingStore:
         if not embeddings:
             return 0
 
-        # Determine models being upserted
-        models_in_batch = {e.get("embedding_model", "default") for e in embeddings}
-        for model in models_in_batch:
+        # Determine (model, version) pairs being upserted. Rows at other
+        # versions stay put — this is the key invariant enabling rotation.
+        pairs_in_batch: set[tuple[str, str]] = {
+            (
+                e.get("embedding_model", "default"),
+                e.get("embedding_model_version", ""),
+            )
+            for e in embeddings
+        }
+        for model, version in pairs_in_batch:
             await self._session.execute(
                 delete(Embedding).where(
                     Embedding.content_sha == content_sha,
                     Embedding.embedding_model == model,
+                    Embedding.embedding_model_version == version,
                 )
             )
 
@@ -105,6 +194,9 @@ class EmbeddingStore:
             kwargs = {
                 "content_sha": content_sha,
                 "embedding_model": emb_data.get("embedding_model", "default"),
+                "embedding_model_version": emb_data.get("embedding_model_version", ""),
+                "embedding_dim": emb_data.get("embedding_dim"),
+                "embedding_provenance": emb_data.get("embedding_provenance", {}),
                 "chunk_text": emb_data.get("chunk_text", ""),
                 "chunk_type": emb_data.get("chunk_type", "file"),
             }
