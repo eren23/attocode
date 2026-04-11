@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.18] - 2026-04-11
+
 ### Added — Code Intel Reproducibility & State Tracking
 
 Phases 1 → 3a of the reproducibility subsystem. Local-first surface landed
