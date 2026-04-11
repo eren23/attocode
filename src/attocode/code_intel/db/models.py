@@ -5,12 +5,11 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from attocode.code_intel.db.base import Base, TimestampMixin, generate_uuid
-
 
 try:
     from pgvector.sqlalchemy import Vector as _PgVector
@@ -194,20 +193,31 @@ class Embedding(Base):
     # N5 fix: CASCADE on FK so deleting file_contents cleans up embeddings
     content_sha: Mapped[str] = mapped_column(Text, ForeignKey("file_contents.sha256", ondelete="CASCADE"), nullable=False)
     embedding_model: Mapped[str] = mapped_column(Text, nullable=False, server_default="default")
+    # Migration 016: explicit model version + dim + provenance to replace the
+    # old "silently wipe on dim change" flow. embedding_model_version defaults
+    # to '' so pre-016 rows stay valid; new code should set it explicitly.
+    embedding_model_version: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    embedding_dim: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    embedding_provenance: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     chunk_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="file")
-    # Vector column — added at runtime by ensure_vector_column().
+    # Vector column — added at runtime by ensure_vector_columns().
     # Dimension depends on the configured embedding model (384/768/1536).
     # Column is nullable: rows without vectors are pre-pgvector or pending re-embedding.
     if _PgVector is not None:
         vector = mapped_column(_PgVector(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    # C6 fix: DB-level guarantee of one embedding per (content_sha, model, chunk_type)
+    # Migration 016 replaced the old uq_embedding_content_model_chunk with
+    # one that also includes embedding_model_version, so two versions of the
+    # same model can coexist during a rotation.
     __table_args__ = (
         __import__("sqlalchemy").UniqueConstraint(
-            "content_sha", "embedding_model", "chunk_type",
-            name="uq_embedding_content_model_chunk",
+            "content_sha", "embedding_model", "embedding_model_version", "chunk_type",
+            name="uq_embedding_content_model_version_chunk",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_embeddings_model_version", "embedding_model", "embedding_model_version",
         ),
     )
 
@@ -354,3 +364,162 @@ class BlameHunk(Base):
     start_line: Mapped[int] = mapped_column(Integer, nullable=False)
     end_line: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Provenance(Base):
+    """Provenance row for a derived code-intel artifact.
+
+    Phase 1 Codex fix (M7): migration 017 created this table but the
+    original Phase 1 work never added an ORM model or write path. This
+    model + :mod:`attocode.code_intel.storage.provenance_store` close
+    that gap so embeddings actually carry provenance records that
+    downstream tools (snapshot restore, orphan scan, model rotation
+    audit) can join against.
+    """
+    __tablename__ = "provenance"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=generate_uuid,
+    )
+    action_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    artifact_type: Mapped[str] = mapped_column(Text, nullable=False)
+    input_blob_oid: Mapped[str] = mapped_column(Text, nullable=False)
+    input_tree_oid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    indexer_name: Mapped[str] = mapped_column(Text, nullable=False)
+    indexer_version: Mapped[str] = mapped_column(Text, nullable=False)
+    config_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    produced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    producer_service: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="attocode-server",
+    )
+    producer_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    producer_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("indexing_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    producer_host: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="",
+    )
+    extra: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+    __table_args__ = (
+        __import__("sqlalchemy").Index(
+            "ix_provenance_action_hash", "action_hash",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_provenance_input_blob", "input_blob_oid",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_provenance_job", "producer_job_id",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_provenance_indexer_version", "indexer_name", "indexer_version",
+        ),
+    )
+
+
+class RepoSnapshot(Base):
+    """A point-in-time manifest of a repo's code-intel state.
+
+    Phase 3a delivers creation / listing / deletion over this table.
+    Phase 3b will add an OCI adapter that pushes the same manifest +
+    component rows as an artifact to a registry.
+    """
+    __tablename__ = "repo_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    repo_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("branches.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    manifest_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    total_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    component_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    commit_oid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    extra: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+    components: Mapped[list[RepoSnapshotComponent]] = relationship(
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        __import__("sqlalchemy").UniqueConstraint(
+            "repo_id", "name", name="uq_repo_snapshots_repo_name",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_repo_snapshots_repo_created", "repo_id", "created_at",
+        ),
+        __import__("sqlalchemy").Index("ix_repo_snapshots_org", "org_id"),
+    )
+
+
+class RepoSnapshotComponent(Base):
+    """One artifact entry inside a :class:`RepoSnapshot`.
+
+    ``name`` is a logical identifier (``"content"`` / ``"symbols"`` /
+    ``"embeddings.bge-small-en-v1.5"``), ``media_type`` is the OCI-shaped
+    media type string, and ``digest`` is the SHA-256 content hash.
+    """
+    __tablename__ = "repo_snapshot_components"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("repo_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    media_type: Mapped[str] = mapped_column(Text, nullable=False)
+    digest: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    extra: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+    snapshot: Mapped[RepoSnapshot] = relationship(back_populates="components")
+
+    __table_args__ = (
+        __import__("sqlalchemy").Index(
+            "ix_repo_snapshot_components_snapshot", "snapshot_id",
+        ),
+        __import__("sqlalchemy").Index(
+            "ix_repo_snapshot_components_digest", "digest",
+        ),
+    )

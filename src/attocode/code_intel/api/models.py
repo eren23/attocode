@@ -374,6 +374,14 @@ class SearchResultsResponse(BaseModel):
     query: str
     results: list[SearchResultItem]
     total: int
+    # Codex fix M4: server-side search responses now expose the same
+    # ``pin_id`` / ``manifest_hash`` pair that local ``_stamp_pin``
+    # emits in the MCP tool footer. Clients can round-trip them via
+    # ``pin_resolve`` (local) or a future ``?pin=`` query param
+    # (planned for Phase 3b). Both default to empty strings so existing
+    # clients that ignore them are unaffected.
+    pin_id: str = ""
+    manifest_hash: str = ""
 
 
 class SecurityFinding(BaseModel):

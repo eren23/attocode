@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from attocode.code_intel._shared import _get_frecency_tracker, _get_project_dir, mcp
+from attocode.code_intel.tools.pin_tools import pin_stamped
 
 
 def _get_git_status(file_path: str) -> tuple[bool, float | None]:
@@ -133,6 +134,7 @@ def get_file_frecency(path: str, ai_mode: bool = True) -> str:
 
 
 @mcp.tool()
+@pin_stamped
 def get_frecency_leaderboard(top_n: int = 20, ai_mode: bool = True) -> str:
     """Get the top N most frequently accessed files.
 

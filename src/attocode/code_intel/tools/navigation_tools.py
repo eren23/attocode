@@ -11,9 +11,11 @@ from attocode.code_intel._shared import (
     _get_service,
     mcp,
 )
+from attocode.code_intel.tools.pin_tools import pin_stamped
 
 
 @mcp.tool()
+@pin_stamped
 def repo_map(
     include_symbols: bool = True,
     max_tokens: int = 6000,
@@ -33,6 +35,7 @@ def repo_map(
 
 
 @mcp.tool()
+@pin_stamped
 def symbols(path: str) -> str:
     """List all symbols (functions, classes, methods) defined in a file.
 
@@ -43,6 +46,7 @@ def symbols(path: str) -> str:
 
 
 @mcp.tool()
+@pin_stamped
 def search_symbols(name: str, limit: int = 30, kind: str = "") -> str:
     """Search for symbol definitions across the entire codebase.
 

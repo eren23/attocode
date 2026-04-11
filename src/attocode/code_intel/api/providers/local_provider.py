@@ -22,8 +22,8 @@ from attocode.code_intel.api.models import (
     GraphQueryResponse,
     HotspotsResponse,
     ImpactAnalysisResponse,
-    LSPCompletionsResponse,
     LSPCompletionItem,
+    LSPCompletionsResponse,
     LSPDefinitionResponse,
     LSPDiagnosticItem,
     LSPDiagnosticsResponse,
@@ -198,10 +198,42 @@ class LocalSearchProvider:
         data = self._svc.semantic_search_data(
             query=query, top_k=top_k, file_filter=file_filter,
         )
+        # Codex M4 (round 3): produce a pin compatible with the stdio
+        # MCP's ``_stamp_pin`` footer so local-mode HTTP clients see the
+        # same round-trippable state identifier. We import from the
+        # MCP-free ``pin_store`` module — NOT ``pin_tools`` — because
+        # ``pin_tools`` transitively imports ``_shared``, whose module
+        # body calls ``sys.exit(1)`` when ``mcp`` is unavailable and
+        # that ``SystemExit`` would escape any ``except Exception``.
+        # The pin is actually persisted via ``PinStore.save()`` so
+        # ``pin_resolve(pin_id)`` works end-to-end.
+        #
+        # Codex round-4 fix P2 #2: pass the bound service's
+        # ``project_dir`` explicitly. Without this the pin would be
+        # minted from ``ATTOCODE_PROJECT_DIR``/cwd, so an HTTP server
+        # registering multiple projects via ``register_project`` would
+        # persist pins into the wrong repo's ``.attocode/cache/pins.db``
+        # and ``pin_resolve(resp.pin_id)`` would round-trip to unrelated
+        # state.
+        pin_id = ""
+        manifest_hash = ""
+        try:
+            from attocode.code_intel.tools.pin_store import (
+                compute_and_persist_pin,
+            )
+            server_pin = compute_and_persist_pin(
+                self._svc.project_dir, ttl_seconds=0,
+            )
+            pin_id = server_pin.pin_id
+            manifest_hash = server_pin.manifest_hash
+        except Exception:
+            pass
         return SearchResultsResponse(
             query=data["query"],
             results=[SearchResultItem(**r) for r in data["results"]],
             total=data["total"],
+            pin_id=pin_id,
+            manifest_hash=manifest_hash,
         )
 
     async def security_scan(

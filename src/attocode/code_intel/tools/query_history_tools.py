@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from attocode.code_intel._shared import _get_project_dir, mcp
+from attocode.code_intel.tools.pin_tools import pin_stamped
 
 
 def _get_query_tracker():
@@ -76,6 +77,7 @@ def get_query_combo_boost(query: str, file_path: str) -> str:
 
 
 @mcp.tool()
+@pin_stamped
 def get_top_results_for_query(query: str, limit: int = 10) -> str:
     """Get the top files commonly selected for a query.
 

@@ -90,6 +90,7 @@ def record_learning(
     details: str = "",
     scope: str = "",
     confidence: float = 0.7,
+    anchor_blob_oid: str = "",
 ) -> str:
     """Record a project learning for future recall.
 
@@ -102,16 +103,48 @@ def record_learning(
         details: Optional longer explanation or example.
         scope: Optional directory scope (e.g. 'src/api/').
         confidence: Initial confidence 0.0-1.0 (default 0.7).
+        anchor_blob_oid: Optional ``"git:<sha>"`` / ``"sha256:<hex>"`` anchor
+            for the file this learning is about. If left empty and ``scope``
+            looks like a concrete file path, it's auto-computed so the
+            learning survives renames and ``orphan_scan`` can verify
+            reachability via git.
     """
     store = _get_memory_store()
+
+    # Auto-compute the anchor when the caller didn't supply one and the
+    # scope looks like a file path we can hash.
+    resolved_anchor = anchor_blob_oid
+    if not resolved_anchor and scope:
+        import os as _os
+        project_dir = _get_project_dir()
+        candidate = scope if _os.path.isabs(scope) else _os.path.join(project_dir, scope)
+        if _os.path.isfile(candidate):
+            try:
+                from attocode.integrations.context.blob_oid import (
+                    BlobOidCache,
+                    compute_blob_oid,
+                )
+                cache = BlobOidCache(project_dir=project_dir)
+                try:
+                    resolved_anchor = compute_blob_oid(
+                        candidate, project_dir, cache=cache,
+                    )
+                finally:
+                    cache.close()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("record_learning: anchor compute failed: %s", exc)
+                resolved_anchor = ""
+
     try:
         learning_id = store.add(
             type=type, description=description,
             details=details, scope=scope, confidence=confidence,
+            anchor_blob_oid=resolved_anchor,
         )
     except ValueError as e:
         return f"Error: {e}"
-    return f"Recorded learning #{learning_id}: [{type}] {description}"
+    suffix = f" (anchor={resolved_anchor[:24]}…)" if resolved_anchor else ""
+    return f"Recorded learning #{learning_id}: [{type}] {description}{suffix}"
 
 
 @mcp.tool()

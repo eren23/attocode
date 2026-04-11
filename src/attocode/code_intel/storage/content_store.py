@@ -7,6 +7,8 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import uuid
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -131,34 +133,90 @@ class ContentStore:
         )
         return {row[0] for row in result}
 
-    async def gc_unreferenced(self, min_age_minutes: int = 5) -> int:
+    async def gc_unreferenced(
+        self,
+        min_age_minutes: int = 5,
+        *,
+        repo_id: uuid.UUID | None = None,
+    ) -> int:
         """Delete file_contents not referenced by any branch_files, symbols, dependencies, or embeddings.
 
         C2 fix: Only deletes content older than min_age_minutes to avoid racing
         with concurrent indexers that are still writing references.
 
+        Codex review fix (B1): when ``repo_id`` is provided, scope the delete
+        to content that is *only* referenced from branches belonging to that
+        repo. A blob that's still referenced from a different repo's branches
+        is never deleted, even if this repo's branches no longer reference it.
+        When ``repo_id`` is ``None`` the old global-sweep behavior is
+        preserved for the unscoped background worker.
+
         Returns count of deleted rows.
         """
         from sqlalchemy import text
 
-        result = await self._session.execute(
-            text("""
-            DELETE FROM file_contents
-            WHERE created_at < NOW() - make_interval(mins => :age)
-              AND sha256 NOT IN (
-                SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
-                UNION
-                SELECT DISTINCT content_sha FROM symbols
-                UNION
-                SELECT DISTINCT source_sha FROM dependencies
-                UNION
-                SELECT DISTINCT target_sha FROM dependencies
-                UNION
-                SELECT DISTINCT content_sha FROM embeddings
+        if repo_id is None:
+            result = await self._session.execute(
+                text("""
+                DELETE FROM file_contents
+                WHERE created_at < NOW() - make_interval(mins => :age)
+                  AND sha256 NOT IN (
+                    SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+                    UNION
+                    SELECT DISTINCT content_sha FROM symbols
+                    UNION
+                    SELECT DISTINCT source_sha FROM dependencies
+                    UNION
+                    SELECT DISTINCT target_sha FROM dependencies
+                    UNION
+                    SELECT DISTINCT content_sha FROM embeddings
+                )
+                """).bindparams(age=min_age_minutes)
             )
-            """).bindparams(age=min_age_minutes)
-        )
+        else:
+            # Scoped GC: delete content whose *only* live references live in
+            # branch_files of the target repo, AND which is no longer in any
+            # of the target repo's branches. We still require the content to
+            # be globally unreferenced from symbols/deps/embeddings because
+            # those are not repo-scoped; otherwise we'd break indexing
+            # caches for other repos that happened to share the same blob.
+            result = await self._session.execute(
+                text("""
+                DELETE FROM file_contents
+                WHERE created_at < NOW() - make_interval(mins => :age)
+                  AND sha256 IN (
+                    -- blobs currently or previously associated with this repo
+                    SELECT DISTINCT bf.content_sha
+                    FROM branch_files bf
+                    JOIN branches b ON b.id = bf.branch_id
+                    WHERE b.repo_id = :repo_id AND bf.content_sha IS NOT NULL
+                  )
+                  AND sha256 NOT IN (
+                    -- still live in any branch (any repo)
+                    SELECT DISTINCT bf.content_sha
+                    FROM branch_files bf
+                    WHERE bf.content_sha IS NOT NULL
+                    UNION
+                    SELECT DISTINCT content_sha FROM symbols
+                    UNION
+                    SELECT DISTINCT source_sha FROM dependencies
+                    UNION
+                    SELECT DISTINCT target_sha FROM dependencies
+                    UNION
+                    SELECT DISTINCT content_sha FROM embeddings
+                )
+                """).bindparams(age=min_age_minutes, repo_id=str(repo_id))
+            )
         count = result.rowcount
         if count:
-            logger.info("GC: removed %d unreferenced file contents (older than %dm)", count, min_age_minutes)
+            if repo_id is None:
+                logger.info(
+                    "GC: removed %d unreferenced file contents (older than %dm, global)",
+                    count, min_age_minutes,
+                )
+            else:
+                logger.info(
+                    "GC: removed %d unreferenced file contents (older than %dm, repo=%s)",
+                    count, min_age_minutes, repo_id,
+                )
         return count

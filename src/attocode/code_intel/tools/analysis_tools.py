@@ -15,6 +15,7 @@ from attocode.code_intel._shared import (
     _get_service,
     mcp,
 )
+from attocode.code_intel.tools.pin_tools import pin_stamped
 
 
 @mcp.tool()
@@ -249,6 +250,7 @@ def community_detection(
 
 
 @mcp.tool()
+@pin_stamped
 def repo_map_ranked(
     task_context: str = "",
     token_budget: int = 1024,

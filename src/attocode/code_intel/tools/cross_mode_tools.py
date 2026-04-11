@@ -8,6 +8,7 @@ When one search mode finds nothing, suggests results from the other mode.
 from __future__ import annotations
 
 from attocode.code_intel._shared import _get_project_dir, mcp
+from attocode.code_intel.tools.pin_tools import pin_stamped
 
 
 def _get_cross_mode_searcher():
@@ -98,6 +99,7 @@ def suggest_when_grep_finds_nothing(
 
 
 @mcp.tool()
+@pin_stamped
 def cross_mode_search(
     query: str,
     prefer_mode: str = "file",

@@ -159,12 +159,14 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
             cross_repo_search,
             embeddings,
             files_v2,
+            gc,
             git_v2,
             jobs,
             orgs,
             preferences,
             presence,
             repos,
+            snapshots,
             webhooks,
             websocket,
         )
@@ -185,6 +187,9 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         app.include_router(activity.router)
         app.include_router(preferences.router)
         app.include_router(cross_repo_search.router)
+        # Phase 3a reproducibility routes
+        app.include_router(gc.router)
+        app.include_router(snapshots.router)
 
     # Graph visualization — serve the bundled HTML page at /graph
     import os

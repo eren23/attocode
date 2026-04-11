@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
-from attocode.code_intel.api.deps import get_db_session, get_repo_service
+from attocode.code_intel.api.deps import get_db_session
 from attocode.code_intel.db.models import Organization, OrgMembership, Repository, User
 
 logger = logging.getLogger(__name__)
@@ -84,6 +84,26 @@ class CreateRepoRequest(BaseModel):
     local_path: str | None = None
     default_branch: str = "main"
     language: str | None = None
+
+
+class UpdateRepoRequest(BaseModel):
+    """Fields that can be updated after a repository is created.
+
+    ``None`` means "leave unchanged". Empty string explicitly clears a
+    nullable column. Immutable fields (``id``, ``created_at``) are not
+    present.
+
+    Codex fix m4: ``target_org_id`` is now accepted so admins can move
+    a repo between orgs they have admin rights in. Both source and
+    target orgs are checked for membership, and the target org must
+    not already contain a repo with the same name.
+    """
+    name: str | None = None
+    clone_url: str | None = None
+    default_branch: str | None = None
+    language: str | None = None
+    local_path: str | None = None
+    target_org_id: uuid.UUID | None = None
 
 
 class RepoResponse(BaseModel):
@@ -168,7 +188,7 @@ async def create_org(
         org_id=org.id,
         user_id=auth.user_id,
         role="owner",
-        accepted_at=datetime.now(timezone.utc),
+        accepted_at=datetime.now(UTC),
     )
     session.add(membership)
     await session.commit()
@@ -602,6 +622,150 @@ async def delete_repo(
     await session.delete(repo)
     await session.commit()
     return {"detail": "Repository deleted"}
+
+
+@router.patch("/{org_id}/repos/{repo_id}", response_model=RepoResponse)
+async def update_repo(
+    org_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    req: UpdateRepoRequest,
+    auth: AuthContext = Depends(resolve_auth),
+    session: AsyncSession = Depends(get_db_session),
+) -> RepoResponse:
+    """Update mutable repository fields (admin+ required).
+
+    Supports renaming the repo, retargeting its ``clone_url``, changing
+    the default branch, or updating the declared language. Phase 3a
+    does NOT support moving a repo between orgs (that would require
+    re-checking quotas and audit logging across two orgs); use create +
+    delete for that case.
+
+    Returns the updated :class:`RepoResponse`.
+    """
+    await _require_membership(org_id, auth, session, min_role="admin")
+
+    result = await session.execute(
+        select(Repository).where(Repository.id == repo_id, Repository.org_id == org_id)
+    )
+    repo = result.scalar_one_or_none()
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    changes: dict[str, dict[str, str | None]] = {}
+
+    # Rename: enforce uniqueness within the org.
+    if req.name is not None and req.name != repo.name:
+        if not req.name:
+            raise HTTPException(status_code=422, detail="name cannot be empty")
+        existing = await session.execute(
+            select(Repository).where(
+                Repository.org_id == org_id,
+                Repository.name == req.name,
+                Repository.id != repo_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Repository '{req.name}' already exists in this org",
+            )
+        changes["name"] = {"from": repo.name, "to": req.name}
+        repo.name = req.name
+
+    if req.clone_url is not None and req.clone_url != repo.clone_url:
+        changes["clone_url"] = {"from": repo.clone_url, "to": req.clone_url or None}
+        repo.clone_url = req.clone_url or None
+
+    if req.default_branch is not None and req.default_branch != repo.default_branch:
+        if not req.default_branch:
+            raise HTTPException(status_code=422, detail="default_branch cannot be empty")
+        changes["default_branch"] = {
+            "from": repo.default_branch,
+            "to": req.default_branch,
+        }
+        repo.default_branch = req.default_branch
+
+    if req.language is not None and req.language != repo.language:
+        changes["language"] = {"from": repo.language, "to": req.language or None}
+        repo.language = req.language or None
+
+    if req.local_path is not None and req.local_path != repo.local_path:
+        changes["local_path"] = {"from": repo.local_path, "to": req.local_path or None}
+        repo.local_path = req.local_path or None
+
+    # Codex fix m4: optional cross-org move. Rejected if the caller
+    # doesn't hold admin in the target org, or if the target already
+    # has a repo with the same (post-rename) name.
+    moved_from_org: uuid.UUID | None = None
+    if req.target_org_id is not None and req.target_org_id != org_id:
+        # Verify target org membership (admin+).
+        await _require_membership(
+            req.target_org_id, auth, session, min_role="admin",
+        )
+        # Check name collision in the target org under the new name.
+        target_name = repo.name  # already reflects any rename above
+        existing = await session.execute(
+            select(Repository).where(
+                Repository.org_id == req.target_org_id,
+                Repository.name == target_name,
+                Repository.id != repo_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Target org already has a repository named "
+                    f"{target_name!r}; rename before moving."
+                ),
+            )
+        moved_from_org = repo.org_id
+        changes["org_id"] = {
+            "from": str(moved_from_org),
+            "to": str(req.target_org_id),
+        }
+        repo.org_id = req.target_org_id
+
+    if changes:
+        from attocode.code_intel.audit import log_event
+
+        await log_event(
+            session,
+            org_id,
+            "repo.updated",
+            repo_id=repo_id,
+            user_id=auth.user_id,
+            detail={"changes": changes},
+        )
+        if moved_from_org is not None:
+            # Emit a distinct ``repo.moved`` event in the TARGET org so
+            # target-org admins see the move in their audit feed.
+            await log_event(
+                session,
+                req.target_org_id,  # type: ignore[arg-type]
+                "repo.moved",
+                repo_id=repo_id,
+                user_id=auth.user_id,
+                detail={
+                    "from_org_id": str(moved_from_org),
+                    "to_org_id": str(req.target_org_id),
+                    "name": repo.name,
+                },
+            )
+        await session.commit()
+        await session.refresh(repo)
+
+    return RepoResponse(
+        id=str(repo.id),
+        name=repo.name,
+        clone_url=repo.clone_url,
+        local_path=repo.local_path,
+        default_branch=repo.default_branch,
+        language=repo.language,
+        index_status=repo.index_status,
+        last_indexed_at=repo.last_indexed_at.isoformat() if repo.last_indexed_at else None,
+        created_at=repo.created_at.isoformat(),
+    )
 
 
 @router.post("/{org_id}/repos/{repo_id}/reindex")

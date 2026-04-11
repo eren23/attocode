@@ -89,13 +89,17 @@ class MemoryStore:
                 unhelpful_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active'
+                status TEXT NOT NULL DEFAULT 'active',
+                anchor_blob_oid TEXT NOT NULL DEFAULT ''
             );
 
             CREATE INDEX IF NOT EXISTS idx_learnings_scope ON learnings(scope);
             CREATE INDEX IF NOT EXISTS idx_learnings_status ON learnings(status);
             CREATE INDEX IF NOT EXISTS idx_learnings_type ON learnings(type);
         """)
+        # The anchor index references a column that may not exist yet
+        # on pre-2c databases — migrate first, then create the index.
+        self._migrate_schema()
 
         # FTS5 virtual table — created separately (can't be in executescript
         # with IF NOT EXISTS reliably on all SQLite versions)
@@ -127,6 +131,33 @@ class MemoryStore:
 
         conn.commit()
 
+    def _migrate_schema(self) -> None:
+        """Additive in-place migration for pre-anchor learnings databases.
+
+        Adds the ``anchor_blob_oid`` column if missing so an existing
+        Phase 1 / 2a / 2b store keeps working after the Phase 2c
+        upgrade. Idempotent.
+        """
+        conn = self._get_conn()
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(learnings)").fetchall()
+        }
+        if "anchor_blob_oid" not in columns:
+            conn.execute(
+                "ALTER TABLE learnings ADD COLUMN anchor_blob_oid "
+                "TEXT NOT NULL DEFAULT ''"
+            )
+            logger.info("memory_store: migrated learnings table (+ anchor_blob_oid)")
+        # Ensure the new partial index is present regardless of whether
+        # we just added the column or it was already there.
+        with contextlib.suppress(sqlite3.OperationalError):
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_learnings_anchor "
+                "ON learnings(anchor_blob_oid) WHERE anchor_blob_oid != ''"
+            )
+        conn.commit()
+
     # ------------------------------------------------------------------
     # Write operations
     # ------------------------------------------------------------------
@@ -138,11 +169,20 @@ class MemoryStore:
         details: str = "",
         scope: str = "",
         confidence: float = 0.7,
+        anchor_blob_oid: str = "",
     ) -> int:
         """Record a new learning. Returns learning ID.
 
         Deduplicates via FTS similarity — if a highly similar learning
         exists with the same type and scope, updates its confidence instead.
+
+        Args:
+            anchor_blob_oid: Optional content-addressed anchor for the
+                file this learning references (e.g. ``"git:abc123"``).
+                When set, ``orphan_scan`` can check git reachability to
+                detect learnings whose referenced content has been removed
+                from the repo. Pass an empty string to fall back to the
+                path-based ``scope`` heuristic.
         """
         conn = self._get_conn()
 
@@ -155,22 +195,39 @@ class MemoryStore:
         # Deduplication: check FTS for similar existing learning
         existing_id = self._find_duplicate(type, description, scope)
         if existing_id is not None:
-            # Boost confidence of existing learning
-            conn.execute(
-                """UPDATE learnings
-                   SET confidence = MIN(?, confidence + 0.05),
-                       updated_at = ?
-                   WHERE id = ?""",
-                (_CONFIDENCE_CAP, now, existing_id),
-            )
+            # Boost confidence of existing learning. Also backfill the
+            # anchor_blob_oid if the new call has one and the existing
+            # row doesn't — a learning gains provenance on re-record.
+            if anchor_blob_oid:
+                conn.execute(
+                    """UPDATE learnings
+                       SET confidence = MIN(?, confidence + 0.05),
+                           updated_at = ?,
+                           anchor_blob_oid = CASE
+                               WHEN anchor_blob_oid = '' THEN ?
+                               ELSE anchor_blob_oid
+                           END
+                       WHERE id = ?""",
+                    (_CONFIDENCE_CAP, now, anchor_blob_oid, existing_id),
+                )
+            else:
+                conn.execute(
+                    """UPDATE learnings
+                       SET confidence = MIN(?, confidence + 0.05),
+                           updated_at = ?
+                       WHERE id = ?""",
+                    (_CONFIDENCE_CAP, now, existing_id),
+                )
             conn.commit()
             return existing_id
 
         cursor = conn.execute(
             """INSERT INTO learnings
-               (type, description, details, scope, confidence, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (type, description, details, scope, confidence, now, now),
+               (type, description, details, scope, confidence,
+                anchor_blob_oid, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (type, description, details, scope, confidence,
+             anchor_blob_oid, now, now),
         )
         conn.commit()
         return cursor.lastrowid  # type: ignore[return-value]
@@ -267,7 +324,7 @@ class MemoryStore:
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         values = list(updates.values()) + [learning_id]
         conn.execute(
-            f"UPDATE learnings SET {set_clause} WHERE id = ?",  # noqa: S608
+            f"UPDATE learnings SET {set_clause} WHERE id = ?",
             values,
         )
         conn.commit()
@@ -305,7 +362,7 @@ class MemoryStore:
                     """SELECT l.id, l.type, l.description, l.details, l.scope,
                               l.confidence, l.apply_count, l.help_count,
                               l.unhelpful_count, l.created_at, l.updated_at,
-                              rank
+                              l.anchor_blob_oid, rank
                        FROM learnings_fts f
                        JOIN learnings l ON l.id = f.rowid
                        WHERE learnings_fts MATCH ?
@@ -315,8 +372,8 @@ class MemoryStore:
                     (self._escape_fts_query(query), max_results * 3),
                 )
                 for row in cursor:
-                    entry = self._row_to_dict(row[:11])
-                    entry["_rank"] = row[11]
+                    entry = self._row_to_dict(row[:12])
+                    entry["_rank"] = row[12]
                     results.append(entry)
                     seen_ids.add(entry["id"])
             except sqlite3.OperationalError:
@@ -328,12 +385,13 @@ class MemoryStore:
             cursor = conn.execute(
                 f"""SELECT id, type, description, details, scope,
                            confidence, apply_count, help_count,
-                           unhelpful_count, created_at, updated_at
+                           unhelpful_count, created_at, updated_at,
+                           anchor_blob_oid
                     FROM learnings
                     WHERE status = 'active'
                       AND scope IN ({placeholders})
                     ORDER BY confidence DESC
-                    LIMIT ?""",  # noqa: S608
+                    LIMIT ?""",
                 [*scope_candidates, max_results * 2],
             )
             for row in cursor:
@@ -357,7 +415,8 @@ class MemoryStore:
 
         query = (
             "SELECT id, type, description, details, scope, confidence,"
-            " apply_count, help_count, unhelpful_count, created_at, updated_at"
+            " apply_count, help_count, unhelpful_count, created_at, updated_at,"
+            " anchor_blob_oid"
             " FROM learnings WHERE status = ?"
         )
         params: list[str] = [status]
@@ -381,8 +440,13 @@ class MemoryStore:
         return " ".join(f'"{t}"' for t in terms if t)
 
     def _row_to_dict(self, row: tuple) -> dict:
-        """Convert a row tuple to a dict."""
-        return {
+        """Convert a row tuple to a dict.
+
+        Tolerant of the row length — if the caller's SELECT doesn't
+        include ``anchor_blob_oid`` (legacy code paths not yet updated),
+        the field defaults to an empty string.
+        """
+        result = {
             "id": row[0],
             "type": row[1],
             "description": row[2],
@@ -395,6 +459,11 @@ class MemoryStore:
             "created_at": row[9],
             "updated_at": row[10],
         }
+        if len(row) > 11:
+            result["anchor_blob_oid"] = row[11]
+        else:
+            result["anchor_blob_oid"] = ""
+        return result
 
     def _build_scope_hierarchy(self, scope: str) -> list[str]:
         """Build scope candidates from most specific to global."""
@@ -457,6 +526,67 @@ class MemoryStore:
             (now, _AUTO_ARCHIVE_THRESHOLD),
         )
         conn.commit()
+
+    # ------------------------------------------------------------------
+    # Deletion
+    # ------------------------------------------------------------------
+
+    def clear_all(self, status_filter: str = "") -> int:
+        """Hard-delete learnings.
+
+        Args:
+            status_filter: If non-empty, only delete learnings whose
+                ``status`` matches (e.g. ``"archived"``). Empty string
+                wipes every row.
+
+        Returns the count deleted. FTS rows are removed via the existing
+        AFTER DELETE trigger on the ``learnings`` table. MemoryStore
+        doesn't serialize writes with a lock elsewhere (SQLite's own
+        busy handler is the contention path), so we follow the same
+        pattern here.
+        """
+        conn = self._get_conn()
+        if status_filter:
+            cursor = conn.execute(
+                "DELETE FROM learnings WHERE status = ?",
+                (status_filter,),
+            )
+        else:
+            cursor = conn.execute("DELETE FROM learnings")
+        conn.commit()
+        return cursor.rowcount
+
+    def delete_by_id(self, learning_id: int) -> bool:
+        """Hard-delete one learning by id. Returns True on success."""
+        conn = self._get_conn()
+        cursor = conn.execute(
+            "DELETE FROM learnings WHERE id = ?", (learning_id,),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def archive_by_id(self, learning_id: int) -> bool:
+        """Soft-delete a learning by setting ``status='archived'``.
+
+        Codex fix B2: ``orphan_scan(auto_archive=True)`` used to hard-delete
+        rows because no soft-archive API existed. This method provides
+        the missing path — the row is preserved, its ``status`` flips to
+        ``archived``, and ``updated_at`` is bumped so consumers can
+        audit when the archival happened.
+
+        Returns True if a row was updated, False if no matching learning
+        was found.
+        """
+        conn = self._get_conn()
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        cursor = conn.execute(
+            """UPDATE learnings
+               SET status = 'archived', updated_at = ?
+               WHERE id = ?""",
+            (now, learning_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
 
     # ------------------------------------------------------------------
     # Lifecycle

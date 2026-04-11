@@ -201,11 +201,17 @@ class TestRegexSearch:
         assert len(match_lines) == 5
 
     def test_regex_search_no_matches(self):
-        """Test that a pattern matching nothing returns 'No matches found.'."""
+        """Test that a pattern matching nothing returns 'No matches found.'.
+
+        ``regex_search`` is pin-stamped, so its response ends with an
+        ``index_pin:`` footer. The body should still start with the
+        no-matches message.
+        """
         from attocode.code_intel.tools.search_tools import regex_search
 
         result = regex_search(pattern="zzz_nonexistent_pattern_xyz")
-        assert result == "No matches found."
+        assert result.startswith("No matches found.")
+        assert "index_pin:" in result
 
     def test_regex_search_invalid_regex(self):
         """Test that an invalid regex returns an error message."""

@@ -68,6 +68,8 @@ nav:
       - Repos & Branches: guides/repos-and-branches.md
       - Fast Search: guides/fast-search.md
       - Semantic Search: guides/semantic-search.md
+      - Code Intel Reproducibility: guides/code-intel-reproducibility.md
+      - Reproducibility Walkthrough: guides/reproducibility-walkthrough.md
       - CLI Commands: guides/cli-commands.md
       - Advanced Analysis: guides/advanced-analysis.md
       - Code History: guides/code-history.md
