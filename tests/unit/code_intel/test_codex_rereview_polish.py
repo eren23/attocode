@@ -11,6 +11,7 @@ behavioral contract from the Phase 3a-fix plan.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import uuid
 from types import SimpleNamespace
@@ -596,6 +597,104 @@ class TestLocalProviderPopulatesPinFields:
         assert expected_db.exists(), (
             f"pin_tools._get_project_dir monkeypatch did not take effect; "
             f"expected {expected_db} to exist"
+        )
+
+    def test_pin_current_is_deterministic(self, tmp_path, monkeypatch):
+        """Round 5 regression test for Codex P2 finding.
+
+        ``pin_current`` used to call ``RetrievalPin.create()`` which
+        generates a random base32 token via ``make_pin_id()``. That
+        meant two calls on unchanged state produced DIFFERENT pin_ids,
+        accumulating duplicate rows in ``pins.db`` and breaking the
+        deterministic contract documented for ``_stamp_pin`` and
+        HTTP search-response pins.
+
+        After the round-5 fix, ``pin_current`` derives the pin_id from
+        ``pin_<manifest_hash[:20]>`` — same format as ``_stamp_pin`` —
+        so two calls yield identical ids and the PinStore upsert
+        collapses them to one row.
+        """
+        import attocode.code_intel.tools.pin_store as pin_store
+        import attocode.code_intel.tools.pin_tools as pin_tools
+
+        project = tmp_path / "proj"
+        (project / ".attocode" / "cache").mkdir(parents=True)
+        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_store, "_pin_stores", {}, raising=False)
+
+        result1 = pin_tools.pin_current(ttl_seconds=0)
+        result2 = pin_tools.pin_current(ttl_seconds=0)
+
+        # Extract the pin_id from each response's ``Pinned: pin_...`` line.
+        def _extract(text: str) -> str:
+            for line in text.splitlines():
+                if line.startswith("Pinned: "):
+                    return line.split("Pinned: ", 1)[1].strip()
+            raise AssertionError(f"No Pinned: line in {text!r}")
+
+        id1 = _extract(result1)
+        id2 = _extract(result2)
+
+        # Deterministic: identical ids on unchanged state.
+        assert id1 == id2
+        assert id1.startswith("pin_")
+        # Must match the ``pin_<hex20>`` format (not the random base32
+        # token that ``make_pin_id`` produces).
+        hex_part = id1[len("pin_"):]
+        assert len(hex_part) == 20
+        assert all(c in "0123456789abcdef" for c in hex_part)
+
+        # Only one row persisted — the upsert collapsed the duplicate.
+        store = pin_tools._get_pin_store(str(project))
+        all_pins = store.list_all()
+        matching = [p for p in all_pins if p.pin_id == id1]
+        assert len(matching) == 1
+
+    def test_legacy_pin_store_reset_invalidates_dict_cache(
+        self, tmp_path, monkeypatch,
+    ):
+        """Round 5 regression test for Codex P3 finding.
+
+        Setting ``pin_store._pin_store = None`` is a legacy test-fixture
+        pattern used by Phase 2 tests to force the singleton to rebuild
+        on next access. Before the round-5 fix, that reset only cleared
+        ``_pin_store_project`` — the ``_pin_stores`` dict still held the
+        old PinStore for that project, so subsequent
+        ``_get_pin_store(current)`` calls returned the stale cached
+        connection and the legacy reset was silently a no-op.
+
+        After the fix, the legacy-reset path also pops the dict entry,
+        so the next access truly builds a fresh PinStore.
+        """
+        import attocode.code_intel.tools.pin_store as pin_store
+
+        project = tmp_path / "proj"
+        (project / ".attocode" / "cache").mkdir(parents=True)
+
+        # Clear any lingering state, then populate the cache.
+        monkeypatch.setattr(pin_store, "_pin_stores", {}, raising=False)
+        monkeypatch.setattr(pin_store, "_pin_store", None, raising=False)
+        monkeypatch.setattr(pin_store, "_pin_store_project", "", raising=False)
+
+        store_a = pin_store._get_pin_store(str(project))
+        assert str(project) in [
+            os.path.dirname(os.path.dirname(os.path.dirname(p.db_path)))
+            for p in pin_store._pin_stores.values()
+        ]
+
+        # Trigger the legacy reset. Note: we set BOTH _pin_store to None
+        # AND _pin_store_project to the current project's abs path, since
+        # the legacy-reset branch requires both conditions to match.
+        pin_store._pin_store = None
+        pin_store._pin_store_project = os.path.abspath(str(project))
+
+        store_b = pin_store._get_pin_store(str(project))
+
+        # Round 5: the dict cache was invalidated, so store_b is a
+        # fresh instance — NOT the same object as store_a.
+        assert store_b is not store_a, (
+            "legacy reset did not flush the _pin_stores dict — "
+            "stale PinStore returned"
         )
 
     def test_local_provider_does_not_import_mcp_runtime(self):

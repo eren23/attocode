@@ -366,8 +366,11 @@ def _get_pin_store(project_dir: str | None = None) -> PinStore:
     current = os.path.abspath(project_dir)
 
     # Legacy compat: if a test reset ``_pin_store``, honor that by
-    # re-creating on next access.
+    # re-creating on next access. Codex round-5 P3 fix: also pop the
+    # per-project dict entry — otherwise the cache returns the stale
+    # PinStore instance and the legacy reset is silently a no-op.
     if _pin_store is None and current == _pin_store_project:
+        _pin_stores.pop(current, None)
         _pin_store_project = ""
 
     cached = _pin_stores.get(current)

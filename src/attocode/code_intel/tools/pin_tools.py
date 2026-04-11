@@ -161,10 +161,27 @@ def pin_current(ttl_seconds: int = 86400) -> str:
 
     Returns:
         The pin_id + a summary of hashed stores.
+
+    Codex round-5 fix: pin_current now derives the ``pin_id`` from the
+    manifest hash (``pin_<hex20>``) instead of ``make_pin_id()``'s random
+    token. This matches ``_stamp_pin`` and HTTP search-response pins —
+    two calls on unchanged state collapse to the same deterministic id,
+    so the PinStore upsert no longer accumulates duplicates.
     """
     project_dir = _get_project_dir()
     hashes = _compute_current_manifest_hashes(project_dir)
-    pin = RetrievalPin.create(manifest_hashes=hashes, ttl_seconds=ttl_seconds)
+    raw = RetrievalPin.create(manifest_hashes=hashes, ttl_seconds=ttl_seconds)
+    deterministic_id = f"pin_{raw.manifest_hash[:20]}"
+    pin = RetrievalPin(
+        pin_id=deterministic_id,
+        schema_version=raw.schema_version,
+        manifest_hashes=raw.manifest_hashes,
+        manifest_hash=raw.manifest_hash,
+        overlay_id=raw.overlay_id,
+        branch_id=raw.branch_id,
+        created_at=raw.created_at,
+        expires_at=raw.expires_at,
+    )
     _get_pin_store(project_dir).save(pin)
     lines = [f"Pinned: {pin.pin_id}", f"manifest_hash: {pin.manifest_hash}"]
     if pin.expires_at > 0:
