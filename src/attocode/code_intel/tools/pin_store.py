@@ -206,9 +206,18 @@ def _hash_for_trigrams(project_dir: str) -> str:
     )
 
 
-def _compute_current_manifest_hashes() -> dict[str, str]:
-    """Return the current per-store manifest hashes for the active project."""
-    project_dir = _get_project_dir()
+def _compute_current_manifest_hashes(project_dir: str | None = None) -> dict[str, str]:
+    """Return the current per-store manifest hashes for a project.
+
+    ``project_dir`` is optional: if omitted, falls back to the active
+    project via ``_get_project_dir()`` — useful for pin_tools callers
+    that don't carry an explicit project context. Callers with a
+    bound service (e.g. ``LocalSearchProvider``) MUST pass the
+    service's ``project_dir`` so the resulting pin is minted against
+    the correct repo's on-disk stores.
+    """
+    if project_dir is None:
+        project_dir = _get_project_dir()
     hashes: dict[str, str] = {}
     for defn in _STORE_DEFS:
         hashes[defn["name"]] = _hash_for_store(project_dir, defn)
@@ -320,44 +329,86 @@ class PinStore:
         return cur.rowcount
 
 
+# ---------------------------------------------------------------------------
+# Per-project PinStore cache
+# ---------------------------------------------------------------------------
+#
+# Dict-keyed by absolute project_dir so a single interpreter serving
+# multiple projects (e.g. an HTTP API with ``register_project``)
+# maintains one PinStore per repo — not a "current project" singleton
+# that silently points at whatever the env var happens to say.
+#
+# ``_pin_store`` / ``_pin_store_project`` remain as legacy aliases so
+# existing test fixtures that reset them see a usable (empty) state,
+# but the primary cache is ``_pin_stores``.
+
+_pin_stores: dict[str, PinStore] = {}
+
 _pin_store: PinStore | None = None
 _pin_store_project: str = ""
 
 
-def _get_pin_store() -> PinStore:
-    """Return the per-project singleton PinStore, rebuilding on project change.
+def _get_pin_store(project_dir: str | None = None) -> PinStore:
+    """Return the PinStore for a project, caching per project_dir.
 
-    The old behavior was a process-wide singleton which meant a test
-    switching to a fresh temp project dir (or a CLI session that
-    re-discovered a different project root) would silently get a stale
-    connection pointing at a no-longer-existing sqlite file. Codex
-    review pointed out the resulting test pollution, so the singleton
-    is now keyed by the current project dir.
+    ``project_dir`` is optional: if omitted, falls back to the active
+    project via ``_get_project_dir()``. Pass the bound service's
+    ``project_dir`` explicitly from HTTP providers so an API serving
+    multiple projects doesn't route pin writes to the wrong repo's
+    ``.attocode/cache/pins.db``.
+
+    Legacy behavior: if the caller sets ``_pin_store = None`` via
+    monkeypatch, a fresh store is created for the current project.
     """
     global _pin_store, _pin_store_project
-    current = _get_project_dir()
-    if _pin_store is None or _pin_store_project != current:
-        _pin_store = PinStore(current)
+    if project_dir is None:
+        project_dir = _get_project_dir()
+    current = os.path.abspath(project_dir)
+
+    # Legacy compat: if a test reset ``_pin_store``, honor that by
+    # re-creating on next access.
+    if _pin_store is None and current == _pin_store_project:
+        _pin_store_project = ""
+
+    cached = _pin_stores.get(current)
+    if cached is None:
+        cached = PinStore(current)
+        _pin_stores[current] = cached
+        # Keep the legacy singleton in sync with whatever the most
+        # recent call was so ``_pin_store`` / ``_pin_store_project``
+        # attribute reads still reflect something sensible.
+        _pin_store = cached
         _pin_store_project = current
-    return _pin_store
+    return cached
 
 
-def compute_and_persist_pin(*, ttl_seconds: int = 0) -> RetrievalPin:
+def compute_and_persist_pin(
+    project_dir: str | None = None, *, ttl_seconds: int = 0,
+) -> RetrievalPin:
     """MCP-free helper used by HTTP providers.
 
-    Computes the current per-store manifest hashes, derives a
-    deterministic pin id (``pin_<hex20>`` of the manifest hash),
-    persists it via :class:`PinStore`, and returns the stored
+    Computes the per-store manifest hashes for ``project_dir``,
+    derives a deterministic pin id (``pin_<hex20>`` of the manifest
+    hash), persists it via :class:`PinStore`, and returns the stored
     :class:`RetrievalPin`. Round-trippable with ``pin_resolve`` and
     ``verify_pin`` on the stdio side because both read from the same
     ``.attocode/cache/pins.db``.
+
+    ``project_dir`` is optional; if omitted it falls back to
+    auto-discovery via ``_get_project_dir()``. Callers with a bound
+    ``CodeIntelService`` (e.g. ``LocalSearchProvider``) MUST pass
+    ``svc.project_dir`` to avoid writing pins for project A into
+    project B's ``pins.db`` when one interpreter serves both.
 
     Failures in hashing or persistence surface as exceptions so callers
     can decide whether to swallow or log. This function MUST NOT catch
     ``SystemExit`` or ``BaseException`` — those indicate the process
     should exit.
     """
-    hashes = _compute_current_manifest_hashes()
+    if project_dir is None:
+        project_dir = _get_project_dir()
+    abs_dir = os.path.abspath(project_dir)
+    hashes = _compute_current_manifest_hashes(abs_dir)
     raw = RetrievalPin.create(manifest_hashes=hashes, ttl_seconds=ttl_seconds)
     deterministic_id = f"pin_{raw.manifest_hash[:20]}"
     pin = RetrievalPin(
@@ -370,5 +421,5 @@ def compute_and_persist_pin(*, ttl_seconds: int = 0) -> RetrievalPin:
         created_at=raw.created_at,
         expires_at=raw.expires_at,
     )
-    _get_pin_store().save(pin)
+    _get_pin_store(abs_dir).save(pin)
     return pin

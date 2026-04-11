@@ -7,6 +7,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Code Intel Reproducibility & State Tracking
+
+Phases 1 → 3a of the reproducibility subsystem. Local-first surface landed
+complete; the HTTP API covers snapshot descriptors, repo-scoped GC, and
+pin fields on search responses. Docs: [Reproducibility Guide](docs/guides/code-intel-reproducibility.md)
+and [Walkthrough](docs/guides/reproducibility-walkthrough.md).
+
+- **Retrieval pins** (Phase 1): `pin_current`, `pin_resolve`, `pin_list`,
+  `pin_delete`, `verify_pin` MCP tools plus an auto-stamped `index_pin`
+  footer on every ranked-result tool (`semantic_search`, `fast_search`,
+  `regex_search`, `repo_map`, `frecency_search`, etc.). Pin ids are
+  deterministic: `pin_<hex20>` derived from a SHA-256 manifest hash.
+  Persisted to `.attocode/cache/pins.db` via `PinStore`.
+- **Portable snapshots** (Phase 2a): `snapshot_create`, `snapshot_list`,
+  `snapshot_delete`, `snapshot_restore`, `snapshot_diff` MCP tools.
+  Bundles every SQLite store (via live backup API) + trigram files into a
+  single `.atsnap.tar.gz` archive. Manifest format is forward-compatible
+  with Phase 3b's OCI push/pull adapter.
+- **Named overlays** (Phase 2c): `overlay_create`, `overlay_list`,
+  `overlay_status`, `overlay_activate`, `overlay_delete` MCP tools for
+  switching between known-good working sets without reindexing.
+- **Embedding rotation** (Phase 2b): six-state state machine
+  (`embeddings_rotate_start` → `_step` → `_cutover` → `_gc_old`, plus
+  `_status` and `_abort`) lets you migrate to a new embedding model
+  without wiping existing vectors. Staging happens in `vectors_rotating`;
+  the primary `vectors` column is untouched until atomic cutover.
+- **Surgical reset tools**: `clear_symbols`, `clear_embeddings`,
+  `clear_trigrams`, `clear_kw_index`, `clear_learnings`, `clear_adrs`,
+  `clear_all`, `cas_clear` — all default to `confirm=False` dry-run.
+- **Export / import**: `export_learnings` / `import_learnings` (JSONL),
+  `export_adrs_markdown` / `import_adrs_markdown` for durable
+  human-readable serialization of the memory store and ADR store.
+- **Status / verify**: `cache_status_all`, `embeddings_status`,
+  `verify_all_caches(deep=False)`, `migrate_cache(dry_run=True, resume=True)`
+  tools for inspecting the cache manifest and catching drift without
+  shelling out to `sqlite3`.
+- **GC + orphan scan**: `gc_preview(min_age_days=7.0)`,
+  `gc_run(min_age_days=30.0, confirm=False)`,
+  `orphan_scan(auto_archive=False)` for CAS cleanup and anchor repair.
+- **HTTP API additions** (Phase 3a): `POST/GET/GET/{id}/DELETE
+  /api/v1/orgs/{org_id}/repos/{repo_id}/snapshots` for server-side
+  snapshot descriptors; `POST /gc` and `GET /gc/stats` for repo-scoped
+  GC; `PATCH /repos/{id}` with `target_org_id` for cross-org moves;
+  every `/api/v2/projects/{project_id}/search` response now returns
+  `pin_id` and `manifest_hash` fields (matching the stdio footer format).
+- **Shared primitives**: new `src/attocode/code_intel/artifacts/` package
+  with `compute_action_hash`, `Provenance` dataclass, and `RetrievalPin`.
+  Used by both the stdio and HTTP sides.
+- **Neutral `project_dir` module**:
+  `src/attocode/code_intel/project_dir.py` hosts `_get_project_dir` and
+  `_walk_up` so HTTP providers can resolve project paths without
+  importing `mcp` — `_shared.py` re-exports for backward compat with the
+  ~25 existing call sites.
+- **MCP-free `pin_store`**:
+  `src/attocode/code_intel/tools/pin_store.py` hosts the pure pin
+  helpers (`PinStore`, `_compute_current_manifest_hashes`,
+  `compute_and_persist_pin`). `pin_tools.py` re-exports for stdio use
+  but HTTP providers import directly, avoiding the `_shared.py` MCP
+  runtime dependency.
+- **Migrations 016–018**: embedding provenance columns
+  (`embedding_model`, `embedding_model_version`, `embedding_dim`,
+  `produced_at`, `blob_oid`, `action_hash`, `embedding_provenance`
+  JSONB), `provenance` table, `repo_snapshots` +
+  `repo_snapshot_components` tables.
+
+### Fixed — Reproducibility invariants
+
+- **Killed the destructive dim-change path**: `ensure_vector_column()`
+  no longer calls `UPDATE embeddings SET vector = NULL` on dimension
+  mismatch. Replaced with `ensure_vector_columns(primary_dim,
+  shadow_dim=None)` which raises `EmbeddingDimensionMismatchError`
+  instead of silently wiping data.
+- **Repo-scoped GC**: `ContentStore.gc_unreferenced` and
+  `EmbeddingStore.gc_orphaned` now accept an optional `repo_id` kwarg
+  that scopes the `DELETE` through `branches.repo_id` via a JOIN on
+  `branch_files`. The HTTP `/gc` route always passes it; background
+  workers retain the global-sweep behavior.
+- **Rotation lock invariant**: vector-store writes
+  (`upsert`, `upsert_batch`, `clear_all`, `clear_by_model`,
+  `delete_by_file`) raise `VectorStoreRotationActiveError` during any
+  rotation state in `{pending, backfilling, ready_to_cutover,
+  cutover_done}`. The `clear_embeddings` MCP tool has the same guard.
+- **Cross-process cache invalidation**: `VectorStore` reads a
+  `_rotator_cache_ver` row from `store_metadata` at the start of every
+  search and bumps its local cache version if another process
+  completed a cutover.
+- **Deterministic snapshot manifest hash**: `_compute_manifest_hash`
+  sorts components by `(name, digest)` (not just `name`) so multiple
+  embedding models under `embeddings.{model}` can't produce hash flap
+  from DB iteration order. Embedding components are keyed as
+  `embeddings.{model}:{version}` for per-version distinctness.
+- **Multi-project pin isolation**:
+  `LocalSearchProvider.semantic_search` now passes
+  `self._svc.project_dir` into `compute_and_persist_pin`, so an HTTP
+  process serving multiple projects via `register_project` never writes
+  pin rows into the wrong repo's `pins.db`. Codex round-4 P2 #2 fix.
+- **`pin_tools` monkeypatch correctness**: `_stamp_pin` now resolves
+  `_get_project_dir()` via LOAD_GLOBAL in the pin_tools namespace and
+  passes it explicitly into the `pin_store` helpers, so test fixtures
+  that monkeypatch `pin_tools._get_project_dir` flow through correctly.
+  Codex round-4 P2 #1 fix.
+- **Stamped pins are persisted**: `_stamp_pin` now writes to `PinStore`
+  by default (previously ephemeral) and the footer prints the full
+  64-char `manifest_hash` (previously truncated with `…`). Codex round-2
+  M3 fix.
+- **Portable snapshot manifest**: snapshot `manifest.json` stores only
+  the project basename in `project_name`, never the absolute path, so
+  snapshots don't leak workstation layout when shared. Codex round-2 m2.
+- **Snapshot diff by (name, archive_path)**: `snapshot_diff` now keys
+  the diff dict on `(name, archive_path)` tuples so trigram components
+  with different archive paths don't collide. Codex round-2 M8.
+- **`orphan_scan` archive semantics**: `auto_archive=True` sets
+  `status='archived'` via `MemoryStore.archive_by_id` instead of
+  hard-deleting, so orphaned learnings can be inspected or restored.
+  Codex round-1 B2 fix.
+
 ## [0.2.17] - 2026-04-07
 
 ### Added

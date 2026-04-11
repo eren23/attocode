@@ -88,12 +88,20 @@ def _stamp_pin(result_text: str, *, persist: bool = True, ttl_seconds: int = 0) 
     ``manifest_hash`` printed in the footer is the complete hex string
     (previously a ``...``-truncated prefix that couldn't be verified).
 
+    Codex round-4 fix P2 #1: project_dir is resolved via
+    ``_get_project_dir()`` in this module's namespace and then passed
+    *explicitly* into the pin_store helpers. Monkeypatching
+    ``pin_tools._get_project_dir`` therefore flows through to both
+    the manifest-hash computation and the PinStore path — previously
+    only direct patches to ``pin_store`` had any effect.
+
     Idempotent: calling twice with no intervening writes produces the
     same deterministic id, which collapses to a single upserted row in
     the pin store.
     """
+    project_dir = _get_project_dir()
     try:
-        hashes = _compute_current_manifest_hashes()
+        hashes = _compute_current_manifest_hashes(project_dir)
     except Exception as exc:
         logger.debug("pin: hash computation failed: %s", exc)
         return result_text
@@ -117,7 +125,7 @@ def _stamp_pin(result_text: str, *, persist: bool = True, ttl_seconds: int = 0) 
             expires_at=pin.expires_at,
         )
         try:
-            _get_pin_store().save(pin_to_save)
+            _get_pin_store(project_dir).save(pin_to_save)
         except sqlite3.Error as exc:
             logger.debug("pin: persist failed: %s", exc)
 
@@ -154,9 +162,10 @@ def pin_current(ttl_seconds: int = 86400) -> str:
     Returns:
         The pin_id + a summary of hashed stores.
     """
-    hashes = _compute_current_manifest_hashes()
+    project_dir = _get_project_dir()
+    hashes = _compute_current_manifest_hashes(project_dir)
     pin = RetrievalPin.create(manifest_hashes=hashes, ttl_seconds=ttl_seconds)
-    _get_pin_store().save(pin)
+    _get_pin_store(project_dir).save(pin)
     lines = [f"Pinned: {pin.pin_id}", f"manifest_hash: {pin.manifest_hash}"]
     if pin.expires_at > 0:
         import time
@@ -174,7 +183,7 @@ def pin_current(ttl_seconds: int = 86400) -> str:
 @mcp.tool()
 def pin_resolve(pin_id: str) -> str:
     """Look up a previously-minted retrieval pin by id."""
-    pin = _get_pin_store().get(pin_id)
+    pin = _get_pin_store(_get_project_dir()).get(pin_id)
     if pin is None:
         return f"No pin with id {pin_id!r}"
     lines = [
@@ -193,7 +202,7 @@ def pin_resolve(pin_id: str) -> str:
 @mcp.tool()
 def pin_list() -> str:
     """List all retrieval pins, most recent first."""
-    store = _get_pin_store()
+    store = _get_pin_store(_get_project_dir())
     store.gc_expired()
     pins = store.list_all()
     if not pins:
@@ -210,7 +219,7 @@ def pin_list() -> str:
 @mcp.tool()
 def pin_delete(pin_id: str) -> str:
     """Delete a retrieval pin by id."""
-    deleted = _get_pin_store().delete(pin_id)
+    deleted = _get_pin_store(_get_project_dir()).delete(pin_id)
     return f"Deleted pin {pin_id}" if deleted else f"No pin with id {pin_id!r}"
 
 
@@ -224,13 +233,14 @@ def verify_pin(pin_id: str) -> str:
     was minted (assuming the tool is deterministic for a fixed index state —
     which is the whole point of these pins).
     """
-    pin = _get_pin_store().get(pin_id)
+    project_dir = _get_project_dir()
+    pin = _get_pin_store(project_dir).get(pin_id)
     if pin is None:
         return f"No pin with id {pin_id!r}"
     if pin.is_expired():
         return f"Pin {pin_id} has expired."
 
-    current = _compute_current_manifest_hashes()
+    current = _compute_current_manifest_hashes(project_dir)
     drift = pin.drift_from(current)
     if not drift:
         return f"Pin {pin_id}: no drift. State is identical to the pinned snapshot."

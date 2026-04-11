@@ -569,3 +569,296 @@ The 38 MCP tools exposed by the code-intel server:
 
 **Events:**
 `notify_file_changed`
+
+---
+
+## Phase 3a — Reproducibility & State Tracking
+
+Phase 3a added server-side reproducibility endpoints: snapshot CRUD,
+repo-scoped GC, cross-org repo move, and pin fields on every v2 search
+response. This section documents those routes. For the stdio-MCP side of
+the same features (and a walkthrough), see the
+[Code-Intel Reproducibility Guide](guides/code-intel-reproducibility.md).
+
+### Snapshots
+
+Snapshots are content-addressed manifest records under the `repo_snapshots`
+and `repo_snapshot_components` tables (migration 018). The manifest hash
+follows an OCI v1.1 image-manifest shape so Phase 3b's OCI push/pull
+adapter can ship the underlying blobs to a registry without changing the
+database schema.
+
+**Limitations in Phase 3a:** these endpoints **describe** the state but do
+not yet materialize a downloadable tarball of the underlying content /
+symbol / embedding blobs. Phase 3b will stitch client-side snapshot
+tarballs (from the stdio `snapshot_create` tool) into these manifest
+records and add a push/pull adapter.
+
+#### POST /api/v1/orgs/{org_id}/repos/{repo_id}/snapshots
+
+Create a snapshot record for a repo's current state. Admin-only.
+
+**Request body** (`SnapshotCreateRequest`):
+
+```json
+{
+  "name": "release-candidate-1",
+  "description": "Pre-release baseline before cutover",
+  "branch": "",
+  "commit_oid": "",
+  "dry_run": false
+}
+```
+
+- `branch` — empty means "use the repo's `default_branch`". Pass a branch
+  name to snapshot against a non-default branch.
+- `commit_oid` — optional explicit pin to a git commit. Empty = current.
+- `dry_run` — if `true`, the endpoint returns the computed manifest hash
+  and components without writing to the database.
+
+**Response (`dry_run=false`)** — `SnapshotResponse`:
+
+```json
+{
+  "id": "3f0a...",
+  "repo_id": "1c2d...",
+  "org_id": "9e8f...",
+  "branch_id": "7b6a...",
+  "name": "release-candidate-1",
+  "description": "Pre-release baseline before cutover",
+  "manifest_hash": "1f9a2b3c4d5e6f708192a3b4c5d6e7f809102132435465768796a7b8c9d0e1f2",
+  "total_bytes": 78123456,
+  "component_count": 4,
+  "commit_oid": null,
+  "created_at": "2026-04-11T00:35:17Z",
+  "components": [
+    {
+      "name": "content",
+      "media_type": "application/vnd.attocode.content-manifest.v1+json",
+      "digest": "sha256:...",
+      "size_bytes": 45123456,
+      "extra": {}
+    },
+    {
+      "name": "symbols",
+      "media_type": "application/vnd.attocode.symbols-manifest.v1+json",
+      "digest": "sha256:...",
+      "size_bytes": 0,
+      "extra": {"row_count": 12842}
+    },
+    {
+      "name": "dependencies",
+      "media_type": "application/vnd.attocode.deps-manifest.v1+json",
+      "digest": "sha256:...",
+      "size_bytes": 0,
+      "extra": {"edge_count": 4231}
+    },
+    {
+      "name": "embeddings.bge-base-en-v1.5:v1",
+      "media_type": "application/vnd.attocode.embeddings-manifest.v1+json",
+      "digest": "sha256:...",
+      "size_bytes": 0,
+      "extra": {"row_count": 1247}
+    }
+  ]
+}
+```
+
+Note that non-content components report `size_bytes=0` and push the
+cardinality into `extra.row_count` or `extra.edge_count`. That's the Batch
+A size-semantics fix — `size_bytes` always means real bytes.
+
+**Response (`dry_run=true`)** — `SnapshotDryRunResponse`: same shape minus
+the persistent `id`, with an additional `dry_run: true` field. Useful for
+computing what a snapshot would contain without committing it.
+
+#### GET /api/v1/orgs/{org_id}/repos/{repo_id}/snapshots
+
+List snapshots for a repo (most recent first). Member auth.
+
+**Query parameters:**
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `limit` | int | 20 | 1 – 100 |
+| `offset` | int | 0 | Standard pagination |
+
+**Response** — `SnapshotListResponse`:
+
+```json
+{
+  "snapshots": [ /* SnapshotResponse[] */ ],
+  "total": 5,
+  "limit": 20,
+  "offset": 0,
+  "has_more": false
+}
+```
+
+#### GET /api/v1/orgs/{org_id}/repos/{repo_id}/snapshots/{snapshot_id}
+
+Fetch a single snapshot with its full component list. Member auth.
+
+**Response** — `SnapshotResponse` (same shape as the create response).
+
+#### DELETE /api/v1/orgs/{org_id}/repos/{repo_id}/snapshots/{snapshot_id}
+
+Delete a snapshot record. Admin-only. Returns `204 No Content`.
+
+---
+
+### Garbage Collection
+
+Repo-scoped GC. Phase 3a-fix Batch A added the `repo_id` scoping —
+previously `ContentStore.gc_unreferenced` and `EmbeddingStore.gc_orphaned`
+issued unqualified global `DELETE`s, which was a tenancy bug. Now every
+delete joins through `branches.repo_id` to the target repo.
+
+#### POST /api/v1/orgs/{org_id}/repos/{repo_id}/gc
+
+Run or preview GC for a repo. Member auth for `dry_run=true`, admin auth
+for `dry_run=false`.
+
+**Request body** (`GCRunRequest`):
+
+```json
+{
+  "dry_run": true,
+  "types": ["content", "embedding"],
+  "min_age_minutes": 5,
+  "embedding_min_age_minutes": 60
+}
+```
+
+- `types` — empty list means "all known types". Valid values: `"content"`,
+  `"embedding"`. Unknown types return 422.
+- `min_age_minutes` — content entities younger than this are ignored
+  (prevents GC of in-flight writes). Defaults to 5 minutes.
+- `embedding_min_age_minutes` — separate age gate for embeddings (they're
+  more expensive to regenerate, so the default is 60 minutes).
+
+**Response** — `GCRunResponse`:
+
+```json
+{
+  "repo_id": "1c2d...",
+  "dry_run": true,
+  "results": [
+    {"kind": "content", "removed": 12},
+    {"kind": "embedding", "removed": 3}
+  ],
+  "removed_total": 15
+}
+```
+
+On `dry_run=true`, `removed` is a preview count. On `dry_run=false`, it's
+the actual deletion count.
+
+#### GET /api/v1/orgs/{org_id}/repos/{repo_id}/gc/stats
+
+Non-destructive count of entities eligible for GC. Member auth. Useful for
+dashboards or for deciding whether a GC run is worth scheduling.
+
+**Response** — `GCStatsResponse`:
+
+```json
+{
+  "repo_id": "1c2d...",
+  "types": {
+    "content": 12,
+    "embedding": 3
+  }
+}
+```
+
+---
+
+### Cross-org repo move
+
+#### PATCH /api/v1/orgs/{org_id}/repos/{repo_id}
+
+Rename a repo, retarget its `clone_url`, or move it to a different org.
+Admin auth on **both** the source and target orgs (Phase 3a-fix Batch F
+m4). Name uniqueness is enforced in the target org.
+
+**Request body:**
+
+```json
+{
+  "name": "renamed-repo",
+  "clone_url": "https://github.com/new-owner/renamed-repo.git",
+  "target_org_id": "other-org-uuid"
+}
+```
+
+All three fields are optional. Passing `target_org_id` triggers the
+cross-org move path; the caller must be an admin of both orgs, and no
+other repo named `name` may already exist in the target org.
+
+**Response:** the updated repo record.
+
+---
+
+### Pin fields on search responses
+
+Every `/api/v2/projects/{project_id}/search` response now carries two
+additional fields:
+
+```json
+{
+  "query": "authentication middleware",
+  "results": [ /* SearchResultItem[] */ ],
+  "total": 12,
+  "pin_id": "pin_1f9a2b3c4d5e6f708192",
+  "manifest_hash": "1f9a2b3c4d5e6f708192a3b4c5d6e7f809102132435465768796a7b8c9d0e1f2"
+}
+```
+
+- `pin_id` — a deterministic, content-addressed identifier for the index
+  state this response was computed against. Format: `pin_<hex20>`.
+- `manifest_hash` — the full 64-char SHA-256 of the canonical per-store
+  manifest. Same hash the stdio MCP's `_stamp_pin` footer emits.
+
+**Contract:**
+
+- Empty strings in either field mean the pin computation failed — the
+  server swallows exceptions from locked SQLite files and similar
+  transient issues rather than failing the whole search. Clients should
+  treat empty fields as "no pin was returned, proceed with the results
+  anyway".
+- A populated `pin_id` **is** persisted on the server side. In local
+  mode, it's written to the bound service's
+  `.attocode/cache/pins.db`, so a subsequent stdio `pin_resolve` /
+  `verify_pin` call round-trips. In DB mode, pins are computed against
+  the repo's stored manifest state via
+  `api/routes/_pin_helper.py::build_retrieval_pin`.
+- A multi-project API process serving repos A and B will mint pins into
+  each repo's own `pins.db` — never cross-contaminated. This was Codex
+  round-4 P2 #2; the fix threads `self._svc.project_dir` through the
+  provider so `ATTOCODE_PROJECT_DIR`-based fallback can't leak pins
+  across tenants.
+
+**Using the pin fields from a client:**
+
+```python
+resp = client.post("/api/v2/projects/abc/search", json={"query": "auth"})
+data = resp.json()
+
+# Carry the pin through a multi-step agent session:
+agent_context["last_pin_id"] = data["pin_id"]
+
+# Later: verify the index hasn't drifted before re-issuing the same query
+verify_resp = stdio_mcp_client.call(
+    "verify_pin", {"pin_id": agent_context["last_pin_id"]}
+)
+```
+
+### Implementation references
+
+- Snapshots: `src/attocode/code_intel/api/routes/snapshots.py`
+- GC: `src/attocode/code_intel/api/routes/gc.py`
+- Cross-org move: `src/attocode/code_intel/api/routes/orgs.py::patch_repo`
+- Pin helper: `src/attocode/code_intel/api/routes/_pin_helper.py`
+- Providers: `src/attocode/code_intel/api/providers/db_provider.py` and
+  `local_provider.py`
+- Migration: `src/attocode/code_intel/migrations/versions/018_repo_snapshots.py`

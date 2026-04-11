@@ -167,15 +167,16 @@ class TestStampPinRoundTrip:
         from attocode.code_intel.tools import pin_store, pin_tools
 
         # Redirect the project dir to a temp location so the test
-        # doesn't read or write the user's real .attocode. Patch
-        # ``pin_store`` because that's where the pure helpers live
-        # after the round-3 refactor (``pin_tools`` now re-exports
-        # from it; patching ``pin_tools`` is ineffective).
+        # doesn't read or write the user's real .attocode. After the
+        # round-4 refactor, ``_stamp_pin`` reads ``_get_project_dir``
+        # from ``pin_tools`` namespace via LOAD_GLOBAL, so patching
+        # ``pin_tools._get_project_dir`` is now effective. We also
+        # clear the ``pin_store`` dict cache so each test starts
+        # fresh.
         project = tmp_path / "proj"
         (project / ".attocode" / "cache").mkdir(parents=True)
-        monkeypatch.setattr(pin_store, "_get_project_dir", lambda: str(project))
-        monkeypatch.setattr(pin_store, "_pin_store", None, raising=False)
-        monkeypatch.setattr(pin_store, "_pin_store_project", "", raising=False)
+        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_store, "_pin_stores", {}, raising=False)
 
         result = pin_tools._stamp_pin("hello world result")
         pin_id = self._extract_pin_id(result)
@@ -186,8 +187,11 @@ class TestStampPinRoundTrip:
         assert "…" not in manifest_hash
         assert len(manifest_hash) == 64
 
-        # The persisted pin is findable via PinStore.get().
-        store = pin_tools._get_pin_store()
+        # The persisted pin is findable via PinStore.get(). Call
+        # with explicit project_dir — the no-args fallback would
+        # re-discover via ATTOCODE_PROJECT_DIR/cwd and miss the
+        # temp project the test is pinned against.
+        store = pin_tools._get_pin_store(str(project))
         pin = store.get(pin_id)
         assert pin is not None
         assert pin.pin_id == pin_id
@@ -200,9 +204,8 @@ class TestStampPinRoundTrip:
 
         project = tmp_path / "proj"
         (project / ".attocode" / "cache").mkdir(parents=True)
-        monkeypatch.setattr(pin_store, "_get_project_dir", lambda: str(project))
-        monkeypatch.setattr(pin_store, "_pin_store", None, raising=False)
-        monkeypatch.setattr(pin_store, "_pin_store_project", "", raising=False)
+        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_store, "_pin_stores", {}, raising=False)
 
         result1 = pin_tools._stamp_pin("first")
         result2 = pin_tools._stamp_pin("second")
@@ -210,7 +213,7 @@ class TestStampPinRoundTrip:
         id2 = self._extract_pin_id(result2)
         assert id1 == id2  # deterministic
 
-        store = pin_tools._get_pin_store()
+        store = pin_tools._get_pin_store(str(project))
         # Only one row persisted — upsert collapsed the duplicate.
         all_pins = store.list_all()
         matching = [p for p in all_pins if p.pin_id == id1]

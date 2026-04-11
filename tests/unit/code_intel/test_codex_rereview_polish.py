@@ -439,25 +439,36 @@ class TestLocalProviderPopulatesPinFields:
         must return a response with non-empty ``pin_id`` /
         ``manifest_hash`` fields so clients can rely on them.
 
-        Round 3 follow-up: patch ``pin_store`` (not ``pin_tools``)
-        because the MCP-free helpers moved there, and assert that the
-        returned ``pin_id`` is actually persisted — the round-2 fix
-        computed it but never called ``PinStore.save()``, so
-        ``pin_resolve`` would have failed on the roundtrip.
+        Round 3 follow-up: the pin MUST be persisted so
+        ``PinStore.get(pin_id)`` roundtrips. Round-2 computed the id
+        but never called ``PinStore.save()``, which silently broke
+        ``pin_resolve``.
+
+        Round 4 follow-up: ``LocalSearchProvider`` must mint the pin
+        against the **bound service's** ``project_dir``, not the
+        global env-var-driven discovery. A multi-project API server
+        using ``register_project`` would otherwise persist pins into
+        the wrong repo's ``.attocode/cache/pins.db``. The mocked
+        service in this test exposes ``project_dir`` pointing at a
+        temp directory, and we assert the pin lands in THAT dir's
+        pins.db — not in any globally-discovered path.
         """
         import attocode.code_intel.tools.pin_store as pin_store
 
         project = tmp_path / "proj"
         (project / ".attocode" / "cache").mkdir(parents=True)
-        monkeypatch.setattr(pin_store, "_get_project_dir", lambda: str(project))
-        monkeypatch.setattr(pin_store, "_pin_store", None, raising=False)
-        monkeypatch.setattr(pin_store, "_pin_store_project", "", raising=False)
+        # Clear the per-project cache so this test starts fresh.
+        monkeypatch.setattr(pin_store, "_pin_stores", {}, raising=False)
 
         from attocode.code_intel.api.providers.local_provider import (
             LocalSearchProvider,
         )
 
         svc = MagicMock()
+        # Round 4: the provider now reads svc.project_dir and passes
+        # it explicitly to compute_and_persist_pin, so we configure
+        # the mock to return the temp project path.
+        svc.project_dir = str(project)
         svc.semantic_search_data.return_value = {
             "query": "auth",
             "results": [{"file_path": "src/auth.py", "score": 0.9, "snippet": "…"}],
@@ -474,15 +485,118 @@ class TestLocalProviderPopulatesPinFields:
         assert resp.pin_id.startswith("pin_")
         assert len(resp.manifest_hash) == 64  # full sha256 hex
 
-        # Round 3: the pin MUST be persisted so a subsequent
-        # ``PinStore.get(pin_id)`` roundtrip succeeds. Without this,
-        # any client that takes ``resp.pin_id`` and passes it to
-        # ``pin_resolve`` / ``verify_pin`` gets "No pin with id …".
-        store = pin_store._get_pin_store()
+        # Round 3 + 4: the pin MUST be persisted in THIS project's
+        # pins.db so a subsequent ``PinStore.get(pin_id)`` roundtrip
+        # succeeds against the bound service's project — not a
+        # globally-discovered one.
+        store = pin_store._get_pin_store(str(project))
         persisted = store.get(resp.pin_id)
         assert persisted is not None
         assert persisted.pin_id == resp.pin_id
         assert persisted.manifest_hash == resp.manifest_hash
+        # The pins.db file must actually live under the bound service's
+        # project, NOT under ATTOCODE_PROJECT_DIR/cwd.
+        expected_db = project / ".attocode" / "cache" / "pins.db"
+        assert expected_db.exists(), (
+            f"pin should have been persisted to {expected_db} but wasn't"
+        )
+
+    @pytest.mark.asyncio
+    async def test_multi_project_pins_are_isolated(self, tmp_path, monkeypatch):
+        """Round 4 regression test for Codex P2 finding #2.
+
+        A single interpreter serving two different projects via two
+        ``LocalSearchProvider`` instances must write pins into EACH
+        project's own ``pins.db``, not into a globally-discovered
+        path. Before the round-4 fix, both providers would share
+        whatever ``ATTOCODE_PROJECT_DIR``/cwd happened to point at
+        and persist pins to the wrong repo.
+        """
+        import attocode.code_intel.tools.pin_store as pin_store
+
+        project_a = tmp_path / "proj_a"
+        project_b = tmp_path / "proj_b"
+        (project_a / ".attocode" / "cache").mkdir(parents=True)
+        (project_b / ".attocode" / "cache").mkdir(parents=True)
+
+        # Clear the per-project cache and force the global discovery
+        # to point at a bogus third directory so we're certain the
+        # providers are NOT using the fallback path.
+        bogus = tmp_path / "bogus_global"
+        bogus.mkdir()
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(bogus))
+        monkeypatch.setattr(pin_store, "_pin_stores", {}, raising=False)
+
+        from attocode.code_intel.api.providers.local_provider import (
+            LocalSearchProvider,
+        )
+
+        svc_a = MagicMock()
+        svc_a.project_dir = str(project_a)
+        svc_a.semantic_search_data.return_value = {
+            "query": "q", "results": [], "total": 0,
+        }
+        svc_b = MagicMock()
+        svc_b.project_dir = str(project_b)
+        svc_b.semantic_search_data.return_value = {
+            "query": "q", "results": [], "total": 0,
+        }
+
+        prov_a = LocalSearchProvider(svc_a)
+        prov_b = LocalSearchProvider(svc_b)
+
+        resp_a = await prov_a.semantic_search(
+            query="q", top_k=1, file_filter="", branch="",
+        )
+        resp_b = await prov_b.semantic_search(
+            query="q", top_k=1, file_filter="", branch="",
+        )
+
+        # Each project got a pin, written to its OWN pins.db.
+        assert (project_a / ".attocode" / "cache" / "pins.db").exists()
+        assert (project_b / ".attocode" / "cache" / "pins.db").exists()
+        # The bogus "global" dir must NOT have a pins.db — the
+        # providers ignored ATTOCODE_PROJECT_DIR and used svc.project_dir.
+        assert not (bogus / ".attocode" / "cache" / "pins.db").exists()
+
+        # Round-trip: each pin_id must be resolvable in its own repo's
+        # PinStore. Also verify they are persisted independently.
+        store_a = pin_store._get_pin_store(str(project_a))
+        store_b = pin_store._get_pin_store(str(project_b))
+        assert store_a.get(resp_a.pin_id) is not None
+        assert store_b.get(resp_b.pin_id) is not None
+
+    def test_pin_tools_monkeypatch_of_get_project_dir_is_effective(
+        self, tmp_path, monkeypatch,
+    ):
+        """Round 4 regression test for Codex P2 finding #1.
+
+        Monkeypatching ``pin_tools._get_project_dir`` must flow
+        through into ``_stamp_pin`` so existing test fixtures (e.g.
+        ``test_maintenance_tools_phase2.py``) that patch only
+        pin_tools keep working. Before the round-4 fix,
+        ``_stamp_pin`` read the function from ``pin_store``'s
+        namespace, so pin_tools-level patches were silent no-ops.
+        """
+        import attocode.code_intel.tools.pin_store as pin_store
+        import attocode.code_intel.tools.pin_tools as pin_tools
+
+        project = tmp_path / "proj"
+        (project / ".attocode" / "cache").mkdir(parents=True)
+        monkeypatch.setattr(pin_tools, "_get_project_dir", lambda: str(project))
+        monkeypatch.setattr(pin_store, "_pin_stores", {}, raising=False)
+
+        result = pin_tools._stamp_pin("some tool output")
+
+        # The footer must include a pin id and the pins.db must live
+        # under the patched project dir — NOT the real project where
+        # the test runner is invoked from.
+        assert "index_pin:" in result
+        expected_db = project / ".attocode" / "cache" / "pins.db"
+        assert expected_db.exists(), (
+            f"pin_tools._get_project_dir monkeypatch did not take effect; "
+            f"expected {expected_db} to exist"
+        )
 
     def test_local_provider_does_not_import_mcp_runtime(self):
         """Round 3 regression test for Codex P2 finding #1:

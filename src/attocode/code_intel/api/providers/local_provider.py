@@ -207,13 +207,23 @@ class LocalSearchProvider:
         # that ``SystemExit`` would escape any ``except Exception``.
         # The pin is actually persisted via ``PinStore.save()`` so
         # ``pin_resolve(pin_id)`` works end-to-end.
+        #
+        # Codex round-4 fix P2 #2: pass the bound service's
+        # ``project_dir`` explicitly. Without this the pin would be
+        # minted from ``ATTOCODE_PROJECT_DIR``/cwd, so an HTTP server
+        # registering multiple projects via ``register_project`` would
+        # persist pins into the wrong repo's ``.attocode/cache/pins.db``
+        # and ``pin_resolve(resp.pin_id)`` would round-trip to unrelated
+        # state.
         pin_id = ""
         manifest_hash = ""
         try:
             from attocode.code_intel.tools.pin_store import (
                 compute_and_persist_pin,
             )
-            server_pin = compute_and_persist_pin(ttl_seconds=0)
+            server_pin = compute_and_persist_pin(
+                self._svc.project_dir, ttl_seconds=0,
+            )
             pin_id = server_pin.pin_id
             manifest_hash = server_pin.manifest_hash
         except Exception:
