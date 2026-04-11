@@ -59,7 +59,8 @@ snapshot_report.html
 .internal
 
 # scripts
-scripts/
+scripts/*
+!scripts/validate_release_version.py
 .DS_Store
 
 #playwright
