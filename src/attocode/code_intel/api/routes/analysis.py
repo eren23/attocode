@@ -30,6 +30,9 @@ from attocode.code_intel.api.models import (
     NotifyFilesRequest,
     ReadinessReportRequest,
     RepoMapRankedRequest,
+    AnalyzeRequest,
+    ListRulesRequest,
+    RegisterRuleRequest,
     SecurityScanRequest,
     SymbolListResponse,
     SymbolSearchResponse,
@@ -439,6 +442,77 @@ async def conventions_v2(
     """Coding conventions (structured)."""
     provider = await get_analysis_provider(project_id)
     return await provider.conventions(branch, sample_size, path)
+
+
+# ---------------------------------------------------------------------------
+# Rule-based analysis endpoints
+# ---------------------------------------------------------------------------
+
+
+@router_v1.post("/analyze", response_model=TextResult)
+async def analyze_v1(
+    project_id: str,
+    req: AnalyzeRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Run rule-based analysis with language packs."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.analyze(
+        files=req.files, path=req.path, language=req.language,
+        category=req.category, severity=req.severity, pack=req.pack,
+        min_confidence=req.min_confidence, max_findings=req.max_findings,
+    ))
+
+
+@router_v1.post("/list-rules", response_model=TextResult)
+async def list_rules_v1(
+    project_id: str,
+    req: ListRulesRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """List available analysis rules."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.list_rules(
+        language=req.language, category=req.category,
+        severity=req.severity, pack=req.pack, verbose=req.verbose,
+    ))
+
+
+@router_v1.get("/list-packs", response_model=TextResult)
+async def list_packs_v1(
+    project_id: str,
+    branch: BranchParam = "",
+) -> TextResult:
+    """List installed language analysis packs."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.list_packs())
+
+
+@router_v1.post("/install-pack", response_model=TextResult)
+async def install_pack_v1(
+    project_id: str,
+    name: str,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Install an example language pack into the project."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.install_pack(name=name))
+
+
+@router_v1.post("/register-rule", response_model=TextResult)
+async def register_rule_v1(
+    project_id: str,
+    req: RegisterRuleRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Register a custom YAML rule at runtime."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.register_rule(yaml_content=req.yaml_content))
 
 
 # Backward-compatible alias: old code may import `router` from this module.

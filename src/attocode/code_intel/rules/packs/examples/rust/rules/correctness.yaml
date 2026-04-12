@@ -1,0 +1,51 @@
+# Rust correctness and performance patterns
+
+- id: rs-unwrap-usage
+  name: Unwrap without context
+  pattern: '\.unwrap\(\)'
+  message: "unwrap() panics on None/Err — use expect() or proper error handling"
+  severity: medium
+  category: correctness
+  languages: [rust]
+  confidence: 0.7
+  explanation: >
+    unwrap() provides no context on panic. In production code, use
+    expect("reason") for intentional panics or ? for propagation.
+  recommendation: "Use .expect('context') or the ? operator"
+  examples:
+    - bad: "let value = result.unwrap();"
+      good: 'let value = result.expect("config must be valid");'
+
+- id: rs-clone-in-loop
+  name: Clone in hot loop
+  pattern: '\.clone\(\)'
+  message: "clone() in potential hot path — deep copy may be expensive"
+  severity: low
+  category: performance
+  languages: [rust]
+  confidence: 0.4
+  recommendation: "Use references or Cow<T> to avoid unnecessary cloning"
+
+- id: rs-todo-macro
+  name: todo!() macro left in code
+  pattern: 'todo!\s*\('
+  message: "todo!() panics at runtime — unfinished implementation"
+  severity: high
+  category: correctness
+  languages: [rust]
+  confidence: 0.95
+  recommendation: "Implement the missing functionality or use unimplemented!() with a tracking issue"
+
+- id: rs-unsafe-block
+  name: Unsafe block usage
+  pattern: 'unsafe\s*\{'
+  message: "unsafe block — verify memory safety invariants"
+  severity: medium
+  category: security
+  languages: [rust]
+  confidence: 0.8
+  cwe: CWE-119
+  explanation: >
+    Unsafe blocks disable Rust's borrow checker guarantees. Every unsafe
+    block should have a SAFETY comment explaining why it's correct.
+  recommendation: "Add a // SAFETY: comment and consider safe alternatives"

@@ -1,0 +1,24 @@
+sanitizers:
+  - name: parameterized_query
+    patterns:
+      - 'db\.Query(?:Row|Context)?\(\s*(?:["`]|`)[^)]*\?\s*(?:["`]|`)\s*,'
+      - 'db\.Exec(?:Context)?\(\s*(?:["`]|`)[^)]*\?\s*(?:["`]|`)\s*,'
+    language: go
+
+  - name: html_escape
+    patterns:
+      - 'html\.EscapeString\('
+      - 'template\.HTMLEscapeString\('
+    language: go
+
+  - name: filepath_clean
+    patterns:
+      - 'filepath\.Clean\('
+      - 'filepath\.Base\('
+    language: go
+
+  - name: url_escape
+    patterns:
+      - 'url\.PathEscape\('
+      - 'url\.QueryEscape\('
+    language: go

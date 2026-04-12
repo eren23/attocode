@@ -1,0 +1,4 @@
+name: python
+version: 1.0.0
+languages: [python]
+description: "Python analysis pack — performance patterns, correctness, idioms"

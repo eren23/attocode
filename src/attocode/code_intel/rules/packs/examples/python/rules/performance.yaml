@@ -1,0 +1,90 @@
+# Python performance antipatterns
+
+- id: py-string-concat-loop
+  name: String concatenation in loop
+  pattern: '\w+\s*\+=\s*[''"]'
+  message: "String concatenation in loop creates N intermediate strings"
+  severity: low
+  category: performance
+  languages: [python]
+  confidence: 0.5
+  explanation: >
+    Python strings are immutable. Concatenation with += creates a new string
+    object each iteration, copying all previous content. For N iterations,
+    this is O(N^2) total characters copied.
+  recommendation: "Collect into a list and use ''.join(parts) at the end"
+  examples:
+    - bad: "result = ''\nfor item in items:\n    result += str(item)"
+      good: "result = ''.join(str(item) for item in items)"
+      explanation: "join() pre-calculates total size and copies once"
+
+- id: py-mutable-default-arg
+  name: Mutable default argument
+  pattern: 'def\s+\w+\s*\([^)]*(?:=\s*\[\]|=\s*\{\}|=\s*set\(\))'
+  message: "Mutable default argument — shared across all calls"
+  severity: medium
+  category: correctness
+  languages: [python]
+  confidence: 0.85
+  explanation: >
+    Default mutable arguments (list, dict, set) are evaluated once at function
+    definition time, not at each call. All calls that use the default share the
+    same object, leading to surprising mutation bugs.
+  recommendation: "Use None as default and create inside function: if arg is None: arg = []"
+  examples:
+    - bad: "def add(item, items=[]):\n    items.append(item)\n    return items"
+      good: "def add(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items"
+
+- id: py-dict-keys-iteration
+  name: Iterating dict.keys() unnecessarily
+  pattern: 'for\s+\w+\s+in\s+\w+\.keys\(\)\s*:'
+  message: "Iterating .keys() is redundant — iterate the dict directly"
+  severity: info
+  category: style
+  languages: [python]
+  confidence: 0.9
+  recommendation: "Use 'for key in my_dict:' instead of 'for key in my_dict.keys():'"
+  examples:
+    - bad: "for key in config.keys():"
+      good: "for key in config:"
+
+- id: py-isinstance-chain
+  name: Long isinstance chain
+  pattern: 'isinstance\s*\([^)]+\)\s*(?:and|or)\s*isinstance'
+  message: "Chained isinstance calls — consider match/case or dict dispatch"
+  severity: low
+  category: complexity
+  languages: [python]
+  confidence: 0.6
+  explanation: >
+    Long isinstance chains are hard to read and maintain. Python 3.10+
+    match/case provides cleaner structural pattern matching, or use a
+    dispatch dict for handler routing.
+  recommendation: "Use match/case (3.10+) or a type->handler dict"
+
+- id: py-global-import-in-function
+  name: Import inside function
+  pattern: '^\s{4,}import\s+\w+'
+  message: "Import inside function — runs on every call (acceptable for optional deps)"
+  severity: info
+  category: performance
+  languages: [python]
+  confidence: 0.4
+  recommendation: "Move to top of file unless it's intentionally lazy for optional dependencies"
+
+- id: py-bare-except
+  name: Bare except clause
+  pattern: 'except\s*:'
+  message: "Bare except catches SystemExit, KeyboardInterrupt — too broad"
+  severity: medium
+  category: correctness
+  languages: [python]
+  confidence: 0.9
+  explanation: >
+    A bare 'except:' clause catches everything including SystemExit (sys.exit)
+    and KeyboardInterrupt (Ctrl+C), making it impossible to stop the program
+    normally.
+  recommendation: "Use 'except Exception:' to exclude system-level exceptions"
+  examples:
+    - bad: "try:\n    risky()\nexcept:\n    pass"
+      good: "try:\n    risky()\nexcept Exception as e:\n    logger.error(e)"

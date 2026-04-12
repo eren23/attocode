@@ -1,0 +1,48 @@
+# Go security patterns
+
+- id: go-sql-string-concat
+  name: SQL string concatenation
+  pattern: '(?:db|tx|conn)\.(?:Query|QueryRow|QueryContext|QueryRowContext|Exec|ExecContext|Prepare)\s*\([^,)]*\+'
+  message: "SQL query built with string concatenation — SQL injection risk"
+  severity: high
+  category: security
+  languages: [go]
+  cwe: CWE-89
+  confidence: 0.8
+  recommendation: "Use parameterized queries with ? placeholders"
+  examples:
+    - bad: 'db.Query("SELECT * FROM users WHERE id=" + id)'
+      good: 'db.Query("SELECT * FROM users WHERE id=?", id)'
+
+- id: go-exec-command-var
+  name: Variable in exec.Command
+  pattern: 'exec\.Command\s*\([^"'']'
+  message: "exec.Command with variable argument — command injection risk"
+  severity: high
+  category: security
+  languages: [go]
+  cwe: CWE-78
+  confidence: 0.7
+  recommendation: "Validate and sanitize command arguments; avoid user input in commands"
+
+- id: go-template-html-unescaped
+  name: template.HTML with user input
+  pattern: 'template\.HTML\s*\('
+  message: "template.HTML bypasses Go's auto-escaping — XSS risk"
+  severity: medium
+  category: security
+  languages: [go]
+  cwe: CWE-79
+  confidence: 0.7
+  recommendation: "Use text/template auto-escaping; only use template.HTML for trusted content"
+
+- id: go-tls-insecure
+  name: TLS InsecureSkipVerify
+  pattern: 'InsecureSkipVerify\s*:\s*true'
+  message: "TLS certificate verification disabled — MITM risk"
+  severity: high
+  category: security
+  languages: [go]
+  cwe: CWE-295
+  confidence: 0.95
+  recommendation: "Enable TLS verification; use custom CA bundle if needed"

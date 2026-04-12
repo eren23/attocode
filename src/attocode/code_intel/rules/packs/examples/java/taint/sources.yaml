@@ -1,0 +1,21 @@
+sources:
+  - name: http_request
+    patterns:
+      - 'request\.getParameter\('
+      - 'request\.getHeader\('
+      - 'request\.getCookies\('
+      - 'request\.getQueryString\('
+      - 'request\.getPathInfo\('
+      - 'request\.getInputStream\('
+      - '@RequestParam'
+      - '@PathVariable'
+      - '@RequestBody'
+      - '@RequestHeader'
+    language: java
+
+  - name: system_input
+    patterns:
+      - 'System\.getenv\('
+      - 'System\.getProperty\('
+      - 'Scanner\(System\.in\)'
+    language: java

@@ -61,6 +61,20 @@
 | `semantic_search` | Natural language code search. Optional `mode`: "auto" (default), "keyword" (fast), "vector" (wait for embeddings) | Find code by description, not name |
 | `security_scan` | Secret detection (13 patterns), anti-patterns (21 rules incl. supply-chain obfuscation: invisible Unicode, eval-on-decoded-data, install-hook scrutiny), dependency issues | Security review, supply-chain hardening |
 
+### Rule-Based Analysis (200–5000 tokens each)
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `analyze` | Run rules from language packs against files. Returns rich findings with code context, antipattern explanations, few-shot examples, and fix suggestions. Filter by language, category, severity, or pack. | **Deep analysis** — performance antipatterns, correctness bugs, security issues, style violations |
+| `list_rules` | Browse all registered rules by language, category, severity, or pack. Use `verbose=True` for descriptions. | Discover available checks before running analysis |
+| `list_packs` | Show installed packs and available example packs | See what's active vs what can be installed |
+| `install_pack` | Install an example language pack (go, python, typescript, rust, java) into `.attocode/packs/` | Activate language-specific analysis for your project |
+| `register_rule` | Register a custom YAML rule at runtime. For permanent rules, add files to `.attocode/rules/` | Add project-specific or domain-specific checks on the fly |
+
+**Language packs are NOT auto-loaded** — use `install_pack("go")` to activate packs relevant to your project. Once installed, rules are customizable in `.attocode/packs/<name>/rules/*.yaml`. Each finding includes surrounding code context (10 lines), an explanation of why it matters, and fix examples.
+
+**Custom rules** in `.attocode/rules/*.yaml` or `.attocode/plugins/` are auto-loaded alongside installed packs.
+
 ### Memory & Recall (50–500 tokens each)
 
 | Tool | Purpose | When to Use |
@@ -170,8 +184,9 @@ bootstrap(task_hint="your task", max_tokens=8000)
 1. impact_analysis(changed_files)       → Blast radius of changes
 2. hotspots(10)                         → Are changes in risky areas?
 3. conventions()                        → Do changes follow project style?
-4. lsp_diagnostics(file) × N           → Errors in each changed file (parallel)
-5. security_scan(path="changed_dir")    → Security check
+4. analyze(files=changed_files)         → Rule-based analysis (perf, correctness, security)
+5. lsp_diagnostics(file) × N           → Errors in each changed file (parallel)
+6. security_scan(path="changed_dir")    → Secret/supply-chain check
 ```
 
 ### Onboarding / First Contact

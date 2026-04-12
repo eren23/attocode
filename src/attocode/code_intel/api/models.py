@@ -674,3 +674,31 @@ class LearningRecallResponse(BaseModel):
     query: str
     results: list[LearningRecallItem]
     total: int
+
+
+# ---------------------------------------------------------------------------
+# Rule-based analysis
+# ---------------------------------------------------------------------------
+
+
+class AnalyzeRequest(BaseModel):
+    files: list[str] | None = None
+    path: str = ""
+    language: str = ""
+    category: str = ""
+    severity: str = ""
+    pack: str = ""
+    min_confidence: float = 0.5
+    max_findings: int = 50
+
+
+class ListRulesRequest(BaseModel):
+    language: str = ""
+    category: str = ""
+    severity: str = ""
+    pack: str = ""
+    verbose: bool = False
+
+
+class RegisterRuleRequest(BaseModel):
+    yaml_content: str
