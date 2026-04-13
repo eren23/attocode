@@ -1,0 +1,139 @@
+# Team-specific rules — NOT generic security. These encode project decisions.
+
+- id: no-print-debugging
+  pattern: '\bprint\s*\('
+  message: "Use logger instead of print() — prints are stripped in CI"
+  severity: medium
+  category: style
+  languages: [python]
+  confidence: 0.85
+  explanation: >
+    Our CI pipeline redirects stdout to /dev/null. print() calls are
+    invisible in production. Use the project logger which writes to
+    both stdout and the structured log file.
+  recommendation: "Replace with logger.info(), logger.debug(), etc."
+  examples:
+    - bad: 'print(f"Processing {item}")'
+      good: 'logger.info("Processing %s", item)'
+
+- id: no-bare-dict-access
+  pattern: '\w+\[[''"][^''"]+[''"]\](?!\s*=)'
+  message: "Use .get() for dict access — bare [] throws KeyError on missing keys"
+  severity: low
+  category: correctness
+  languages: [python]
+  confidence: 0.6
+  explanation: >
+    In our data pipeline, configs and API responses frequently have optional
+    keys. Bare dict[key] access crashes on missing keys. Use .get(key, default)
+    for resilient access.
+  recommendation: "Use config.get('key', default) instead of config['key']"
+  examples:
+    - bad: "name = config['username']"
+      good: "name = config.get('username', 'anonymous')"
+
+- id: no-star-import
+  pattern: 'from\s+\w+(?:\.\w+)*\s+import\s+\*'
+  message: "Star imports pollute namespace and break static analysis"
+  severity: medium
+  category: style
+  languages: [python]
+  confidence: 0.95
+  explanation: >
+    Star imports make it impossible to determine where a name came from
+    without running the code. They also prevent dead-code detection and
+    auto-completion from working correctly.
+  recommendation: "Import specific names: from module import Class, function"
+
+- id: no-string-format-logging
+  pattern: 'logger\.\w+\(f[''"]'
+  message: "Use lazy % formatting in logger calls, not f-strings"
+  severity: low
+  category: performance
+  languages: [python]
+  confidence: 0.8
+  explanation: >
+    f-strings are evaluated immediately even if the log level is disabled.
+    Logger % formatting (logger.info("x=%s", x)) is lazy — the string is
+    only formatted if the message will actually be emitted.
+  recommendation: 'Use logger.info("Processing %s", item) not logger.info(f"Processing {item}")'
+  examples:
+    - bad: 'logger.debug(f"Loaded {len(items)} items")'
+      good: 'logger.debug("Loaded %d items", len(items))'
+
+- id: go-no-panic
+  pattern: '\bpanic\s*\('
+  message: "Don't panic — return errors instead"
+  severity: high
+  category: correctness
+  languages: [go]
+  confidence: 0.9
+  explanation: >
+    In our services, panics crash the entire process. Go's error
+    return convention exists specifically to avoid this. Only panic
+    for truly unrecoverable programmer errors in init().
+  recommendation: "Return error instead: return fmt.Errorf(...)"
+  examples:
+    - bad: 'panic("config not found")'
+      good: 'return fmt.Errorf("config not found: %w", err)'
+
+- id: go-no-init-function
+  pattern: '^func\s+init\s*\(\s*\)'
+  message: "Avoid init() — use explicit initialization for testability"
+  severity: medium
+  category: style
+  languages: [go]
+  confidence: 0.85
+  explanation: >
+    init() functions run implicitly at import time, making it impossible
+    to control initialization order in tests. Use an explicit Setup()
+    or NewService() pattern instead.
+  recommendation: "Move initialization to an explicit constructor or Setup function"
+
+- id: ts-no-any-cast
+  pattern: '\bas\s+any\b'
+  message: "Don't cast to any — use proper type narrowing"
+  severity: medium
+  category: correctness
+  languages: [typescript]
+  confidence: 0.9
+  explanation: >
+    Casting to `any` silently disables all type checking for that value.
+    Bugs that TypeScript would catch at compile time become runtime errors.
+    Use type guards, unknown, or proper interface narrowing.
+  recommendation: "Use type guards (if 'key' in obj), unknown, or proper interfaces"
+  examples:
+    - bad: "const data = response as any"
+      good: "const data: ApiResponse = response as ApiResponse"
+
+- id: rs-no-expect-in-lib
+  pattern: '\.expect\s*\('
+  message: "Library code should return Result, not expect/panic"
+  severity: medium
+  category: correctness
+  languages: [rust]
+  confidence: 0.7
+  explanation: >
+    .expect() panics when the Result is Err, crashing the caller.
+    Library code should propagate errors with ? so callers decide
+    how to handle failures.
+  recommendation: "Use the ? operator: let value = result?;"
+  examples:
+    - bad: 'let config = fs::read_to_string("config.toml").expect("config missing");'
+      good: 'let config = fs::read_to_string("config.toml")?;'
+
+- id: java-no-system-out
+  pattern: 'System\.out\.print'
+  message: "Use SLF4J logger instead of System.out"
+  severity: medium
+  category: style
+  languages: [java, kotlin]
+  confidence: 0.9
+  explanation: >
+    System.out bypasses the logging framework. Log output won't appear
+    in structured logs, can't be filtered by level, and won't include
+    context (thread, timestamp, class).
+  recommendation: "Use log.info(), log.debug(), etc."
+  examples:
+    - bad: 'System.out.println("Processing: " + item);'
+      good: 'log.info("Processing: {}", item);'

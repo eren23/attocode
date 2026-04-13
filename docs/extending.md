@@ -372,8 +372,67 @@ To add a new integration module:
 | `streaming/` | Response streaming, PTY shell |
 | `lsp/` | Language Server Protocol |
 
+## Custom Analysis Rules
+
+The code-intel rule engine supports user-defined rules and plugins alongside
+the builtin language packs (Go, Python, TypeScript, Rust, Java).
+
+### YAML Custom Rules
+
+Add rules to `.attocode/rules/*.yaml`:
+
+```yaml
+id: no-direct-db-import
+pattern: "from database import"
+message: "Import database module through the repository layer"
+severity: medium
+category: correctness
+languages: [python]
+recommendation: "Use from app.repositories import ... instead"
+explanation: >
+  Direct database imports bypass the repository abstraction layer,
+  making queries harder to test and migrate.
+examples:
+  - bad: "from database import session"
+    good: "from app.repositories import UserRepository"
+fix:
+  search: "from database import"
+  replace: "from app.repositories import"
+```
+
+Rules support fields: `id`, `pattern` (regex), `message`, `severity`, `category`
+(correctness / suspicious / complexity / performance / style / security / deprecated),
+`languages`, `cwe`, `tags`, `confidence`, `recommendation`, `explanation`, `examples`, `fix`.
+
+### Plugins
+
+For organized rule collections, create a plugin in `.attocode/plugins/<name>/`:
+
+```
+.attocode/plugins/my-company/
+├── plugin.yaml
+└── rules/
+    ├── api-standards.yaml
+    └── logging-rules.yaml
+```
+
+```yaml
+# plugin.yaml
+name: my-company
+version: 1.0.0
+description: "Internal coding standards"
+```
+
+Plugins are auto-discovered and loaded alongside builtin packs.
+
+### Runtime Registration
+
+Register rules on the fly via the `register_rule` MCP tool — useful for
+one-off checks without creating files.
+
 ## Related Pages
 
 - [Architecture](ARCHITECTURE.md) — Module relationships and data flow
 - [MCP Integration](MCP.md) — Basic MCP setup guide
 - [Skills & Agents](skills-and-agents.md) — Skill and agent definitions
+- [Advanced Analysis](guides/advanced-analysis.md) — Dead code, distillation, graph DSL, and rule-based analysis

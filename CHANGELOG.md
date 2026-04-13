@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Pluggable Rule-Based Analysis Engine
+
+PerfInsights-inspired multi-language analysis framework with language packs,
+custom rules, and agent-optimized output. The connected coding agent receives
+structured findings with code context, antipattern explanations, few-shot
+examples, and fix suggestions — everything needed for LLMCheck-quality
+triage without running a separate LLM.
+
+- **4 new MCP tools**: `analyze`, `list_rules`, `list_packs`, `register_rule`
+  (47 total MCP tools, up from 43)
+- **5 language packs** (Go, Python, TypeScript, Rust, Java) with 32 rules:
+  - Go: PerfInsights-inspired perf antipatterns (`fmt.Sprintf` allocation,
+    `strings.ToLower` vs `EqualFold`, `defer` in loop, mutex over I/O,
+    error string comparison), security (SQL injection, command injection,
+    TLS verification), correctness
+  - Python: mutable default args, bare except, string concat in loops,
+    dict.keys() iteration, isinstance chains
+  - TypeScript/JS: sequential await in loop, array push spread, console.log,
+    any type, optional chaining
+  - Rust: unwrap without context, clone in hot loop, todo!() left in code,
+    unsafe blocks
+  - Java/Kotlin: string concat in loops, catch generic Exception, SQL
+    concatenation, synchronized I/O
+- **Taint definitions per pack**: Go (3 sources, 10 sinks, 4 sanitizers),
+  Java (2 sources, 4 sinks) — YAML-driven, extensible
+- **Deterministic pre-filter pipeline**: dedup, test-file severity demotion,
+  confidence threshold — reduces noise before the agent sees findings
+- **Finding enricher**: 10-line code context windows, enclosing function
+  detection, few-shot examples, suggested fixes in every finding
+- **Plugin system**: `.attocode/plugins/<name>/` with `plugin.yaml` manifest
+  and `rules/*.yaml` — user-defined analysis rules auto-loaded alongside packs
+- **Custom rules**: `.attocode/rules/*.yaml` with expanded format supporting
+  `explanation`, `examples`, `fix`, `category`, `confidence` fields
+- **Unified rule model**: all 141 rules (109 builtin + 32 pack) share one
+  `UnifiedRule` shape with Clippy-inspired categories (correctness, suspicious,
+  complexity, performance, style, security, deprecated)
+- **Thread-safe registry**: `RuleRegistry` with locking for concurrent MCP calls
+- **65 new tests** in `tests/unit/code_intel/test_rules_engine.py`
+
 ## [0.2.18] - 2026-04-11
 
 ### Added — Code Intel Reproducibility & State Tracking

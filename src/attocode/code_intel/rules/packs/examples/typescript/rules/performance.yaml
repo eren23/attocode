@@ -1,0 +1,69 @@
+# TypeScript/JavaScript performance and correctness patterns
+
+- id: ts-await-in-loop
+  name: Sequential await in loop
+  pattern: '^\s+(?:const|let|var)\s+\w+\s*=\s*await\s'
+  message: "Possible sequential await in loop — requests may execute one at a time"
+  severity: medium
+  category: performance
+  languages: [typescript, javascript]
+  confidence: 0.55
+  explanation: >
+    Using await inside a for loop makes each iteration wait for the previous
+    one to complete. If the operations are independent, they can run in
+    parallel with Promise.all(), potentially reducing total time by N×.
+  recommendation: "Collect promises and use Promise.all() for independent operations"
+  examples:
+    - bad: "for (const id of ids) {\n  const data = await fetch(id);\n}"
+      good: "const results = await Promise.all(ids.map(id => fetch(id)));"
+      explanation: "Promise.all runs all fetches concurrently"
+
+- id: ts-no-optional-chain
+  name: Nested null checks instead of optional chaining
+  pattern: '(\w+)\s*&&\s*\1\.\w+\s*&&\s*\1\.\w+\.\w+'
+  message: "Nested && null checks — use optional chaining (?.)"
+  severity: info
+  category: style
+  languages: [typescript, javascript]
+  confidence: 0.7
+  recommendation: "Use optional chaining: obj?.prop?.nested"
+  examples:
+    - bad: "if (user && user.address && user.address.city)"
+      good: "if (user?.address?.city)"
+
+- id: ts-array-push-spread
+  name: Array.push with spread in loop
+  pattern: '\.push\(\.\.\.'
+  message: "Array.push(...spread) can hit call stack limit for large arrays"
+  severity: medium
+  category: correctness
+  languages: [typescript, javascript]
+  confidence: 0.7
+  explanation: >
+    Array.push(...largeArray) passes each element as a function argument.
+    JavaScript engines have a maximum argument count (~65k-130k), so this
+    throws RangeError for large arrays.
+  recommendation: "Use Array.prototype.push.apply() or concat()"
+  examples:
+    - bad: "result.push(...bigArray)"
+      good: "for (const item of bigArray) result.push(item)"
+
+- id: ts-console-log
+  name: console.log in production code
+  pattern: 'console\.log\s*\('
+  message: "console.log left in code — use proper logging or remove"
+  severity: info
+  category: style
+  languages: [typescript, javascript]
+  confidence: 0.6
+  recommendation: "Use a structured logger or remove debug statements"
+
+- id: ts-any-type
+  name: TypeScript any type usage
+  pattern: ':\s*any\b'
+  message: "Explicit 'any' type — loses type safety"
+  severity: low
+  category: style
+  languages: [typescript]
+  confidence: 0.6
+  recommendation: "Use specific types, unknown, or generics instead of any"

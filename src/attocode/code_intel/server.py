@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 43 tools for deep codebase understanding:
+Provides 48 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -26,6 +26,11 @@ Provides 43 tools for deep codebase understanding:
 - security_scan: Secret/anti-pattern/dependency scanning
 - semantic_search: Natural language code search
 - semantic_search_status: Check embedding index progress
+- analyze: Rule-based analysis with language packs (Go, Python, TS, Rust, Java)
+- list_rules: Browse available analysis rules by language/category/severity
+- list_packs: List installed language analysis packs
+- install_pack: Install a language analysis pack (go, python, ts, rust, java)
+- register_rule: Register a custom YAML rule at runtime
 - notify_file_changed: Notify server of external file modifications
 - recall: Retrieve relevant project learnings
 - record_learning: Record patterns/conventions/gotchas
@@ -582,6 +587,8 @@ import attocode.code_intel.tools.maintenance_tools as _maintenance_tools  # noqa
 import attocode.code_intel.tools.snapshot_tools as _snapshot_tools  # noqa: E402, F401
 # Phase 2c — named overlays
 import attocode.code_intel.tools.overlay_tools as _overlay_tools  # noqa: E402, F401
+# Rule-based analysis engine (PerfInsights-inspired)
+import attocode.code_intel.tools.rule_tools as _rule_tools  # noqa: E402, F401
 from attocode.code_intel.helpers import (  # noqa: E402, F401
     _compute_file_metrics,
     _percentile_ranks,

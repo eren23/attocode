@@ -1,0 +1,55 @@
+# Java/Kotlin correctness and performance patterns
+
+- id: java-string-concat-loop
+  name: String concatenation in loop
+  pattern: '\w+\s*\+=\s*"'
+  message: "String concatenation in loop — O(N^2) due to immutable strings"
+  severity: medium
+  category: performance
+  languages: [java, kotlin]
+  confidence: 0.6
+  recommendation: "Use StringBuilder for loop concatenation"
+  examples:
+    - bad: 'String result = "";\nfor (String s : items) result += s;'
+      good: "StringBuilder sb = new StringBuilder();\nfor (String s : items) sb.append(s);"
+
+- id: java-catch-exception
+  name: Catch generic Exception
+  pattern: 'catch\s*\(\s*(?:Exception\s|\w+\s*:\s*Exception)'
+  message: "Catching generic Exception — too broad, may mask bugs"
+  severity: medium
+  category: correctness
+  languages: [java, kotlin]
+  confidence: 0.7
+  recommendation: "Catch specific exception types"
+
+- id: java-synchronized-block
+  name: Synchronized block (check for I/O inside)
+  pattern: 'synchronized\s*\('
+  message: "Synchronized block — verify no I/O (streams, sockets, HTTP) inside"
+  severity: info
+  category: performance
+  languages: [java]
+  confidence: 0.35
+  recommendation: "If I/O occurs inside, move it outside the synchronized block"
+
+- id: java-null-return
+  name: Returning null from collection method
+  pattern: 'return\s+null\s*;'
+  message: "Returning null — consider Optional or empty collection"
+  severity: low
+  category: style
+  languages: [java]
+  confidence: 0.4
+  recommendation: "Use Optional<T>, Collections.emptyList(), or throw an exception"
+
+- id: java-sql-concat
+  name: SQL string concatenation
+  pattern: '(?:createQuery|prepareStatement|executeQuery)\s*\([^)]*\+'
+  message: "SQL query built with concatenation — SQL injection risk"
+  severity: high
+  category: security
+  languages: [java, kotlin]
+  cwe: CWE-89
+  confidence: 0.8
+  recommendation: "Use PreparedStatement with parameterized queries"

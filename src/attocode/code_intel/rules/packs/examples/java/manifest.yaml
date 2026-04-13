@@ -1,0 +1,4 @@
+name: java
+version: 1.0.0
+languages: [java, kotlin]
+description: "Java/Kotlin analysis pack — correctness, performance, security patterns"

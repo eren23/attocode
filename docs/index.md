@@ -12,7 +12,7 @@ Production AI coding agent built in Python. Features a Textual-based TUI, multi-
 - **Multi-provider** --- Anthropic, OpenRouter, and OpenAI adapters
 - **Skills & agents** --- Extensible skill and agent system with project-level and user-level customization
 - **Research campaigns** --- Multi-experiment research workflows with dedicated worktrees, hypothesis tracking, and persistent campaign state
-- **Code intelligence** --- 36-language AST parsing, semantic search, dependency graphs, architecture analysis via MCP server
+- **Code intelligence** --- 47-tool MCP server with AST parsing (25+ languages), rule-based analysis with language packs (Go, Python, TS, Rust, Java), taint tracking, semantic search, and dependency graphs
 - **MCP support** --- Connect external tools via the Model Context Protocol
 
 ## Quick Start

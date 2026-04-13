@@ -1,0 +1,136 @@
+# Go performance antipatterns — inspired by Uber PerfInsights
+# These target patterns that cause measurable CPU/memory overhead
+# in production Go services.
+
+- id: go-sprintf-allocation
+  name: fmt.Sprintf string allocation
+  pattern: 'fmt\.Sprintf\s*\('
+  message: "fmt.Sprintf allocates a new string per call — consider alternatives in hot paths"
+  severity: low
+  category: performance
+  languages: [go]
+  confidence: 0.5
+  explanation: >
+    fmt.Sprintf parses the format string and allocates a new string on every
+    invocation. In hot loops, this creates N allocations that pressure the GC.
+    Not every Sprintf is a problem — only flag this in performance-sensitive paths.
+  recommendation: "For hot paths, use strings.Builder, strconv.Itoa + concatenation, or pre-allocate"
+  examples:
+    - bad: 'key := fmt.Sprintf("cache:%s:%d", prefix, id)'
+      good: 'key := "cache:" + prefix + ":" + strconv.Itoa(id)'
+      explanation: "String concatenation avoids format parsing overhead"
+    - bad: 'msg := fmt.Sprintf("error: %s", err.Error())'
+      good: 'msg := "error: " + err.Error()'
+      explanation: "Direct concatenation for simple cases"
+
+- id: go-string-tolower-compare
+  name: strings.ToLower for comparison
+  pattern: 'strings\.To(?:Lower|Upper)\s*\([^)]+\)\s*[!=]='
+  message: "strings.ToLower() allocates a new string for comparison — use EqualFold"
+  severity: medium
+  category: performance
+  languages: [go]
+  confidence: 0.85
+  explanation: >
+    strings.ToLower() creates a new lowercase copy of the string just to
+    compare it. strings.EqualFold() compares case-insensitively without
+    any allocation.
+  recommendation: "Use strings.EqualFold(a, b) for case-insensitive comparison"
+  examples:
+    - bad: 'if strings.ToLower(name) == "admin" {'
+      good: 'if strings.EqualFold(name, "admin") {'
+      explanation: "EqualFold is allocation-free"
+
+- id: go-append-no-prealloc
+  name: append without pre-allocation
+  pattern: 'var\s+\w+\s+\[\]\w+\s*\n(?:.*\n){0,5}.*\bappend\('
+  message: "Slice append in loop without pre-allocation causes repeated re-allocation"
+  severity: low
+  category: performance
+  languages: [go]
+  confidence: 0.5
+  explanation: >
+    When the final size is known or estimatable, pre-allocating with
+    make([]T, 0, n) avoids the geometric growth and copying that
+    append performs behind the scenes.
+  recommendation: "Use make([]T, 0, expectedLen) when the size is known"
+  examples:
+    - bad: "var results []string\nfor _, item := range items {\n    results = append(results, item.Name)\n}"
+      good: "results := make([]string, 0, len(items))\nfor _, item := range items {\n    results = append(results, item.Name)\n}"
+      explanation: "Pre-allocation avoids re-allocation during growth"
+
+- id: go-json-marshal-hot
+  name: json.Marshal without reusable encoder
+  pattern: 'json\.(?:Marshal|MarshalIndent|Unmarshal)\s*\('
+  message: "json.Marshal/Unmarshal in hot path — consider json.NewEncoder for reuse"
+  severity: low
+  category: performance
+  languages: [go]
+  confidence: 0.5
+  explanation: >
+    json.Marshal creates a new encoder internally each time. For high-throughput
+    paths, reusing json.NewEncoder with a bytes.Buffer pool reduces allocations.
+  recommendation: "For hot paths, use json.NewEncoder(buf) with sync.Pool for buffers"
+
+- id: go-mutex-lock
+  name: sync.Mutex Lock call
+  pattern: '\.Lock\(\)'
+  message: "Mutex lock — verify no I/O (network, file, HTTP) happens before Unlock"
+  severity: info
+  category: suspicious
+  languages: [go]
+  confidence: 0.3
+  explanation: >
+    Holding a mutex across I/O blocks all waiting goroutines. This flags
+    Lock() calls for review — check that no network calls, file operations,
+    or HTTP requests occur before the corresponding Unlock().
+  recommendation: "Verify no I/O between Lock() and Unlock(). If there is, restructure."
+
+- id: go-reflect-in-loop
+  name: Reflection in tight loop
+  pattern: 'reflect\.(?:ValueOf|TypeOf)\s*\('
+  message: "reflect.ValueOf/TypeOf in potential hot path — reflection is slow"
+  severity: low
+  category: performance
+  languages: [go]
+  confidence: 0.45
+  explanation: >
+    Reflection in Go is significantly slower than direct type access due to
+    interface boxing and type introspection. In tight loops, this overhead
+    compounds.
+  recommendation: "Use type switches, generics, or code generation instead of reflection"
+
+- id: go-error-string-compare
+  name: Error string comparison
+  pattern: 'err\.Error\(\)\s*[!=]='
+  message: "Comparing error strings is fragile — use errors.Is or errors.As"
+  severity: medium
+  category: correctness
+  languages: [go]
+  confidence: 0.9
+  explanation: >
+    Error messages can change between library versions. errors.Is() and
+    errors.As() check the error chain properly and are stable across versions.
+  recommendation: "Use errors.Is(err, targetErr) or errors.As(err, &targetType)"
+  examples:
+    - bad: 'if err.Error() == "not found" {'
+      good: 'if errors.Is(err, ErrNotFound) {'
+      explanation: "errors.Is checks the entire error chain"
+
+- id: go-defer-statement
+  name: defer statement (check if inside loop)
+  pattern: '^\s+defer\s'
+  message: "defer call — if inside a loop, defers accumulate until function returns"
+  severity: low
+  category: correctness
+  languages: [go]
+  confidence: 0.35
+  explanation: >
+    If this defer is inside a for/range loop, deferred calls stack up until
+    the function returns — causing resource leaks. Check surrounding code
+    for a loop. If inside a loop, wrap in a closure or close explicitly.
+  recommendation: "If inside a loop: wrap in func() { defer f.Close() }()"
+  examples:
+    - bad: "for _, f := range files {\n    fd, _ := os.Open(f)\n    defer fd.Close()\n}"
+      good: "for _, f := range files {\n    func() {\n        fd, _ := os.Open(f)\n        defer fd.Close()\n    }()\n}"
+      explanation: "Closure ensures defer runs each iteration"

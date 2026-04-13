@@ -133,14 +133,14 @@ def review_change(
     files: list[str] | None = None,
     mode: str = "full",
 ) -> str:
-    """Comprehensive change review combining security, bug, and convention analysis.
+    """Comprehensive change review combining security, rule analysis, and convention checks.
 
     Runs multiple analysis passes on changed files and produces a unified
     report. Much more efficient than calling each tool individually.
 
     Args:
         files: List of file paths to review (default: git-modified files).
-        mode: Review depth -- 'quick' (security only), 'full' (all checks).
+        mode: Review depth -- 'quick' (security only), 'full' (security + rules + conventions).
 
     Returns:
         Unified review report with categorized findings.
@@ -192,6 +192,24 @@ def review_change(
         )
         total_findings += sec_findings
         report_sections.append(f"## Security ({sec_findings} finding(s))\n\n{filtered_security}")
+
+    # --- Rule-based analysis (full mode only) ---
+    if mode == "full":
+        rules_text = ""
+        try:
+            rules_text = svc.analyze(
+                files=files, min_confidence=0.5, max_findings=20,
+            )
+        except Exception as exc:
+            rules_text = f"Rule analysis error: {exc}"
+
+        if rules_text and "No findings" not in rules_text:
+            rule_findings = sum(
+                1 for line in rules_text.splitlines()
+                if any(m in line for m in ("[CRITICAL]", "[HIGH]", "[MEDIUM]", "[LOW]", "[INFO]"))
+            )
+            total_findings += rule_findings
+            report_sections.append(f"## Rule Analysis ({rule_findings} finding(s))\n\n{rules_text}")
 
     # --- Conventions check (full mode only) ---
     if mode == "full":

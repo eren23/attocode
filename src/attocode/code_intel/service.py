@@ -2772,3 +2772,56 @@ class CodeIntelService:
             except Exception as exc:
                 logger.debug("notify_file_changed: error for %s: %s", f, exc)
         return f"Updated {updated} file(s). AST index refreshed."
+
+    # ------------------------------------------------------------------
+    # Rule-based analysis (PerfInsights-inspired)
+    # ------------------------------------------------------------------
+
+    def analyze(
+        self,
+        files: list[str] | None = None,
+        path: str = "",
+        language: str = "",
+        category: str = "",
+        severity: str = "",
+        pack: str = "",
+        min_confidence: float = 0.5,
+        max_findings: int = 50,
+    ) -> str:
+        from attocode.code_intel.tools.rule_tools import _analyze_impl
+
+        return _analyze_impl(
+            files=files, path=path, language=language, category=category,
+            severity=severity, pack=pack, min_confidence=min_confidence,
+            max_findings=max_findings, project_dir=self._project_dir,
+        )
+
+    def list_rules(
+        self,
+        language: str = "",
+        category: str = "",
+        severity: str = "",
+        pack: str = "",
+        verbose: bool = False,
+    ) -> str:
+        from attocode.code_intel.tools.rule_tools import list_rules as _list_rules
+
+        return _list_rules(
+            language=language, category=category, severity=severity,
+            pack=pack, verbose=verbose,
+        )
+
+    def list_packs(self) -> str:
+        from attocode.code_intel.tools.rule_tools import list_packs as _list_packs
+
+        return _list_packs()
+
+    def register_rule(self, yaml_content: str) -> str:
+        from attocode.code_intel.tools.rule_tools import register_rule as _register_rule
+
+        return _register_rule(yaml_content=yaml_content)
+
+    def install_pack(self, name: str) -> str:
+        from attocode.code_intel.tools.rule_tools import install_pack as _install_pack
+
+        return _install_pack(name=name)

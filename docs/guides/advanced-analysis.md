@@ -1,6 +1,61 @@
 # Advanced Analysis
 
-Three complementary tools for deep codebase analysis: dead code detection, code distillation, and graph DSL queries. Available as MCP tools and through the HTTP API.
+Four complementary tools for deep codebase analysis: rule-based analysis with example language packs, dead code detection, code distillation, and graph DSL queries. Available as MCP tools and through the HTTP API.
+
+## Rule-Based Analysis
+
+The `analyze` tool runs language-specific rules against source files, returning
+rich findings with code context, antipattern explanations, few-shot examples,
+and fix suggestions. Five example language packs ship with attocode (install
+with `install_pack("name")` to activate):
+
+| Pack | Languages | Focus Areas |
+|------|-----------|-------------|
+| `go` | Go | Performance antipatterns (PerfInsights-inspired), security, correctness |
+| `python` | Python | Mutable defaults, bare except, string concat, idioms |
+| `typescript` | TypeScript, JavaScript | Sequential await, array push spread, type safety |
+| `rust` | Rust | unwrap usage, clone in loops, unsafe blocks |
+| `java` | Java, Kotlin | String concat in loops, generic exception catch, SQL injection |
+
+### Usage
+
+```
+# Scan specific files
+analyze(files=["src/api/handler.go", "src/api/middleware.go"])
+
+# Scan a directory for performance issues
+analyze(path="src/", category="performance")
+
+# Filter to a specific language and severity
+analyze(language="go", severity="medium")
+
+# Browse available rules
+list_rules(language="go", verbose=True)
+
+# Register a custom rule on the fly
+register_rule(yaml_content="id: no-println\npattern: 'fmt.Println\\('\nmessage: Use structured logging\nseverity: low\ncategory: style\nlanguages: [go]")
+```
+
+### How Findings Are Structured
+
+Each finding includes:
+- **Code context**: 10 lines before and after the flagged line
+- **Enclosing function**: which function the issue is in
+- **Explanation**: why this pattern matters (for agent reasoning)
+- **Few-shot examples**: bad vs good code pairs
+- **Suggested fix**: deterministic fix when available
+- **Confidence score**: 0.0–1.0, pre-filtered by a deterministic pipeline
+
+The connected coding agent uses this context to decide whether a finding is
+real, generate a fix, and explain the issue to the user — no separate LLM
+call needed.
+
+### Custom Rules
+
+Add YAML files to `.attocode/rules/` or create plugins in `.attocode/plugins/`.
+See [Extending Attocode](../extending.md#custom-analysis-rules) for the full format.
+
+---
 
 ## Dead Code Detection
 
