@@ -2,9 +2,8 @@
 
 Reduces noise before the connected coding agent sees findings:
 1. Dedup — remove exact duplicates and merge overlapping findings
-2. Dead code filter — skip findings in unreferenced functions
-3. Test file adjuster — lower severity for test/spec files
-4. Confidence threshold — drop findings below minimum confidence
+2. Test file adjuster — lower severity for test/spec files
+3. Confidence threshold — drop findings below minimum confidence
 
 No LLM in this pipeline. These are all mechanical, deterministic filters.
 """

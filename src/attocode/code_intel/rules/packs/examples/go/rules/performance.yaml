@@ -72,19 +72,19 @@
     paths, reusing json.NewEncoder with a bytes.Buffer pool reduces allocations.
   recommendation: "For hot paths, use json.NewEncoder(buf) with sync.Pool for buffers"
 
-- id: go-mutex-over-io
-  name: sync.Mutex held across I/O
-  pattern: '\.Lock\(\)[\s\S]{0,200}(?:http\.\w+|net\.\w+|os\.(?:Open|Create|Read|Write)\w*|io\.(?:Read|Write|Copy)\w*|\.Dial\(|\.Listen\()'
-  message: "Mutex possibly held across I/O operation — risks goroutine blocking"
-  severity: medium
+- id: go-mutex-lock
+  name: sync.Mutex Lock call
+  pattern: '\.Lock\(\)'
+  message: "Mutex lock — verify no I/O (network, file, HTTP) happens before Unlock"
+  severity: info
   category: suspicious
   languages: [go]
-  confidence: 0.6
+  confidence: 0.3
   explanation: >
-    Holding a mutex while performing I/O (network calls, file operations)
-    blocks all goroutines waiting for the lock until the I/O completes.
-    This can cause cascading latency under load.
-  recommendation: "Copy data under the lock, release it, then perform I/O"
+    Holding a mutex across I/O blocks all waiting goroutines. This flags
+    Lock() calls for review — check that no network calls, file operations,
+    or HTTP requests occur before the corresponding Unlock().
+  recommendation: "Verify no I/O between Lock() and Unlock(). If there is, restructure."
 
 - id: go-reflect-in-loop
   name: Reflection in tight loop
@@ -117,20 +117,20 @@
       good: 'if errors.Is(err, ErrNotFound) {'
       explanation: "errors.Is checks the entire error chain"
 
-- id: go-defer-in-loop
-  name: defer inside loop
-  pattern: 'for\s.*{[\s\S]{0,200}defer\s'
-  message: "defer inside loop — deferred calls accumulate until function returns"
-  severity: medium
+- id: go-defer-statement
+  name: defer statement (check if inside loop)
+  pattern: '^\s+defer\s'
+  message: "defer call — if inside a loop, defers accumulate until function returns"
+  severity: low
   category: correctness
   languages: [go]
-  confidence: 0.8
+  confidence: 0.35
   explanation: >
-    Deferred calls inside a loop don't execute at the end of each iteration —
-    they stack up until the enclosing function returns. This can cause resource
-    leaks (file handles, connections) and memory growth.
-  recommendation: "Extract loop body into a separate function, or close resources explicitly"
+    If this defer is inside a for/range loop, deferred calls stack up until
+    the function returns — causing resource leaks. Check surrounding code
+    for a loop. If inside a loop, wrap in a closure or close explicitly.
+  recommendation: "If inside a loop: wrap in func() { defer f.Close() }()"
   examples:
     - bad: "for _, f := range files {\n    fd, _ := os.Open(f)\n    defer fd.Close()\n}"
       good: "for _, f := range files {\n    func() {\n        fd, _ := os.Open(f)\n        defer fd.Close()\n    }()\n}"
-      explanation: "Wrapping in a closure ensures defer runs each iteration"
+      explanation: "Closure ensures defer runs each iteration"

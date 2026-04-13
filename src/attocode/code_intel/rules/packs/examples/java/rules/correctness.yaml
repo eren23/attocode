@@ -23,15 +23,15 @@
   confidence: 0.7
   recommendation: "Catch specific exception types"
 
-- id: java-synchronized-io
-  name: Synchronized block with I/O
-  pattern: 'synchronized\s*\([^)]*\)\s*\{[\s\S]{0,300}(?:InputStream|OutputStream|Socket|Http|URL|File)'
-  message: "Synchronized block may contain I/O — risks thread starvation"
-  severity: medium
+- id: java-synchronized-block
+  name: Synchronized block (check for I/O inside)
+  pattern: 'synchronized\s*\('
+  message: "Synchronized block — verify no I/O (streams, sockets, HTTP) inside"
+  severity: info
   category: performance
   languages: [java]
-  confidence: 0.55
-  recommendation: "Move I/O outside synchronized block; copy shared data under lock"
+  confidence: 0.35
+  recommendation: "If I/O occurs inside, move it outside the synchronized block"
 
 - id: java-null-return
   name: Returning null from collection method

@@ -55,7 +55,8 @@ class RuleRegistry:
         return len(rules)
 
     def get(self, qualified_id: str) -> UnifiedRule | None:
-        return self._rules.get(qualified_id)
+        with self._lock:
+            return self._rules.get(qualified_id)
 
     def remove(self, qualified_id: str) -> bool:
         """Remove a rule by qualified ID. Returns True if found."""
@@ -84,12 +85,15 @@ class RuleRegistry:
 
     @property
     def count(self) -> int:
-        return len(self._rules)
+        with self._lock:
+            return len(self._rules)
 
     def all_rules(self, *, enabled_only: bool = True) -> list[UnifiedRule]:
+        with self._lock:
+            rules = list(self._rules.values())
         if enabled_only:
-            return [r for r in self._rules.values() if r.enabled]
-        return list(self._rules.values())
+            return [r for r in rules if r.enabled]
+        return rules
 
     def query(
         self,
@@ -141,27 +145,31 @@ class RuleRegistry:
         return results
 
     def languages(self) -> list[str]:
-        return sorted(self._by_language.keys())
+        with self._lock:
+            return sorted(self._by_language.keys())
 
     def packs(self) -> list[str]:
-        return sorted(self._by_pack.keys())
+        with self._lock:
+            return sorted(self._by_pack.keys())
 
     def categories(self) -> list[tuple[RuleCategory, int]]:
-        return sorted(
-            [(cat, len(ids)) for cat, ids in self._by_category.items()],
-            key=lambda x: x[1],
-            reverse=True,
-        )
+        with self._lock:
+            return sorted(
+                [(cat, len(ids)) for cat, ids in self._by_category.items()],
+                key=lambda x: x[1],
+                reverse=True,
+            )
 
     def stats(self) -> dict[str, int | dict[str, int]]:
-        by_sev = {str(sev): len(ids) for sev, ids in self._by_severity.items()}
-        by_cat = {str(cat): len(ids) for cat, ids in self._by_category.items()}
-        by_src: dict[str, int] = defaultdict(int)
-        by_tier_d: dict[str, int] = defaultdict(int)
-        enabled = sum(1 for r in self._rules.values() if r.enabled)
-        for r in self._rules.values():
-            by_src[str(r.source)] += 1
-            by_tier_d[str(r.tier)] += 1
+        with self._lock:
+            by_sev = {str(sev): len(ids) for sev, ids in self._by_severity.items()}
+            by_cat = {str(cat): len(ids) for cat, ids in self._by_category.items()}
+            by_src: dict[str, int] = defaultdict(int)
+            by_tier_d: dict[str, int] = defaultdict(int)
+            enabled = sum(1 for r in self._rules.values() if r.enabled)
+            for r in self._rules.values():
+                by_src[str(r.source)] += 1
+                by_tier_d[str(r.tier)] += 1
         return {
             "total": len(self._rules),
             "enabled": enabled,

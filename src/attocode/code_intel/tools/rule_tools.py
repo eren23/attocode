@@ -1,6 +1,6 @@
 """Rule-based analysis tools for the code-intel MCP server.
 
-Tools: analyze, list_rules, list_packs, register_rule.
+Tools: analyze, list_rules, list_packs, install_pack, register_rule.
 
 These expose the pluggable rule engine to the connected coding agent,
 providing rich, pre-filtered, context-laden findings that enable the
@@ -84,17 +84,37 @@ def _collect_files(
     path: str,
     project_dir: str,
 ) -> list[str]:
-    """Resolve file list from explicit files or path glob."""
+    """Resolve file list from explicit files or path glob.
+
+    All resolved paths are checked for containment within project_dir
+    to prevent path traversal attacks via the HTTP API.
+    """
+    root = os.path.realpath(project_dir)
+
+    def _is_within_project(abs_path: str) -> bool:
+        real = os.path.realpath(abs_path)
+        return real == root or real.startswith(root + os.sep)
+
     if files:
         result = []
         for f in files:
-            abs_f = f if os.path.isabs(f) else os.path.join(project_dir, f)
+            abs_f = os.path.realpath(
+                f if os.path.isabs(f) else os.path.join(project_dir, f)
+            )
+            if not _is_within_project(abs_f):
+                logger.warning("Skipping path outside project root: %s", f)
+                continue
             if os.path.isfile(abs_f):
                 result.append(abs_f)
         return result
 
     # Walk path (or whole project)
-    scan_dir = os.path.join(project_dir, path) if path else project_dir
+    scan_dir = os.path.realpath(
+        os.path.join(project_dir, path) if path else project_dir
+    )
+    if not _is_within_project(scan_dir):
+        logger.warning("Scan path escapes project root: %s", path)
+        return []
     if not os.path.isdir(scan_dir):
         return []
 
@@ -115,8 +135,7 @@ def _collect_files(
     return result
 
 
-@mcp.tool()
-def analyze(
+def _analyze_impl(
     files: list[str] | None = None,
     path: str = "",
     language: str = "",
@@ -125,27 +144,11 @@ def analyze(
     pack: str = "",
     min_confidence: float = 0.5,
     max_findings: int = 50,
+    project_dir: str = "",
 ) -> str:
-    """Run rule-based analysis on source files with rich context for reasoning.
-
-    Returns structured findings with: code context (10 lines before/after),
-    antipattern explanations, few-shot examples, suggested fixes, confidence
-    scores, and CWE references. Designed to give you everything needed to
-    triage, fix, and explain issues.
-
-    Args:
-        files: Specific file paths to analyze (relative or absolute).
-            If empty, scans all source files under path.
-        path: Directory to scan (relative to project root). Default: entire project.
-        language: Filter rules to this language (e.g. "python", "go").
-        category: Filter by category: correctness, suspicious, complexity,
-            performance, style, security, deprecated.
-        severity: Filter by minimum severity: critical, high, medium, low, info.
-        pack: Filter rules from a specific language pack.
-        min_confidence: Minimum confidence threshold (0.0-1.0). Default 0.5.
-        max_findings: Maximum findings to return. Default 50.
-    """
-    project_dir = _get_project_dir()
+    """Internal implementation — accepts explicit project_dir for service layer."""
+    if not project_dir:
+        project_dir = _get_project_dir()
     reg = _get_registry()
 
     # Query applicable rules
@@ -181,6 +184,46 @@ def analyze(
 
     # Format for agent
     return format_findings(findings, max_findings=max_findings)
+
+
+@mcp.tool()
+def analyze(
+    files: list[str] | None = None,
+    path: str = "",
+    language: str = "",
+    category: str = "",
+    severity: str = "",
+    pack: str = "",
+    min_confidence: float = 0.5,
+    max_findings: int = 50,
+) -> str:
+    """Run rule-based analysis on source files with rich context for reasoning.
+
+    Returns structured findings with: code context (10 lines before/after),
+    antipattern explanations, few-shot examples, suggested fixes, confidence
+    scores, and CWE references. Designed to give you everything needed to
+    triage, fix, and explain issues.
+
+    Language-specific rules require installing a pack first via install_pack().
+    Builtin security rules (secrets, CWE patterns) are always active.
+
+    Args:
+        files: Specific file paths to analyze (relative or absolute).
+            If empty, scans all source files under path.
+        path: Directory to scan (relative to project root). Default: entire project.
+        language: Filter rules to this language (e.g. "python", "go").
+        category: Filter by category: correctness, suspicious, complexity,
+            performance, style, security, deprecated.
+        severity: Filter by minimum severity: critical, high, medium, low, info.
+        pack: Filter rules from a specific language pack.
+        min_confidence: Minimum confidence threshold (0.0-1.0). Default 0.5.
+        max_findings: Maximum findings to return. Default 50.
+    """
+    return _analyze_impl(
+        files=files, path=path, language=language, category=category,
+        severity=severity, pack=pack, min_confidence=min_confidence,
+        max_findings=max_findings,
+    )
 
 
 @mcp.tool()
@@ -349,6 +392,9 @@ def register_rule(yaml_content: str) -> str:
     errors: list[str] = []
 
     for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            errors.append(f"Rule at index {i}: expected dict, got {type(item).__name__}")
+            continue
         rule = _parse_yaml_rule(item, source=RuleSource.USER, origin=f"runtime[{i}]")
         if rule is None:
             errors.append(f"Rule at index {i}: invalid (check id, pattern, message, severity)")

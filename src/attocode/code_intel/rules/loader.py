@@ -182,17 +182,23 @@ def _parse_yaml_rule(
                 explanation=str(ex.get("explanation", "")),
             ))
 
+    # Normalize languages and tags to lists (YAML allows string shorthand)
+    raw_langs = data.get("languages", [])
+    languages = [raw_langs] if isinstance(raw_langs, str) else list(raw_langs)
+    raw_tags = data.get("tags", [])
+    tags = [raw_tags] if isinstance(raw_tags, str) else list(raw_tags)
+
     return UnifiedRule(
         id=str(data["id"]),
         name=str(data.get("name", data["id"])),
         description=str(data["message"]),
         severity=RuleSeverity(sev_str),
         category=category,
-        languages=data.get("languages", []),
+        languages=languages,
         pattern=compiled,
         structural_pattern=str(data.get("structural_pattern", "")),
         cwe=str(data.get("cwe", "")),
-        tags=data.get("tags", []),
+        tags=tags,
         source=source,
         tier=tier,
         confidence=float(data.get("confidence", 0.8)),

@@ -2788,12 +2788,12 @@ class CodeIntelService:
         min_confidence: float = 0.5,
         max_findings: int = 50,
     ) -> str:
-        from attocode.code_intel.tools.rule_tools import analyze as _analyze
+        from attocode.code_intel.tools.rule_tools import _analyze_impl
 
-        return _analyze(
+        return _analyze_impl(
             files=files, path=path, language=language, category=category,
             severity=severity, pack=pack, min_confidence=min_confidence,
-            max_findings=max_findings,
+            max_findings=max_findings, project_dir=self._project_dir,
         )
 
     def list_rules(

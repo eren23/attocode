@@ -1,12 +1,13 @@
 # Advanced Analysis
 
-Four complementary tools for deep codebase analysis: rule-based analysis with language packs, dead code detection, code distillation, and graph DSL queries. Available as MCP tools and through the HTTP API.
+Four complementary tools for deep codebase analysis: rule-based analysis with example language packs, dead code detection, code distillation, and graph DSL queries. Available as MCP tools and through the HTTP API.
 
 ## Rule-Based Analysis
 
 The `analyze` tool runs language-specific rules against source files, returning
 rich findings with code context, antipattern explanations, few-shot examples,
-and fix suggestions. Five builtin language packs ship with attocode:
+and fix suggestions. Five example language packs ship with attocode (install
+with `install_pack("name")` to activate):
 
 | Pack | Languages | Focus Areas |
 |------|-----------|-------------|
