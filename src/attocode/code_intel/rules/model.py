@@ -10,6 +10,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from attocode.code_intel.rules.combinators import CompositePattern
 
 
 # ---------------------------------------------------------------------------
@@ -71,10 +75,15 @@ class FewShotExample:
 
 @dataclass(slots=True, frozen=True)
 class AutoFix:
-    """Deterministic search/replace fix."""
+    """Deterministic search/replace fix.
+
+    When *uses_metavars* is True, *search* and *replace* are templates
+    containing ``$VAR`` references that get resolved from match captures.
+    """
 
     search: str
     replace: str
+    uses_metavars: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -140,6 +149,14 @@ class UnifiedRule:
     recommendation: str = ""  # how to fix
     scan_comments: bool = False
 
+    # Metavariable support (A1)
+    metavars: list[str] = field(default_factory=list)  # metavar names in pattern
+    metavar_regex: dict[str, str] = field(default_factory=dict)  # post-match regex constraints
+    metavar_comparison: dict[str, str] = field(default_factory=dict)  # post-match numeric constraints
+
+    # Boolean combinators (A3) — when set, executor uses composite evaluation
+    composite_pattern: CompositePattern | None = None
+
     @property
     def qualified_id(self) -> str:
         """Pack-qualified ID (e.g. 'go/performance/sprintf-in-loop')."""
@@ -184,6 +201,9 @@ class EnrichedFinding:
     recommendation: str = ""  # how to fix
     examples: list[FewShotExample] = field(default_factory=list)
     suggested_fix: str = ""  # concrete fix text
+
+    # Metavariable captures (populated when rule uses $VAR patterns)
+    captures: dict[str, str] = field(default_factory=dict)
 
     # Metadata
     cwe: str = ""

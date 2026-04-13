@@ -339,8 +339,9 @@ def install_pack(name: str) -> str:
 
     # Reload registry to pick up new pack
     global _registry, _registry_loaded
-    _registry = None
-    _registry_loaded = False
+    with _registry_lock:
+        _registry = None
+        _registry_loaded = False
 
     return result
 
@@ -406,5 +407,190 @@ def register_rule(yaml_content: str) -> str:
     if errors:
         parts.append("Errors:\n" + "\n".join(f"  - {e}" for e in errors))
     parts.append(f"Registry now has {reg.count} rules total.")
+
+    return "\n".join(parts)
+
+
+@mcp.tool()
+def test_rules(
+    fixtures_dir: str = "",
+    rule_id: str = "",
+) -> str:
+    """Run rule tests against fixture files with expect/ok/todoruleid annotations.
+
+    Fixture files should contain inline annotations:
+      # expect: rule-id    — rule MUST fire on this line
+      # ok: rule-id        — rule must NOT fire on this line (false-positive guard)
+      # todoruleid: rule-id — rule SHOULD fire but is known-missing
+
+    Args:
+        fixtures_dir: Directory containing annotated test files.
+            Default: .attocode/test_fixtures/ or tests/fixtures/rule_violations/.
+        rule_id: Optional — only test this specific rule.
+    """
+    from attocode.code_intel.rules.testing import (
+        RuleTestRunner,
+        format_test_report,
+    )
+
+    reg = _get_registry()
+    project_dir = _get_project_dir()
+
+    # Resolve fixtures directory
+    if not fixtures_dir:
+        import os
+        for candidate in [
+            os.path.join(project_dir, ".attocode", "test_fixtures"),
+            os.path.join(project_dir, "tests", "fixtures", "rule_violations"),
+        ]:
+            if os.path.isdir(candidate):
+                fixtures_dir = candidate
+                break
+        if not fixtures_dir:
+            return "No test fixtures directory found. Provide fixtures_dir or create .attocode/test_fixtures/."
+
+    # Get rules
+    if rule_id:
+        rule = reg.get(rule_id)
+        if rule is None:
+            return f"Rule '{rule_id}' not found in registry."
+        rules = [rule]
+    else:
+        rules = reg.all_rules(enabled_only=False)
+
+    runner = RuleTestRunner(rules, project_dir=project_dir)
+    suite = runner.run_test_suite(fixtures_dir)
+
+    if not suite.file_results:
+        return f"No annotated test files found in {fixtures_dir}."
+
+    return format_test_report(suite)
+
+
+@mcp.tool()
+def ci_scan(
+    path: str = "",
+    language: str = "",
+    category: str = "",
+    fail_on: str = "high",
+    diff_only: bool = False,
+    output_format: str = "summary",
+) -> str:
+    """Run CI-style rule scan with exit-code semantics and SARIF output.
+
+    Designed for CI/CD pipelines: scans source files, applies rules,
+    and reports findings with pass/fail status. Supports diff-only mode
+    to scan only changed lines since a baseline git ref.
+
+    Args:
+        path: Directory to scan (relative to project root). Default: entire project.
+        language: Filter rules to this language.
+        category: Filter by category (correctness, security, etc.).
+        fail_on: Minimum severity to trigger failure: critical, high, medium, low.
+        diff_only: Only report findings on lines changed since baseline.
+        output_format: Output format — "summary" (human-readable),
+            "sarif" (SARIF JSON), "annotations" (GitHub Actions format).
+    """
+    from attocode.code_intel.rules.ci import (
+        CIConfig, CIRunner, format_ci_summary, format_github_annotations,
+    )
+    from attocode.code_intel.rules.sarif import findings_to_sarif, sarif_to_json
+    from attocode.code_intel.rules.model import RuleSeverity
+
+    project_dir = _get_project_dir()
+
+    config = CIConfig()
+    sev_str = fail_on.lower()
+    if sev_str in {s.value for s in RuleSeverity}:
+        config.fail_on = RuleSeverity(sev_str)
+
+    runner = CIRunner(project_dir, config=config)
+    result = runner.run(path=path, language=language, category=category, diff_only=diff_only)
+
+    if output_format == "sarif":
+        sarif = findings_to_sarif(result.findings)
+        return sarif_to_json(sarif)
+    elif output_format == "annotations":
+        annotations = format_github_annotations(result.findings)
+        status = "PASS" if result.passed else "FAIL"
+        return f"Status: {status}\n{annotations}"
+    else:
+        return format_ci_summary(result)
+
+
+@mcp.tool()
+def rule_stats(rule_id: str = "") -> str:
+    """Show profiling stats and confidence calibration for rules.
+
+    Shows execution time, match count, true/false positive feedback,
+    and calibrated confidence from persistent feedback data.
+
+    Args:
+        rule_id: Specific rule ID, or empty for all rules with feedback.
+    """
+    from attocode.code_intel.rules.profiling import (
+        FeedbackStore, RuleStats, format_rule_stats,
+    )
+
+    project_dir = _get_project_dir()
+    store = FeedbackStore(project_dir)
+    feedback = store.all_feedback()
+
+    if not feedback:
+        return "No rule feedback recorded yet. Use rule_feedback() to record TP/FP observations."
+
+    # Build stats from feedback data
+    stats: dict[str, RuleStats] = {}
+    for rid, fb in feedback.items():
+        if rule_id and rid != rule_id:
+            continue
+        s = RuleStats(
+            rule_id=rid,
+            true_positives=fb.get("tp", 0),
+            false_positives=fb.get("fp", 0),
+        )
+        stats[rid] = s
+
+    if rule_id and not stats:
+        return f"No feedback for rule '{rule_id}'."
+
+    return format_rule_stats(stats, feedback)
+
+
+@mcp.tool()
+def rule_feedback(
+    rule_id: str,
+    is_true_positive: bool,
+    finding_line: int = 0,
+) -> str:
+    """Record whether a finding was a true or false positive.
+
+    This feedback is used to calibrate rule confidence scores over time.
+    After 5+ observations, a calibrated confidence replaces the rule's
+    default confidence for more accurate triage.
+
+    Args:
+        rule_id: The rule that produced the finding.
+        is_true_positive: True if the finding was a real issue, False if it was a false positive.
+        finding_line: Optional line number for context (not used in calibration).
+    """
+    from attocode.code_intel.rules.profiling import FeedbackStore
+
+    project_dir = _get_project_dir()
+    store = FeedbackStore(project_dir)
+    store.record(rule_id, is_true_positive=is_true_positive)
+
+    fb = store.get_feedback(rule_id)
+    tp, fp = fb.get("tp", 0), fb.get("fp", 0)
+    total = tp + fp
+    cal = store.get_calibrated_confidence(rule_id)
+
+    parts = [f"Recorded {'TP' if is_true_positive else 'FP'} for `{rule_id}`."]
+    parts.append(f"Total: {tp} TP, {fp} FP ({total} observations)")
+    if cal is not None:
+        parts.append(f"Calibrated confidence: {cal:.1%}")
+    else:
+        remaining = 5 - total
+        parts.append(f"Need {remaining} more observation(s) for calibration.")
 
     return "\n".join(parts)

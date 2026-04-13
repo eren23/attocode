@@ -6,6 +6,7 @@ import logging
 import re
 from pathlib import Path
 
+from attocode.code_intel.rules.metavar import compile_metavar_pattern, has_metavars
 from attocode.code_intel.rules.model import (
     AutoFix,
     FewShotExample,
@@ -146,7 +147,12 @@ def _parse_yaml_rule(
     origin: str = "",
 ) -> UnifiedRule | None:
     """Parse a single YAML rule dict into a UnifiedRule."""
-    missing = [f for f in ("id", "pattern", "message", "severity") if f not in data]
+    # "pattern" is required unless "patterns" or "pattern-either" provides it
+    has_composite = "patterns" in data or "pattern-either" in data
+    required = ["id", "message", "severity"]
+    if not has_composite:
+        required.append("pattern")
+    missing = [f for f in required if f not in data]
     if missing:
         logger.warning("Rule %s missing required fields: %s", origin, ", ".join(missing))
         return None
@@ -160,18 +166,54 @@ def _parse_yaml_rule(
     cat_str = str(data.get("category", "security")).lower()
     category = _YAML_CATEGORY_MAP.get(cat_str, RuleCategory.SECURITY)
 
-    try:
-        compiled = re.compile(data["pattern"])
-    except re.error as exc:
-        logger.warning("Rule %s has invalid regex: %s", origin, exc)
-        return None
+    # Build composite pattern if "patterns" or "pattern-either" is present
+    composite_pattern = None
+    if has_composite:
+        from attocode.code_intel.rules.combinators import build_composite_from_yaml
+        if "patterns" in data:
+            composite_src = data["patterns"]  # list of dicts
+        else:
+            # Top-level pattern-either: wrap as dict for build_composite_from_yaml
+            composite_src = {"pattern-either": data["pattern-either"]}
+        composite_pattern = build_composite_from_yaml(composite_src)
+        if composite_pattern is None:
+            logger.warning("Rule %s has invalid composite patterns", origin)
+            return None
+
+    # Compile primary pattern (may be absent for composite-only rules)
+    compiled: re.Pattern[str] | None = None
+    metavar_names: list[str] = []
+    if "pattern" in data:
+        pattern_str = str(data["pattern"])
+        try:
+            if has_metavars(pattern_str):
+                compiled, metavar_names = compile_metavar_pattern(pattern_str)
+            else:
+                compiled = re.compile(pattern_str)
+        except re.error as exc:
+            logger.warning("Rule %s has invalid regex: %s", origin, exc)
+            return None
 
     tier = RuleTier.STRUCTURAL if data.get("structural_pattern") else RuleTier.REGEX
+
+    # Parse metavariable constraints
+    metavar_regex: dict[str, str] = {}
+    raw_mv_regex = data.get("metavariable-regex") or data.get("metavariable_regex")
+    if isinstance(raw_mv_regex, dict):
+        metavar_regex = {str(k): str(v) for k, v in raw_mv_regex.items()}
+
+    metavar_comparison: dict[str, str] = {}
+    raw_mv_cmp = data.get("metavariable-comparison") or data.get("metavariable_comparison")
+    if isinstance(raw_mv_cmp, dict):
+        metavar_comparison = {str(k): str(v) for k, v in raw_mv_cmp.items()}
 
     fix = None
     fix_data = data.get("fix")
     if isinstance(fix_data, dict) and "search" in fix_data and "replace" in fix_data:
-        fix = AutoFix(search=str(fix_data["search"]), replace=str(fix_data["replace"]))
+        fix_search = str(fix_data["search"])
+        fix_replace = str(fix_data["replace"])
+        uses_metavars = has_metavars(fix_search) or has_metavars(fix_replace)
+        fix = AutoFix(search=fix_search, replace=fix_replace, uses_metavars=uses_metavars)
 
     examples: list[FewShotExample] = []
     for ex in data.get("examples", []):
@@ -209,6 +251,10 @@ def _parse_yaml_rule(
         examples=examples,
         recommendation=str(data.get("recommendation", "")),
         scan_comments=bool(data.get("scan_comments", False)),
+        metavars=metavar_names,
+        metavar_regex=metavar_regex,
+        metavar_comparison=metavar_comparison,
+        composite_pattern=composite_pattern,
     )
 
 
