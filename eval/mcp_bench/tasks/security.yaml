@@ -1,0 +1,244 @@
+# code-intel-bench: security_scanning tasks
+# Category: security_scanning — can the tool detect vulnerability patterns?
+# Tools: analyze, security_scan
+
+tasks:
+  - task_id: "security_scanning-fastapi-001"
+    category: "security_scanning"
+    repo: "fastapi"
+    query: "Scan this project for security vulnerabilities. Look for injection risks, auth bypasses, and insecure defaults."
+    tools_required: [security_scan]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["security"]
+      expected_cwes: []
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-express-002"
+    category: "security_scanning"
+    repo: "express"
+    query: "Run a security scan on the Express codebase. Check for path traversal, header injection, and prototype pollution risks."
+    tools_required: [security_scan]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["security"]
+      expected_cwes: ["CWE-22"]
+      min_findings: 1
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-rails-003"
+    category: "security_scanning"
+    repo: "rails"
+    query: "Analyze the Rails codebase for SQL injection vulnerabilities and mass assignment risks."
+    tools_required: [security_scan, analyze]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["SQL", "injection"]
+      expected_cwes: ["CWE-89"]
+      min_findings: 1
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-wordpress-004"
+    category: "security_scanning"
+    repo: "wordpress"
+    query: "Scan WordPress for XSS vulnerabilities, especially in template rendering and user input handling."
+    tools_required: [security_scan]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["XSS"]
+      expected_cwes: ["CWE-79"]
+      min_findings: 1
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-spring-boot-005"
+    category: "security_scanning"
+    repo: "spring-boot"
+    query: "Analyze Spring Boot for deserialization vulnerabilities and insecure default configurations."
+    tools_required: [security_scan, analyze]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["deserialization"]
+      expected_cwes: ["CWE-502"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-fastapi-006"
+    category: "security_scanning"
+    repo: "fastapi"
+    query: "Check for CORS misconfiguration patterns and overly permissive security headers."
+    tools_required: [analyze]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["CORS"]
+      expected_cwes: ["CWE-942"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-express-007"
+    category: "security_scanning"
+    repo: "express"
+    query: "Analyze the response handling code for information disclosure vulnerabilities, such as stack traces leaking in error responses."
+    tools_required: [analyze]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["error", "disclosure"]
+      expected_cwes: ["CWE-209"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-wordpress-008"
+    category: "security_scanning"
+    repo: "wordpress"
+    query: "Scan for file upload vulnerabilities and unrestricted file type handling."
+    tools_required: [security_scan]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["upload", "file"]
+      expected_cwes: ["CWE-434"]
+      min_findings: 1
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-rails-009"
+    category: "security_scanning"
+    repo: "rails"
+    query: "Check for CSRF token handling vulnerabilities and session fixation risks."
+    tools_required: [security_scan]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["CSRF"]
+      expected_cwes: ["CWE-352"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-redis-010"
+    category: "security_scanning"
+    repo: "redis"
+    query: "Scan for buffer overflow vulnerabilities and unsafe memory operations in the C codebase."
+    tools_required: [security_scan]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["buffer"]
+      expected_cwes: ["CWE-120"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-prisma-011"
+    category: "security_scanning"
+    repo: "prisma"
+    query: "Analyze for query injection risks in the Prisma client runtime. Check how user inputs flow into queries."
+    tools_required: [security_scan, analyze]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["injection", "query"]
+      expected_cwes: ["CWE-89"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-wordpress-012"
+    category: "security_scanning"
+    repo: "wordpress"
+    query: "Scan for authentication bypass vulnerabilities in the login and user management code."
+    tools_required: [security_scan]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["authentication"]
+      expected_cwes: ["CWE-287"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-spring-boot-013"
+    category: "security_scanning"
+    repo: "spring-boot"
+    query: "Check for actuator endpoint exposure risks and information leakage through management endpoints."
+    tools_required: [security_scan, analyze]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["actuator", "endpoint"]
+      expected_cwes: ["CWE-200"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-rails-014"
+    category: "security_scanning"
+    repo: "rails"
+    query: "Analyze the cookie handling and session management code for insecure storage patterns."
+    tools_required: [analyze]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["session", "cookie"]
+      expected_cwes: ["CWE-614"]
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5
+
+  - task_id: "security_scanning-express-015"
+    category: "security_scanning"
+    repo: "express"
+    query: "Run a comprehensive security scan. Report all findings with severity levels."
+    tools_required: [security_scan]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["security"]
+      expected_cwes: []
+      min_findings: 0
+    scoring_rubric:
+      deterministic_weight: 0.5

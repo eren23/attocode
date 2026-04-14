@@ -1,0 +1,154 @@
+# code-intel-bench: dead_code tasks
+# Category: dead_code — can the tool detect unreferenced code?
+# Tools: dead_code
+
+tasks:
+  - task_id: "dead_code-fastapi-001"
+    category: "dead_code"
+    repo: "fastapi"
+    query: "Find dead code in this project — unreferenced functions, unused imports, and orphaned modules."
+    tools_required: [dead_code]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unused"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-express-002"
+    category: "dead_code"
+    repo: "express"
+    query: "Scan for dead code. Are there any exported functions that are never imported or called?"
+    tools_required: [dead_code]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unreferenced"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-pandas-003"
+    category: "dead_code"
+    repo: "pandas"
+    query: "Detect dead code in the pandas core module. Find functions or classes that appear unused."
+    tools_required: [dead_code]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unused"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-redis-004"
+    category: "dead_code"
+    repo: "redis"
+    query: "Find unreferenced functions in the Redis C codebase. Are there any static functions never called?"
+    tools_required: [dead_code]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unreferenced"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-rails-005"
+    category: "dead_code"
+    repo: "rails"
+    query: "Scan the Rails codebase for dead code — deprecated methods that are defined but never called internally."
+    tools_required: [dead_code]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["deprecated"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-requests-006"
+    category: "dead_code"
+    repo: "requests"
+    query: "Find any dead code in the requests library. Look for unused utility functions or unreachable code paths."
+    tools_required: [dead_code]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unused"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-starship-007"
+    category: "dead_code"
+    repo: "starship"
+    query: "Detect dead code in the starship prompt modules. Are there any unused module configurations or helper functions?"
+    tools_required: [dead_code]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unused"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-spring-boot-008"
+    category: "dead_code"
+    repo: "spring-boot"
+    query: "Find dead code in Spring Boot. Look for unreferenced auto-configuration classes or unused bean definitions."
+    tools_required: [dead_code]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unreferenced"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-prisma-009"
+    category: "dead_code"
+    repo: "prisma"
+    query: "Scan the Prisma monorepo for dead code. Find unused exported types, functions, or modules across packages."
+    tools_required: [dead_code]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unused"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3
+
+  - task_id: "dead_code-wordpress-010"
+    category: "dead_code"
+    repo: "wordpress"
+    query: "Find dead code in WordPress. Look for functions defined in wp-includes that are never called."
+    tools_required: [dead_code]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["unused"]
+      must_mention_files: []
+    scoring_rubric:
+      deterministic_weight: 0.3

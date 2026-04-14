@@ -1,0 +1,304 @@
+# code-intel-bench: semantic_search tasks
+# Category: semantic_search — can the tool find code by natural language query?
+# Tools: semantic_search
+
+tasks:
+  - task_id: "semantic_search-fastapi-001"
+    category: "semantic_search"
+    repo: "fastapi"
+    query: "Find code related to middleware configuration and CORS setup"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "middleware configuration and CORS setup"
+    ground_truth:
+      must_contain: ["middleware", "CORS"]
+      must_mention_files: ["fastapi/middleware/cors.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-pandas-002"
+    category: "semantic_search"
+    repo: "pandas"
+    query: "Find code that handles missing data and NaN values"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "handling missing data and NaN values"
+    ground_truth:
+      must_contain: ["NaN", "missing"]
+      must_mention_files: ["pandas/core/missing.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-redis-003"
+    category: "semantic_search"
+    repo: "redis"
+    query: "Find the code responsible for key expiration and TTL management"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "key expiration and TTL management"
+    ground_truth:
+      must_contain: ["expire", "TTL"]
+      must_mention_files: ["src/expire.c"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-express-004"
+    category: "semantic_search"
+    repo: "express"
+    query: "Find the code that handles route parameter parsing"
+    tools_required: [semantic_search]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: "route parameter parsing"
+    ground_truth:
+      must_contain: ["param", "route"]
+      must_mention_files: ["lib/router/layer.js"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-gh-cli-005"
+    category: "semantic_search"
+    repo: "gh-cli"
+    query: "Find the code handling authentication flow and token management"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "authentication flow and token management"
+    ground_truth:
+      must_contain: ["auth", "token"]
+      must_mention_files: ["pkg/cmd/auth/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-fastapi-006"
+    category: "semantic_search"
+    repo: "fastapi"
+    query: "Find the dependency injection system and how dependencies are resolved"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "dependency injection resolution"
+    ground_truth:
+      must_contain: ["Depends", "dependency"]
+      must_mention_files: ["fastapi/dependencies/utils.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-rails-007"
+    category: "semantic_search"
+    repo: "rails"
+    query: "Find the code responsible for database migration execution"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "database migration execution"
+    ground_truth:
+      must_contain: ["migration"]
+      must_mention_files: ["activerecord/lib/active_record/migration.rb"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-prisma-008"
+    category: "semantic_search"
+    repo: "prisma"
+    query: "Find code that generates TypeScript types from the Prisma schema"
+    tools_required: [semantic_search]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: "TypeScript type generation from schema"
+    ground_truth:
+      must_contain: ["generate", "type"]
+      must_mention_files: ["packages/client/src/generation/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-spring-boot-009"
+    category: "semantic_search"
+    repo: "spring-boot"
+    query: "Find the auto-configuration mechanism that scans for @Configuration classes"
+    tools_required: [semantic_search]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: "auto-configuration scanning Configuration classes"
+    ground_truth:
+      must_contain: ["AutoConfiguration", "Configuration"]
+      must_mention_files: ["spring-boot-project/spring-boot-autoconfigure/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-ripgrep-010"
+    category: "semantic_search"
+    repo: "ripgrep"
+    query: "Find the code responsible for parallel file searching and thread pool management"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "parallel file searching thread pool"
+    ground_truth:
+      must_contain: ["parallel", "thread"]
+      must_mention_files: ["crates/searcher/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-deno-011"
+    category: "semantic_search"
+    repo: "deno"
+    query: "Find the permission system that controls file, network, and env access"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "permission system file network env access control"
+    ground_truth:
+      must_contain: ["permission"]
+      must_mention_files: ["runtime/permissions/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-pandas-012"
+    category: "semantic_search"
+    repo: "pandas"
+    query: "Find the code that handles CSV file reading and parsing"
+    tools_required: [semantic_search]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: "CSV file reading and parsing"
+    ground_truth:
+      must_contain: ["csv", "read"]
+      must_mention_files: ["pandas/io/parsers/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-redis-013"
+    category: "semantic_search"
+    repo: "redis"
+    query: "Find the code implementing the pub/sub messaging system"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "pub/sub messaging publish subscribe"
+    ground_truth:
+      must_contain: ["pubsub"]
+      must_mention_files: ["src/pubsub.c"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-wordpress-014"
+    category: "semantic_search"
+    repo: "wordpress"
+    query: "Find the code responsible for the plugin hook system (actions and filters)"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "plugin hook system actions and filters"
+    ground_truth:
+      must_contain: ["hook", "filter"]
+      must_mention_files: ["wp-includes/plugin.php"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-vapor-015"
+    category: "semantic_search"
+    repo: "vapor"
+    query: "Find the code handling HTTP request routing and middleware pipeline"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "HTTP request routing middleware pipeline"
+    ground_truth:
+      must_contain: ["route", "middleware"]
+      must_mention_files: ["Sources/Vapor/Routing/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-phoenix-016"
+    category: "semantic_search"
+    repo: "phoenix"
+    query: "Find the code implementing WebSocket channel communication"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "WebSocket channel communication"
+    ground_truth:
+      must_contain: ["channel"]
+      must_mention_files: ["lib/phoenix/channel.ex"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-requests-017"
+    category: "semantic_search"
+    repo: "requests"
+    query: "Find the code that handles SSL certificate verification and TLS"
+    tools_required: [semantic_search]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: "SSL certificate verification TLS"
+    ground_truth:
+      must_contain: ["ssl", "cert"]
+      must_mention_files: ["requests/adapters.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-cockroach-018"
+    category: "semantic_search"
+    repo: "cockroach"
+    query: "Find the code implementing distributed SQL query planning"
+    tools_required: [semantic_search]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: "distributed SQL query planning"
+    ground_truth:
+      must_contain: ["plan", "query"]
+      must_mention_files: ["pkg/sql/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-starship-019"
+    category: "semantic_search"
+    repo: "starship"
+    query: "Find the code that detects the current git branch and status for the prompt"
+    tools_required: [semantic_search]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: "git branch detection status prompt"
+    ground_truth:
+      must_contain: ["git", "branch"]
+      must_mention_files: ["src/modules/git_branch.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "semantic_search-spark-020"
+    category: "semantic_search"
+    repo: "spark"
+    query: "Find the code implementing resilient distributed dataset (RDD) transformations"
+    tools_required: [semantic_search]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: "RDD resilient distributed dataset transformations"
+    ground_truth:
+      must_contain: ["RDD"]
+      must_mention_files: ["core/src/main/scala/org/apache/spark/rdd/RDD.scala"]
+    scoring_rubric:
+      deterministic_weight: 0.7

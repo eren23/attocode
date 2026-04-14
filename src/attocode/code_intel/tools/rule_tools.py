@@ -1,6 +1,12 @@
 """Rule-based analysis tools for the code-intel MCP server.
 
-Tools: analyze, list_rules, list_packs, install_pack, register_rule.
+Tools:
+  Core:     analyze, list_rules, list_packs, install_pack, register_rule
+  Testing:  test_rules
+  CI:       ci_scan
+  Feedback: rule_stats, rule_feedback
+  Community: search_community_packs, install_community_pack, validate_pack_tool
+  Import:   import_rules
 
 These expose the pluggable rule engine to the connected coding agent,
 providing rich, pre-filtered, context-laden findings that enable the
@@ -26,10 +32,12 @@ _registry_lock = threading.Lock()
 def _get_registry():
     """Get or create the global rule registry (lazy singleton)."""
     global _registry, _registry_loaded
-    if _registry is not None and _registry_loaded:
-        return _registry
+    # Read-only fast path (safe: both reads are atomic in CPython;
+    # the lock below re-checks to avoid races with install_pack resets)
+    reg = _registry
+    if reg is not None and _registry_loaded:
+        return reg
     with _registry_lock:
-        # Double-check under lock
         if _registry is not None and _registry_loaded:
             return _registry
 
@@ -339,8 +347,9 @@ def install_pack(name: str) -> str:
 
     # Reload registry to pick up new pack
     global _registry, _registry_loaded
-    _registry = None
-    _registry_loaded = False
+    with _registry_lock:
+        _registry = None
+        _registry_loaded = False
 
     return result
 
@@ -408,3 +417,312 @@ def register_rule(yaml_content: str) -> str:
     parts.append(f"Registry now has {reg.count} rules total.")
 
     return "\n".join(parts)
+
+
+@mcp.tool()
+def test_rules(
+    fixtures_dir: str = "",
+    rule_id: str = "",
+) -> str:
+    """Run rule tests against fixture files with expect/ok/todoruleid annotations.
+
+    Fixture files should contain inline annotations:
+      # expect: rule-id    — rule MUST fire on this line
+      # ok: rule-id        — rule must NOT fire on this line (false-positive guard)
+      # todoruleid: rule-id — rule SHOULD fire but is known-missing
+
+    Args:
+        fixtures_dir: Directory containing annotated test files.
+            Default: .attocode/test_fixtures/ or tests/fixtures/rule_violations/.
+        rule_id: Optional — only test this specific rule.
+    """
+    from attocode.code_intel.rules.testing import (
+        RuleTestRunner,
+        format_test_report,
+    )
+
+    reg = _get_registry()
+    project_dir = _get_project_dir()
+
+    # Resolve fixtures directory
+    if not fixtures_dir:
+        import os
+        for candidate in [
+            os.path.join(project_dir, ".attocode", "test_fixtures"),
+            os.path.join(project_dir, "tests", "fixtures", "rule_violations"),
+        ]:
+            if os.path.isdir(candidate):
+                fixtures_dir = candidate
+                break
+        if not fixtures_dir:
+            return "No test fixtures directory found. Provide fixtures_dir or create .attocode/test_fixtures/."
+
+    # Get rules
+    if rule_id:
+        rule = reg.get(rule_id)
+        if rule is None:
+            return f"Rule '{rule_id}' not found in registry."
+        rules = [rule]
+    else:
+        rules = reg.all_rules(enabled_only=False)
+
+    runner = RuleTestRunner(rules, project_dir=project_dir)
+    suite = runner.run_test_suite(fixtures_dir)
+
+    if not suite.file_results:
+        return f"No annotated test files found in {fixtures_dir}."
+
+    return format_test_report(suite)
+
+
+@mcp.tool()
+def ci_scan(
+    path: str = "",
+    language: str = "",
+    category: str = "",
+    fail_on: str = "high",
+    diff_only: bool = False,
+    output_format: str = "summary",
+) -> str:
+    """Run CI-style rule scan with exit-code semantics and SARIF output.
+
+    Designed for CI/CD pipelines: scans source files, applies rules,
+    and reports findings with pass/fail status. Supports diff-only mode
+    to scan only changed lines since a baseline git ref.
+
+    Args:
+        path: Directory to scan (relative to project root). Default: entire project.
+        language: Filter rules to this language.
+        category: Filter by category (correctness, security, etc.).
+        fail_on: Minimum severity to trigger failure: critical, high, medium, low.
+        diff_only: Only report findings on lines changed since baseline.
+        output_format: Output format — "summary" (human-readable),
+            "sarif" (SARIF JSON), "annotations" (GitHub Actions format).
+    """
+    from attocode.code_intel.rules.ci import (
+        CIConfig, CIRunner, format_ci_summary, format_github_annotations,
+    )
+    from attocode.code_intel.rules.sarif import findings_to_sarif, sarif_to_json
+    from attocode.code_intel.rules.model import RuleSeverity
+
+    project_dir = _get_project_dir()
+
+    config = CIConfig()
+    sev_str = fail_on.lower()
+    if sev_str in {s.value for s in RuleSeverity}:
+        config.fail_on = RuleSeverity(sev_str)
+
+    runner = CIRunner(project_dir, config=config)
+    result = runner.run(path=path, language=language, category=category, diff_only=diff_only)
+
+    if output_format == "sarif":
+        sarif = findings_to_sarif(result.findings)
+        return sarif_to_json(sarif)
+    elif output_format == "annotations":
+        annotations = format_github_annotations(result.findings)
+        status = "PASS" if result.passed else "FAIL"
+        return f"Status: {status}\n{annotations}"
+    else:
+        return format_ci_summary(result)
+
+
+@mcp.tool()
+def rule_stats(rule_id: str = "") -> str:
+    """Show profiling stats and confidence calibration for rules.
+
+    Shows execution time, match count, true/false positive feedback,
+    and calibrated confidence from persistent feedback data.
+
+    Args:
+        rule_id: Specific rule ID, or empty for all rules with feedback.
+    """
+    from attocode.code_intel.rules.profiling import (
+        FeedbackStore, RuleStats, format_rule_stats,
+    )
+
+    project_dir = _get_project_dir()
+    store = FeedbackStore(project_dir)
+    feedback = store.all_feedback()
+
+    if not feedback:
+        return "No rule feedback recorded yet. Use rule_feedback() to record TP/FP observations."
+
+    # Build stats from feedback data
+    stats: dict[str, RuleStats] = {}
+    for rid, fb in feedback.items():
+        if rule_id and rid != rule_id:
+            continue
+        s = RuleStats(
+            rule_id=rid,
+            true_positives=fb.get("tp", 0),
+            false_positives=fb.get("fp", 0),
+        )
+        stats[rid] = s
+
+    if rule_id and not stats:
+        return f"No feedback for rule '{rule_id}'."
+
+    return format_rule_stats(stats, feedback)
+
+
+@mcp.tool()
+def rule_feedback(
+    rule_id: str,
+    is_true_positive: bool,
+    finding_line: int = 0,
+) -> str:
+    """Record whether a finding was a true or false positive.
+
+    This feedback is used to calibrate rule confidence scores over time.
+    After 5+ observations, a calibrated confidence replaces the rule's
+    default confidence for more accurate triage.
+
+    Args:
+        rule_id: The rule that produced the finding.
+        is_true_positive: True if the finding was a real issue, False if it was a false positive.
+        finding_line: Optional line number for context (not used in calibration).
+    """
+    from attocode.code_intel.rules.profiling import FeedbackStore
+
+    project_dir = _get_project_dir()
+    store = FeedbackStore(project_dir)
+    store.record(rule_id, is_true_positive=is_true_positive)
+
+    fb = store.get_feedback(rule_id)
+    tp, fp = fb.get("tp", 0), fb.get("fp", 0)
+    total = tp + fp
+    cal = store.get_calibrated_confidence(rule_id)
+
+    parts = [f"Recorded {'TP' if is_true_positive else 'FP'} for `{rule_id}`."]
+    parts.append(f"Total: {tp} TP, {fp} FP ({total} observations)")
+    if cal is not None:
+        parts.append(f"Calibrated confidence: {cal:.1%}")
+    else:
+        remaining = 5 - total
+        parts.append(f"Need {remaining} more observation(s) for calibration.")
+
+    return "\n".join(parts)
+
+
+@mcp.tool()
+def search_community_packs(
+    query: str = "",
+    language: str = "",
+) -> str:
+    """Search the community rule pack registry.
+
+    Finds rule packs shared by the community, filterable by keyword
+    and language. Install found packs with install_community_pack().
+
+    Args:
+        query: Search by name, description, or tags.
+        language: Filter to packs supporting this language.
+    """
+    from attocode.code_intel.rules.marketplace import search_packs, format_registry_search
+
+    entries = search_packs(query=query, language=language)
+    return format_registry_search(entries)
+
+
+@mcp.tool()
+def install_community_pack(
+    name: str,
+    url: str = "",
+) -> str:
+    """Install a community rule pack from a Git repository.
+
+    Downloads and validates the pack, then installs to .attocode/packs/.
+
+    Args:
+        name: Pack name (used as directory name).
+        url: Git clone URL. If empty, looks up from community registry.
+    """
+    from attocode.code_intel.rules.marketplace import (
+        install_remote_pack,
+        search_packs,
+    )
+
+    project_dir = _get_project_dir()
+    if not project_dir:
+        return "Error: No project directory detected. Open a project first."
+
+    if not url:
+        entries = search_packs(query=name)
+        matching = [e for e in entries if e.name == name]
+        if matching:
+            url = matching[0].url
+        else:
+            return f"Pack '{name}' not found in registry. Provide a URL directly."
+
+    result = install_remote_pack(url, project_dir, pack_name=name)
+
+    # Reload registry
+    global _registry, _registry_loaded
+    with _registry_lock:
+        _registry = None
+        _registry_loaded = False
+
+    return result
+
+
+@mcp.tool()
+def validate_pack_tool(pack_path: str = "") -> str:
+    """Validate a rule pack for correctness before publishing.
+
+    Checks manifest, rule syntax, regex compilation, and inline tests.
+
+    Args:
+        pack_path: Path to pack directory. Default: validates all installed packs.
+    """
+    from attocode.code_intel.rules.marketplace import validate_pack, prepare_pack_for_publish
+
+    project_dir = _get_project_dir()
+    if not project_dir and not pack_path:
+        return "Error: No project directory detected. Provide pack_path or open a project."
+
+    if pack_path:
+        import os
+        if not os.path.isabs(pack_path):
+            pack_path = os.path.join(project_dir, pack_path)
+        return prepare_pack_for_publish(pack_path)
+
+    import os
+    packs_dir = os.path.join(project_dir, ".attocode", "packs")
+    if not os.path.isdir(packs_dir):
+        return "No packs installed (.attocode/packs/ not found)."
+
+    results: list[str] = []
+    for entry in sorted(os.listdir(packs_dir)):
+        pack_dir = os.path.join(packs_dir, entry)
+        if os.path.isdir(pack_dir):
+            errors = validate_pack(pack_dir)
+            status = "PASS" if not errors else "FAIL"
+            results.append(f"**{entry}**: {status}")
+            if errors:
+                for e in errors:
+                    results.append(f"  - {e}")
+
+    return "\n".join(results) if results else "No packs found."
+
+
+@mcp.tool()
+def import_rules(
+    source_format: str,
+    content: str,
+) -> str:
+    """Import rules from another tool's format into attocode YAML.
+
+    Converts rules from Semgrep or other formats to attocode YAML.
+    Output can be saved to .attocode/rules/ or registered via register_rule().
+
+    Supported formats: semgrep
+
+    Args:
+        source_format: Source format — "semgrep".
+        content: YAML content in the source format.
+    """
+    if source_format.lower() == "semgrep":
+        from attocode.code_intel.rules.importers.semgrep import convert_semgrep_to_yaml
+        return convert_semgrep_to_yaml(content)
+    else:
+        return f"Unsupported format '{source_format}'. Supported: semgrep"

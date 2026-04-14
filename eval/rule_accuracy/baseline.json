@@ -1,0 +1,458 @@
+{
+  "bug/use-of-eval()-can-execute-arbitrary-code": {
+    "f1": 0.0,
+    "fn": 0,
+    "fp": 2,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "bug/use-of-exec()-can-execute-arbitrary-code": {
+    "f1": 0.0,
+    "fn": 0,
+    "fp": 1,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "go-exec-command-var": {
+    "f1": 0.6667,
+    "fn": 1,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 0.5,
+    "tp": 1
+  },
+  "go-sql-string-concat": {
+    "f1": 0.6667,
+    "fn": 1,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 0.5,
+    "tp": 1
+  },
+  "go/go-defer-statement": {
+    "f1": 0.6667,
+    "fn": 0,
+    "fp": 1,
+    "precision": 0.5,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "go/go-error-string-compare": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "go/go-mutex-lock": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "go/go-reflect-in-loop": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "go/go-sprintf-allocation": {
+    "f1": 0.6667,
+    "fn": 0,
+    "fp": 1,
+    "precision": 0.5,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "go/go-string-tolower-compare": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "go/go-template-html-unescaped": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "go/go-tls-insecure": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "java/java-catch-exception": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "java/java-null-return": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 3
+  },
+  "java/java-sql-concat": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "java/java-string-concat-loop": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "python/py-bare-except": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "python/py-dict-keys-iteration": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "python/py-global-import-in-function": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "python/py-isinstance-chain": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "python/py-mutable-default-arg": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 2
+  },
+  "python/py-string-concat-loop": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "rust/rs-clone-in-loop": {
+    "f1": 0.6667,
+    "fn": 0,
+    "fp": 1,
+    "precision": 0.5,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "rust/rs-todo-macro": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "rust/rs-unsafe-block": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 2
+  },
+  "rust/rs-unwrap-usage": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/aws_access_key": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/github_token": {
+    "f1": 0.0,
+    "fn": 1,
+    "fp": 0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "security/go_sql_sprintf": {
+    "f1": 0.0,
+    "fn": 0,
+    "fp": 1,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "security/java_sql_concat": {
+    "f1": 0.0,
+    "fn": 1,
+    "fp": 0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "security/js_dangerously_set": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/js_document_write": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/js_dynamic_eval": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 2
+  },
+  "security/js_eval_on_buffer": {
+    "f1": 0.0,
+    "fn": 1,
+    "fp": 0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "security/js_innerhtml": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/js_settimer_string_arg": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/jwt_token": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/openai_key": {
+    "f1": 0.0,
+    "fn": 1,
+    "fp": 0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "security/password_assignment": {
+    "f1": 0.0,
+    "fn": 1,
+    "fp": 0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "security/python_dynamic_eval": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 2
+  },
+  "security/python_dynamic_exec": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/python_marshal_loads": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/python_os_system": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/python_pickle_loads": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/python_shell_true": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 2
+  },
+  "security/python_sql_concat": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/python_sql_format_string": {
+    "f1": 0.6667,
+    "fn": 1,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 0.5,
+    "tp": 1
+  },
+  "security/python_sql_fstring": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/python_weak_hash": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 2
+  },
+  "security/python_weak_random": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 3
+  },
+  "security/python_yaml_unsafe": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "security/slack_webhook": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "should": {
+    "f1": 0.0,
+    "fn": 1,
+    "fp": 0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "typescript/ts-any-type": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 2
+  },
+  "typescript/ts-array-push-spread": {
+    "f1": 1.0,
+    "fn": 0,
+    "fp": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "typescript/ts-await-in-loop": {
+    "f1": 0.6667,
+    "fn": 0,
+    "fp": 1,
+    "precision": 0.5,
+    "recall": 1.0,
+    "tp": 1
+  },
+  "typescript/ts-console-log": {
+    "f1": 0.8,
+    "fn": 0,
+    "fp": 1,
+    "precision": 0.6667,
+    "recall": 1.0,
+    "tp": 2
+  }
+}

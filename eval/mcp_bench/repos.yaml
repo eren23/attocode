@@ -1,0 +1,141 @@
+# code-intel-bench repository manifest
+# Each repo is pinned at a specific commit for reproducibility.
+# Run `setup.sh` to clone repos, or set BENCHMARK_REPOS_DIR.
+
+repos:
+  # Python
+  - name: fastapi
+    url: https://github.com/tiangolo/fastapi
+    commit: HEAD
+    language: python
+    size_mb: 15
+
+  - name: pandas
+    url: https://github.com/pandas-dev/pandas
+    commit: HEAD
+    language: python
+    size_mb: 120
+
+  - name: requests
+    url: https://github.com/psf/requests
+    commit: HEAD
+    language: python
+    size_mb: 5
+
+  # Go
+  - name: gh-cli
+    url: https://github.com/cli/cli
+    commit: HEAD
+    language: go
+    size_mb: 30
+
+  - name: cockroach
+    url: https://github.com/cockroachdb/cockroach
+    commit: HEAD
+    language: go
+    size_mb: 500
+
+  # Rust
+  - name: ripgrep
+    url: https://github.com/BurntSushi/ripgrep
+    commit: HEAD
+    language: rust
+    size_mb: 8
+
+  - name: starship
+    url: https://github.com/starship/starship
+    commit: HEAD
+    language: rust
+    size_mb: 15
+
+  - name: deno
+    url: https://github.com/denoland/deno
+    commit: HEAD
+    language: rust
+    size_mb: 80
+
+  # C
+  - name: redis
+    url: https://github.com/redis/redis
+    commit: HEAD
+    language: c
+    size_mb: 30
+
+  # C++
+  - name: spdlog
+    url: https://github.com/gabime/spdlog
+    commit: HEAD
+    language: cpp
+    size_mb: 5
+
+  # Java
+  - name: spring-boot
+    url: https://github.com/spring-projects/spring-boot
+    commit: HEAD
+    language: java
+    size_mb: 60
+
+  # JavaScript
+  - name: express
+    url: https://github.com/expressjs/express
+    commit: HEAD
+    language: javascript
+    size_mb: 3
+
+  # TypeScript
+  - name: prisma
+    url: https://github.com/prisma/prisma
+    commit: HEAD
+    language: typescript
+    size_mb: 40
+
+  # Ruby
+  - name: rails
+    url: https://github.com/rails/rails
+    commit: HEAD
+    language: ruby
+    size_mb: 80
+
+  - name: faker
+    url: https://github.com/faker-ruby/faker
+    commit: HEAD
+    language: ruby
+    size_mb: 10
+
+  # Swift
+  - name: vapor
+    url: https://github.com/vapor/vapor
+    commit: HEAD
+    language: swift
+    size_mb: 10
+
+  # Elixir
+  - name: phoenix
+    url: https://github.com/phoenixframework/phoenix
+    commit: HEAD
+    language: elixir
+    size_mb: 8
+
+  # Scala
+  - name: spark
+    url: https://github.com/apache/spark
+    commit: HEAD
+    language: scala
+    size_mb: 200
+
+  # PHP
+  - name: wordpress
+    url: https://github.com/WordPress/WordPress
+    commit: HEAD
+    language: php
+    size_mb: 60
+
+  # Internal
+  - name: attocode
+    url: local
+    commit: HEAD
+    language: python
+    size_mb: 20
+
+# Micro slice — 3 small repos for fast CI runs (<5 min total)
+micro_slice: [express, fastapi, starship]

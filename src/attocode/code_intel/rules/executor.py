@@ -6,6 +6,12 @@ import logging
 import os
 from pathlib import Path
 
+from attocode.code_intel.rules.combinators import MatchContext
+from attocode.code_intel.rules.metavar import (
+    apply_metavar_fix,
+    check_metavar_constraints,
+    interpolate_message,
+)
 from attocode.code_intel.rules.model import (
     EnrichedFinding,
     RuleTier,
@@ -94,8 +100,10 @@ def execute_rules(
     universal_rules: list[UnifiedRule] = []
 
     for rule in rules:
-        if rule.tier != RuleTier.REGEX or rule.pattern is None:
+        if rule.tier != RuleTier.REGEX:
             continue  # structural/plugin tiers handled elsewhere
+        if rule.pattern is None and rule.composite_pattern is None:
+            continue  # no executable pattern
         if not rule.languages:
             universal_rules.append(rule)
         else:
@@ -130,25 +138,70 @@ def execute_rules(
             for rule in applicable:
                 if is_comment and not rule.scan_comments:
                     continue
-                if rule.pattern and rule.pattern.search(line):
-                    findings.append(EnrichedFinding(
-                        rule_id=rule.qualified_id,
-                        rule_name=rule.name,
-                        severity=rule.severity,
-                        category=rule.category,
-                        confidence=rule.confidence,
-                        file=rel_path,
-                        line=line_no,
-                        code_snippet=line.rstrip()[:200],
-                        description=rule.description,
-                        explanation=rule.explanation,
-                        recommendation=rule.recommendation,
-                        examples=list(rule.examples),
-                        suggested_fix=f"{rule.fix.search} \u2192 {rule.fix.replace}" if rule.fix else "",
-                        cwe=rule.cwe,
-                        pack=rule.pack,
-                        tags=list(rule.tags),
-                    ))
+
+                captures: dict[str, str] = {}
+
+                # --- Composite pattern path ---
+                if rule.composite_pattern is not None:
+                    ctx = MatchContext(
+                        line=line, line_no=line_no, all_lines=lines,
+                    )
+                    if not rule.composite_pattern.evaluate(ctx):
+                        continue
+                    captures = ctx.captures
+
+                # --- Simple pattern path ---
+                elif rule.pattern is not None:
+                    match = rule.pattern.search(line)
+                    if not match:
+                        continue
+                    if rule.metavars:
+                        captures = {
+                            k: v for k, v in match.groupdict().items()
+                            if v is not None
+                        }
+                        if not check_metavar_constraints(
+                            captures, rule.metavar_regex, rule.metavar_comparison,
+                        ):
+                            continue
+                else:
+                    continue
+
+                # Build description with metavar interpolation
+                description = rule.description
+                if captures:
+                    description = interpolate_message(description, captures)
+
+                # Build suggested fix
+                suggested_fix = ""
+                if rule.fix:
+                    if rule.fix.uses_metavars and captures:
+                        sf_search, sf_replace = apply_metavar_fix(
+                            rule.fix.search, rule.fix.replace, captures,
+                        )
+                        suggested_fix = f"{sf_search} \u2192 {sf_replace}"
+                    else:
+                        suggested_fix = f"{rule.fix.search} \u2192 {rule.fix.replace}"
+
+                findings.append(EnrichedFinding(
+                    rule_id=rule.qualified_id,
+                    rule_name=rule.name,
+                    severity=rule.severity,
+                    category=rule.category,
+                    confidence=rule.confidence,
+                    file=rel_path,
+                    line=line_no,
+                    code_snippet=line.rstrip()[:200],
+                    description=description,
+                    explanation=rule.explanation,
+                    recommendation=rule.recommendation,
+                    examples=list(rule.examples),
+                    suggested_fix=suggested_fix,
+                    captures=dict(captures),
+                    cwe=rule.cwe,
+                    pack=rule.pack,
+                    tags=list(rule.tags),
+                ))
 
     # Sort: severity first, then file, then line
     _sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}

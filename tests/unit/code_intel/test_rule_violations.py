@@ -31,45 +31,26 @@ from attocode.code_intel.rules.filters.pipeline import run_pipeline
 from attocode.code_intel.rules.model import RuleSource
 
 # ---------------------------------------------------------------------------
-# Annotation parser
+# Annotation parser — delegates to the shared testing module
 # ---------------------------------------------------------------------------
 
-_EXPECT_RE = re.compile(r"#\s*expect:\s*([\w./-]+)|//\s*expect:\s*([\w./-]+)")
-
-
-@dataclass
-class Expectation:
-    line: int
-    rule_id: str  # may be partial (e.g. "no-print-debugging" matches "no-print-debugging" or "python/no-print-debugging")
+from attocode.code_intel.rules.testing import (
+    Expectation,
+    parse_annotations,
+    _finding_matches_rule,
+)
 
 
 def parse_expectations(file_path: str) -> list[Expectation]:
-    """Parse # expect: rule-id annotations from a source file."""
-    expectations: list[Expectation] = []
-    with open(file_path, encoding="utf-8") as f:
-        for i, line in enumerate(f, 1):
-            m = _EXPECT_RE.search(line)
-            if m:
-                rule_id = m.group(1) or m.group(2)
-                expectations.append(Expectation(line=i, rule_id=rule_id))
-    return expectations
+    """Parse # expect: rule-id annotations from a source file.
 
-
-def _finding_matches_rule(finding_rule_id: str, expected_rule_id: str) -> bool:
-    """Check if a finding's rule_id matches an expected annotation.
-
-    Supports partial matching: "no-print-debugging" matches both
-    "no-print-debugging" and "plugin:my-rules/no-print-debugging".
+    Now delegates to the shared testing module which also handles
+    ``# ok:`` and ``# todoruleid:`` annotations.
     """
-    if finding_rule_id == expected_rule_id:
-        return True
-    # Partial: expected appears at the end after a /
-    if finding_rule_id.endswith("/" + expected_rule_id):
-        return True
-    # Partial: expected is contained in the finding ID
-    if expected_rule_id in finding_rule_id:
-        return True
-    return False
+    return [
+        a for a in parse_annotations(file_path)
+        if a.kind == "expect"
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -229,4 +210,61 @@ def test_clean_functions_produce_no_findings(
     if false_positives:
         pytest.fail(
             f"False positives in clean functions of {rel_path}:\n" + "\n".join(false_positives)
+        )
+
+
+# ---------------------------------------------------------------------------
+# # ok: annotation tests — verify FP guards work
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("rel_path,language", _TEST_FILES, ids=[t[1] for t in _TEST_FILES])
+def test_ok_annotations_not_matched(
+    full_registry: RuleRegistry,
+    rel_path: str,
+    language: str,
+) -> None:
+    """Verify lines annotated with # ok: rule-id do NOT produce that finding."""
+    file_path = str(FIXTURES_DIR / rel_path)
+    if not os.path.isfile(file_path):
+        pytest.skip(f"Fixture not found: {file_path}")
+
+    ok_annotations = [
+        a for a in parse_annotations(file_path) if a.kind == "ok"
+    ]
+    if not ok_annotations:
+        pytest.skip(f"No # ok: annotations in {rel_path}")
+
+    # Run rules
+    rules = full_registry.query(language=language, min_confidence=0.0)
+    universal = full_registry.query(min_confidence=0.0)
+    seen_ids = set()
+    combined = []
+    for r in rules + universal:
+        if r.qualified_id not in seen_ids:
+            combined.append(r)
+            seen_ids.add(r.qualified_id)
+
+    findings = execute_rules([file_path], combined, project_dir=str(FIXTURES_DIR))
+    findings = run_pipeline(findings, min_confidence=0.0)
+
+    finding_map: dict[int, list[str]] = {}
+    for f in findings:
+        finding_map.setdefault(f.line, []).append(f.rule_id)
+
+    violations: list[str] = []
+    for ann in ok_annotations:
+        line_findings = finding_map.get(ann.line, [])
+        matched = any(
+            _finding_matches_rule(fid, ann.rule_id)
+            for fid in line_findings
+        )
+        if matched:
+            violations.append(
+                f"  Line {ann.line}: rule '{ann.rule_id}' fired but was marked # ok:"
+            )
+
+    if violations:
+        pytest.fail(
+            f"False positives in {rel_path} (# ok: violations):\n" + "\n".join(violations)
         )
