@@ -1,0 +1,154 @@
+# code-intel-bench: architecture tasks
+# Category: architecture — can the tool detect module structure and hotspots?
+# Tools: community_detection, hotspots
+
+tasks:
+  - task_id: "architecture-fastapi-001"
+    category: "architecture"
+    repo: "fastapi"
+    query: "Detect the major module communities in this project. What are the main architectural boundaries?"
+    tools_required: [community_detection]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["routing", "dependencies"]
+      must_mention_files: ["fastapi/routing.py", "fastapi/applications.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-express-002"
+    category: "architecture"
+    repo: "express"
+    query: "What are the hotspot files in express — the most complex and change-prone modules?"
+    tools_required: [hotspots]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["router"]
+      must_mention_files: ["lib/router/index.js"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-redis-003"
+    category: "architecture"
+    repo: "redis"
+    query: "Detect the architectural communities in the Redis codebase. What are the major subsystems?"
+    tools_required: [community_detection]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["server", "networking"]
+      must_mention_files: ["src/server.c"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-pandas-004"
+    category: "architecture"
+    repo: "pandas"
+    query: "What are the complexity hotspots in pandas? Which files have the highest cyclomatic complexity?"
+    tools_required: [hotspots]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["frame", "series"]
+      must_mention_files: ["pandas/core/frame.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-rails-005"
+    category: "architecture"
+    repo: "rails"
+    query: "Detect the module communities in Rails. How do ActiveRecord, ActionPack, and other components relate?"
+    tools_required: [community_detection]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["ActiveRecord", "ActionPack"]
+      must_mention_files: ["activerecord/", "actionpack/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-spring-boot-006"
+    category: "architecture"
+    repo: "spring-boot"
+    query: "What are the hotspot files in Spring Boot? Where is complexity concentrated?"
+    tools_required: [hotspots]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["SpringApplication", "autoconfigure"]
+      must_mention_files: ["spring-boot-project/spring-boot/src/main/java/org/springframework/boot/SpringApplication.java"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-ripgrep-007"
+    category: "architecture"
+    repo: "ripgrep"
+    query: "Detect the architectural boundaries in ripgrep. How are the internal crates organized?"
+    tools_required: [community_detection]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["crate", "searcher"]
+      must_mention_files: ["crates/searcher/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-cockroach-008"
+    category: "architecture"
+    repo: "cockroach"
+    query: "What are the major module communities in CockroachDB? Identify the primary architectural layers."
+    tools_required: [community_detection]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["sql", "kv"]
+      must_mention_files: ["pkg/sql/", "pkg/kv/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-deno-009"
+    category: "architecture"
+    repo: "deno"
+    query: "What are the complexity hotspots in Deno? Which files carry the most architectural weight?"
+    tools_required: [hotspots]
+    difficulty: hard
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["runtime"]
+      must_mention_files: ["runtime/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "architecture-prisma-010"
+    category: "architecture"
+    repo: "prisma"
+    query: "Detect the module boundaries in the Prisma monorepo. How do the packages relate to each other?"
+    tools_required: [community_detection]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["client", "engine"]
+      must_mention_files: ["packages/client/", "packages/engines/"]
+    scoring_rubric:
+      deterministic_weight: 0.7

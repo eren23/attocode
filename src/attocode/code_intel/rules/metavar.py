@@ -38,6 +38,13 @@ _TYPE_FRAGMENTS: dict[str, str] = {
 # Default regex for any $X not in _TYPE_FRAGMENTS
 _DEFAULT_FRAGMENT = r"\w+"
 
+# Comparison operators for metavariable-comparison constraints
+_CMP_OPS = {
+    ">": float.__gt__, ">=": float.__ge__,
+    "<": float.__lt__, "<=": float.__le__,
+    "==": float.__eq__, "!=": float.__ne__,
+}
+
 
 def _infer_fragment(name: str) -> str:
     """Infer the regex fragment for a metavariable name.
@@ -165,12 +172,7 @@ def check_metavar_constraints(
                 return False
             op, threshold_str = cmp_match.group(1), cmp_match.group(2)
             threshold = float(threshold_str)
-            _OPS = {
-                ">": float.__gt__, ">=": float.__ge__,
-                "<": float.__lt__, "<=": float.__le__,
-                "==": float.__eq__, "!=": float.__ne__,
-            }
-            op_fn = _OPS.get(op)
+            op_fn = _CMP_OPS.get(op)
             if op_fn is None:
                 return False  # unrecognized operator — fail closed
             if not op_fn(num, threshold):

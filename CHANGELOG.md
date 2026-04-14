@@ -5,6 +5,113 @@ All notable changes to the Attocode Python agent will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.20] - 2026-04-14
+
+### Added — Rule Engine Expansion, Benchmarking, & Ecosystem
+
+Major expansion of the rule engine with Semgrep-style features, a publishable
+code intelligence benchmark, and community rule ecosystem tooling.
+
+#### Rule Engine (Part A)
+
+- **Metavariable support** (`metavar.py`): `$FUNC`, `$ARG`, `$STR`, `$NUM`,
+  `$EXPR`, `$TYPE`, `$...` pattern variables with type-hinted regex, back-
+  references, `metavariable-regex` and `metavariable-comparison` post-match
+  constraints, message interpolation, and metavar-aware autofix templates
+- **Boolean combinators** (`combinators.py`): `pattern-either`, `pattern-not`,
+  `pattern-inside`, `pattern-not-inside` composition with indentation-aware
+  scope detection and function-boundary awareness
+- **Rule testing framework** (`testing.py`): `# expect:`, `# ok:` (FP guard),
+  `# todoruleid:` (known-missing) annotations; `RuleTestRunner` with
+  `validate_inline_test_cases` for YAML rule self-checks
+- **SARIF v2.1.0 output** (`sarif.py`): GitHub Code Scanning compatible with
+  CWE relationships, few-shot examples in property bags, `help.markdown`
+- **CI runner** (`ci.py`): `CIRunner` with diff-only scanning via `git diff`,
+  severity-based exit codes, `.attocode/ci.yaml` config, GitHub Actions
+  annotations with proper `%`/newline encoding
+- **Rule profiling** (`profiling.py`): per-rule timing, TP/FP feedback,
+  confidence calibration (`calibrated_confidence = tp / (tp + fp)` at 5+
+  samples), persistent `.attocode/rule_feedback.json`
+- **Community registry** (`marketplace.py`): `validate_pack()` with manifest/
+  regex/uniqueness/inline-test checks, `install_remote_pack()` with path-
+  traversal sanitization, `search_packs()`, `prepare_pack_for_publish()`
+- **Semgrep import** (`importers/semgrep.py`): converts Semgrep YAML rules to
+  attocode format — patterns, `pattern-either`, composite `patterns`, CWE,
+  severity mapping, metavariable constraints, autofix
+
+#### New MCP Tools (8)
+
+- `test_rules` — run annotated fixture tests against rules
+- `ci_scan` — CI-style scan with SARIF/annotations/summary output
+- `rule_stats` — profiling stats and calibration data
+- `rule_feedback` — record TP/FP for confidence calibration
+- `search_community_packs` — search community rule registry
+- `install_community_pack` — install from Git with validation
+- `validate_pack_tool` — validate packs before publishing
+- `import_rules` — convert rules from Semgrep format
+
+#### Benchmarking (Part B)
+
+- **Rule accuracy benchmark** (`eval/rule_accuracy/`): corpus of 46 annotated
+  files across 6 languages, 13 CWE categories; precision/recall/F1 per rule,
+  per CWE, per language; CASTLE Score (triage-burden-weighted); confidence
+  calibration with ECE measurement; regression detection with baseline snapshots
+  - Current: **F1=0.87**, P=0.87, R=0.87 across 57 rules
+  - Calibration: ECE=0.22 (confidence scores over-optimistic)
+- **Publishable `code-intel-bench`** (`eval/mcp_bench/`): first code-intelligence
+  MCP benchmark — 120 tasks across 8 categories (orientation, symbol search,
+  semantic search, dependency tracing, impact analysis, architecture, security
+  scanning, dead code), 20 repos, 3 reference adapters (attocode, ripgrep,
+  ast-grep), deterministic + ground-truth scoring pipeline
+- **Rule performance profiling** (`eval/rule_profiling/`): per-rule timing,
+  effectiveness index, dead rule detection (82 dead rules identified in corpus)
+- **LLM FP filtering** (`eval/llm_fp_filter/`): Haiku-based TP/FP classifier
+  with benchmark harness against ground truth
+
+#### Documentation
+
+- `docs/rule-format-spec.md` — canonical YAML schema spec for agent-native rules
+- `docs/explain-dont-flag.md` — positioning: "Explain, Don't Just Flag"
+
+### Changed
+
+- `executor.py`: dual path — composite patterns (combinators) and simple patterns
+  (metavar-aware) with capture extraction and constraint checking
+- `loader.py`: detects `$VAR` metavariables, `patterns`/`pattern-either` keys,
+  `metavariable-regex`/`metavariable-comparison` constraints in YAML
+- `model.py`: `UnifiedRule` gains `metavars`, `metavar_regex`,
+  `metavar_comparison`, `composite_pattern` fields; `EnrichedFinding` gains
+  `captures`; `AutoFix` gains `uses_metavars`
+- `rule_tools.py`: module docstring updated, `_get_registry` restored double-
+  checked locking, `format` parameter renamed to `source_format`
+
+### Fixed
+
+- `metavar.py`: unrecognized comparison operator now fails closed (was silently passing)
+- `testing.py`: `parse_annotations` handles `OSError`; `_finding_matches_rule`
+  removed overly broad substring match; `validate_inline_test_cases` matches
+  per-line (consistent with executor)
+- `profiling.py`: `_timers` dict accessed under lock in `start()`/`stop()`
+- `sarif.py`: URI field uses forward slashes on all platforms
+- `ci.py`: hunk parser uses dedicated regex; GitHub annotations encode special
+  chars; `diff_only` handles absolute paths
+- `marketplace.py`: `pack_name` sanitized against path traversal; manifest
+  existence checked before parsing; inline `test_cases` use per-line matching
+- `rule_tools.py`: `install_pack` registry reset under lock; empty
+  `_get_project_dir()` returns explicit error
+- `importers/semgrep.py`: `metavariable-regex` properly converted from Semgrep
+  format (`{"metavariable": "$VAR", "regex": "..."}` → `{"VAR": "..."}`)
+
+### Tests
+
+- **1055 tests** total (up from 75 in 0.2.19 rule engine baseline)
+- New test files: `test_metavar.py` (30), `test_combinators.py` (22),
+  `test_sarif.py` (14), `test_ci_runner.py` (15), `test_profiling.py` (17),
+  `test_testing_framework.py` (22), `test_rules_integration.py` (7),
+  `test_marketplace.py` (18), `test_rule_tools.py` (16),
+  `test_edge_cases.py` (32), `test_rule_accuracy.py` (16),
+  `test_mcp_bench.py` (18)
+
 ## [0.2.19] - 2026-04-13
 
 ### Added — Pluggable Rule-Based Analysis Engine

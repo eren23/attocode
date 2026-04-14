@@ -1,0 +1,229 @@
+# code-intel-bench: orientation tasks
+# Category: orientation — can the tool give a useful project overview?
+# Tools: project_summary
+
+tasks:
+  - task_id: "orientation-fastapi-001"
+    category: "orientation"
+    repo: "fastapi"
+    query: "Give me an overview of this project. What is it, what language is it written in, and what are the main entry points?"
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Python", "ASGI"]
+      must_mention_files: ["fastapi/applications.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-redis-002"
+    category: "orientation"
+    repo: "redis"
+    query: "Summarize this project. What does it do, what language is the core written in, and where is the main server loop?"
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["C", "in-memory"]
+      must_mention_files: ["src/server.c"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-express-003"
+    category: "orientation"
+    repo: "express"
+    query: "What is this project? Describe its purpose, language, and main module entry point."
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["JavaScript", "HTTP"]
+      must_mention_files: ["lib/express.js"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-pandas-004"
+    category: "orientation"
+    repo: "pandas"
+    query: "Provide a high-level summary of this repository. What problem does it solve and what are the core modules?"
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Python", "DataFrame"]
+      must_mention_files: ["pandas/core/frame.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-rails-005"
+    category: "orientation"
+    repo: "rails"
+    query: "Give me an overview of this project. What frameworks does it bundle and what language is it written in?"
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Ruby", "MVC"]
+      must_mention_files: ["railties/lib/rails.rb"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-gh-cli-006"
+    category: "orientation"
+    repo: "gh-cli"
+    query: "What is this project? Describe its purpose, primary language, and how the CLI is structured."
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Go", "GitHub"]
+      must_mention_files: ["cmd/gh/main.go"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-ripgrep-007"
+    category: "orientation"
+    repo: "ripgrep"
+    query: "Summarize this project. What does it do and what language is it built in?"
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Rust", "search"]
+      must_mention_files: ["crates/core/main.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-spring-boot-008"
+    category: "orientation"
+    repo: "spring-boot"
+    query: "What is this project? Describe its ecosystem, primary language, and how auto-configuration works at a high level."
+    tools_required: [project_summary]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Java", "Spring"]
+      must_mention_files: ["spring-boot-project/spring-boot/src/main/java/org/springframework/boot/SpringApplication.java"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-prisma-009"
+    category: "orientation"
+    repo: "prisma"
+    query: "Give me a project overview. What problem does Prisma solve and what languages/runtimes does it target?"
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["TypeScript", "ORM"]
+      must_mention_files: ["packages/client/src/runtime/index.ts"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-deno-010"
+    category: "orientation"
+    repo: "deno"
+    query: "Summarize this project. What is its primary purpose, what language is the runtime written in, and how is the codebase organized?"
+    tools_required: [project_summary]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Rust", "runtime"]
+      must_mention_files: ["runtime/lib.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-starship-011"
+    category: "orientation"
+    repo: "starship"
+    query: "What is this project? Describe what it does, what language it uses, and how modules are organized."
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Rust", "prompt"]
+      must_mention_files: ["src/main.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-vapor-012"
+    category: "orientation"
+    repo: "vapor"
+    query: "Provide an overview of this project. What framework is it and what language is it written in?"
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Swift", "HTTP"]
+      must_mention_files: ["Sources/Vapor/Application.swift"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-phoenix-013"
+    category: "orientation"
+    repo: "phoenix"
+    query: "Summarize this project. What web framework is it, what language is it built with, and what are its key architectural components?"
+    tools_required: [project_summary]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Elixir", "channels"]
+      must_mention_files: ["lib/phoenix/endpoint.ex"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-wordpress-014"
+    category: "orientation"
+    repo: "wordpress"
+    query: "What is this project? Give an overview of its purpose, primary language, and how the codebase is structured."
+    tools_required: [project_summary]
+    difficulty: easy
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["PHP", "CMS"]
+      must_mention_files: ["wp-settings.php"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "orientation-spark-015"
+    category: "orientation"
+    repo: "spark"
+    query: "Provide a high-level summary of this project. What distributed computing problem does it solve, what language is it primarily written in, and what are its major sub-modules?"
+    tools_required: [project_summary]
+    difficulty: medium
+    target_symbol: ""
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Scala", "distributed"]
+      must_mention_files: ["core/src/main/scala/org/apache/spark/SparkContext.scala"]
+    scoring_rubric:
+      deterministic_weight: 0.7

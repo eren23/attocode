@@ -1,0 +1,304 @@
+# code-intel-bench: symbol_search tasks
+# Category: symbol_search — can the tool find and describe symbols by name?
+# Tools: search_symbols, cross_references
+
+tasks:
+  - task_id: "symbol_search-fastapi-001"
+    category: "symbol_search"
+    repo: "fastapi"
+    query: "Find the FastAPI class definition. Where is it defined and what are its key methods?"
+    tools_required: [search_symbols]
+    difficulty: easy
+    target_symbol: "FastAPI"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "FastAPI"]
+      must_mention_files: ["fastapi/applications.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-pandas-002"
+    category: "symbol_search"
+    repo: "pandas"
+    query: "Locate the DataFrame class. What module defines it and what are its primary responsibilities?"
+    tools_required: [search_symbols]
+    difficulty: easy
+    target_symbol: "DataFrame"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "DataFrame"]
+      must_mention_files: ["pandas/core/frame.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-redis-003"
+    category: "symbol_search"
+    repo: "redis"
+    query: "Find the redisServer struct. Where is it declared and what are its key fields?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "redisServer"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["struct", "redisServer"]
+      must_mention_files: ["src/server.h"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-express-004"
+    category: "symbol_search"
+    repo: "express"
+    query: "Find the createApplication function. Where is it defined and what does it return?"
+    tools_required: [search_symbols]
+    difficulty: easy
+    target_symbol: "createApplication"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["function", "createApplication"]
+      must_mention_files: ["lib/express.js"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-gh-cli-005"
+    category: "symbol_search"
+    repo: "gh-cli"
+    query: "Find the NewCmdRoot function. Where is it defined and what does it set up?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "NewCmdRoot"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["func", "NewCmdRoot"]
+      must_mention_files: ["pkg/cmd/root/root.go"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-rails-006"
+    category: "symbol_search"
+    repo: "rails"
+    query: "Find the ActiveRecord module definition. Where is it declared in the source tree?"
+    tools_required: [search_symbols]
+    difficulty: easy
+    target_symbol: "ActiveRecord"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["module", "ActiveRecord"]
+      must_mention_files: ["activerecord/lib/active_record.rb"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-prisma-007"
+    category: "symbol_search"
+    repo: "prisma"
+    query: "Find the PrismaClient class. Where is it defined and what is its role?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "PrismaClient"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "PrismaClient"]
+      must_mention_files: ["packages/client/src"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-fastapi-008"
+    category: "symbol_search"
+    repo: "fastapi"
+    query: "Find the APIRouter class. What file defines it and what methods does it expose?"
+    tools_required: [search_symbols]
+    difficulty: easy
+    target_symbol: "APIRouter"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "APIRouter"]
+      must_mention_files: ["fastapi/routing.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-pandas-009"
+    category: "symbol_search"
+    repo: "pandas"
+    query: "Locate the Series class definition. Where is it defined?"
+    tools_required: [search_symbols]
+    difficulty: easy
+    target_symbol: "Series"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "Series"]
+      must_mention_files: ["pandas/core/series.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-redis-010"
+    category: "symbol_search"
+    repo: "redis"
+    query: "Find the redisCommand struct. Where is it declared?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "redisCommand"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["struct", "redisCommand"]
+      must_mention_files: ["src/server.h"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-ripgrep-011"
+    category: "symbol_search"
+    repo: "ripgrep"
+    query: "Find the Searcher struct. Where is it defined and what does it do?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "Searcher"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["struct", "Searcher"]
+      must_mention_files: ["crates/searcher/src/searcher/mod.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-spring-boot-012"
+    category: "symbol_search"
+    repo: "spring-boot"
+    query: "Find the SpringApplication class. Where is it defined and what is its main method?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "SpringApplication"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "SpringApplication"]
+      must_mention_files: ["spring-boot-project/spring-boot/src/main/java/org/springframework/boot/SpringApplication.java"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-deno-013"
+    category: "symbol_search"
+    repo: "deno"
+    query: "Find the JsRuntime struct. Where is it defined in the Deno codebase?"
+    tools_required: [search_symbols]
+    difficulty: hard
+    target_symbol: "JsRuntime"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["struct", "JsRuntime"]
+      must_mention_files: ["runtime/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-requests-014"
+    category: "symbol_search"
+    repo: "requests"
+    query: "Find the Session class. Where is it defined and what HTTP methods does it support?"
+    tools_required: [search_symbols]
+    difficulty: easy
+    target_symbol: "Session"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "Session"]
+      must_mention_files: ["requests/sessions.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-vapor-015"
+    category: "symbol_search"
+    repo: "vapor"
+    query: "Find the Application class. Where is it defined in the Vapor framework?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "Application"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "Application"]
+      must_mention_files: ["Sources/Vapor/Application.swift"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-phoenix-016"
+    category: "symbol_search"
+    repo: "phoenix"
+    query: "Find the Phoenix.Endpoint module. Where is it defined?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "Endpoint"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["module", "Endpoint"]
+      must_mention_files: ["lib/phoenix/endpoint.ex"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-starship-017"
+    category: "symbol_search"
+    repo: "starship"
+    query: "Find the Context struct. Where is it defined and what fields does it contain?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "Context"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["struct", "Context"]
+      must_mention_files: ["src/context.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-fastapi-018"
+    category: "symbol_search"
+    repo: "fastapi"
+    query: "Find all cross-references to the Depends function. What files use it?"
+    tools_required: [cross_references]
+    difficulty: medium
+    target_symbol: "Depends"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["Depends"]
+      must_mention_files: ["fastapi/params.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-cockroach-019"
+    category: "symbol_search"
+    repo: "cockroach"
+    query: "Find the Node struct in the server package. Where is it defined?"
+    tools_required: [search_symbols]
+    difficulty: hard
+    target_symbol: "Node"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["struct", "Node"]
+      must_mention_files: ["pkg/server/node.go"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "symbol_search-spdlog-020"
+    category: "symbol_search"
+    repo: "spdlog"
+    query: "Find the logger class. Where is it defined and what are its logging methods?"
+    tools_required: [search_symbols]
+    difficulty: medium
+    target_symbol: "logger"
+    target_file: ""
+    search_query: ""
+    ground_truth:
+      must_contain: ["class", "logger"]
+      must_mention_files: ["include/spdlog/logger.h"]
+    scoring_rubric:
+      deterministic_weight: 0.7

@@ -1,0 +1,229 @@
+# code-intel-bench: dependency_tracing tasks
+# Category: dependency_tracing — can the tool trace import/dependency graphs?
+# Tools: dependencies, dependency_graph
+
+tasks:
+  - task_id: "dependency_tracing-fastapi-001"
+    category: "dependency_tracing"
+    repo: "fastapi"
+    query: "What are the direct dependencies of fastapi/applications.py? Show the import graph."
+    tools_required: [dependencies]
+    difficulty: easy
+    target_symbol: ""
+    target_file: "fastapi/applications.py"
+    search_query: ""
+    ground_truth:
+      must_contain: ["routing", "Starlette"]
+      must_mention_files: ["fastapi/applications.py", "fastapi/routing.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-pandas-002"
+    category: "dependency_tracing"
+    repo: "pandas"
+    query: "Trace the dependency graph of pandas/core/frame.py. What modules does DataFrame rely on?"
+    tools_required: [dependencies, dependency_graph]
+    difficulty: hard
+    target_symbol: ""
+    target_file: "pandas/core/frame.py"
+    search_query: ""
+    ground_truth:
+      must_contain: ["series", "index"]
+      must_mention_files: ["pandas/core/frame.py", "pandas/core/series.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-express-003"
+    category: "dependency_tracing"
+    repo: "express"
+    query: "What does lib/router/index.js depend on? Show all its imports."
+    tools_required: [dependencies]
+    difficulty: easy
+    target_symbol: ""
+    target_file: "lib/router/index.js"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Route", "Layer"]
+      must_mention_files: ["lib/router/index.js", "lib/router/route.js"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-redis-004"
+    category: "dependency_tracing"
+    repo: "redis"
+    query: "What header files does src/server.c include? Trace the dependency chain."
+    tools_required: [dependencies]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "src/server.c"
+    search_query: ""
+    ground_truth:
+      must_contain: ["server.h"]
+      must_mention_files: ["src/server.c", "src/server.h"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-gh-cli-005"
+    category: "dependency_tracing"
+    repo: "gh-cli"
+    query: "Trace the dependencies of pkg/cmd/root/root.go. What packages does it import?"
+    tools_required: [dependencies]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "pkg/cmd/root/root.go"
+    search_query: ""
+    ground_truth:
+      must_contain: ["cmd", "cobra"]
+      must_mention_files: ["pkg/cmd/root/root.go"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-rails-006"
+    category: "dependency_tracing"
+    repo: "rails"
+    query: "What are the dependencies of activerecord/lib/active_record/base.rb? What modules does it include?"
+    tools_required: [dependencies]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "activerecord/lib/active_record/base.rb"
+    search_query: ""
+    ground_truth:
+      must_contain: ["ActiveRecord"]
+      must_mention_files: ["activerecord/lib/active_record/base.rb"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-spring-boot-007"
+    category: "dependency_tracing"
+    repo: "spring-boot"
+    query: "What are the imports of the SpringApplication.java file? Show the dependency tree."
+    tools_required: [dependencies]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "spring-boot-project/spring-boot/src/main/java/org/springframework/boot/SpringApplication.java"
+    search_query: ""
+    ground_truth:
+      must_contain: ["SpringApplication", "ApplicationContext"]
+      must_mention_files: ["spring-boot-project/spring-boot/src/main/java/org/springframework/boot/SpringApplication.java"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-prisma-008"
+    category: "dependency_tracing"
+    repo: "prisma"
+    query: "Trace the dependency graph for the Prisma client runtime entry point. What modules does it pull in?"
+    tools_required: [dependencies, dependency_graph]
+    difficulty: hard
+    target_symbol: ""
+    target_file: "packages/client/src/runtime/index.ts"
+    search_query: ""
+    ground_truth:
+      must_contain: ["runtime"]
+      must_mention_files: ["packages/client/src/runtime/index.ts"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-requests-009"
+    category: "dependency_tracing"
+    repo: "requests"
+    query: "What are the dependencies of requests/api.py? Show what it imports."
+    tools_required: [dependencies]
+    difficulty: easy
+    target_symbol: ""
+    target_file: "requests/api.py"
+    search_query: ""
+    ground_truth:
+      must_contain: ["sessions"]
+      must_mention_files: ["requests/api.py", "requests/sessions.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-fastapi-010"
+    category: "dependency_tracing"
+    repo: "fastapi"
+    query: "Show the full dependency graph rooted at fastapi/routing.py. What are its transitive dependencies?"
+    tools_required: [dependency_graph]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "fastapi/routing.py"
+    search_query: ""
+    ground_truth:
+      must_contain: ["routing"]
+      must_mention_files: ["fastapi/routing.py", "fastapi/dependencies/utils.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-ripgrep-011"
+    category: "dependency_tracing"
+    repo: "ripgrep"
+    query: "What crates does the ripgrep main binary depend on? Show the internal crate dependency structure."
+    tools_required: [dependency_graph]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "crates/core/main.rs"
+    search_query: ""
+    ground_truth:
+      must_contain: ["crate"]
+      must_mention_files: ["crates/core/main.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-phoenix-012"
+    category: "dependency_tracing"
+    repo: "phoenix"
+    query: "Trace the dependencies of lib/phoenix/endpoint.ex. What modules does it use?"
+    tools_required: [dependencies]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "lib/phoenix/endpoint.ex"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Phoenix"]
+      must_mention_files: ["lib/phoenix/endpoint.ex"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-wordpress-013"
+    category: "dependency_tracing"
+    repo: "wordpress"
+    query: "What files does wp-settings.php require or include? Trace the bootstrap dependency chain."
+    tools_required: [dependencies]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "wp-settings.php"
+    search_query: ""
+    ground_truth:
+      must_contain: ["require", "include"]
+      must_mention_files: ["wp-settings.php", "wp-includes/"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-vapor-014"
+    category: "dependency_tracing"
+    repo: "vapor"
+    query: "What does Sources/Vapor/Application.swift import? Show its dependency structure."
+    tools_required: [dependencies]
+    difficulty: medium
+    target_symbol: ""
+    target_file: "Sources/Vapor/Application.swift"
+    search_query: ""
+    ground_truth:
+      must_contain: ["import"]
+      must_mention_files: ["Sources/Vapor/Application.swift"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "dependency_tracing-spark-015"
+    category: "dependency_tracing"
+    repo: "spark"
+    query: "Trace the import dependencies of SparkContext.scala. What core packages does it rely on?"
+    tools_required: [dependencies]
+    difficulty: hard
+    target_symbol: ""
+    target_file: "core/src/main/scala/org/apache/spark/SparkContext.scala"
+    search_query: ""
+    ground_truth:
+      must_contain: ["SparkContext"]
+      must_mention_files: ["core/src/main/scala/org/apache/spark/SparkContext.scala"]
+    scoring_rubric:
+      deterministic_weight: 0.7

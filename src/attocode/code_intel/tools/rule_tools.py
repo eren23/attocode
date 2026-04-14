@@ -1,6 +1,12 @@
 """Rule-based analysis tools for the code-intel MCP server.
 
-Tools: analyze, list_rules, list_packs, install_pack, register_rule.
+Tools:
+  Core:     analyze, list_rules, list_packs, install_pack, register_rule
+  Testing:  test_rules
+  CI:       ci_scan
+  Feedback: rule_stats, rule_feedback
+  Community: search_community_packs, install_community_pack, validate_pack_tool
+  Import:   import_rules
 
 These expose the pluggable rule engine to the connected coding agent,
 providing rich, pre-filtered, context-laden findings that enable the
@@ -26,10 +32,12 @@ _registry_lock = threading.Lock()
 def _get_registry():
     """Get or create the global rule registry (lazy singleton)."""
     global _registry, _registry_loaded
-    if _registry is not None and _registry_loaded:
-        return _registry
+    # Read-only fast path (safe: both reads are atomic in CPython;
+    # the lock below re-checks to avoid races with install_pack resets)
+    reg = _registry
+    if reg is not None and _registry_loaded:
+        return reg
     with _registry_lock:
-        # Double-check under lock
         if _registry is not None and _registry_loaded:
             return _registry
 
@@ -594,3 +602,127 @@ def rule_feedback(
         parts.append(f"Need {remaining} more observation(s) for calibration.")
 
     return "\n".join(parts)
+
+
+@mcp.tool()
+def search_community_packs(
+    query: str = "",
+    language: str = "",
+) -> str:
+    """Search the community rule pack registry.
+
+    Finds rule packs shared by the community, filterable by keyword
+    and language. Install found packs with install_community_pack().
+
+    Args:
+        query: Search by name, description, or tags.
+        language: Filter to packs supporting this language.
+    """
+    from attocode.code_intel.rules.marketplace import search_packs, format_registry_search
+
+    entries = search_packs(query=query, language=language)
+    return format_registry_search(entries)
+
+
+@mcp.tool()
+def install_community_pack(
+    name: str,
+    url: str = "",
+) -> str:
+    """Install a community rule pack from a Git repository.
+
+    Downloads and validates the pack, then installs to .attocode/packs/.
+
+    Args:
+        name: Pack name (used as directory name).
+        url: Git clone URL. If empty, looks up from community registry.
+    """
+    from attocode.code_intel.rules.marketplace import (
+        install_remote_pack,
+        search_packs,
+    )
+
+    project_dir = _get_project_dir()
+    if not project_dir:
+        return "Error: No project directory detected. Open a project first."
+
+    if not url:
+        entries = search_packs(query=name)
+        matching = [e for e in entries if e.name == name]
+        if matching:
+            url = matching[0].url
+        else:
+            return f"Pack '{name}' not found in registry. Provide a URL directly."
+
+    result = install_remote_pack(url, project_dir, pack_name=name)
+
+    # Reload registry
+    global _registry, _registry_loaded
+    with _registry_lock:
+        _registry = None
+        _registry_loaded = False
+
+    return result
+
+
+@mcp.tool()
+def validate_pack_tool(pack_path: str = "") -> str:
+    """Validate a rule pack for correctness before publishing.
+
+    Checks manifest, rule syntax, regex compilation, and inline tests.
+
+    Args:
+        pack_path: Path to pack directory. Default: validates all installed packs.
+    """
+    from attocode.code_intel.rules.marketplace import validate_pack, prepare_pack_for_publish
+
+    project_dir = _get_project_dir()
+    if not project_dir and not pack_path:
+        return "Error: No project directory detected. Provide pack_path or open a project."
+
+    if pack_path:
+        import os
+        if not os.path.isabs(pack_path):
+            pack_path = os.path.join(project_dir, pack_path)
+        return prepare_pack_for_publish(pack_path)
+
+    import os
+    packs_dir = os.path.join(project_dir, ".attocode", "packs")
+    if not os.path.isdir(packs_dir):
+        return "No packs installed (.attocode/packs/ not found)."
+
+    results: list[str] = []
+    for entry in sorted(os.listdir(packs_dir)):
+        pack_dir = os.path.join(packs_dir, entry)
+        if os.path.isdir(pack_dir):
+            errors = validate_pack(pack_dir)
+            status = "PASS" if not errors else "FAIL"
+            results.append(f"**{entry}**: {status}")
+            if errors:
+                for e in errors:
+                    results.append(f"  - {e}")
+
+    return "\n".join(results) if results else "No packs found."
+
+
+@mcp.tool()
+def import_rules(
+    source_format: str,
+    content: str,
+) -> str:
+    """Import rules from another tool's format into attocode YAML.
+
+    Converts rules from Semgrep or other formats to attocode YAML.
+    Output can be saved to .attocode/rules/ or registered via register_rule().
+
+    Supported formats: semgrep
+
+    Args:
+        source_format: Source format — "semgrep".
+        content: YAML content in the source format.
+    """
+    if source_format.lower() == "semgrep":
+        from attocode.code_intel.rules.importers.semgrep import convert_semgrep_to_yaml
+        return convert_semgrep_to_yaml(content)
+    else:
+        return f"Unsupported format '{source_format}'. Supported: semgrep"

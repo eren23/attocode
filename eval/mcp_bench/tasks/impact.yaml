@@ -1,0 +1,229 @@
+# code-intel-bench: impact_analysis tasks
+# Category: impact_analysis — can the tool compute blast radius for changes?
+# Tools: impact_analysis
+
+tasks:
+  - task_id: "impact_analysis-fastapi-001"
+    category: "impact_analysis"
+    repo: "fastapi"
+    query: "If I change the APIRouter class, what is the blast radius? What files and modules would be affected?"
+    tools_required: [impact_analysis]
+    difficulty: medium
+    target_symbol: "APIRouter"
+    target_file: "fastapi/routing.py"
+    search_query: ""
+    ground_truth:
+      must_contain: ["APIRouter", "routing"]
+      must_mention_files: ["fastapi/routing.py", "fastapi/applications.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-pandas-002"
+    category: "impact_analysis"
+    repo: "pandas"
+    query: "What is the impact of modifying the Series class? What modules depend on it?"
+    tools_required: [impact_analysis]
+    difficulty: hard
+    target_symbol: "Series"
+    target_file: "pandas/core/series.py"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Series", "DataFrame"]
+      must_mention_files: ["pandas/core/series.py", "pandas/core/frame.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-redis-003"
+    category: "impact_analysis"
+    repo: "redis"
+    query: "What would be affected if I change the redisCommand struct? Compute the blast radius."
+    tools_required: [impact_analysis]
+    difficulty: hard
+    target_symbol: "redisCommand"
+    target_file: "src/server.h"
+    search_query: ""
+    ground_truth:
+      must_contain: ["redisCommand", "command"]
+      must_mention_files: ["src/server.h", "src/server.c"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-express-004"
+    category: "impact_analysis"
+    repo: "express"
+    query: "If I modify the Router prototype, what is the impact? What files would break?"
+    tools_required: [impact_analysis]
+    difficulty: medium
+    target_symbol: "Router"
+    target_file: "lib/router/index.js"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Router", "route"]
+      must_mention_files: ["lib/router/index.js", "lib/express.js"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-gh-cli-005"
+    category: "impact_analysis"
+    repo: "gh-cli"
+    query: "What is the impact of changing the Factory struct in the cmdutil package?"
+    tools_required: [impact_analysis]
+    difficulty: medium
+    target_symbol: "Factory"
+    target_file: "pkg/cmdutil/factory.go"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Factory"]
+      must_mention_files: ["pkg/cmdutil/factory.go"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-rails-006"
+    category: "impact_analysis"
+    repo: "rails"
+    query: "If I modify ActiveRecord::Base, what is the blast radius across the Rails codebase?"
+    tools_required: [impact_analysis]
+    difficulty: hard
+    target_symbol: "Base"
+    target_file: "activerecord/lib/active_record/base.rb"
+    search_query: ""
+    ground_truth:
+      must_contain: ["ActiveRecord", "Base"]
+      must_mention_files: ["activerecord/lib/active_record/base.rb"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-spring-boot-007"
+    category: "impact_analysis"
+    repo: "spring-boot"
+    query: "What would be affected by changing the SpringApplication class? Show all dependents."
+    tools_required: [impact_analysis]
+    difficulty: hard
+    target_symbol: "SpringApplication"
+    target_file: "spring-boot-project/spring-boot/src/main/java/org/springframework/boot/SpringApplication.java"
+    search_query: ""
+    ground_truth:
+      must_contain: ["SpringApplication"]
+      must_mention_files: ["spring-boot-project/spring-boot/src/main/java/org/springframework/boot/SpringApplication.java"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-prisma-008"
+    category: "impact_analysis"
+    repo: "prisma"
+    query: "What is the blast radius of modifying the query engine interface? What packages would be affected?"
+    tools_required: [impact_analysis]
+    difficulty: hard
+    target_symbol: "PrismaClient"
+    target_file: "packages/client/src/runtime/index.ts"
+    search_query: ""
+    ground_truth:
+      must_contain: ["client", "runtime"]
+      must_mention_files: ["packages/client/src/runtime/index.ts"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-requests-009"
+    category: "impact_analysis"
+    repo: "requests"
+    query: "What is the impact of changing the Session class? What would break?"
+    tools_required: [impact_analysis]
+    difficulty: medium
+    target_symbol: "Session"
+    target_file: "requests/sessions.py"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Session"]
+      must_mention_files: ["requests/sessions.py", "requests/api.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-fastapi-010"
+    category: "impact_analysis"
+    repo: "fastapi"
+    query: "What is the blast radius of modifying the Depends function? How many files use it?"
+    tools_required: [impact_analysis]
+    difficulty: medium
+    target_symbol: "Depends"
+    target_file: "fastapi/params.py"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Depends"]
+      must_mention_files: ["fastapi/params.py"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-ripgrep-011"
+    category: "impact_analysis"
+    repo: "ripgrep"
+    query: "If I change the Searcher struct, what files and modules would be impacted?"
+    tools_required: [impact_analysis]
+    difficulty: medium
+    target_symbol: "Searcher"
+    target_file: "crates/searcher/src/searcher/mod.rs"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Searcher"]
+      must_mention_files: ["crates/searcher/src/searcher/mod.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-wordpress-012"
+    category: "impact_analysis"
+    repo: "wordpress"
+    query: "What is the blast radius of changing the WP_Query class?"
+    tools_required: [impact_analysis]
+    difficulty: hard
+    target_symbol: "WP_Query"
+    target_file: "wp-includes/class-wp-query.php"
+    search_query: ""
+    ground_truth:
+      must_contain: ["WP_Query", "query"]
+      must_mention_files: ["wp-includes/class-wp-query.php"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-starship-013"
+    category: "impact_analysis"
+    repo: "starship"
+    query: "What is the impact of changing the Context struct on the rest of the starship codebase?"
+    tools_required: [impact_analysis]
+    difficulty: medium
+    target_symbol: "Context"
+    target_file: "src/context.rs"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Context"]
+      must_mention_files: ["src/context.rs"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-phoenix-014"
+    category: "impact_analysis"
+    repo: "phoenix"
+    query: "What would be affected by modifying the Phoenix.Socket module?"
+    tools_required: [impact_analysis]
+    difficulty: medium
+    target_symbol: "Socket"
+    target_file: "lib/phoenix/socket.ex"
+    search_query: ""
+    ground_truth:
+      must_contain: ["Socket", "channel"]
+      must_mention_files: ["lib/phoenix/socket.ex"]
+    scoring_rubric:
+      deterministic_weight: 0.7
+
+  - task_id: "impact_analysis-deno-015"
+    category: "impact_analysis"
+    repo: "deno"
+    query: "What is the blast radius of changing the permissions module? What depends on it?"
+    tools_required: [impact_analysis]
+    difficulty: hard
+    target_symbol: "Permissions"
+    target_file: "runtime/permissions/"
+    search_query: ""
+    ground_truth:
+      must_contain: ["permission"]
+      must_mention_files: ["runtime/permissions/"]
+    scoring_rubric:
+      deterministic_weight: 0.7

@@ -243,7 +243,8 @@ def validate_inline_test_cases(
     for i, tc in enumerate(test_cases):
         code = str(tc.get("code", ""))
         should_match = bool(tc.get("should_match", True))
-        matched = bool(rule.pattern.search(code))
+        # Match per-line (consistent with executor behavior)
+        matched = any(rule.pattern.search(line) for line in code.splitlines()) if code else False
 
         if should_match and not matched:
             errors.append(
