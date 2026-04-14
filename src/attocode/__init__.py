@@ -1,3 +1,3 @@
 """Attocode - Production AI coding agent."""
 
-__version__ = "0.2.19"
+__version__ = "0.2.20"
