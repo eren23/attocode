@@ -149,6 +149,54 @@ class IndexProgress:
 
 
 @dataclass(slots=True)
+class SearchScoringConfig:
+    """Tunable scoring parameters for BM25 keyword search and two-stage retrieval.
+
+    Default values match the original hardcoded constants. Adjusting these
+    allows the meta-harness optimization loop to explore better configurations.
+    """
+
+    # BM25 base parameters
+    bm25_k1: float = 1.5
+    bm25_b: float = 0.75
+
+    # Graduated symbol name match boosts
+    name_exact_boost: float = 3.0
+    name_substring_boost: float = 2.0
+    name_token_boost: float = 1.5
+
+    # Definition-type boosts
+    class_boost: float = 1.3
+    function_boost: float = 1.15
+    method_boost: float = 1.1
+
+    # Path relevance: source directory boost
+    src_dir_boost: float = 1.2
+
+    # Multi-term coverage bonuses
+    multi_term_high_bonus: float = 1.4   # >= 80% coverage
+    multi_term_med_bonus: float = 1.15   # >= 50% coverage
+    multi_term_high_threshold: float = 0.8
+    multi_term_med_threshold: float = 0.5
+
+    # File type penalties
+    non_code_penalty: float = 0.3
+    config_penalty: float = 0.15
+    test_penalty: float = 0.7
+
+    # Exact phrase bonus
+    exact_phrase_bonus: float = 1.2
+
+    # Deduplication: max chunks per file in results
+    max_chunks_per_file: int = 2
+
+    # Two-stage retrieval parameters
+    wide_k_multiplier: int = 5
+    wide_k_min: int = 50
+    rrf_k: int = 60
+
+
+@dataclass(slots=True)
 class SemanticSearchResult:
     """A single semantic search result."""
 
@@ -172,6 +220,7 @@ class SemanticSearchManager:
 
     root_dir: str
     nl_mode: str = ""  # "none" or "heuristic"; "" = read ATTOCODE_NL_EMBEDDING_MODE env var
+    scoring_config: SearchScoringConfig = field(default_factory=SearchScoringConfig)
     _provider: Any = field(default=None, repr=False)
     _store: Any = field(default=None, repr=False)
     _indexed: bool = field(default=False, repr=False)
@@ -507,7 +556,8 @@ class SemanticSearchManager:
             logger.debug("Failed to build existing_files set", exc_info=True)
 
         # Stage 1a: Vector search (wide recall)
-        wide_k = max(top_k * 5, 50) if two_stage else top_k
+        cfg = self.scoring_config
+        wide_k = max(top_k * cfg.wide_k_multiplier, cfg.wide_k_min) if two_stage else top_k
         raw_results = self._store.search(
             query_vec, top_k=wide_k, file_filter=file_filter,
             existing_files=existing_files,
@@ -547,7 +597,7 @@ class SemanticSearchManager:
             for r in keyword_results
         ])
 
-        fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked)
+        fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked, k=cfg.rrf_k)
 
         # Build result lookup for fast access
         result_map: dict[str, SemanticSearchResult] = {}
@@ -729,10 +779,11 @@ class SemanticSearchManager:
             docs_to_score = self._kw_docs
 
         query_lower = query.lower()
+        cfg = self.scoring_config
 
         # BM25 parameters — N and avg_dl use FULL corpus for correct IDF
-        k1 = 1.5
-        b = 0.75
+        k1 = cfg.bm25_k1
+        b = cfg.bm25_b
         N = len(self._kw_docs)  # noqa: N806
         avg_dl = self._kw_avg_dl or 1.0
 
@@ -766,62 +817,59 @@ class SemanticSearchManager:
             _name_boost_applied = False
             for term in query_tokens:
                 if term == _name_lower:
-                    # Exact symbol name match (query term IS the doc name)
-                    score *= 3.0
+                    score *= cfg.name_exact_boost
                     _name_boost_applied = True
                     break
                 if term in _name_lower:
-                    # Symbol name contains query term as substring
-                    score *= 2.0
+                    score *= cfg.name_substring_boost
                     _name_boost_applied = True
                     break
             if not _name_boost_applied:
                 for term in query_tokens:
                     if term in name_tokens:
-                        # Query term appears in tokenized name parts
-                        score *= 1.5
+                        score *= cfg.name_token_boost
                         break
 
             # Definition-type boost: classes and functions rank above file-level
             if doc.chunk_type == "class":
-                score *= 1.3
+                score *= cfg.class_boost
             elif doc.chunk_type == "function":
-                score *= 1.15
+                score *= cfg.function_boost
             elif doc.chunk_type == "method":
-                score *= 1.1
+                score *= cfg.method_boost
 
             # Path relevance boost: source directories rank higher
             _SRC_DIRS = {"src", "lib", "pkg", "core", "internal", "app", "main"}  # noqa: N806
             _first_dir = doc.file_path.split("/")[0] if "/" in doc.file_path else ""
             if _first_dir.lower() in _SRC_DIRS:
-                score *= 1.2
+                score *= cfg.src_dir_boost
 
             # Multi-term coverage bonus
             if len(query_tokens) > 1:
                 _matched_terms = sum(1 for t in query_tokens if doc.term_freqs.get(t, 0) > 0)
                 _coverage = _matched_terms / len(query_tokens)
-                if _coverage >= 0.8:
-                    score *= 1.4
-                elif _coverage >= 0.5:
-                    score *= 1.15
+                if _coverage >= cfg.multi_term_high_threshold:
+                    score *= cfg.multi_term_high_bonus
+                elif _coverage >= cfg.multi_term_med_threshold:
+                    score *= cfg.multi_term_med_bonus
 
             # Non-code file penalty (markdown, text, config formats)
             _NON_CODE_EXTS = {".md", ".txt", ".rst", ".cfg", ".ini", ".yml", ".yaml", ".json", ".toml", ".xml", ".csv"}  # noqa: N806
             _ext = os.path.splitext(doc.file_path)[1].lower()
             if _ext in _NON_CODE_EXTS:
-                score *= 0.3
+                score *= cfg.non_code_penalty
 
             # Config/doc file penalty (stacks with non-code ext penalty)
             if doc.is_config:
-                score *= 0.15
+                score *= cfg.config_penalty
 
             # Test file mild penalty
             if doc.is_test:
-                score *= 0.7
+                score *= cfg.test_penalty
 
             # Exact phrase bonus: multi-word query substring match in text
             if len(query_tokens) > 1 and query_lower in doc.text.lower():
-                score *= 1.2
+                score *= cfg.exact_phrase_bonus
 
             scored.append((score, doc))
 
@@ -835,11 +883,11 @@ class SemanticSearchManager:
         if max_score <= 0:
             max_score = 1.0
 
-        # Deduplicate: max 2 chunks per file
+        # Deduplicate: max N chunks per file
         file_counts: dict[str, int] = {}
         results: list[SemanticSearchResult] = []
         for raw_score, doc in scored:
-            if file_counts.get(doc.file_path, 0) >= 2:
+            if file_counts.get(doc.file_path, 0) >= cfg.max_chunks_per_file:
                 continue
             file_counts[doc.file_path] = file_counts.get(doc.file_path, 0) + 1
             results.append(SemanticSearchResult(

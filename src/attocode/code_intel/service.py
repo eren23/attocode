@@ -28,6 +28,7 @@ class CodeIntelService:
     def __init__(self, project_dir: str, config: CodeIntelConfig | None = None) -> None:
         self._project_dir = os.path.abspath(project_dir)
         self._config = config or CodeIntelConfig(project_dir=self._project_dir)
+        self._scoring_config = None  # Optional SearchScoringConfig override
 
         # Lazy singletons
         self._init_lock = threading.Lock()
@@ -162,8 +163,22 @@ class CodeIntelService:
                 if self._semantic_search is None:
                     from attocode.integrations.context.semantic_search import SemanticSearchManager
 
-                    self._semantic_search = SemanticSearchManager(root_dir=self._project_dir)
+                    kwargs: dict = {"root_dir": self._project_dir}
+                    if self._scoring_config is not None:
+                        kwargs["scoring_config"] = self._scoring_config
+                    self._semantic_search = SemanticSearchManager(**kwargs)
         return self._semantic_search
+
+    def set_scoring_config(self, config) -> None:
+        """Set search scoring config for meta-harness optimization.
+
+        Must be called before the first search. If the SemanticSearchManager
+        is already initialized, updates it in place.
+        """
+        with self._init_lock:
+            self._scoring_config = config
+            if self._semantic_search is not None:
+                self._semantic_search.scoring_config = config
 
     def _get_memory_store(self):
         if self._memory_store is None:
