@@ -1733,11 +1733,12 @@ class TestHandleTaskCompletionSuccess:
         ctx.config.quality_gates = False
         recovery_state = SwarmRecoveryState()
 
+        # No files_modified: mandatory compilation + verification paths need a real
+        # workspace; this test targets non-hollow success + completed status only.
         spawn_result = SpawnResult(
             success=True,
             output="Created src/foo.py with the implementation.",
             tool_calls=5,
-            files_modified=["src/foo.py"],
         )
 
         await handle_task_completion(

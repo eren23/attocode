@@ -14,7 +14,7 @@ Production AI coding agent built in Python. Features a Textual-based TUI, multi-
 - **Session persistence** --- SQLite-backed sessions, checkpoints, goals, audit logs, and permission grants that persist across prompts
 - **MCP support** --- Connect external tools via the Model Context Protocol
 - **Code intelligence** --- 47-tool MCP server with AST parsing (25+ languages), rule-based analysis with language packs (Go, Python, TS, Rust, Java), taint tracking, semantic search, and dependency graphs
-- **Multi-provider** --- Anthropic, OpenRouter, OpenAI, Azure, and ZAI adapters
+- **Multi-provider** --- Anthropic, OpenRouter, OpenAI, ZAI, and MiniMax adapters
 - **Research campaigns** --- Multi-experiment research workflows with dedicated worktrees, hypothesis tracking, and persistent campaign state
 - **Skills & agents** --- Extensible skill and agent system with project-level and user-level customization
 
@@ -155,7 +155,7 @@ src/attocode/
   types/           Type definitions (messages, agent, config)
   agent/           Core agent orchestrator and builders
   core/            Execution loop, subagent spawner, tool executor
-  providers/       LLM provider adapters (Anthropic, OpenRouter, OpenAI, Azure, ZAI)
+  providers/       LLM provider adapters (Anthropic, OpenRouter, OpenAI, ZAI, MiniMax)
   tools/           Built-in tool implementations (file ops, bash, search)
   integrations/    Feature modules organized by domain:
     budget/          Economics, budget pools, doom-loop detection

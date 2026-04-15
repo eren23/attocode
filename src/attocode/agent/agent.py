@@ -266,6 +266,8 @@ class ProductionAgent:
     def apply_budget_extension(self, additional_tokens: int) -> int:
         """Extend token budget and sync agent/context/economics references.
 
+        Used by the `/budget` command; the active agent must implement this.
+
         Returns the new max token budget.
         """
         if additional_tokens <= 0:

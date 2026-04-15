@@ -111,10 +111,10 @@
   - Key file: `security/dataflow.py` (currently 530L, expect ~800-1000L after)
 
 - [ ] **Sanitizer-aware taint tracking**
-  - `TaintSanitizerDef` model exists in `rules/model.py`, `taint_loader.py` loads from YAML
+  - `TaintSanitizerDef` (and related) models exist in `rules/model.py`; a dedicated pack YAML loader was removed pending this phase — reintroduce loading or embed definitions as needed
   - Wire sanitizers into dataflow: taint killed when value passes through sanitizer function
   - Language packs have sanitizer YAML stubs (Go has `taint/sanitizers.yaml`)
-  - Key files: `dataflow.py`, `rules/packs/taint_loader.py`
+  - Key files: `dataflow.py`, `rules/model.py`, pack `taint/` YAML under each language pack
 
 - [ ] **Type-hint-aware analysis (Python/TypeScript)**
   - Extract type annotations via tree-sitter; use LSP hover when available

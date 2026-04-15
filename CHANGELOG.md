@@ -5,6 +5,15 @@ All notable changes to the Attocode Python agent will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **Azure OpenAI adapter** (`src/attocode/providers/azure.py`) — OpenAI-compatible routing remains available via the OpenAI and OpenRouter providers.
+- **Pack YAML taint loader** (`src/attocode/code_intel/rules/packs/taint_loader.py`) — `TaintSourceDef` / `TaintSinkDef` / `TaintSanitizerDef` models remain in `rules/model.py` for future dataflow work; language packs continue to ship rule YAML under each pack’s `rules/` directory.
+- **Centralized defaults module** (`src/attocode/defaults.py`) — execution budget presets live in `types/budget.py`; optional feature wiring uses `FeatureConfig` in `agent/feature_initializer.py`.
+- **`attoswarm.replay.attocode_bridge`** — experimental Attocode replay bridge removed from the `attoswarm` package.
+
 ## [0.2.20] - 2026-04-14
 
 ### Added — Rule Engine Expansion, Benchmarking, & Ecosystem
