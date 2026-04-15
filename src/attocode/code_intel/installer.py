@@ -49,7 +49,6 @@ import tomli_w
 AUTO_INSTALL_TARGETS: tuple[str, ...] = (
     "claude", "cursor", "windsurf", "vscode", "codex",
     "claude-desktop", "cline", "zed",
-    # New targets:
     "opencode", "gemini-cli", "roo-code", "amazon-q",
     "copilot-cli", "junie", "kiro", "trae", "firebase",
     "amp", "continue", "hermes", "goose", "gsd",

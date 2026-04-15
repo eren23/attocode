@@ -16,6 +16,7 @@ from attocode.integrations.mcp.client import MCPCallResult, MCPTool
 from attocode.integrations.mcp.transports import MCPTransport
 
 if TYPE_CHECKING:
+    from attocode.integrations.mcp.client import MCPClient
     from attocode.integrations.mcp.config import MCPServerConfig
     from attocode.integrations.mcp.meta_tools import MCPMetaTools
 

@@ -11,7 +11,7 @@ from attocode.integrations.mcp.scaffolder import (
     MCPScaffolder,
     MCPScaffolderError,
     MCPServerSpec,
-    ToolSpec,
+    MCPToolSpec as ToolSpec,
 )
 
 

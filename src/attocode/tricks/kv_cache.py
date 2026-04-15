@@ -11,7 +11,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from attocode.integrations.utilities.token_estimate import estimate_tokens
+from attocode.integrations.utilities.token_estimate import CHARS_PER_TOKEN, estimate_tokens
+from attocode.types.events import SimpleEventListener
 
 
 @dataclass
@@ -53,7 +54,7 @@ class DynamicContent:
     extra: dict[str, str] = field(default_factory=dict)
 
 
-CacheEventListener = Callable[[str, dict[str, Any]], None]
+CacheEventListener = SimpleEventListener
 
 
 class CacheAwareContext:
@@ -210,7 +211,7 @@ class CacheAwareContext:
     ) -> CacheStats:
         """Calculate cache efficiency statistics."""
         total_tokens = estimate_tokens(system_prompt)
-        dynamic_tokens = max(1, int(dynamic_content_length / 3.5)) if dynamic_content_length else 0
+        dynamic_tokens = max(1, int(dynamic_content_length / CHARS_PER_TOKEN)) if dynamic_content_length else 0
         cacheable_tokens = total_tokens - dynamic_tokens
         non_cacheable_tokens = dynamic_tokens
 

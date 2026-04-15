@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
@@ -18,6 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from attocode.errors import ConfigurationError, ToolError
+from attocode.types.events import SimpleEventListener
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Types
@@ -103,7 +107,7 @@ class LSPConfig:
     root_uri: str = ""
 
 
-LSPEventListener = Callable[[str, dict[str, Any]], None]
+LSPEventListener = SimpleEventListener
 
 
 # =============================================================================
@@ -882,12 +886,9 @@ class LSPManager:
         )
 
         # Wire protocol tracing from feature flag
-        try:
-            from attocode.integrations.feature_flags import feature
-            if feature("LSP_PROTOCOL_TRACE"):
-                client.enable_protocol_trace(True)
-        except Exception:
-            pass
+        from attocode.integrations.feature_flags import feature
+        if feature("LSP_PROTOCOL_TRACE"):
+            client.enable_protocol_trace(True)
 
         await client.start()
         self._clients[language_id] = client

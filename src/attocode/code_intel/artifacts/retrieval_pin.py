@@ -21,21 +21,13 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from attocode.code_intel.artifacts.hashing import canonical_json
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 PIN_SCHEMA_VERSION = 1
 DEFAULT_TTL_SECONDS = 86_400  # 24 hours
-
-
-def _canonical_json(obj: Any) -> bytes:
-    return json.dumps(
-        obj,
-        sort_keys=True,
-        ensure_ascii=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("ascii")
 
 
 def compute_store_hash(
@@ -63,7 +55,7 @@ def compute_store_hash(
         "max_updated_at": float(max_updated_at or 0.0),
         "extra": dict(extra or {}),
     }
-    return hashlib.sha256(_canonical_json(body)).hexdigest()
+    return hashlib.sha256(canonical_json(body)).hexdigest()
 
 
 def make_pin_id() -> str:
@@ -110,7 +102,7 @@ class RetrievalPin:
         """Build a new pin from a dict of per-store hashes."""
         manifest = {str(k): str(v) for k, v in sorted(manifest_hashes.items())}
         manifest_hash = hashlib.sha256(
-            _canonical_json({"manifest": manifest, "overlay": overlay_id, "branch": branch_id})
+            canonical_json({"manifest": manifest, "overlay": overlay_id, "branch": branch_id})
         ).hexdigest()
         now = time.time()
         return cls(

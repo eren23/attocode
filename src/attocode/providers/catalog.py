@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from attocode.config import PROVIDER_MODEL_OPTIONS
 from attocode.providers.base import (
     BUILTIN_MODELS,
-    ModelInfo,
     ModelPricing,
 )
 

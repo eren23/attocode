@@ -13,6 +13,7 @@ from collections import Counter, deque
 from pathlib import Path
 
 from attocode.code_intel.config import CodeIntelConfig
+from attocode.integrations.utilities.token_estimate import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -1014,7 +1015,7 @@ class CodeIntelService:
             "level": level,
             "text": text,
             "files_included": len(selected),
-            "estimated_tokens": int(len(text) / 3.5) if text else 0,
+            "estimated_tokens": estimate_tokens(text) if text else 0,
         }
 
     def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "", branch: str = "") -> dict:
@@ -1946,7 +1947,7 @@ class CodeIntelService:
                 file_section.extend(sym_lines)
 
             section_text = "\n".join(file_section)
-            section_tokens = int(len(section_text) / 3.5)
+            section_tokens = estimate_tokens(section_text)
             if token_est + section_tokens > max_tokens and sections:
                 sections.append(f"  ... and {len(sorted_files) - len(sections)} more files (truncated)")
                 break
@@ -2046,7 +2047,7 @@ class CodeIntelService:
         token_est = 0
         for header, text, _prio in sections:
             section_text = f"## {header}\n{text}"
-            section_tokens = int(len(section_text) / 3.5)
+            section_tokens = estimate_tokens(section_text)
             if token_est + section_tokens > max_tokens and output_parts:
                 break
             output_parts.append(section_text)

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from attocode.integrations.utilities.token_estimate import estimate_tokens
+from attocode.types.events import SimpleEventListener
 
 
 class ReferenceType:
@@ -77,7 +78,7 @@ class ReversibleCompactionConfig:
 
 
 ReferenceExtractor = Callable[[str, int], list[Reference]]
-CompactionEventListener = Callable[[str, dict[str, Any]], None]
+CompactionEventListener = SimpleEventListener
 
 
 class ReversibleCompactor:

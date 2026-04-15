@@ -72,7 +72,7 @@ def _runtime_prefixes(run_dir: Path, state: dict[str, Any] | None = None) -> lis
     prefixes: set[str] = set()
     try:
         rel = run_dir.resolve().relative_to(working_dir.resolve()).as_posix()
-    except Exception:
+    except ValueError:
         rel = ""
 
     if rel:

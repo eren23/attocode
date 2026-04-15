@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from attoswarm.coordinator.causal_analyzer import CausalChainAnalyzer
-    from attoswarm.coordinator.decompose_metrics import DecomposeMetrics, DecomposeScorecard
+    from attoswarm.coordinator.decompose_metrics import DecomposeMetrics
     from attoswarm.coordinator.trace_query import TraceQueryEngine
 
 logger = logging.getLogger(__name__)

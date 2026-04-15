@@ -22,7 +22,7 @@ from attocode.agent.context import AgentContext
 from attocode.agent.message_builder import build_initial_messages
 from attocode.config import infer_project_root_from_session_dir
 from attocode.types.events import AgentEvent, EventType
-from attocode.types.messages import Message, Role, ToolCall
+from attocode.types.messages import Message, Role
 
 logger = logging.getLogger(__name__)
 
@@ -97,21 +97,21 @@ async def build_run_context(
 
     # Wire extension handler into context
     if agent._extension_handler:
-        ctx.extension_handler = agent._extension_handler  # type: ignore[attr-defined]
+        ctx.extension_handler = agent._extension_handler
 
     # Wire additional integrations
     if agent._safety_manager:
-        ctx.safety_manager = agent._safety_manager  # type: ignore[attr-defined]
+        ctx.safety_manager = agent._safety_manager
     if agent._task_manager:
-        ctx.task_manager = agent._task_manager  # type: ignore[attr-defined]
+        ctx.task_manager = agent._task_manager
     if agent._interactive_planner:
-        ctx.interactive_planner = agent._interactive_planner  # type: ignore[attr-defined]
+        ctx.interactive_planner = agent._interactive_planner
     if agent._codebase_context:
-        ctx.codebase_context = agent._codebase_context  # type: ignore[attr-defined]
+        ctx.codebase_context = agent._codebase_context
     if agent._multi_agent_manager:
-        ctx.multi_agent_manager = agent._multi_agent_manager  # type: ignore[attr-defined]
+        ctx.multi_agent_manager = agent._multi_agent_manager
     if agent._cancellation_manager:
-        ctx.cancellation_manager = agent._cancellation_manager  # type: ignore[attr-defined]
+        ctx.cancellation_manager = agent._cancellation_manager
     if agent._thread_manager:
         ctx.thread_manager = agent._thread_manager
     if agent._trace_collector:

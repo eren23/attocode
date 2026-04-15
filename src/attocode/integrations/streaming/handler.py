@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from attocode.types.events import SimpleEventListener
 from attocode.types.messages import (
     ChatResponse,
     StreamChunk,
@@ -42,7 +43,7 @@ class _StreamState:
     usage: TokenUsage | None = None
 
 
-StreamEventListener = Callable[[str, dict[str, Any]], None]
+StreamEventListener = SimpleEventListener
 StreamCallback = Callable[[StreamChunk], None]
 
 

@@ -490,7 +490,7 @@ async def assess_and_adapt(
 async def mid_swarm_replan(ctx: Any) -> None:
     """Perform a mid-swarm re-plan to recover from stall.
 
-    Guards: runs at most once per session (ctx.has_replanned).
+    Guards: runs at most ``max_replans`` times per session (ctx.replan_count).
     Uses an LLM call to analyze completed/failed tasks and propose
     replacement subtasks for the stalled remainder.
     """
@@ -583,7 +583,6 @@ async def mid_swarm_replan(ctx: Any) -> None:
             )
             logger.info("Mid-swarm replan added %d tasks (attempt %d)", len(smart_subtasks), replan_count + 1)
             ctx.replan_count = replan_count + 1
-            ctx.has_replanned = True  # Backward compat
     except Exception:
         logger.warning("Mid-swarm replan LLM call failed", exc_info=True)
 

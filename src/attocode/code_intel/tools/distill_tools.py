@@ -16,6 +16,7 @@ from attocode.code_intel._shared import (
     _get_remote_service,
     mcp,
 )
+from attocode.integrations.utilities.token_estimate import estimate_tokens
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,7 +39,7 @@ def _extract_signatures(
     and their methods.  Each function includes parameter names + types and
     return type.  Docstrings are reduced to first line only.
 
-    Uses ``len(text) / 3.5`` token estimation (same as ``repo_map``).
+    Uses ``estimate_tokens()`` for token estimation (same as ``repo_map``).
     """
     sections: list[str] = []
     token_est = 0
@@ -103,7 +104,7 @@ def _extract_signatures(
             continue
 
         section_text = "\n".join(file_lines)
-        section_tokens = int(len(section_text) / 3.5)
+        section_tokens = estimate_tokens(section_text)
 
         if token_est + section_tokens > max_tokens and sections:
             remaining = len(rel_paths) - len(sections)
@@ -348,5 +349,5 @@ def distill(
         return "No content extracted (files may not have parseable ASTs)."
 
     # Add summary footer
-    footer = f"\n\n({len(selected)} files, level={level}, ~{int(len(output) / 3.5)} tokens)"
+    footer = f"\n\n({len(selected)} files, level={level}, ~{estimate_tokens(output)} tokens)"
     return output + footer

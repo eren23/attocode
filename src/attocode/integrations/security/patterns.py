@@ -14,13 +14,7 @@ import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-
-class Severity(StrEnum):
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    INFO = "info"
+from attocode.types.severity import Severity
 
 
 class Category(StrEnum):

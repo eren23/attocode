@@ -83,7 +83,6 @@ class OrchestratorInternals:
     total_dispatches: int = 0
     total_hollows: int = 0
     original_prompt: str = ""
-    has_replanned: bool = False  # Kept for backward compat
     replan_count: int = 0
     scout_tokens: int = 0
 
@@ -253,7 +252,6 @@ class SwarmOrchestrator:
         self._total_dispatches = ctx.total_dispatches
         self._total_hollows = ctx.total_hollows
         self._original_prompt = ctx.original_prompt
-        self._has_replanned = ctx.has_replanned
         self._replan_count = ctx.replan_count
 
     async def execute(self, task: str) -> SwarmExecutionResult:
@@ -306,7 +304,6 @@ class SwarmOrchestrator:
         self._total_dispatches = 0
         self._total_hollows = 0
         self._original_prompt = task
-        self._has_replanned = False
         self._replan_count = 0
 
         ctx = self._get_internals()
@@ -813,11 +810,6 @@ class SwarmOrchestrator:
                     task_id=task.id,
                     dependents=dependent_count[task.id],
                 ))
-
-
-# =============================================================================
-# Simple Budget Pool (placeholder until full DynamicBudgetPool)
-# =============================================================================
 
 
 class _SimpleBudgetPool:

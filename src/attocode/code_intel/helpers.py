@@ -457,7 +457,6 @@ def _analyze_conventions(ast_cache: dict, sample_rels: list[str]) -> dict:
         "base_classes": Counter(),
         "file_sizes": [],
         "files_per_dir": Counter(),
-        # New stats
         "exception_classes": [],  # list of (name, bases)
         "all_exports_count": 0,
         "private_functions": 0,

@@ -25,11 +25,6 @@ router = APIRouter(
     dependencies=[Depends(verify_auth)],
 )
 
-# Backward-compatible aliases
-_LANG_MAP = LANG_MAP
-_MAX_FILE_SIZE = MAX_FILE_SIZE
-_detect_language = detect_language
-
 
 def _resolve_path(project_dir: str, rel_path: str) -> str:
     """Resolve and validate a relative path within the project."""
@@ -55,10 +50,10 @@ async def get_file_content(
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
     stat = os.stat(abs_path)
-    if stat.st_size > _MAX_FILE_SIZE:
+    if stat.st_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
-            detail=f"File too large ({stat.st_size} bytes, max {_MAX_FILE_SIZE})",
+            detail=f"File too large ({stat.st_size} bytes, max {MAX_FILE_SIZE})",
         )
 
     # Check if binary
@@ -66,7 +61,7 @@ async def get_file_content(
     if mime_type and not mime_type.startswith("text/") and mime_type != "application/json":
         # Allow known text formats
         ext = os.path.splitext(abs_path)[1].lower()
-        if ext not in _LANG_MAP and ext not in {".cfg", ".ini", ".env", ".gitignore"}:
+        if ext not in LANG_MAP and ext not in {".cfg", ".ini", ".env", ".gitignore"}:
             raise HTTPException(status_code=415, detail="Binary file — content not available via this endpoint")
 
     try:
@@ -81,7 +76,7 @@ async def get_file_content(
     return FileContentResponse(
         path=path,
         content=content,
-        language=_detect_language(path),
+        language=detect_language(path),
         size_bytes=stat.st_size,
         line_count=line_count,
     )
@@ -118,7 +113,7 @@ async def get_file_tree(
                     name=entry.name,
                     type="file",
                     size_bytes=size,
-                    language=_detect_language(entry.name),
+                    language=detect_language(entry.name),
                 ))
     except OSError as exc:
         logger.exception("Error reading directory %s", abs_path)

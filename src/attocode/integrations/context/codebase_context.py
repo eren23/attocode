@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from attocode.integrations.utilities.token_estimate import CHARS_PER_TOKEN
+
 
 @dataclass(slots=True)
 class FileInfo:
@@ -1195,7 +1197,7 @@ class CodebaseContextManager:
                 break
 
             # Estimate tokens from file size (size in bytes / CHARS_PER_TOKEN)
-            est_tokens = max(1, int(file_info.size / 3.5))
+            est_tokens = max(1, int(file_info.size / CHARS_PER_TOKEN))
 
             if est_tokens > remaining_tokens:
                 continue  # Skip files that don't fit, try smaller ones

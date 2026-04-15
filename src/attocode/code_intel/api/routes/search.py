@@ -178,7 +178,3 @@ async def security_scan_v2(
     """Security analysis (structured)."""
     provider = await get_search_provider(project_id)
     return await provider.security_scan(mode=req.mode, path=req.path, branch=branch)
-
-
-# Backward-compatible alias
-router = router_v1

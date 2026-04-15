@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import tarfile
 from datetime import UTC, datetime
@@ -10,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from attocode import __version__
+from attocode.code_intel.artifacts.hashing import sha256_file
 
 _SCHEMA_VERSION = 1
 _ARTIFACTS = (
@@ -18,14 +18,6 @@ _ARTIFACTS = (
     ("artifacts/cache/memory.db", ".attocode/cache/memory.db"),
     ("artifacts/adrs.db", ".attocode/adrs.db"),
 )
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _metadata(project_dir: Path) -> dict[str, object]:
@@ -37,7 +29,7 @@ def _metadata(project_dir: Path) -> dict[str, object]:
             "path": bundle_path,
             "present": present,
             "size_bytes": source.stat().st_size if present else 0,
-            "sha256": _sha256(source) if present else None,
+            "sha256": sha256_file(source) if present else None,
         })
 
     return {

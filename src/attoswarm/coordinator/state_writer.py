@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from attoswarm.protocol.io import write_json_atomic
 from attoswarm.protocol.models import LauncherInfo, LineageSpec, SwarmState, TaskSpec, utc_now_iso
@@ -56,7 +57,7 @@ def write_state(
     # Enriched dag nodes
     dag_nodes = []
     for t in tasks:
-        node: dict = {
+        node: dict[str, Any] = {
             "task_id": t.task_id,
             "status": t.status,
             "title": t.title,

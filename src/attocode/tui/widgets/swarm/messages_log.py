@@ -106,7 +106,7 @@ class MessagesLog(Widget):
             log.write(line)
 
     @staticmethod
-    def _to_epoch(ts: Any) -> float:
+    def _to_epoch(ts: int | float | str | None) -> float:
         if isinstance(ts, (int, float)):
             return float(ts)
         if isinstance(ts, str) and ts:

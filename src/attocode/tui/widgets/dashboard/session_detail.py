@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from textual.containers import Container, Vertical
-from textual.message import Message
 from textual.widgets import ContentSwitcher, Static
 
 from attocode.tracing.analysis import (
@@ -74,9 +73,6 @@ class SessionDetailPane(Container):
         dock: top;
     }
     """
-
-    class BackRequested(Message):
-        """User pressed Escape to go back to session browser."""
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)

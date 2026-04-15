@@ -173,6 +173,3 @@ async def recent_changes(
     svc = await get_service_or_404(project_id)
     data = svc.recent_changes_data(days=days, path=path, top_n=top_n)
     return RecentChangesResponse(**data)
-
-
-router = router_v1

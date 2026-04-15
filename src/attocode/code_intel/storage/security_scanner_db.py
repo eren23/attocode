@@ -86,7 +86,6 @@ async def db_security_scan(
     from attocode.integrations.security.patterns import (
         ANTI_PATTERNS,
         SECRET_PATTERNS,
-        Category,
     )
 
     content_store = ContentStore(session)

@@ -488,7 +488,7 @@ class TestOrchestratorInternals:
         assert ctx.total_dispatches == 0
         assert ctx.total_hollows == 0
         assert ctx.original_prompt == ""
-        assert ctx.has_replanned is False
+        assert ctx.replan_count == 0
 
     def test_collected_data_defaults(self) -> None:
         ctx = _make_ctx()

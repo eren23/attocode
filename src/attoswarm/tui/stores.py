@@ -10,7 +10,7 @@ from typing import Any
 from attoswarm.protocol.io import read_json
 
 
-def _to_epoch(ts: Any) -> float:
+def _to_epoch(ts: int | float | str | None) -> float:
     """Normalize a timestamp (epoch number or ISO string) to a float epoch."""
     if isinstance(ts, (int, float)):
         return float(ts)

@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from attocode.agent.context import AgentContext, EventHandler
+from attocode.integrations.utilities.token_estimate import estimate_tokens
 from attocode.providers.base import LLMProvider, get_model_context_window
 from attocode.types.agent import AgentConfig, AgentMetrics, AgentResult, AgentStatus
 from attocode.types.budget import STANDARD_BUDGET, ExecutionBudget
@@ -335,11 +336,10 @@ class ProductionAgent:
         """Get context window usage as a fraction (0.0 to 1.0)."""
         if not self._ctx:
             return 0.0
-        total_chars = sum(
-            len(getattr(m, "content", "") or "")
-            for m in self._ctx.messages
+        all_content = "".join(
+            getattr(m, "content", "") or "" for m in self._ctx.messages
         )
-        estimated_tokens = total_chars // 4
+        estimated_tokens = estimate_tokens(all_content)
         max_context = get_model_context_window(self._config.model or "")
         return min(estimated_tokens / max_context, 1.0)
 

@@ -12,12 +12,53 @@ from attocode.types.budget import STANDARD_BUDGET, ExecutionBudget
 from attocode.types.events import AgentEvent, EventType
 
 if TYPE_CHECKING:
+    from attocode.integrations.safety.execution_policy import ExecutionPolicy
+    from attocode.integrations.utilities.state_machine import AgentStateMachine
+
+    from attocode.integrations.budget.cancellation import CancellationManager
+    from attocode.integrations.budget.economics import ExecutionEconomicsManager
+    from attocode.integrations.budget.injection_budget import InjectionBudgetManager
+    from attocode.integrations.context.ast_service import ASTService
+    from attocode.integrations.context.auto_compaction import AutoCompactionManager
+    from attocode.integrations.context.codebase_context import CodebaseContextManager
+    from attocode.integrations.context.context_engineering import ContextEngineeringManager
+    from attocode.integrations.context.hierarchical_explorer import HierarchicalExplorer
+    from attocode.integrations.context.semantic_cache import SemanticCacheManager
+    from attocode.integrations.context.semantic_search import SemanticSearchManager
+    from attocode.integrations.lsp.client import LSPManager
+    from attocode.integrations.persistence.project_state import ProjectStateManager
+    from attocode.integrations.quality.auto_checkpoint import AutoCheckpointManager
+    from attocode.integrations.quality.dead_letter_queue import DeadLetterQueue
+    from attocode.integrations.quality.health_check import HealthChecker
+    from attocode.integrations.quality.learning_store import LearningStore
+    from attocode.integrations.quality.self_improvement import SelfImprovementProtocol
+    from attocode.integrations.quality.tool_recommendation import ToolRecommendationEngine
+    from attocode.integrations.quality.trajectory import TrajectoryTracker
+    from attocode.integrations.safety.pattern_rules import PatternRuleEngine
+    from attocode.integrations.safety.policy_engine import PolicyEngine
+    from attocode.integrations.security.scanner import SecurityScanner
+    from attocode.integrations.tasks.interactive_planning import InteractivePlanner
+    from attocode.integrations.tasks.pending_plan import PendingPlanManager
+    from attocode.integrations.tasks.planning import PlanningManager
+    from attocode.integrations.tasks.task_manager import TaskManager
+    from attocode.integrations.tasks.work_log import WorkLog
+    from attocode.integrations.utilities.hooks import HookManager
+    from attocode.integrations.utilities.ignore import IgnoreManager
+    from attocode.integrations.utilities.mode_manager import ModeManager
+    from attocode.integrations.utilities.thread_manager import ThreadManager
+    from attocode.integrations.utilities.undo import FileChangeTracker
     from attocode.providers.base import LLMProvider
+    from attocode.tools.dynamic import DynamicToolRegistry
     from attocode.tools.registry import ToolRegistry
+    from attocode.tricks.failure_evidence import FailureTracker
+    from attocode.tricks.recitation import RecitationManager
     from attocode.types.messages import Message, MessageWithStructuredContent
 
 EventHandler = Callable[[AgentEvent], Any]
 ApprovalCallback = Callable[..., Any]  # async (tool_name, args, danger, context) -> ApprovalResult
+
+# Type alias for the skill manager dict (not a class — assembled in feature_initializer)
+SkillManagerDict = dict[str, Any]
 
 
 @dataclass
@@ -53,30 +94,30 @@ class AgentContext:
     project_root: str = ""
 
     # Policy engine (optional - if None, all tools are auto-approved)
-    policy_engine: Any = None  # PolicyEngine instance
+    policy_engine: PolicyEngine | None = None
 
     # Approval callback (optional - for TUI/interactive approval)
     approval_callback: ApprovalCallback | None = None
 
     # Economics manager (optional - for budget tracking)
-    economics: Any = None  # ExecutionEconomicsManager instance
+    economics: ExecutionEconomicsManager | None = None
 
     # Auto-compaction manager (optional)
-    compaction_manager: Any = None  # AutoCompactionManager instance
+    compaction_manager: AutoCompactionManager | None = None
 
     # Session store (optional)
-    session_store: Any = None  # SessionStore instance
+    session_store: Any = None  # SessionStore — no single class; keep Any
     session_id: str | None = None
 
     # Context engineering tricks (optional)
-    recitation_manager: Any = None  # RecitationManager instance
-    failure_tracker: Any = None  # FailureTracker instance
+    recitation_manager: RecitationManager | None = None
+    failure_tracker: FailureTracker | None = None
 
     # Learning store (optional)
-    learning_store: Any = None  # LearningStore instance
+    learning_store: LearningStore | None = None
 
     # Auto-checkpoint (optional)
-    auto_checkpoint: Any = None  # AutoCheckpointManager instance
+    auto_checkpoint: AutoCheckpointManager | None = None
 
     # MCP server configs (optional)
     mcp_server_configs: list[dict[str, Any]] = field(default_factory=list)
@@ -85,42 +126,55 @@ class AgentContext:
     goal: str | None = None
 
     # Mode manager (optional - for build/plan/review/debug modes)
-    mode_manager: Any = None  # ModeManager instance
+    mode_manager: ModeManager | None = None
 
     # File change tracker (optional - for undo capability)
-    file_change_tracker: Any = None  # FileChangeTracker instance
+    file_change_tracker: FileChangeTracker | None = None
 
     # Thread manager (optional - for conversation forking)
-    thread_manager: Any = None  # ThreadManager instance
+    thread_manager: ThreadManager | None = None
 
     # Trace collector (optional - for execution tracing)
-    trace_collector: Any = None  # TraceCollector instance
+    trace_collector: Any = None  # TraceCollector — import path varies; keep Any
 
     # --- Integration slots (initialized by feature_initializer) ---
-    cancellation_manager: Any = None  # CancellationManager instance
-    codebase_context: Any = None  # CodebaseContextManager instance
-    interactive_planner: Any = None  # InteractivePlanner instance
-    task_manager: Any = None  # TaskManager instance
-    _context_engineering: Any = None  # ContextEngineeringManager instance
-    _dead_letter_queue: Any = None  # DeadLetterQueue instance
-    _execution_policy: Any = None  # ExecutionPolicy instance
-    _health_check: Any = None  # HealthCheckManager instance
-    _hook_manager: Any = None  # HookManager instance
-    _ignore_manager: Any = None  # IgnoreManager instance
-    _injection_budget: Any = None  # InjectionBudgetManager instance
+    cancellation_manager: CancellationManager | None = None
+    codebase_context: CodebaseContextManager | None = None
+    interactive_planner: InteractivePlanner | None = None
+    task_manager: TaskManager | None = None
+    _context_engineering: ContextEngineeringManager | None = None
+    _dead_letter_queue: DeadLetterQueue | None = None
+    _execution_policy: ExecutionPolicy | None = None
+    _health_check: HealthChecker | None = None
+    _hook_manager: HookManager | None = None
+    _ignore_manager: IgnoreManager | None = None
+    _injection_budget: InjectionBudgetManager | None = None
     _loaded_rules: list[str] = field(default_factory=list)
-    _lsp_manager: Any = None  # LSPManager instance
-    _pending_plan: Any = None  # PendingPlanManager instance
-    _planning_manager: Any = None  # PlanningManager instance
-    _safety_policy_engine: Any = None  # PolicyEngine instance
-    _self_improvement: Any = None  # SelfImprovementManager instance
-    _tool_recommender: Any = None  # ToolRecommendationEngine instance
-    _semantic_cache: Any = None  # SemanticCacheManager instance
-    _skill_manager: Any = None  # dict with loader/executor/dependency_graph/skills
-    _state_machine: Any = None  # AgentStateMachine instance
-    _work_log: Any = None  # WorkLog instance
-    _semantic_search: Any = None  # SemanticSearchManager instance
-    _security_scanner: Any = None  # SecurityScanner instance
+    _lsp_manager: LSPManager | None = None
+    _pending_plan: PendingPlanManager | None = None
+    _planning_manager: PlanningManager | None = None
+    _safety_policy_engine: PolicyEngine | None = None
+    _self_improvement: SelfImprovementProtocol | None = None
+    _tool_recommender: ToolRecommendationEngine | None = None
+    _semantic_cache: SemanticCacheManager | None = None
+    _skill_manager: SkillManagerDict | None = None
+    _state_machine: AgentStateMachine | None = None
+    _work_log: WorkLog | None = None
+    _semantic_search: SemanticSearchManager | None = None
+    _security_scanner: SecurityScanner | None = None
+
+    # --- Slots set by feature_initializer but not in original field list ---
+    _pattern_rule_engine: PatternRuleEngine | None = None
+    _ast_service: ASTService | None = None
+    _hierarchical_explorer: HierarchicalExplorer | None = None
+    project_state: ProjectStateManager | None = None
+    dynamic_tools: DynamicToolRegistry | None = None
+    trajectory_tracker: TrajectoryTracker | None = None
+
+    # --- Slots set by run_context_builder (wired from ProductionAgent) ---
+    extension_handler: Any = None  # BudgetExtensionHandler (callable alias)
+    safety_manager: Any = None  # Varies by caller; keep Any
+    multi_agent_manager: Any = None  # Varies by caller; keep Any
 
     def on_event(self, handler: EventHandler) -> None:
         """Register an event handler."""

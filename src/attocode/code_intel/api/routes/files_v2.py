@@ -23,11 +23,6 @@ from attocode.code_intel.api.utils import MAX_FILE_SIZE, detect_language, is_bin
 router = APIRouter(prefix="/api/v2/projects/{project_id}", tags=["files-v2"])
 logger = logging.getLogger(__name__)
 
-# Backward-compatible aliases
-_MAX_FILE_SIZE = MAX_FILE_SIZE
-_detect_language = detect_language
-_is_binary = is_binary
-
 
 # --- Response models ---
 
@@ -157,7 +152,7 @@ def _assemble_tree(
             path=full_path,
             type="file",
             size=size,
-            language=_detect_language(name),
+            language=detect_language(name),
         ))
 
     return entries
@@ -188,7 +183,7 @@ def _build_tree_recursive(
             path=e.path,
             type=node_type,
             size=e.size,
-            language=_detect_language(e.name) if e.type == "blob" else "",
+            language=detect_language(e.name) if e.type == "blob" else "",
             children=children,
         ))
     # Sort: directories first, then files, alphabetically
@@ -237,7 +232,7 @@ async def get_root_tree(
                 path=e.path,
                 type="directory" if e.type == "tree" else "file",
                 size=e.size,
-                language=_detect_language(e.name) if e.type == "blob" else "",
+                language=detect_language(e.name) if e.type == "blob" else "",
             )
             for e in entries
         ],
@@ -269,7 +264,7 @@ async def get_subtree(
 
     try:
         entries = git.get_tree(str(project_id), resolved_ref, path)
-    except (FileNotFoundError, ValueError, KeyError) as e:
+    except (FileNotFoundError, ValueError, KeyError):
         raise HTTPException(status_code=404, detail=f"Path not found: {path}")
 
     return TreeResponse(
@@ -281,7 +276,7 @@ async def get_subtree(
                 path=e.path,
                 type="directory" if e.type == "tree" else "file",
                 size=e.size,
-                language=_detect_language(e.name) if e.type == "blob" else "",
+                language=detect_language(e.name) if e.type == "blob" else "",
             )
             for e in entries
         ],
@@ -320,16 +315,16 @@ async def get_file_content(
         git = get_git_manager()
         try:
             data = git.read_file(str(project_id), resolved_ref, path)
-        except (FileNotFoundError, KeyError) as e:
+        except (FileNotFoundError, KeyError):
             raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
-    if len(data) > _MAX_FILE_SIZE:
+    if len(data) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
-            detail=f"File too large ({len(data)} bytes, max {_MAX_FILE_SIZE})",
+            detail=f"File too large ({len(data)} bytes, max {MAX_FILE_SIZE})",
         )
 
-    if _is_binary(data):
+    if is_binary(data):
         raise HTTPException(status_code=415, detail="Binary file — content not available via this endpoint")
 
     content = data.decode("utf-8", errors="replace")
@@ -339,7 +334,7 @@ async def get_file_content(
         path=path,
         ref=resolved_ref,
         content=content,
-        language=_detect_language(path),
+        language=detect_language(path),
         size_bytes=len(data),
         line_count=line_count,
     )
@@ -370,7 +365,7 @@ async def get_repo_stats(
     languages: dict[str, int] = {}
     total_size = 0
     for path in manifest:
-        lang = _detect_language(path)
+        lang = detect_language(path)
         if lang:
             languages[lang] = languages.get(lang, 0) + 1
 

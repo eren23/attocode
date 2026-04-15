@@ -6,10 +6,8 @@ stats building, checkpointing, artifact auditing, etc.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-import re
 from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.swarm.types import (
@@ -675,33 +673,16 @@ def get_swarm_progress_summary(ctx: OrchestratorInternals) -> str:
 
 
 def parse_json(content: str) -> dict[str, Any] | None:
-    """Extract JSON from LLM response, handling markdown code blocks."""
-    if not content:
-        return None
+    """Extract a JSON object from LLM response, handling markdown code blocks.
 
-    # Try direct parse
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        pass
+    Thin wrapper around :func:`attocode.tricks.json_utils.extract_json` that
+    only returns ``dict`` results (ignoring arrays and scalars).
+    """
+    from attocode.tricks.json_utils import extract_json
 
-    # Try extracting from markdown code block
-    match = re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # Try finding JSON object in content
-    brace_start = content.find("{")
-    brace_end = content.rfind("}")
-    if brace_start >= 0 and brace_end > brace_start:
-        try:
-            return json.loads(content[brace_start:brace_end + 1])
-        except json.JSONDecodeError:
-            pass
-
+    result = extract_json(content)
+    if isinstance(result, dict):
+        return result
     return None
 
 

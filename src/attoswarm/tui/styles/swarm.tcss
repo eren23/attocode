@@ -140,9 +140,7 @@ DependencyTree > Tree {
     padding: 0 2;
 }
 
-/* ── Legacy widget styles (kept for backward compat with old code) ── */
-
-/* Agent Grid (old card-based view) */
+/* Agent Grid */
 AgentGrid {
     height: auto;
     min-height: 1;

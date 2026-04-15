@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -395,14 +395,6 @@ def analyze_file(
     functions = _extract_function_bodies(content, language)
     lines = content.splitlines()
     findings: list[DataFlowFinding] = []
-
-    rel_path = os.path.basename(file_path)
-    # Try to compute relative path
-    try:
-        from pathlib import PurePosixPath
-        rel_path = file_path  # will be overridden by caller if needed
-    except Exception:
-        pass
 
     for func_name, start, end in functions:
         func_lines = lines[start - 1:end]

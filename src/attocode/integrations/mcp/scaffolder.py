@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
-class ToolSpec:
+class MCPToolSpec:
     """Specification for a tool in the MCP server."""
     name: str
     description: str
@@ -31,7 +31,7 @@ class MCPServerSpec:
     """Full specification for an MCP server."""
     name: str
     description: str
-    tools: list[ToolSpec] = field(default_factory=list)
+    tools: list[MCPToolSpec] = field(default_factory=list)
     version: str = "0.1.0"
 
 

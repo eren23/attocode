@@ -16,11 +16,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 
 import httpx
 
@@ -73,16 +72,6 @@ class MCPTransport(ABC):
 # =============================================================================
 # SSE Transport
 # =============================================================================
-
-
-@dataclass
-class SSETool:
-    """A tool from an SSE-capable MCP server."""
-
-    name: str
-    description: str
-    input_schema: dict[str, Any]
-    server_name: str = ""
 
 
 class SSETransport(MCPTransport):
@@ -616,7 +605,6 @@ def create_transport(
     transport_type = config.get("type", "stdio").lower()
 
     if transport_type == "stdio":
-        from .client import MCPClient
         return _StdioWrapper(
             command=config["command"],
             args=config.get("args", []),

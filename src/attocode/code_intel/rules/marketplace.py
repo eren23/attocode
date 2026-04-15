@@ -7,17 +7,14 @@ pack structure (manifest.yaml + rules/*.yaml).
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 import re
 import shutil
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from attocode.code_intel.rules.packs.pack_loader import PackManifest, _load_manifest
+from attocode.code_intel.rules.packs.pack_loader import _load_manifest
 
 logger = logging.getLogger(__name__)
 
