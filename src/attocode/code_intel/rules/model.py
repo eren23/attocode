@@ -157,6 +157,11 @@ class UnifiedRule:
     # Boolean combinators (A3) — when set, executor uses composite evaluation
     composite_pattern: CompositePattern | None = None
 
+    # External references (CWE links, blog posts, doc URLs). Preserved by
+    # community pack importers (e.g. semgrep ``metadata.references``) so the
+    # provenance of a rule is not lost on conversion.
+    references: list[str] = field(default_factory=list)
+
     @property
     def qualified_id(self) -> str:
         """Pack-qualified ID (e.g. 'go/performance/sprintf-in-loop')."""

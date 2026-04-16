@@ -25,8 +25,10 @@ from attocode.code_intel.rules.model import EnrichedFinding, UnifiedRule
 # ---------------------------------------------------------------------------
 
 # Matches: # expect: rule-id, // expect: rule-id, # ok: rule-id, etc.
+# Also accepts the semgrep-rules ``ruleid:`` marker as an alias for ``expect:``
+# so test fixtures imported from semgrep work without preprocessing.
 _ANNOTATION_RE = re.compile(
-    r"(?:#|//)\s*(expect|ok|todoruleid):\s*([\w./-]+)"
+    r"(?:#|//)\s*(expect|ok|todoruleid|ruleid):\s*([\w./-]+)"
 )
 
 
@@ -46,9 +48,13 @@ def parse_annotations(file_path: str) -> list[Expectation]:
         with open(file_path, encoding="utf-8") as f:
             for i, line in enumerate(f, 1):
                 for m in _ANNOTATION_RE.finditer(line):
+                    kind = m.group(1)
+                    # semgrep "ruleid" is treated as our "expect"
+                    if kind == "ruleid":
+                        kind = "expect"
                     expectations.append(Expectation(
                         line=i,
-                        kind=m.group(1),
+                        kind=kind,
                         rule_id=m.group(2),
                     ))
     except OSError:
@@ -124,6 +130,10 @@ def _finding_matches_rule(finding_rule_id: str, expected_rule_id: str) -> bool:
     if finding_rule_id.endswith("/" + expected_rule_id):
         return True
     return False
+
+
+# Public alias — the rule-bench harness reuses this matcher.
+match_finding_to_expectation = _finding_matches_rule
 
 
 # ---------------------------------------------------------------------------
