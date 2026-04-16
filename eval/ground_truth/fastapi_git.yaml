@@ -1,0 +1,60 @@
+repo: fastapi
+source: git_derived
+queries:
+- query: "\U0001F4DD Update docs for responses and new stream with `yield`"
+  relevant_files:
+  - docs_src/stream_data/tutorial002_py310.py
+  - tests/test_tutorial/test_stream_data/test_tutorial002.py
+  commit_sha: 1377052c6cc5
+- query: "\U0001F4DD Rename `docs_src/websockets` to `docs_src/websockets_` to avoid\
+    \ import errors"
+  relevant_files:
+  - docs_src/websockets/__init__.py
+  - docs_src/websockets/tutorial001_py310.py
+  - docs_src/websockets/tutorial002_an_py310.py
+  - docs_src/websockets/tutorial002_py310.py
+  - docs_src/websockets/tutorial003_py310.py
+  - docs_src/websockets_/__init__.py
+  - docs_src/websockets_/tutorial001_py310.py
+  - docs_src/websockets_/tutorial002_an_py310.py
+  - docs_src/websockets_/tutorial002_py310.py
+  - docs_src/websockets_/tutorial003_py310.py
+  - tests/test_tutorial/test_websockets/test_tutorial001.py
+  - tests/test_tutorial/test_websockets/test_tutorial002.py
+  - tests/test_tutorial/test_websockets/test_tutorial003.py
+  commit_sha: 0901b4092c36
+- query: "\U0001F528 Run tests with `pytest-xdist` and `pytest-cov`"
+  relevant_files:
+  - tests/test_tutorial/test_additional_responses/test_tutorial002.py
+  - tests/test_tutorial/test_additional_responses/test_tutorial004.py
+  - tests/test_tutorial/test_background_tasks/test_tutorial001.py
+  - tests/test_tutorial/test_background_tasks/test_tutorial002.py
+  - tests/test_tutorial/test_custom_docs_ui/test_tutorial001.py
+  - tests/test_tutorial/test_custom_docs_ui/test_tutorial002.py
+  - tests/test_tutorial/test_events/test_tutorial002.py
+  - tests/test_tutorial/test_settings/test_app01.py
+  - tests/test_tutorial/test_static_files/test_tutorial001.py
+  - tests/test_tutorial/test_templates/test_tutorial001.py
+  - tests/test_tutorial/test_websockets/test_tutorial003.py
+  - tests/utils.py
+  commit_sha: 5aacc7b6a0a3
+- query: "\u267B\uFE0F Refactor logic to handle OpenAPI and Swagger UI escaping data"
+  relevant_files:
+  - fastapi/applications.py
+  - fastapi/openapi/docs.py
+  - tests/test_openapi_cache_root_path.py
+  - tests/test_swagger_ui_escape.py
+  commit_sha: 2686c7fbbf9a
+- query: "\U0001F512\uFE0F Add `strict_content_type` checking for JSON requests"
+  relevant_files:
+  - docs_src/strict_content_type/__init__.py
+  - docs_src/strict_content_type/tutorial001_py310.py
+  - fastapi/applications.py
+  - fastapi/routing.py
+  - tests/test_strict_content_type_app_level.py
+  - tests/test_strict_content_type_nested.py
+  - tests/test_strict_content_type_router_level.py
+  - tests/test_tutorial/test_body/test_tutorial001.py
+  - tests/test_tutorial/test_strict_content_type/__init__.py
+  - tests/test_tutorial/test_strict_content_type/test_tutorial001.py
+  commit_sha: 22354a253037

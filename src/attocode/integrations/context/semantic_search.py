@@ -149,6 +149,58 @@ class IndexProgress:
 
 
 @dataclass(slots=True)
+class ContextAssemblyConfig:
+    """Tunable parameters for bootstrap() and relevant_context().
+
+    Controls token budget allocation, size tier thresholds, and
+    symbol display limits during context assembly.
+    """
+
+    # bootstrap() size tier thresholds (file count)
+    small_repo_threshold: int = 100
+    large_repo_threshold: int = 5000
+
+    # bootstrap() budget ratios (with task_hint)
+    summary_ratio: float = 0.38
+    structure_ratio: float = 0.38
+    conventions_ratio: float = 0.12
+    search_ratio: float = 0.12
+
+    # bootstrap() budget ratios (without task_hint)
+    summary_ratio_no_hint: float = 0.40
+    structure_ratio_no_hint: float = 0.44
+    conventions_ratio_no_hint: float = 0.16
+
+    # bootstrap() medium repo structure split
+    medium_structure_map_ratio: float = 0.7
+
+    # bootstrap() explorer params (large repos)
+    explore_max_items: int = 20
+    explore_importance_threshold: float = 0.3
+
+    # bootstrap() hotspots count
+    bootstrap_hotspots_n: int = 10
+
+    # bootstrap() conventions sample size
+    conventions_sample_size: int = 25
+
+    # bootstrap() search top_k
+    bootstrap_search_top_k: int = 5
+
+    # relevant_context() max BFS depth
+    max_depth: int = 2
+
+    # relevant_context() symbol caps per file
+    center_symbol_cap: int = 8
+    neighbor_symbol_cap: int = 5
+
+    # relevant_context() preview limits
+    param_preview_limit: int = 4
+    base_preview_limit: int = 3
+    method_preview_limit: int = 4
+
+
+@dataclass(slots=True)
 class SearchScoringConfig:
     """Tunable scoring parameters for BM25 keyword search and two-stage retrieval.
 
@@ -157,25 +209,25 @@ class SearchScoringConfig:
     """
 
     # BM25 base parameters
-    bm25_k1: float = 1.5
-    bm25_b: float = 0.75
+    bm25_k1: float = 2.8      # optimized from 1.5 — higher term saturation
+    bm25_b: float = 0.25      # optimized from 0.75 — less length normalization
 
     # Graduated symbol name match boosts
-    name_exact_boost: float = 3.0
-    name_substring_boost: float = 2.0
-    name_token_boost: float = 1.5
+    name_exact_boost: float = 5.5   # optimized from 3.0
+    name_substring_boost: float = 3.0   # optimized from 2.0
+    name_token_boost: float = 2.2   # optimized from 1.5
 
     # Definition-type boosts
-    class_boost: float = 1.3
-    function_boost: float = 1.15
-    method_boost: float = 1.1
+    class_boost: float = 1.6   # optimized from 1.3
+    function_boost: float = 1.4   # optimized from 1.15
+    method_boost: float = 1.3   # optimized from 1.1
 
     # Path relevance: source directory boost
-    src_dir_boost: float = 1.2
+    src_dir_boost: float = 1.3   # optimized from 1.2
 
     # Multi-term coverage bonuses
-    multi_term_high_bonus: float = 1.4   # >= 80% coverage
-    multi_term_med_bonus: float = 1.15   # >= 50% coverage
+    multi_term_high_bonus: float = 2.5   # optimized from 1.4
+    multi_term_med_bonus: float = 1.8    # optimized from 1.15
     multi_term_high_threshold: float = 0.8
     multi_term_med_threshold: float = 0.5
 
@@ -185,15 +237,20 @@ class SearchScoringConfig:
     test_penalty: float = 0.7
 
     # Exact phrase bonus
-    exact_phrase_bonus: float = 1.2
+    exact_phrase_bonus: float = 2.8   # optimized from 1.2
 
     # Deduplication: max chunks per file in results
     max_chunks_per_file: int = 2
 
     # Two-stage retrieval parameters
-    wide_k_multiplier: int = 5
-    wide_k_min: int = 50
-    rrf_k: int = 60
+    wide_k_multiplier: int = 8    # optimized from 5
+    wide_k_min: int = 100         # optimized from 50
+    rrf_k: int = 35               # optimized from 60 — sharper fusion
+
+    # Algorithmic signals (Phase 1 improvements)
+    importance_weight: float = 0.5   # file importance boost (0 = disabled)
+    frecency_weight: float = 0.2     # frecency boost (0 = disabled)
+    rerank_confidence_threshold: float = 0.4  # auto-rerank when top score below this (0 = disabled)
 
 
 @dataclass(slots=True)
@@ -240,6 +297,8 @@ class SemanticSearchManager:
     _bg_thread: Any = field(default=None, repr=False)
     _index_progress: IndexProgress = field(default_factory=IndexProgress, repr=False)
     _summarizer: Any = field(default=None, repr=False)
+    _importance_scores: dict[str, float] = field(default_factory=dict, repr=False)
+    _frecency_tracker: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         # Defer provider creation to first use (_ensure_provider) to avoid
@@ -250,7 +309,40 @@ class SemanticSearchManager:
             self.root_dir, ".attocode", "index", "kw_index.db",
         )
         if not self.nl_mode:
-            self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none")
+            self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "heuristic")
+
+    def _get_importance(self, file_path: str) -> float:
+        """Get file importance score (0.0-1.0), lazily loaded."""
+        if not self._importance_scores:
+            self._load_importance_scores()
+        return self._importance_scores.get(file_path, 0.0)
+
+    def _load_importance_scores(self) -> None:
+        """Load file importance from CodebaseContextManager if available."""
+        try:
+            from attocode.integrations.context.codebase_context import CodebaseContextManager
+            ctx = CodebaseContextManager(self.root_dir)
+            for fi in ctx._files:
+                self._importance_scores[fi.relative_path] = fi.importance
+        except Exception:
+            logger.debug("Failed to load importance scores", exc_info=True)
+
+    def _get_frecency_score(self, file_path: str) -> float:
+        """Get frecency score for a file, lazily loading the tracker."""
+        if self._frecency_tracker is None:
+            try:
+                from attocode.integrations.context.frecency import FrecencyTracker
+                self._frecency_tracker = FrecencyTracker(self.root_dir, ai_mode=True)
+            except Exception:
+                self._frecency_tracker = False  # sentinel: don't retry
+                return 0.0
+        if self._frecency_tracker is False:
+            return 0.0
+        try:
+            result = self._frecency_tracker.get_score(file_path)
+            return float(result.score) if result else 0.0
+        except Exception:
+            return 0.0
 
     def _ensure_provider(self) -> None:
         """Initialize embedding provider on first use."""
@@ -614,10 +706,28 @@ class SemanticSearchManager:
             if kw_id not in result_map:
                 result_map[kw_id] = r
 
-        # Optional cross-encoder reranking
+        # Cross-encoder reranking: explicit or lazy (auto-trigger on low confidence)
         if rerank:
             rerank_k = min(len(fused), 3 * top_k)
             fused = self._rerank(query, fused[:rerank_k], result_map, top_k)
+        elif cfg.rerank_confidence_threshold > 0 and fused:
+            top_score = fused[0][1] if fused else 0
+            if top_score < cfg.rerank_confidence_threshold:
+                rerank_k = min(len(fused), 3 * top_k)
+                fused = self._rerank(query, fused[:rerank_k], result_map, top_k)
+
+        # Frecency boost: recently-accessed files get a score bump
+        if cfg.frecency_weight > 0:
+            boosted: list[tuple[str, float]] = []
+            for item_id, fused_score in fused:
+                result = result_map.get(item_id)
+                if result:
+                    frec = self._get_frecency_score(result.file_path)
+                    if frec > 0:
+                        boost = min(frec / 100.0, 0.3) * cfg.frecency_weight
+                        fused_score *= (1.0 + boost)
+                boosted.append((item_id, fused_score))
+            fused = sorted(boosted, key=lambda x: x[1], reverse=True)
 
         # Return top-k by fused score
         merged: list[SemanticSearchResult] = []
@@ -870,6 +980,11 @@ class SemanticSearchManager:
             # Exact phrase bonus: multi-word query substring match in text
             if len(query_tokens) > 1 and query_lower in doc.text.lower():
                 score *= cfg.exact_phrase_bonus
+
+            # File importance boost (PageRank + hub score from dependency graph)
+            if cfg.importance_weight > 0:
+                imp = self._get_importance(doc.file_path)
+                score *= (1.0 + imp * cfg.importance_weight)
 
             scored.append((score, doc))
 

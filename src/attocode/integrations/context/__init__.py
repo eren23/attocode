@@ -94,6 +94,7 @@ __all__ = [
     "FileNode",
     "HierarchicalExplorer",
     # semantic_search
+    "ContextAssemblyConfig",
     "SearchScoringConfig",
     "SemanticSearchManager",
     "SemanticSearchResult",
@@ -200,6 +201,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "SemanticCacheConfig": ("attocode.integrations.context.semantic_cache", "SemanticCacheConfig"),
     "SemanticCacheManager": ("attocode.integrations.context.semantic_cache", "SemanticCacheManager"),
     # semantic_search
+    "ContextAssemblyConfig": ("attocode.integrations.context.semantic_search", "ContextAssemblyConfig"),
     "SearchScoringConfig": ("attocode.integrations.context.semantic_search", "SearchScoringConfig"),
     "SemanticSearchManager": ("attocode.integrations.context.semantic_search", "SemanticSearchManager"),
     "SemanticSearchResult": ("attocode.integrations.context.semantic_search", "SemanticSearchResult"),
