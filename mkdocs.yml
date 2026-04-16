@@ -77,6 +77,7 @@ nav:
       - Observability: guides/observability.md
       - Architecture Decisions: guides/architecture-decisions.md
       - Evaluation & Benchmarks: guides/evaluation-and-benchmarks.md
+      - Rule-Bench Corpus: guides/rule-bench-corpus.md
       - Providers: PROVIDERS.md
       - Provider Resilience: provider-resilience.md
       - Sandbox: SANDBOX.md

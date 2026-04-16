@@ -7,6 +7,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.22] - 2026-04-16
+
+### Added — Rule-Bench Harness + Community Pack Expansion
+
+Extends the meta-harness with a rule-quality optimizer and significantly
+expands language coverage by importing community rule packs from
+permissive sources. Lets the optimizer tune existing rules (stage 1)
+and generate new rules from templates (stage 2), with a per-language
+floor predicate preventing the "win-Python-break-Go" regression
+pattern observed in the search-bench experiments.
+
+#### Rule-Bench Harness (`eval/meta_harness/rule_bench/`)
+
+- **`scoring.py`** — severity-weighted F1 (critical=4x..info=0.5x),
+  per-language macro-aggregation with universal-rule bucket "*",
+  composite via macro mean. Skips zero-signal rules so unused rules
+  don't dilute scores.
+- **`corpus.py`** — `CorpusLoader` discovers labeled samples from three
+  sources: `packs/community/<pack>/fixtures/`, hand-labeled
+  `eval/rule_harness/fixtures/attocode/`, and the legacy CWE corpus
+  under `eval/rule_accuracy/corpus/`. Reuses
+  `parse_annotations` so semgrep `# ruleid:` markers normalize to
+  `expect` automatically.
+- **`config.py`** — `RuleBenchConfig` holds per-rule overrides
+  (`enabled`, `confidence`, `severity`), pack activation flags, global
+  `min_confidence`, and stage-2 `extra_rules`. `apply_to_registry`
+  returns a fresh cloned `RuleRegistry` so retries and parallel
+  candidates never share mutable state.
+- **`evaluator.py`** — `RuleBenchEvaluator` mirrors
+  `CodeIntelBenchEvaluator.evaluate(working_dir) -> EvalResult`. Lazily
+  loads packs and corpus, applies the candidate's config, scores per-rule
+  TP/FP/FN, aggregates to severity-weighted F1 per language. Disabled
+  rules still surface in the per-rule report.
+- **`predicate.py`** — `rule_accept_predicate` enforces a 5%
+  per-language F1 floor on top of strict-improvement.
+- **`proposer.py`** — stage-1 sweep proposer mutates 1-3 random rule
+  overrides per candidate; stage-2 LLM proposer fills rule templates
+  with slot validation + fixture-coverage gate (≥2 TPs, ≤1 FP).
+- **`template_engine.py`** + 6 templates (`deprecated_api_call`,
+  `missing_error_check`, `insecure_default_arg`, `regex_redos`,
+  `string_concat_in_loop`, `unsafe_deserialization`).
+- **`composite_evaluator.py`** — `CompositeBenchEvaluator` runs search +
+  rule legs in parallel; composite =
+  `0.3 * search + 0.5 * mcp + 0.2 * rule`. Forwards rule-leg
+  `per_language` metadata so the floor predicate still rejects
+  single-language regressions.
+
+#### Meta-Harness Refactor (`eval/meta_harness/`)
+
+- **`_llm_client.py`** — extracted shared LLM scaffolding (`call_llm`,
+  `load_env`, `diff_from_defaults`) so the rule-bench proposer reuses
+  the same client.
+- **`meta_loop.py`** — `MetaHarnessRunner` now accepts a `BenchSpec`
+  (evaluator, config_default, propose_sweep, propose_llm,
+  accept_predicate, artifact_prefix); default preserves legacy
+  search-bench behavior. `EvolutionEntry` gains optional
+  `per_language`, `reject_reason`, `bench_metadata` fields.
+- **`__main__.py`** — adds `--bench {search|rule|composite}` flag plus
+  `_select_bench` factory.
+- **`paths.py`** — `prefixed`/`baseline_path`/`evolution_path`/
+  `best_config_path` helpers so each bench writes its own artifacts
+  side-by-side.
+
+#### Community Rule Packs (`packs/community/`)
+
+Three permissively-licensed packs hand-ported from upstream sources,
+each shipping with its own LICENSE + NOTICE + manifest declaring SPDX
+license, source URL, commit, and attribution:
+
+- **bandit-python** (Apache-2.0, 8 rules): hardcoded passwords, weak
+  hashes (MD5/SHA1), weak ciphers, dynamic eval, TLS verify disabled,
+  shell=True, SQL string concat
+- **gosec-go** (Apache-2.0, 8 rules): hardcoded creds, bind-all
+  interfaces, unsafe package use, fmt.Sprintf SQL, file path
+  inclusion, weak ciphers, low TLS MinVersion, crypto/md5 import
+- **eslint-typescript** (MIT, 7 rules): no-eval, no-implied-eval,
+  no-new-func, no-var, eqeqeq, no-with, no-throw-literal
+
+#### Pack Tooling (`eval/rule_harness/`)
+
+- **`import_pack.py`** — scaffolds the legal shell for a new community
+  pack (LICENSE, NOTICE, manifest, PORTING.md checklist) so porting
+  starts in a license-compliant state. Sources: bandit, gosec, eslint.
+- **`scripts/seed_attocode_fixtures.py`** — generates 15 fixture stubs
+  from example pack rules' `examples` fields for hand-curation.
+- **`fixtures/attocode/`** — 21 labeled fixtures across 6 languages
+  (python, go, typescript, javascript, rust, java).
+
+#### Schema Groundwork
+
+- **`UnifiedRule`** gains a `references: list[str]` field for preserving
+  external links from imports.
+- **`PackManifest`** gains provenance fields (`source`, `source_url`,
+  `source_commit`, `source_license`, `attribution`, `imported_at`,
+  `upstream_rule_count`, `imported_rule_count`).
+- **`testing._ANNOTATION_RE`** accepts `ruleid` as an alias for `expect`
+  so semgrep test fixtures import without preprocessing.
+- New `list_community_packs()` and `get_community_pack_dir()` in
+  `pack_loader.py`.
+
+#### CI
+
+- New `pack-license-check` job runs `scripts/check_pack_licenses.py`
+  on every push: every community pack must ship LICENSE + NOTICE +
+  manifest with SPDX license in the permissive allowlist (Apache-2.0,
+  MIT, BSD-2/3-Clause, ISC).
+
+#### Validated Results
+
+- Composite F1 = 0.857 across 6 languages on the baseline corpus
+- Sweep mode finds +1.42% improvement candidates per iteration
+- Per-language floor correctly rejects regression candidates in
+  integration tests
+- 207 unit + integration tests pass
+
+#### Documentation
+
+- New `docs/guides/rule-bench-corpus.md` — annotation format,
+  community pack onboarding, hand-labeling workflow, running
+  `--bench rule`, the per-language floor predicate, stage-2 templates,
+  quarterly upstream-license maintenance, troubleshooting.
+- `docs/guides/meta-harness-optimization.md` — new "Bench Modes"
+  section.
+
 ## [0.2.21] - 2026-04-16
 
 ### Added — Search Scoring Optimization via Meta-Harness

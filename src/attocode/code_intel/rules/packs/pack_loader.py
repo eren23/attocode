@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 # Example packs ship here — NOT auto-loaded
 _EXAMPLES_DIR = Path(__file__).parent / "examples"
 
+# Community packs (imported from upstream sources like semgrep-rules, bandit,
+# gosec) ship under ``community/`` with their own LICENSE + NOTICE files.
+# They are NOT auto-loaded — the rule-bench harness loads them explicitly.
+_COMMUNITY_DIR = Path(__file__).parent / "community"
+
 
 @dataclass(slots=True)
 class PackManifest:
@@ -34,6 +39,17 @@ class PackManifest:
     languages: list[str] = field(default_factory=list)
     description: str = ""
     pack_dir: str = ""
+
+    # Provenance fields — populated by the community pack importer.
+    # Kept additive so older manifests (without these keys) continue to load.
+    source: str = ""  # "community" | "example" | "user"
+    source_url: str = ""
+    source_commit: str = ""
+    source_license: str = ""  # SPDX identifier
+    attribution: str = ""  # human-readable attribution string
+    imported_at: str = ""  # ISO-8601 timestamp
+    upstream_rule_count: int = 0
+    imported_rule_count: int = 0
 
 
 def _load_manifest(pack_dir: Path) -> PackManifest | None:
@@ -67,6 +83,14 @@ def _load_manifest(pack_dir: Path) -> PackManifest | None:
         languages=data.get("languages", [pack_dir.name]),
         description=str(data.get("description", "")),
         pack_dir=str(pack_dir),
+        source=str(data.get("source", "")),
+        source_url=str(data.get("source_url", "")),
+        source_commit=str(data.get("source_commit", "")),
+        source_license=str(data.get("source_license", "")),
+        attribution=str(data.get("attribution", "")),
+        imported_at=str(data.get("imported_at", "")),
+        upstream_rule_count=int(data.get("upstream_rule_count", 0) or 0),
+        imported_rule_count=int(data.get("imported_rule_count", 0) or 0),
     )
 
 
@@ -119,6 +143,28 @@ def list_example_packs() -> list[PackManifest]:
                 if m:
                     manifests.append(m)
     return manifests
+
+
+def list_community_packs() -> list[PackManifest]:
+    """List community packs imported from upstream sources.
+
+    Community packs live under ``packs/community/<name>/`` with their own
+    ``LICENSE`` and ``NOTICE`` files. They are NOT auto-loaded — the
+    rule-bench harness loads them explicitly when running evaluations.
+    """
+    manifests: list[PackManifest] = []
+    if _COMMUNITY_DIR.is_dir():
+        for entry in sorted(_COMMUNITY_DIR.iterdir()):
+            if entry.is_dir() and not entry.name.startswith("_"):
+                m = _load_manifest(entry)
+                if m:
+                    manifests.append(m)
+    return manifests
+
+
+def get_community_pack_dir() -> Path:
+    """Return the directory where community packs are stored."""
+    return _COMMUNITY_DIR
 
 
 def install_pack(pack_name: str, project_dir: str) -> str:

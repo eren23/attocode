@@ -230,6 +230,10 @@ def _parse_yaml_rule(
     raw_tags = data.get("tags", [])
     tags = [raw_tags] if isinstance(raw_tags, str) else list(raw_tags)
 
+    # External references (CWE links, blog posts, etc.) — preserved on import
+    raw_refs = data.get("references", [])
+    references = [raw_refs] if isinstance(raw_refs, str) else list(raw_refs)
+
     return UnifiedRule(
         id=str(data["id"]),
         name=str(data.get("name", data["id"])),
@@ -255,6 +259,7 @@ def _parse_yaml_rule(
         metavar_regex=metavar_regex,
         metavar_comparison=metavar_comparison,
         composite_pattern=composite_pattern,
+        references=references,
     )
 
 

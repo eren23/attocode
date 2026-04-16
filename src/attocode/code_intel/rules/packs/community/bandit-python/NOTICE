@@ -1,0 +1,13 @@
+# NOTICE — bandit-python
+
+Rule patterns adapted from Bandit (https://github.com/PyCQA/bandit). Original copyright PyCQA. Licensed under Apache-2.0.
+
+Upstream: https://github.com/PyCQA/bandit
+Commit:   (unspecified)
+License:  Apache-2.0
+
+Modifications:
+- Translated rule patterns to attocode UnifiedRule schema
+- Subset selection (high-value rules first)
+
+See LICENSE for full license terms.

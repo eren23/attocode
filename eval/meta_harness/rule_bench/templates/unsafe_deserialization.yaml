@@ -1,0 +1,23 @@
+# Template: flag unsafe deserialization sinks.
+template_id: unsafe_deserialization
+description: Flag a known-unsafe deserialization sink (RCE risk)
+slots:
+  - name: language
+    kind: language
+  - name: sink_pattern
+    kind: regex_fragment
+    description: Regex matching the unsafe deserializer call site
+rule:
+  id: 'security/{{language}}/{{slot_safe_name}}-unsafe-deser'
+  name: Unsafe deserialization
+  message: 'Unsafe deserialization via {{sink_pattern}}'
+  severity: critical
+  category: security
+  languages:
+    - '{{language}}'
+  pattern: '{{sink_pattern}}'
+  confidence: 0.75
+  cwe: CWE-502
+  recommendation: |
+    Avoid native deserialization on untrusted input. Prefer JSON / a
+    typed schema parser (protobuf, msgpack) and validate before use.

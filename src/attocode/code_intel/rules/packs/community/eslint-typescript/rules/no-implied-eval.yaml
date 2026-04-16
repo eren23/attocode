@@ -1,0 +1,20 @@
+# Adapted from eslint rule 'no-implied-eval'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: no-implied-eval
+name: Implied dynamic code evaluation
+message: setTimeout/setInterval with a string argument runs as code
+severity: high
+category: security
+languages: [javascript, typescript]
+confidence: 0.8
+cwe: CWE-95
+pattern: '\b(setTimeout|setInterval)\s*\(\s*[''"]'
+explanation: |
+  Passing a string (instead of a function) to setTimeout / setInterval
+  evaluates that string as code at the global scope — equivalent to
+  using the eval function.
+recommendation: |
+  Pass an arrow function or function reference: setTimeout(() => doX(), 100).
+references:
+  - https://eslint.org/docs/latest/rules/no-implied-eval

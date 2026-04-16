@@ -4,6 +4,16 @@ Attocode includes an automated hyperparameter optimization framework for code-in
 
 **Validated result:** +25.5% overall MRR across 5 ground-truth repositories (4/5 repos improved, 0 significant regressions) when comparing the pre-optimization defaults to the shipped `best_config.yaml`.
 
+## Bench Modes
+
+The harness supports three bench modes selected via `--bench`:
+
+- `--bench search` (default) — optimizes search scoring + MCP bench; the historical use case described in this guide.
+- `--bench rule` — optimizes rule packs by tuning per-rule overrides (enabled, confidence, severity) and (stage 2) generating new rules from templates. Uses severity-weighted F1 macro-averaged across languages with a per-language floor predicate. See [Rule-Bench Corpus](rule-bench-corpus.md) for the corpus contract and how to add new community packs.
+- `--bench composite` — runs both legs in parallel and folds them into one score (`0.3 * search + 0.5 * mcp + 0.2 * rule`). The per-language rule floor still applies, so a candidate that wins search but breaks Go rules is rejected.
+
+Artifacts are prefixed by mode (`baseline.json` / `rule_baseline.json` / `composite_baseline.json`) so the modes coexist in the same results directory.
+
 ## Quick Start
 
 ```bash

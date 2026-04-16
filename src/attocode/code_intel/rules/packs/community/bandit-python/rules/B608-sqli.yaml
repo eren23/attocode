@@ -1,0 +1,22 @@
+# Adapted from bandit rule 'B608 hardcoded_sql_expressions'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: B608-sqli
+name: SQL string built via concatenation or f-string
+message: SQL string interpolation — possible injection
+severity: high
+category: security
+languages: [python]
+confidence: 0.6
+cwe: CWE-89
+pattern: '(SELECT|INSERT|UPDATE|DELETE)\s+[^;''"]*[''"]\s*[+%]\s*\w+'
+explanation: |
+  Building SQL by concatenating user input or formatting variables into
+  the query string is the classic SQL-injection pattern. The bandit
+  variant catches both ``+`` concatenation and ``%`` formatting.
+recommendation: |
+  Use parameterized queries (``cursor.execute(sql, (var,))``) so the
+  database driver handles escaping. ORMs do this automatically.
+references:
+  - https://bandit.readthedocs.io/en/latest/plugins/b608_hardcoded_sql_expressions.html
+  - https://cwe.mitre.org/data/definitions/89.html

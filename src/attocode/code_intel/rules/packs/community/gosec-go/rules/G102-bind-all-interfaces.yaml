@@ -1,0 +1,21 @@
+# Adapted from gosec rule 'G102 bind_to_all_interfaces'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: G102-bind-all-interfaces
+name: Bind to all network interfaces
+message: Service bound to 0.0.0.0 — exposes all network interfaces
+severity: medium
+category: security
+languages: [go]
+confidence: 0.75
+cwe: CWE-200
+pattern: '"0\.0\.0\.0:'
+explanation: |
+  Binding to ``0.0.0.0`` makes the service reachable on every network
+  interface (including public IPs). Often unintended, especially in
+  development services that should be loopback-only.
+recommendation: |
+  Bind to ``127.0.0.1`` for local-only services. For services that need
+  external access, document the exposure and pair with firewall rules.
+references:
+  - https://github.com/securego/gosec

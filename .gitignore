@@ -62,6 +62,7 @@ snapshot_report.html
 # scripts
 scripts/*
 !scripts/validate_release_version.py
+!scripts/check_pack_licenses.py
 .DS_Store
 
 #playwright
