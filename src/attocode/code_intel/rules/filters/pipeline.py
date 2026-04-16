@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-from collections import defaultdict
 
 from attocode.code_intel.rules.model import EnrichedFinding, RuleSeverity
 

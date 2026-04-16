@@ -53,10 +53,6 @@ from attocode.code_intel.rules.packs.pack_loader import (
     load_all_packs,
     load_pack,
 )
-from attocode.code_intel.rules.packs.taint_loader import (
-    load_pack_taint_defs,
-    compile_taint_patterns,
-)
 from attocode.code_intel.rules.plugins.plugin_loader import (
     discover_plugins,
     load_all_plugins,
@@ -651,47 +647,6 @@ class TestPackLoader:
 # ---------------------------------------------------------------------------
 # Taint Loader Tests
 # ---------------------------------------------------------------------------
-
-class TestTaintLoader:
-    def test_load_go_taint_sources(self) -> None:
-        examples = list_example_packs()
-        go_manifest = next(m for m in examples if m.name == "go")
-        sources, _, _ = load_pack_taint_defs(go_manifest.pack_dir)
-        assert len(sources) >= 2
-        http_source = next(s for s in sources if s.name == "http_request")
-        assert any("FormValue" in p for p in http_source.patterns)
-
-    def test_load_go_taint_sinks_with_context_variants(self) -> None:
-        examples = list_example_packs()
-        go_manifest = next(m for m in examples if m.name == "go")
-        _, sinks, _ = load_pack_taint_defs(go_manifest.pack_dir)
-        sql_sink = next(s for s in sinks if s.name == "sql_query")
-        assert sql_sink.cwe == "CWE-89"
-        assert any("QueryContext" in p for p in sql_sink.patterns)
-
-    def test_load_go_taint_sanitizers_no_url_parse(self) -> None:
-        examples = list_example_packs()
-        go_manifest = next(m for m in examples if m.name == "go")
-        _, _, sanitizers = load_pack_taint_defs(go_manifest.pack_dir)
-        names = [s.name for s in sanitizers]
-        assert "html_escape" in names
-        for s in sanitizers:
-            for p in s.patterns:
-                assert "url.Parse" not in p, "url.Parse is NOT a sanitizer"
-
-    def test_compile_patterns_produces_valid_regex(self) -> None:
-        examples = list_example_packs()
-        go_manifest = next(m for m in examples if m.name == "go")
-        sources, sinks, sanitizers = load_pack_taint_defs(go_manifest.pack_dir)
-        cs, ck, ca = compile_taint_patterns(sources, sinks, sanitizers)
-        assert len(cs) >= 2
-        assert len(ck) >= 4
-
-    def test_nonexistent_taint_dir_returns_empty(self) -> None:
-        sources, sinks, sanitizers = load_pack_taint_defs("/nonexistent")
-        assert sources == []
-        assert sinks == []
-        assert sanitizers == []
 
 
 # ---------------------------------------------------------------------------

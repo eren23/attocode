@@ -9,7 +9,6 @@ Builds a co-change matrix from git history to identify:
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import time
 from collections import defaultdict

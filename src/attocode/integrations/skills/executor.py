@@ -176,10 +176,7 @@ class SkillExecutor:
         Falls back to input order if no graph is available.
         """
         if self._dependency_graph and len(skill_names) > 1:
-            try:
-                ordered = self._dependency_graph.resolve_order(skill_names)
-            except Exception:
-                ordered = skill_names
+            ordered = self._dependency_graph.resolve_order(skill_names)
         else:
             ordered = skill_names
         return [self.execute(name, args) for name in ordered]

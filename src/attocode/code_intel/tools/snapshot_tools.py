@@ -20,7 +20,6 @@ compatible.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
@@ -33,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from attocode.code_intel._shared import _get_project_dir, mcp
+from attocode.code_intel.artifacts.hashing import sha256_file
 
 logger = logging.getLogger(__name__)
 
@@ -69,13 +69,6 @@ _BINARY_FILES: tuple[tuple[str, str], ...] = (
 # Helpers
 # ---------------------------------------------------------------------------
 
-
-def _sha256_file(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def _snapshots_dir(project_dir: str) -> str:
@@ -224,7 +217,7 @@ def _stage_snapshot(
             archive_path=f"stores/{out_name}",
             source_path=src_rel,
             size_bytes=size,
-            digest=_sha256_file(dest),
+            digest=sha256_file(dest),
         ))
 
     # Binary / non-SQLite files (trigrams).
@@ -240,7 +233,7 @@ def _stage_snapshot(
                 archive_path=f"stores/{out_name}",
                 source_path=src_rel,
                 size_bytes=os.path.getsize(dest),
-                digest=_sha256_file(dest),
+                digest=sha256_file(dest),
             ))
 
     # cache_manifest.json (top level of the archive)
@@ -253,7 +246,7 @@ def _stage_snapshot(
             archive_path="cache_manifest.json",
             source_path="cache_manifest.json",
             size_bytes=os.path.getsize(dest),
-            digest=_sha256_file(dest),
+            digest=sha256_file(dest),
         ))
 
     return components
@@ -501,7 +494,7 @@ def snapshot_restore(name: str, confirm: bool = False) -> str:
                 continue
             expected = c.get("digest", "")
             if expected.startswith("sha256:"):
-                actual = "sha256:" + _sha256_file(staged_path)
+                actual = "sha256:" + sha256_file(staged_path)
                 if actual != expected:
                     bad.append(f"digest mismatch: {ap}")
         if bad:

@@ -24,7 +24,7 @@ from attocode.types.budget import (
     BudgetStatus,
     ExecutionBudget,
 )
-from attocode.types.events import AgentEvent, EventType
+from attocode.types.events import AgentEvent, EventType, SimpleEventListener
 from attocode.types.messages import (
     CacheControl,
     ChatOptions,
@@ -46,6 +46,7 @@ from attocode.types.messages import (
     ToolDefinition,
     ToolResult,
 )
+from attocode.types.severity import Severity
 
 __all__ = [
     # messages
@@ -93,4 +94,7 @@ __all__ = [
     # events
     "AgentEvent",
     "EventType",
+    "SimpleEventListener",
+    # severity
+    "Severity",
 ]

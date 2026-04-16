@@ -7,7 +7,6 @@ from collections import Counter
 from attocode.code_intel.rules.model import (
     EnrichedFinding,
     FewShotExample,
-    RuleCategory,
     RuleSeverity,
 )
 

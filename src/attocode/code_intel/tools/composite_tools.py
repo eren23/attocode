@@ -583,7 +583,6 @@ def architecture_drift(
     from attocode.integrations.context.architecture_drift import (
         check_drift,
         format_report,
-        load_architecture,
     )
 
     project_dir = _get_project_dir()

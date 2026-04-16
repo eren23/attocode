@@ -227,7 +227,6 @@ def extract_symbols(content: bytes, path: str) -> list[dict]:
 
 def _extract_with_tree_sitter(text: str, language: str) -> list[dict]:
     """Extract symbols using tree-sitter."""
-    import tree_sitter
 
     # This will raise if tree-sitter is not available
     from attocode.integrations.context.ts_parser import _get_parser as get_parser

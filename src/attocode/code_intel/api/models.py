@@ -627,19 +627,6 @@ class FileTreeResponse(BaseModel):
 
 
 # ------------------------------------------------------------------
-# Repository stats
-# ------------------------------------------------------------------
-
-
-class RepoStatsResponse(BaseModel):
-    file_count: int = 0
-    total_lines: int = 0
-    symbol_count: int = 0
-    dependency_count: int = 0
-    languages: dict[str, int] = {}
-
-
-# ------------------------------------------------------------------
 # Learning v2 (structured)
 # ------------------------------------------------------------------
 

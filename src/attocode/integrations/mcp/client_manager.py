@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from attocode.integrations.mcp.client import MCPCallResult, MCPTool
+from attocode.integrations.mcp.client import MCPCallResult, MCPClient, MCPTool
 from attocode.integrations.mcp.transports import MCPTransport
 
 if TYPE_CHECKING:

@@ -7,7 +7,7 @@ timing summary, including critical-path analysis.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from attoswarm.coordinator.trace_context import SpanContext, on_span_complete, remove_span_listener

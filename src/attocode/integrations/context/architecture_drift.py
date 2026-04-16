@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

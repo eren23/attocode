@@ -1,0 +1,69 @@
+repo: express
+source: git_derived
+queries:
+- query: replace dummy with placeholder in example comments
+  relevant_files:
+  - examples/auth/index.js
+  - examples/ejs/index.js
+  - examples/route-middleware/index.js
+  commit_sha: 6c4249feec8a
+- query: Remove duplicate tests in res.location and res.jsonp
+  relevant_files:
+  - test/res.jsonp.js
+  - test/res.location.js
+  commit_sha: 9c85a25c02e8
+- query: Allow passing null or undefined as the value for options in app.render
+  relevant_files:
+  - lib/application.js
+  - test/app.render.js
+  commit_sha: c9ecf7b65838
+- query: Polish HTML structure of the response in the res.redirect() function
+  relevant_files:
+  - lib/response.js
+  - test/res.redirect.js
+  commit_sha: 9a3f7ff4120d
+- query: enhance req.acceptsCharsets method
+  relevant_files:
+  - lib/request.js
+  - test/req.acceptsCharsets.js
+  commit_sha: 6cd404eb28ff
+- query: 'sec: security patch for CVE-2024-51999'
+  relevant_files:
+  - lib/utils.js
+  - test/req.query.js
+  commit_sha: 2f64f68c37c6
+- query: 'lib: use req.socket over deprecated req.connection'
+  relevant_files:
+  - lib/request.js
+  - test/req.protocol.js
+  commit_sha: 89f198c6a50a
+- query: enforce explicit Buffer import and add lint rule
+  relevant_files:
+  - lib/response.js
+  - lib/utils.js
+  - test/express.json.js
+  - test/express.raw.js
+  - test/express.static.js
+  - test/express.text.js
+  - test/express.urlencoded.js
+  - test/res.attachment.js
+  - test/res.download.js
+  - test/res.send.js
+  - test/res.sendFile.js
+  - test/support/utils.js
+  - test/utils.js
+  commit_sha: 98c85eb0dd64
+- query: fix typos in test descriptions
+  relevant_files:
+  - test/express.json.js
+  - test/express.raw.js
+  - test/express.text.js
+  - test/express.urlencoded.js
+  - test/res.download.js
+  - test/res.sendFile.js
+  commit_sha: dfd1851245aa
+- query: remove duplicate word
+  relevant_files:
+  - test/app.router.js
+  - test/res.format.js
+  commit_sha: f9954dd317a1

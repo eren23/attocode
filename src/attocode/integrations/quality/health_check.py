@@ -12,6 +12,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from attocode.types.events import SimpleEventListener
+
 
 @dataclass
 class HealthCheckResult:
@@ -56,7 +58,7 @@ class HealthCheckerConfig:
     parallel: bool = True
 
 
-HealthEventListener = Callable[[str, dict[str, Any]], None]
+HealthEventListener = SimpleEventListener
 
 
 class HealthChecker:

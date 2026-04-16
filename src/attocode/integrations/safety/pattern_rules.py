@@ -137,9 +137,6 @@ class PatternRule:
             return bool(self._arg_re.search(serialized))
         except (TypeError, ValueError):
             return False
-            return bool(self._arg_re.search(serialized))
-        except (TypeError, ValueError):
-            return False
 
     def matches(self, tool_name: str, arguments: dict[str, Any] | None) -> bool:
         """Full match: tool pattern AND (if present) argument pattern."""

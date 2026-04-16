@@ -172,7 +172,3 @@ async def relevant_context_v2(
         files=req.files, depth=req.depth, max_tokens=req.max_tokens,
         include_symbols=req.include_symbols,
     ))
-
-
-# Backward-compatible alias
-router = router_v1

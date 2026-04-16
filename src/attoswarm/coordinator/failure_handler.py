@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from attoswarm.coordinator.loop import HybridCoordinator
+    from attoswarm.protocol.models import TaskSpec
 
 
 async def handle_task_failed(
@@ -78,13 +79,13 @@ async def handle_task_failed(
         async def _delayed_retry(
             _coordinator: HybridCoordinator,
             _task_id: str,
-            _task: object,
+            _task: TaskSpec,
             _reason: str,
             _delay: float,
         ) -> None:
             await asyncio.sleep(_delay)
             _coordinator._transition_task(_task_id, "ready", "coordinator", _reason)
-            _coordinator._persist_task(_task, status="ready", last_error=_reason)  # type: ignore[arg-type]
+            _coordinator._persist_task(_task, status="ready", last_error=_reason)
 
         asyncio.create_task(
             _delayed_retry(coordinator, task_id, task, reason, delay),

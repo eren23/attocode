@@ -28,7 +28,6 @@ from attocode.core.completion import analyze_completion
 from attocode.core.response_handler import call_llm, call_llm_streaming
 from attocode.core.tool_executor import (
     build_tool_result_messages,
-    execute_tool_calls,
     execute_tool_calls_concurrent,
 )
 from attocode.integrations.context.compaction import adjust_slice_for_tool_pairs, microcompact
@@ -732,38 +731,29 @@ def inject_recitation(ctx: AgentContext, iteration: int) -> str | None:
     if ctx.recitation_manager is None:
         return None
 
-    try:
-        from attocode.tricks.recitation import RecitationState
+    from attocode.tricks.recitation import RecitationState
 
-        # Build recitation state with available context
-        failure_count = 0
-        if ctx.failure_tracker:
-            try:
-                failure_count = len(ctx.failure_tracker.get_unresolved_failures())
-            except Exception:
-                pass
+    # Build recitation state with available context
+    failure_count = 0
+    if ctx.failure_tracker:
+        failure_count = len(ctx.failure_tracker.get_unresolved_failures())
 
-        files_modified = 0
-        work_log = getattr(ctx, '_work_log', None)
-        if work_log:
-            try:
-                files_modified = work_log.files_modified_count
-            except Exception:
-                pass
+    files_modified = 0
+    work_log = getattr(ctx, '_work_log', None)
+    if work_log:
+        files_modified = work_log.files_modified_count
 
-        rec_state = RecitationState(
-            iteration=iteration,
-            goal=ctx.goal,
-            failure_count=failure_count,
-            files_modified=files_modified,
-        )
+    rec_state = RecitationState(
+        iteration=iteration,
+        goal=ctx.goal,
+        failure_count=failure_count,
+        files_modified=files_modified,
+    )
 
-        if ctx.recitation_manager.should_inject(iteration):
-            content = ctx.recitation_manager.build_recitation(rec_state)
-            if content:
-                return content
-    except Exception:
-        pass
+    if ctx.recitation_manager.should_inject(iteration):
+        content = ctx.recitation_manager.build_recitation(rec_state)
+        if content:
+            return content
 
     return None
 
@@ -779,27 +769,24 @@ def accumulate_failure_evidence(ctx: AgentContext) -> str | None:
     if ctx.failure_tracker is None:
         return None
 
-    try:
-        unresolved = ctx.failure_tracker.get_unresolved_failures()
-        if not unresolved:
-            return None
-
-        # Build compact summary
-        parts = [f"Unresolved failures ({len(unresolved)}):"]
-        for i, failure in enumerate(unresolved[:5]):  # Max 5
-            action = getattr(failure, 'action', 'unknown')
-            error = getattr(failure, 'error', 'unknown')
-            # Truncate error to keep context small
-            if len(error) > 150:
-                error = error[:147] + "..."
-            parts.append(f"  {i+1}. {action}: {error}")
-
-        if len(unresolved) > 5:
-            parts.append(f"  ... and {len(unresolved) - 5} more")
-
-        return "\n".join(parts)
-    except Exception:
+    unresolved = ctx.failure_tracker.get_unresolved_failures()
+    if not unresolved:
         return None
+
+    # Build compact summary
+    parts = [f"Unresolved failures ({len(unresolved)}):"]
+    for i, failure in enumerate(unresolved[:5]):  # Max 5
+        action = getattr(failure, 'action', 'unknown')
+        error = getattr(failure, 'error', 'unknown')
+        # Truncate error to keep context small
+        if len(error) > 150:
+            error = error[:147] + "..."
+        parts.append(f"  {i+1}. {action}: {error}")
+
+    if len(unresolved) > 5:
+        parts.append(f"  ... and {len(unresolved) - 5} more")
+
+    return "\n".join(parts)
 
 
 def invalidate_ast_on_edit(ctx: AgentContext, tool_name: str, tool_args: dict) -> None:
@@ -1127,10 +1114,7 @@ async def run_execution_loop(
                 )
 
             # 2.5. Microcompact — per-turn tool result decay (before full compaction)
-            try:
-                microcompact(ctx.messages, ctx.iteration)
-            except Exception:
-                pass  # microcompact is best-effort; never block the loop
+            microcompact(ctx.messages, ctx.iteration)
 
             # 2.6. Fresh context check (before compaction)
             _fresh_result = await handle_fresh_context_refresh(ctx)
@@ -1235,16 +1219,6 @@ async def run_execution_loop(
                         message=analysis.message or "Model repeatedly returned narrative-only incomplete output.",
                     )
 
-                # Record completion in learning store
-                if ctx.learning_store is not None:
-                    try:
-                        ctx.learning_store.record_session_outcome(
-                            success=analysis.reason == CompletionReason.COMPLETED,
-                            iterations=ctx.iteration,
-                            tokens=ctx.metrics.total_tokens,
-                        )
-                    except Exception:
-                        pass
 
                 # Note: self-improvement diagnosis happens per-tool-call
                 # in the tool execution section below (SelfImprovementProtocol)
@@ -1319,83 +1293,71 @@ async def run_execution_loop(
                 # Record in economics (loop detection + phase tracking)
                 if ctx.economics is not None:
                     for tc, _tr in zip(response.tool_calls, tool_results, strict=False):
-                        try:
-                            loop_detection, phase_nudge = ctx.economics.record_tool_call(
-                                tc.name,
-                                arguments=tc.arguments,
-                                iteration=ctx.iteration,
-                            )
-                            # Inject loop detection warning
-                            if loop_detection and loop_detection.is_loop:
-                                ctx.add_message(Message(
-                                    role=Role.USER,
-                                    content=(
-                                        f"[System: Doom loop detected! '{tc.name}' called "
-                                        f"{loop_detection.count} times with same args. "
-                                        "Try a DIFFERENT approach.]"
-                                    ),
-                                ))
-                            # Inject phase nudge
-                            if phase_nudge:
-                                ctx.add_message(Message(
-                                    role=Role.USER,
-                                    content=f"[System: {phase_nudge}]",
-                                ))
-                        except Exception:
-                            pass
+                        loop_detection, phase_nudge = ctx.economics.record_tool_call(
+                            tc.name,
+                            arguments=tc.arguments,
+                            iteration=ctx.iteration,
+                        )
+                        # Inject loop detection warning
+                        if loop_detection and loop_detection.is_loop:
+                            ctx.add_message(Message(
+                                role=Role.USER,
+                                content=(
+                                    f"[System: Doom loop detected! '{tc.name}' called "
+                                    f"{loop_detection.count} times with same args. "
+                                    "Try a DIFFERENT approach.]"
+                                ),
+                            ))
+                        # Inject phase nudge
+                        if phase_nudge:
+                            ctx.add_message(Message(
+                                role=Role.USER,
+                                content=f"[System: {phase_nudge}]",
+                            ))
 
                 # Record failures in failure tracker + self-improvement diagnosis
                 if ctx.failure_tracker is not None:
                     from attocode.tricks.failure_evidence import FailureInput
                     for tc, tr in zip(response.tool_calls, tool_results, strict=False):
                         if tr.is_error and tr.error:
-                            try:
-                                ctx.failure_tracker.record_failure(FailureInput(
-                                    action=tc.name,
-                                    error=tr.error,
-                                    args=tc.arguments,
-                                    iteration=ctx.iteration,
-                                ))
-                            except Exception:
-                                pass
+                            ctx.failure_tracker.record_failure(FailureInput(
+                                action=tc.name,
+                                error=tr.error,
+                                args=tc.arguments,
+                                iteration=ctx.iteration,
+                            ))
 
                 # Self-improvement: diagnose tool failures, record successes
                 self_improvement = getattr(ctx, "_self_improvement", None)
                 if self_improvement is not None:
                     for tc, tr in zip(response.tool_calls, tool_results, strict=False):
-                        try:
-                            if tr.is_error and tr.error:
-                                enhanced = self_improvement.enhance_error_message(
-                                    tc.name,
-                                    tr.error,
-                                    tc.arguments or {},
-                                )
-                                # Inject diagnosis as system message if it adds info
-                                if enhanced and enhanced != tr.error:
-                                    ctx.add_message(Message(
-                                        role=Role.USER,
-                                        content=f"[System: Self-diagnosis for {tc.name} failure]\n{enhanced}",
-                                    ))
-                            else:
-                                self_improvement.record_success(
-                                    tc.name,
-                                    tc.arguments or {},
-                                    context=f"iteration_{ctx.iteration}",
-                                )
-                        except Exception:
-                            pass
+                        if tr.is_error and tr.error:
+                            enhanced = self_improvement.enhance_error_message(
+                                tc.name,
+                                tr.error,
+                                tc.arguments or {},
+                            )
+                            # Inject diagnosis as system message if it adds info
+                            if enhanced and enhanced != tr.error:
+                                ctx.add_message(Message(
+                                    role=Role.USER,
+                                    content=f"[System: Self-diagnosis for {tc.name} failure]\n{enhanced}",
+                                ))
+                        else:
+                            self_improvement.record_success(
+                                tc.name,
+                                tc.arguments or {},
+                                context=f"iteration_{ctx.iteration}",
+                            )
 
                 # Inject failure context if there are unresolved failures
                 if ctx.failure_tracker is not None:
-                    try:
-                        failure_ctx = ctx.failure_tracker.get_failure_context(max_failures=3)
-                        if failure_ctx:
-                            ctx.add_message(Message(
-                                role=Role.USER,
-                                content=f"[System: {failure_ctx}]",
-                            ))
-                    except Exception:
-                        pass
+                    failure_ctx = ctx.failure_tracker.get_failure_context(max_failures=3)
+                    if failure_ctx:
+                        ctx.add_message(Message(
+                            role=Role.USER,
+                            content=f"[System: {failure_ctx}]",
+                        ))
 
                 # Inject accumulated failure evidence into budget check
                 failure_summary = accumulate_failure_evidence(ctx)
@@ -1431,28 +1393,6 @@ async def run_execution_loop(
                         content=f"[System: {combined}]",
                     ))
 
-                # Record in work log if available
-                work_log = getattr(ctx, "_work_log", None)
-                if work_log is not None:
-                    try:
-                        for tc, tr in zip(response.tool_calls, tool_results, strict=False):
-                            work_log.record_tool_call(
-                                tc.name,
-                                success=not tr.is_error,
-                                iteration=ctx.iteration,
-                            )
-                    except Exception:
-                        pass
-
-                # Record in dead letter queue if tool errors
-                dlq = getattr(ctx, "_dead_letter_queue", None)
-                if dlq is not None:
-                    for tc, tr in zip(response.tool_calls, tool_results, strict=False):
-                        if tr.is_error:
-                            try:
-                                dlq.add(tc.name, tr.error or "Unknown error", tc.arguments)
-                            except Exception:
-                                pass
 
                 # Track consecutive tool error batches (independent of recommender)
                 batch_has_error = any(tr.is_error for tr in tool_results)
@@ -1464,40 +1404,37 @@ async def run_execution_loop(
                 # Tool recommendation: record usage and inject hints on repeated failures
                 recommender = getattr(ctx, "_tool_recommender", None)
                 if recommender is not None:
-                    try:
-                        # Determine current phase for task_type
-                        phase = "unknown"
-                        if ctx.economics is not None:
-                            pt = getattr(ctx.economics, "phase_tracker", None)
-                            if pt is not None:
-                                phase = getattr(pt, "current_phase", "unknown")
+                    # Determine current phase for task_type
+                    phase = "unknown"
+                    if ctx.economics is not None:
+                        pt = getattr(ctx.economics, "phase_tracker", None)
+                        if pt is not None:
+                            phase = getattr(pt, "current_phase", "unknown")
 
-                        for tc, tr in zip(response.tool_calls, tool_results, strict=False):
-                            recommender.record_usage(
-                                tool_name=tc.name,
-                                task_type=phase,
-                                success=not tr.is_error,
-                                context_keywords=_extract_keywords(tc.arguments or {}),
-                            )
+                    for tc, tr in zip(response.tool_calls, tool_results, strict=False):
+                        recommender.record_usage(
+                            tool_name=tc.name,
+                            task_type=phase,
+                            success=not tr.is_error,
+                            context_keywords=_extract_keywords(tc.arguments or {}),
+                        )
 
-                        # Inject tool recommendations after 3+ consecutive error batches
-                        if consecutive_tool_errors >= 3:
-                            recs = recommender.recommend(
-                                task_type=phase,
-                                context=(ctx.goal or "")[:500],
-                                current_tools=[tc.name for tc in response.tool_calls],
-                                max_results=3,
+                    # Inject tool recommendations after 3+ consecutive error batches
+                    if consecutive_tool_errors >= 3:
+                        recs = recommender.recommend(
+                            task_type=phase,
+                            context=(ctx.goal or "")[:500],
+                            current_tools=[tc.name for tc in response.tool_calls],
+                            max_results=3,
+                        )
+                        if recs:
+                            hint = "Suggested tools based on patterns: " + ", ".join(
+                                f"{r.tool_name} ({r.reason})" for r in recs
                             )
-                            if recs:
-                                hint = "Suggested tools based on patterns: " + ", ".join(
-                                    f"{r.tool_name} ({r.reason})" for r in recs
-                                )
-                                ctx.add_message(Message(
-                                    role=Role.USER,
-                                    content=f"[System: {hint}]",
-                                ))
-                    except Exception:
-                        pass
+                            ctx.add_message(Message(
+                                role=Role.USER,
+                                content=f"[System: {hint}]",
+                            ))
 
                 # Auto-checkpoint after tool batch
                 if ctx.auto_checkpoint is not None:

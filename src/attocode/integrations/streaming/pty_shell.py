@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from attocode.errors import ToolError
+from attocode.types.events import SimpleEventListener
 
 # =============================================================================
 # Types
@@ -55,7 +56,7 @@ class ShellState:
     pid: int | None = None
 
 
-PTYEventListener = Callable[[str, dict[str, Any]], None]
+PTYEventListener = SimpleEventListener
 
 
 # =============================================================================

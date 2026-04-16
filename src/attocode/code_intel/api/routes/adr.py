@@ -75,6 +75,3 @@ async def update_adr_status_v1(
         status=req.status,
         superseded_by=req.superseded_by,
     ))
-
-
-router = router_v1

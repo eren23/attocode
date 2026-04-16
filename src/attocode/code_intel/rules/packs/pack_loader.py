@@ -1,7 +1,6 @@
 """Language pack loader — discovers and loads user-activated analysis packs.
 
-Packs provide language-specific rules, taint definitions, and few-shot
-examples. Example packs ship with attocode under ``packs/examples/``
+Packs provide language-specific rules and few-shot examples. Example packs ship with attocode under ``packs/examples/``
 but are NOT auto-loaded. Users activate packs by copying them to
 ``.attocode/packs/<name>/`` in their project.
 
@@ -13,7 +12,6 @@ Each pack directory contains:
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path

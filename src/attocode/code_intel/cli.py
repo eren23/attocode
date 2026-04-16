@@ -1865,7 +1865,6 @@ def _cmd_watch(args: list[str]) -> None:
     """
     import signal
     import subprocess
-    import time
 
     try:
         import httpx
@@ -2177,7 +2176,6 @@ def _cmd_setup(args: list[str]) -> None:
 
     To connect to an existing server, use ``attocode code-intel connect`` instead.
     """
-    import subprocess
 
     try:
         import httpx
@@ -2701,11 +2699,9 @@ def _cmd_verify(args: list[str]) -> None:
 
     # Service mode: run integrity checks against the database
     async def _run_verify() -> None:
-        from sqlalchemy import func as sa_func
-        from sqlalchemy import select, text
+        from sqlalchemy import text
 
         from attocode.code_intel.db.engine import get_session
-        from attocode.code_intel.db.models import Branch, BranchFile, Embedding, FileContent, Symbol
 
         print("Running integrity checks...\n", file=sys.stderr)
         issues: list[str] = []

@@ -27,25 +27,11 @@ tool calls and converts them to search-then-execute.
 
 from __future__ import annotations
 
-import fnmatch
-import re
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from attocode.tools.registry import ToolRegistry
-
-
-class DeferralLevel(StrEnum):
-    """How a tool is made available to the model."""
-
-    # Always in the schema — no special handling needed
-    IMMEDIATE = "immediate"
-    # Available via ToolSearch roundtrip only
-    DEFERRED = "deferred"
-    # Loaded from MCP/lazy source on first use
-    DYNAMIC = "dynamic"
 
 
 @dataclass

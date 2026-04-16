@@ -11,6 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from attocode.integrations.utilities.token_estimate import estimate_tokens
+from attocode.types.events import SimpleEventListener
+
 
 @dataclass
 class SerializationStyle:
@@ -45,7 +48,7 @@ class DiverseSerializerConfig:
     seed: int | None = None
 
 
-DiverseSerializerEventListener = Callable[[str, dict[str, Any]], None]
+DiverseSerializerEventListener = SimpleEventListener
 
 
 class _SeededRandom:
@@ -302,47 +305,5 @@ def measure_compression_ratio(data: Any) -> dict[str, Any]:
         "compact_ratio": len(compact) / max(1, len(pretty)),
         "diverse_ratio": len(diverse) / max(1, len(pretty)),
         "savings_chars": len(pretty) - len(compact),
-        "savings_tokens_approx": (len(pretty) - len(compact)) // 4,
+        "savings_tokens_approx": estimate_tokens(pretty) - estimate_tokens(compact),
     }
-
-
-class AdaptiveSerializer(DiverseSerializer):
-    """Serializer that adapts variation level based on context.
-
-    Increases variation when the LLM seems to be repeating patterns,
-    decreases it when the output is already diverse.
-    """
-
-    def __init__(self, config: DiverseSerializerConfig | None = None) -> None:
-        super().__init__(config)
-        self._recent_styles: list[str] = []
-        self._max_style_history: int = 20
-
-    def serialize(self, data: Any) -> str:
-        """Serialize with adaptive variation."""
-        # Check if we're in a repetition rut
-        if self._is_style_repetitive():
-            # Temporarily boost variation
-            saved = self._config.variation_level
-            self._config.variation_level = min(1.0, saved + 0.3)
-            result = super().serialize(data)
-            self._config.variation_level = saved
-        else:
-            result = super().serialize(data)
-
-        # Track the style used
-        style = f"{self._stats.total_serializations}"
-        self._recent_styles.append(style)
-        if len(self._recent_styles) > self._max_style_history:
-            self._recent_styles.pop(0)
-
-        return result
-
-    def _is_style_repetitive(self) -> bool:
-        """Check if recent styles are too similar."""
-        if len(self._recent_styles) < 5:
-            return False
-        # Check if the last 5 styles are all the same
-        last_5 = self._recent_styles[-5:]
-        unique = len(set(last_5))
-        return unique <= 2

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from attocode.integrations.utilities.token_estimate import estimate_tokens
 from attocode.types.messages import Message, Role
 
 
@@ -35,7 +36,7 @@ class ContextBlock:
 
     def __post_init__(self) -> None:
         if self.estimated_tokens == 0 and self.content:
-            self.estimated_tokens = len(self.content) // 4
+            self.estimated_tokens = estimate_tokens(self.content)
 
 
 @dataclass(slots=True)

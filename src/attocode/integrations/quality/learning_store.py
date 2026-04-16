@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from attocode.types.events import SimpleEventListener
+
 
 class LearningStatus(StrEnum):
     """Status of a learning."""
@@ -81,7 +83,7 @@ class LearningStoreConfig:
     in_memory: bool = False
 
 
-LearningEventListener = Callable[[str, dict[str, Any]], None]
+LearningEventListener = SimpleEventListener
 
 # Stop words for keyword extraction
 _STOP_WORDS = frozenset([

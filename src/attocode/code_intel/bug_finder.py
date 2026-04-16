@@ -11,18 +11,10 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+
+from attocode.types.severity import Severity
 
 logger = logging.getLogger(__name__)
-
-
-class Severity(StrEnum):
-    """Bug finding severity."""
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    INFO = "info"
 
 
 class FindingCategory(StrEnum):

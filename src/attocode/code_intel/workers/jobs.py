@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -15,7 +14,7 @@ async def index_repository(ctx: dict, repo_id: str, branch_name: str = "main") -
     Timeout: 30min, Retries: 2, Priority: medium
     """
     from attocode.code_intel.db.engine import get_session
-    from attocode.code_intel.db.models import Branch, IndexingJob, Repository
+    from attocode.code_intel.db.models import Branch, IndexingJob
     from attocode.code_intel.pubsub import publish_event
 
     logger.info("Starting full index for repo %s branch %s", repo_id, branch_name)
@@ -170,7 +169,7 @@ async def index_branch_delta(
     Timeout: 10min, Retries: 3, Priority: medium
     """
     from attocode.code_intel.db.engine import get_session
-    from attocode.code_intel.db.models import Branch, IndexingJob, Repository
+    from attocode.code_intel.db.models import IndexingJob
     from attocode.code_intel.pubsub import publish_event
 
     logger.info("Starting delta index for repo %s: %s..%s", repo_id, from_ref, to_ref)
@@ -262,7 +261,7 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
     4. Batch 32 files at a time for memory efficiency
     """
     from attocode.code_intel.db.engine import get_session
-    from attocode.code_intel.db.models import Branch, FileContent, Repository
+    from attocode.code_intel.db.models import FileContent
     from attocode.code_intel.pubsub import publish_event
 
     logger.info("Starting embedding generation for repo %s branch %s", repo_id, branch_name)

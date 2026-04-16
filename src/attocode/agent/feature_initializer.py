@@ -1,14 +1,13 @@
-"""Feature initializer - wires all integrations into the agent context.
+"""Feature initializer -- wires all optional integrations into an AgentContext.
 
-This is the Python equivalent of the TS feature-initializer.ts.
-It initializes economics, compaction, hooks, rules, ignore patterns,
-recitation, failure tracking, and other optional integrations.
+Covers economics, compaction, hooks, rules, ignore patterns, recitation,
+failure tracking, safety, planning, codebase context, LSP, and more.
 """
 
 from __future__ import annotations
 
 import logging
-import os
+import os  # noqa: F401 — used in LSP and skill-manager try blocks
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -92,8 +91,6 @@ def _init_feature_flags() -> dict[str, bool]:
         # Log enabled flags for observability
         enabled = registry.list_enabled()
         if enabled:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.debug("Feature flags enabled: %s", ", ".join(enabled))
         flag_results["feature_flags"] = True
     except Exception:
@@ -287,9 +284,7 @@ def initialize_features(
                     if os.path.isfile(rule_file):
                         count = pattern_engine.load_from_file(rule_file)
                         if count > 0:
-                            import logging
-                            _safety_logger = logging.getLogger(__name__)
-                            _safety_logger.info(
+                            logger.info(
                                 "Loaded %d pattern permission rules from %s",
                                 count, rule_file,
                             )
@@ -321,9 +316,6 @@ def initialize_features(
         except Exception:
             logger.warning("feature_init_failed", extra={"feature": "task_manager"}, exc_info=True)
             results["task_manager"] = False
-
-    # --- Yield to event loop (keep TUI responsive during init) ---
-    # (yield point removed — function is now sync, runs in thread)
 
     # 15. Codebase context
     if cfg.enable_codebase_context and working_dir and not getattr(ctx, "codebase_context", None):
@@ -393,14 +385,11 @@ def initialize_features(
                 ctx.registry.register(tool)
 
             # Call hierarchy tools (gated by feature flag)
-            try:
-                from attocode.integrations.feature_flags import feature
-                if feature("CALL_HIERARCHY"):
-                    for tool in create_call_hierarchy_tools(lsp):
-                        ctx.registry.register(tool)
-                    results["call_hierarchy_tools"] = True
-            except Exception:
-                results["call_hierarchy_tools"] = False
+            from attocode.integrations.feature_flags import feature
+            if feature("CALL_HIERARCHY"):
+                for tool in create_call_hierarchy_tools(lsp):
+                    ctx.registry.register(tool)
+                results["call_hierarchy_tools"] = True
 
             results["lsp_tools"] = True
         except Exception:
@@ -430,9 +419,6 @@ def initialize_features(
         except Exception:
             logger.debug("feature_init_failed", extra={"feature": "hierarchical_explorer"}, exc_info=True)
             results["hierarchical_explorer"] = False
-
-    # --- Yield to event loop (keep TUI responsive) ---
-    # (yield point removed — function is now sync, runs in thread)
 
     # 18. Cancellation manager
     if cfg.enable_cancellation and not getattr(ctx, "cancellation_manager", None):
@@ -529,11 +515,8 @@ def initialize_features(
             from attocode.integrations.context.context_engineering import ContextEngineeringManager
             ce_kwargs: dict[str, Any] = {}
             if cfg.enable_diverse_serialization:
-                try:
-                    from attocode.tricks.serialization_diversity import DiverseSerializer
-                    ce_kwargs["serializer"] = DiverseSerializer()
-                except Exception:
-                    logger.debug("feature_init_failed", extra={"feature": "diverse_serialization"}, exc_info=True)
+                from attocode.tricks.serialization_diversity import DiverseSerializer
+                ce_kwargs["serializer"] = DiverseSerializer()
             ctx._context_engineering = ContextEngineeringManager(**ce_kwargs)
             results["context_engineering"] = True
         except Exception:
@@ -620,9 +603,6 @@ def initialize_features(
             logger.debug("feature_init_failed", extra={"feature": "security_scanner"}, exc_info=True)
             results["security_scanner"] = False
 
-    # --- Yield to event loop (keep TUI responsive) ---
-    # (yield point removed — function is now sync, runs in thread)
-
     # 31. Semantic search (optional — degrades gracefully if no embedding provider)
     if working_dir and hasattr(ctx, "registry") and ctx.registry is not None:
         try:
@@ -674,8 +654,6 @@ def initialize_features(
     # 34. Project state (file-driven)
     if cfg.enable_project_state and not getattr(ctx, "project_state", None):
         try:
-            from pathlib import Path
-
             from attocode.integrations.persistence.project_state import ProjectStateManager
 
             pr = project_root or getattr(ctx, "project_root", "")
@@ -692,8 +670,6 @@ def initialize_features(
     # 35. Dynamic tool registry
     if cfg.enable_dynamic_tools and not getattr(ctx, "dynamic_tools", None):
         try:
-            from pathlib import Path
-
             from attocode.tools.dynamic import DynamicToolRegistry
 
             pr = project_root or getattr(ctx, "project_root", "")
@@ -723,19 +699,6 @@ def initialize_features(
     return results
 
 
-def get_feature_summary(results: dict[str, bool]) -> str:
-    """Generate a human-readable summary of initialized features."""
-    enabled = [k for k, v in results.items() if v]
-    failed = [k for k, v in results.items() if not v]
-
-    parts = []
-    if enabled:
-        parts.append(f"Enabled: {', '.join(enabled)}")
-    if failed:
-        parts.append(f"Failed: {', '.join(failed)}")
-    return " | ".join(parts) if parts else "No features initialized"
-
-
 def wire_cross_references(ctx: AgentContext, results: dict[str, bool]) -> None:
     """Wire cross-references between initialized features.
 
@@ -744,43 +707,28 @@ def wire_cross_references(ctx: AgentContext, results: dict[str, bool]) -> None:
     """
     # Wire economics into compaction manager for post-compaction baseline updates
     if results.get("economics") and results.get("compaction") and ctx.economics and ctx.compaction_manager:
-        try:
-            ctx.compaction_manager.economics = ctx.economics
-        except Exception:
-            logger.warning("cross_ref_failed", extra={"ref": "economics->compaction"}, exc_info=True)
+        ctx.compaction_manager.economics = ctx.economics
 
     # Wire failure tracker into learning store for failure-based learnings
     if results.get("failure_tracking") and results.get("learning") and ctx.failure_tracker and ctx.learning_store:
-        try:
-            ctx.learning_store.failure_tracker = ctx.failure_tracker
-        except Exception:
-            logger.warning("cross_ref_failed", extra={"ref": "failure->learning"}, exc_info=True)
+        ctx.learning_store.failure_tracker = ctx.failure_tracker
 
     # Wire work log into economics for progress tracking
     if results.get("work_log") and results.get("economics"):
         work_log = getattr(ctx, '_work_log', None)
         if work_log and ctx.economics:
-            try:
-                ctx.economics._progress_source = work_log  # type: ignore[attr-defined]
-            except Exception:
-                logger.warning("cross_ref_failed", extra={"ref": "work_log->economics"}, exc_info=True)
+            ctx.economics._progress_source = work_log  # type: ignore[attr-defined]
 
     # Wire semantic cache into context engineering
     if results.get("semantic_cache") and results.get("context_engineering"):
         cache = getattr(ctx, '_semantic_cache', None)
         ce = getattr(ctx, '_context_engineering', None)
         if cache and ce:
-            try:
-                ce.semantic_cache = cache
-            except Exception:
-                logger.warning("cross_ref_failed", extra={"ref": "semantic_cache->context_engineering"}, exc_info=True)
+            ce.semantic_cache = cache
 
     # Wire task manager into interactive planner
     if results.get("task_manager") and results.get("interactive_planner"):
         task_mgr = getattr(ctx, 'task_manager', None)
         planner = getattr(ctx, 'interactive_planner', None)
         if task_mgr and planner:
-            try:
-                planner.task_manager = task_mgr
-            except Exception:
-                logger.warning("cross_ref_failed", extra={"ref": "task_manager->interactive_planner"}, exc_info=True)
+            planner.task_manager = task_mgr

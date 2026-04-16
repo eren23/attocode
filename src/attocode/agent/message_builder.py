@@ -80,46 +80,6 @@ def build_system_prompt(
     return "\n".join(parts)
 
 
-def build_context_attachment(
-    *,
-    tool_listing: str | None = None,
-    mcp_instructions: str | None = None,
-    skill_listing: str | None = None,
-    learning_context: str | None = None,
-    extra_context: str | None = None,
-) -> Message | None:
-    """Build a context attachment message with dynamic content.
-
-    Dynamic content (tool lists, MCP instructions, skills, learning context)
-    is placed in a separate message rather than in the system prompt. This
-    keeps the system prompt byte-stable across turns for LLM prompt cache hits.
-
-    Returns None if no dynamic content was provided.
-    """
-    parts: list[str] = []
-
-    if tool_listing:
-        parts.append(f"<available-tools>\n{tool_listing}\n</available-tools>")
-
-    if mcp_instructions:
-        parts.append(f"<mcp-instructions>\n{mcp_instructions}\n</mcp-instructions>")
-
-    if skill_listing:
-        parts.append(f"<available-skills>\n{skill_listing}\n</available-skills>")
-
-    if learning_context:
-        parts.append(f"<learning-context>\n{learning_context}\n</learning-context>")
-
-    if extra_context:
-        parts.append(f"<extra-context>\n{extra_context}\n</extra-context>")
-
-    if not parts:
-        return None
-
-    content = "<system-reminder>\n" + "\n\n".join(parts) + "\n</system-reminder>"
-    return Message(role=Role.USER, content=content)
-
-
 def build_user_message(
     prompt: str,
     *,

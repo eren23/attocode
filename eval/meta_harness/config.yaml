@@ -1,0 +1,46 @@
+# Meta-harness optimization configuration for code-intel search
+# See eval/meta_harness/harness_config.py for parameter details
+
+metric_name: code_intel_composite
+metric_direction: maximize
+
+# Experiment budget
+total_max_experiments: 50
+experiment_timeout_seconds: 300
+total_max_cost_usd: 20.0
+total_max_wall_seconds: 14400  # 4 hours
+
+# Strategy mix: how to balance exploration vs exploitation
+strategy_mix:
+  explore: 3
+  exploit: 2
+  ablate: 1
+
+# Repos for inner-loop evaluation
+train_repos: [fastapi, express, starship]  # micro_slice for speed
+eval_repos: [attocode, redis]
+
+# Parameter ranges (also defined in harness_config.py PARAMETER_RANGES)
+# Included here for the proposer skill to reference
+parameter_ranges:
+  bm25_k1: [0.5, 3.0]
+  bm25_b: [0.0, 1.0]
+  name_exact_boost: [1.0, 10.0]
+  name_substring_boost: [1.0, 5.0]
+  name_token_boost: [1.0, 3.0]
+  class_boost: [1.0, 3.0]
+  function_boost: [1.0, 2.0]
+  method_boost: [1.0, 2.0]
+  src_dir_boost: [1.0, 2.0]
+  multi_term_high_bonus: [1.0, 3.0]
+  multi_term_med_bonus: [1.0, 2.0]
+  multi_term_high_threshold: [0.5, 1.0]
+  multi_term_med_threshold: [0.2, 0.8]
+  non_code_penalty: [0.05, 1.0]
+  config_penalty: [0.01, 1.0]
+  test_penalty: [0.1, 1.0]
+  exact_phrase_bonus: [1.0, 3.0]
+  max_chunks_per_file: [1, 10]
+  wide_k_multiplier: [2, 15]
+  wide_k_min: [10, 200]
+  rrf_k: [10, 200]

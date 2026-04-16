@@ -21,6 +21,7 @@ from .hashing import (
     canonical_json,
     compute_action_hash,
     compute_config_digest,
+    sha256_file,
 )
 from .provenance import LEGACY_INDEXER_NAME, Provenance, legacy_provenance
 from .retrieval_pin import (
@@ -40,4 +41,5 @@ __all__ = [
     "compute_store_hash",
     "legacy_provenance",
     "make_pin_id",
+    "sha256_file",
 ]

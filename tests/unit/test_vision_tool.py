@@ -703,47 +703,6 @@ class TestZAIVisionDisabled:
 
 
 # ---------------------------------------------------------------------------
-# Azure _format_message with list content
-# ---------------------------------------------------------------------------
-
-
-class TestAzureFormatMessageVision:
-    """Tests for Azure provider formatting list content (images)."""
-
-    def test_format_message_string_content(self) -> None:
-        from attocode.providers.azure import _format_message
-        from attocode.types.messages import Message, Role
-        msg = Message(role=Role.USER, content="Hello")
-        result = _format_message(msg)
-        assert result["content"] == "Hello"
-
-    def test_format_message_list_content_with_image(self) -> None:
-        from attocode.providers.azure import _format_message
-        from attocode.types.messages import (
-            ImageContentBlock,
-            ImageSource,
-            ImageSourceType,
-            MessageWithStructuredContent,
-            Role,
-            TextContentBlock,
-        )
-        msg = MessageWithStructuredContent(
-            role=Role.USER,
-            content=[
-                TextContentBlock(text="Describe this"),
-                ImageContentBlock(source=ImageSource(
-                    type=ImageSourceType.BASE64, media_type="image/png", data="abc123",
-                )),
-            ],
-        )
-        result = _format_message(msg)
-        content = result["content"]
-        assert isinstance(content, list)
-        assert len(content) == 2
-        assert content[0] == {"type": "text", "text": "Describe this"}
-        assert content[1]["type"] == "image_url"
-        assert "data:image/png;base64,abc123" in content[1]["image_url"]["url"]
-
 
 # ---------------------------------------------------------------------------
 # Vision capability check (is_vision_capable)

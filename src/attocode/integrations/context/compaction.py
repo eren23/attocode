@@ -10,9 +10,10 @@ of stale tool results based on tool-specific retention rules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
+from attocode.integrations.utilities.token_estimate import estimate_tokens
 from attocode.types.messages import Message, Role
 
 # Length thresholds
@@ -102,7 +103,7 @@ class ContentReplacementState:
         """Record that a tool result was evicted."""
         if not preview:
             preview = original_content[:200].strip()
-        est_tokens = len(original_content) // 4  # rough estimate
+        est_tokens = estimate_tokens(original_content)
         self._replaced[message_id] = ReplacedContent(
             tool_name=tool_name,
             original_token_estimate=est_tokens,

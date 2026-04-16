@@ -16,7 +16,7 @@ Usage::
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 if TYPE_CHECKING:
     from attocode.code_intel.service import CodeIntelService
@@ -96,18 +96,4 @@ class MockServiceFactory:
         mock = MagicMock(spec=CrossRefIndex)
         mock.search.return_value = []
         mock.get_definitions.return_value = []
-        return mock
-
-
-class AsyncMockServiceFactory(MockServiceFactory):
-    """Factory for creating async mock services.
-
-    Use this when testing async code paths.
-    """
-
-    def code_intel_service(self, **kwargs) -> "CodeIntelService":
-        """Create an async mock CodeIntelService."""
-        mock = super().code_intel_service(**kwargs)
-        mock.search_symbols = AsyncMock(return_value=kwargs.get("search_symbols_return", {}))
-        mock.search_code = AsyncMock(return_value=kwargs.get("search_code_return", ""))
         return mock

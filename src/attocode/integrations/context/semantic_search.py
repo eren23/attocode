@@ -149,6 +149,125 @@ class IndexProgress:
 
 
 @dataclass(slots=True)
+class ContextAssemblyConfig:
+    """Tunable parameters for bootstrap() and relevant_context().
+
+    Controls token budget allocation, size tier thresholds, and
+    symbol display limits during context assembly.
+    """
+
+    # bootstrap() size tier thresholds (file count)
+    small_repo_threshold: int = 100
+    large_repo_threshold: int = 5000
+
+    # bootstrap() budget ratios (with task_hint)
+    summary_ratio: float = 0.38
+    structure_ratio: float = 0.38
+    conventions_ratio: float = 0.12
+    search_ratio: float = 0.12
+
+    # bootstrap() budget ratios (without task_hint)
+    summary_ratio_no_hint: float = 0.40
+    structure_ratio_no_hint: float = 0.44
+    conventions_ratio_no_hint: float = 0.16
+
+    # bootstrap() medium repo structure split
+    medium_structure_map_ratio: float = 0.7
+
+    # bootstrap() explorer params (large repos)
+    explore_max_items: int = 20
+    explore_importance_threshold: float = 0.3
+
+    # bootstrap() hotspots count
+    bootstrap_hotspots_n: int = 10
+
+    # bootstrap() conventions sample size
+    conventions_sample_size: int = 25
+
+    # bootstrap() search top_k
+    bootstrap_search_top_k: int = 5
+
+    # relevant_context() max BFS depth
+    max_depth: int = 2
+
+    # relevant_context() symbol caps per file
+    center_symbol_cap: int = 8
+    neighbor_symbol_cap: int = 5
+
+    # relevant_context() preview limits
+    param_preview_limit: int = 4
+    base_preview_limit: int = 3
+    method_preview_limit: int = 4
+
+
+@dataclass(slots=True)
+class SearchScoringConfig:
+    """Tunable scoring parameters for BM25 keyword search and two-stage retrieval.
+
+    Default values match the original hardcoded constants. Adjusting these
+    allows the meta-harness optimization loop to explore better configurations.
+    """
+
+    # BM25 base parameters (optimized via meta-harness, round 5)
+    bm25_k1: float = 2.2      # was 1.5 → 2.8 (kw-only) → 2.2 (final with adaptive fusion)
+    bm25_b: float = 0.3       # was 0.75 → 0.05 (kw-only) → 0.3 (final with adaptive fusion)
+
+    # Graduated symbol name match boosts
+    name_exact_boost: float = 5.0
+    name_substring_boost: float = 3.0
+    name_token_boost: float = 2.2
+
+    # Definition-type boosts
+    class_boost: float = 1.8
+    function_boost: float = 1.4
+    method_boost: float = 1.3
+
+    # Path relevance: source directory boost
+    src_dir_boost: float = 1.7
+
+    # Multi-term coverage bonuses
+    multi_term_high_bonus: float = 2.5
+    multi_term_med_bonus: float = 1.8
+    multi_term_high_threshold: float = 0.7
+    multi_term_med_threshold: float = 0.4
+
+    # File type penalties
+    non_code_penalty: float = 0.3
+    config_penalty: float = 0.15
+    test_penalty: float = 0.6
+
+    # Exact phrase bonus
+    exact_phrase_bonus: float = 3.0
+
+    # Deduplication: more diversity per file when vectors return semantic neighbors
+    max_chunks_per_file: int = 8
+
+    # Two-stage retrieval — wide candidates + balanced default RRF
+    wide_k_multiplier: int = 12
+    wide_k_min: int = 150
+    rrf_k: int = 60               # default; adaptive fusion overrides per-list
+
+    # Algorithmic signals (Phase 1 improvements)
+    # Ablation-validated defaults: importance helps (+0.4%), rerank hurts (-1.4%) with aggressive threshold
+    importance_weight: float = 0.5   # file importance boost (0 = disabled)
+    frecency_weight: float = 0.2     # frecency boost (0 = disabled, currently no tracking data)
+    rerank_confidence_threshold: float = 0.0  # disabled by default — ablation showed it hurts on code queries; set >0 to enable
+
+    # Phase 2: Dependency proximity — boost results near high-ranking files in the import graph
+    dep_proximity_weight: float = 0.3   # 0 = disabled
+    dep_proximity_seed_count: int = 5    # top-N results used as "seeds" for neighborhood discovery
+
+    # Phase 3a: Adaptive fusion — vary keyword/vector weighting by keyword confidence
+    # When keyword search produces a confident top result, downweight vectors (avoid semantic noise)
+    # When keyword is uncertain, use balanced fusion to let vectors fill the gap
+    adaptive_fusion: bool = True               # True = adapt rrf_k by keyword confidence
+    kw_confidence_threshold: float = 0.5       # (legacy, unused with current strategy)
+    kw_dominance_threshold: float = 1.5        # top-1/top-2 score ratio for "dominant" classification
+    rrf_k_keyword_high_conf: int = 10          # sharp k_keyword when keyword is confident
+    rrf_k_vector_low_conf: int = 250           # smooth k_vector when keyword is confident (downweight)
+
+
+@dataclass(slots=True)
 class SemanticSearchResult:
     """A single semantic search result."""
 
@@ -172,6 +291,7 @@ class SemanticSearchManager:
 
     root_dir: str
     nl_mode: str = ""  # "none" or "heuristic"; "" = read ATTOCODE_NL_EMBEDDING_MODE env var
+    scoring_config: SearchScoringConfig = field(default_factory=SearchScoringConfig)
     _provider: Any = field(default=None, repr=False)
     _store: Any = field(default=None, repr=False)
     _indexed: bool = field(default=False, repr=False)
@@ -191,6 +311,9 @@ class SemanticSearchManager:
     _bg_thread: Any = field(default=None, repr=False)
     _index_progress: IndexProgress = field(default_factory=IndexProgress, repr=False)
     _summarizer: Any = field(default=None, repr=False)
+    _importance_scores: dict[str, float] = field(default_factory=dict, repr=False)
+    _frecency_tracker: Any = field(default=None, repr=False)
+    _dep_graph: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         # Defer provider creation to first use (_ensure_provider) to avoid
@@ -201,7 +324,101 @@ class SemanticSearchManager:
             self.root_dir, ".attocode", "index", "kw_index.db",
         )
         if not self.nl_mode:
-            self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none")
+            self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "heuristic")
+
+    def _get_importance(self, file_path: str) -> float:
+        """Get file importance score (0.0-1.0), lazily loaded."""
+        if not self._importance_scores:
+            self._load_importance_scores()
+        return self._importance_scores.get(file_path, 0.0)
+
+    def _load_importance_scores(self) -> None:
+        """Load file importance from CodebaseContextManager if available."""
+        try:
+            from attocode.integrations.context.codebase_context import CodebaseContextManager
+            ctx = CodebaseContextManager(self.root_dir)
+            ctx._ensure_fresh()
+            for fi in ctx._files:
+                self._importance_scores[fi.relative_path] = fi.importance
+            # Use sentinel to avoid reload if genuinely empty
+            if not self._importance_scores:
+                self._importance_scores["__empty__"] = 0.0
+        except Exception:
+            logger.debug("Failed to load importance scores", exc_info=True)
+
+    def _get_frecency_score(self, file_path: str) -> float:
+        """Get frecency score for a file, lazily loading the tracker."""
+        if self._frecency_tracker is None:
+            try:
+                from attocode.integrations.context.frecency import FrecencyTracker
+                self._frecency_tracker = FrecencyTracker(self.root_dir, ai_mode=True)
+            except Exception:
+                self._frecency_tracker = False  # sentinel: don't retry
+                return 0.0
+        if self._frecency_tracker is False:
+            return 0.0
+        try:
+            result = self._frecency_tracker.get_score(file_path)
+            return float(result.score) if result else 0.0
+        except Exception:
+            return 0.0
+
+    def _get_dep_graph(self) -> Any:
+        """Lazily load the dependency graph from CodebaseContextManager."""
+        if self._dep_graph is False:
+            return None
+        if self._dep_graph is None:
+            try:
+                from attocode.integrations.context.codebase_context import CodebaseContextManager
+                ctx = CodebaseContextManager(self.root_dir)
+                ctx._ensure_fresh()
+                self._dep_graph = ctx.dependency_graph
+                if self._dep_graph is None:
+                    self._dep_graph = False
+                    return None
+            except Exception:
+                logger.debug("Failed to load dependency graph", exc_info=True)
+                self._dep_graph = False
+                return None
+        return self._dep_graph
+
+    def _apply_dependency_boost(
+        self,
+        fused: list[tuple[str, float]],
+        result_map: dict[str, SemanticSearchResult],
+        weight: float,
+        seed_count: int,
+    ) -> list[tuple[str, float]]:
+        """Boost results that are in the dependency neighborhood of top-N seed results.
+
+        For each of the top seed_count results, find files that import them or are
+        imported by them. Any result file in this neighborhood gets a score boost.
+        """
+        graph = self._get_dep_graph()
+        if graph is None or not fused:
+            return fused
+
+        # Collect neighborhood files from top-N seeds
+        neighborhood: set[str] = set()
+        for item_id, _ in fused[:seed_count]:
+            result = result_map.get(item_id)
+            if not result:
+                continue
+            fp = result.file_path
+            neighborhood.update(graph.get_imports(fp))
+            neighborhood.update(graph.get_importers(fp))
+
+        if not neighborhood:
+            return fused
+
+        # Apply boost to any result in the neighborhood
+        boosted: list[tuple[str, float]] = []
+        for item_id, score in fused:
+            result = result_map.get(item_id)
+            if result and result.file_path in neighborhood:
+                score *= (1.0 + weight)
+            boosted.append((item_id, score))
+        return sorted(boosted, key=lambda x: x[1], reverse=True)
 
     def _ensure_provider(self) -> None:
         """Initialize embedding provider on first use."""
@@ -507,7 +724,8 @@ class SemanticSearchManager:
             logger.debug("Failed to build existing_files set", exc_info=True)
 
         # Stage 1a: Vector search (wide recall)
-        wide_k = max(top_k * 5, 50) if two_stage else top_k
+        cfg = self.scoring_config
+        wide_k = max(top_k * cfg.wide_k_multiplier, cfg.wide_k_min) if two_stage else top_k
         raw_results = self._store.search(
             query_vec, top_k=wide_k, file_filter=file_filter,
             existing_files=existing_files,
@@ -547,7 +765,44 @@ class SemanticSearchManager:
             for r in keyword_results
         ])
 
-        fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked)
+        # Adaptive fusion: trust keyword more only when BOTH lists agree on the top result.
+        # Agreement = vector and keyword identify the same top file → keyword is genuinely correct.
+        # Disagreement = treat both as uncertain, use balanced fusion (vectors may have semantic insight).
+        # This avoids over-trusting keyword when its top match is high-dominance but wrong (Redis case).
+        if cfg.adaptive_fusion and keyword_ranked and vector_ranked:
+            kw_top = keyword_ranked[0][1] if keyword_ranked else 0.0
+            kw_second = keyword_ranked[1][1] if len(keyword_ranked) > 1 else 0.0
+            dominance = (kw_top / kw_second) if kw_second > 0 else float("inf")
+
+            # Extract file path from top results (id format: "type:path:name")
+            def _file_of(item_id: str) -> str:
+                parts = item_id.split(":", 2)
+                return parts[1] if len(parts) >= 2 else item_id
+
+            kw_top_file = _file_of(keyword_ranked[0][0])
+            # Cross-modal agreement: keyword top-1 file appears in vector top-3
+            # Strict agreement protects redis-style queries (where vectors are correct
+            # and keyword is wrong) — keyword shouldn't be trusted unless vectors confirm.
+            vec_top_files = {_file_of(r[0]) for r in vector_ranked[:3]}
+            agreement = kw_top_file in vec_top_files
+            high_confidence = dominance >= cfg.kw_dominance_threshold and agreement
+
+            if high_confidence:
+                k_keyword = cfg.rrf_k_keyword_high_conf
+                k_vector = cfg.rrf_k_vector_low_conf
+            else:
+                k_keyword = cfg.rrf_k
+                k_vector = cfg.rrf_k
+
+            # Per-list weighted RRF (inline to support per-list k)
+            fused_dict: dict[str, float] = {}
+            for rank, (item_id, _) in enumerate(vector_ranked):
+                fused_dict[item_id] = fused_dict.get(item_id, 0.0) + 1.0 / (k_vector + rank + 1)
+            for rank, (item_id, _) in enumerate(keyword_ranked):
+                fused_dict[item_id] = fused_dict.get(item_id, 0.0) + 1.0 / (k_keyword + rank + 1)
+            fused = sorted(fused_dict.items(), key=lambda x: x[1], reverse=True)
+        else:
+            fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked, k=cfg.rrf_k)
 
         # Build result lookup for fast access
         result_map: dict[str, SemanticSearchResult] = {}
@@ -564,10 +819,36 @@ class SemanticSearchManager:
             if kw_id not in result_map:
                 result_map[kw_id] = r
 
-        # Optional cross-encoder reranking
+        # Cross-encoder reranking: explicit or lazy (auto-trigger on low confidence)
         if rerank:
             rerank_k = min(len(fused), 3 * top_k)
             fused = self._rerank(query, fused[:rerank_k], result_map, top_k)
+        elif cfg.rerank_confidence_threshold > 0 and fused:
+            top_score = fused[0][1] if fused else 0
+            if top_score < cfg.rerank_confidence_threshold:
+                rerank_k = min(len(fused), 3 * top_k)
+                fused = self._rerank(query, fused[:rerank_k], result_map, top_k)
+
+        # Dependency proximity boost: files structurally close to top seeds get a bump
+        if cfg.dep_proximity_weight > 0 and fused:
+            fused = self._apply_dependency_boost(
+                fused, result_map,
+                weight=cfg.dep_proximity_weight,
+                seed_count=cfg.dep_proximity_seed_count,
+            )
+
+        # Frecency boost: recently-accessed files get a score bump
+        if cfg.frecency_weight > 0:
+            boosted: list[tuple[str, float]] = []
+            for item_id, fused_score in fused:
+                result = result_map.get(item_id)
+                if result:
+                    frec = self._get_frecency_score(result.file_path)
+                    if frec > 0:
+                        boost = min(frec / 100.0, 0.3) * cfg.frecency_weight
+                        fused_score *= (1.0 + boost)
+                boosted.append((item_id, fused_score))
+            fused = sorted(boosted, key=lambda x: x[1], reverse=True)
 
         # Return top-k by fused score
         merged: list[SemanticSearchResult] = []
@@ -729,10 +1010,11 @@ class SemanticSearchManager:
             docs_to_score = self._kw_docs
 
         query_lower = query.lower()
+        cfg = self.scoring_config
 
         # BM25 parameters — N and avg_dl use FULL corpus for correct IDF
-        k1 = 1.5
-        b = 0.75
+        k1 = cfg.bm25_k1
+        b = cfg.bm25_b
         N = len(self._kw_docs)  # noqa: N806
         avg_dl = self._kw_avg_dl or 1.0
 
@@ -766,62 +1048,64 @@ class SemanticSearchManager:
             _name_boost_applied = False
             for term in query_tokens:
                 if term == _name_lower:
-                    # Exact symbol name match (query term IS the doc name)
-                    score *= 3.0
+                    score *= cfg.name_exact_boost
                     _name_boost_applied = True
                     break
                 if term in _name_lower:
-                    # Symbol name contains query term as substring
-                    score *= 2.0
+                    score *= cfg.name_substring_boost
                     _name_boost_applied = True
                     break
             if not _name_boost_applied:
                 for term in query_tokens:
                     if term in name_tokens:
-                        # Query term appears in tokenized name parts
-                        score *= 1.5
+                        score *= cfg.name_token_boost
                         break
 
             # Definition-type boost: classes and functions rank above file-level
             if doc.chunk_type == "class":
-                score *= 1.3
+                score *= cfg.class_boost
             elif doc.chunk_type == "function":
-                score *= 1.15
+                score *= cfg.function_boost
             elif doc.chunk_type == "method":
-                score *= 1.1
+                score *= cfg.method_boost
 
             # Path relevance boost: source directories rank higher
             _SRC_DIRS = {"src", "lib", "pkg", "core", "internal", "app", "main"}  # noqa: N806
             _first_dir = doc.file_path.split("/")[0] if "/" in doc.file_path else ""
             if _first_dir.lower() in _SRC_DIRS:
-                score *= 1.2
+                score *= cfg.src_dir_boost
 
             # Multi-term coverage bonus
             if len(query_tokens) > 1:
                 _matched_terms = sum(1 for t in query_tokens if doc.term_freqs.get(t, 0) > 0)
                 _coverage = _matched_terms / len(query_tokens)
-                if _coverage >= 0.8:
-                    score *= 1.4
-                elif _coverage >= 0.5:
-                    score *= 1.15
+                if _coverage >= cfg.multi_term_high_threshold:
+                    score *= cfg.multi_term_high_bonus
+                elif _coverage >= cfg.multi_term_med_threshold:
+                    score *= cfg.multi_term_med_bonus
 
             # Non-code file penalty (markdown, text, config formats)
             _NON_CODE_EXTS = {".md", ".txt", ".rst", ".cfg", ".ini", ".yml", ".yaml", ".json", ".toml", ".xml", ".csv"}  # noqa: N806
             _ext = os.path.splitext(doc.file_path)[1].lower()
             if _ext in _NON_CODE_EXTS:
-                score *= 0.3
+                score *= cfg.non_code_penalty
 
             # Config/doc file penalty (stacks with non-code ext penalty)
             if doc.is_config:
-                score *= 0.15
+                score *= cfg.config_penalty
 
             # Test file mild penalty
             if doc.is_test:
-                score *= 0.7
+                score *= cfg.test_penalty
 
             # Exact phrase bonus: multi-word query substring match in text
             if len(query_tokens) > 1 and query_lower in doc.text.lower():
-                score *= 1.2
+                score *= cfg.exact_phrase_bonus
+
+            # File importance boost (PageRank + hub score from dependency graph)
+            if cfg.importance_weight > 0:
+                imp = self._get_importance(doc.file_path)
+                score *= (1.0 + imp * cfg.importance_weight)
 
             scored.append((score, doc))
 
@@ -835,11 +1119,11 @@ class SemanticSearchManager:
         if max_score <= 0:
             max_score = 1.0
 
-        # Deduplicate: max 2 chunks per file
+        # Deduplicate: max N chunks per file
         file_counts: dict[str, int] = {}
         results: list[SemanticSearchResult] = []
         for raw_score, doc in scored:
-            if file_counts.get(doc.file_path, 0) >= 2:
+            if file_counts.get(doc.file_path, 0) >= cfg.max_chunks_per_file:
                 continue
             file_counts[doc.file_path] = file_counts.get(doc.file_path, 0) + 1
             results.append(SemanticSearchResult(
@@ -1254,8 +1538,9 @@ class SemanticSearchManager:
         imports = [imp.module for imp in ast.imports[:20]]
         symbols = ast.get_symbols()[:20]
         summary_parts = []
-        if ast.docstring:
-            summary_parts.append(ast.docstring[:200])
+        file_doc = getattr(ast, "docstring", None)
+        if file_doc:
+            summary_parts.append(file_doc[:200])
         if imports:
             summary_parts.append(f"imports: {', '.join(imports)}")
         if symbols:

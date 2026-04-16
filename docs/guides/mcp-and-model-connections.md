@@ -348,8 +348,8 @@ Supported providers in the current docs and code:
 - Anthropic
 - OpenRouter
 - OpenAI
-- Azure
 - ZAI
+- MiniMax
 
 Common inputs:
 

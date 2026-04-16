@@ -17,6 +17,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import os
     from collections.abc import Mapping
 
 # Version tag baked into every action_hash. Bump only in a coordinated
@@ -140,6 +141,15 @@ CONFIG_SUBSET: Mapping[str, tuple[str, ...]] = {
     ),
     "learning_ref": ("schema_version",),
 }
+
+
+def sha256_file(path: str | os.PathLike[str]) -> str:
+    """Compute SHA-256 hex digest of a file, reading in 64 KiB chunks."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def canonical_json(obj: Any) -> bytes:

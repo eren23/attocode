@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from attocode.types.events import SimpleEventListener
+
 
 @dataclass
 class PlanTask:
@@ -70,7 +72,7 @@ class RecitationEntry:
     sources: list[str] = field(default_factory=list)
 
 
-RecitationEventListener = Callable[[str, dict[str, Any]], None]
+RecitationEventListener = SimpleEventListener
 
 
 class RecitationManager:
@@ -314,53 +316,3 @@ def build_task_dependency_recitation(
                 parts.append(f"  READY: {t.description}")
 
     return "\n".join(parts)
-
-
-class AdaptiveRecitationManager(RecitationManager):
-    """Extended recitation manager with adaptive frequency.
-
-    Adjusts recitation frequency based on context size and
-    agent behavior (more frequent when drift is detected).
-    """
-
-    def __init__(self, config: RecitationConfig | None = None) -> None:
-        super().__init__(config)
-        self._drift_score: float = 0.0
-        self._last_goal_words: set[str] = set()
-
-    def detect_drift(self, recent_content: str, goal: str) -> float:
-        """Detect how much the agent has drifted from the goal.
-
-        Returns a drift score from 0.0 (on track) to 1.0 (completely off).
-        """
-        if not goal:
-            return 0.0
-
-        goal_words = {w.lower() for w in goal.split() if len(w) > 3}
-        content_words = {w.lower() for w in recent_content.split() if len(w) > 3}
-
-        if not goal_words:
-            return 0.0
-
-        overlap = goal_words & content_words
-        relevance = len(overlap) / len(goal_words)
-        drift = 1.0 - relevance
-
-        self._drift_score = drift
-        return drift
-
-    def should_inject(self, iteration: int) -> bool:
-        """Check with adaptive frequency — inject more when drifting."""
-        base_freq = self._config.frequency
-
-        # Reduce frequency when drifting
-        if self._drift_score > 0.7:
-            adjusted_freq = max(2, base_freq // 2)
-        elif self._drift_score > 0.4:
-            adjusted_freq = max(3, base_freq - 2)
-        else:
-            adjusted_freq = base_freq
-
-        if iteration <= 1:
-            return True
-        return (iteration - self._last_injection_iteration) >= adjusted_freq

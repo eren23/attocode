@@ -270,7 +270,3 @@ async def lsp_outgoing_calls_v2(
     return await provider.outgoing_calls(
         file=req.file, line=req.line, col=req.col, branch=branch,
     )
-
-
-# Backward-compatible alias
-router = router_v1

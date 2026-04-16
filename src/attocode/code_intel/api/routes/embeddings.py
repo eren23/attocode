@@ -301,7 +301,6 @@ async def trigger_generate_embeddings(
 
     # Enqueue the ARQ job
     try:
-        import redis.asyncio as aioredis
         from arq import create_pool
         from arq.connections import RedisSettings
 
@@ -340,7 +339,7 @@ async def get_indexing_status(
     session: AsyncSession = Depends(get_db_session),
 ) -> IndexingStatusResponse:
     """Get combined indexing + embedding progress."""
-    from attocode.code_intel.db.models import IndexingJob, Repository
+    from attocode.code_intel.db.models import IndexingJob
 
     repo = await _get_repo(project_id, session)
 

@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from attocode.types.events import SimpleEventListener
+
 
 class FailureCategory(StrEnum):
     """Categories of failures."""
@@ -83,7 +85,7 @@ class FailureTrackerConfig:
     repeat_warning_threshold: int = 3
 
 
-FailureEventListener = Callable[[str, dict[str, Any]], None]
+FailureEventListener = SimpleEventListener
 
 # Categorization patterns
 _CATEGORY_PATTERNS: list[tuple[re.Pattern[str], FailureCategory]] = [

@@ -12,6 +12,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+from attocode.integrations.utilities.token_estimate import estimate_tokens
+
 
 @dataclass(slots=True)
 class HistoryEntry:
@@ -61,7 +63,7 @@ class HistoryManager:
         metadata: dict[str, Any] | None = None,
     ) -> HistoryEntry:
         """Add a message to history."""
-        tokens = len(content) // 4  # rough estimate
+        tokens = estimate_tokens(content)
         entry = HistoryEntry(
             role=role,
             content=content,

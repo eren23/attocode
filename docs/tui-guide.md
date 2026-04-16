@@ -196,7 +196,7 @@ Appears when the agent proposes a new learning (pattern, preference, etc.) for v
 
 A 3-step wizard that runs on first launch:
 
-1. **Provider selection** — Choose from Anthropic, OpenRouter, OpenAI, ZAI, Azure
+1. **Provider selection** — Choose from Anthropic, OpenRouter, OpenAI, ZAI, MiniMax
 2. **API key input** — Enter your API key (hidden input)
 3. **Model selection** — Pick a model or enter a custom model ID
 

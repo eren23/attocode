@@ -513,7 +513,3 @@ async def register_rule_v1(
     ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.register_rule(yaml_content=req.yaml_content))
-
-
-# Backward-compatible alias: old code may import `router` from this module.
-router = router_v1

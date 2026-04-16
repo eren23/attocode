@@ -215,10 +215,7 @@ def _is_loop_guard_blocked(ctx: AgentContext, tc: ToolCall) -> bool:
     detector = getattr(economics, "loop_detector", None) if economics is not None else None
     if detector is None:
         return False
-    try:
-        detection = detector.peek(tc.name, tc.arguments or {})
-    except Exception:
-        return False
+    detection = detector.peek(tc.name, tc.arguments or {})
     if not detection.is_loop:
         return False
 
@@ -323,26 +320,17 @@ def _notify_file_changed(ctx: AgentContext, path: str) -> None:
     # Notify codebase context manager
     cbc = getattr(ctx, "codebase_context", None)
     if cbc:
-        try:
-            cbc.mark_file_dirty(path)
-        except Exception:
-            logger.debug("notify_file_changed: codebase_context.mark_file_dirty failed", exc_info=True)
+        cbc.mark_file_dirty(path)
 
     # Invalidate hierarchical explorer cache
     explorer = getattr(ctx, "_hierarchical_explorer", None)
     if explorer:
-        try:
-            explorer.invalidate()
-        except Exception:
-            logger.debug("notify_file_changed: hierarchical_explorer.invalidate failed", exc_info=True)
+        explorer.invalidate()
 
     # Notify AST service of file change (invalidate AST cache + cross-refs)
     ast_svc = getattr(ctx, "_ast_service", None)
     if ast_svc:
-        try:
-            ast_svc.notify_file_changed(path)
-        except Exception:
-            logger.debug("notify_file_changed: ast_service.notify_file_changed failed", exc_info=True)
+        ast_svc.notify_file_changed(path)
 
     # Notify semantic search to re-index the changed file.
     # Prefer the manager's bounded queue to avoid spawning unbounded threads.
@@ -496,19 +484,16 @@ async def execute_single_tool(
     # Economics recording + phase nudge injection moved to loop.py
     # (after tool results are added) to avoid interleaving user messages
     # between assistant tool_calls and tool results — MiniMax rejects that.
-    try:
-        if ctx.economics is not None:
-            loop_detection = ctx.economics.loop_detector.peek(
-                tc.name, tc.arguments or {},
+    if ctx.economics is not None:
+        loop_detection = ctx.economics.loop_detector.peek(
+            tc.name, tc.arguments or {},
+        )
+        if loop_detection.is_loop:
+            ctx.emit_simple(
+                EventType.BUDGET_WARNING,
+                iteration=ctx.iteration,
+                metadata={"doom_loop": True, "tool": tc.name, "count": loop_detection.count},
             )
-            if loop_detection.is_loop:
-                ctx.emit_simple(
-                    EventType.BUDGET_WARNING,
-                    iteration=ctx.iteration,
-                    metadata={"doom_loop": True, "tool": tc.name, "count": loop_detection.count},
-                )
-    except Exception:
-        pass  # Economics peek is best-effort; never block tool execution
 
     effective_timeout = timeout or DEFAULT_TOOL_TIMEOUT
     was_truncated = False

@@ -44,7 +44,6 @@ class StatusBar(Static):
     cost: reactive[float] = reactive(0.0)
     git_branch: reactive[str] = reactive("")
 
-    # New reactives
     total_tokens: reactive[int] = reactive(0)
     max_tokens: reactive[int] = reactive(200_000)
     context_tokens: reactive[int] = reactive(0)
@@ -54,7 +53,6 @@ class StatusBar(Static):
     lines_removed: reactive[int] = reactive(0)
     project_name: reactive[str] = reactive("")
 
-    # Part 2 additions: cache, compaction, phase
     cache_hit_rate: reactive[float] = reactive(0.0)
     compaction_count: reactive[int] = reactive(0)
     phase: reactive[str] = reactive("")

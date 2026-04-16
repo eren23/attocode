@@ -6,9 +6,13 @@ policy, context, resilience, insight, and subagent categories.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
+
+# Shared callback type for simple event listeners used across the codebase.
+SimpleEventListener = Callable[[str, dict[str, Any]], None]
 
 
 class EventType(StrEnum):

@@ -1,0 +1,312 @@
+repo: attocode
+source: git_derived
+queries:
+- query: add scoring configuration for semantic search optimization
+  relevant_files:
+  - eval/meta_harness/__init__.py
+  - eval/meta_harness/__main__.py
+  - eval/meta_harness/evaluator.py
+  - eval/meta_harness/harness_config.py
+  - eval/meta_harness/meta_loop.py
+  - eval/meta_harness/proposer.py
+  - eval/meta_harness/splits.py
+  - src/attocode/code_intel/service.py
+  - src/attocode/integrations/context/__init__.py
+  - src/attocode/integrations/context/semantic_search.py
+  commit_sha: b7c43b61fac9
+- query: update changelog and documentation for provider changes
+  relevant_files:
+  - src/attocode/agent/agent.py
+  - src/attocode/code_intel/rules/packs/pack_loader.py
+  - tests/unit/integrations/test_swarm_core.py
+  commit_sha: c07faa460b7f
+- query: bump version to 0.2.20 for attocode and attoswarm packages
+  relevant_files:
+  - src/attocode/__init__.py
+  - src/attoswarm/__init__.py
+  commit_sha: ded915193502
+- query: Enhance rule-based analysis tools and improve code intelligence
+  relevant_files:
+  - src/attocode/code_intel/rules/filters/pipeline.py
+  - src/attocode/code_intel/rules/loader.py
+  - src/attocode/code_intel/rules/registry.py
+  - src/attocode/code_intel/service.py
+  - src/attocode/code_intel/tools/rule_tools.py
+  commit_sha: 7a8181ce9cd5
+- query: Refactor pin management to ensure deterministic pin IDs and improve legacy
+    reset behavior
+  relevant_files:
+  - src/attocode/code_intel/tools/pin_store.py
+  - src/attocode/code_intel/tools/pin_tools.py
+  - tests/unit/code_intel/test_codex_rereview_polish.py
+  commit_sha: c0c8a039fb00
+- query: Update version to 0.2.18 and document changes in CHANGELOG.md, reflecting
+    the implementation of phases 1 to 3a of the reproducibility subsystem
+  relevant_files:
+  - src/attocode/__init__.py
+  - src/attoswarm/__init__.py
+  commit_sha: 7579c6ee4bad
+- query: Implement phases 1 to 3a of the reproducibility subsystem, enhancing code
+    intelligence with new snapshot management, garbage collection, and pinning features.
+    Introduce HTTP API endpoints for snapshot CRUD operations, repo-scoped GC, and
+    cross-org repo moves. Update documentation and guides to reflect these changes,
+    ensuring better usability and clarity. Fix various reproducibility invariants
+    to prevent data loss and improve pin management across multiple projects
+  relevant_files:
+  - src/attocode/code_intel/api/providers/local_provider.py
+  - src/attocode/code_intel/tools/pin_store.py
+  - src/attocode/code_intel/tools/pin_tools.py
+  - tests/unit/code_intel/test_codex_rereview_polish.py
+  - tests/unit/context/test_retrieval_pin.py
+  commit_sha: 4a63a84b6fdf
+- query: Refactor project directory discovery and pin management for improved modularity
+  relevant_files:
+  - src/attocode/code_intel/_shared.py
+  - src/attocode/code_intel/api/providers/local_provider.py
+  - src/attocode/code_intel/project_dir.py
+  - src/attocode/code_intel/tools/pin_store.py
+  - src/attocode/code_intel/tools/pin_tools.py
+  - tests/unit/code_intel/test_codex_rereview_polish.py
+  - tests/unit/context/test_retrieval_pin.py
+  commit_sha: 37579679ac4e
+- query: Refactor API providers to enhance type checking and response consistency
+  relevant_files:
+  - src/attocode/code_intel/api/providers/db_provider.py
+  - src/attocode/code_intel/api/providers/local_provider.py
+  - tests/unit/code_intel/test_api_phase3a.py
+  - tests/unit/code_intel/test_codex_rereview_polish.py
+  - tests/unit/context/test_embedding_rotation.py
+  commit_sha: fb71df48cf83
+- query: Add repository update functionality and snapshot models
+  relevant_files:
+  - src/attocode/code_intel/api/app.py
+  - src/attocode/code_intel/api/routes/gc.py
+  - src/attocode/code_intel/api/routes/orgs.py
+  - src/attocode/code_intel/api/routes/snapshots.py
+  - src/attocode/code_intel/db/models.py
+  - src/attocode/code_intel/migrations/versions/018_repo_snapshots.py
+  - tests/unit/code_intel/test_api_phase3a.py
+  commit_sha: cf56e5788a5a
+- query: Add anchor blob support to ADR and learning tools
+  relevant_files:
+  - src/attocode/code_intel/server.py
+  - src/attocode/code_intel/tools/adr_tools.py
+  - src/attocode/code_intel/tools/learning_tools.py
+  - src/attocode/code_intel/tools/maintenance_tools.py
+  - src/attocode/code_intel/tools/overlay_tools.py
+  - src/attocode/integrations/context/blob_oid.py
+  - src/attocode/integrations/context/memory_store.py
+  - tests/unit/code_intel/tools/test_phase2c_anchors_and_overlays.py
+  - tests/unit/context/test_blob_oid.py
+  commit_sha: d7cca8b3328a
+- query: Implement embedding rotation tools in maintenance_tools.py
+  relevant_files:
+  - src/attocode/code_intel/tools/maintenance_tools.py
+  - src/attocode/integrations/context/embedding_rotation.py
+  - tests/unit/context/test_embedding_rotation.py
+  commit_sha: 7bb8020282d8
+- query: Add deletion capabilities to MemoryStore and VectorStore, including methods
+    to clear all entries and delete by specific criteria. Enhance ADRStore with hard-delete
+    functionality for ADRs, allowing for selective or complete data removal. Introduce
+    new snapshot tools in server.py for improved data management
+  relevant_files:
+  - src/attocode/code_intel/server.py
+  - src/attocode/code_intel/tools/adr_tools.py
+  - src/attocode/code_intel/tools/maintenance_tools.py
+  - src/attocode/code_intel/tools/snapshot_tools.py
+  - src/attocode/integrations/context/memory_store.py
+  - src/attocode/integrations/context/vector_store.py
+  - tests/unit/code_intel/tools/test_maintenance_tools_phase2.py
+  commit_sha: 8bdb6a850d28
+- query: Update version to 0.2.17 across project files, reflecting the latest release
+  relevant_files:
+  - src/attocode/__init__.py
+  - src/attoswarm/__init__.py
+  commit_sha: 5cfa6a588cd9
+- query: Add new tools for architecture drift detection and data flow vulnerability
+    scanning
+  relevant_files:
+  - src/attocode/code_intel/server.py
+  - src/attocode/code_intel/tools/composite_tools.py
+  - src/attocode/code_intel/tools/search_tools.py
+  - src/attocode/integrations/context/architecture_drift.py
+  - src/attocode/integrations/security/dataflow.py
+  - tests/unit/integrations/context/test_architecture_drift.py
+  - tests/unit/integrations/test_dataflow.py
+  commit_sha: c0c5a67b6fae
+- query: 'Enhance code intelligence server by adding 3 new composite tools: `review_change`,
+    `explain_impact`, and `suggest_tests`, increasing the total tools available to
+    43. Introduce a new `regex_search` tool for accelerated regex code searching.
+    Update documentation and imports accordingly. Additionally, implement support
+    for loading custom security rules from YAML files, allowing user-defined patterns
+    to be integrated into the scanning pipeline'
+  relevant_files:
+  - src/attocode/code_intel/server.py
+  - src/attocode/code_intel/tools/composite_tools.py
+  - src/attocode/code_intel/tools/search_tools.py
+  - src/attocode/integrations/context/codebase_ast.py
+  - src/attocode/integrations/context/embeddings.py
+  - src/attocode/integrations/context/semantic_search.py
+  - src/attocode/integrations/context/ts_parser.py
+  - src/attocode/integrations/security/custom_rules.py
+  - src/attocode/integrations/security/patterns.py
+  - src/attocode/integrations/security/scanner.py
+  - tests/unit/code_intel/tools/test_search_tools.py
+  - tests/unit/integrations/context/test_embeddings.py
+  - tests/unit/integrations/context/test_go_symbols.py
+  - tests/unit/integrations/test_new_security_rules.py
+  - tests/unit/integrations/test_security_autofix.py
+  commit_sha: ab3244a5412d
+- query: Enhance security scanning capabilities by adding 7 new anti-pattern rules
+    for detecting stealth supply-chain malware in `security_scan`. Introduced a `scan_comments`
+    option for individual patterns, allowing comment line scanning. Implemented an
+    install-hook scanner to flag suspicious scripts in `package.json` and added a
+    new shared pattern matching generator. Updated documentation to reflect these
+    changes
+  relevant_files:
+  - src/attocode/code_intel/storage/security_scanner_db.py
+  - src/attocode/integrations/security/dependency_audit.py
+  - src/attocode/integrations/security/matcher.py
+  - src/attocode/integrations/security/patterns.py
+  - src/attocode/integrations/security/scanner.py
+  - tests/unit/code_intel/test_supply_chain_rules.py
+  - tests/unit/integrations/test_security_matcher.py
+  commit_sha: 863a593abebb
+- query: Implement new CLI commands for probing installations and managing bundles.
+    Added 'probe-install' for runtime probing of installed targets and 'bundle' for
+    exporting and inspecting code-intel bundles. Updated help documentation to reflect
+    these new commands and their usage
+  relevant_files:
+  - src/attocode/code_intel/bundle.py
+  - src/attocode/code_intel/cli.py
+  - src/attocode/code_intel/installer.py
+  - src/attocode/code_intel/probe.py
+  - src/attocode/code_intel/server.py
+  - src/attocode/integrations/mcp/client.py
+  - tests/unit/code_intel/test_cli_lifecycle.py
+  - tests/unit/code_intel/test_cli_maintenance_local.py
+  - tests/unit/code_intel/test_cli_ops.py
+  - tests/unit/code_intel/test_cli_query_commands.py
+  - tests/unit/test_code_intel.py
+  commit_sha: d53b8443b7a6
+- query: Enhance search performance in version 0.2.15 with significant optimizations
+    including a BM25 keyword index disk cache, trigram pre-filtering for keyword search,
+    and numpy-accelerated vector search. Updated changelog and documentation to reflect
+    these improvements, resulting in up to 176x speedup in search operations. Added
+    comprehensive performance benchmarks and refined the semantic search guide
+  relevant_files:
+  - src/attocode/integrations/context/semantic_search.py
+  - src/attocode/integrations/context/vector_store.py
+  commit_sha: 9574e24cd525
+- query: Enhance AST service hydration and introduce hydration snapshot feature
+  relevant_files:
+  - src/attocode/code_intel/_shared.py
+  - src/attocode/code_intel/service.py
+  - src/attocode/integrations/context/ast_service.py
+  - tests/integration/code_intel/test_mcp_tools_audit.py
+  - tests/unit/integrations/test_lifecycle.py
+  - tests/unit/test_code_intel_hydration.py
+  commit_sha: fe64d82e98bc
+- query: Enhance MCP server configuration and add hydration status endpoint
+  relevant_files:
+  - src/attocode/code_intel/api/providers/remote_provider.py
+  - src/attocode/code_intel/api/routes/analysis.py
+  - src/attocode/code_intel/cli.py
+  - src/attocode/code_intel/installer.py
+  - tests/integration/code_intel/test_mcp_tools_audit.py
+  - tests/unit/agent/test_feature_initializer.py
+  - tests/unit/code_intel/test_api.py
+  - tests/unit/code_intel/test_lsp_extended_models.py
+  - tests/unit/integrations/test_feature_flags.py
+  - tests/unit/integrations/test_lifecycle.py
+  - tests/unit/integrations/test_mcp.py
+  - tests/unit/integrations/test_path_security.py
+  - tests/unit/integrations/test_tool_deferral.py
+  - tests/unit/test_code_intel.py
+  - tests/unit/tools/test_file_ops.py
+  commit_sha: d1a526c0eb1d
+- query: Implement LSP completions, call hierarchy, and workspace symbol features
+  relevant_files:
+  - src/attocode/agent/feature_initializer.py
+  - src/attocode/code_intel/api/models.py
+  - src/attocode/code_intel/api/providers/db_provider.py
+  - src/attocode/code_intel/api/providers/local_provider.py
+  - src/attocode/code_intel/api/routes/lsp.py
+  - src/attocode/code_intel/service.py
+  - src/attocode/code_intel/tools/lsp_tools.py
+  - src/attocode/integrations/lsp/client.py
+  - src/attocode/tools/lsp.py
+  commit_sha: 4c3d0e2f2aa6
+- query: Implement feature flag initialization and enhance LSP client shutdown process
+  relevant_files:
+  - src/attocode/agent/feature_initializer.py
+  - src/attocode/integrations/feature_flags/__init__.py
+  - src/attocode/integrations/lifecycle/__init__.py
+  - src/attocode/integrations/lsp/client.py
+  - src/attocode/integrations/lsp/hierarchy.py
+  - src/attocode/integrations/mcp/client_manager.py
+  - src/attocode/integrations/mcp/config.py
+  - src/attocode/integrations/mcp/transports.py
+  - src/attocode/integrations/path_security/__init__.py
+  - src/attocode/integrations/safety/pattern_rules.py
+  - src/attocode/integrations/safety/policy_engine.py
+  - src/attocode/integrations/tool_deferral/__init__.py
+  - src/attocode/tools/file_ops.py
+  - src/attocode/tools/lsp.py
+  - src/attocode/types/messages.py
+  commit_sha: b0cd799dc3fc
+- query: Enhance project directory resolution and update .gitignore
+  relevant_files:
+  - src/attocode/code_intel/_shared.py
+  - src/attocode/code_intel/server.py
+  - tests/unit/code_intel/test_project_discovery.py
+  commit_sha: fa9ccec8ac63
+- query: Implement GSD integration and enhance remote configuration handling
+  relevant_files:
+  - src/attocode/code_intel/cli.py
+  - src/attocode/code_intel/installer.py
+  - src/attocode/integrations/mcp/config.py
+  - tests/unit/test_code_intel.py
+  commit_sha: 598652a94a3e
+- query: Enhance tool execution and message handling in the agent
+  relevant_files:
+  - src/attocode/core/loop.py
+  - src/attocode/core/tool_executor.py
+  - src/attocode/integrations/context/auto_compaction.py
+  - src/attocode/integrations/context/compaction.py
+  - src/attocode/integrations/streaming/handler.py
+  - src/attocode/providers/minimax.py
+  - src/attocode/providers/openai_compat.py
+  - tests/unit/integrations/context/test_auto_compaction.py
+  - tests/unit/integrations/context/test_compaction.py
+  - tests/unit/providers/test_minimax.py
+  commit_sha: 4a96b715108e
+- query: Enhance event handling and feature initialization in the agent
+  relevant_files:
+  - src/attocode/agent/run_context_builder.py
+  - src/attocode/cli.py
+  - src/attocode/types/events.py
+  - tests/unit/providers/test_minimax.py
+  - tests/unit/test_preseed_cache.py
+  - tests/unit/test_run_context_builder.py
+  commit_sha: e233c7aee6b7
+- query: Refactor feature initialization to synchronous execution
+  relevant_files:
+  - src/attocode/agent/feature_initializer.py
+  - src/attocode/agent/run_context_builder.py
+  commit_sha: 362c3a83b68d
+- query: Enhance Code-Intel Installer with 13 new auto-install targets
+  relevant_files:
+  - src/attocode/code_intel/cli.py
+  - src/attocode/code_intel/installer.py
+  - tests/unit/test_code_intel.py
+  commit_sha: 632be4f1bd91
+- query: Enhance configuration and verification features in Code Intel
+  relevant_files:
+  - eval/benchmark_3way_catalog.py
+  - src/attocode/code_intel/cli.py
+  - src/attocode/code_intel/installer.py
+  - src/attocode/code_intel/server.py
+  - tests/unit/test_benchmark_3way_catalog.py
+  - tests/unit/test_code_intel.py
+  commit_sha: 182997fff87b

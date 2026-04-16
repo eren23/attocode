@@ -488,7 +488,7 @@ class TestOrchestratorInternals:
         assert ctx.total_dispatches == 0
         assert ctx.total_hollows == 0
         assert ctx.original_prompt == ""
-        assert ctx.has_replanned is False
+        assert ctx.replan_count == 0
 
     def test_collected_data_defaults(self) -> None:
         ctx = _make_ctx()
@@ -1733,11 +1733,12 @@ class TestHandleTaskCompletionSuccess:
         ctx.config.quality_gates = False
         recovery_state = SwarmRecoveryState()
 
+        # No files_modified: mandatory compilation + verification paths need a real
+        # workspace; this test targets non-hollow success + completed status only.
         spawn_result = SpawnResult(
             success=True,
             output="Created src/foo.py with the implementation.",
             tool_calls=5,
-            files_modified=["src/foo.py"],
         )
 
         await handle_task_completion(

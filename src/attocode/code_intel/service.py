@@ -13,6 +13,7 @@ from collections import Counter, deque
 from pathlib import Path
 
 from attocode.code_intel.config import CodeIntelConfig
+from attocode.integrations.utilities.token_estimate import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,8 @@ class CodeIntelService:
     def __init__(self, project_dir: str, config: CodeIntelConfig | None = None) -> None:
         self._project_dir = os.path.abspath(project_dir)
         self._config = config or CodeIntelConfig(project_dir=self._project_dir)
+        self._scoring_config = None  # Optional SearchScoringConfig override
+        self._context_config = None  # Optional ContextAssemblyConfig override
 
         # Lazy singletons
         self._init_lock = threading.Lock()
@@ -161,8 +164,26 @@ class CodeIntelService:
                 if self._semantic_search is None:
                     from attocode.integrations.context.semantic_search import SemanticSearchManager
 
-                    self._semantic_search = SemanticSearchManager(root_dir=self._project_dir)
+                    kwargs: dict = {"root_dir": self._project_dir}
+                    if self._scoring_config is not None:
+                        kwargs["scoring_config"] = self._scoring_config
+                    self._semantic_search = SemanticSearchManager(**kwargs)
         return self._semantic_search
+
+    def set_scoring_config(self, config) -> None:
+        """Set search scoring config for meta-harness optimization.
+
+        Must be called before the first search. If the SemanticSearchManager
+        is already initialized, updates it in place.
+        """
+        with self._init_lock:
+            self._scoring_config = config
+            if self._semantic_search is not None:
+                self._semantic_search.scoring_config = config
+
+    def set_context_config(self, config) -> None:
+        """Set context assembly config for meta-harness optimization."""
+        self._context_config = config
 
     def _get_memory_store(self):
         if self._memory_store is None:
@@ -1014,7 +1035,7 @@ class CodeIntelService:
             "level": level,
             "text": text,
             "files_included": len(selected),
-            "estimated_tokens": int(len(text) / 3.5) if text else 0,
+            "estimated_tokens": estimate_tokens(text) if text else 0,
         }
 
     def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "", branch: str = "") -> dict:
@@ -1872,12 +1893,16 @@ class CodeIntelService:
         max_tokens: int = 4000,
         include_symbols: bool = True,
     ) -> str:
+        from attocode.integrations.context.semantic_search import ContextAssemblyConfig
+
+        cc = self._context_config or ContextAssemblyConfig()
+
         svc = self._get_ast_service()
         ctx = self._get_context_mgr()
         ast_cache = svc._ast_cache
         all_files = {fi.relative_path: fi for fi in ctx._files}
 
-        depth = min(depth, 2)
+        depth = min(depth, cc.max_depth)
         center_rels: list[str] = []
         for f in files:
             rel = svc._to_rel(f)
@@ -1929,15 +1954,15 @@ class CodeIntelService:
             file_section = [header, meta]
 
             if include_symbols and file_ast:
-                max_sym = 8 if dist == 0 else 5
+                max_sym = cc.center_symbol_cap if dist == 0 else cc.neighbor_symbol_cap
                 sym_lines: list[str] = []
                 for fn in file_ast.functions[:max_sym]:
-                    params = ", ".join(p.name for p in fn.parameters[:4])
+                    params = ", ".join(p.name for p in fn.parameters[:cc.param_preview_limit])
                     ret = f" -> {fn.return_type}" if fn.return_type else ""
                     sym_lines.append(f"    fn {fn.name}({params}){ret}")
                 for cls in file_ast.classes[:max_sym]:
-                    bases = f"({', '.join(cls.bases[:3])})" if cls.bases else ""
-                    methods_preview = ", ".join(m.name for m in cls.methods[:4])
+                    bases = f"({', '.join(cls.bases[:cc.base_preview_limit])})" if cls.bases else ""
+                    methods_preview = ", ".join(m.name for m in cls.methods[:cc.method_preview_limit])
                     sym_lines.append(f"    class {cls.name}{bases}: {methods_preview}")
                 remaining = max_sym - len(sym_lines)
                 if remaining < 0:
@@ -1946,7 +1971,7 @@ class CodeIntelService:
                 file_section.extend(sym_lines)
 
             section_text = "\n".join(file_section)
-            section_tokens = int(len(section_text) / 3.5)
+            section_tokens = estimate_tokens(section_text)
             if token_est + section_tokens > max_tokens and sections:
                 sections.append(f"  ... and {len(sorted_files) - len(sections)} more files (truncated)")
                 break
@@ -2046,7 +2071,7 @@ class CodeIntelService:
         token_est = 0
         for header, text, _prio in sections:
             section_text = f"## {header}\n{text}"
-            section_tokens = int(len(section_text) / 3.5)
+            section_tokens = estimate_tokens(section_text)
             if token_est + section_tokens > max_tokens and output_parts:
                 break
             output_parts.append(section_text)
@@ -2055,6 +2080,9 @@ class CodeIntelService:
 
     def bootstrap(self, task_hint: str = "", max_tokens: int = 8000, indexing_depth: str = "auto") -> str:
         from attocode.code_intel.helpers import _analyze_conventions, _format_conventions
+        from attocode.integrations.context.semantic_search import ContextAssemblyConfig
+
+        cc = self._context_config or ContextAssemblyConfig()
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -2063,22 +2091,24 @@ class CodeIntelService:
 
         total_files = len(files)
         import os
-        _file_cap = int(os.environ.get("ATTOCODE_FILE_CAP", "5000"))
-        if total_files < 100:
+        _file_cap = int(os.environ.get("ATTOCODE_FILE_CAP", str(cc.large_repo_threshold)))
+        if total_files < cc.small_repo_threshold:
             size_tier = "small"
         elif total_files < _file_cap:
             size_tier = "medium"
         else:
             size_tier = "large"
 
-        summary_budget = int(max_tokens * 0.38)
-        structure_budget = int(max_tokens * 0.38)
-        conventions_budget = int(max_tokens * 0.12)
-        search_budget = int(max_tokens * 0.12) if task_hint else 0
-        if not task_hint:
-            summary_budget = int(max_tokens * 0.40)
-            structure_budget = int(max_tokens * 0.44)
-            conventions_budget = int(max_tokens * 0.16)
+        if task_hint:
+            summary_budget = int(max_tokens * cc.summary_ratio)
+            structure_budget = int(max_tokens * cc.structure_ratio)
+            conventions_budget = int(max_tokens * cc.conventions_ratio)
+            search_budget = int(max_tokens * cc.search_ratio)
+        else:
+            summary_budget = int(max_tokens * cc.summary_ratio_no_hint)
+            structure_budget = int(max_tokens * cc.structure_ratio_no_hint)
+            conventions_budget = int(max_tokens * cc.conventions_ratio_no_hint)
+            search_budget = 0
 
         sections: list[str] = []
         sections.append(self.project_summary(max_tokens=summary_budget))
@@ -2087,15 +2117,15 @@ class CodeIntelService:
             map_text = self.repo_map(include_symbols=True, max_tokens=structure_budget)
             sections.append(f"## Repository Map\n{map_text}")
         elif size_tier == "medium":
-            map_text = self.repo_map(include_symbols=True, max_tokens=int(structure_budget * 0.7))
-            hs_text = self.hotspots(top_n=10)
+            map_text = self.repo_map(include_symbols=True, max_tokens=int(structure_budget * cc.medium_structure_map_ratio))
+            hs_text = self.hotspots(top_n=cc.bootstrap_hotspots_n)
             sections.append(f"## Repository Map\n{map_text}")
             sections.append(f"## Hotspots\n{hs_text}")
         else:
             explorer = self._get_explorer()
-            root_result = explorer.explore("", max_items=20, importance_threshold=0.3)
+            root_result = explorer.explore("", max_items=cc.explore_max_items, importance_threshold=cc.explore_importance_threshold)
             explore_text = explorer.format_result(root_result)
-            hs_text = self.hotspots(top_n=10)
+            hs_text = self.hotspots(top_n=cc.bootstrap_hotspots_n)
             sections.append(f"## Top-Level Structure\n{explore_text}")
             sections.append(f"## Hotspots\n{hs_text}")
 
@@ -2107,7 +2137,7 @@ class CodeIntelService:
                 key=lambda fi: fi.importance,
                 reverse=True,
             )
-            sample_rels = [fi.relative_path for fi in candidates[:25]]
+            sample_rels = [fi.relative_path for fi in candidates[:cc.conventions_sample_size]]
             if sample_rels:
                 stats = _analyze_conventions(ast_cache, sample_rels)
                 conv_text = _format_conventions(stats)
@@ -2119,7 +2149,7 @@ class CodeIntelService:
         if task_hint:
             try:
                 mgr = self._get_semantic_search()
-                results = mgr.search(task_hint, top_k=5)
+                results = mgr.search(task_hint, top_k=cc.bootstrap_search_top_k)
                 if results:
                     search_text = mgr.format_results(results)
                     search_chars = search_budget * 4

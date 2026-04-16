@@ -105,8 +105,6 @@ class SubagentManager:
             floor=concurrency_floor,
             ceiling=concurrency_ceiling,
         )
-        # Keep a plain semaphore reference for backward compat
-        self._semaphore = self._concurrency
         self._file_ledger = file_ledger
         self._ast_service = ast_service
         self._spawn_fn = spawn_fn

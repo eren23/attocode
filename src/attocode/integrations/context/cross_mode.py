@@ -28,15 +28,6 @@ class SearchSuggestion:
     score: float  # Relevance score
 
 
-@dataclass
-class CrossModeResult:
-    """Result of a cross-mode search."""
-    original_query: str
-    original_mode: str  # "file" or "grep"
-    suggestions: list[SearchSuggestion]
-    mode_used: str  # The mode that provided suggestions
-
-
 # ---------------------------------------------------------------------------
 # Cross-mode search
 # ---------------------------------------------------------------------------

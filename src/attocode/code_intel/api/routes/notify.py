@@ -551,7 +551,6 @@ async def push_blame(
 ) -> BlamePushResponse:
     """Push blame data for DB-backed blame (remote repos)."""
     from sqlalchemy import select
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
 
     from attocode.code_intel.db.engine import get_session
     from attocode.code_intel.db.models import BlameHunk, Repository

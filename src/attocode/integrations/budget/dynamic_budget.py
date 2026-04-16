@@ -279,10 +279,6 @@ class DynamicBudgetPool(SharedBudgetPool):
 
         return freed
 
-    # =========================================================================
-    # Enhanced Stats
-    # =========================================================================
-
     def get_dynamic_stats(self) -> DynamicBudgetStats:
         """Get enhanced stats including dynamic info."""
         base = self.get_stats()

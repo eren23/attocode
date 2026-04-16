@@ -536,16 +536,7 @@ async def _extend_budget_command(agent: Any, arg: str) -> CommandResult:
     if not ctx:
         return CommandResult(output="No active context.")
 
-    if hasattr(agent, "apply_budget_extension"):
-        new_max = agent.apply_budget_extension(amount)
-    else:
-        # Fallback for legacy test doubles.
-        ctx.budget = ctx.budget.__class__(
-            max_tokens=ctx.budget.max_tokens + amount,
-            max_iterations=ctx.budget.max_iterations,
-            max_cost=ctx.budget.max_cost,
-        )
-        new_max = ctx.budget.max_tokens
+    new_max = agent.apply_budget_extension(amount)
     return CommandResult(output=f"Budget extended by {amount:,} tokens. New max: {new_max:,}")
 
 
@@ -1205,10 +1196,6 @@ def _reject_command(agent: Any, arg: str) -> CommandResult:
             return CommandResult(output="Could not find pending change to reject.")
     return CommandResult(output="No pending changes to reject.")
 
-
-# ============================================================
-# Agent command handlers (rewritten with AgentRegistry)
-# ============================================================
 
 def _agents_command(agent: Any, arg: str) -> CommandResult:
     if not arg or arg == "list":
@@ -1930,10 +1917,6 @@ async def _mcp_command(agent: Any, arg: str) -> CommandResult:
 
     return CommandResult(output="MCP subcommands: list, tools, connect <name>, disconnect <name>, search <query>, stats")
 
-
-# ============================================================
-# Skills command handlers (full implementation)
-# ============================================================
 
 def _skills_command(agent: Any, arg: str) -> CommandResult:
     if not arg or arg == "list":
@@ -3143,11 +3126,6 @@ def _theme_command(app: Any, arg: str) -> CommandResult:
     return CommandResult(output="Theme switching not supported by this app.")
 
 
-# ============================================================
-# New feature command handlers (F2-F13 wiring)
-# ============================================================
-
-
 def _define_tool_command(agent: Any, arg: str) -> CommandResult:
     """Handle /define-tool — list or describe dynamic tool capabilities."""
     ctx = getattr(agent, "context", None)
@@ -3263,7 +3241,6 @@ def _orchestrate_command(agent: Any, arg: str) -> CommandResult:
 
 def _watch_command(agent: Any, arg: str) -> CommandResult:
     """Handle /watch — scan for inline AI trigger comments."""
-    from pathlib import Path
 
     from attocode.agent.watch import FileWatcher, WatchConfig
 
