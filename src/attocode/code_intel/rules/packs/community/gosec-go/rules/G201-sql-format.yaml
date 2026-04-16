@@ -1,0 +1,21 @@
+# Adapted from gosec rule 'G201 sql_format_string'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: G201-sql-format
+name: SQL string built via fmt.Sprintf
+message: SQL built with fmt.Sprintf — possible injection
+severity: high
+category: security
+languages: [go]
+confidence: 0.7
+cwe: CWE-89
+pattern: '\bfmt\.Sprintf\s*\(\s*"[^"]*\b(SELECT|INSERT|UPDATE|DELETE)\b'
+explanation: |
+  ``fmt.Sprintf`` formats values without SQL escaping. Any user-supplied
+  string in the format args can break the query and inject statements.
+recommendation: |
+  Use ``db.Exec(query, args...)`` / ``db.Query(query, args...)`` with
+  positional placeholders (``$1``, ``?``) so the driver handles escaping.
+references:
+  - https://github.com/securego/gosec
+  - https://cwe.mitre.org/data/definitions/89.html

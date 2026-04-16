@@ -1,0 +1,20 @@
+# Adapted from bandit rule 'B304 weak_cipher'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: B304-weak-des
+name: Use of weak DES cipher
+message: DES/3DES are cryptographically weak; use AES-GCM
+severity: high
+category: security
+languages: [python]
+confidence: 0.85
+cwe: CWE-327
+pattern: '\b(DES|TripleDES|ARC2|ARC4|Blowfish)\.new\s*\('
+explanation: |
+  DES has a 56-bit key (brute-forceable), 3DES is deprecated by NIST,
+  and RC4/RC2 have known biases. These ciphers should not be used.
+recommendation: |
+  Use AES-256-GCM via ``cryptography`` library
+  (``Cipher(algorithms.AES(key), modes.GCM(iv))``).
+references:
+  - https://bandit.readthedocs.io/en/latest/blacklists/blacklist_calls.html

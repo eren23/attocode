@@ -1,0 +1,20 @@
+# Adapted from gosec rule 'G401 weak_des_or_rc4_crypto'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: G401-weak-cipher
+name: Use of weak cipher (DES/RC4)
+message: DES and RC4 are cryptographically weak
+severity: high
+category: security
+languages: [go]
+confidence: 0.85
+cwe: CWE-327
+pattern: '\b(des|rc4)\.New(?:Cipher|TripleDESCipher)?\s*\('
+explanation: |
+  ``crypto/des`` and ``crypto/rc4`` are obsolete. DES has a 56-bit key
+  (brute-forceable); RC4 has known biases.
+recommendation: |
+  Use ``crypto/aes`` with GCM mode for symmetric encryption.
+references:
+  - https://github.com/securego/gosec
+  - https://pkg.go.dev/crypto/aes

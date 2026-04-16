@@ -1,0 +1,23 @@
+# Adapted from gosec rule 'G304 file_path_inclusion'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: G304-file-inclusion
+name: Variable file path passed to file IO
+message: Tainted file path — possible directory traversal
+severity: medium
+category: security
+languages: [go]
+confidence: 0.55
+cwe: CWE-22
+pattern: '\bos\.(Open|ReadFile|Create|OpenFile)\s*\(\s*[a-zA-Z_]\w*\s*[,)]'
+explanation: |
+  Reading or writing to a file path that comes from a variable (rather
+  than a const) risks directory traversal if the variable is influenced
+  by user input.
+recommendation: |
+  Validate the path against an allowlist or wrap with ``filepath.Clean``
+  + ``filepath.Rel`` to confirm the result stays within the intended
+  base directory.
+references:
+  - https://github.com/securego/gosec
+  - https://cwe.mitre.org/data/definitions/22.html

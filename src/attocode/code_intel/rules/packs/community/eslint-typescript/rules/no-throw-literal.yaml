@@ -1,0 +1,19 @@
+# Adapted from eslint rule 'no-throw-literal'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: no-throw-literal
+name: Throwing a non-Error literal
+message: Throw an Error subclass, not a raw string or object literal
+severity: medium
+category: correctness
+languages: [javascript, typescript]
+confidence: 0.8
+pattern: '\bthrow\s+[''"`{]'
+explanation: |
+  Throwing a string or object literal loses the stack trace and the
+  ``instanceof Error`` check that downstream catch handlers rely on.
+recommendation: |
+  ``throw new Error("...")`` (or a custom subclass) so callers get the
+  expected interface.
+references:
+  - https://eslint.org/docs/latest/rules/no-throw-literal

@@ -1,0 +1,21 @@
+# Adapted from gosec rule 'G103 unsafe_block'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: G103-unsafe-block
+name: Use of unsafe package
+message: Package 'unsafe' bypasses Go type safety
+severity: medium
+category: suspicious
+languages: [go]
+confidence: 0.85
+pattern: '\bunsafe\.(Pointer|Sizeof|Alignof|Offsetof|String|StringData|Slice|SliceData)\b'
+explanation: |
+  ``unsafe`` lets you bypass Go's type system and memory-safety
+  guarantees. Code paths that touch ``unsafe`` need extra review for
+  data-race, alignment, and pointer-aliasing bugs.
+recommendation: |
+  Audit each ``unsafe`` call site. Document why type safety must be
+  bypassed and which invariants the surrounding code maintains.
+references:
+  - https://github.com/securego/gosec
+  - https://pkg.go.dev/unsafe

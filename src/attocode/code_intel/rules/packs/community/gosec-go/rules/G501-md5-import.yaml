@@ -1,0 +1,21 @@
+# Adapted from gosec rule 'G501 weak_md5_hash'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: G501-md5-import
+name: Import of crypto/md5
+message: crypto/md5 is cryptographically broken
+severity: medium
+category: security
+languages: [go]
+confidence: 0.7
+cwe: CWE-327
+pattern: '"crypto/md5"'
+explanation: |
+  MD5 is vulnerable to collision attacks. Importing ``crypto/md5`` is a
+  smell — even when the use is intentional, it's worth a comment
+  explaining why.
+recommendation: |
+  Use ``crypto/sha256`` for hashing. If MD5 is needed for non-security
+  reasons (legacy file formats, etag compatibility), document why.
+references:
+  - https://github.com/securego/gosec

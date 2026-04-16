@@ -1,0 +1,21 @@
+# Adapted from bandit rule 'B303 weak_md5_hash'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: B303-weak-md5
+name: Use of weak MD5 hash
+message: MD5 is cryptographically broken; use SHA-256 or stronger
+severity: high
+category: security
+languages: [python]
+confidence: 0.85
+cwe: CWE-327
+pattern: '\bhashlib\.md5\s*\('
+explanation: |
+  MD5 is vulnerable to collision attacks and is no longer considered
+  cryptographically secure. Bandit B303 flags any use as a security issue.
+recommendation: |
+  Use ``hashlib.sha256`` (or SHA-3) for cryptographic hashing. If the use
+  is non-security (e.g. cache key), pass ``usedforsecurity=False`` (Python 3.9+).
+references:
+  - https://bandit.readthedocs.io/en/latest/blacklists/blacklist_calls.html
+  - https://cwe.mitre.org/data/definitions/327.html

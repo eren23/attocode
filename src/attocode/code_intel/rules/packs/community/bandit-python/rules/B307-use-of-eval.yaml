@@ -1,0 +1,22 @@
+# Adapted from bandit rule 'B307 use_of_eval'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: B307-use-of-eval
+name: Use of dynamic code evaluation
+message: Avoid eval/exec on dynamic input — leads to arbitrary code execution
+severity: critical
+category: security
+languages: [python]
+confidence: 0.8
+cwe: CWE-95
+pattern: '\b(eval|exec)\s*\('
+explanation: |
+  ``eval`` and ``exec`` interpret arbitrary strings as Python code. If any
+  part of the input is influenced by an external source, an attacker can
+  execute commands.
+recommendation: |
+  Use ``ast.literal_eval`` for trusted literal expressions, or a proper
+  parser/DSL for dynamic logic.
+references:
+  - https://bandit.readthedocs.io/en/latest/blacklists/blacklist_calls.html
+  - https://cwe.mitre.org/data/definitions/95.html

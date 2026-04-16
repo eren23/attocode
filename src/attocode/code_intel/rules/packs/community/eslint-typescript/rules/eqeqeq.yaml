@@ -1,0 +1,20 @@
+# Adapted from eslint rule 'eqeqeq'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: eqeqeq
+name: Loose equality comparison
+message: Use === / !== instead of == / !=
+severity: medium
+category: correctness
+languages: [javascript, typescript]
+confidence: 0.85
+pattern: '[^!=<>]==[^=]|[^!]!=[^=]'
+explanation: |
+  ``==`` and ``!=`` perform implicit type coercion, leading to
+  surprising comparisons (``"" == 0`` is true, ``[] == false`` is true).
+  Strict equality avoids the trap.
+recommendation: |
+  Use ``===`` and ``!==``. If type coercion is genuinely intended,
+  add a comment so the next reader knows it's deliberate.
+references:
+  - https://eslint.org/docs/latest/rules/eqeqeq

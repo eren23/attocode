@@ -1,0 +1,20 @@
+# Adapted from eslint rule 'no-var'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: no-var
+name: Use of var keyword
+message: Prefer let or const over var
+severity: low
+category: style
+languages: [javascript, typescript]
+confidence: 0.95
+pattern: '^\s*var\s+\w'
+explanation: |
+  ``var`` declarations are function-scoped and hoisted, leading to
+  surprising behavior. ``let`` and ``const`` are block-scoped and
+  match developer intuition.
+recommendation: |
+  Replace ``var`` with ``const`` for constants or ``let`` for
+  reassignable bindings.
+references:
+  - https://eslint.org/docs/latest/rules/no-var
