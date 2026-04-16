@@ -55,6 +55,22 @@ jobs:
       - name: Verify all extras resolve
         run: uv sync --locked --all-extras
 
+  pack-license-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (PyYAML for the script)
+        run: uv sync --locked --extra dev
+
+      - name: Verify community pack licenses
+        run: uv run python scripts/check_pack_licenses.py
+
   research-integration:
     runs-on: ubuntu-latest
 
