@@ -84,34 +84,44 @@ class RuleBenchEvaluator:
         if self._base_registry is not None:
             return self._base_registry
 
+        from attocode.code_intel.rules.packs.pack_loader import (
+            _EXAMPLES_DIR,  # type: ignore[attr-defined]
+            list_example_packs,
+        )
+
         registry = RuleRegistry()
         loaded_packs: set[str] = set()
+        # Explicit pack filter, or "all packs found on disk" when empty.
+        explicit_filter = bool(self._packs)
+        wanted = set(self._packs)
 
-        # 1. Shipped example packs the harness was asked to load
-        if self._packs:
-            from attocode.code_intel.rules.packs.pack_loader import (
-                _EXAMPLES_DIR,  # type: ignore[attr-defined]
+        # 1. Shipped example packs
+        example_manifests = list_example_packs() if not explicit_filter else [
+            type("M", (), {"name": p})() for p in self._packs
+        ]
+        for manifest in example_manifests:
+            pack = manifest.name
+            if explicit_filter and pack not in wanted:
+                continue
+            pack_dir = _EXAMPLES_DIR / pack
+            if not pack_dir.is_dir():
+                continue
+            rules_dir = pack_dir / "rules"
+            if not rules_dir.is_dir():
+                rules_dir = pack_dir
+            rules = load_yaml_rules(
+                rules_dir, source=RuleSource.PACK, pack=pack,
             )
-            for pack in self._packs:
-                pack_dir = _EXAMPLES_DIR / pack
-                if not pack_dir.is_dir():
-                    continue
-                rules_dir = pack_dir / "rules"
-                if not rules_dir.is_dir():
-                    rules_dir = pack_dir
-                rules = load_yaml_rules(
-                    rules_dir, source=RuleSource.PACK, pack=pack,
-                )
-                for r in rules:
-                    registry.register(r)
-                loaded_packs.add(pack)
+            for r in rules:
+                registry.register(r)
+            loaded_packs.add(pack)
 
         # 2. Community packs (when included)
         if self._include_community:
             community_dir = get_community_pack_dir()
             if community_dir.is_dir():
                 for manifest in list_community_packs():
-                    if self._packs and manifest.name not in self._packs:
+                    if explicit_filter and manifest.name not in wanted:
                         continue
                     pack_dir = community_dir / manifest.name
                     rules_dir = pack_dir / "rules"

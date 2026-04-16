@@ -102,6 +102,10 @@ def cmd_baseline(args: argparse.Namespace) -> None:
 
     result = asyncio.run(bench["evaluator"].evaluate(_PROJECT_ROOT))
 
+    if not result.success:
+        print(f"Baseline evaluation failed: {result.error}")
+        sys.exit(1)
+
     print(f"Composite score: {result.metric_value:.4f}")
     print()
 
