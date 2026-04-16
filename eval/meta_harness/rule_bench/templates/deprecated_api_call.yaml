@@ -1,0 +1,23 @@
+# Template: flag calls to a deprecated API.
+template_id: deprecated_api_call
+description: Flag calls to a deprecated API and suggest a replacement
+slots:
+  - name: language
+    kind: language
+  - name: api_pattern
+    kind: regex_fragment
+    description: Regex matching the deprecated API call (e.g. ``foo\\.bar\\(``)
+  - name: replacement_hint
+    kind: text
+    description: Short text describing the recommended replacement
+rule:
+  id: 'deprecated/{{language}}/{{slot_safe_name}}'
+  name: Deprecated API call
+  message: '{{api_pattern}} is deprecated; use {{replacement_hint}}'
+  severity: medium
+  category: deprecated
+  languages:
+    - '{{language}}'
+  pattern: '{{api_pattern}}'
+  confidence: 0.7
+  recommendation: 'Replace with {{replacement_hint}}'

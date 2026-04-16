@@ -1,0 +1,21 @@
+# Template: flag string concatenation inside a loop body.
+template_id: string_concat_in_loop
+description: Flag in-loop string concatenation patterns
+slots:
+  - name: language
+    kind: language
+  - name: concat_pattern
+    kind: regex_fragment
+    description: |
+      Regex matching the in-loop concatenation (e.g. ``\\+=\\s*[''"]``)
+rule:
+  id: 'perf/{{language}}/{{slot_safe_name}}-concat-loop'
+  name: String concatenation in loop
+  message: 'In-loop concatenation creates O(N^2) intermediate strings'
+  severity: low
+  category: performance
+  languages:
+    - '{{language}}'
+  pattern: '{{concat_pattern}}'
+  confidence: 0.5
+  recommendation: 'Use a builder/buffer/join instead of += inside the loop'

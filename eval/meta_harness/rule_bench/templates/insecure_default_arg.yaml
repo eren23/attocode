@@ -1,0 +1,22 @@
+# Template: flag an insecure default argument value.
+template_id: insecure_default_arg
+description: Flag an insecure default that callers can leave at its risky value
+slots:
+  - name: language
+    kind: language
+  - name: arg_pattern
+    kind: regex_fragment
+    description: Regex matching the insecure default literal in code
+  - name: severity
+    kind: enum:critical|high|medium|low
+rule:
+  id: 'security/{{language}}/{{slot_safe_name}}-default'
+  name: Insecure default argument
+  message: 'Default {{arg_pattern}} is insecure'
+  severity: '{{severity}}'
+  category: security
+  languages:
+    - '{{language}}'
+  pattern: '{{arg_pattern}}'
+  confidence: 0.65
+  recommendation: 'Override the default with a safer value'

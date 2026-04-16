@@ -1,0 +1,23 @@
+# Template: flag a function call whose error/exception result isn't checked.
+template_id: missing_error_check
+description: Flag a call that returns an error/exception path that isn't handled
+slots:
+  - name: language
+    kind: language
+  - name: call_pattern
+    kind: regex_fragment
+    description: Regex matching the unchecked call expression
+  - name: required_check
+    kind: text
+    description: How callers should handle the error (e.g. ``check err != nil``)
+rule:
+  id: 'safety/{{language}}/{{slot_safe_name}}-unchecked'
+  name: Missing error check
+  message: '{{call_pattern}} return value should be {{required_check}}'
+  severity: medium
+  category: correctness
+  languages:
+    - '{{language}}'
+  pattern: '{{call_pattern}}'
+  confidence: 0.6
+  recommendation: '{{required_check}}'

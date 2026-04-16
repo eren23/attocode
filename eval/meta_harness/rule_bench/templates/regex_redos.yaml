@@ -1,0 +1,24 @@
+# Template: flag a regex pattern with classic ReDoS shape.
+template_id: regex_redos
+description: Flag a regex literal that exhibits a known ReDoS-prone shape
+slots:
+  - name: language
+    kind: language
+  - name: pattern_signature
+    kind: regex_fragment
+    description: |
+      Regex matching the suspect regex literal — typically nested
+      quantifiers like ``\\(\\.\\*\\)\\+`` or ``\\(\\\\w\\+\\)\\+``.
+rule:
+  id: 'safety/{{language}}/{{slot_safe_name}}-redos'
+  name: Potential ReDoS regex
+  message: 'Regex {{pattern_signature}} has ReDoS-prone shape'
+  severity: medium
+  category: performance
+  languages:
+    - '{{language}}'
+  pattern: '{{pattern_signature}}'
+  confidence: 0.55
+  recommendation: |
+    Rewrite to avoid nested quantifiers; consider RE2 / linear-time engines
+    or pre-validate input length.
