@@ -6,7 +6,6 @@ parameter configurations based on failure analysis.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -14,7 +13,8 @@ from typing import Any
 
 import yaml
 
-from eval.meta_harness.harness_config import PARAMETER_RANGES, HarnessConfig
+from eval.meta_harness._llm_client import call_llm, diff_from_defaults, load_env
+from eval.meta_harness.harness_config import HarnessConfig
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,9 @@ def _build_prompt(
     if history:
         recent = history[-10:]
         lines = []
+        defaults = HarnessConfig.default().to_dict()
         for h in recent:
-            cfg_changes = _diff_from_defaults(h.get("config", {}))
+            cfg_changes = diff_from_defaults(h.get("config", {}), defaults)
             lines.append(
                 f"  - score={h.get('score', 0):.4f} status={h.get('status', '?')} "
                 f"changes: {cfg_changes}"
@@ -198,75 +199,16 @@ def propose_configs_llm(
     Returns:
         List of (HarnessConfig, hypothesis) tuples.
     """
-    _load_env()
+    load_env()
 
     prompt = _build_prompt(current_config, eval_result, history, n_candidates)
-    text = _call_llm(prompt, model)
+    text = call_llm(prompt, model)
     return _parse_candidates(text)
 
 
-def _call_llm(prompt: str, model: str = "") -> str:
-    """Call the LLM via OpenRouter or Anthropic direct."""
-    import openai
-
-    or_key = os.environ.get("OPENROUTER_API_KEY", "")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-
-    if or_key:
-        # OpenRouter via OpenAI-compatible API
-        if not model:
-            model = "anthropic/claude-sonnet-4"
-        client = openai.OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=or_key,
-        )
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.choices[0].message.content or ""
-
-    elif anthropic_key:
-        import anthropic
-        if not model:
-            model = "claude-sonnet-4-20250514"
-        client = anthropic.Anthropic(api_key=anthropic_key)
-        response = client.messages.create(
-            model=model,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.content[0].text
-
-    else:
-        raise RuntimeError(
-            "No API key found. Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY "
-            "in environment or .env file."
-        )
-
-
-def _load_env() -> None:
-    """Load API keys from .env files if not already in environment."""
-    needed = ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"]
-    if any(os.environ.get(k) for k in needed):
-        return
-
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    for env_file in [".env", ".env.dev"]:
-        env_path = os.path.join(project_root, env_file)
-        if not os.path.isfile(env_path):
-            continue
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("#") or "=" not in line:
-                    continue
-                key, _, value = line.partition("=")
-                key = key.strip()
-                value = value.strip().strip("'\"")
-                if key in needed and value:
-                    os.environ[key] = value
+def _diff_from_defaults(config: dict[str, Any]) -> str:
+    """Backward-compat shim — see :func:`_llm_client.diff_from_defaults`."""
+    return diff_from_defaults(config, HarnessConfig.default().to_dict())
 
 
 def _parse_candidates(text: str) -> list[tuple[HarnessConfig, str]]:
