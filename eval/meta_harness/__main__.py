@@ -21,6 +21,8 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, os.path.join(_PROJECT_ROOT, "src"))
     sys.path.insert(0, _PROJECT_ROOT)
 
+from eval.meta_harness.paths import ensure_results_dir, results_dir as _results_dir_fn
+
 
 def cmd_baseline(args: argparse.Namespace) -> None:
     """Evaluate current default config and save as baseline."""
@@ -68,8 +70,7 @@ def cmd_baseline(args: argparse.Namespace) -> None:
             print()
 
     # Save baseline
-    output_dir = os.path.join(_PROJECT_ROOT, "eval", "meta_harness", "results")
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = ensure_results_dir()
     baseline_path = os.path.join(output_dir, "baseline.json")
     baseline_data = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -121,7 +122,7 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
 
 def cmd_report(args: argparse.Namespace) -> None:
     """Show summary of all evaluation results."""
-    results_dir = os.path.join(_PROJECT_ROOT, "eval", "meta_harness", "results")
+    results_dir = _results_dir_fn()
 
     # Load baseline
     baseline_path = os.path.join(results_dir, "baseline.json")

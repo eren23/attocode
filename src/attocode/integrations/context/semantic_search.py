@@ -208,49 +208,63 @@ class SearchScoringConfig:
     allows the meta-harness optimization loop to explore better configurations.
     """
 
-    # BM25 base parameters
-    bm25_k1: float = 2.8      # optimized from 1.5 — higher term saturation
-    bm25_b: float = 0.25      # optimized from 0.75 — less length normalization
+    # BM25 base parameters (re-optimized with vectors active)
+    bm25_k1: float = 2.2      # was 1.5 → 2.8 (kw-only) → 2.2 (with vectors)
+    bm25_b: float = 0.4       # was 0.75 → 0.05 (kw-only) → 0.4 (with vectors)
 
     # Graduated symbol name match boosts
-    name_exact_boost: float = 5.5   # optimized from 3.0
-    name_substring_boost: float = 3.0   # optimized from 2.0
-    name_token_boost: float = 2.2   # optimized from 1.5
+    name_exact_boost: float = 4.0    # less aggressive than kw-only optimum
+    name_substring_boost: float = 2.5
+    name_token_boost: float = 2.0
 
     # Definition-type boosts
-    class_boost: float = 1.6   # optimized from 1.3
-    function_boost: float = 1.4   # optimized from 1.15
-    method_boost: float = 1.3   # optimized from 1.1
+    class_boost: float = 1.4
+    function_boost: float = 1.25
+    method_boost: float = 1.15
 
     # Path relevance: source directory boost
-    src_dir_boost: float = 1.3   # optimized from 1.2
+    src_dir_boost: float = 1.4
 
     # Multi-term coverage bonuses
-    multi_term_high_bonus: float = 2.5   # optimized from 1.4
-    multi_term_med_bonus: float = 1.8    # optimized from 1.15
-    multi_term_high_threshold: float = 0.8
-    multi_term_med_threshold: float = 0.5
+    multi_term_high_bonus: float = 2.2
+    multi_term_med_bonus: float = 1.6
+    multi_term_high_threshold: float = 0.65
+    multi_term_med_threshold: float = 0.35
 
-    # File type penalties
-    non_code_penalty: float = 0.3
-    config_penalty: float = 0.15
-    test_penalty: float = 0.7
+    # File type penalties (less harsh when vector search adds noise)
+    non_code_penalty: float = 0.6
+    config_penalty: float = 0.4
+    test_penalty: float = 0.9
 
     # Exact phrase bonus
-    exact_phrase_bonus: float = 2.8   # optimized from 1.2
+    exact_phrase_bonus: float = 2.8
 
-    # Deduplication: max chunks per file in results
-    max_chunks_per_file: int = 2
+    # Deduplication: more diversity per file when vectors return semantic neighbors
+    max_chunks_per_file: int = 6
 
-    # Two-stage retrieval parameters
-    wide_k_multiplier: int = 8    # optimized from 5
-    wide_k_min: int = 100         # optimized from 50
-    rrf_k: int = 35               # optimized from 60 — sharper fusion
+    # Two-stage retrieval — wider when vector noise is present, smoother fusion
+    wide_k_multiplier: int = 15
+    wide_k_min: int = 200
+    rrf_k: int = 80               # smoother fusion (was 35 in kw-only optimum)
 
     # Algorithmic signals (Phase 1 improvements)
+    # Ablation-validated defaults: importance helps (+0.4%), rerank hurts (-1.4%) with aggressive threshold
     importance_weight: float = 0.5   # file importance boost (0 = disabled)
-    frecency_weight: float = 0.2     # frecency boost (0 = disabled)
-    rerank_confidence_threshold: float = 0.4  # auto-rerank when top score below this (0 = disabled)
+    frecency_weight: float = 0.2     # frecency boost (0 = disabled, currently no tracking data)
+    rerank_confidence_threshold: float = 0.0  # disabled by default — ablation showed it hurts on code queries; set >0 to enable
+
+    # Phase 2: Dependency proximity — boost results near high-ranking files in the import graph
+    dep_proximity_weight: float = 0.3   # 0 = disabled
+    dep_proximity_seed_count: int = 5    # top-N results used as "seeds" for neighborhood discovery
+
+    # Phase 3a: Adaptive fusion — vary keyword/vector weighting by keyword confidence
+    # When keyword search produces a confident top result, downweight vectors (avoid semantic noise)
+    # When keyword is uncertain, use balanced fusion to let vectors fill the gap
+    adaptive_fusion: bool = True               # True = adapt rrf_k by keyword confidence
+    kw_confidence_threshold: float = 0.5       # (legacy, unused with current strategy)
+    kw_dominance_threshold: float = 1.5        # top-1/top-2 score ratio for "dominant" classification
+    rrf_k_keyword_high_conf: int = 10          # sharp k_keyword when keyword is confident
+    rrf_k_vector_low_conf: int = 250           # smooth k_vector when keyword is confident (downweight)
 
 
 @dataclass(slots=True)
@@ -299,6 +313,7 @@ class SemanticSearchManager:
     _summarizer: Any = field(default=None, repr=False)
     _importance_scores: dict[str, float] = field(default_factory=dict, repr=False)
     _frecency_tracker: Any = field(default=None, repr=False)
+    _dep_graph: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         # Defer provider creation to first use (_ensure_provider) to avoid
@@ -322,8 +337,12 @@ class SemanticSearchManager:
         try:
             from attocode.integrations.context.codebase_context import CodebaseContextManager
             ctx = CodebaseContextManager(self.root_dir)
+            ctx._ensure_fresh()
             for fi in ctx._files:
                 self._importance_scores[fi.relative_path] = fi.importance
+            # Use sentinel to avoid reload if genuinely empty
+            if not self._importance_scores:
+                self._importance_scores["__empty__"] = 0.0
         except Exception:
             logger.debug("Failed to load importance scores", exc_info=True)
 
@@ -343,6 +362,63 @@ class SemanticSearchManager:
             return float(result.score) if result else 0.0
         except Exception:
             return 0.0
+
+    def _get_dep_graph(self) -> Any:
+        """Lazily load the dependency graph from CodebaseContextManager."""
+        if self._dep_graph is False:
+            return None
+        if self._dep_graph is None:
+            try:
+                from attocode.integrations.context.codebase_context import CodebaseContextManager
+                ctx = CodebaseContextManager(self.root_dir)
+                ctx._ensure_fresh()
+                self._dep_graph = ctx.dependency_graph
+                if self._dep_graph is None:
+                    self._dep_graph = False
+                    return None
+            except Exception:
+                logger.debug("Failed to load dependency graph", exc_info=True)
+                self._dep_graph = False
+                return None
+        return self._dep_graph
+
+    def _apply_dependency_boost(
+        self,
+        fused: list[tuple[str, float]],
+        result_map: dict[str, SemanticSearchResult],
+        weight: float,
+        seed_count: int,
+    ) -> list[tuple[str, float]]:
+        """Boost results that are in the dependency neighborhood of top-N seed results.
+
+        For each of the top seed_count results, find files that import them or are
+        imported by them. Any result file in this neighborhood gets a score boost.
+        """
+        graph = self._get_dep_graph()
+        if graph is None or not fused:
+            return fused
+
+        # Collect neighborhood files from top-N seeds
+        neighborhood: set[str] = set()
+        for item_id, _ in fused[:seed_count]:
+            result = result_map.get(item_id)
+            if not result:
+                continue
+            fp = result.file_path
+            neighborhood.update(graph.get_imports(fp))
+            neighborhood.update(graph.get_importers(fp))
+
+        if not neighborhood:
+            return fused
+
+        # Apply boost to any result in the neighborhood
+        boosted: list[tuple[str, float]] = []
+        for item_id, score in fused:
+            result = result_map.get(item_id)
+            if result and result.file_path in neighborhood:
+                score *= (1.0 + weight)
+            boosted.append((item_id, score))
+        return sorted(boosted, key=lambda x: x[1], reverse=True)
 
     def _ensure_provider(self) -> None:
         """Initialize embedding provider on first use."""
@@ -689,7 +765,44 @@ class SemanticSearchManager:
             for r in keyword_results
         ])
 
-        fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked, k=cfg.rrf_k)
+        # Adaptive fusion: trust keyword more only when BOTH lists agree on the top result.
+        # Agreement = vector and keyword identify the same top file → keyword is genuinely correct.
+        # Disagreement = treat both as uncertain, use balanced fusion (vectors may have semantic insight).
+        # This avoids over-trusting keyword when its top match is high-dominance but wrong (Redis case).
+        if cfg.adaptive_fusion and keyword_ranked and vector_ranked:
+            kw_top = keyword_ranked[0][1] if keyword_ranked else 0.0
+            kw_second = keyword_ranked[1][1] if len(keyword_ranked) > 1 else 0.0
+            dominance = (kw_top / kw_second) if kw_second > 0 else float("inf")
+
+            # Extract file path from top results (id format: "type:path:name")
+            def _file_of(item_id: str) -> str:
+                parts = item_id.split(":", 2)
+                return parts[1] if len(parts) >= 2 else item_id
+
+            kw_top_file = _file_of(keyword_ranked[0][0])
+            # Cross-modal agreement: keyword top-1 file appears in vector top-3
+            # Strict agreement protects redis-style queries (where vectors are correct
+            # and keyword is wrong) — keyword shouldn't be trusted unless vectors confirm.
+            vec_top_files = {_file_of(r[0]) for r in vector_ranked[:3]}
+            agreement = kw_top_file in vec_top_files
+            high_confidence = dominance >= cfg.kw_dominance_threshold and agreement
+
+            if high_confidence:
+                k_keyword = cfg.rrf_k_keyword_high_conf
+                k_vector = cfg.rrf_k_vector_low_conf
+            else:
+                k_keyword = cfg.rrf_k
+                k_vector = cfg.rrf_k
+
+            # Per-list weighted RRF (inline to support per-list k)
+            fused_dict: dict[str, float] = {}
+            for rank, (item_id, _) in enumerate(vector_ranked):
+                fused_dict[item_id] = fused_dict.get(item_id, 0.0) + 1.0 / (k_vector + rank + 1)
+            for rank, (item_id, _) in enumerate(keyword_ranked):
+                fused_dict[item_id] = fused_dict.get(item_id, 0.0) + 1.0 / (k_keyword + rank + 1)
+            fused = sorted(fused_dict.items(), key=lambda x: x[1], reverse=True)
+        else:
+            fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked, k=cfg.rrf_k)
 
         # Build result lookup for fast access
         result_map: dict[str, SemanticSearchResult] = {}
@@ -715,6 +828,14 @@ class SemanticSearchManager:
             if top_score < cfg.rerank_confidence_threshold:
                 rerank_k = min(len(fused), 3 * top_k)
                 fused = self._rerank(query, fused[:rerank_k], result_map, top_k)
+
+        # Dependency proximity boost: files structurally close to top seeds get a bump
+        if cfg.dep_proximity_weight > 0 and fused:
+            fused = self._apply_dependency_boost(
+                fused, result_map,
+                weight=cfg.dep_proximity_weight,
+                seed_count=cfg.dep_proximity_seed_count,
+            )
 
         # Frecency boost: recently-accessed files get a score bump
         if cfg.frecency_weight > 0:
@@ -1417,8 +1538,9 @@ class SemanticSearchManager:
         imports = [imp.module for imp in ast.imports[:20]]
         symbols = ast.get_symbols()[:20]
         summary_parts = []
-        if ast.docstring:
-            summary_parts.append(ast.docstring[:200])
+        file_doc = getattr(ast, "docstring", None)
+        if file_doc:
+            summary_parts.append(file_doc[:200])
         if imports:
             summary_parts.append(f"imports: {', '.join(imports)}")
         if symbols:

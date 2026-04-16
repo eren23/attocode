@@ -26,6 +26,7 @@ import yaml
 
 from eval.meta_harness.evaluator import CodeIntelBenchEvaluator
 from eval.meta_harness.harness_config import PARAMETER_RANGES, HarnessConfig
+from eval.meta_harness.paths import results_dir as default_results_dir
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +69,7 @@ class MetaHarnessRunner:
     ) -> None:
         self._iterations = iterations
         self._candidates_per_iter = candidates_per_iteration
-        self._results_dir = Path(results_dir or os.path.join(
-            _PROJECT_ROOT, "eval", "meta_harness", "results",
-        ))
+        self._results_dir = Path(results_dir or default_results_dir())
         self._propose_mode = propose_mode
 
         self._evaluator = CodeIntelBenchEvaluator(

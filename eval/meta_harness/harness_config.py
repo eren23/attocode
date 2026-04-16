@@ -38,6 +38,14 @@ PARAMETER_RANGES: dict[str, tuple[float, float]] = {
     "wide_k_multiplier": (2, 15),
     "wide_k_min": (10, 200),
     "rrf_k": (10, 200),
+    "importance_weight": (0.0, 2.0),
+    "frecency_weight": (0.0, 1.0),
+    "rerank_confidence_threshold": (0.0, 0.9),
+    "dep_proximity_weight": (0.0, 1.0),
+    "dep_proximity_seed_count": (1, 15),
+    "kw_dominance_threshold": (1.0, 5.0),
+    "rrf_k_keyword_high_conf": (5, 60),
+    "rrf_k_vector_low_conf": (50, 500),
 }
 
 # Valid ranges for context assembly parameters
