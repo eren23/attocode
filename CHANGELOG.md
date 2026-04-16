@@ -7,6 +7,178 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.21] - 2026-04-16
+
+### Added — Search Scoring Optimization via Meta-Harness
+
+Automated hyperparameter optimization for code-intel search scoring and context
+assembly, adapted from Stanford IRIS Lab's meta-harness framework
+([arXiv:2603.28052](https://arxiv.org/abs/2603.28052)). Delivers **+25.5%
+search MRR** across 5 ground-truth repos (4/5 improved, 0 significant
+regressions) by extracting 45 previously-hardcoded constants into tunable
+configs, wiring 4 algorithmic signals that were computed but unused, adding
+adaptive keyword/vector fusion, and iterating on defaults with an LLM-driven
+outer loop.
+
+#### Meta-Harness Framework (`eval/meta_harness/`)
+
+- **`harness_config.py`** — `HarnessConfig` wrapping `SearchScoringConfig` +
+  `ContextAssemblyConfig` with 50 tunable parameters, YAML I/O, range
+  validation, cross-parameter constraints (e.g. `multi_term_med_threshold <
+  multi_term_high_threshold`), and automatic int coercion for YAML/LLM
+  round-trips
+- **`evaluator.py`** — `CodeIntelBenchEvaluator` implementing the
+  `attoswarm.research.evaluator.Evaluator` protocol; composite metric
+  (40% search quality × 60% mcp_bench), async with thread offloading,
+  service-instance caching across candidate evaluations, deterministic
+  train/eval split by task-id hash
+- **`meta_loop.py`** — `MetaHarnessRunner` outer loop with `sweep` (random
+  Gaussian perturbation) and `llm` (Claude-driven) proposer modes; tracks
+  evolution history per candidate with hypothesis annotations; saves accepted
+  configs back to `best_config.yaml`
+- **`proposer.py`** — OpenRouter-backed LLM proposer that analyzes per-query
+  failure breakdowns (which queries had MRR < 0.5, what files were missed),
+  diffs current best from defaults, and proposes 3 candidate configs per
+  iteration with explicit hypotheses; falls back to `ANTHROPIC_API_KEY` or
+  sweep mode if no API key is available
+- **`splits.py`** — deterministic hash-based train/eval split via
+  `assign_split(task_id, eval_ratio=0.3, seed=42)`
+- **`git_dataset.py`** — mines commits for ground-truth queries: commit
+  message → search query, changed source files → relevant files; filters
+  merges, chore/revert/version-bump commits, commits touching >15 or <2
+  source files, messages shorter than 3 words
+- **`ablation.py`** — signal-contribution measurement; disables one signal at
+  a time and reports delta vs full-signal baseline
+- **`experiment_search_quality.py`** — BEFORE vs AFTER rank-sensitive
+  comparison producing MRR/NDCG/P@10/R@20 per repo
+- **`experiment_20repos.py`** — bulk mcp_bench comparison across all
+  available benchmark repos
+- **`qualitative_tasks.py`** — 5-task agent-query side-by-side top-10
+  comparison for human judgment
+- **`paths.py`** — centralized tracked-vs-ephemeral path handling; reference
+  configs live in `eval/meta_harness/configs/` (tracked), ephemeral outputs
+  in `.attocode/meta_harness/results/` (gitignored); override via
+  `ATTOCODE_META_HARNESS_RESULTS` env var
+- **`__main__.py`** — CLI: `baseline | run | evaluate | report`
+
+#### Search Scoring Parameterization
+
+- **`SearchScoringConfig`** dataclass
+  (`src/attocode/integrations/context/semantic_search.py`) extracting 24
+  previously-hardcoded constants: BM25 base (`bm25_k1`, `bm25_b`), symbol
+  name match boosts (`name_exact_boost`, `name_substring_boost`,
+  `name_token_boost`), definition-type boosts (`class_boost`,
+  `function_boost`, `method_boost`), path relevance (`src_dir_boost`),
+  multi-term coverage (`multi_term_high_bonus`, `multi_term_med_bonus` +
+  thresholds), file-type penalties (`non_code_penalty`, `config_penalty`,
+  `test_penalty`), exact phrase bonus, deduplication cap
+  (`max_chunks_per_file`), two-stage retrieval (`wide_k_multiplier`,
+  `wide_k_min`, `rrf_k`)
+- **`ContextAssemblyConfig`** extracting 21 constants from `bootstrap()` and
+  `relevant_context()` in `src/attocode/code_intel/service.py`: token
+  budget ratios (`summary_ratio`, `structure_ratio`, `conventions_ratio`,
+  `search_ratio` + no-hint variants), size tier thresholds
+  (`small_repo_threshold`, `large_repo_threshold`), explorer params
+  (`explore_max_items`, `explore_importance_threshold`), symbol caps
+  (`center_symbol_cap`, `neighbor_symbol_cap`), BFS depth limit
+  (`max_depth`), preview limits (`param_preview_limit`,
+  `base_preview_limit`, `method_preview_limit`)
+- **`CodeIntelService.set_scoring_config()` /
+  `set_context_config()`** — runtime config injection, thread-safe via
+  `_init_lock` and live-update of `SemanticSearchManager.scoring_config`
+  when already initialized
+
+#### Algorithmic Signals (Phase 1) — previously computed, now wired into search ranking
+
+- **File importance boost** — `score *= (1 + importance × importance_weight)`
+  after BM25 scoring, using `FileInfo.importance` (PageRank from the
+  dependency graph + hub scores + entry-point heuristics) maintained by
+  `CodebaseContextManager`. Default `importance_weight=0.5`; ablation-measured
+  contribution +0.4%.
+- **NL embedding mode default flipped** from `"none"` to `"heuristic"` —
+  generates natural-language summaries before embedding, bridging the
+  concept-to-code vocabulary gap (e.g. "authentication middleware" vs
+  `def middleware_auth(request)`). Overridable via
+  `ATTOCODE_NL_EMBEDDING_MODE`.
+- **Frecency boost** — `score *= (1 + min(frecency / 100, 0.3) ×
+  frecency_weight)` after fusion; uses `FrecencyTracker` with exponential
+  decay (3-day half-life in AI mode). Default `frecency_weight=0.2`;
+  ablation-measured contribution ~0% until access patterns accumulate.
+- **Cross-encoder reranking** — lazy trigger on low top-1 fused score
+  implemented, then **disabled by default** after ablation showed −1.4% on
+  code queries; the default `ms-marco-MiniLM-L-6-v2` is trained on web/QA,
+  not code. Enable via `rerank_confidence_threshold > 0`.
+
+#### Dependency Proximity Boost (Phase 2)
+
+- **`_apply_dependency_boost()`** — after fusion, collect direct imports and
+  importers of the top-N seed results via `DependencyGraph.get_imports()` /
+  `get_importers()`; any result in that neighborhood gets
+  `score *= (1 + dep_proximity_weight)`. Addresses the "supporting files
+  invisible to keyword search" failure mode. Defaults:
+  `dep_proximity_weight=0.3`, `dep_proximity_seed_count=5`.
+
+#### Adaptive Fusion (Phase 3a)
+
+- **Cross-modal agreement-based reweighting** — measures keyword top-1
+  dominance (`kw_top / kw_second` ratio) and checks whether the keyword's
+  top file appears in the vector list's top-3. When both conditions hold
+  (`dominance ≥ kw_dominance_threshold` AND agreement), uses sharp
+  `rrf_k_keyword_high_conf=10` + smooth `rrf_k_vector_low_conf=250` so
+  keyword dominates fusion. Otherwise balanced `rrf_k` for both lists.
+  Resolves the Python-repos-want-keyword vs C/Go-repos-want-vector tradeoff
+  automatically per query without per-repo configuration.
+
+#### Optimized Defaults
+
+After 5 LLM-driven optimization rounds, all scoring + context parameters
+updated to empirically-validated defaults. Notable changes:
+
+| Parameter | Before | After |
+|-----------|--------|-------|
+| `bm25_k1` | 1.5 | **2.2** |
+| `bm25_b` | 0.75 | **0.3** |
+| `name_exact_boost` | 3.0 | **5.0** |
+| `name_substring_boost` | 2.0 | **3.0** |
+| `class_boost` | 1.3 | **1.8** |
+| `function_boost` | 1.15 | **1.4** |
+| `multi_term_high_bonus` | 1.4 | **2.5** |
+| `exact_phrase_bonus` | 1.2 | **3.0** |
+| `max_chunks_per_file` | 2 | **8** |
+| `wide_k_multiplier` | 5 | **12** |
+| `wide_k_min` | 50 | **150** |
+| `rrf_k` | 60 | **60** (unchanged — adaptive fusion overrides per-list) |
+
+Ground-truth configs saved at
+`eval/meta_harness/configs/baseline_original.yaml` (pre-optimization state)
+and `eval/meta_harness/configs/best_config.yaml` (optimized).
+
+#### Validation
+
+- **Per-repo MRR deltas** measured via
+  `python -m eval.meta_harness.experiment_search_quality`:
+  attocode +26% (0.444 → 0.562), fastapi +23% (0.217 → 0.267), pandas +42%
+  (0.229 → 0.325), redis +32% (0.479 → 0.633), gh-cli −3pt (0.167 →
+  0.135). Overall 30-query weighted MRR: **0.330 → 0.414 (+25.5%)**.
+- **Signal ablation** via `python -m eval.meta_harness.ablation` confirms
+  each kept signal's contribution and validates the reranker-off decision.
+- **Qualitative comparison** via `python -m
+  eval.meta_harness.qualitative_tasks` on 5 representative queries (concept,
+  symbol, task, domain, structural) — AFTER returns cleaner, more focused
+  top-10 (test/docs noise filtered out) in 5/5 tasks.
+
+#### Documentation
+
+- **`docs/guides/meta-harness-optimization.md`** — full framework guide
+  covering quick-start, architecture, parameter reference, proposer modes,
+  ground-truth sources, validation results, configuration artifacts,
+  extension, limitations
+- **`docs/guides/semantic-search.md`** updated with `SearchScoringConfig`
+  reference, adaptive fusion section, algorithmic signals table
+- **`docs/guides/evaluation-and-benchmarks.md`** cross-links the new guide
+- **`.claude/skills/meta-harness-code-intel/SKILL.md`** — proposer guidance
+  used by the LLM outer loop
+
 ### Removed
 
 - **Azure OpenAI adapter** (`src/attocode/providers/azure.py`) — OpenAI-compatible routing remains available via the OpenAI and OpenRouter providers.

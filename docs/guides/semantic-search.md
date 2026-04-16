@@ -81,6 +81,64 @@ Before BM25 scoring, the existing trigram index is queried for each token in the
 - Falls back to a pure Python loop if numpy is not installed
 - Server mode is unaffected (already uses pgvector HNSW)
 
+## Search Scoring Configuration
+
+All BM25 weights, boosts, penalties, fusion constants, and algorithmic-signal weights are exposed via the `SearchScoringConfig` dataclass (`src/attocode/integrations/context/semantic_search.py`). Defaults ship pre-tuned via the meta-harness optimization loop against a 5-repo ground-truth set; override at runtime via `CodeIntelService.set_scoring_config()`.
+
+```python
+from attocode.code_intel.service import CodeIntelService
+from attocode.integrations.context.semantic_search import SearchScoringConfig
+
+svc = CodeIntelService("/path/to/repo")
+svc.set_scoring_config(SearchScoringConfig(
+    bm25_k1=2.5,
+    name_exact_boost=6.0,
+    importance_weight=0.6,
+    rrf_k=40,
+))
+```
+
+The `ContextAssemblyConfig` dataclass similarly controls `bootstrap()` and `relevant_context()` — set via `svc.set_context_config()`.
+
+See [Meta-Harness Optimization](meta-harness-optimization.md) for the full parameter reference, proposer loop, and automated tuning workflow.
+
+### Parameter Summary (shipped defaults)
+
+| Category | Parameter | Default | Purpose |
+|----------|-----------|---------|---------|
+| BM25 | `bm25_k1`, `bm25_b` | 2.2, 0.3 | Term saturation, length normalization |
+| Name match | `name_exact_boost`, `name_substring_boost`, `name_token_boost` | 5.0, 3.0, 2.2 | Query term matches symbol name (exact / substring / tokenized) |
+| Definition | `class_boost`, `function_boost`, `method_boost` | 1.8, 1.4, 1.3 | Rank classes > functions > methods |
+| Path | `src_dir_boost` | 1.7 | Files under `src/`, `lib/`, `pkg/`, `core/`, etc. |
+| Coverage | `multi_term_high_bonus` (thresh 0.7), `multi_term_med_bonus` (thresh 0.4) | 2.5, 1.8 | Multi-term query coverage bonuses |
+| Penalty | `non_code_penalty`, `config_penalty`, `test_penalty` | 0.3, 0.15, 0.6 | Down-rank non-source files |
+| Phrase | `exact_phrase_bonus` | 3.0 | Query as substring of doc text |
+| Retrieval | `wide_k_multiplier`, `wide_k_min`, `rrf_k`, `max_chunks_per_file` | 12, 150, 60, 8 | Two-stage candidate width + fusion + dedup |
+
+### Algorithmic Signals
+
+| Signal | Weight param | Default | Ablation delta | Notes |
+|--------|--------------|---------|----------------|-------|
+| File importance | `importance_weight` | 0.5 | **+0.4%** | Uses PageRank + hub score from the dependency graph |
+| Frecency | `frecency_weight` | 0.2 | ~0% | Depends on recent access data |
+| Cross-encoder rerank | `rerank_confidence_threshold` | 0.0 (off) | **−1.4%** | Disabled by default; `ms-marco-MiniLM` was trained on web/QA, not code |
+| Dependency proximity | `dep_proximity_weight` | 0.3 | ~0% | Boosts imports/importers of top-N seeds |
+
+Run ablations yourself: `python -m eval.meta_harness.ablation --signals importance,frecency,rerank,dep_proximity`.
+
+## Adaptive Fusion
+
+Different codebases want different fusion behavior: Python repos (descriptive symbol names like `BudgetEnforcementMode`) are well-served by keyword-dominant fusion, while C/Go repos (terse names like `t_zset.c` for sorted-set implementation) need vector-dominant fusion. Adaptive fusion picks per query:
+
+1. Compute keyword dominance: `kw_top_1 / kw_top_2` (scores post-normalization).
+2. Check **cross-modal agreement**: does keyword's top file appear in vector's top-3?
+3. When **both** `dominance ≥ kw_dominance_threshold` (default 1.5) **and** agreement holds → use sharp `rrf_k_keyword_high_conf=10` + smooth `rrf_k_vector_low_conf=250`. Keyword dominates the fused ranking.
+4. Otherwise → use the balanced `rrf_k=60` for both lists.
+
+Enabled by default (`adaptive_fusion: true`). Disable by setting `adaptive_fusion=False` on the config if you prefer static RRF. Measured impact: recovers 90%+ of the keyword-only ceiling on Python repos while preserving vector wins on C/Go repos.
+
+Code: the adaptive branch lives inline in `SemanticSearchManager.search()` in `src/attocode/integrations/context/semantic_search.py` after the two-stage retrieval.
+
 ## Vector Store Backends
 
 | | SQLite (CLI mode) | pgvector (service mode) |

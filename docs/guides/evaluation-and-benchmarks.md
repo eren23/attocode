@@ -58,6 +58,21 @@ python -m eval.competitive
 python -m eval.competitive --report eval/competitive_report.md
 ```
 
+### Optimize search scoring automatically
+
+```bash
+# LLM-driven hyperparameter optimization across 5 repos
+python -m eval.meta_harness --search-repos attocode,fastapi,redis,gh-cli,pandas \
+    --no-split run --iterations 10 --propose-mode llm
+
+# BEFORE vs AFTER comparison (rank-sensitive MRR/NDCG/P@k/R@k)
+python -m eval.meta_harness.experiment_search_quality
+```
+
+See the [Meta-Harness Optimization](meta-harness-optimization.md) guide for the
+full framework: 50 tunable parameters, adaptive fusion, algorithmic signal
+wiring, and reproduction of the validated +25.5% MRR improvement.
+
 ## Benchmark Tasks (10 per repo)
 
 | Task | What It Measures | Service Method |
@@ -231,5 +246,18 @@ The file indexing cap controls how many files are analyzed during bootstrap. Def
 export ATTOCODE_FILE_CAP=5000
 python scripts/benchmark_ci.py --repos fastapi
 ```
+
+## Meta-Harness Hyperparameter Optimization
+
+The `eval/meta_harness/` framework automates hyperparameter tuning for code-intel search and context assembly. An LLM proposer analyzes per-query failures from ground-truth evaluation, proposes parameter configurations with explicit hypotheses, and the harness evaluates each against the composite metric (40% search quality × 60% mcp_bench).
+
+The shipped defaults were produced by this loop and validated at **+25.5% overall MRR** across 5 ground-truth repos. Signal contributions measured via ablation (importance +0.4%, reranking −1.4% → disabled, frecency ~0%, dep-proximity ~0%).
+
+See the dedicated [Meta-Harness Optimization](meta-harness-optimization.md) guide for:
+
+- 50-parameter reference (scoring + context assembly + algorithmic signals + adaptive fusion)
+- `sweep` vs `llm` proposer modes
+- Ablation, qualitative comparison, and git-derived dataset generation
+- Reproducing the BEFORE/AFTER experiment
 
 Higher caps improve coverage but increase bootstrap time.

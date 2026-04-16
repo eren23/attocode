@@ -1,11 +1,11 @@
 # Code Intelligence Roadmap
 
 > Authoritative roadmap for attocode code-intel. Replaces the old HTTP API roadmap (Phases 2-5).
-> Baseline: **v0.2.20** (April 14, 2026).
+> Baseline: **v0.2.21** (April 16, 2026).
 
 ---
 
-## Current State (v0.2.20)
+## Current State (v0.2.21)
 
 | Metric | Value |
 |--------|-------|

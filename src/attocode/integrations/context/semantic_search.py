@@ -208,44 +208,44 @@ class SearchScoringConfig:
     allows the meta-harness optimization loop to explore better configurations.
     """
 
-    # BM25 base parameters (re-optimized with vectors active)
-    bm25_k1: float = 2.2      # was 1.5 → 2.8 (kw-only) → 2.2 (with vectors)
-    bm25_b: float = 0.4       # was 0.75 → 0.05 (kw-only) → 0.4 (with vectors)
+    # BM25 base parameters (optimized via meta-harness, round 5)
+    bm25_k1: float = 2.2      # was 1.5 → 2.8 (kw-only) → 2.2 (final with adaptive fusion)
+    bm25_b: float = 0.3       # was 0.75 → 0.05 (kw-only) → 0.3 (final with adaptive fusion)
 
     # Graduated symbol name match boosts
-    name_exact_boost: float = 4.0    # less aggressive than kw-only optimum
-    name_substring_boost: float = 2.5
-    name_token_boost: float = 2.0
+    name_exact_boost: float = 5.0
+    name_substring_boost: float = 3.0
+    name_token_boost: float = 2.2
 
     # Definition-type boosts
-    class_boost: float = 1.4
-    function_boost: float = 1.25
-    method_boost: float = 1.15
+    class_boost: float = 1.8
+    function_boost: float = 1.4
+    method_boost: float = 1.3
 
     # Path relevance: source directory boost
-    src_dir_boost: float = 1.4
+    src_dir_boost: float = 1.7
 
     # Multi-term coverage bonuses
-    multi_term_high_bonus: float = 2.2
-    multi_term_med_bonus: float = 1.6
-    multi_term_high_threshold: float = 0.65
-    multi_term_med_threshold: float = 0.35
+    multi_term_high_bonus: float = 2.5
+    multi_term_med_bonus: float = 1.8
+    multi_term_high_threshold: float = 0.7
+    multi_term_med_threshold: float = 0.4
 
-    # File type penalties (less harsh when vector search adds noise)
-    non_code_penalty: float = 0.6
-    config_penalty: float = 0.4
-    test_penalty: float = 0.9
+    # File type penalties
+    non_code_penalty: float = 0.3
+    config_penalty: float = 0.15
+    test_penalty: float = 0.6
 
     # Exact phrase bonus
-    exact_phrase_bonus: float = 2.8
+    exact_phrase_bonus: float = 3.0
 
     # Deduplication: more diversity per file when vectors return semantic neighbors
-    max_chunks_per_file: int = 6
+    max_chunks_per_file: int = 8
 
-    # Two-stage retrieval — wider when vector noise is present, smoother fusion
-    wide_k_multiplier: int = 15
-    wide_k_min: int = 200
-    rrf_k: int = 80               # smoother fusion (was 35 in kw-only optimum)
+    # Two-stage retrieval — wide candidates + balanced default RRF
+    wide_k_multiplier: int = 12
+    wide_k_min: int = 150
+    rrf_k: int = 60               # default; adaptive fusion overrides per-list
 
     # Algorithmic signals (Phase 1 improvements)
     # Ablation-validated defaults: importance helps (+0.4%), rerank hurts (-1.4%) with aggressive threshold
