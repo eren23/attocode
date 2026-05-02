@@ -261,7 +261,6 @@ class SearchScoringConfig:
     # When keyword search produces a confident top result, downweight vectors (avoid semantic noise)
     # When keyword is uncertain, use balanced fusion to let vectors fill the gap
     adaptive_fusion: bool = True               # True = adapt rrf_k by keyword confidence
-    kw_confidence_threshold: float = 0.5       # (legacy, unused with current strategy)
     kw_dominance_threshold: float = 1.5        # top-1/top-2 score ratio for "dominant" classification
     rrf_k_keyword_high_conf: int = 10          # sharp k_keyword when keyword is confident
     rrf_k_vector_low_conf: int = 250           # smooth k_vector when keyword is confident (downweight)

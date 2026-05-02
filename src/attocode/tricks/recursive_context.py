@@ -202,12 +202,10 @@ class RecursiveContextRetriever:
 
             visited.add(file_path)
 
-            # Get content
             content = self._provider.get_content(file_path)
             if content is None:
                 continue
 
-            # Truncate if needed
             is_truncated = False
             if len(content) > max_content_per_file:
                 content = content[:max_content_per_file]

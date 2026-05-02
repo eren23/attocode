@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    pass
+    import pygit2
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,9 @@ class CredentialStore:
     def __init__(self, ssh_key_path: str = "") -> None:
         self._ssh_key_path = ssh_key_path
 
-    def resolve(self, credential: Credential | None = None):
+    def resolve(
+        self, credential: Credential | None = None
+    ) -> pygit2.RemoteCallbacks | None:
         """Resolve a credential into pygit2 RemoteCallbacks.
 
         Returns None for public repos (no auth needed).

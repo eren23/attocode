@@ -297,9 +297,12 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
             dim = provider.dimension()
 
             # 3. Ensure vector column exists with the right dimension
-            from attocode.code_intel.storage.embedding_store import EmbeddingStore, ensure_vector_column
+            from attocode.code_intel.storage.embedding_store import (
+                EmbeddingStore,
+                ensure_vector_columns,
+            )
 
-            await ensure_vector_column(session, dim)
+            await ensure_vector_columns(session, primary_dim=dim)
 
             # 4. Resolve branch manifest
             from attocode.code_intel.storage.branch_overlay import BranchOverlay

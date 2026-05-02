@@ -1384,7 +1384,6 @@ async def _run_wave_review(ctx: OrchestratorInternals, wave_index: int) -> None:
 
     review_result = await review_wave(ctx, critic_config, wave_index, wave_tasks)
 
-    # Store the review
     ctx.wave_reviews.append({
         "wave": wave_index + 1,
         "assessment": review_result.assessment,

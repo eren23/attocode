@@ -7,12 +7,11 @@ by keeping static content at the start and dynamic content at the end.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from attocode.integrations.utilities.token_estimate import CHARS_PER_TOKEN, estimate_tokens
-from attocode.types.events import SimpleEventListener
+from attocode.types.events import SimpleEventEmitter, SimpleEventListener
 
 
 @dataclass
@@ -57,7 +56,7 @@ class DynamicContent:
 CacheEventListener = SimpleEventListener
 
 
-class CacheAwareContext:
+class CacheAwareContext(SimpleEventEmitter):
     """Builds system prompts optimized for KV-cache efficiency.
 
     Static content goes first (cacheable), dynamic content at
@@ -65,8 +64,8 @@ class CacheAwareContext:
     """
 
     def __init__(self, config: CacheAwareConfig | None = None) -> None:
+        super().__init__()
         self._config = config or CacheAwareConfig()
-        self._listeners: list[CacheEventListener] = []
         self._message_hashes: dict[str, int] = {}
         self._breakpoint_positions: dict[str, int] = {}
 
@@ -237,29 +236,10 @@ class CacheAwareContext:
         """Get positions of cache breakpoints."""
         return dict(self._breakpoint_positions)
 
-    def on(self, listener: CacheEventListener) -> Callable[[], None]:
-        """Subscribe to cache events. Returns unsubscribe function."""
-        self._listeners.append(listener)
-
-        def unsubscribe() -> None:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
-
-        return unsubscribe
-
     def reset(self) -> None:
         """Reset all tracked state."""
         self._message_hashes.clear()
         self._breakpoint_positions.clear()
-
-    def _emit(self, event: str, data: dict[str, Any]) -> None:
-        for listener in self._listeners:
-            try:
-                listener(event, data)
-            except Exception:
-                pass
 
 
 def stable_stringify(obj: Any, indent: int | None = None) -> str:

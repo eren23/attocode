@@ -1,23 +1,14 @@
 """Provenance write path for derived code-intel artifacts.
 
-Codex review fix M7: migration 017 created the ``provenance`` table
-months ago but nothing wrote to it — the ORM class was missing and
-``EmbeddingStore.upsert_embeddings`` only stored inline
-``embedding_provenance`` JSON. This module closes that gap by
-providing a single entry point that normalizes a
-``Provenance`` dataclass (from the shared ``artifacts/`` package) into
-a row in the server-side ``provenance`` table.
+Normalizes a ``Provenance`` dataclass (from the shared ``artifacts/``
+package) into a row in the server-side ``provenance`` table.
 
-Design:
-
-- :func:`write_provenance_rows` accepts a list of dicts so batched
-  writes (one per embedding chunk in the same upsert) are a single
+- :func:`write_provenance_rows` takes a list of dicts so batched writes
+  (one per embedding chunk in the same upsert) collapse into a single
   ``session.add_all`` call.
-- The helper is deliberately loose about schema: any keys that don't
-  match ``Provenance`` columns flow into the ``extra`` JSONB bucket, so
-  callers from different phases (snapshots, rotations, future indexer
-  runs) can tack on whatever contextual metadata they want without
-  needing another migration.
+- Schema is loose: keys that don't match ``Provenance`` columns flow
+  into the ``extra`` JSONB bucket, so callers can tack on contextual
+  metadata without a migration.
 - No commit — the caller owns the session lifecycle.
 """
 

@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from rich.text import Text
+from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import RichLog
 
@@ -31,7 +32,7 @@ class MessagesLog(Widget):
         super().__init__(**kwargs)
         self._seen_count: int = 0
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         yield RichLog(id="messages-log", auto_scroll=True, markup=True, max_lines=500)
 
     def update_messages(self, messages: list[dict[str, Any]]) -> None:

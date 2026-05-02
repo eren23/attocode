@@ -7,6 +7,7 @@ lsp_enrich.
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import (
     _get_project_dir,
@@ -15,14 +16,17 @@ from attocode.code_intel._shared import (
     mcp,
 )
 
+if TYPE_CHECKING:
+    from attocode.integrations.lsp.client import LSPManager
+
 # ---------------------------------------------------------------------------
 # Lazy LSP manager singleton
 # ---------------------------------------------------------------------------
 
-_lsp_manager = None
+_lsp_manager: LSPManager | None = None
 
 
-def _get_lsp_manager():
+def _get_lsp_manager() -> LSPManager:
     """Lazily initialize the LSP manager for MCP server use."""
     global _lsp_manager
     if _lsp_manager is None:

@@ -18,18 +18,22 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import _get_project_dir, mcp
+
+if TYPE_CHECKING:
+    from attocode.code_intel.rules.registry import RuleRegistry
 
 logger = logging.getLogger(__name__)
 
 # Lazy singleton for the rule registry
-_registry = None
+_registry: RuleRegistry | None = None
 _registry_loaded = False
 _registry_lock = threading.Lock()
 
 
-def _get_registry():
+def _get_registry() -> RuleRegistry:
     """Get or create the global rule registry (lazy singleton)."""
     global _registry, _registry_loaded
     # Read-only fast path (safe: both reads are atomic in CPython;
@@ -457,7 +461,6 @@ def test_rules(
         if not fixtures_dir:
             return "No test fixtures directory found. Provide fixtures_dir or create .attocode/test_fixtures/."
 
-    # Get rules
     if rule_id:
         rule = reg.get(rule_id)
         if rule is None:

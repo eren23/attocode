@@ -21,14 +21,13 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
 from attocode.code_intel.api.deps import get_db_session
 from attocode.code_intel.api.routes.orgs import _require_membership
-from attocode.code_intel.db.models import Repository
+from attocode.code_intel.api.utils import get_repo_by_org as _load_repo
 from attocode.code_intel.storage.content_store import ContentStore
 from attocode.code_intel.storage.embedding_store import EmbeddingStore
 
@@ -73,22 +72,6 @@ class GCStatsResponse(BaseModel):
 
 
 # --- Helpers ---
-
-
-async def _load_repo(
-    org_id: uuid.UUID,
-    repo_id: uuid.UUID,
-    session: AsyncSession,
-) -> Repository:
-    result = await session.execute(
-        select(Repository).where(
-            Repository.id == repo_id, Repository.org_id == org_id,
-        )
-    )
-    repo = result.scalar_one_or_none()
-    if repo is None:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    return repo
 
 
 def _parse_types(types: list[str]) -> set[str]:

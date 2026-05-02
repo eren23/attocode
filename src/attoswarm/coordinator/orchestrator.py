@@ -147,21 +147,21 @@ class SwarmOrchestrator:
         # Trace bridge (EventBus → TraceCollector)
         self._trace_bridge: Any = None
 
-        # Phase 1: Distributed tracing
+        # Distributed tracing
         tracing_cfg = getattr(config, 'tracing', None)
         self._tracing_enabled = tracing_cfg.enabled if tracing_cfg else True
         self._trace_ctx: TraceContext | None = None
         self._cache = SwarmCache(max_size=256, default_ttl=300.0)
         self._result_pipeline = ResultPipeline()
 
-        # Phase 2: Adaptive systems
+        # Adaptive systems
         health_threshold = adaptive_cfg.health_threshold if adaptive_cfg else 0.5
         self._health_monitor = HealthMonitor(health_threshold=health_threshold)
         self._budget_gate: BudgetGate | None = None
         self._speculative_enabled = adaptive_cfg.speculative_enabled if adaptive_cfg else False
         self._speculative_executor: Any = None
 
-        # Phase 3: Intelligence layer
+        # Validation / poison detection
         validation_cfg = getattr(config, 'validation', None)
         self._decompose_validation = validation_cfg.decompose_validation if validation_cfg else True
         self._preflight_enabled = validation_cfg.preflight_checks if validation_cfg else True
@@ -174,16 +174,16 @@ class SwarmOrchestrator:
         self._validation_result: dict[str, Any] | None = None
         self._poison_reports: list[dict[str, Any]] = []
 
-        # Phase 4: Timing & post-mortem
+        # Timing & post-mortem
         self._timing_waterfall: Any = None
 
-        # Decision log (Workstream 2.4)
+        # Decision log
         self._decisions: list[dict[str, Any]] = []
 
-        # Error tracking (Fix S1)
+        # Error tracking
         self._errors: list[dict[str, Any]] = []
 
-        # Task transition log (Fix S2)
+        # Task transition log
         self._transition_log: list[dict[str, Any]] = []
 
         # Shutdown / pause
@@ -2028,7 +2028,7 @@ class SwarmOrchestrator:
             except Exception as exc:
                 logger.debug("Causal analysis failed for %s: %s", result.task_id, exc)
 
-        # Track error (Fix S1)
+        # Track error
         self._errors.append({
             "timestamp": utc_now_iso(),
             "message": result.error or "Task failed",
@@ -2436,7 +2436,7 @@ class SwarmOrchestrator:
         })
 
     # ------------------------------------------------------------------
-    # Code-intel integration (Workstream 1)
+    # Code-intel integration
     # ------------------------------------------------------------------
 
     def _init_code_intel(self) -> None:
@@ -2587,7 +2587,7 @@ class SwarmOrchestrator:
         return tasks
 
     # ------------------------------------------------------------------
-    # Budget projection (Workstream 2.1)
+    # Budget projection
     # ------------------------------------------------------------------
 
     def _init_budget_projector(self) -> None:
@@ -2640,7 +2640,7 @@ class SwarmOrchestrator:
             logger.debug("Budget projection failed: %s", exc)
 
     # ------------------------------------------------------------------
-    # Failure analysis (Workstream 2.2)
+    # Failure analysis
     # ------------------------------------------------------------------
 
     def _classify_failure(self, result: Any) -> dict[str, Any] | None:
@@ -2667,7 +2667,7 @@ class SwarmOrchestrator:
         return None
 
     # ------------------------------------------------------------------
-    # Decision transparency (Workstream 2.4)
+    # Decision transparency
     # ------------------------------------------------------------------
 
     def _record_decision(

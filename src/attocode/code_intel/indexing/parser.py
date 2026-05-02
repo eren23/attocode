@@ -109,7 +109,7 @@ def extract_imports(content: bytes, path: str, language: str | None) -> list[str
         for m in re.finditer(r"""export\s+(?:\*|(?:\{[^}]*\}|\w+)\s+)from\s+['"]([\w@/.\\-]+)['"]""", text):
             imports.append(m.group(1))
     elif language == "go":
-        # M3 fix: restrict to Go import block context, not all quoted strings
+        # Restrict to the Go import block, not all quoted strings.
         import_block = re.search(r'import\s*\((.*?)\)', text, re.DOTALL)
         if import_block:
             for m in re.finditer(r'"([\w/.\\-]+)"', import_block.group(1)):

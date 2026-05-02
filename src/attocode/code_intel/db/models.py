@@ -369,12 +369,9 @@ class BlameHunk(Base):
 class Provenance(Base):
     """Provenance row for a derived code-intel artifact.
 
-    Phase 1 Codex fix (M7): migration 017 created this table but the
-    original Phase 1 work never added an ORM model or write path. This
-    model + :mod:`attocode.code_intel.storage.provenance_store` close
-    that gap so embeddings actually carry provenance records that
+    Backed by migration 017. Embeddings carry provenance records that
     downstream tools (snapshot restore, orphan scan, model rotation
-    audit) can join against.
+    audit) join against.
     """
     __tablename__ = "provenance"
 

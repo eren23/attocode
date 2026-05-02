@@ -93,10 +93,10 @@ class UpdateRepoRequest(BaseModel):
     nullable column. Immutable fields (``id``, ``created_at``) are not
     present.
 
-    Codex fix m4: ``target_org_id`` is now accepted so admins can move
-    a repo between orgs they have admin rights in. Both source and
-    target orgs are checked for membership, and the target org must
-    not already contain a repo with the same name.
+    ``target_org_id`` lets admins move a repo between orgs they have
+    admin rights in. Both source and target orgs are checked for
+    membership, and the target org must not already contain a repo with
+    the same name.
     """
     name: str | None = None
     clone_url: str | None = None
@@ -693,9 +693,9 @@ async def update_repo(
         changes["local_path"] = {"from": repo.local_path, "to": req.local_path or None}
         repo.local_path = req.local_path or None
 
-    # Codex fix m4: optional cross-org move. Rejected if the caller
-    # doesn't hold admin in the target org, or if the target already
-    # has a repo with the same (post-rename) name.
+    # Optional cross-org move. Rejected if the caller doesn't hold admin
+    # in the target org, or if the target already has a repo with the
+    # same (post-rename) name.
     moved_from_org: uuid.UUID | None = None
     if req.target_org_id is not None and req.target_org_id != org_id:
         # Verify target org membership (admin+).

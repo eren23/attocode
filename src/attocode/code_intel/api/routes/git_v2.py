@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
 from attocode.code_intel.api.deps import get_db_session, get_git_manager
+from attocode.code_intel.api.utils import get_repo_by_id as _get_repo
 
 router = APIRouter(prefix="/api/v2/projects/{project_id}", tags=["git-v2"])
 logger = logging.getLogger(__name__)
@@ -84,19 +85,6 @@ class DiffResponse(BaseModel):
 
 
 # --- Helpers ---
-
-
-async def _get_repo(project_id: uuid.UUID, session: AsyncSession, auth: AuthContext | None = None):
-    from attocode.code_intel.db.models import Repository
-
-    result = await session.execute(select(Repository).where(Repository.id == project_id))
-    repo = result.scalar_one_or_none()
-    if repo is None:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    # Org isolation
-    if auth and auth.org_id and repo.org_id != auth.org_id:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    return repo
 
 
 def _patch_entry_from_db_diff(patch) -> PatchEntryResponse:

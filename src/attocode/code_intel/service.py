@@ -11,9 +11,25 @@ import os
 import threading
 from collections import Counter, deque
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from attocode.code_intel.config import CodeIntelConfig
 from attocode.integrations.utilities.token_estimate import estimate_tokens
+
+if TYPE_CHECKING:
+    from attocode.integrations.context.ast_service import ASTService
+    from attocode.integrations.context.code_analyzer import CodeAnalyzer
+    from attocode.integrations.context.codebase_context import CodebaseContextManager
+    from attocode.integrations.context.hierarchical_explorer import HierarchicalExplorer
+    from attocode.integrations.context.memory_store import MemoryStore
+    from attocode.integrations.context.semantic_search import (
+        ContextAssemblyConfig,
+        SearchScoringConfig,
+        SemanticSearchManager,
+    )
+    from attocode.integrations.context.temporal_coupling import TemporalCouplingAnalyzer
+    from attocode.integrations.lsp.client import LSPManager
+    from attocode.integrations.security.scanner import SecurityScanner
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +44,21 @@ class CodeIntelService:
     def __init__(self, project_dir: str, config: CodeIntelConfig | None = None) -> None:
         self._project_dir = os.path.abspath(project_dir)
         self._config = config or CodeIntelConfig(project_dir=self._project_dir)
-        self._scoring_config = None  # Optional SearchScoringConfig override
-        self._context_config = None  # Optional ContextAssemblyConfig override
+        self._scoring_config: SearchScoringConfig | None = None  # Optional override
+        self._context_config: ContextAssemblyConfig | None = None  # Optional override
 
         # Lazy singletons
         self._init_lock = threading.Lock()
-        self._ast_service = None
-        self._context_mgr = None
-        self._code_analyzer = None
-        self._lsp_manager = None
-        self._explorer = None
-        self._security_scanner = None
-        self._semantic_search = None
-        self._memory_store = None
+        self._ast_service: ASTService | None = None
+        self._context_mgr: CodebaseContextManager | None = None
+        self._code_analyzer: CodeAnalyzer | None = None
+        self._lsp_manager: LSPManager | None = None
+        self._explorer: HierarchicalExplorer | None = None
+        self._security_scanner: SecurityScanner | None = None
+        self._semantic_search: SemanticSearchManager | None = None
+        self._memory_store: MemoryStore | None = None
+        self._temporal_analyzer: TemporalCouplingAnalyzer | None = None
+        self._lsp_auto_started: bool = False
 
     @classmethod
     def get_instance(cls, project_dir: str, config: CodeIntelConfig | None = None) -> CodeIntelService:
@@ -66,7 +84,7 @@ class CodeIntelService:
     # Lazy initializers
     # ------------------------------------------------------------------
 
-    def _get_ast_service(self, *, indexing_depth: str = "auto"):
+    def _get_ast_service(self, *, indexing_depth: str = "auto") -> ASTService:
         if self._ast_service is None:
             with self._init_lock:
                 if self._ast_service is None:
@@ -87,7 +105,7 @@ class CodeIntelService:
                         self._context_mgr = svc._context_mgr
         return self._ast_service
 
-    def _get_context_mgr(self):
+    def _get_context_mgr(self) -> CodebaseContextManager:
         if self._context_mgr is None:
             # Trigger AST service init first — it does file discovery
             # and we reuse its context manager
@@ -104,7 +122,7 @@ class CodeIntelService:
                     self._context_mgr = mgr
         return self._context_mgr
 
-    def _get_code_analyzer(self):
+    def _get_code_analyzer(self) -> CodeAnalyzer:
         if self._code_analyzer is None:
             with self._init_lock:
                 if self._code_analyzer is None:
@@ -113,7 +131,7 @@ class CodeIntelService:
                     self._code_analyzer = CodeAnalyzer()
         return self._code_analyzer
 
-    def _get_lsp_manager(self):
+    def _get_lsp_manager(self) -> LSPManager:
         if self._lsp_manager is None:
             with self._init_lock:
                 if self._lsp_manager is None:
@@ -135,7 +153,7 @@ class CodeIntelService:
                     self._lsp_auto_started = False
         return self._lsp_manager
 
-    def _get_explorer(self):
+    def _get_explorer(self) -> HierarchicalExplorer:
         if self._explorer is None:
             # Initialize deps outside the lock to avoid reentrant deadlock
             ctx = self._get_context_mgr()
@@ -149,7 +167,7 @@ class CodeIntelService:
                     self._explorer = HierarchicalExplorer(ctx, ast_service=ast_svc)
         return self._explorer
 
-    def _get_security_scanner(self):
+    def _get_security_scanner(self) -> SecurityScanner:
         if self._security_scanner is None:
             with self._init_lock:
                 if self._security_scanner is None:
@@ -158,19 +176,19 @@ class CodeIntelService:
                     self._security_scanner = SecurityScanner(root_dir=self._project_dir)
         return self._security_scanner
 
-    def _get_semantic_search(self):
+    def _get_semantic_search(self) -> SemanticSearchManager:
         if self._semantic_search is None:
             with self._init_lock:
                 if self._semantic_search is None:
                     from attocode.integrations.context.semantic_search import SemanticSearchManager
 
-                    kwargs: dict = {"root_dir": self._project_dir}
+                    kwargs: dict[str, object] = {"root_dir": self._project_dir}
                     if self._scoring_config is not None:
                         kwargs["scoring_config"] = self._scoring_config
                     self._semantic_search = SemanticSearchManager(**kwargs)
         return self._semantic_search
 
-    def set_scoring_config(self, config) -> None:
+    def set_scoring_config(self, config: SearchScoringConfig) -> None:
         """Set search scoring config for meta-harness optimization.
 
         Must be called before the first search. If the SemanticSearchManager
@@ -181,11 +199,11 @@ class CodeIntelService:
             if self._semantic_search is not None:
                 self._semantic_search.scoring_config = config
 
-    def set_context_config(self, config) -> None:
+    def set_context_config(self, config: ContextAssemblyConfig) -> None:
         """Set context assembly config for meta-harness optimization."""
         self._context_config = config
 
-    def _get_memory_store(self):
+    def _get_memory_store(self) -> MemoryStore:
         if self._memory_store is None:
             with self._init_lock:
                 if self._memory_store is None:
@@ -316,7 +334,7 @@ class CodeIntelService:
             ]
         return engine.format_report(report)
 
-    def _get_temporal_analyzer(self):
+    def _get_temporal_analyzer(self) -> TemporalCouplingAnalyzer:
         if not hasattr(self, "_temporal_analyzer") or self._temporal_analyzer is None:
             from attocode.integrations.context.temporal_coupling import (
                 TemporalCouplingAnalyzer,

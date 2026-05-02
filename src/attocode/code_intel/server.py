@@ -579,13 +579,11 @@ import attocode.code_intel.tools.query_history_tools as _query_history_tools  # 
 import attocode.code_intel.tools.readiness_tools as _readiness_tools  # noqa: E402, F401
 import attocode.code_intel.tools.composite_tools as _composite_tools  # noqa: E402, F401
 import attocode.code_intel.tools.search_tools as _search_tools  # noqa: E402, F401
-# Phase 1 reproducibility tools — pin_tools must come first because
-# maintenance_tools imports _stamp_pin / _STORE_DEFS from it.
+# pin_tools must come first because maintenance_tools imports
+# _stamp_pin / _STORE_DEFS from it.
 import attocode.code_intel.tools.pin_tools as _pin_tools  # noqa: E402, F401
 import attocode.code_intel.tools.maintenance_tools as _maintenance_tools  # noqa: E402, F401
-# Phase 2a — snapshot tools
 import attocode.code_intel.tools.snapshot_tools as _snapshot_tools  # noqa: E402, F401
-# Phase 2c — named overlays
 import attocode.code_intel.tools.overlay_tools as _overlay_tools  # noqa: E402, F401
 # Rule-based analysis engine (PerfInsights-inspired)
 import attocode.code_intel.tools.rule_tools as _rule_tools  # noqa: E402, F401

@@ -6,11 +6,10 @@ stream to prevent the agent from losing track of objectives.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from attocode.types.events import SimpleEventListener
+from attocode.types.events import SimpleEventEmitter, SimpleEventListener
 
 
 @dataclass
@@ -75,7 +74,7 @@ class RecitationEntry:
 RecitationEventListener = SimpleEventListener
 
 
-class RecitationManager:
+class RecitationManager(SimpleEventEmitter):
     """Manages periodic goal/progress recitation.
 
     Injects system messages at configurable intervals to
@@ -83,10 +82,10 @@ class RecitationManager:
     """
 
     def __init__(self, config: RecitationConfig | None = None) -> None:
+        super().__init__()
         self._config = config or RecitationConfig()
         self._last_injection_iteration = 0
         self._history: list[RecitationEntry] = []
-        self._listeners: list[RecitationEventListener] = []
 
     def should_inject(self, iteration: int) -> bool:
         """Check if recitation should be injected at this iteration."""
@@ -225,25 +224,6 @@ class RecitationManager:
         for key, value in kwargs.items():
             if hasattr(self._config, key):
                 setattr(self._config, key, value)
-
-    def on(self, listener: RecitationEventListener) -> Callable[[], None]:
-        """Subscribe to recitation events."""
-        self._listeners.append(listener)
-
-        def unsubscribe() -> None:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
-
-        return unsubscribe
-
-    def _emit(self, event: str, data: dict[str, Any]) -> None:
-        for listener in self._listeners:
-            try:
-                listener(event, data)
-            except Exception:
-                pass
 
 
 def build_quick_recitation(state: RecitationState) -> str:

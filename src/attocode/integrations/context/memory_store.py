@@ -568,11 +568,8 @@ class MemoryStore:
     def archive_by_id(self, learning_id: int) -> bool:
         """Soft-delete a learning by setting ``status='archived'``.
 
-        Codex fix B2: ``orphan_scan(auto_archive=True)`` used to hard-delete
-        rows because no soft-archive API existed. This method provides
-        the missing path — the row is preserved, its ``status`` flips to
-        ``archived``, and ``updated_at`` is bumped so consumers can
-        audit when the archival happened.
+        Preserves the row and bumps ``updated_at`` so consumers can audit
+        when the archival happened.
 
         Returns True if a row was updated, False if no matching learning
         was found.
@@ -592,10 +589,10 @@ class MemoryStore:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def __enter__(self):
+    def __enter__(self) -> MemoryStore:
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> None:
         self.close()
 
     def close(self) -> None:

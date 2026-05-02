@@ -208,13 +208,11 @@ class LocalSearchProvider:
         # The pin is actually persisted via ``PinStore.save()`` so
         # ``pin_resolve(pin_id)`` works end-to-end.
         #
-        # Codex round-4 fix P2 #2: pass the bound service's
-        # ``project_dir`` explicitly. Without this the pin would be
-        # minted from ``ATTOCODE_PROJECT_DIR``/cwd, so an HTTP server
-        # registering multiple projects via ``register_project`` would
-        # persist pins into the wrong repo's ``.attocode/cache/pins.db``
-        # and ``pin_resolve(resp.pin_id)`` would round-trip to unrelated
-        # state.
+        # Pass the bound service's ``project_dir`` explicitly. Without
+        # this the pin would be minted from ``ATTOCODE_PROJECT_DIR``/cwd,
+        # so an HTTP server registering multiple projects via
+        # ``register_project`` would persist pins into the wrong repo's
+        # ``.attocode/cache/pins.db``.
         pin_id = ""
         manifest_hash = ""
         try:

@@ -7,8 +7,8 @@ for charting.
 
 from __future__ import annotations
 
-from typing import Any
-
+from attocode.tracing.analysis._helpers import safe_float as _float
+from attocode.tracing.analysis._helpers import safe_int as _int
 from attocode.tracing.analysis.views import TokenFlowPoint
 from attocode.tracing.types import TraceEvent, TraceEventKind, TraceSession
 
@@ -121,28 +121,3 @@ class TokenAnalyzer:
         return totals
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _int(d: dict[str, Any], key: str) -> int:
-    """Safely extract an integer from a data dict."""
-    v = d.get(key)
-    if v is None:
-        return 0
-    try:
-        return int(v)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _float(d: dict[str, Any], key: str) -> float:
-    """Safely extract a float from a data dict."""
-    v = d.get(key)
-    if v is None:
-        return 0.0
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return 0.0

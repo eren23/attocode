@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import uuid
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -16,11 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from attocode.code_intel.api.deps import get_db_session
 from attocode.code_intel.db.models import Repository, WebhookConfig
 
+if TYPE_CHECKING:
+    from cryptography.fernet import Fernet
+
 router = APIRouter(prefix="/api/v1/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
 
 
-def _get_fernet():
+def _get_fernet() -> Fernet:
     """Get Fernet instance using SECRET_KEY from config."""
     from attocode.code_intel.crypto import _get_fernet as _shared_get_fernet
 

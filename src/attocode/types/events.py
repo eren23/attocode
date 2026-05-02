@@ -15,6 +15,31 @@ from typing import Any
 SimpleEventListener = Callable[[str, dict[str, Any]], None]
 
 
+class SimpleEventEmitter:
+    """Mixin: subscribe/emit ``(event, data)`` events. Listener errors are swallowed."""
+
+    _listeners: list[SimpleEventListener]
+
+    def __init__(self) -> None:
+        self._listeners = []
+
+    def on(self, listener: SimpleEventListener) -> Callable[[], None]:
+        self._listeners.append(listener)
+
+        def unsubscribe() -> None:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
+
+        return unsubscribe
+
+    def _emit(self, event: str, data: dict[str, Any]) -> None:
+        for listener in self._listeners:
+            try:
+                listener(event, data)
+            except Exception:
+                pass
+
+
 class EventType(StrEnum):
     """Types of agent events.
 

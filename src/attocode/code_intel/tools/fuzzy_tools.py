@@ -7,11 +7,17 @@ matches even with typos and character swaps.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import _get_project_dir, mcp
 
+if TYPE_CHECKING:
+    from attocode.integrations.context.fuzzy import FuzzyMatcher
 
-def _get_fuzzy_matcher(pattern: str, case_sensitive: bool = False, min_score: float = 30.0):
+
+def _get_fuzzy_matcher(
+    pattern: str, case_sensitive: bool = False, min_score: float = 30.0
+) -> FuzzyMatcher:
     """Create a fuzzy matcher for the given pattern."""
     from attocode.integrations.context.fuzzy import FuzzyMatcher
 

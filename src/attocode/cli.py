@@ -429,7 +429,7 @@ def _run_tui(config: Any) -> None:
         )
         if result.returncode == 0:
             git_branch = result.stdout.strip()
-    except Exception:
+    except (OSError, subprocess.TimeoutExpired):
         pass
 
     # Populate dynamic model cache (pricing + context windows) before building

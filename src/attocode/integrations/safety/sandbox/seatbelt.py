@@ -15,6 +15,10 @@ from pathlib import Path
 
 from attocode.errors import ConfigurationError
 
+# SeatbeltResult is the canonical generic SandboxResult; the alias preserves
+# the historical module-local name without duplicating the dataclass.
+from attocode.integrations.safety.sandbox.basic import SandboxResult as SeatbeltResult
+
 
 @dataclass(slots=True)
 class SeatbeltOptions:
@@ -25,15 +29,6 @@ class SeatbeltOptions:
     network_allowed: bool = False
     timeout: float = 300.0
     max_output_bytes: int = 1_000_000
-
-
-@dataclass(slots=True)
-class SeatbeltResult:
-    """Result of a seatbelt sandbox validation or execution."""
-
-    allowed: bool
-    reason: str = ""
-    command: str = ""
 
 
 def _generate_profile(options: SeatbeltOptions, working_dir: str) -> str:

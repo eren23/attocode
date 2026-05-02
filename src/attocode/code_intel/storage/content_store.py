@@ -69,7 +69,7 @@ class ContentStore:
         # Pre-compute all hashes
         entries = [(self.hash_content(content), content, lang) for content, lang in items]
 
-        # M6 fix: deduplicate within batch by SHA
+        # Deduplicate within the batch by SHA.
         seen: dict[str, tuple[str, bytes, str | None]] = {}
         hashes = []
         for sha, content, language in entries:
@@ -141,15 +141,13 @@ class ContentStore:
     ) -> int:
         """Delete file_contents not referenced by any branch_files, symbols, dependencies, or embeddings.
 
-        C2 fix: Only deletes content older than min_age_minutes to avoid racing
-        with concurrent indexers that are still writing references.
+        Only deletes content older than min_age_minutes to avoid racing
+        with concurrent indexers still writing references.
 
-        Codex review fix (B1): when ``repo_id`` is provided, scope the delete
-        to content that is *only* referenced from branches belonging to that
-        repo. A blob that's still referenced from a different repo's branches
-        is never deleted, even if this repo's branches no longer reference it.
-        When ``repo_id`` is ``None`` the old global-sweep behavior is
-        preserved for the unscoped background worker.
+        When ``repo_id`` is provided, scopes the delete to content
+        referenced *only* from branches of that repo. A blob still
+        referenced from a different repo's branches is never deleted.
+        ``repo_id=None`` runs a global sweep (background worker).
 
         Returns count of deleted rows.
         """

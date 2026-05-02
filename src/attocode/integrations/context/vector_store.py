@@ -63,13 +63,10 @@ class VectorStoreRotationActiveError(RuntimeError):
     """Raised when a destructive write hits the vectors table while an
     embedding rotation is still active.
 
-    Codex review B3: the Phase 2b rotation state machine documented that
-    mid-rotation writes to the primary ``vectors`` table would be lost
-    after cutover. Documented but not enforced — which meant
-    ``clear_embeddings`` could silently destroy the rotation's source
-    data. This exception turns that soft limitation into a hard refusal:
-    any destructive write during ``pending|backfilling|ready_to_cutover|``
-    ``cutover_done`` now raises instead of corrupting the rotation.
+    Mid-rotation writes to the primary ``vectors`` table would be lost
+    after cutover. Any destructive write during ``pending``,
+    ``backfilling``, ``ready_to_cutover``, or ``cutover_done`` raises
+    rather than silently corrupting the rotation source data.
     """
 
     def __init__(self, *, rotation_state: str, db_path: str) -> None:
@@ -377,12 +374,12 @@ class VectorStore:
     def _check_rotation_lock(self) -> None:
         """Reject destructive writes while a rotation is mid-flight.
 
-        Codex review B3: ``clear_*`` / ``upsert*`` must not run when an
-        embedding rotation is still reading from the primary ``vectors``
-        table. Reads ``store_metadata.rotation_state`` and raises
-        :class:`VectorStoreRotationActiveError` for any of the active
-        states. Pre-rotation (``none``), aborted, failed, and fully
-        completed-and-GCed states all pass through.
+        ``clear_*`` / ``upsert*`` must not run while an embedding rotation
+        is still reading from the primary ``vectors`` table. Reads
+        ``store_metadata.rotation_state`` and raises
+        :class:`VectorStoreRotationActiveError` for active states.
+        Pre-rotation (``none``), aborted, failed, and completed-and-GCed
+        states pass through.
         """
         conn = self._get_conn()
         try:
@@ -407,13 +404,12 @@ class VectorStore:
     def _check_external_cache_bump(self) -> None:
         """Pick up cache invalidations from other processes.
 
-        Codex review M5: ``EmbeddingRotator.cutover()`` writes a
-        ``_rotator_cache_ver`` key into ``store_metadata`` to signal that
-        already-open ``VectorStore`` instances should reload their
-        in-memory numpy matrix. This helper compares the stored value
-        against the last one we saw and bumps the local
-        ``_vec_cache_version`` on drift so the next search call triggers
-        a reload.
+        ``EmbeddingRotator.cutover()`` writes ``_rotator_cache_ver`` into
+        ``store_metadata`` to signal already-open ``VectorStore`` instances
+        to reload their in-memory numpy matrix. We compare the stored
+        value against the last seen and bump the local
+        ``_vec_cache_version`` on drift so the next search triggers a
+        reload.
         """
         conn = self._get_conn()
         try:

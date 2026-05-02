@@ -7,11 +7,15 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import (
     _get_project_dir,
     mcp,
 )
+
+if TYPE_CHECKING:
+    from attocode.integrations.context.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -22,22 +26,24 @@ logger = logging.getLogger(__name__)
 _memory_store_lock = threading.Lock()
 
 
-def _get_memory_store():
+def _get_memory_store() -> MemoryStore:
     """Lazily initialize and return the MemoryStore singleton (thread-safe).
 
     Uses ``server._memory_store`` as the authoritative location so tests
     can reset it by setting ``srv._memory_store = None``.
     """
     import attocode.code_intel.server as _srv
+    from attocode.integrations.context.memory_store import MemoryStore
 
-    if _srv._memory_store is not None:
-        return _srv._memory_store
+    existing = _srv._memory_store
+    if isinstance(existing, MemoryStore):
+        return existing
     # server._memory_store is None — create a fresh instance
     with _memory_store_lock:
         # Double-check after acquiring lock
-        if _srv._memory_store is not None:
-            return _srv._memory_store
-        from attocode.integrations.context.memory_store import MemoryStore
+        existing = _srv._memory_store
+        if isinstance(existing, MemoryStore):
+            return existing
 
         store = MemoryStore(_get_project_dir())
         _srv._memory_store = store

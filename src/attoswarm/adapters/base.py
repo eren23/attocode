@@ -30,6 +30,32 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+async def _pump_stream(
+    stream: asyncio.StreamReader | None,
+    queue: asyncio.Queue[str],
+    *,
+    log_file: str | None = None,
+    stream_name: str = "stdout",
+) -> None:
+    """Pump lines from a stream into a queue, optionally tee'ing to a log file."""
+    if stream is None:
+        return
+    log_path = Path(log_file) if log_file else None
+    while True:
+        line = await stream.readline()
+        if not line:
+            break
+        text = line.decode("utf-8", errors="replace")
+        if log_path:
+            try:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(f"[{stream_name}] {text}")
+            except OSError:
+                pass
+        await queue.put(text)
+
+
 @dataclass(slots=True)
 class AgentProcessSpec:
     agent_id: str
@@ -242,22 +268,7 @@ class SubprocessBackend:
         log_file: str | None = None,
         stream_name: str = "stdout",
     ) -> None:
-        if stream is None:
-            return
-        log_path = Path(log_file) if log_file else None
-        while True:
-            line = await stream.readline()
-            if not line:
-                break
-            text = line.decode("utf-8", errors="replace")
-            if log_path:
-                try:
-                    log_path.parent.mkdir(parents=True, exist_ok=True)
-                    with log_path.open("a", encoding="utf-8") as fh:
-                        fh.write(f"[{stream_name}] {text}")
-                except OSError:
-                    pass
-            await queue.put(text)
+        await _pump_stream(stream, queue, log_file=log_file, stream_name=stream_name)
 
 
 # ---------------------------------------------------------------------------
@@ -714,19 +725,4 @@ class SubprocessAdapter:
         log_file: str | None = None,
         stream_name: str = "stdout",
     ) -> None:
-        if stream is None:
-            return
-        log_path = Path(log_file) if log_file else None
-        while True:
-            line = await stream.readline()
-            if not line:
-                break
-            text = line.decode("utf-8", errors="replace")
-            if log_path:
-                try:
-                    log_path.parent.mkdir(parents=True, exist_ok=True)
-                    with log_path.open("a", encoding="utf-8") as fh:
-                        fh.write(f"[{stream_name}] {text}")
-                except OSError:
-                    pass
-            await queue.put(text)
+        await _pump_stream(stream, queue, log_file=log_file, stream_name=stream_name)

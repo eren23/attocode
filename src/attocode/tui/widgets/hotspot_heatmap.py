@@ -7,6 +7,8 @@ from typing import Any
 from rich.text import Text
 from textual.widget import Widget
 
+from attocode.tui.widgets._path_utils import short_path as _short_path
+
 
 class HotspotHeatmap(Widget):
     """Bar chart of top files by composite complexity score.
@@ -89,17 +91,3 @@ class HotspotHeatmap(Widget):
 
         return text
 
-
-def _short_path(path: str, max_len: int = 45) -> str:
-    """Shorten a file path for display, preserving start and end."""
-    if len(path) <= max_len:
-        return path
-    parts = path.split("/")
-    if len(parts) <= 3:
-        return path
-    # Show first dir + ... + last 2 components
-    short = "/".join(parts[:1]) + "/\u2026/" + "/".join(parts[-2:])
-    if len(short) <= max_len:
-        return short
-    # Still too long — just truncate with ellipsis
-    return path[:max_len - 1] + "\u2026"

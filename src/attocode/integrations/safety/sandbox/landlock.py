@@ -17,6 +17,10 @@ from pathlib import Path
 
 from attocode.errors import ConfigurationError
 
+# LandlockResult is the canonical generic SandboxResult; the alias preserves
+# the historical module-local name without duplicating the dataclass.
+from attocode.integrations.safety.sandbox.basic import SandboxResult as LandlockResult
+
 # Landlock constants
 LANDLOCK_CREATE_RULESET_VERSION = 1
 
@@ -58,15 +62,6 @@ class LandlockOptions:
     network_allowed: bool = True
     timeout: float = 300.0
     max_output_bytes: int = 1_000_000
-
-
-@dataclass(slots=True)
-class LandlockResult:
-    """Result of a Landlock sandbox check."""
-
-    allowed: bool
-    reason: str = ""
-    command: str = ""
 
 
 @dataclass

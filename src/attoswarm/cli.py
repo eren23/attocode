@@ -146,7 +146,7 @@ def _write_activity(run_dir: str, task_id: str, label: str) -> None:
         p = Path(run_dir) / "agents" / f"agent-{task_id}.activity.txt"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(label, encoding="utf-8")
-    except Exception:
+    except OSError:
         pass
 
 
@@ -375,7 +375,7 @@ def _snapshot_file_state(working_dir: str) -> set[str]:
         )
         files = set(diff.stdout.strip().splitlines()) | set(untracked.stdout.strip().splitlines())
         return {f for f in files if f.strip()}
-    except Exception:
+    except (OSError, _sp.TimeoutExpired):
         return set()
 
 
@@ -802,7 +802,7 @@ def _doctor_rows(cfg: SwarmYamlConfig) -> list[dict[str, Any]]:
                 )
                 if probe.returncode != 0:
                     details = f"{binary} --help exited {probe.returncode}"
-            except Exception as exc:  # pragma: no cover - defensive
+            except (OSError, subprocess.TimeoutExpired) as exc:
                 details = f"probe failed: {exc}"
                 found = False
         rows.append(
@@ -920,9 +920,9 @@ def _run_monitor_app(run_dir: str, proc: Any) -> int:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait(timeout=3)
-                except Exception:
+                except OSError:
                     pass
-            except Exception:
+            except OSError:
                 pass
         else:
             click.echo(f"Dashboard detached; coordinator still running (pid={proc.pid})")
@@ -1470,7 +1470,7 @@ def inspect_command(run_dir: Path, tail: int, agent: str | None, task_id: str | 
     for line in show:
         try:
             item = json.loads(line)
-        except Exception:
+        except json.JSONDecodeError:
             continue
         payload = item.get("payload", {}) if isinstance(item.get("payload"), dict) else {}
         if agent and payload.get("agent_id") != agent:
@@ -2327,7 +2327,7 @@ def _run_research_with_monitor(**kwargs: Any) -> None:
     if kwargs.get("config_path"):
         try:
             refresh_interval_s = _tui_refresh_interval_s(load_swarm_yaml(Path(kwargs["config_path"])))
-        except Exception:
+        except (OSError, ValueError):
             refresh_interval_s = DEFAULT_LIVE_REFRESH_S
 
     app = _make_tui_app(

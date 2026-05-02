@@ -101,14 +101,11 @@ class ADRStore:
     def _migrate_schema(self) -> None:
         """Add the ``anchor_blob_oids`` column if missing.
 
-        Phase 2c retrofit — older ADR databases created under Phase 1/2a/2b
-        don't have this column yet. This runs at every open and is
-        idempotent, so a fresh store is a no-op and an old store gets
-        the column added in place.
-
-        Codex fix M9: commits the DDL explicitly so callers that invoke
-        the helper standalone (not via ``_create_tables``) still see the
-        new column persisted on the same connection.
+        Older ADR databases lack this column. Runs at every open and is
+        idempotent: a fresh store is a no-op, an old store gets the
+        column added in place. Commits the DDL explicitly so callers
+        that invoke this helper standalone (not via ``_create_tables``)
+        still see the new column persisted on the same connection.
         """
         conn = self._get_conn()
         columns = {
@@ -369,10 +366,10 @@ class ADRStore:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def __enter__(self):
+    def __enter__(self) -> ADRStore:
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> None:
         self.close()
 
     def close(self) -> None:

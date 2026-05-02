@@ -32,7 +32,7 @@ class ASTExplorerMini(Widget):
         self._ast_service = ast_service
         self._codemap: dict[str, Any] | None = None
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         yield Tree("AST Index", id="ast-tree")
 
     def on_mount(self) -> None:

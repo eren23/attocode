@@ -303,8 +303,9 @@ Return ONLY JSON:
         if ctx.track_orchestrator_usage:
             ctx.track_orchestrator_usage(response, "task-enrichment")
 
-        from attocode.integrations.swarm.lifecycle import parse_json
-        parsed = parse_json(response.content)
+        from attocode.tricks.json_utils import extract_json
+        _parsed_raw = extract_json(response.content)
+        parsed = _parsed_raw if isinstance(_parsed_raw, dict) else None
         if parsed:
             enriched_desc = parsed.get("enriched_description", "")
             if enriched_desc and len(enriched_desc) > len(subtask.description):

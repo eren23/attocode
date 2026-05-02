@@ -83,17 +83,14 @@ def _stamp_pin(result_text: str, *, persist: bool = True, ttl_seconds: int = 0) 
     the full 64-char manifest hash to the response footer so callers
     can later look the pin up via ``verify_pin`` or ``pin_resolve``.
 
-    Codex review fix M3: pin persistence is now the default (previously
-    the stamped footer was dropped and never re-findable) and the
-    ``manifest_hash`` printed in the footer is the complete hex string
-    (previously a ``...``-truncated prefix that couldn't be verified).
+    Pin persistence is the default and the ``manifest_hash`` printed in
+    the footer is the complete hex string (verifiable via ``verify_pin``
+    / ``pin_resolve``).
 
-    Codex round-4 fix P2 #1: project_dir is resolved via
-    ``_get_project_dir()`` in this module's namespace and then passed
-    *explicitly* into the pin_store helpers. Monkeypatching
-    ``pin_tools._get_project_dir`` therefore flows through to both
-    the manifest-hash computation and the PinStore path — previously
-    only direct patches to ``pin_store`` had any effect.
+    project_dir is resolved via ``_get_project_dir()`` in this module's
+    namespace and passed *explicitly* into the pin_store helpers, so
+    monkeypatching ``pin_tools._get_project_dir`` flows through to both
+    the manifest-hash computation and the PinStore path.
 
     Idempotent: calling twice with no intervening writes produces the
     same deterministic id, which collapses to a single upserted row in
@@ -162,11 +159,10 @@ def pin_current(ttl_seconds: int = 86400) -> str:
     Returns:
         The pin_id + a summary of hashed stores.
 
-    Codex round-5 fix: pin_current now derives the ``pin_id`` from the
-    manifest hash (``pin_<hex20>``) instead of ``make_pin_id()``'s random
-    token. This matches ``_stamp_pin`` and HTTP search-response pins —
-    two calls on unchanged state collapse to the same deterministic id,
-    so the PinStore upsert no longer accumulates duplicates.
+    The ``pin_id`` is derived deterministically from the manifest hash
+    (``pin_<hex20>``), matching ``_stamp_pin`` and HTTP search-response
+    pins. Two calls on unchanged state collapse to the same id, so the
+    PinStore upsert never accumulates duplicates.
     """
     project_dir = _get_project_dir()
     hashes = _compute_current_manifest_hashes(project_dir)

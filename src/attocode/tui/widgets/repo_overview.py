@@ -10,6 +10,7 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Collapsible, Input, Static, Tree
 
+from attocode.tui.widgets._path_utils import short_path as _short_path
 from attocode.tui.widgets.command_palette import fuzzy_match
 
 if TYPE_CHECKING:
@@ -429,15 +430,3 @@ class RepoOverviewWidget(Widget):
         except Exception:
             return None
 
-
-def _short_path(path: str, max_len: int = 45) -> str:
-    """Shorten a file path for display, preserving start and end."""
-    if len(path) <= max_len:
-        return path
-    parts = path.split("/")
-    if len(parts) <= 3:
-        return path
-    short = "/".join(parts[:1]) + "/\u2026/" + "/".join(parts[-2:])
-    if len(short) <= max_len:
-        return short
-    return path[: max_len - 1] + "\u2026"

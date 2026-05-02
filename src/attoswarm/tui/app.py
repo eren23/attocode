@@ -213,7 +213,6 @@ class SwarmSummaryBar(Static):
         resume_command: str = "",
     ) -> None:
         text = Text()
-        # Phase
         phase_style = {
             "initializing": "cyan italic",
             "decomposing": "cyan bold",

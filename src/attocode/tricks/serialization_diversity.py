@@ -7,12 +7,11 @@ over-fitting to specific formatting patterns.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from attocode.integrations.utilities.token_estimate import estimate_tokens
-from attocode.types.events import SimpleEventListener
+from attocode.types.events import SimpleEventEmitter, SimpleEventListener
 
 
 @dataclass
@@ -71,7 +70,7 @@ class _SeededRandom:
         return low + int(self.next_float() * (high - low + 1))
 
 
-class DiverseSerializer:
+class DiverseSerializer(SimpleEventEmitter):
     """Serializes data with controlled style variation.
 
     Varies indentation, key ordering, spacing, and array formatting
@@ -79,12 +78,12 @@ class DiverseSerializer:
     """
 
     def __init__(self, config: DiverseSerializerConfig | None = None) -> None:
+        super().__init__()
         self._config = config or DiverseSerializerConfig()
         import time
         seed = self._config.seed if self._config.seed is not None else int(time.time() * 1000)
         self._rng = _SeededRandom(seed)
         self._stats = DiversityStats()
-        self._listeners: list[DiverseSerializerEventListener] = []
 
     def serialize(self, data: Any) -> str:
         """Serialize with a randomly generated style."""
@@ -171,18 +170,6 @@ class DiverseSerializer:
         """Set the variation level (0.0 to 1.0)."""
         self._config.variation_level = max(0.0, min(1.0, level))
 
-    def on(self, listener: DiverseSerializerEventListener) -> Callable[[], None]:
-        """Subscribe to serializer events."""
-        self._listeners.append(listener)
-
-        def unsubscribe() -> None:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
-
-        return unsubscribe
-
     def _process_value(self, value: Any, style: SerializationStyle) -> Any:
         """Recursively process a value according to the style."""
         if isinstance(value, dict):
@@ -209,13 +196,6 @@ class DiverseSerializer:
             return [self._process_value(item, style) for item in value]
         else:
             return value
-
-    def _emit(self, event: str, data: dict[str, Any]) -> None:
-        for listener in self._listeners:
-            try:
-                listener(event, data)
-            except Exception:
-                pass
 
 
 def serialize_with_variation(data: Any, variation_level: float = 0.3) -> str:

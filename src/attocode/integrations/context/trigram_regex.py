@@ -7,14 +7,10 @@ list for patterns that can't be meaningfully decomposed (e.g., ".*").
 
 from __future__ import annotations
 
-import sys
+import re._parser as sre_parse  # type: ignore[import-not-found]
 import zlib
 
-# sre_parse is deprecated in 3.11+ in favor of re._parser
-if sys.version_info >= (3, 11):
-    import re._parser as sre_parse  # type: ignore[import-not-found]
-else:
-    import sre_parse  # type: ignore[import-deprecated]
+# Project requires Python 3.12+, so use the modern re._parser location.
 
 
 def _trigram_hash(tri: bytes) -> int:

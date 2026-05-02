@@ -19,11 +19,15 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from attocode.code_intel.api.auth import resolve_auth
+
+if TYPE_CHECKING:
+    from attocode.code_intel.indexing.debouncer import FileChangeDebouncer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["notify"])
@@ -54,7 +58,7 @@ class FlushRequest(BaseModel):
 
 # --- Module-level debouncer singleton ---
 
-_debouncer = None
+_debouncer: FileChangeDebouncer | None = None
 _pipeline_initialized = False
 
 # --- Idempotency cache ---
@@ -63,7 +67,7 @@ _idempotency_cache: dict[str, float] = {}
 _IDEMPOTENCY_TTL = 300  # 5 minutes
 
 
-def _get_debouncer():
+def _get_debouncer() -> FileChangeDebouncer:
     """Get or create the module-level debouncer singleton."""
     global _debouncer
     if _debouncer is None:
@@ -243,10 +247,7 @@ async def _handle_service_mode(project_id: str, branch: str, paths: list[str], *
 
 
 async def _call_sync(func, *args):
-    """Call a sync function from async context.
-
-    M7 fix: Use get_running_loop() instead of deprecated get_event_loop().
-    """
+    """Call a sync function from async context."""
     import asyncio
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, func, *args)

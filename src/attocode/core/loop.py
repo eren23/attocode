@@ -267,7 +267,7 @@ async def handle_auto_compaction(
     if ctx.economics is not None:
         try:
             budget_usage = float(getattr(ctx.economics, "usage_fraction", 0.0))
-        except Exception:
+        except (TypeError, ValueError):
             budget_usage = 0.0
     threshold = float(getattr(ctx.compaction_manager, "compaction_threshold", 0.8))
     effective_usage = max(context_usage, budget_usage)

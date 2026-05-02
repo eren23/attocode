@@ -32,7 +32,7 @@ class BranchOverlay:
     async def _bump_version(self, branch_id: uuid.UUID) -> int:
         """Increment branch version counter. Returns new version.
 
-        M10 fix: Raises clear ValueError if branch_id doesn't exist.
+        Raises ValueError if ``branch_id`` doesn't exist.
         """
         from sqlalchemy import update
 

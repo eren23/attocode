@@ -52,7 +52,7 @@ class SymbolStore:
         if skip_if_exists and await self.has_symbols(content_sha):
             return 0
 
-        # M5 fix: bulk DELETE instead of O(N) individual ORM deletes
+        # Bulk DELETE — O(N) individual ORM deletes are too slow here.
         from sqlalchemy import delete
         await self._session.execute(
             delete(Symbol).where(Symbol.content_sha == content_sha)

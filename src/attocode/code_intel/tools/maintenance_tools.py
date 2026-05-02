@@ -544,8 +544,8 @@ def clear_embeddings(confirm: bool = False, model: str = "") -> str:
     if not os.path.exists(db_path):
         return "clear_embeddings: no embeddings.db to clear."
 
-    # Codex fix m1: when ``model`` is set, the dry-run preview reports
-    # the count of rows matching the filter, not the total row count.
+    # When ``model`` is set, the dry-run preview reports the count of
+    # rows matching the filter, not the total row count.
     if model:
         try:
             count_conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -599,9 +599,9 @@ def clear_embeddings(confirm: bool = False, model: str = "") -> str:
                     store.clear_by_model(model) if model else store.clear_all()
                 )
             except VectorStoreRotationActiveError as exc:
-                # Codex fix B3: clear_embeddings would silently destroy
-                # rotation state. Surface the refusal as a readable tool
-                # response rather than an uncaught exception.
+                # Surface the refusal as a readable tool response rather
+                # than letting clear_embeddings silently destroy rotation
+                # state mid-flight.
                 return (
                     f"clear_embeddings: REFUSED — {exc}. Finish the "
                     f"rotation first (embeddings_rotate_cutover + "
@@ -1382,12 +1382,10 @@ def orphan_scan(auto_archive: bool = False) -> str:
                 )
             if auto_archive:
                 try:
-                    # Codex fix B2: archive (soft-delete) instead of
-                    # hard-deleting. MemoryStore.archive_by_id sets
-                    # status='archived' and preserves the row so the
-                    # learning can still be surfaced via
-                    # list_learnings(status='archived') and resurrected
-                    # via import_learnings if needed.
+                    # Archive (soft-delete) instead of hard-deleting so
+                    # the learning is still surfaceable via
+                    # list_learnings(status='archived') and resurrectable
+                    # via import_learnings.
                     store.archive_by_id(o["id"])
                     archived_count += 1
                 except Exception as exc:

@@ -282,7 +282,8 @@ async def trigger_generate_embeddings(
     Enqueues an ARQ background job to generate embeddings for all files
     in the specified branch that don't already have them.
     """
-    repo = await _get_repo(project_id, session)
+    # Validate that the repository exists (raises 404 otherwise).
+    await _get_repo(project_id, session)
 
     # Fail fast if no embedding provider is available
     from attocode.integrations.context.embeddings import create_embedding_provider

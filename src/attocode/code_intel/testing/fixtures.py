@@ -76,7 +76,6 @@ def code_intel_service(
     Resets all singletons before and after the test to ensure isolation.
     """
     import attocode.code_intel._shared as ci_shared
-    from attocode.code_intel.config import CodeIntelConfig
     from attocode.code_intel.service import CodeIntelService
 
     monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(sample_project))
@@ -85,7 +84,6 @@ def code_intel_service(
     ci_shared._service = None
     ci_shared._remote_service = None
 
-    config = CodeIntelConfig(project_dir=str(sample_project))
     service = CodeIntelService.get_instance(str(sample_project))
 
     yield service

@@ -9,12 +9,11 @@ from __future__ import annotations
 import re
 import time
 import uuid
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from attocode.types.events import SimpleEventListener
+from attocode.types.events import SimpleEventEmitter, SimpleEventListener
 
 
 class FailureCategory(StrEnum):
@@ -101,7 +100,7 @@ _CATEGORY_PATTERNS: list[tuple[re.Pattern[str], FailureCategory]] = [
 ]
 
 
-class FailureTracker:
+class FailureTracker(SimpleEventEmitter):
     """Tracks and analyzes agent failures.
 
     Records failures, auto-categorizes them, detects repeat
@@ -109,9 +108,9 @@ class FailureTracker:
     """
 
     def __init__(self, config: FailureTrackerConfig | None = None) -> None:
+        super().__init__()
         self._config = config or FailureTrackerConfig()
         self._failures: list[Failure] = []
-        self._listeners: list[FailureEventListener] = []
 
     def record_failure(self, input: FailureInput) -> Failure:  # noqa: A002
         """Record a new failure."""
@@ -256,18 +255,6 @@ class FailureTracker:
         """Clear all failures."""
         self._failures.clear()
 
-    def on(self, listener: FailureEventListener) -> Callable[[], None]:
-        """Subscribe to failure events."""
-        self._listeners.append(listener)
-
-        def unsubscribe() -> None:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
-
-        return unsubscribe
-
     def _detect_patterns(self) -> None:
         """Detect failure patterns."""
         unresolved = [f for f in self._failures if not f.resolved]
@@ -308,13 +295,6 @@ class FailureTracker:
                     suggestion=f"Systematic '{cat}' issue detected - investigate root cause",
                 )
                 self._emit("pattern.detected", {"pattern": pattern})
-
-    def _emit(self, event: str, data: dict[str, Any]) -> None:
-        for listener in self._listeners:
-            try:
-                listener(event, data)
-            except Exception:
-                pass
 
 
 def categorize_error(error: str) -> FailureCategory:
