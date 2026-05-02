@@ -335,7 +335,7 @@ class CodeIntelService:
         return engine.format_report(report)
 
     def _get_temporal_analyzer(self) -> TemporalCouplingAnalyzer:
-        if not hasattr(self, "_temporal_analyzer") or self._temporal_analyzer is None:
+        if self._temporal_analyzer is None:
             from attocode.integrations.context.temporal_coupling import (
                 TemporalCouplingAnalyzer,
             )
@@ -1263,7 +1263,7 @@ class CodeIntelService:
 
     async def _ensure_lsp_started(self) -> None:
         """Start LSP servers on first async call."""
-        if not getattr(self, "_lsp_auto_started", True):
+        if not self._lsp_auto_started:
             self._lsp_auto_started = True
             lsp = self._get_lsp_manager()
             try:
