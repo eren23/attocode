@@ -159,13 +159,13 @@ class IndexStore:
         ).fetchone()
         if row:
             if row[0] != SCHEMA_VERSION:
-                # Schema migrations clear all persisted index data — first
-                # request after upgrade will trigger a full re-index that
-                # may take a while on big repos. Surface the rebuild
-                # prominently so users (and ``readiness_report``) can
-                # explain the latency rather than seeing an unexplained
-                # stall. The flag below is read by readiness so the MCP
-                # tool can report "index rebuilt; full re-index pending".
+                # Schema migrations clear all persisted index data — the
+                # first request after upgrade will trigger a full
+                # re-index that may take a while on big repos. We log
+                # this prominently and stash the prior version on the
+                # store instance + in the SQLite metadata table so a
+                # future readiness probe can attribute a slow first
+                # request to the rebuild rather than to indexing bugs.
                 logger.warning(
                     "Index schema changed (%s -> %s); clearing %r and "
                     "rebuilding from source on next access — full "

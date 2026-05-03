@@ -296,6 +296,52 @@ class TestEvolveLoop:
         with pytest.raises(ValueError):
             evolve([], fixtures_dir=str(fixture_corpus))
 
+    def test_evolve_rejects_zero_max_generations(self, fixture_corpus: Path):
+        """Review C1 — ``max_generations=0`` would have produced an
+        EvolutionState with len(population) != len(fitnesses). Caller
+        passing 0 must get a clean ValueError, not a silently-broken
+        result."""
+        seed = _rule("r1")
+        with pytest.raises(ValueError, match="max_generations"):
+            evolve([seed], fixtures_dir=str(fixture_corpus), max_generations=0)
+
+    def test_evolve_continues_on_individual_evaluation_failure(
+        self, fixture_corpus: Path, monkeypatch,
+    ):
+        """Review C2 — when ``RuleTestRunner`` raises for a candidate, the
+        evolve loop must surface a zero-fitness for that individual
+        rather than crashing the whole run."""
+        from attocode.code_intel.rules import evolution as evo
+
+        seed = _rule("r1", pattern=r"\bdanger\b")
+        # Make every other evaluate_rule call raise — the safe wrapper
+        # should swallow it and substitute zero fitness.
+        original = evo.evaluate_rule
+        call_count = {"n": 0}
+
+        def flaky(rule, *, fixtures_dir, project_dir):
+            call_count["n"] += 1
+            if call_count["n"] % 2 == 0:
+                raise RuntimeError("synthetic fixture crash")
+            return original(rule, fixtures_dir=fixtures_dir, project_dir=project_dir)
+
+        monkeypatch.setattr(evo, "evaluate_rule", flaky)
+        # Should NOT raise. Best fitness is the seed (which evaluates fine).
+        state = evo.evolve(
+            [seed],
+            fixtures_dir=str(fixture_corpus),
+            max_generations=2,
+            population_size=4,
+            plateau_gens=99,
+            rng=random.Random(0),
+        )
+        assert state.generations_run >= 1
+        # At least one zero-fitness should have shown up across both gens.
+        zero_count = sum(
+            1 for f in state.fitnesses if f.composite == 0.0
+        )
+        assert zero_count >= 1
+
     def test_population_and_fitnesses_correspond_after_loop(self, fixture_corpus: Path):
         """C1 — `EvolutionState.fitnesses[i]` must rank `population[i]`.
         Specifically: after a plateau exit, the returned population is

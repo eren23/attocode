@@ -182,6 +182,99 @@ class TestIndexStoreRoundtrip:
         store.close()
 
 
+class TestConcurrentMutation:
+    """Review C3 — CrossRefIndex must tolerate concurrent ``add_*`` and
+    ``remove_file`` calls from the LSP callback thread plus the
+    background hydration thread. The lock added in this fix prevents
+    the dict-corruption race that previously could crash ``remove_file``
+    with a ``KeyError`` mid-iteration."""
+
+    def test_concurrent_add_reference_does_not_lose_writes(self):
+        import threading
+
+        idx = CrossRefIndex()
+        # Pre-define a callee so add_call_edge has a meaningful target.
+        idx.add_definition(_def("target"))
+
+        n_threads = 16
+        per_thread = 25
+        callers = [f"caller_{i}" for i in range(n_threads * per_thread)]
+        barrier = threading.Barrier(n_threads)
+
+        def worker(start: int):
+            barrier.wait()
+            for i in range(per_thread):
+                idx.add_reference(_ref(
+                    "target",
+                    caller=callers[start + i],
+                    file=f"f{start + i}.py",
+                    line=1,
+                ))
+
+        threads = [
+            threading.Thread(target=worker, args=(t * per_thread,))
+            for t in range(n_threads)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Every caller should be in callers_of[target] — no lost writes.
+        assert idx.callers_of["target"] == set(callers)
+
+    def test_concurrent_remove_file_during_add_reference(self):
+        """Stress-test interleaved removal + addition. The point isn't
+        that any specific ref survives — it's that no thread crashes
+        with ``KeyError`` or corrupts the dicts."""
+        import threading
+
+        idx = CrossRefIndex()
+        idx.add_definition(_def("target"))
+
+        stop = threading.Event()
+        errors: list[BaseException] = []
+
+        def adder():
+            i = 0
+            while not stop.is_set():
+                try:
+                    idx.add_reference(_ref(
+                        "target", caller=f"c{i}",
+                        file=f"f{i % 5}.py", line=1,
+                    ))
+                except BaseException as exc:
+                    errors.append(exc)
+                    return
+                i += 1
+
+        def remover():
+            i = 0
+            while not stop.is_set():
+                try:
+                    idx.remove_file(f"f{i % 5}.py")
+                except BaseException as exc:
+                    errors.append(exc)
+                    return
+                i += 1
+
+        threads = [
+            threading.Thread(target=adder),
+            threading.Thread(target=adder),
+            threading.Thread(target=remover),
+        ]
+        for t in threads:
+            t.start()
+        # Run for a short burst.
+        import time as _time
+        _time.sleep(0.1)
+        stop.set()
+        for t in threads:
+            t.join(timeout=2.0)
+
+        assert errors == [], errors
+
+
 class TestEnclosingCaller:
     def test_innermost_wins(self):
         symbols = [

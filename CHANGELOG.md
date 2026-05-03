@@ -44,7 +44,9 @@ ast-grep Tier 2 patterns.
   `caller_qualified_name`.
 - `IndexStore` schema bumped 2 → 3 to persist the new column. First
   startup after upgrade clears the cache and re-indexes from source —
-  surfaced in logs and `readiness_report`.
+  warned at WARNING level and stashed on the store instance plus in
+  SQLite metadata so a future readiness probe can attribute a slow
+  first request to the rebuild.
 - `CodeIntelService.call_graph_data` / `call_graph` for service-side
   consumption; PyCG harness rewired to validate against the new
   in-memory edge map (synthetic micro-bench hits P=R=1.0).

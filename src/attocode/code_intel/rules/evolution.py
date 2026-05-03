@@ -321,6 +321,10 @@ def evolve(
     by the ``test_rules`` MCP tool)."""
     if not seeds:
         raise ValueError("evolve() requires at least one seed rule")
+    if max_generations < 1:
+        raise ValueError(
+            f"evolve() requires max_generations >= 1, got {max_generations}"
+        )
 
     rng = rng or random.Random(42)
 
@@ -355,12 +359,24 @@ def evolve(
     last_evaluated_rules: list[UnifiedRule] = list(population)
     last_evaluated_fits: list[Fitness] = []
 
+    def _safe_evaluate(rule: UnifiedRule) -> Fitness:
+        """Defensive wrapper — RuleTestRunner can raise on a malformed
+        fixture or a tree-sitter crash. Surface the failure as a
+        zero-fitness candidate so the loop continues and the audit log
+        captures the broken individual instead of crashing the run."""
+        try:
+            return evaluate_rule(
+                rule, fixtures_dir=fixtures_dir, project_dir=project_dir,
+            )
+        except Exception as exc:  # noqa: BLE001 — we want all errors caught
+            logger.warning(
+                "evaluate_rule failed for %s: %s", rule.id, exc,
+            )
+            return Fitness(0.0, 0.0, 0.0, 0.0, 0.0)
+
     for gen in range(max_generations):
         generations_run = gen + 1
-        fitnesses = [
-            evaluate_rule(r, fixtures_dir=fixtures_dir, project_dir=project_dir)
-            for r in population
-        ]
+        fitnesses = [_safe_evaluate(r) for r in population]
         ranked = sorted(
             zip(population, fitnesses, strict=True),
             key=lambda x: -x[1].composite,

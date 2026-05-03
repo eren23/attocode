@@ -517,6 +517,49 @@ class TestStructuralFallback:
             f"got {[(f.rule_id, f.file, f.line) for f in debug_findings]}"
         )
 
+    def test_inline_rule_yaml_runtime_rejects_context_without_selector(self):
+        """Review I3 — programmatic UnifiedRule with context but no
+        selector reaches ``_build_inline_rule_yaml`` even though the
+        loader rejects pack-loaded rules in this shape. The runtime path
+        must fail loudly, not silently emit invalid ast-grep YAML."""
+        from attocode.code_intel.rules.executor import _build_inline_rule_yaml
+
+        bad = UnifiedRule(
+            id="r",
+            name="r",
+            description="m",
+            severity=RuleSeverity.LOW,
+            category=RuleCategory.STYLE,
+            languages=["go"],
+            structural_pattern="fmt.Println($X)",
+            structural_context="func _() { fmt.Println($X) }",
+            structural_selector="",  # the bug: missing
+            source=RuleSource.USER,
+            tier=RuleTier.STRUCTURAL,
+        )
+        with pytest.raises(ValueError, match="structural_selector"):
+            _build_inline_rule_yaml(bad, "go")
+
+    def test_yaml_quote_handles_newlines_and_quotes(self):
+        """Review I1 — synthesised / evolved patterns may contain
+        newlines or double-quotes. The double-quoted-with-escapes form
+        must round-trip via ``yaml.safe_load``."""
+        import yaml
+
+        from attocode.code_intel.rules.executor import _yaml_quote
+
+        for raw in (
+            'simple',
+            "with 'single' quotes",
+            'with "double" quotes',
+            'multi\nline\npattern',
+            'tab\there',
+            r'backslash\d+',
+        ):
+            quoted = _yaml_quote(raw)
+            decoded = yaml.safe_load(quoted)
+            assert decoded == raw, (raw, quoted, decoded)
+
     def test_loader_rejects_context_without_selector(self):
         """I4 — a YAML rule that sets ``structural_context`` but omits
         ``structural_selector`` produces invalid ast-grep YAML at runtime.

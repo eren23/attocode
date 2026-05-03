@@ -124,8 +124,21 @@ def _ast_grep_lang_name(lang: str) -> str:
 
 
 def _yaml_quote(value: str) -> str:
-    """Render ``value`` as a YAML single-quoted scalar, escaping quotes."""
-    return "'" + value.replace("'", "''") + "'"
+    """Render ``value`` as a YAML double-quoted scalar with escapes.
+
+    Double-quoted scalars handle every printable + control character via
+    backslash escapes. Single-quoted scalars cannot represent literal
+    newlines or tabs, so synthesised / evolved patterns containing those
+    (which are legal ast-grep input) would corrupt the inline-rules YAML.
+    """
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+    return '"' + escaped + '"'
 
 
 def _build_inline_rule_yaml(rule: UnifiedRule, lang: str) -> str:
@@ -148,10 +161,21 @@ def _build_inline_rule_yaml(rule: UnifiedRule, lang: str) -> str:
         "rule:",
     ]
     if rule.structural_context:
+        # Context without selector produces invalid ast-grep YAML — the
+        # parser needs a selector to know which AST kind to extract from
+        # the wrapping context. Loader-level validation rejects pack rules
+        # in this shape; this guard catches programmatically-constructed
+        # rules (synthesis / evolution / direct UnifiedRule(...) callers)
+        # so they fail loudly instead of silently no-op'ing.
+        if not rule.structural_selector:
+            raise ValueError(
+                f"rule {rule.qualified_id!r} has structural_context but no "
+                "structural_selector; ast-grep needs both to extract a "
+                "node from the wrapping context"
+            )
         parts.append("  pattern:")
         parts.append(f"    context: {_yaml_quote(rule.structural_context)}")
-        if rule.structural_selector:
-            parts.append(f"    selector: {rule.structural_selector}")
+        parts.append(f"    selector: {rule.structural_selector}")
     elif rule.structural_selector:
         # Selector without context: pair it with the pattern as object.
         parts.append("  pattern:")

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -113,12 +114,28 @@ class CrossRefIndex:
     # Optional persistent store (set via set_store)
     _store: Any = field(default=None, repr=False)
 
+    # Re-entrant lock guarding all mutating methods plus the iterating
+    # reads that need a consistent snapshot. Reentrancy matters because
+    # ``add_reference`` may call ``add_call_edge`` and ``remove_file``
+    # walks every other map. Background hydration (``ASTService``'s
+    # daemon thread) and LSP/MCP request threads can mutate the index
+    # concurrently, so the lock prevents corrupted dicts and torn lists.
+    _lock: threading.RLock = field(
+        default_factory=threading.RLock, repr=False, compare=False,
+    )
+
     def set_store(self, store: IndexStore) -> None:
         """Attach an IndexStore for write-through persistence."""
         self._store = store
 
     def persist_file(self, file_path: str) -> None:
         """Write-through: save current in-memory symbols/refs for a file to the store."""
+        if self._store is None:
+            return
+        with self._lock:
+            self._persist_file_locked(file_path)
+
+    def _persist_file_locked(self, file_path: str) -> None:
         if self._store is None:
             return
         # Collect symbols for this file
@@ -156,6 +173,12 @@ class CrossRefIndex:
 
         Returns the number of files loaded.
         """
+        if self._store is None:
+            return 0
+        with self._lock:
+            return self._load_from_store_locked()
+
+    def _load_from_store_locked(self) -> int:
         if self._store is None:
             return 0
 
@@ -210,6 +233,15 @@ class CrossRefIndex:
         Deduplicates by (qualified_name, file, line) — LSP wins on conflict.
         Returns the number of new entries added.
         """
+        with self._lock:
+            return self._merge_lsp_results_locked(file_path, definitions, references)
+
+    def _merge_lsp_results_locked(
+        self,
+        file_path: str,
+        definitions: list[SymbolLocation],
+        references: list[SymbolRef],
+    ) -> int:
         added = 0
 
         for loc in definitions:
@@ -273,20 +305,22 @@ class CrossRefIndex:
 
     def add_definition(self, loc: SymbolLocation) -> None:
         """Register a symbol definition."""
-        self.definitions.setdefault(loc.qualified_name, []).append(loc)
-        self.file_symbols.setdefault(loc.file_path, set()).add(loc.qualified_name)
-        # Populate inverted indexes
-        bare = loc.qualified_name.rsplit(".", 1)[-1]
-        self._name_to_qnames.setdefault(bare, set()).add(loc.qualified_name)
-        self._lower_to_qnames.setdefault(bare.lower(), set()).add(loc.qualified_name)
-        for token in _split_name_tokens(bare):
-            self._tokens_to_qnames.setdefault(token, set()).add(loc.qualified_name)
+        with self._lock:
+            self.definitions.setdefault(loc.qualified_name, []).append(loc)
+            self.file_symbols.setdefault(loc.file_path, set()).add(loc.qualified_name)
+            # Populate inverted indexes
+            bare = loc.qualified_name.rsplit(".", 1)[-1]
+            self._name_to_qnames.setdefault(bare, set()).add(loc.qualified_name)
+            self._lower_to_qnames.setdefault(bare.lower(), set()).add(loc.qualified_name)
+            for token in _split_name_tokens(bare):
+                self._tokens_to_qnames.setdefault(token, set()).add(loc.qualified_name)
 
     def add_reference(self, ref: SymbolRef) -> None:
         """Register a symbol reference."""
-        self.references.setdefault(ref.symbol_name, []).append(ref)
-        if ref.ref_kind == "call" and ref.caller_qualified_name:
-            self.add_call_edge(ref.caller_qualified_name, ref.symbol_name)
+        with self._lock:
+            self.references.setdefault(ref.symbol_name, []).append(ref)
+            if ref.ref_kind == "call" and ref.caller_qualified_name:
+                self.add_call_edge(ref.caller_qualified_name, ref.symbol_name)
 
     def add_call_edge(self, caller: str, callee: str) -> None:
         """Record that ``caller`` calls ``callee``.
@@ -298,16 +332,22 @@ class CrossRefIndex:
         """
         if not caller or not callee:
             return
-        self.call_edges.setdefault(caller, set()).add(callee)
-        self.callers_of.setdefault(callee, set()).add(caller)
+        with self._lock:
+            self.call_edges.setdefault(caller, set()).add(callee)
+            self.callers_of.setdefault(callee, set()).add(caller)
 
     def add_file_dependency(self, source: str, target: str) -> None:
         """Record that *source* imports from *target*."""
-        self.file_dependencies.setdefault(source, set()).add(target)
-        self.file_dependents.setdefault(target, set()).add(source)
+        with self._lock:
+            self.file_dependencies.setdefault(source, set()).add(target)
+            self.file_dependents.setdefault(target, set()).add(source)
 
     def remove_file(self, file_path: str) -> None:
         """Remove all index entries for a file (in-memory and store)."""
+        with self._lock:
+            self._remove_file_locked(file_path)
+
+    def _remove_file_locked(self, file_path: str) -> None:
         if self._store is not None:
             self._store.remove_file(file_path)
         # Snapshot callers defined here BEFORE we mutate file_symbols below.
@@ -504,43 +544,45 @@ class CrossRefIndex:
         """
         if depth < 1:
             return set()
-        visited: set[str] = set()
-        frontier: set[str] = {caller}
-        result: set[str] = set()
-        for _ in range(depth):
-            next_frontier: set[str] = set()
-            for node in frontier:
-                if node in visited:
-                    continue
-                visited.add(node)
-                callees = self.call_edges.get(node, set())
-                result.update(callees)
-                next_frontier.update(callees - visited)
-            if not next_frontier:
-                break
-            frontier = next_frontier
-        return result
+        with self._lock:
+            visited: set[str] = set()
+            frontier: set[str] = {caller}
+            result: set[str] = set()
+            for _ in range(depth):
+                next_frontier: set[str] = set()
+                for node in frontier:
+                    if node in visited:
+                        continue
+                    visited.add(node)
+                    callees = self.call_edges.get(node, set())
+                    result.update(callees)
+                    next_frontier.update(callees - visited)
+                if not next_frontier:
+                    break
+                frontier = next_frontier
+            return result
 
     def get_callers(self, callee: str, *, depth: int = 1) -> set[str]:
         """Return symbols that call ``callee`` up to ``depth`` hops back."""
         if depth < 1:
             return set()
-        visited: set[str] = set()
-        frontier: set[str] = {callee}
-        result: set[str] = set()
-        for _ in range(depth):
-            next_frontier: set[str] = set()
-            for node in frontier:
-                if node in visited:
-                    continue
-                visited.add(node)
-                callers = self.callers_of.get(node, set())
-                result.update(callers)
-                next_frontier.update(callers - visited)
-            if not next_frontier:
-                break
-            frontier = next_frontier
-        return result
+        with self._lock:
+            visited: set[str] = set()
+            frontier: set[str] = {callee}
+            result: set[str] = set()
+            for _ in range(depth):
+                next_frontier: set[str] = set()
+                for node in frontier:
+                    if node in visited:
+                        continue
+                    visited.add(node)
+                    callers = self.callers_of.get(node, set())
+                    result.update(callers)
+                    next_frontier.update(callers - visited)
+                if not next_frontier:
+                    break
+                frontier = next_frontier
+            return result
 
 
 def _rank_score(loc: SymbolLocation, match_score: float) -> float:
