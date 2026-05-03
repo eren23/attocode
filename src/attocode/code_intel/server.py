@@ -1,52 +1,31 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 48 tools for deep codebase understanding:
-- bootstrap: All-in-one orientation (summary + map + conventions + search)
-- relevant_context: Subgraph capsule for file(s) with neighbors and symbols
-- repo_map: Token-budgeted file tree with symbols
-- symbols: List symbols in a file
-- search_symbols: Fuzzy symbol search across codebase
-- dependencies: File import/importer relationships
-- impact_analysis: Transitive impact of file changes (BFS)
-- cross_references: Symbol definitions + usage sites
-- file_analysis: Detailed single-file analysis
-- dependency_graph: Dependency graph from a starting file
-- project_summary: High-level project overview (CLAUDE.md bootstrap)
-- hotspots: Risk/complexity analysis with ranked hotspots
-- conventions: Code style and convention detection (with optional directory scoping)
-- lsp_definition: Type-resolved go-to-definition
-- lsp_references: All references with type awareness
-- lsp_hover: Type signature + docs for symbol
-- lsp_diagnostics: Errors/warnings from language server
-- graph_query: Raw graph traversal query
-- graph_dsl: Graph query language for dependency traversal
-- explore_codebase: Hierarchical drill-down navigation
-- find_related: Find files related to a given file
-- community_detection: Detect module communities in the dependency graph
-- security_scan: Secret/anti-pattern/dependency scanning
-- semantic_search: Natural language code search
-- semantic_search_status: Check embedding index progress
-- analyze: Rule-based analysis with language packs (Go, Python, TS, Rust, Java)
-- list_rules: Browse available analysis rules by language/category/severity
-- list_packs: List installed language analysis packs
-- install_pack: Install a language analysis pack (go, python, ts, rust, java)
-- register_rule: Register a custom YAML rule at runtime
-- notify_file_changed: Notify server of external file modifications
-- recall: Retrieve relevant project learnings
-- record_learning: Record patterns/conventions/gotchas
-- learning_feedback: Mark learnings as helpful/unhelpful
-- list_learnings: Browse stored learnings
-- record_adr: Record an architecture decision
-- list_adrs: Browse architecture decision records
-- get_adr: Get full details of an ADR
-- update_adr_status: Update ADR lifecycle status
-- dead_code: Detect unreachable/unused code
-- distill: Distill code into compressed representations
-- code_evolution: Trace how code has changed over time
-- recent_changes: Show recent file modifications
-- review_change: Unified change review (security + conventions)
-- explain_impact: Blast radius explanation with risk assessment
-- suggest_tests: Test file recommendations for changed files
+Tool families (full list registered at runtime; query via your MCP
+client's tool-listing endpoint):
+
+- **Navigation & repo map**: bootstrap, relevant_context, repo_map,
+  symbols, search_symbols, file_analysis, project_summary,
+  explore_codebase, find_related, community_detection
+- **Cross-refs & impact**: dependencies, impact_analysis,
+  cross_references, dependency_graph, graph_query, graph_dsl,
+  call_graph, explain_impact
+- **LSP**: lsp_definition, lsp_references, lsp_hover, lsp_diagnostics
+- **Search**: semantic_search, semantic_search_status, fast_search,
+  fuzzy_search, frecency_search, regex_search, cross_mode_search
+- **Rules engine**: analyze, list_rules, list_packs, install_pack,
+  install_community_pack, register_rule, test_rules, ci_scan,
+  rule_stats, rule_feedback, rule_hygiene, synthesize_rule,
+  evolve_rules, import_rules
+- **Quality / hygiene**: hotspots, conventions, dead_code, distill,
+  security_scan, suggest_tests, review_change, readiness_report
+- **History**: code_evolution, recent_changes, churn_hotspots,
+  change_coupling
+- **Memory & learning**: recall, record_learning, learning_feedback,
+  list_learnings, record_adr, list_adrs, get_adr, update_adr_status
+
+Language packs shipped: **go, python, typescript, rust, java, cpp,
+csharp, php, ruby, kotlin** (10 packs, ~91 rules — Tier-1 regex plus
+Tier-2 ast-grep structural patterns where ast-grep is on PATH).
 
 Usage::
 
