@@ -127,10 +127,37 @@ def extract_imports(content: bytes, path: str, language: str | None) -> list[str
     return imports
 
 
+def _enclosing_caller(symbols: list[dict], line: int) -> str:
+    """Return the qualified name of the function/method whose line range
+    contains ``line``. When several symbols nest, the innermost (smallest
+    span) wins. Returns an empty string when no enclosing function exists
+    (top-level call) or when symbols extraction failed.
+    """
+    best_qname = ""
+    best_span = -1
+    for sym in symbols:
+        kind = sym.get("kind", "")
+        if kind not in ("function", "method"):
+            continue
+        start = sym.get("line_start", 0)
+        end = sym.get("line_end", start)
+        if start <= line <= end:
+            span = end - start
+            if best_span < 0 or span < best_span:
+                qname = sym.get("qualified_name") or sym.get("name") or ""
+                if qname:
+                    best_qname = qname
+                    best_span = span
+    return best_qname
+
+
 def extract_references(content: bytes, path: str) -> list[dict]:
     """Extract symbol references (call sites, imports) from file content.
 
-    Returns list of dicts: {symbol_name, ref_kind, line}.
+    Returns list of dicts: {symbol_name, ref_kind, line, caller_qualified_name}.
+    ``caller_qualified_name`` is the enclosing function/method (best-effort,
+    inferred by line range against extracted symbols); empty for top-level
+    calls or when symbol extraction is unavailable.
     """
     import re
 
@@ -142,6 +169,13 @@ def extract_references(content: bytes, path: str) -> list[dict]:
         text = content.decode("utf-8", errors="replace")
     except Exception:
         return []
+
+    # Symbols are needed to attribute callers; failure here is non-fatal,
+    # we just emit refs without caller_qualified_name.
+    try:
+        symbols = extract_symbols(content, path)
+    except Exception:
+        symbols = []
 
     refs: list[dict] = []
     seen: set[tuple[str, int]] = set()  # dedupe (name, line)
@@ -158,6 +192,8 @@ def extract_references(content: bytes, path: str) -> list[dict]:
         if re.match(r"^\s*(?:from\s|import\s|export\s.*from)", line_text):
             continue
 
+        caller = _enclosing_caller(symbols, i)
+
         # Function/method calls: name(
         for m in re.finditer(r"\b(\w+)\s*\(", stripped):
             name = m.group(1)
@@ -167,7 +203,12 @@ def extract_references(content: bytes, path: str) -> list[dict]:
             key = (name, i)
             if key not in seen:
                 seen.add(key)
-                refs.append({"symbol_name": name, "ref_kind": "call", "line": i})
+                refs.append({
+                    "symbol_name": name,
+                    "ref_kind": "call",
+                    "line": i,
+                    "caller_qualified_name": caller,
+                })
 
         # Method calls: obj.method(
         for m in re.finditer(r"\b\w+\.(\w+)\s*\(", stripped):
@@ -177,7 +218,12 @@ def extract_references(content: bytes, path: str) -> list[dict]:
             key = (name, i)
             if key not in seen:
                 seen.add(key)
-                refs.append({"symbol_name": name, "ref_kind": "call", "line": i})
+                refs.append({
+                    "symbol_name": name,
+                    "ref_kind": "call",
+                    "line": i,
+                    "caller_qualified_name": caller,
+                })
 
     return refs
 

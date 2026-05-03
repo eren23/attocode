@@ -88,6 +88,31 @@ def cross_references(symbol_name: str) -> str:
 
 
 @mcp.tool()
+def call_graph(
+    symbol: str,
+    direction: str = "callees",
+    depth: int = 1,
+) -> str:
+    """Function-level call-graph traversal — who calls whom.
+
+    With ``direction="callees"``, returns symbols called by ``symbol``
+    (forward edges). With ``direction="callers"``, returns symbols that
+    call ``symbol`` (reverse edges). ``depth`` caps the BFS hops.
+
+    Edges are populated from tree-sitter parsing during indexing and
+    optionally enriched by LSP. The set of edges grows monotonically
+    as more files get indexed; rerun after a full ``reindex`` for
+    completeness.
+
+    Args:
+        symbol: Function or method name (qualified or bare).
+        direction: "callees" (forward) or "callers" (reverse).
+        depth: Maximum BFS hops (default 1).
+    """
+    return _get_service().call_graph(symbol, direction=direction, depth=depth)
+
+
+@mcp.tool()
 def dependencies(path: str) -> str:
     """Get import/dependency relationships for a file.
 

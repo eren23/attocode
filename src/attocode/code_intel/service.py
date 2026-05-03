@@ -528,6 +528,98 @@ class CodeIntelService:
             "total_references": len(references),
         }
 
+    def call_graph_data(
+        self,
+        symbol: str,
+        *,
+        direction: str = "callees",
+        depth: int = 1,
+    ) -> dict:
+        """Return structured call-graph data for ``symbol``.
+
+        ``direction`` is "callees" (forward) or "callers" (reverse).
+        ``depth`` caps the BFS hops; results from intermediate hops are
+        included alongside the final frontier.
+        """
+        svc = self._get_ast_service()
+        definitions = svc.find_symbol(symbol)
+        # Ensure the file(s) containing the symbol have references parsed
+        # so call-edges are populated on demand for the first invocation.
+        for loc in definitions:
+            try:
+                svc.ensure_references_indexed(loc.file_path)
+            except Exception:
+                pass
+
+        candidates: set[str] = {symbol}
+        for loc in definitions:
+            if loc.qualified_name:
+                candidates.add(loc.qualified_name)
+
+        edges: set[str] = set()
+        for caller_name in candidates:
+            if direction == "callers":
+                edges.update(svc.get_callers_of(caller_name, depth=depth))
+            else:
+                edges.update(svc.get_callees_of(caller_name, depth=depth))
+
+        return {
+            "symbol": symbol,
+            "direction": direction,
+            "depth": depth,
+            "definitions": [
+                {
+                    "kind": loc.kind, "name": loc.name,
+                    "qualified_name": loc.qualified_name,
+                    "file_path": loc.file_path,
+                    "start_line": loc.start_line, "end_line": loc.end_line,
+                }
+                for loc in definitions
+            ],
+            "edges": sorted(edges),
+            "total_edges": len(edges),
+        }
+
+    def call_graph(
+        self,
+        symbol: str,
+        *,
+        direction: str = "callees",
+        depth: int = 1,
+    ) -> str:
+        """Human-readable call-graph traversal for ``symbol``."""
+        if direction not in ("callees", "callers"):
+            return f"Error: direction must be 'callees' or 'callers', got '{direction}'"
+        if depth < 1:
+            return "Error: depth must be >= 1"
+
+        data = self.call_graph_data(symbol, direction=direction, depth=depth)
+
+        verb = "calls" if direction == "callees" else "is called by"
+        lines = [f"Call graph for '{symbol}' (direction={direction}, depth={depth}):"]
+
+        defs = data["definitions"]
+        if defs:
+            lines.append(f"\n  Definitions ({len(defs)}):")
+            for loc in defs:
+                lines.append(
+                    f"    {loc['kind']} {loc['qualified_name'] or loc['name']}  "
+                    f"in {loc['file_path']}:{loc['start_line']}"
+                )
+        else:
+            lines.append("\n  Definitions: (none found — symbol may be external or unindexed)")
+
+        edges = data["edges"]
+        lines.append(f"\n  {symbol} {verb} ({len(edges)}):")
+        if edges:
+            for edge in edges[:200]:
+                lines.append(f"    {edge}")
+            if len(edges) > 200:
+                lines.append(f"    ... and {len(edges) - 200} more")
+        else:
+            lines.append("    (none)")
+        return "\n".join(lines)
+
     def file_analysis_data(self, path: str) -> dict:
         """Return structured file analysis."""
         analyzer = self._get_code_analyzer()

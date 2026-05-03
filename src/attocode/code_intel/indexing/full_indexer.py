@@ -290,6 +290,7 @@ class FullIndexer:
                         symbol_name=r["symbol_name"],
                         ref_kind=r["ref_kind"],
                         line=r["line"],
+                        caller_qualified_name=r.get("caller_qualified_name", ""),
                     ))
                 stats["references_found"] += len(refs)
             except Exception as e:

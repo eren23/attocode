@@ -750,6 +750,20 @@ class ASTService:
         self._ensure_initialized()
         return self._index.get_references(symbol)
 
+    def get_callees_of(self, caller: str, *, depth: int = 1) -> set[str]:
+        """Function-level call-graph traversal: callees up to ``depth`` hops.
+
+        Use ``ensure_references_indexed`` for files containing ``caller``
+        first if you need on-demand population.
+        """
+        self._ensure_initialized()
+        return self._index.get_callees(caller, depth=depth)
+
+    def get_callers_of(self, callee: str, *, depth: int = 1) -> set[str]:
+        """Function-level call-graph traversal: callers up to ``depth`` hops back."""
+        self._ensure_initialized()
+        return self._index.get_callers(callee, depth=depth)
+
     def get_dependencies(self, path: str) -> set[str]:
         """Files that *path* imports from."""
         self._ensure_initialized()
@@ -792,12 +806,20 @@ class ASTService:
         tool_name: str,
         file_path: str,
         results: list[Any],
+        query: dict | None = None,
     ) -> int:
         """Ingest LSP results into the cross-reference index.
 
         Called by LSPManager's on_result_callback. Converts LSP locations
         to SymbolLocation/SymbolRef with ``source="lsp"`` and merges them
         into the index.
+
+        ``query`` carries the original request position
+        (``{"line": int, "col": int}``, both 0-indexed) so that for
+        ``references`` results we can resolve the *queried* symbol — that
+        symbol is the callee, while each result's enclosing function is
+        the caller. Together they feed high-confidence call-graph edges
+        with ``source="lsp"`` attribution.
 
         Returns the number of new entries added.
         """
@@ -807,6 +829,14 @@ class ASTService:
         rel = self._to_rel(file_path)
         definitions: list[SymbolLocation] = []
         references: list[SymbolRef] = []
+
+        # For ``references`` results, look up the queried symbol once —
+        # that's the callee for every edge we're about to record.
+        callee_name = ""
+        if tool_name == "references" and query is not None:
+            q_line = int(query.get("line", 0)) + 1  # LSP is 0-indexed
+            q_name, _q_qname, _q_kind = self._resolve_symbol_at_line(rel, q_line)
+            callee_name = q_name
 
         for item in results:
             # LSPLocation has .uri, .range (.start.line, .start.character)
@@ -824,7 +854,10 @@ class ASTService:
 
             line = item.range.start.line + 1  # LSP is 0-indexed
 
-            # Look up symbol name from AST cache at this line
+            # Look up the symbol whose body contains this line — for
+            # ``definition`` results it identifies the defined symbol;
+            # for ``references`` results it's the *enclosing* function
+            # (the caller of ``callee_name``).
             name, qname, kind = self._resolve_symbol_at_line(item_rel, line)
             if not name:
                 # Can't determine symbol name — skip to avoid polluting index
@@ -842,13 +875,29 @@ class ASTService:
                 )
                 definitions.append(loc)
             elif tool_name == "references":
-                ref = SymbolRef(
-                    symbol_name=name,
-                    ref_kind="call",
-                    file_path=item_rel,
-                    line=line,
-                    source="lsp",
-                )
+                # When we know the queried (callee) symbol, store the ref
+                # against it and attribute the *enclosing* function as the
+                # caller — that's the call-graph edge ``qname → callee``.
+                # When ``query`` is missing (legacy callers), fall back to
+                # the prior behaviour (symbol_name = enclosing function,
+                # no caller) so we don't regress.
+                if callee_name:
+                    ref = SymbolRef(
+                        symbol_name=callee_name,
+                        ref_kind="call",
+                        file_path=item_rel,
+                        line=line,
+                        source="lsp",
+                        caller_qualified_name=qname,
+                    )
+                else:
+                    ref = SymbolRef(
+                        symbol_name=name,
+                        ref_kind="call",
+                        file_path=item_rel,
+                        line=line,
+                        source="lsp",
+                    )
                 references.append(ref)
 
         if definitions or references:
@@ -1113,6 +1162,30 @@ class ASTService:
         if not known_symbols:
             return
 
+        # Build a list of (qualified_name, start_line, end_line) for every
+        # function/method in this file so we can attribute each call site to
+        # its enclosing scope and feed the call-graph edges. Innermost wins
+        # via smallest span on tie.
+        scopes: list[tuple[str, int, int]] = []
+        for fn in ast.functions:
+            scopes.append((fn.name, fn.start_line, fn.end_line))
+        for cls in ast.classes:
+            for method in cls.methods:
+                scopes.append(
+                    (f"{cls.name}.{method.name}", method.start_line, method.end_line)
+                )
+
+        def _enclosing_qname(line_no: int) -> str:
+            best_q = ""
+            best_span = -1
+            for qname, s, e in scopes:
+                if s <= line_no <= e:
+                    span = e - s
+                    if best_span < 0 or span < best_span:
+                        best_q = qname
+                        best_span = span
+            return best_q
+
         # Build a regex pattern for call sites: symbol_name(
         # Only scan for symbols that are actually defined somewhere.
         # Skip comment lines and string literals to reduce false positives.
@@ -1134,9 +1207,18 @@ class ASTService:
             if stripped.startswith("#"):
                 continue
 
+            # Skip definition lines — the symbol's own name on its def line
+            # is not a call site even though the regex matches "name(".
+            if re.match(
+                r"^\s*(?:async\s+)?(?:def|class|function|interface|type)\s",
+                line,
+            ):
+                continue
+
             # Strip inline comments and string literals for matching
             # Remove quoted strings to avoid matching inside them
             clean_line = re.sub(r'(["\'])(?:(?!\1).)*\1', '""', line)
+            caller = _enclosing_qname(i)
 
             # Find function/method calls: name(
             for m in re.finditer(r"\b(\w+)\s*\(", clean_line):
@@ -1147,6 +1229,7 @@ class ASTService:
                         ref_kind="call",
                         file_path=rel_path,
                         line=i,
+                        caller_qualified_name=caller,
                     )
                     self._index.add_reference(ref)
 
@@ -1159,5 +1242,6 @@ class ASTService:
                         ref_kind="attribute",
                         file_path=rel_path,
                         line=i,
+                        caller_qualified_name=caller,
                     )
                     self._index.add_reference(ref)

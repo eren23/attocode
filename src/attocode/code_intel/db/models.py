@@ -230,6 +230,13 @@ class SymbolReference(Base):
     symbol_name: Mapped[str] = mapped_column(String(500), nullable=False)
     ref_kind: Mapped[str] = mapped_column(String(20), nullable=False)
     line: Mapped[int] = mapped_column(nullable=False)
+    # Qualified name of the function/method enclosing this reference. Empty
+    # for top-level calls or when the parser could not attribute a caller.
+    # Populated by extract_references() in full_indexer's third pass and
+    # consumed by call-graph queries over HTTP-indexed repos.
+    caller_qualified_name: Mapped[str] = mapped_column(
+        String(500), nullable=False, server_default="",
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
