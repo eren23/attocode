@@ -1,0 +1,48 @@
+# Java structural patterns (ast-grep, Tier 2).
+
+- id: java-system-out-println
+  name: System.out.println left in source
+  structural_pattern: 'System.out.println($X)'
+  message: "System.out.println($X) — use a logger framework instead"
+  severity: low
+  category: style
+  languages: [java]
+  confidence: 0.35
+  tags: [debug]
+  explanation: >
+    Direct ``System.out`` writes bypass the logging pipeline (SLF4J,
+    Log4j, JUL). They aren't filterable by level or routable to log
+    aggregators.
+  recommendation: "Use SLF4J: logger.info(\"…\", arg) — or remove if it was debug output."
+
+- id: java-print-stack-trace
+  name: Throwable.printStackTrace() called
+  structural_pattern: '$E.printStackTrace()'
+  message: "$E.printStackTrace() — log the exception via your logger instead"
+  severity: medium
+  category: correctness
+  languages: [java]
+  confidence: 0.7
+  explanation: >
+    ``printStackTrace()`` writes to ``System.err`` with no metadata or
+    context. Logging frameworks attach timestamps, levels, MDC, and
+    can ship the trace alongside structured fields.
+  recommendation: "logger.error(\"context\", e) — passes the exception so the framework formats it."
+  examples:
+    - bad: "} catch (IOException e) {\n    e.printStackTrace();\n}"
+      good: "} catch (IOException e) {\n    logger.error(\"failed to read file\", e);\n}"
+      explanation: "The logger captures the full stack trace plus your message."
+
+- id: java-thread-sleep
+  name: Thread.sleep call
+  structural_pattern: 'Thread.sleep($X)'
+  message: "Thread.sleep($X) blocks the thread — usually a workaround for missing sync"
+  severity: low
+  category: suspicious
+  languages: [java]
+  confidence: 0.4
+  explanation: >
+    Hardcoded sleeps are flaky in tests and waste latency in services.
+    Prefer ``CompletableFuture``, ``CountDownLatch``, or scheduled
+    executors with proper retry/backoff.
+  recommendation: "Use CompletableFuture/CountDownLatch or a ScheduledExecutorService with backoff."

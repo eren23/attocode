@@ -1,0 +1,55 @@
+# Python structural patterns (ast-grep, Tier 2).
+#
+# These complement the regex-based rules in ``performance.yaml`` —
+# patterns that are awkward or imprecise as regex but trivial as AST.
+
+- id: py-debug-print-leftover
+  name: Debug print left in source
+  structural_pattern: 'print($X)'
+  message: "Debug print($X) left in source — remove before commit or switch to logger"
+  severity: low
+  category: style
+  languages: [python]
+  confidence: 0.35
+  tags: [debug]
+  explanation: >
+    A bare ``print()`` is fine in scripts and CLI tools but usually
+    indicates a debug statement when found inside libraries or service
+    code. Easy to leave behind during quick iteration.
+  recommendation: "Remove the print or replace with logging.debug/info"
+  examples:
+    - bad: "def handle(req):\n    print(req)\n    return process(req)"
+      good: "logger.debug('handling %s', req)"
+      explanation: "Use the standard logging module so verbosity can be controlled at deploy time."
+
+- id: py-assert-in-non-test
+  name: Plain assert outside tests
+  structural_pattern: 'assert $X'
+  message: "assert $X — stripped when Python runs with -O; use explicit checks in production"
+  severity: medium
+  category: correctness
+  languages: [python]
+  confidence: 0.5
+  explanation: >
+    ``assert`` is removed when the interpreter runs with ``-O``. Tests
+    and dev-time invariants are fine; production code paths that rely
+    on the check (input validation, postconditions) silently lose their
+    guard.
+  recommendation: "Raise an explicit exception (ValueError, AssertionError) instead of assert."
+
+- id: py-blocking-sleep
+  name: Blocking time.sleep call
+  structural_pattern: 'time.sleep($X)'
+  message: "time.sleep($X) blocks the thread — wrong inside async code or hot loops"
+  severity: low
+  category: performance
+  languages: [python]
+  confidence: 0.5
+  explanation: >
+    ``time.sleep`` blocks the thread. Inside ``async def`` functions
+    use ``await asyncio.sleep`` instead so the event loop can do work.
+  recommendation: "Use asyncio.sleep in async code; reserve time.sleep for sync scripts and tests."
+  examples:
+    - bad: "async def poll():\n    time.sleep(1)"
+      good: "async def poll():\n    await asyncio.sleep(1)"
+      explanation: "Frees the event loop while waiting."

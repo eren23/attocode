@@ -136,6 +136,15 @@ class UnifiedRule:
     languages: list[str] = field(default_factory=list)  # empty = all
     pattern: re.Pattern[str] | None = None  # compiled regex (tier 1)
     structural_pattern: str = ""  # ast-grep pattern string (tier 2)
+    # Optional disambiguators for ast-grep patterns. ``structural_context``
+    # wraps the pattern in a larger code snippet so the parser picks the
+    # intended AST shape (e.g. ``func _() { fmt.Println($X) }`` forces a
+    # call_expression in Go, where ``fmt.Println($X)`` alone parses as
+    # type_conversion). ``structural_selector`` then names the AST kind
+    # to extract from inside that context. Setting either switches the
+    # executor from ``sg run --pattern`` to ``sg scan --inline-rules``.
+    structural_context: str = ""
+    structural_selector: str = ""
     cwe: str = ""
     tags: list[str] = field(default_factory=list)
     source: RuleSource = RuleSource.BUILTIN
@@ -143,6 +152,7 @@ class UnifiedRule:
     confidence: float = 0.8
     fix: AutoFix | None = None
     enabled: bool = True
+    disabled_reason: str = ""  # "dead" | "noisy" | "" — set by hygiene auto-prune
     pack: str = ""  # language pack name (e.g. "go", "python")
     explanation: str = ""  # why this matters (for agent context)
     examples: list[FewShotExample] = field(default_factory=list)

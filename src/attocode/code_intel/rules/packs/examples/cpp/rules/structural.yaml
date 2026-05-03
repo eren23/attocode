@@ -1,0 +1,42 @@
+# C / C++ structural patterns (ast-grep, Tier 2).
+
+- id: cpp-printf-debug
+  name: printf debug leftover
+  structural_pattern: 'printf($$$X)'
+  structural_context: 'void _f() { printf($$$X); }'
+  structural_selector: call_expression
+  message: "printf — debug leftover, route through proper logging"
+  severity: low
+  category: style
+  languages: [c, cpp]
+  confidence: 0.35
+  tags: [debug]
+  explanation: >
+    Bare ``printf`` calls aren't filtered by level and bypass any logging
+    pipeline. In libraries especially, leaking to stdout is surprising.
+  recommendation: "Use a logging framework (spdlog, glog) or remove if it was a debug aid."
+
+- id: cpp-cout-debug
+  name: std::cout debug leftover
+  structural_pattern: 'std::cout << $X'
+  message: "std::cout << $X — debug leftover, prefer a logger in non-CLI code"
+  severity: low
+  category: style
+  languages: [cpp]
+  confidence: 0.35
+  tags: [debug]
+  recommendation: "Use spdlog/glog for filterable output; remove if it was a debug aid."
+
+- id: cpp-c-style-cast
+  name: C-style cast in C++
+  structural_pattern: '($T)$EXPR'
+  message: "C-style cast — prefer static_cast / reinterpret_cast / const_cast for clearer intent"
+  severity: low
+  category: style
+  languages: [cpp]
+  confidence: 0.3
+  explanation: >
+    C-style casts collapse static_cast, reinterpret_cast, and const_cast
+    into one syntax. The C++ named casts make the kind of conversion
+    explicit and let the compiler check semantics.
+  recommendation: "Use static_cast<T>(expr), reinterpret_cast<T>(expr), or const_cast<T>(expr)."

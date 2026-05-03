@@ -1,0 +1,73 @@
+# Ruby security and correctness rules (Tier 1 regex).
+
+- id: ruby-yaml-load-untrusted
+  name: YAML.load on untrusted input
+  pattern: '\bYAML\.load\b'
+  message: "YAML.load can deserialize arbitrary objects — use YAML.safe_load instead"
+  severity: high
+  category: security
+  languages: [ruby]
+  cwe: CWE-502
+  confidence: 0.85
+  explanation: >
+    ``YAML.load`` instantiates whatever Ruby classes appear in the
+    document, allowing attackers to construct objects with side effects
+    or to gain code execution via gadget chains.
+  recommendation: "Use YAML.safe_load(data) — restricts to a small set of safe types."
+
+- id: ruby-marshal-load-untrusted
+  name: Marshal.load on untrusted input
+  pattern: '\bMarshal\.load\b'
+  message: "Marshal.load deserializes arbitrary Ruby objects — never call on untrusted input"
+  severity: critical
+  category: security
+  languages: [ruby]
+  cwe: CWE-502
+  confidence: 0.9
+  recommendation: "Use a structured format (JSON, MessagePack) for untrusted data."
+
+- id: ruby-send-with-user-input
+  name: .send/.public_send with non-literal method name
+  pattern: '\.(?:public_)?send\s*\(\s*[^"'']'
+  message: "send with dynamic method name — risk of invoking arbitrary methods"
+  severity: medium
+  category: security
+  languages: [ruby]
+  cwe: CWE-470
+  confidence: 0.5
+  recommendation: "Whitelist allowed method names, or refactor to explicit dispatch."
+
+- id: ruby-where-string-interpolation
+  name: ActiveRecord .where with string interpolation
+  pattern: '\.where\s*\(\s*["''][^"'']*#\{'
+  message: ".where(\"...#{var}...\") — SQL injection risk; use placeholders"
+  severity: high
+  category: security
+  languages: [ruby]
+  cwe: CWE-89
+  confidence: 0.85
+  recommendation: "Use .where(\"col = ?\", value) or .where(col: value) to parameterize."
+  examples:
+    - bad: 'User.where("name = #{params[:name]}")'
+      good: 'User.where("name = ?", params[:name])'
+      explanation: "Placeholder syntax escapes the value through ActiveRecord."
+
+- id: ruby-rescue-bare
+  name: Bare rescue catches everything
+  pattern: '^\s*rescue\s*(?:=>|\n|$)'
+  message: "Bare rescue catches StandardError and below — usually too broad"
+  severity: medium
+  category: correctness
+  languages: [ruby]
+  confidence: 0.55
+  recommendation: "Catch specific exception classes (rescue Net::HTTPError => e)."
+
+- id: ruby-update-without-bang
+  name: ActiveRecord .update return value ignored
+  pattern: '\.(?:update|save)(?:\([^)]*\))?\s*$'
+  message: ".update / .save without ! returns false on failure — check the result or use the bang variant"
+  severity: low
+  category: correctness
+  languages: [ruby]
+  confidence: 0.4
+  recommendation: "Use .update! / .save! to raise on failure, or check the return value."

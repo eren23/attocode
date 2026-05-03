@@ -147,10 +147,17 @@ def _parse_yaml_rule(
     origin: str = "",
 ) -> UnifiedRule | None:
     """Parse a single YAML rule dict into a UnifiedRule."""
-    # "pattern" is required unless "patterns" or "pattern-either" provides it
+    # ``pattern`` is required unless one of: ``patterns``/``pattern-either``
+    # provides a composite, OR ``structural_pattern`` provides a Tier-2
+    # ast-grep matcher (message-only structural rules are valid).
     has_composite = "patterns" in data or "pattern-either" in data
+    has_structural = bool(data.get("structural_pattern"))
+    # Allow ``description`` as a synonym for ``message`` so structural-only
+    # rules don't have to repeat themselves.
+    if "message" not in data and "description" in data:
+        data = {**data, "message": data["description"]}
     required = ["id", "message", "severity"]
-    if not has_composite:
+    if not (has_composite or has_structural):
         required.append("pattern")
     missing = [f for f in required if f not in data]
     if missing:
@@ -195,6 +202,18 @@ def _parse_yaml_rule(
             return None
 
     tier = RuleTier.STRUCTURAL if data.get("structural_pattern") else RuleTier.REGEX
+
+    # ast-grep's inline-rule YAML accepts a ``pattern`` object with either
+    # a bare string OR ``{context, selector}``. Specifying ``context``
+    # without ``selector`` produces an invalid rule that ast-grep rejects
+    # at parse time, which silently no-ops the rule. Catch it at load.
+    if data.get("structural_context") and not data.get("structural_selector"):
+        logger.warning(
+            "Rule %s sets structural_context without structural_selector; "
+            "ast-grep needs both — skipping this rule",
+            origin,
+        )
+        return None
 
     # Parse metavariable constraints
     metavar_regex: dict[str, str] = {}
@@ -243,6 +262,8 @@ def _parse_yaml_rule(
         languages=languages,
         pattern=compiled,
         structural_pattern=str(data.get("structural_pattern", "")),
+        structural_context=str(data.get("structural_context", "")),
+        structural_selector=str(data.get("structural_selector", "")),
         cwe=str(data.get("cwe", "")),
         tags=tags,
         source=source,

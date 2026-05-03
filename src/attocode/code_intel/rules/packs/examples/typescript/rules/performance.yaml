@@ -55,7 +55,8 @@
   severity: info
   category: style
   languages: [typescript, javascript]
-  confidence: 0.6
+  confidence: 0.35
+  tags: [debug]
   recommendation: "Use a structured logger or remove debug statements"
 
 - id: ts-any-type
