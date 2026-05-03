@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.23] - 2026-05-03
+
 ### Added — Phase 1 Code-Intel Roadmap (call graph + rule-engine evolution)
 
 Closes the eight Phase 1 deliverables from `docs/code-intel-roadmap.md`.
