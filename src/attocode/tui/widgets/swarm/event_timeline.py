@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from rich.text import Text
+from textual.app import ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import RichLog, Static
@@ -170,7 +171,7 @@ class EventsLog(Widget):
         super().__init__(**kwargs)
         self._seen_count: int = 0
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         yield RichLog(id="events-log", auto_scroll=True, markup=True, max_lines=1000)
 
     def update_events_filtered(self, events: list[dict[str, Any]]) -> None:

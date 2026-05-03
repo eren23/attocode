@@ -14,6 +14,10 @@ from pathlib import Path
 
 from attocode.errors import ConfigurationError
 
+# DockerResult is the canonical generic SandboxResult; the alias preserves
+# the historical module-local name without duplicating the dataclass.
+from attocode.integrations.safety.sandbox.basic import SandboxResult as DockerResult
+
 
 @dataclass(slots=True)
 class DockerOptions:
@@ -27,15 +31,6 @@ class DockerOptions:
     max_memory_mb: int = 512
     max_cpu_seconds: int = 30
     max_output_bytes: int = 1_000_000
-
-
-@dataclass(slots=True)
-class DockerResult:
-    """Result of a Docker sandbox check."""
-
-    allowed: bool
-    reason: str = ""
-    command: str = ""
 
 
 @dataclass

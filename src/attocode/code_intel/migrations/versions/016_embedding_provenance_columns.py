@@ -108,20 +108,18 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Revert the non-destructive dual-column rewrite.
 
-    Codex review fix (M6): the naive downgrade — drop the wide unique
-    key, recreate the narrow one — fails outright when a dual-version
-    rotation has left multiple ``embedding_model_version`` values for
-    the same ``(content_sha, embedding_model, chunk_type)`` tuple.
-    Recreating the old narrow unique constraint would raise at DDL
-    time.
+    A naive downgrade (drop the wide unique key, recreate the narrow
+    one) fails outright when a dual-version rotation has left multiple
+    ``embedding_model_version`` values for the same
+    ``(content_sha, embedding_model, chunk_type)`` tuple — recreating
+    the narrow unique constraint raises at DDL time.
 
-    The safe-by-default behavior is to REFUSE the downgrade unless the
-    operator confirms via the ``ATTOCODE_ALLOW_DESTRUCTIVE_016_DOWNGRADE``
-    env var. When that flag is set, we delete every row whose
-    ``embedding_model_version`` is non-empty first, logging the count,
-    then proceed with the rewrite. Pre-rotation databases (where every
-    row has ``embedding_model_version = ''``) downgrade cleanly with
-    no data loss and no flag.
+    Safe default: REFUSE the downgrade unless the operator sets
+    ``ATTOCODE_ALLOW_DESTRUCTIVE_016_DOWNGRADE``. When set, delete every
+    row whose ``embedding_model_version`` is non-empty first (logging
+    the count) and then rewrite. Pre-rotation databases (every row has
+    ``embedding_model_version = ''``) downgrade cleanly without the
+    flag.
     """
     import logging
     import os

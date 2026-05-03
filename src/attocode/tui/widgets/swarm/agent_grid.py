@@ -6,11 +6,13 @@ import contextlib
 from typing import Any
 
 from rich.text import Text
+from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Static
+from textual.widgets._data_table import RowDoesNotExist
 
 _STATUS_ICONS = {
     "idle": "\u2501",      # ━
@@ -140,7 +142,7 @@ class AgentGrid(Widget):
 
     agents: reactive[list[dict[str, Any]]] = reactive(list)
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         yield Horizontal(id="agent-grid-row")
 
     def on_mount(self) -> None:
@@ -274,7 +276,7 @@ class AgentsDataTable(Widget):
         self._prev_order: list[str] = []
         self._restoring_cursor: bool = False
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         table = DataTable(id="agents-table", cursor_type="row")
         table.add_columns("Status", "Agent", "Task", "Doing", "Tools", "Errs", "Model", "Elapsed", "Tokens")
         yield table
@@ -383,7 +385,7 @@ class AgentsDataTable(Widget):
         else:
             # Differential update
             for removed_key in old_keys - new_keys:
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(RowDoesNotExist):
                     table.remove_row(removed_key)
 
             for added_key in new_keys - old_keys:

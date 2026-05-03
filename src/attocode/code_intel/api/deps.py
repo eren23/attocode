@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from attocode.code_intel.api.auth.context import AuthContext
+    from attocode.code_intel.git.manager import GitRepoManager
 
 # N2: Shared BranchParam type alias — used by all route modules
 BranchParam = Annotated[str, Query(alias="branch", description="Branch name (empty = default/working dir)")]
@@ -290,7 +291,7 @@ async def get_branch_context(
 # --- Git manager ---
 
 
-def get_git_manager():
+def get_git_manager() -> GitRepoManager:
     """Return a GitRepoManager configured from the active config."""
     from attocode.code_intel.git.manager import GitRepoManager
 
@@ -318,7 +319,7 @@ async def get_org_scoped_session(
 ) -> AsyncSession:
     """Set RLS context for org isolation, then return the session.
 
-    M12 fix: Use parameterized SET to prevent SQL injection.
+    Uses parameterized SET to prevent SQL injection.
     """
     if auth.org_id:
         from sqlalchemy import text

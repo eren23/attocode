@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from rich.text import Text
+from textual.app import ComposeResult
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -131,7 +132,7 @@ class DependencyTree(Widget):
         self._node_map: dict[str, Any] = {}  # task_id -> TreeNode
         self._prev_statuses: dict[str, str] = {}  # task_id -> status
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         tree: Tree[str] = Tree("Tasks", id="dep-tree")
         tree.show_root = False
         yield tree

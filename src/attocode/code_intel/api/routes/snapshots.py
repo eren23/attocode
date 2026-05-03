@@ -36,6 +36,7 @@ from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
 from attocode.code_intel.api.deps import get_db_session
 from attocode.code_intel.api.routes.orgs import _require_membership
+from attocode.code_intel.api.utils import get_repo_by_org as _load_repo
 from attocode.code_intel.db.models import (
     Branch,
     Dependency,
@@ -129,22 +130,6 @@ def _sha256_of(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-async def _load_repo(
-    org_id: uuid.UUID,
-    repo_id: uuid.UUID,
-    session: AsyncSession,
-) -> Repository:
-    result = await session.execute(
-        select(Repository).where(
-            Repository.id == repo_id, Repository.org_id == org_id,
-        )
-    )
-    repo = result.scalar_one_or_none()
-    if repo is None:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    return repo
-
-
 async def _resolve_branch(
     repo: Repository,
     branch_name: str,
@@ -228,11 +213,11 @@ async def _compute_components(
 
     # --- Symbols component ---
     #
-    # Codex fix (M2): size_bytes is ALWAYS actual bytes. Row counts and
+    # Convention: size_bytes is ALWAYS actual bytes. Row counts and
     # other cardinalities go into ``extra``. Symbols / deps / embeddings
     # components report ``size_bytes=0`` because there is no meaningful
-    # "on-disk byte count" for them yet — Phase 3b's OCI adapter will
-    # backfill these with real artifact sizes when it ships.
+    # on-disk byte count for them yet (the OCI adapter will backfill
+    # these with real artifact sizes once it ships).
     if content_shas:
         sym_result = await session.execute(
             select(Symbol.content_sha, func.count()).where(
@@ -280,11 +265,11 @@ async def _compute_components(
 
     # --- Embeddings components ---
     #
-    # Codex fix (M1): component name now includes ``model_version`` so
-    # two versions of the same model (during a rotation) live under
-    # distinct names instead of colliding on ``embeddings.{model}``.
-    # Sort deterministically by (model, version) so DB iteration order
-    # can't leak into the manifest hash.
+    # Component name includes ``model_version`` so two versions of the
+    # same model (during a rotation) live under distinct names instead
+    # of colliding on ``embeddings.{model}``. Sort deterministically by
+    # (model, version) so DB iteration order can't leak into the
+    # manifest hash.
     if content_shas:
         emb_result = await session.execute(
             select(
@@ -331,15 +316,12 @@ def _compute_manifest_hash(
 
     Deliberately excludes transient metadata (name, description,
     created_at, created_by) so two snapshots of identical state under
-    different names produce the same hash — which is what Phase 3b's
-    OCI dedup needs.
+    different names produce the same hash — required for OCI dedup.
 
-    Codex fix (M1): sorts by ``(name, digest)`` so identical-name
-    components (should never happen after the M1 naming fix, but the
-    sort key defends against regressions) can't reorder based on DB
-    iteration. Also ``(name, digest)`` is stable even when two components
-    share the same logical name — if they did, their distinct digests
-    would still produce a deterministic ordering.
+    Sorts by ``(name, digest)`` so identical-name components can't
+    reorder based on DB iteration. ``(name, digest)`` is stable even
+    when two components share the same logical name — distinct digests
+    still produce a deterministic ordering.
     """
     body = {
         "schema": SNAPSHOT_SCHEMA,

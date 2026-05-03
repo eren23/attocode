@@ -107,9 +107,6 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         ),
         import_types=("preproc_include",),
     ),
-    # ---------------------------------------------------------------
-    # Phase 1: 11 new programming languages (9 → 20)
-    # ---------------------------------------------------------------
     "csharp": _LangConfig(
         grammar_module="tree_sitter_c_sharp",
         function_types=("method_declaration", "constructor_declaration", "local_function_statement"),
@@ -195,9 +192,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         import_types=(),  # @import is a builtin call
         var_types=("variable_declaration",),
     ),
-    # ---------------------------------------------------------------
-    # Phase 2: Data/config languages (20 → 25)
-    # ---------------------------------------------------------------
+    # Data/config languages
     "yaml": _LangConfig(
         grammar_module="tree_sitter_yaml",
         function_types=(),
@@ -228,9 +223,6 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         class_types=("rule_set",),  # CSS selectors
         import_types=("import_statement",),  # @import
     ),
-    # ---------------------------------------------------------------
-    # Phase 3: 11 new programming languages (25 → 36)
-    # ---------------------------------------------------------------
     "erlang": _LangConfig(
         grammar_module="tree_sitter_erlang",
         function_types=("function_clause",),
@@ -319,7 +311,6 @@ LANGUAGE_CONFIGS["shell"] = LANGUAGE_CONFIGS["bash"]
 LANGUAGE_CONFIGS["sh"] = LANGUAGE_CONFIGS["bash"]
 LANGUAGE_CONFIGS["terraform"] = LANGUAGE_CONFIGS["hcl"]
 LANGUAGE_CONFIGS["scss"] = LANGUAGE_CONFIGS["css"]
-# Phase 3 aliases
 LANGUAGE_CONFIGS["objective-c"] = LANGUAGE_CONFIGS["objc"]
 LANGUAGE_CONFIGS["objective_c"] = LANGUAGE_CONFIGS["objc"]
 LANGUAGE_CONFIGS["f#"] = LANGUAGE_CONFIGS["fsharp"]
@@ -1617,7 +1608,7 @@ def _extract_css_symbols(root, source_bytes: bytes, classes: list[dict]) -> None
 
 
 # ---------------------------------------------------------------------------
-# Phase 3: Generic tree-sitter extractor (any grammar, no config needed)
+# Generic tree-sitter extractor (any grammar, no config needed)
 # ---------------------------------------------------------------------------
 
 # Heuristic node types that commonly represent definitions across languages.
@@ -1879,7 +1870,6 @@ EXTRA_GRAMMAR_MODULES: dict[str, str] = {
     "fortran": "tree_sitter_fortran",
     "ada": "tree_sitter_ada",
     "d": "tree_sitter_d",
-    # Phase 3: Languages added for 50-repo benchmark
     "objc": "tree_sitter_objc",
     "nim": "tree_sitter_nim",
     "fsharp": "tree_sitter_fsharp",
@@ -1934,7 +1924,6 @@ EXTRA_LANG_EXTENSIONS: dict[str, str] = {
     ".adb": "ada",
     ".ads": "ada",
     ".d": "d",
-    # Phase 3: Languages added for 50-repo benchmark
     ".nim": "nim",
     ".nimble": "nim",
     ".fs": "fsharp",
@@ -1984,7 +1973,7 @@ def ts_parse_file_generic(
 
 
 # ---------------------------------------------------------------------------
-# Phase 4: Universal-ctags integration (50 → 100+ languages)
+# Universal-ctags integration (fallback for languages without grammars)
 # ---------------------------------------------------------------------------
 
 

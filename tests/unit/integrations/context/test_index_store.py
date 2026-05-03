@@ -57,7 +57,9 @@ class TestIndexStoreBasics:
         assert stats["symbols"] == 0
 
     def test_schema_version_set(self, store):
-        assert store.get_meta("schema_version") == "2"
+        from attocode.integrations.context.index_store import SCHEMA_VERSION
+
+        assert store.get_meta("schema_version") == SCHEMA_VERSION
 
     def test_metadata(self, store):
         store.set_meta("test_key", "test_value")

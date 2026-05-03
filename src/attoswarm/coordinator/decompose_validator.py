@@ -244,11 +244,7 @@ class DecomposeValidator:
         result: ValidationResult,
     ) -> None:
         """Check for tasks disconnected from the DAG."""
-        all_ids = {t.task_id for t in tasks}
-        referenced = set()
-        for task in tasks:
-            referenced.update(task.deps)
-            # Tasks that are depended upon
+        # Tasks that are depended upon
         has_dependents = set()
         for task in tasks:
             for dep in task.deps:

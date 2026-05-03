@@ -18,7 +18,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 
 
 @dataclass(slots=True)
@@ -58,6 +58,7 @@ class StoredReference:
     line: int
     column: int
     source: str  # "tree-sitter" | "lsp"
+    caller_qualified_name: str = ""  # enclosing function/method (call-graph edge)
 
 
 @dataclass(slots=True)
@@ -75,6 +76,12 @@ class IndexStore:
     db_path: str
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    # When the on-disk schema differed from ``SCHEMA_VERSION`` at startup,
+    # we wipe and rebuild — this records the prior version so callers
+    # (e.g. ``readiness_report``) can surface a "schema migrated, full
+    # re-index pending" hint instead of leaving users guessing why the
+    # first request after upgrade is slow.
+    _schema_rebuilt_from: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
@@ -125,7 +132,8 @@ class IndexStore:
                 ref_kind TEXT NOT NULL DEFAULT 'call',
                 line INTEGER NOT NULL DEFAULT 0,
                 col INTEGER NOT NULL DEFAULT 0,
-                source TEXT NOT NULL DEFAULT 'tree-sitter'
+                source TEXT NOT NULL DEFAULT 'tree-sitter',
+                caller_qualified_name TEXT NOT NULL DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS dependencies (
@@ -139,6 +147,7 @@ class IndexStore:
             CREATE INDEX IF NOT EXISTS ix_symbols_file ON symbols(file_path);
             CREATE INDEX IF NOT EXISTS ix_refs_symbol ON refs(symbol_name);
             CREATE INDEX IF NOT EXISTS ix_refs_file ON refs(file_path);
+            CREATE INDEX IF NOT EXISTS ix_refs_caller ON refs(caller_qualified_name);
             CREATE INDEX IF NOT EXISTS ix_deps_target ON dependencies(target_path);
         """)
         conn.commit()
@@ -150,16 +159,32 @@ class IndexStore:
         ).fetchone()
         if row:
             if row[0] != SCHEMA_VERSION:
+                # Schema migrations clear all persisted index data — the
+                # first request after upgrade will trigger a full
+                # re-index that may take a while on big repos. We log
+                # this prominently and stash the prior version on the
+                # store instance + in the SQLite metadata table so a
+                # future readiness probe can attribute a slow first
+                # request to the rebuild rather than to indexing bugs.
                 logger.warning(
-                    "Index schema changed (%s -> %s), rebuilding",
-                    row[0], SCHEMA_VERSION,
+                    "Index schema changed (%s -> %s); clearing %r and "
+                    "rebuilding from source on next access — full "
+                    "re-index will run on demand. Subsequent requests "
+                    "may be slow until indexing catches up.",
+                    row[0], SCHEMA_VERSION, self.db_path,
                 )
                 self.clear_all()
                 conn.execute(
                     "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?)",
                     (SCHEMA_VERSION,),
                 )
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) "
+                    "VALUES ('schema_rebuilt_from_version', ?)",
+                    (row[0],),
+                )
                 conn.commit()
+                self._schema_rebuilt_from = row[0]
         else:
             conn.execute(
                 "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?)",
@@ -336,6 +361,7 @@ class IndexStore:
                 r.get("line", 0),
                 r.get("column", 0),
                 r.get("source", "tree-sitter"),
+                r.get("caller_qualified_name", ""),
             )
             for r in refs
         ]
@@ -343,8 +369,9 @@ class IndexStore:
             conn.execute("DELETE FROM refs WHERE file_path = ?", (file_path,))
             conn.executemany(
                 """INSERT INTO refs
-                   (file_path, symbol_name, ref_kind, line, col, source)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                   (file_path, symbol_name, ref_kind, line, col, source,
+                    caller_qualified_name)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 rows,
             )
             conn.commit()
@@ -355,18 +382,19 @@ class IndexStore:
         with self._lock:
             if file_path:
                 rows = conn.execute(
-                    "SELECT id, file_path, symbol_name, ref_kind, line, col, source "
-                    "FROM refs WHERE file_path = ?",
+                    "SELECT id, file_path, symbol_name, ref_kind, line, col, "
+                    "source, caller_qualified_name FROM refs WHERE file_path = ?",
                     (file_path,),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT id, file_path, symbol_name, ref_kind, line, col, source FROM refs"
+                    "SELECT id, file_path, symbol_name, ref_kind, line, col, "
+                    "source, caller_qualified_name FROM refs"
                 ).fetchall()
         return [
             StoredReference(
                 id=r[0], file_path=r[1], symbol_name=r[2], ref_kind=r[3],
-                line=r[4], column=r[5], source=r[6],
+                line=r[4], column=r[5], source=r[6], caller_qualified_name=r[7],
             )
             for r in rows
         ]

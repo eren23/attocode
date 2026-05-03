@@ -13,7 +13,6 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
 
@@ -118,7 +117,6 @@ Allows:
     # Also block ``./../etc`` — escaping via the current directory marker.
     # But ``../../pkg`` and ``../../../foo`` are user-space — allow.
     # Handle both leading ../ and ./../ patterns
-    normalized_stripped = normalized.lstrip("./")
 
     def _is_system_escape(path: str) -> bool:
         """Check if path escapes to a system directory via leading ../."""

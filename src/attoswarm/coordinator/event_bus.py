@@ -62,7 +62,7 @@ class EventBus:
                 with p.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(asdict(event)) + "\n")
                     f.flush()
-            except Exception as exc:
+            except (OSError, TypeError) as exc:
                 logger.warning("EventBus persist error: %s", exc)
 
     def subscribe(self, callback: Callable[[SwarmEvent], Any]) -> None:

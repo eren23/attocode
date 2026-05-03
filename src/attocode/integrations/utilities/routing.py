@@ -9,25 +9,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from enum import StrEnum
 
-
-class RoutingStrategy(StrEnum):
-    """Strategy for routing LLM requests."""
-
-    COST = "cost"  # Minimize cost
-    QUALITY = "quality"  # Maximize quality
-    LATENCY = "latency"  # Minimize latency
-    BALANCED = "balanced"  # Balance cost/quality/latency
-    RULES = "rules"  # Rule-based routing
-
-
-class CircuitState(StrEnum):
-    """Circuit breaker state."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject requests
-    HALF_OPEN = "half_open"  # Testing recovery
+# Canonical definitions live in resilience.py; re-exported here for callers
+# that import RoutingStrategy/CircuitState from this module.
+from attocode.integrations.utilities.resilience import CircuitState, RoutingStrategy
 
 
 @dataclass(slots=True)

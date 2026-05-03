@@ -1,0 +1,48 @@
+# TypeScript structural patterns (ast-grep, Tier 2).
+
+- id: ts-console-log-leftover
+  name: console.log left in source
+  structural_pattern: 'console.log($X)'
+  message: "console.log($X) left in source — remove or route through a logger"
+  severity: low
+  category: style
+  languages: [typescript, javascript]
+  confidence: 0.35
+  tags: [debug]
+  explanation: >
+    Bare ``console.log`` survives into production builds, leaks
+    information into the browser console, and bypasses any logging
+    pipeline. Use a structured logger or remove the line.
+  recommendation: "Use the project's logger; for browser code prefer console.debug behind a flag."
+  examples:
+    - bad: "function handle(req) { console.log(req); return process(req); }"
+      good: "logger.debug({ req }, 'handle');"
+      explanation: "Structured loggers support levels and shipping."
+
+- id: ts-non-null-assertion
+  name: Non-null assertion operator
+  structural_pattern: '$X!'
+  message: "Non-null assertion ($X!) bypasses the type checker — prove the invariant or guard explicitly"
+  severity: low
+  category: suspicious
+  languages: [typescript]
+  confidence: 0.4
+  explanation: >
+    The ``!`` operator silences the compiler without checking. When the
+    value is null at runtime you get an unhelpful TypeError. Either
+    refactor so the type narrows naturally, or add an explicit guard.
+  recommendation: "Use a runtime check (if (!x) throw …) or refactor the type."
+
+- id: ts-set-timeout-zero
+  name: setTimeout($X, 0) workaround
+  structural_pattern: 'setTimeout($X, 0)'
+  message: "setTimeout($X, 0) is a microtask hack — queueMicrotask is clearer intent"
+  severity: info
+  category: style
+  languages: [typescript, javascript]
+  confidence: 0.6
+  explanation: >
+    ``setTimeout(fn, 0)`` defers ``fn`` until after the current macro
+    task. ``queueMicrotask(fn)`` schedules sooner (after the current
+    sync code) and signals intent without the magic ``0``.
+  recommendation: "Use queueMicrotask(fn) when you want to defer until after sync work."

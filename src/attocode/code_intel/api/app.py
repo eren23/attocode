@@ -93,7 +93,6 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     if config is None:
         config = CodeIntelConfig.from_env()
 
-    # Initialize DI
     deps.configure(config)
 
     app = FastAPI(
@@ -187,7 +186,6 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         app.include_router(activity.router)
         app.include_router(preferences.router)
         app.include_router(cross_repo_search.router)
-        # Phase 3a reproducibility routes
         app.include_router(gc.router)
         app.include_router(snapshots.router)
 

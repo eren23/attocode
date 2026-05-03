@@ -1,0 +1,90 @@
+# C / C++ memory-safety and deprecated-API rules (Tier 1 regex).
+
+- id: cpp-strcpy-unsafe
+  name: Unsafe strcpy call
+  pattern: '\bstrcpy\s*\('
+  message: "strcpy has no bounds check — overflows the destination on long input"
+  severity: high
+  category: security
+  languages: [c, cpp]
+  cwe: CWE-120
+  confidence: 0.85
+  explanation: >
+    ``strcpy`` keeps copying until it hits a NUL terminator with no
+    knowledge of the destination buffer's size. Long source strings
+    overflow whatever follows on the stack/heap.
+  recommendation: "Use strncpy_s, strlcpy, or std::string for guaranteed-bounded copies."
+  examples:
+    - bad: "char buf[16];\nstrcpy(buf, user_input);"
+      good: "char buf[16];\nstrlcpy(buf, user_input, sizeof(buf));"
+      explanation: "strlcpy refuses to write past the destination size."
+
+- id: cpp-strcat-unsafe
+  name: Unsafe strcat call
+  pattern: '\bstrcat\s*\('
+  message: "strcat has no bounds check — overflows the destination if strlen(dst)+strlen(src) >= cap"
+  severity: high
+  category: security
+  languages: [c, cpp]
+  cwe: CWE-120
+  confidence: 0.85
+  recommendation: "Use strlcat or std::string concatenation with explicit size checks."
+
+- id: cpp-gets-banned
+  name: gets() called
+  pattern: '\bgets\s*\('
+  message: "gets() reads unbounded input — removed from C11 entirely"
+  severity: critical
+  category: security
+  languages: [c, cpp]
+  cwe: CWE-242
+  confidence: 0.99
+  explanation: >
+    ``gets`` cannot be used safely under any circumstances; it was
+    removed from the C11 standard. Always reads until newline with no
+    way to limit length.
+  recommendation: "Use fgets(buf, sizeof(buf), stdin) instead."
+
+- id: cpp-sprintf-unsafe
+  name: sprintf without bounds check
+  pattern: '\bsprintf\s*\('
+  message: "sprintf cannot bound its output — use snprintf with the buffer size"
+  severity: high
+  category: security
+  languages: [c, cpp]
+  cwe: CWE-120
+  confidence: 0.7
+  recommendation: "Use snprintf(buf, sizeof(buf), \"...\", ...) so the output is truncated rather than overflowing."
+
+- id: cpp-system-call
+  name: system() invokes the shell
+  pattern: '\bsystem\s*\('
+  message: "system() runs through the shell — risk of command injection if any arg is attacker-controlled"
+  severity: high
+  category: security
+  languages: [c, cpp]
+  cwe: CWE-78
+  confidence: 0.7
+  recommendation: "Use execve/posix_spawn with argv arrays so arguments aren't shell-parsed."
+
+- id: cpp-md5-deprecated
+  name: MD5 used for security purposes
+  pattern: '\bMD5(?:_Init|_Update|_Final|\s*\()'
+  message: "MD5 is cryptographically broken — use SHA-256 or BLAKE3 for new code"
+  severity: medium
+  category: security
+  languages: [c, cpp]
+  cwe: CWE-327
+  confidence: 0.7
+  recommendation: "Use SHA-256 (EVP_sha256) or BLAKE3 for hashing; bcrypt/argon2 for passwords."
+
+- id: cpp-rand-non-crypto
+  name: rand() used where crypto strength is needed
+  pattern: '\brand\s*\(\s*\)'
+  message: "rand() is not cryptographically secure — predictable from a few outputs"
+  severity: low
+  category: security
+  languages: [c, cpp]
+  cwe: CWE-338
+  confidence: 0.4
+  recommendation: "For security-sensitive randomness use /dev/urandom, getrandom(), or std::random_device."

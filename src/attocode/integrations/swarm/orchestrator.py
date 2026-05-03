@@ -851,7 +851,9 @@ class _SimpleBudgetPool:
             self._used = max(0, self._used - task_id_or_amount)
 
     def reallocate_unused(self) -> None:
-        pass
+        # No-op: simple pool tracks usage directly; reallocation is a
+        # DynamicBudgetPool-only concept. Keep for API compat.
+        return None
 
     @property
     def remaining(self) -> int:

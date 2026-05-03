@@ -7,6 +7,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.23] - 2026-05-03
+
+### Added — Phase 1 Code-Intel Roadmap (call graph + rule-engine evolution)
+
+Closes the eight Phase 1 deliverables from `docs/code-intel-roadmap.md`.
+Code intel gains a function-level call graph, ast-grep Tier-2 structural
+rule execution, LSP-attributed call edges, rule-quality hygiene, plus
+deterministic + LLM-assisted rule synthesis and evolutionary
+optimization. 10 language packs (cpp, csharp, kotlin, php, ruby added
+to the existing five) with 91 rules total — both regex Tier 1 and
+ast-grep Tier 2 patterns.
+
+#### New MCP tools
+
+- `call_graph(symbol, direction, depth)` — function-level callers /
+  callees traversal with cycle-safe BFS. Sources call edges from
+  tree-sitter parsing plus LSP enrichment when servers are available.
+- `rule_hygiene(apply, min_scans, min_samples, fp_threshold,
+  drift_threshold)` — auto-prune dead rules (no matches across N+
+  scans) and noisy rules (FP rate above threshold), report confidence
+  drift. Persistent disable survives registry reloads.
+- `synthesize_rule(positive_samples, negative_samples, language,
+  rule_id, description, mode)` — generate a candidate YAML rule from
+  pos/neg examples. Deterministic LCS-based regex first, falls back to
+  LLM (`mode="auto"`). Both paths validate the candidate against the
+  same samples before returning.
+- `evolve_rules(target_rule_ids, fixtures_dir, generations,
+  population_size, plateau_gens)` — genetic optimization over rules:
+  mutation (regex widen/narrow, severity/confidence shifts), crossover,
+  k=3 tournament selection, 10% elitism, plateau early-stop. Per-
+  generation audit log to `.attocode/evolution_log.jsonl`.
+
+#### Call graph (A1–A2, A6)
+
+- `CrossRefIndex.call_edges` and `callers_of` maps populated by
+  `add_reference()` whenever a `SymbolRef` carries a non-empty
+  `caller_qualified_name`.
+- `IndexStore` schema bumped 2 → 3 to persist the new column. First
+  startup after upgrade clears the cache and re-indexes from source —
+  warned at WARNING level and stashed on the store instance plus in
+  SQLite metadata so a future readiness probe can attribute a slow
+  first request to the rebuild.
+- `CodeIntelService.call_graph_data` / `call_graph` for service-side
+  consumption; PyCG harness rewired to validate against the new
+  in-memory edge map (synthetic micro-bench hits P=R=1.0).
+- LSP refs land with `caller_qualified_name` set when
+  `ingest_lsp_results` receives a `query` position; LSP-attributed
+  edges replace tree-sitter entries on (file, line) collision (only
+  when caller info is present, so legacy callbacks don't invert the
+  edge direction).
+- DB-side `SymbolReference.caller_qualified_name` column added via
+  Alembic migration `019_symref_caller`; full-indexer pipeline writes
+  it on every reference for HTTP-API-indexed repos.
+
+#### Rule engine (A3–A5, A7–A8)
+
+- ast-grep Tier-2 dispatch in `executor.py`. Detects ambiguous patterns
+  (e.g. Go `fmt.Println($X)` parses as `type_conversion_expression`)
+  via new `UnifiedRule.structural_context` and `structural_selector`
+  fields, then routes through `sg scan --inline-rules`. Multi-metavar
+  (`$$$X`) capture support. Tier-1 regex fallback for languages outside
+  ast-grep's grammar set or when the binary isn't on PATH.
+- Five new language packs (cpp, csharp, php, ruby, kotlin), 30
+  structural rules total across all 10 packs. Debug-print families
+  carry `tags: [debug]` and confidence below the default `analyze`
+  threshold so idiomatic CLI code doesn't surface false positives.
+- `FeedbackStore` (`profiling.py`) gains scan/match counters,
+  hygiene-disable tracking, and a `threading.Lock` so concurrent
+  `analyze` calls don't race the JSON file.
+- `synthesize_rule` (`rules/synthesis.py`): LCS-based regex synthesis
+  with context-aware word boundaries plus an injectable LLM caller for
+  validation-loop YAML generation. The default LLM caller raises a
+  clean diagnostic when the dev meta-harness client isn't importable
+  (production wheel guard).
+- `evolve_rules` (`rules/evolution.py`): regex Tier-1 evolution with
+  mutation operators preserving rule validity, generation-stamped
+  child IDs (no population-wide id collision), seed deduplication, and
+  evaluated-population integrity post-loop.
+
+#### Tests
+
+- 117+ new tests across rule_hygiene, call graph (in-memory + IndexStore
+  round-trip + PyCG harness), structural executor, LSP call-graph
+  attribution, rule synthesis, and rule evolution.
+- New regression tests cover the audit findings: tier-1 fallback for
+  unsupported langs, thread-safe FeedbackStore under concurrency,
+  persistent disable surviving registry reloads, end-to-end MCP
+  analyze with structural rules, LSP merge-on-empty-caller no-op,
+  plateau-guard early-termination, A8 final-population integrity, and
+  default-threshold no-noise on idiomatic CLI fixtures.
+
 ## [0.2.22] - 2026-04-16
 
 ### Added — Rule-Bench Harness + Community Pack Expansion

@@ -7,12 +7,16 @@ combo boosting to prioritize commonly co-occurring results.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import _get_project_dir, mcp
 from attocode.code_intel.tools.pin_tools import pin_stamped
 
+if TYPE_CHECKING:
+    from attocode.integrations.context.query_history import QueryHistoryTracker
 
-def _get_query_tracker():
+
+def _get_query_tracker() -> QueryHistoryTracker:
     """Get the query history tracker instance."""
     from attocode.integrations.context.query_history import get_query_tracker
 

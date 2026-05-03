@@ -28,6 +28,32 @@ from .client import MCPCallResult, MCPTool
 logger = logging.getLogger(__name__)
 
 
+def _extract_tool_call_result(
+    result: dict[str, Any] | None,
+    *,
+    no_response_error: str,
+) -> MCPCallResult:
+    """Convert a raw ``tools/call`` JSON-RPC response to ``MCPCallResult``.
+
+    Returns an error result when ``result`` is ``None``. Otherwise extracts
+    text content blocks (``type == "text"``) and joins them. Falls back to
+    ``str(result)`` when no text content is present.
+    """
+    if result is None:
+        return MCPCallResult(success=False, error=no_response_error)
+
+    content = result.get("content", [])
+    if content and isinstance(content, list):
+        text_parts = [
+            c.get("text", "")
+            for c in content
+            if c.get("type") == "text"
+        ]
+        return MCPCallResult(success=True, result="\n".join(text_parts))
+
+    return MCPCallResult(success=True, result=str(result))
+
+
 # =============================================================================
 # Transport interface
 # =============================================================================
@@ -241,20 +267,7 @@ class SSETransport(MCPTransport):
             "name": name,
             "arguments": arguments,
         })
-
-        if result is None:
-            return MCPCallResult(success=False, error="No response from server")
-
-        content = result.get("content", [])
-        if content and isinstance(content, list):
-            text_parts = [
-                c.get("text", "")
-                for c in content
-                if c.get("type") == "text"
-            ]
-            return MCPCallResult(success=True, result="\n".join(text_parts))
-
-        return MCPCallResult(success=True, result=str(result))
+        return _extract_tool_call_result(result, no_response_error="No response from server")
 
     async def disconnect(self) -> None:
         """Close the SSE connection."""
@@ -547,20 +560,7 @@ class StreamableHTTPTransport(MCPTransport):
             "name": name,
             "arguments": arguments,
         })
-
-        if result is None:
-            return MCPCallResult(success=False, error="Request timed out")
-
-        content = result.get("content", [])
-        if content and isinstance(content, list):
-            text_parts = [
-                c.get("text", "")
-                for c in content
-                if c.get("type") == "text"
-            ]
-            return MCPCallResult(success=True, result="\n".join(text_parts))
-
-        return MCPCallResult(success=True, result=str(result))
+        return _extract_tool_call_result(result, no_response_error="Request timed out")
 
     async def disconnect(self) -> None:
         """Close the HTTP session."""

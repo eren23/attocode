@@ -49,7 +49,6 @@ dep_proximity_seed_count: 5
 
 # Adaptive fusion — OFF
 adaptive_fusion: false
-kw_confidence_threshold: 0.5
 kw_dominance_threshold: 1.5
 rrf_k_keyword_high_conf: 10
 rrf_k_vector_low_conf: 250

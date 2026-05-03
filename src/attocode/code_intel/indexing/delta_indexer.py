@@ -78,7 +78,6 @@ class DeltaIndexer:
         # Get current manifest for content-hash comparison
         manifest = await overlay.resolve_manifest(branch_id)
 
-        # Get diff
         diff_entries = self._git.get_diff(repo_id, from_ref, to_ref)
         total = len(diff_entries)
 

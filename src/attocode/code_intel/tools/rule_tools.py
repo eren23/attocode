@@ -18,18 +18,22 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import _get_project_dir, mcp
+
+if TYPE_CHECKING:
+    from attocode.code_intel.rules.registry import RuleRegistry
 
 logger = logging.getLogger(__name__)
 
 # Lazy singleton for the rule registry
-_registry = None
+_registry: RuleRegistry | None = None
 _registry_loaded = False
 _registry_lock = threading.Lock()
 
 
-def _get_registry():
+def _get_registry() -> RuleRegistry:
     """Get or create the global rule registry (lazy singleton)."""
     global _registry, _registry_loaded
     # Read-only fast path (safe: both reads are atomic in CPython;
@@ -45,6 +49,8 @@ def _get_registry():
         from attocode.code_intel.rules.loader import load_builtin_rules, load_user_rules
         from attocode.code_intel.rules.packs.pack_loader import load_all_packs
         from attocode.code_intel.rules.plugins.plugin_loader import load_all_plugins
+        from attocode.code_intel.rules.hygiene import apply_persistent_disable
+        from attocode.code_intel.rules.profiling import FeedbackStore
 
         reg = RuleRegistry()
         project_dir = _get_project_dir()
@@ -71,18 +77,26 @@ def _get_registry():
             reg.register_many(user_rules)
             user_count = len(user_rules)
 
+        # Re-apply previously persisted hygiene auto-disable decisions so
+        # dead/noisy rules pruned in earlier sessions stay disabled.
+        hygiene_disabled = 0
+        if project_dir:
+            hygiene_disabled = apply_persistent_disable(reg, FeedbackStore(project_dir))
+
         # Assign pointer LAST — fully populated before visible
         _registry = reg
         _registry_loaded = True
 
         logger.info(
-            "Rule registry: %d rules (%d builtin, %d from %d packs, %d plugins, %d user)",
+            "Rule registry: %d rules (%d builtin, %d from %d packs, %d plugins, %d user); "
+            "%d hygiene-disabled",
             reg.count,
             len(builtins),
             len(pack_rules),
             len(pack_manifests),
             plugin_count,
             user_count,
+            hygiene_disabled,
         )
     return _registry
 
@@ -183,6 +197,22 @@ def _analyze_impl(
     from attocode.code_intel.rules.formatter import format_findings
 
     findings = execute_rules(file_list, rules, project_dir=project_dir)
+
+    # Persist per-rule scan/match counters so the hygiene tool can
+    # identify dead rules across sessions. Counts pre-filter findings —
+    # post-filter would under-count dead rules whose only matches got
+    # dropped by the test-file/confidence pipeline.
+    if project_dir:
+        from attocode.code_intel.rules.profiling import FeedbackStore
+
+        match_counts: dict[str, int] = {}
+        for f in findings:
+            match_counts[f.rule_id] = match_counts.get(f.rule_id, 0) + 1
+        FeedbackStore(project_dir).record_session(
+            rule_ids=[r.qualified_id for r in rules],
+            matches=match_counts,
+            files_scanned=len(file_list),
+        )
 
     # Pre-filter pipeline (dedup, test-file adjustment, confidence threshold)
     findings = run_pipeline(findings, min_confidence=min_confidence)
@@ -457,7 +487,6 @@ def test_rules(
         if not fixtures_dir:
             return "No test fixtures directory found. Provide fixtures_dir or create .attocode/test_fixtures/."
 
-    # Get rules
     if rule_id:
         rule = reg.get(rule_id)
         if rule is None:
@@ -547,6 +576,9 @@ def rule_stats(rule_id: str = "") -> str:
     if not feedback:
         return "No rule feedback recorded yet. Use rule_feedback() to record TP/FP observations."
 
+    def _as_int(value: object) -> int:
+        return int(value) if isinstance(value, (int, float)) else 0
+
     # Build stats from feedback data
     stats: dict[str, RuleStats] = {}
     for rid, fb in feedback.items():
@@ -554,8 +586,8 @@ def rule_stats(rule_id: str = "") -> str:
             continue
         s = RuleStats(
             rule_id=rid,
-            true_positives=fb.get("tp", 0),
-            false_positives=fb.get("fp", 0),
+            true_positives=_as_int(fb.get("tp", 0)),
+            false_positives=_as_int(fb.get("fp", 0)),
         )
         stats[rid] = s
 
@@ -602,6 +634,208 @@ def rule_feedback(
         parts.append(f"Need {remaining} more observation(s) for calibration.")
 
     return "\n".join(parts)
+
+
+@mcp.tool()
+def evolve_rules(
+    target_rule_ids: list[str],
+    fixtures_dir: str = "",
+    generations: int = 20,
+    population_size: int = 12,
+    plateau_gens: int = 5,
+) -> str:
+    """Evolutionary optimisation of one or more rules against a labelled corpus.
+
+    Uses tournament selection (k=3) + 10% elitism + per-generation
+    mutation/crossover. Fitness is precision + recall + speed bonus.
+    Stops on ``max_generations`` or when the best composite plateaus
+    for ``plateau_gens`` consecutive generations.
+
+    Args:
+        target_rule_ids: Qualified rule IDs to seed the population with.
+            Each must be in the active registry.
+        fixtures_dir: Directory of inline-annotated source files (same
+            format as ``test_rules``). Defaults to
+            ``.attocode/test_fixtures/`` if empty.
+        generations: Maximum generations to run.
+        population_size: Total population per generation (incl. elites).
+        plateau_gens: Stop early if best composite is flat across this
+            many recent generations.
+    """
+    from attocode.code_intel.rules.evolution import EvolutionState, evolve
+
+    if not target_rule_ids:
+        return "Error: provide at least one target_rule_id."
+
+    project_dir = _get_project_dir()
+    if not fixtures_dir:
+        candidate = os.path.join(project_dir or ".", ".attocode", "test_fixtures")
+        if os.path.isdir(candidate):
+            fixtures_dir = candidate
+        else:
+            return (
+                "Error: fixtures_dir not provided and "
+                ".attocode/test_fixtures/ does not exist."
+            )
+
+    registry = _get_registry()
+    seeds: list = []
+    missing: list[str] = []
+    for qid in target_rule_ids:
+        rule = registry.get(qid)
+        if rule is None:
+            missing.append(qid)
+        else:
+            seeds.append(rule)
+    if missing:
+        return f"Error: rule(s) not found: {missing}"
+    if not seeds:
+        return "Error: no usable seed rules."
+
+    log_path = (
+        os.path.join(project_dir, ".attocode", "evolution_log.jsonl")
+        if project_dir else ""
+    )
+
+    state: EvolutionState = evolve(
+        seeds,
+        fixtures_dir=fixtures_dir,
+        project_dir=project_dir,
+        max_generations=generations,
+        population_size=population_size,
+        plateau_gens=plateau_gens,
+        log_path=log_path,
+    )
+
+    best = state.best_rule
+    fit = state.best_fitness
+    parts = [
+        f"Evolution complete: {state.generations_run} generation(s), "
+        f"stopped on {state.stopped_reason}.",
+        "",
+        f"Best rule: {best.qualified_id}",
+        f"  pattern: {best.pattern.pattern if best.pattern else '(none)'}",
+        f"  severity: {best.severity}, confidence: {best.confidence}",
+        f"  precision: {fit.precision:.3f}, recall: {fit.recall:.3f}, "
+        f"f1: {fit.f1:.3f}, speed: {fit.speed_ms:.1f}ms",
+        f"  composite: {fit.composite:.3f}",
+        "",
+        f"History (composite per generation): {state.history}",
+    ]
+    if log_path:
+        parts.append(f"\nFull audit log: {log_path}")
+    return "\n".join(parts)
+
+
+@mcp.tool()
+def synthesize_rule(
+    positive_samples: list[str],
+    negative_samples: list[str] | None = None,
+    language: str = "",
+    rule_id: str = "synth-rule",
+    description: str = "",
+    mode: str = "auto",
+) -> str:
+    """Generate a candidate rule from positive / negative code samples.
+
+    Tries deterministic regex synthesis first (longest common substring +
+    word boundaries, validated against negatives). Falls back to an
+    LLM-assisted synthesis when no clean anchor exists and ``mode`` is
+    ``"auto"`` or ``"llm"``. The returned YAML can be pasted into a pack
+    file or registered at runtime via ``register_rule``.
+
+    Args:
+        positive_samples: Lines of code the rule MUST match (one per entry).
+        negative_samples: Lines of code the rule MUST NOT match. Optional.
+        language: Target language tag (e.g. "python", "go").
+        rule_id: Suggested ID for the synthesized rule.
+        description: What the rule should detect — used by the LLM prompt
+            and as the rule's ``message`` field.
+        mode: ``"auto"`` (default), ``"regex"``, or ``"llm"``.
+
+    Returns:
+        YAML rule body when synthesis succeeded, otherwise a diagnostic
+        report explaining what was tried.
+    """
+    from attocode.code_intel.rules.synthesis import (
+        render_rule_yaml,
+        synthesize_rule as _synth,
+    )
+
+    result = _synth(
+        positives=positive_samples,
+        negatives=list(negative_samples or []),
+        language=language,
+        rule_id=rule_id,
+        description=description,
+        mode=mode,
+    )
+
+    if result.rule is None:
+        diag_lines = "\n  - ".join(result.diagnostics) if result.diagnostics else "(no diagnostics)"
+        return (
+            f"Synthesis failed (mode={mode}, method={result.method}):\n  - {diag_lines}"
+        )
+
+    yaml_body = render_rule_yaml(result.rule)
+    diag_lines = "\n# - ".join(result.diagnostics)
+    return f"# synthesised via {result.method}\n# - {diag_lines}\n{yaml_body}"
+
+
+@mcp.tool()
+def rule_hygiene(
+    apply: bool = False,
+    min_scans: int = 10,
+    min_samples: int = 10,
+    fp_threshold: float = 0.5,
+    drift_threshold: float = 0.2,
+) -> str:
+    """Report (and optionally auto-disable) dead, noisy, and drifting rules.
+
+    Categories:
+        dead — rule applied across `min_scans` analyze sessions with 0 matches.
+        noisy — at least `min_samples` TP/FP observations and FP rate > `fp_threshold`.
+        drift — calibrated confidence diverges from the rule's declared
+            confidence by at least `drift_threshold`. Reported only.
+
+    With `apply=True`, dead and noisy rules are disabled in the in-memory
+    registry and the decision persists in `.attocode/rule_feedback.json` so
+    they stay disabled in future sessions until manually re-enabled.
+
+    Args:
+        apply: When True, disables dead and noisy rules.
+        min_scans: Sessions a rule must have run before it can be marked dead.
+        min_samples: TP/FP observations required before a rule can be marked noisy.
+        fp_threshold: FP rate above which a rule is noisy.
+        drift_threshold: Confidence delta above which drift is reported.
+    """
+    from attocode.code_intel.rules.hygiene import (
+        apply_hygiene,
+        compute_hygiene,
+        format_hygiene_report,
+    )
+    from attocode.code_intel.rules.profiling import FeedbackStore
+
+    project_dir = _get_project_dir()
+    if not project_dir:
+        return "Error: No project directory detected. Open a project first."
+
+    store = FeedbackStore(project_dir)
+    registry = _get_registry()
+    report = compute_hygiene(
+        store,
+        registry,
+        min_scans=min_scans,
+        min_samples=min_samples,
+        fp_threshold=fp_threshold,
+        drift_threshold=drift_threshold,
+    )
+
+    output = format_hygiene_report(report)
+    if apply and report.total_actionable:
+        disabled = apply_hygiene(report, registry, store)
+        output += f"\n\nDisabled {disabled} rule(s) (dead + noisy)."
+    return output
 
 
 @mcp.tool()

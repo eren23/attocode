@@ -84,7 +84,7 @@ class QualityScoreTable(Widget):
         self._results: dict[str, dict[str, Any]] = {}
         self._table_initialized = False
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         yield DataTable(id="quality-scores-table", cursor_type="row")
 
     def on_mount(self) -> None:

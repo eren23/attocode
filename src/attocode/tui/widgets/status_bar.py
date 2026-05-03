@@ -156,7 +156,6 @@ class StatusBar(Static):
             indicator.append(_truncate(self.mode, 20), style="dim")
         parts.append(indicator)
 
-        # Phase
         if self.phase:
             phase_style = {
                 "exploration": "cyan",

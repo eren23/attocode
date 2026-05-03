@@ -7,11 +7,16 @@ When one search mode finds nothing, suggests results from the other mode.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from attocode.code_intel._shared import _get_project_dir, mcp
 from attocode.code_intel.tools.pin_tools import pin_stamped
 
+if TYPE_CHECKING:
+    from attocode.integrations.context.cross_mode import CrossModeSearcher
 
-def _get_cross_mode_searcher():
+
+def _get_cross_mode_searcher() -> CrossModeSearcher:
     """Get cross-mode searcher instance."""
     from attocode.integrations.context.cross_mode import CrossModeSearcher
 

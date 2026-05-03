@@ -272,7 +272,6 @@ class MinimaxProvider(OpenAIProvider):
 
         # Stateful think-tag filter for streaming chunks
         in_think = False
-        buffer = ""
 
         try:
             async with client.stream("POST", self._api_url, json=body) as response:

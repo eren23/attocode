@@ -125,16 +125,6 @@ async def ensure_vector_columns(
     await session.commit()
 
 
-# Backwards-compatibility alias. Old callers that still invoke
-# ``ensure_vector_column(session, dim)`` get the new non-destructive
-# behavior automatically. They will now *raise* on dimension mismatch where
-# they previously silently wiped vectors — which is exactly the point of
-# this change. If you hit this error, use the rotation endpoint.
-async def ensure_vector_column(session: AsyncSession, dimension: int) -> None:
-    """Deprecated alias for :func:`ensure_vector_columns` (single-dim form)."""
-    await ensure_vector_columns(session, primary_dim=dimension)
-
-
 class EmbeddingStore:
     """Content-SHA-keyed embedding storage for semantic search.
 
@@ -554,11 +544,10 @@ class EmbeddingStore:
         Only deletes embeddings older than *min_age_minutes* to avoid racing
         with concurrent indexers that are still writing references.
 
-        Codex review fix (B1): when ``repo_id`` is provided, restrict the
-        DELETE to embeddings whose content_sha was ever tracked by a branch
-        of the target repo AND is no longer tracked anywhere. Global GC
-        (``repo_id=None``) preserves the old behavior for background
-        workers.
+        When ``repo_id`` is provided, restricts the DELETE to embeddings
+        whose content_sha was ever tracked by a branch of the target
+        repo AND is no longer tracked anywhere. ``repo_id=None`` runs
+        global GC (used by background workers).
 
         Returns count of deleted rows.
         """

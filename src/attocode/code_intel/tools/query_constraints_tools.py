@@ -16,11 +16,15 @@ Example queries:
 from __future__ import annotations
 
 import subprocess
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import _get_project_dir, mcp
 
+if TYPE_CHECKING:
+    from attocode.integrations.context.query_constraints import QueryConstraintProcessor
 
-def _get_constraint_processor():
+
+def _get_constraint_processor() -> QueryConstraintProcessor:
     """Get the constraint processor."""
     from attocode.integrations.context.query_constraints import (
         QueryConstraintProcessor,

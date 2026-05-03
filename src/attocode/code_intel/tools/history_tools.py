@@ -14,6 +14,7 @@ import os
 import subprocess
 import threading
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import (
     _get_project_dir,
@@ -21,6 +22,9 @@ from attocode.code_intel._shared import (
     _get_service,
     mcp,
 )
+
+if TYPE_CHECKING:
+    from attocode.integrations.context.temporal_coupling import TemporalCouplingAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -389,11 +393,11 @@ def recent_changes(
 # Temporal coupling helpers
 # ---------------------------------------------------------------------------
 
-_temporal_analyzer = None
+_temporal_analyzer: TemporalCouplingAnalyzer | None = None
 _temporal_lock = threading.Lock()
 
 
-def _get_temporal_analyzer():
+def _get_temporal_analyzer() -> TemporalCouplingAnalyzer:
     """Lazily initialize the TemporalCouplingAnalyzer singleton."""
     global _temporal_analyzer
     if _temporal_analyzer is None:

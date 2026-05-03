@@ -1,25 +1,29 @@
 # Code Intelligence Roadmap
 
 > Authoritative roadmap for attocode code-intel. Replaces the old HTTP API roadmap (Phases 2-5).
-> Baseline: **v0.2.21** (April 16, 2026).
+> Baseline: **v0.2.22** (April 16, 2026). Phase 1 shipped in **v0.2.23** (May 3, 2026).
 
 ---
 
-## Current State (v0.2.21)
+## Current State (v0.2.23 — post Phase 1)
 
-| Metric | Value |
-|--------|-------|
-| MCP tools | 123 |
-| HTTP API endpoints | 171 |
-| Languages | 36+ |
-| Rule packs | 5 (Go, Python, TypeScript, Rust, Java) |
-| Rules | ~57 (regex Tier 1 only) |
-| Rule accuracy | F1=0.87 |
-| Security rules | 101+ (OWASP, framework-specific, supply-chain) |
-| Dataflow analysis | Intra-procedural (single function) |
-| Search modes | 7 (semantic, BM25, trigram, frecency, fuzzy, cross-mode, regex) |
-| Tests | 1,055 |
-| Benchmark tasks | 120 (MCP bench) + 46 annotated files (rule accuracy) |
+| Metric | v0.2.21 baseline | v0.2.23 (Phase 1 shipped) |
+|--------|------------------|----------------------------|
+| MCP tools | 123 | 127 (+ `call_graph`, `rule_hygiene`, `synthesize_rule`, `evolve_rules`) |
+| HTTP API endpoints | 171 | 171 |
+| Languages | 36+ | 36+ |
+| Rule packs | 5 (Go, Python, TypeScript, Rust, Java) | 10 (+ cpp, csharp, kotlin, php, ruby) |
+| Rules | ~57 (regex Tier 1 only) | 91 (Tier 1 + Tier 2 ast-grep) |
+| Call graph | none | function-level via `CrossRefIndex.call_edges` + LSP enrichment |
+| Rule hygiene | manual | auto-prune dead/noisy + persistent disable |
+| Rule synthesis | none | `synthesize_rule` (deterministic LCS-regex + LLM-assisted) |
+| Rule evolution | none | `evolve_rules` (GA: mutation/crossover/k=3 tournament) |
+| Rule accuracy | F1=0.87 | F1=0.87 (corpus expansion deferred — see Phase 1 carry-forward) |
+| Security rules | 101+ (OWASP, framework-specific, supply-chain) | 101+ |
+| Dataflow analysis | Intra-procedural (single function) | Intra-procedural (Phase 2 will go inter-procedural) |
+| Search modes | 7 (semantic, BM25, trigram, frecency, fuzzy, cross-mode, regex) | 7 |
+| Tests | 1,055 | ~1,745 (+ ~117 Phase 1 tests + 6 post-review fixups) |
+| Benchmark tasks | 120 (MCP bench) + 46 annotated files (rule accuracy) | + PyCG synthetic micro-bench (P=R=1.0) |
 
 ### Key subsystems already shipped
 
@@ -32,73 +36,38 @@
 
 ---
 
-## Phase 1: Structural Analysis Foundation (v0.2.21)
+## Phase 1: Structural Analysis Foundation — ✅ SHIPPED in v0.2.23
 
-**Theme:** Move rules from regex to AST-aware. Build function-level call graph. This is the highest-leverage change — `UnifiedRule.structural_pattern` field exists but is inert, `RuleTier.STRUCTURAL` enum is defined, tree-sitter parses 36 languages. All that's missing is the wiring.
+**Status:** Complete on branch `feat/update-85`. All 8 deliverables shipped plus audit follow-ups (R1/R2/R3 + I1–I5 + H1) and coverage gap tests (T1/T2/T3). 10 packs, 91 rules, 4 new MCP tools (`call_graph`, `rule_hygiene`, `synthesize_rule`, `evolve_rules`).
 
 ### Deliverables
 
-- [ ] **ast-grep structural rule executor**
-  - Implement Tier 2 execution in `rules/executor.py` — dispatch to ast-grep when `rule.tier == STRUCTURAL`
-  - Accept `structural_pattern` strings in YAML rules (field already exists on `UnifiedRule`)
-  - Fallback to regex Tier 1 for languages without ast-grep grammars
-  - Key files: `rules/executor.py`, `rules/model.py`, `rules/loader.py`
+- [x] **ast-grep structural rule executor** — Tier 2 dispatch in `rules/executor.py` via `sg run --pattern` and `sg scan --inline-rules` when `structural_context`/`structural_selector` set. Multi-metavar (`$$$X`) capture. Per-language regex fallback for languages outside `_AST_GREP_LANGS` and when binary missing.
 
-- [ ] **Function-level call graph**
-  - Extend `CrossRefIndex` with `call_edges: dict[str, set[str]]` (qualified_caller -> qualified_callees)
-  - Extract call expressions during tree-sitter parsing in `ts_parser.py`
-  - Store edges in `IndexStore` alongside symbol defs/refs
-  - New MCP tool: `call_graph(symbol, direction, depth)`
-  - Validate against PyCG benchmarks (`eval/pycg/` harness exists). Target: P>0.8, R>0.5 on micro-benchmarks
-  - Key files: `cross_references.py`, `ts_parser.py`, `ast_service.py`, `index_store.py`
+- [x] **Function-level call graph** — `CrossRefIndex.call_edges` + `callers_of` populated by `add_reference()`. `IndexStore` schema 2 → 3. `call_graph(symbol, direction, depth)` MCP tool + `CodeIntelService.call_graph_data`. PyCG harness rewired; synthetic micro-bench hits P=R=1.0.
 
-- [ ] **LSP-enriched cross-references**
-  - `ingest_lsp_results` callback (wired in `service.py`) does not feed call-graph edges yet
-  - Insert LSP definition/references as high-confidence call edges with `source: "lsp"` attribution
-  - Call graph gets progressively better when LSP servers are available
-  - Key file: `ast_service.py`
+- [x] **LSP-enriched cross-references** — `ingest_lsp_results` resolves callee from query position + caller from each result's enclosing function. `merge_lsp_results` upgrades tree-sitter refs to LSP source on collision (only when caller info present, so legacy callbacks don't invert edges).
 
-- [ ] **5 more language packs + structural rules**
-  - C/C++, C#, PHP, Ruby packs with both regex and structural patterns
-  - Expand Go and Python packs with structural rules
-  - Goal: 10 packs, 100+ rules total
-  - Key dir: `rules/packs/examples/`
+- [x] **5 more language packs + structural rules** — cpp, csharp, php, ruby, kotlin added; Tier-1 + Tier-2 patterns. **10 packs, 91 rules** (just under the 100-rule target).
 
-- [ ] **Benchmark expansion for structural rules**
-  - Extend `eval/rule_accuracy/corpus/` with structural rule ground truth
-  - Target: F1>=0.87 overall, F1>0.90 for structural-only subset
+- [ ] **Benchmark expansion for structural rules** — DEFERRED. Current `eval/rule_accuracy/corpus/` not yet expanded with the 30 new structural rules' ground-truth fixtures. Per-pack integration tests assert FIRE-on-positive; H1 audit added a default-threshold no-fire-on-CLI test.
 
-- [ ] **Rule synthesis from examples**
-  - Given pos/neg code samples, generate candidate regex and structural patterns
-  - `synthesize_rule(positive_samples, negative_samples, language)` -> `UnifiedRule`
-  - Regex synthesis via common substring extraction + generalization (literal -> `\w+` -> `.*`)
-  - Structural synthesis via ast-grep pattern templates from AST diff of pos vs neg
-  - LLM-assisted mode: feed code samples + CWE description to Claude, get candidate YAML rules
-  - Auto-populate metavar constraints from sample variance
-  - Key files: new `rules/synthesis.py`, hooks into `model.py`, `metavar.py`
+- [x] **Rule synthesis from examples** — `rules/synthesis.py` with deterministic LCS-based regex + LLM-assisted (validation loop). `synthesize_rule` MCP tool. Structural synthesis via AST diff is deferred (regex covers most useful cases).
 
-- [ ] **Evolutionary rule optimization framework**
-  - Population-based optimization of rule patterns using genetic programming
-  - **Mutation operators**: regex widening/narrowing, metavar constraint relaxation/tightening, severity adjustment, composite pattern node insertion/removal, scope boundary changes
-  - **Crossover**: splice composite pattern subtrees between high-performing rules, combine metavar constraints from two parents
-  - **Fitness function**: weighted combination of precision, recall, CASTLE score, and execution speed (from `RuleProfiler`). Configurable weights via `.attocode/evolution.yaml`
-  - **Selection**: tournament selection (k=3) with elitism (top 10% survive unchanged)
-  - Evaluate candidates against `eval/rule_accuracy/corpus/` + `RuleTestRunner` inline fixtures
-  - Generations capped (default 50), early stopping when F1 plateaus for 5 generations
-  - Key files: new `rules/evolution.py`, uses `profiling.py` (fitness), `testing.py` (validation), `registry.py` (storage)
+- [x] **Evolutionary rule optimization framework** — `rules/evolution.py` with mutation (regex widen/narrow + severity/confidence shifts), crossover (50/50 scalar splice), k=3 tournament, 10% elitism, plateau early-stop, JSONL audit log. `evolve_rules` MCP tool.
 
-- [ ] **Auto-pruning of dead/noisy rules**
-  - Already identified 82 dead rules in benchmarks — wire this into a continuous check
-  - Rules with 0 matches across 10+ scanned repos: mark `enabled=False` with `disabled_reason="dead"`
-  - Rules with FP rate > 0.5 after 10+ feedback samples: auto-disable with notification
-  - `rule_hygiene()` MCP tool: report dead rules, noisy rules, confidence drift
-  - Persistent state in `.attocode/rule_feedback.json` (already exists)
+- [x] **Auto-pruning of dead/noisy rules** — `rules/hygiene.py` + `rule_hygiene()` MCP tool. Dead rules (0 matches across 10+ sessions), noisy rules (FP > 0.5 after 10+ samples), drift reporting. Persistent in `.attocode/rule_feedback.json`; thread-safe; survives registry reloads.
 
 **Dependencies:** None (foundational).
 
+**Carry-forward to Phase 2 / Phase 3**:
+- Structural-rule corpus expansion (the deferred benchmark item).
+- AST-diff-based structural synthesis (richer than regex synthesis).
+- DB-side `SymbolReference.caller_qualified_name` is wired (migration 019), but no coverage test against the HTTP API path yet.
+
 ---
 
-## Phase 2: Inter-Procedural Dataflow (v0.2.22)
+## Phase 2: Inter-Procedural Dataflow (v0.2.24)
 
 **Theme:** Follow taint across function boundaries. The current `security/dataflow.py` explicitly documents its limitation: "Intra-procedural only." This phase removes it using the Phase 1 call graph.
 
@@ -156,7 +125,7 @@
 
 ---
 
-## Phase 3: Search Quality & Developer Experience (v0.2.23)
+## Phase 3: Search Quality & Developer Experience (v0.2.25)
 
 **Theme:** Make analysis results actionable. Better ranking, polished autofix, new detection capabilities.
 
@@ -191,7 +160,7 @@
 
 ---
 
-## Phase 4: Integration & CI/CD (v0.2.24)
+## Phase 4: Integration & CI/CD (v0.2.26)
 
 **Theme:** Take attocode from local analysis tool to CI pipeline participant. Analysis engine must be mature (Phases 1-3) before external exposure.
 
@@ -228,7 +197,7 @@
 
 ---
 
-## Phase 5: Scale & Production (v0.2.25)
+## Phase 5: Scale & Production (v0.2.27)
 
 **Theme:** Large monorepos, remote analysis, observability.
 
@@ -264,7 +233,7 @@
 
 ---
 
-## Phase 6: Intelligence Platform (v0.2.26)
+## Phase 6: Intelligence Platform (v0.2.28)
 
 **Theme:** Long-term vision. Cross-service understanding, adaptive learning, coverage analysis.
 
@@ -303,12 +272,12 @@
 
 | Phase | Version | Theme | Key Unlock | Deps |
 |-------|---------|-------|------------|------|
-| 1 | v0.2.21 | Structural Foundation | ast-grep rules, call graph, rule synthesis & evolution | None |
-| 2 | v0.2.22 | Inter-Procedural Dataflow | Cross-function taint, Bayesian confidence, LLM rule gen | P1 |
-| 3 | v0.2.23 | Search & DX | Graph-boosted ranking, autofix, clones | P2 |
-| 4 | v0.2.24 | Integration & CI/CD | GitHub App, VS Code, pre-commit | P1-3 |
-| 5 | v0.2.25 | Scale & Production | Monorepo sharding, remote repos, OTel | P4 |
-| 6 | v0.2.26 | Intelligence Platform | Cross-service, federated rule evolution, risk scoring | P5 |
+| 1 | v0.2.23 ✅ | Structural Foundation | ast-grep rules, call graph, rule synthesis & evolution | None |
+| 2 | v0.2.24 | Inter-Procedural Dataflow | Cross-function taint, Bayesian confidence, LLM rule gen | P1 |
+| 3 | v0.2.25 | Search & DX | Graph-boosted ranking, autofix, clones | P2 |
+| 4 | v0.2.26 | Integration & CI/CD | GitHub App, VS Code, pre-commit | P1-3 |
+| 5 | v0.2.27 | Scale & Production | Monorepo sharding, remote repos, OTel | P4 |
+| 6 | v0.2.28 | Intelligence Platform | Cross-service, federated rule evolution, risk scoring | P5 |
 
 ### Architectural principles
 

@@ -10,12 +10,11 @@ import json
 import sqlite3
 import time
 import uuid
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from attocode.types.events import SimpleEventListener
+from attocode.types.events import SimpleEventEmitter, SimpleEventListener
 
 
 class LearningStatus(StrEnum):
@@ -96,7 +95,7 @@ _STOP_WORDS = frozenset([
 ])
 
 
-class LearningStore:
+class LearningStore(SimpleEventEmitter):
     """SQLite-backed store for agent learnings.
 
     Supports FTS5 search, confidence tracking, and
@@ -104,8 +103,8 @@ class LearningStore:
     """
 
     def __init__(self, config: LearningStoreConfig | None = None) -> None:
+        super().__init__()
         self._config = config or LearningStoreConfig()
-        self._listeners: list[LearningEventListener] = []
 
         if self._config.in_memory:
             self._db = sqlite3.connect(":memory:")
@@ -379,18 +378,6 @@ class LearningStore:
             "by_type": by_type,
         }
 
-    def on(self, listener: LearningEventListener) -> Callable[[], None]:
-        """Subscribe to store events. Returns unsubscribe function."""
-        self._listeners.append(listener)
-
-        def unsubscribe() -> None:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
-
-        return unsubscribe
-
     def close(self) -> None:
         """Close the database."""
         self._db.close()
@@ -472,13 +459,6 @@ class LearningStore:
             )
             self._db.commit()
 
-    def _emit(self, event: str, data: dict[str, Any]) -> None:
-        """Emit an event to listeners."""
-        for listener in self._listeners:
-            try:
-                listener(event, data)
-            except Exception:
-                pass
 
 
 def _row_to_learning(row: sqlite3.Row) -> Learning:

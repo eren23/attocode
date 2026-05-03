@@ -1133,7 +1133,7 @@ class StateStore:
         setattr(self, cache_key, (now, result))
         return result
 
-    # ── Transparency helpers (Workstream 2) ───────────────────────
+    # ── Transparency helpers ──────────────────────────────────────
 
     def read_agent_trace(self, task_id: str) -> list[dict[str, Any]]:
         """Read agent trace JSONL file incrementally.

@@ -10,41 +10,23 @@ from __future__ import annotations
 import difflib
 import logging
 import uuid
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+# Canonical diff models live alongside the git manager; re-exported here for
+# backward compatibility with consumers that import from this module.
+from attocode.code_intel.git.models import DiffHunk, DiffLine, PatchEntry
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass(slots=True)
-class DiffLine:
-    origin: str  # '+'/'-'/' '
-    content: str
-    old_lineno: int | None = None
-    new_lineno: int | None = None
-
-
-@dataclass(slots=True)
-class DiffHunk:
-    old_start: int
-    old_lines: int
-    new_start: int
-    new_lines: int
-    header: str
-    lines: list[DiffLine] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class PatchEntry:
-    path: str
-    status: str  # added|modified|deleted
-    old_path: str | None = None
-    additions: int = 0
-    deletions: int = 0
-    hunks: list[DiffHunk] = field(default_factory=list)
+__all__ = [
+    "DiffHunk",
+    "DiffLine",
+    "PatchEntry",
+    "compute_branch_diff",
+]
 
 
 def _compute_hunks(old_text: str, new_text: str, path: str) -> list[DiffHunk]:

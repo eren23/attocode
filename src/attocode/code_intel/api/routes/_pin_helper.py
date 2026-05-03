@@ -1,21 +1,10 @@
 """Server-side retrieval pin computation.
 
-Codex review fix M4: HTTP search routes need to return a ``pin_id`` +
-``manifest_hash`` pair so clients can track the state they queried
-against (matching what the local stdio MCP side already exposes via
-``_stamp_pin``).
-
-Phase 3a delivers the lightweight half: every v2 search response
-carries these two fields. The server picks up its own per-store
-manifest hashes via cheap ``SELECT COUNT + MAX(updated_at)`` probes,
-builds a :class:`RetrievalPin` with the same canonical format as the
-local ``artifacts/retrieval_pin.py``, and hands the response back with
-``pin_id`` / ``manifest_hash`` populated.
-
-Full server-side ``?pin=<id>`` query-param wiring (round-trip
-verification) is planned for Phase 3b alongside a new ``repo_pins``
-table. This module exists now so the response contract lands first
-and clients can start depending on it without waiting.
+HTTP search routes return ``pin_id`` + ``manifest_hash`` so clients can
+track the state they queried against (matching the local stdio MCP
+``_stamp_pin``). Per-store manifest hashes are computed via cheap
+``SELECT COUNT + MAX(updated_at)`` probes; pins are ephemeral and not
+persisted in a pins table.
 """
 
 from __future__ import annotations
@@ -45,10 +34,10 @@ async def compute_server_manifest_hashes(
     (the local-side equivalent). A store's hash changes whenever its
     row count or latest ``created_at`` / ``updated_at`` timestamp moves.
 
-    ``repo_id`` / ``branch_id`` are accepted so Phase 3b can scope the
-    hash to a specific repo. Phase 3a uses a global view — the returned
-    hash is informational, not a cryptographic commitment to the repo's
-    exact state.
+    ``repo_id`` / ``branch_id`` may scope the hash; the current
+    implementation uses a global view — the returned hash is
+    informational, not a cryptographic commitment to the repo's exact
+    state.
     """
     from sqlalchemy import text
 
@@ -88,26 +77,23 @@ async def compute_server_manifest_hashes(
     if branch_id is not None:
         branch_params["branch_id"] = str(branch_id)
 
-    # file_contents — global, repo scoping would require a join via
-    # branch_files which is overkill for Phase 3a.
+    # file_contents — global; repo scoping would require a join via
+    # branch_files which is overkill here.
     await _probe(
         "file_contents",
         "SELECT COUNT(*), MAX(created_at) FROM file_contents",
         {},
     )
-    # symbols
     await _probe(
         "symbols",
         "SELECT COUNT(*), MAX(created_at) FROM symbols",
         {},
     )
-    # embeddings
     await _probe(
         "embeddings",
         "SELECT COUNT(*), MAX(created_at) FROM embeddings",
         {},
     )
-    # dependencies
     await _probe(
         "dependencies",
         "SELECT COUNT(*), NULL::timestamptz FROM dependencies",
@@ -143,10 +129,10 @@ async def build_retrieval_pin(
 ) -> RetrievalPin:
     """Build a fresh :class:`RetrievalPin` for the current server state.
 
-    Server pins are ephemeral today (not persisted in a pins table —
-    that's Phase 3b). The ``pin_id`` is deterministic off the manifest
-    hash so repeat calls on an unchanged state return an identical id,
-    letting clients cheap-compare across requests.
+    Server pins are ephemeral (not persisted in a pins table). The
+    ``pin_id`` is deterministic off the manifest hash so repeat calls
+    on an unchanged state return an identical id, letting clients
+    cheap-compare across requests.
     """
     hashes = await compute_server_manifest_hashes(
         session, repo_id=repo_id, branch_id=branch_id,

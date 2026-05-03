@@ -825,10 +825,15 @@ class LSPManager:
         self._clients: dict[str, _LSPClient] = {}
         self._listeners: set[LSPEventListener] = set()
         self._diagnostics_cache: dict[str, list[LSPDiagnostic]] = {}
-        # Optional callback: (tool_name, file_path, results) -> None
+        # Optional callback: (tool_name, file_path, results, query) -> None.
         # Fired after get_definition/get_references to feed results back
-        # into the cross-reference index.
-        self.on_result_callback: Callable[[str, str, list], None] | None = None
+        # into the cross-reference index. ``query`` carries the original
+        # request position (``{"line": int, "col": int}``) so the consumer
+        # can resolve which symbol was queried — needed to attribute LSP
+        # references to caller→callee call-graph edges.
+        self.on_result_callback: (
+            Callable[[str, str, list, dict | None], None] | None
+        ) = None
 
     def has_clients(self) -> bool:
         """Return True if any LSP clients are running."""
@@ -920,7 +925,9 @@ class LSPManager:
         result = await client.get_definition(uri, line, col)
         if result and self.on_result_callback:
             try:
-                self.on_result_callback("definition", file, [result])
+                self.on_result_callback(
+                    "definition", file, [result], {"line": line, "col": col},
+                )
             except Exception:
                 pass  # don't let callback errors break LSP flow
         return result
@@ -957,7 +964,9 @@ class LSPManager:
         results = await client.get_references(uri, line, col, include_declaration)
         if results and self.on_result_callback:
             try:
-                self.on_result_callback("references", file, results)
+                self.on_result_callback(
+                    "references", file, results, {"line": line, "col": col},
+                )
             except Exception:
                 pass  # don't let callback errors break LSP flow
         return results

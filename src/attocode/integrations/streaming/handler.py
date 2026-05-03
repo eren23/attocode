@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from attocode.types.events import SimpleEventListener
+from attocode.types.events import SimpleEventEmitter, SimpleEventListener
 from attocode.types.messages import (
     ChatResponse,
     StreamChunk,
@@ -52,7 +52,7 @@ StreamCallback = Callable[[StreamChunk], None]
 # =============================================================================
 
 
-class StreamHandler:
+class StreamHandler(SimpleEventEmitter):
     """Handles streaming responses from LLM providers.
 
     Accumulates chunks into a final ChatResponse, with buffered
@@ -60,8 +60,8 @@ class StreamHandler:
     """
 
     def __init__(self, config: StreamConfig | None = None) -> None:
+        super().__init__()
         self._config = config or StreamConfig()
-        self._listeners: list[StreamEventListener] = []
         self._buffer: str = ""
 
     async def process_stream(
@@ -136,28 +136,9 @@ class StreamHandler:
         if on_chunk:
             on_chunk(chunk)
 
-    def on(self, listener: StreamEventListener) -> Callable[[], None]:
-        """Subscribe to stream events. Returns unsubscribe function."""
-        self._listeners.append(listener)
-
-        def unsubscribe() -> None:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
-
-        return unsubscribe
-
     def is_enabled(self) -> bool:
         """Check if streaming is enabled."""
         return self._config.enabled
-
-    def _emit(self, event: str, data: dict[str, Any]) -> None:
-        for listener in self._listeners:
-            try:
-                listener(event, data)
-            except Exception:
-                pass
 
 
 # =============================================================================

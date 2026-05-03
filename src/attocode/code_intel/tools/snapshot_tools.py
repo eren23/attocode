@@ -39,10 +39,10 @@ logger = logging.getLogger(__name__)
 MANIFEST_SCHEMA_VERSION = 1
 SNAPSHOT_SUFFIX = ".atsnap.tar.gz"
 SNAPSHOT_DIR_NAME = "snapshots"
-# Codex c1: local snapshot operations append audit entries to a
-# per-project JSONL log so create/restore/delete events are traceable
-# after the fact. The server side already writes to ``audit_events``
-# via ``log_event``; this is the equivalent for the local stdio MCP.
+# Local snapshot operations append audit entries to a per-project
+# JSONL log so create/restore/delete events are traceable after the
+# fact. The server side already writes to ``audit_events`` via
+# ``log_event``; this is the equivalent for the local stdio MCP.
 SNAPSHOT_AUDIT_LOG = os.path.join("cache", "snapshot_events.jsonl")
 
 # Everything under .attocode/ that's worth capturing. Each tuple is
@@ -79,8 +79,7 @@ def _append_audit_event(project_dir: str, event_type: str, detail: dict[str, Any
     """Append one JSONL entry to the local snapshot audit log.
 
     Best-effort: any write failure is logged and swallowed so a broken
-    audit path never blocks a successful snapshot operation. Codex fix
-    c1.
+    audit path never blocks a successful snapshot operation.
     """
     log_path = os.path.join(project_dir, ".attocode", SNAPSHOT_AUDIT_LOG)
     try:
@@ -259,13 +258,10 @@ def _write_manifest(
     name: str,
     components: list[_Component],
 ) -> dict[str, Any]:
-    # Codex fix m2: the snapshot manifest used to embed the absolute
-    # ``project_dir`` path, which leaked workstation filesystem layout
-    # into a shareable artifact. Replace it with just the basename —
-    # identifying enough to scan but portable across machines. The
+    # Embed only the basename of project_dir in the manifest to avoid
+    # leaking absolute filesystem paths into shareable snapshots. The
     # absolute path is kept in a private ``_producer_abs_path`` field
-    # only when the snapshot is being restored on the SAME host (the
-    # restore path ignores it anyway).
+    # for same-host restore convenience (restore path ignores it anyway).
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "schema": "atto.snapshot.v1",
@@ -585,12 +581,10 @@ def snapshot_diff(a: str, b: str) -> str:
         return f"snapshot_diff: manifest read failed: {exc}"
 
     def _digest_map(m: dict[str, Any]) -> dict[str, str]:
-        """Codex fix M8: the local snapshot format emits three separate
-        components all named ``trigrams`` (one per on-disk file). Keying
-        the diff dict on ``name`` alone collapsed them into a single
-        entry, silently losing the distinction. Key on
-        ``(name, archive_path)`` instead so the three trigram files
-        show up as three separate diff entries.
+        """The local snapshot format emits three separate components all
+        named ``trigrams`` (one per on-disk file). Key on
+        ``(name, archive_path)`` so the three trigram files show up as
+        three separate diff entries instead of collapsing.
         """
         out: dict[str, str] = {}
         for c in m.get("components", []):

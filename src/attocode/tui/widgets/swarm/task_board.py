@@ -6,11 +6,13 @@ import contextlib
 from typing import Any
 
 from rich.text import Text
+from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Static
+from textual.widgets._data_table import RowDoesNotExist
 
 _COLUMN_TITLES = {
     "pending": "PENDING",
@@ -133,7 +135,7 @@ class KanbanColumn(Vertical):
         self._prev_task_ids: list[str] = []
         self._card_map: dict[str, TaskCard] = {}
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         title = _COLUMN_TITLES.get(self.column_key, self.column_key.upper())
         style = _COLUMN_STYLES.get(self.column_key, "")
         header_text = Text()
@@ -210,7 +212,7 @@ class TaskBoard(Widget):
 
     tasks: reactive[list[dict[str, Any]]] = reactive(list)
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         with Horizontal():
             yield KanbanColumn("pending", id="col-pending")
             yield KanbanColumn("running", id="col-running")
@@ -321,7 +323,7 @@ class TasksDataTable(Widget):
         self._prev_order: list[str] = []
         self._restoring_cursor: bool = False
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         table = DataTable(id="tasks-table", cursor_type="row")
         table.add_columns("Status", "ID", "Title", "Kind", "Agent", "Attempts", "Deps")
         yield table
@@ -416,7 +418,7 @@ class TasksDataTable(Widget):
             # Differential update
             # Remove deleted rows
             for removed_key in old_keys - new_keys:
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(RowDoesNotExist):
                     table.remove_row(removed_key)
 
             # Add new rows

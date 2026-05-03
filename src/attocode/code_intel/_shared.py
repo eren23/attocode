@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -27,6 +28,15 @@ except ImportError:
         file=sys.stderr,
     )
     sys.exit(1)
+
+if TYPE_CHECKING:
+    from attocode.code_intel.api.providers.remote_provider import RemoteTextService
+    from attocode.code_intel.service import CodeIntelService
+    from attocode.integrations.context.ast_service import ASTService
+    from attocode.integrations.context.code_analyzer import CodeAnalyzer
+    from attocode.integrations.context.codebase_context import CodebaseContextManager
+    from attocode.integrations.context.frecency import FrecencyTracker
+    from attocode.integrations.context.hierarchical_explorer import HierarchicalExplorer
 
 logger = logging.getLogger(__name__)
 
@@ -40,17 +50,17 @@ mcp = FastMCP("attocode-code-intel")
 # Lazily initialized singletons
 # ---------------------------------------------------------------------------
 
-_ast_service = None
-_context_mgr = None
-_code_analyzer = None
-_semantic_search = None  # Backward compat: tests may set this directly
-_memory_store = None  # Backward compat: tests may set this directly
-_explorer = None
-_service = None
-_remote_service = None
+_ast_service: ASTService | None = None
+_context_mgr: CodebaseContextManager | None = None
+_code_analyzer: CodeAnalyzer | None = None
+_semantic_search: object | None = None  # Backward compat: tests may set this directly
+_memory_store: object | None = None  # Backward compat: tests may set this directly
+_explorer: HierarchicalExplorer | None = None
+_service: CodeIntelService | None = None
+_remote_service: RemoteTextService | None = None
 
 
-def _check_server_override(name: str):
+def _check_server_override(name: str) -> object | None:
     """Return the value of *name* from ``server.__dict__`` if set there.
 
     Tests (and some internal code) set e.g. ``server._ast_service = mock``
@@ -60,7 +70,7 @@ def _check_server_override(name: str):
     """
     srv = sys.modules.get("attocode.code_intel.server")
     if srv is not None and name in srv.__dict__:
-        return srv.__dict__[name]
+        return srv.__dict__[name]  # type: ignore[no-any-return]
     return None
 
 
@@ -75,12 +85,12 @@ from attocode.code_intel.project_dir import (  # noqa: F401, E402
 )
 
 
-def _get_ast_service():
+def _get_ast_service() -> ASTService:
     """Lazily initialize and return the ASTService singleton."""
     global _ast_service
     override = _check_server_override("_ast_service")
     if override is not None:
-        return override
+        return override  # type: ignore[return-value]
     if _ast_service is None:
         from attocode.integrations.context.ast_service import ASTService
 
@@ -101,12 +111,12 @@ def _get_ast_service():
     return _ast_service
 
 
-def _get_context_mgr():
+def _get_context_mgr() -> CodebaseContextManager:
     """Lazily initialize and return the CodebaseContextManager."""
     global _context_mgr
     override = _check_server_override("_context_mgr")
     if override is not None:
-        return override
+        return override  # type: ignore[return-value]
     if _context_mgr is None:
         from attocode.integrations.context.codebase_context import CodebaseContextManager
 
@@ -116,12 +126,12 @@ def _get_context_mgr():
     return _context_mgr
 
 
-def _get_code_analyzer():
+def _get_code_analyzer() -> CodeAnalyzer:
     """Lazily initialize and return the CodeAnalyzer."""
     global _code_analyzer
     override = _check_server_override("_code_analyzer")
     if override is not None:
-        return override
+        return override  # type: ignore[return-value]
     if _code_analyzer is None:
         from attocode.integrations.context.code_analyzer import CodeAnalyzer
 
@@ -129,7 +139,7 @@ def _get_code_analyzer():
     return _code_analyzer
 
 
-def _get_service():
+def _get_service() -> CodeIntelService | RemoteTextService:
     """Lazily initialize and return the CodeIntelService singleton."""
     global _service
     srv = sys.modules.get("attocode.code_intel.server")
@@ -138,7 +148,7 @@ def _get_service():
         if override is None:
             _service = None
         else:
-            return override
+            return override  # type: ignore[no-any-return]
     if _remote_service is not None:
         return _remote_service
     if _service is not None:
@@ -154,11 +164,11 @@ def _get_service():
     return _service
 
 
-def _get_remote_service():
+def _get_remote_service() -> RemoteTextService | None:
     """Return the configured remote text service, if any."""
     srv = sys.modules.get("attocode.code_intel.server")
     if srv is not None and "_remote_service" in srv.__dict__:
-        return srv.__dict__["_remote_service"]
+        return srv.__dict__["_remote_service"]  # type: ignore[no-any-return]
     return _remote_service
 
 
@@ -182,12 +192,12 @@ def clear_remote_service() -> None:
     _remote_service = None
 
 
-def _get_explorer():
+def _get_explorer() -> HierarchicalExplorer:
     """Lazily initialize the hierarchical explorer."""
     global _explorer
     override = _check_server_override("_explorer")
     if override is not None:
-        return override
+        return override  # type: ignore[return-value]
     if _explorer is None:
         from attocode.integrations.context.hierarchical_explorer import HierarchicalExplorer
         ctx = _get_context_mgr()
@@ -196,7 +206,7 @@ def _get_explorer():
     return _explorer
 
 
-def _get_frecency_tracker():
+def _get_frecency_tracker() -> FrecencyTracker:
     """Get shared frecency tracker (thread-safe via get_tracker lock)."""
     from attocode.integrations.context.frecency import get_tracker
 

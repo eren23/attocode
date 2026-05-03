@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import threading
+from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import (
     _get_ast_service,
@@ -19,6 +20,11 @@ from attocode.code_intel._shared import (
 )
 from attocode.code_intel.tools.pin_tools import pin_stamped
 from attocode.integrations.context.frecency import FrecencyResult
+
+if TYPE_CHECKING:
+    from attocode.integrations.context.semantic_search import SemanticSearchManager
+    from attocode.integrations.context.trigram_index import TrigramIndex
+    from attocode.integrations.security.scanner import SecurityScanner
 
 
 def _get_project_dir() -> str:
@@ -48,14 +54,14 @@ def _empty_frecency(ai_mode: bool) -> FrecencyResult:
 # Lazy singletons
 # ---------------------------------------------------------------------------
 
-_semantic_search = None
+_semantic_search: SemanticSearchManager | None = None
 _semantic_search_lock = threading.Lock()
 
-_trigram_index = None
+_trigram_index: TrigramIndex | None = None
 _trigram_index_lock = threading.Lock()
 
 
-def _get_semantic_search():
+def _get_semantic_search() -> SemanticSearchManager:
     """Lazily initialize the semantic search manager (thread-safe)."""
     global _semantic_search
     if _semantic_search is None:
@@ -67,10 +73,10 @@ def _get_semantic_search():
     return _semantic_search
 
 
-_security_scanner = None
+_security_scanner: SecurityScanner | None = None
 
 
-def _get_security_scanner():
+def _get_security_scanner() -> SecurityScanner:
     """Lazily initialize the security scanner."""
     global _security_scanner
     if _security_scanner is None:
@@ -80,7 +86,7 @@ def _get_security_scanner():
     return _security_scanner
 
 
-def _get_trigram_index():
+def _get_trigram_index() -> TrigramIndex | None:
     """Lazily initialize the trigram index (thread-safe).
 
     Loads an existing index from disk if available. Returns None

@@ -31,7 +31,6 @@ exact_phrase_bonus: 3.0
 frecency_weight: 0.2
 function_boost: 1.4
 importance_weight: 0.5
-kw_confidence_threshold: 0.5
 kw_dominance_threshold: 1.5
 max_chunks_per_file: 8
 method_boost: 1.3

@@ -1,0 +1,49 @@
+# Rust structural patterns (ast-grep, Tier 2).
+#
+# IDs picked to avoid collision with the regex rules in
+# ``correctness.yaml`` (rs-unwrap-usage, rs-todo-macro). These are
+# precision-better restatements via the AST.
+
+- id: rs-expect-call
+  name: .expect() with hardcoded message
+  structural_pattern: '$X.expect($MSG)'
+  message: ".expect($MSG) on $X panics on None/Err — make sure $MSG is informative"
+  severity: low
+  category: correctness
+  languages: [rust]
+  confidence: 0.4
+  explanation: >
+    ``.expect("…")`` is preferable to ``.unwrap()`` because the message
+    surfaces the violated invariant. This rule flags every use so you
+    can audit whether the message actually helps debugging — terse
+    placeholders ("oops", "fail") are worse than nothing.
+  recommendation: "Make the expect message describe the precondition that should hold."
+
+- id: rs-debug-println
+  name: Debug println! left in source
+  structural_pattern: 'println!($X)'
+  message: "println!($X) left in source — switch to log/tracing or remove"
+  severity: low
+  category: style
+  languages: [rust]
+  confidence: 0.35
+  tags: [debug]
+  explanation: >
+    ``println!`` writes straight to stdout and is unfilterable. Use
+    ``log::info!`` or ``tracing::info!`` so output respects log levels
+    and structured logging.
+  recommendation: "Use tracing::info! / log::info! macros (or remove if it was a debug aid)."
+
+- id: rs-dbg-macro
+  name: dbg!() macro left in source
+  structural_pattern: 'dbg!($X)'
+  message: "dbg!($X) — debug macro that prints to stderr, remove before commit"
+  severity: low
+  category: style
+  languages: [rust]
+  confidence: 0.85
+  tags: [debug]
+  explanation: >
+    ``dbg!`` is a debug aid that prints the file/line and value to stderr.
+    Convenient during local iteration; should not survive into mainline.
+  recommendation: "Remove the dbg! macro before committing."

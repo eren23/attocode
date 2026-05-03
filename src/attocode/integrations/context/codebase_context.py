@@ -277,45 +277,37 @@ def _detect_source_prefixes(root_dir: str) -> list[str]:
     # --- pyproject.toml ---
     pyproject = root / "pyproject.toml"
     if pyproject.exists():
-        tomllib = None
+        import tomllib  # stdlib, Python 3.11+ (project requires 3.12+)
+
         try:
-            import tomllib  # Python 3.11+
-        except ImportError:
-            try:
-                import tomli as tomllib  # type: ignore[no-redef]
-            except ImportError:
-                pass
+            with open(pyproject, "rb") as fh:
+                data = tomllib.load(fh)
 
-        if tomllib is not None:
-            try:
-                with open(pyproject, "rb") as fh:
-                    data = tomllib.load(fh)
+            # Hatchling: [tool.hatch.build.targets.wheel] packages = ["src/pkg"]
+            hatch_packages = (
+                data.get("tool", {})
+                .get("hatch", {})
+                .get("build", {})
+                .get("targets", {})
+                .get("wheel", {})
+                .get("packages", [])
+            )
+            for pkg in hatch_packages:
+                parts = Path(pkg).parts
+                if len(parts) >= 2:
+                    prefixes.add(parts[0] + "/")
 
-                # Hatchling: [tool.hatch.build.targets.wheel] packages = ["src/pkg"]
-                hatch_packages = (
-                    data.get("tool", {})
-                    .get("hatch", {})
-                    .get("build", {})
-                    .get("targets", {})
-                    .get("wheel", {})
-                    .get("packages", [])
-                )
-                for pkg in hatch_packages:
-                    parts = Path(pkg).parts
-                    if len(parts) >= 2:
-                        prefixes.add(parts[0] + "/")
-
-                # Setuptools: [tool.setuptools] package-dir = {"" = "src"}
-                setup_pkg_dir = (
-                    data.get("tool", {})
-                    .get("setuptools", {})
-                    .get("package-dir", {})
-                )
-                for _key, src_dir in setup_pkg_dir.items():
-                    if src_dir:
-                        prefixes.add(src_dir.rstrip("/") + "/")
-            except Exception:
-                pass
+            # Setuptools: [tool.setuptools] package-dir = {"" = "src"}
+            setup_pkg_dir = (
+                data.get("tool", {})
+                .get("setuptools", {})
+                .get("package-dir", {})
+            )
+            for _key, src_dir in setup_pkg_dir.items():
+                if src_dir:
+                    prefixes.add(src_dir.rstrip("/") + "/")
+        except Exception:
+            pass
 
     # --- setup.cfg ---
     if not prefixes:

@@ -157,7 +157,6 @@ class FileChangeResult:
 
 # Language detection
 LANG_EXTENSIONS: dict[str, str] = {
-    # Tier 1: Original 9 languages
     ".py": "python",
     ".pyi": "python",
     ".js": "javascript",
@@ -181,7 +180,6 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".hxx": "cpp",
     ".hh": "cpp",
     ".metal": "cpp",
-    # Phase 1: 11 new programming languages
     ".cs": "csharp",
     ".php": "php",
     ".swift": "swift",
@@ -201,7 +199,6 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".hcl": "hcl",
     ".tfvars": "hcl",
     ".zig": "zig",
-    # Phase 3: Additional programming languages
     ".nim": "nim",
     ".fs": "fsharp",
     ".fsi": "fsharp",
@@ -209,7 +206,7 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".cr": "crystal",
     ".m": "objc",
     ".mm": "objc",
-    # Phase 2: Data/config languages
+    # Data/config languages
     ".yaml": "yaml",
     ".yml": "yaml",
     ".toml": "toml",

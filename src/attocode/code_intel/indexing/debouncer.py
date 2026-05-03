@@ -88,8 +88,8 @@ class FileChangeDebouncer:
         except asyncio.CancelledError:
             return
 
-        # M1 fix: copy batch, then clear pending — prevents lost updates
-        # if new paths arrive between pop and handler execution
+        # Copy batch, then clear pending — prevents lost updates if new
+        # paths arrive between pop and handler execution.
         batch = self._pending.pop(key, set())
         files = self._pending_files.pop(key, None) or None
         paths = list(batch)

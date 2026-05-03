@@ -3231,8 +3231,9 @@ def _orchestrate_command(agent: Any, arg: str) -> CommandResult:
 
     from attocode.core.orchestrator import Orchestrator
 
-    orch = Orchestrator()
-    prompt = orch.create_decomposition_prompt(arg)
+    # Instantiate to validate the orchestrator is wired up; the agent will
+    # generate the actual decomposition prompt at execution time.
+    Orchestrator()
     return CommandResult(
         output=f"Orchestrator ready. Decomposition prompt prepared for:\n{arg}\n\n"
         "The agent will break this into mode-specific subtasks."

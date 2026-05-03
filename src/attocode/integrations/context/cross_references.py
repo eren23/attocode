@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -57,6 +58,10 @@ class SymbolRef:
     file_path: str
     line: int
     source: str = "tree-sitter"  # "tree-sitter" | "lsp"
+    # Qualified name of the function/method enclosing this reference. Empty
+    # when the reference is at module top level or the enclosing symbol
+    # could not be resolved. Populated for call-graph construction.
+    caller_qualified_name: str = ""
 
 
 @dataclass(slots=True)
@@ -93,6 +98,10 @@ class CrossRefIndex:
     file_dependencies: dict[str, set[str]] = field(default_factory=dict)
     # file path -> set of file paths that import it
     file_dependents: dict[str, set[str]] = field(default_factory=dict)
+    # caller qualified name -> set of callee bare/qualified names
+    call_edges: dict[str, set[str]] = field(default_factory=dict)
+    # callee bare/qualified name -> set of caller qualified names (reverse)
+    callers_of: dict[str, set[str]] = field(default_factory=dict)
 
     # --- Inverted name indexes (populated by add_definition) ---
     # bare name -> set of qualified names
@@ -105,12 +114,28 @@ class CrossRefIndex:
     # Optional persistent store (set via set_store)
     _store: Any = field(default=None, repr=False)
 
+    # Re-entrant lock guarding all mutating methods plus the iterating
+    # reads that need a consistent snapshot. Reentrancy matters because
+    # ``add_reference`` may call ``add_call_edge`` and ``remove_file``
+    # walks every other map. Background hydration (``ASTService``'s
+    # daemon thread) and LSP/MCP request threads can mutate the index
+    # concurrently, so the lock prevents corrupted dicts and torn lists.
+    _lock: threading.RLock = field(
+        default_factory=threading.RLock, repr=False, compare=False,
+    )
+
     def set_store(self, store: IndexStore) -> None:
         """Attach an IndexStore for write-through persistence."""
         self._store = store
 
     def persist_file(self, file_path: str) -> None:
         """Write-through: save current in-memory symbols/refs for a file to the store."""
+        if self._store is None:
+            return
+        with self._lock:
+            self._persist_file_locked(file_path)
+
+    def _persist_file_locked(self, file_path: str) -> None:
         if self._store is None:
             return
         # Collect symbols for this file
@@ -139,6 +164,7 @@ class CrossRefIndex:
                         "line": ref.line,
                         "column": 0,
                         "source": ref.source,
+                        "caller_qualified_name": ref.caller_qualified_name,
                     })
         self._store.save_references(file_path, ref_dicts)
 
@@ -147,6 +173,12 @@ class CrossRefIndex:
 
         Returns the number of files loaded.
         """
+        if self._store is None:
+            return 0
+        with self._lock:
+            return self._load_from_store_locked()
+
+    def _load_from_store_locked(self) -> int:
         if self._store is None:
             return 0
 
@@ -176,6 +208,7 @@ class CrossRefIndex:
                 file_path=r.file_path,
                 line=r.line,
                 source=r.source,
+                caller_qualified_name=getattr(r, "caller_qualified_name", ""),
             )
             self.add_reference(ref)
 
@@ -200,6 +233,15 @@ class CrossRefIndex:
         Deduplicates by (qualified_name, file, line) — LSP wins on conflict.
         Returns the number of new entries added.
         """
+        with self._lock:
+            return self._merge_lsp_results_locked(file_path, definitions, references)
+
+    def _merge_lsp_results_locked(
+        self,
+        file_path: str,
+        definitions: list[SymbolLocation],
+        references: list[SymbolRef],
+    ) -> int:
         added = 0
 
         for loc in definitions:
@@ -228,14 +270,32 @@ class CrossRefIndex:
                 symbol_name=ref.symbol_name, ref_kind=ref.ref_kind,
                 file_path=ref.file_path, line=ref.line,
                 source="lsp",
+                caller_qualified_name=ref.caller_qualified_name,
             )
+            # LSP wins on (file, line) collision — but ONLY when the
+            # incoming ref carries a resolved caller. Without one, the
+            # legacy ``ingest_lsp_results`` fallback path stores the
+            # *enclosing function* in ``symbol_name`` (not the callee),
+            # so replacing a tree-sitter entry would invert the edge.
+            # In that case we dedupe-skip, preserving the existing
+            # higher-precision tree-sitter ref.
             existing = self.references.get(lsp_ref.symbol_name, [])
-            dup = False
-            for ex in existing:
+            dup_index: int | None = None
+            for i, ex in enumerate(existing):
                 if ex.file_path == lsp_ref.file_path and ex.line == lsp_ref.line:
-                    dup = True
+                    dup_index = i
                     break
-            if not dup:
+
+            if dup_index is not None:
+                if lsp_ref.caller_qualified_name:
+                    existing[dup_index] = lsp_ref
+                    if lsp_ref.ref_kind == "call":
+                        self.add_call_edge(
+                            lsp_ref.caller_qualified_name,
+                            lsp_ref.symbol_name,
+                        )
+                # else: no caller info — leave the tree-sitter entry alone.
+            else:
                 self.add_reference(lsp_ref)
                 added += 1
 
@@ -245,28 +305,53 @@ class CrossRefIndex:
 
     def add_definition(self, loc: SymbolLocation) -> None:
         """Register a symbol definition."""
-        self.definitions.setdefault(loc.qualified_name, []).append(loc)
-        self.file_symbols.setdefault(loc.file_path, set()).add(loc.qualified_name)
-        # Populate inverted indexes
-        bare = loc.qualified_name.rsplit(".", 1)[-1]
-        self._name_to_qnames.setdefault(bare, set()).add(loc.qualified_name)
-        self._lower_to_qnames.setdefault(bare.lower(), set()).add(loc.qualified_name)
-        for token in _split_name_tokens(bare):
-            self._tokens_to_qnames.setdefault(token, set()).add(loc.qualified_name)
+        with self._lock:
+            self.definitions.setdefault(loc.qualified_name, []).append(loc)
+            self.file_symbols.setdefault(loc.file_path, set()).add(loc.qualified_name)
+            # Populate inverted indexes
+            bare = loc.qualified_name.rsplit(".", 1)[-1]
+            self._name_to_qnames.setdefault(bare, set()).add(loc.qualified_name)
+            self._lower_to_qnames.setdefault(bare.lower(), set()).add(loc.qualified_name)
+            for token in _split_name_tokens(bare):
+                self._tokens_to_qnames.setdefault(token, set()).add(loc.qualified_name)
 
     def add_reference(self, ref: SymbolRef) -> None:
         """Register a symbol reference."""
-        self.references.setdefault(ref.symbol_name, []).append(ref)
+        with self._lock:
+            self.references.setdefault(ref.symbol_name, []).append(ref)
+            if ref.ref_kind == "call" and ref.caller_qualified_name:
+                self.add_call_edge(ref.caller_qualified_name, ref.symbol_name)
+
+    def add_call_edge(self, caller: str, callee: str) -> None:
+        """Record that ``caller`` calls ``callee``.
+
+        ``caller`` should be a qualified name (e.g. ``MyClass.do_thing`` or a
+        bare top-level function name). ``callee`` is whatever the source
+        wrote — bare name when type/scope resolution is unavailable; the
+        consumer can disambiguate against ``self.definitions``.
+        """
+        if not caller or not callee:
+            return
+        with self._lock:
+            self.call_edges.setdefault(caller, set()).add(callee)
+            self.callers_of.setdefault(callee, set()).add(caller)
 
     def add_file_dependency(self, source: str, target: str) -> None:
         """Record that *source* imports from *target*."""
-        self.file_dependencies.setdefault(source, set()).add(target)
-        self.file_dependents.setdefault(target, set()).add(source)
+        with self._lock:
+            self.file_dependencies.setdefault(source, set()).add(target)
+            self.file_dependents.setdefault(target, set()).add(source)
 
     def remove_file(self, file_path: str) -> None:
         """Remove all index entries for a file (in-memory and store)."""
+        with self._lock:
+            self._remove_file_locked(file_path)
+
+    def _remove_file_locked(self, file_path: str) -> None:
         if self._store is not None:
             self._store.remove_file(file_path)
+        # Snapshot callers defined here BEFORE we mutate file_symbols below.
+        callers_in_file = set(self.file_symbols.get(file_path, set()))
         # Remove definitions and clean up inverted indexes
         for qname in list(self.file_symbols.get(file_path, [])):
             defs = self.definitions.get(qname, [])
@@ -298,6 +383,17 @@ class CrossRefIndex:
             self.references[name] = [r for r in refs if r.file_path != file_path]
             if not self.references[name]:
                 del self.references[name]
+
+        # Drop call edges whose caller was defined in this file. We can't
+        # reliably attribute callees from the file path alone (callees are
+        # bare names), so this is a best-effort scrub keyed on caller.
+        for caller in callers_in_file:
+            for callee in self.call_edges.pop(caller, set()):
+                rev = self.callers_of.get(callee)
+                if rev is not None:
+                    rev.discard(caller)
+                    if not rev:
+                        del self.callers_of[callee]
 
         # Remove dependency edges
         for dep in self.file_dependencies.pop(file_path, set()):
@@ -434,6 +530,59 @@ class CrossRefIndex:
     def get_dependencies(self, file_path: str) -> set[str]:
         """Files that *file_path* imports from."""
         return self.file_dependencies.get(file_path, set())
+
+    # ------------------------------------------------------------------
+    # Call graph
+    # ------------------------------------------------------------------
+
+    def get_callees(self, caller: str, *, depth: int = 1) -> set[str]:
+        """Return symbols called by ``caller`` up to ``depth`` hops.
+
+        depth=1 returns direct callees only; depth=N follows up to N hops
+        through the in-memory ``call_edges`` map. Cycles are handled by
+        an internal visited set so the traversal always terminates.
+        """
+        if depth < 1:
+            return set()
+        with self._lock:
+            visited: set[str] = set()
+            frontier: set[str] = {caller}
+            result: set[str] = set()
+            for _ in range(depth):
+                next_frontier: set[str] = set()
+                for node in frontier:
+                    if node in visited:
+                        continue
+                    visited.add(node)
+                    callees = self.call_edges.get(node, set())
+                    result.update(callees)
+                    next_frontier.update(callees - visited)
+                if not next_frontier:
+                    break
+                frontier = next_frontier
+            return result
+
+    def get_callers(self, callee: str, *, depth: int = 1) -> set[str]:
+        """Return symbols that call ``callee`` up to ``depth`` hops back."""
+        if depth < 1:
+            return set()
+        with self._lock:
+            visited: set[str] = set()
+            frontier: set[str] = {callee}
+            result: set[str] = set()
+            for _ in range(depth):
+                next_frontier: set[str] = set()
+                for node in frontier:
+                    if node in visited:
+                        continue
+                    visited.add(node)
+                    callers = self.callers_of.get(node, set())
+                    result.update(callers)
+                    next_frontier.update(callers - visited)
+                if not next_frontier:
+                    break
+                frontier = next_frontier
+            return result
 
 
 def _rank_score(loc: SymbolLocation, match_score: float) -> float:

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from attocode.integrations.utilities.token_estimate import estimate_tokens
-from attocode.types.events import SimpleEventListener
+from attocode.types.events import SimpleEventEmitter, SimpleEventListener
 
 
 class ReferenceType:
@@ -81,7 +81,7 @@ ReferenceExtractor = Callable[[str, int], list[Reference]]
 CompactionEventListener = SimpleEventListener
 
 
-class ReversibleCompactor:
+class ReversibleCompactor(SimpleEventEmitter):
     """Compacts conversation while preserving key references.
 
     Extracts file paths, URLs, function names, errors, and commands
@@ -90,9 +90,9 @@ class ReversibleCompactor:
     """
 
     def __init__(self, config: ReversibleCompactionConfig | None = None) -> None:
+        super().__init__()
         self._config = config or ReversibleCompactionConfig()
         self._references: list[Reference] = []
-        self._listeners: list[CompactionEventListener] = []
         self._custom_extractors: dict[str, ReferenceExtractor] = {}
 
     async def compact(
@@ -141,10 +141,8 @@ class ReversibleCompactor:
             all_refs.sort(key=lambda r: r.relevance, reverse=True)
             all_refs = all_refs[: self._config.max_references]
 
-        # Store references
         self._references.extend(all_refs)
 
-        # Get summary
         result = summarize(messages)
         if hasattr(result, "__await__"):
             summary = await result
@@ -212,25 +210,6 @@ class ReversibleCompactor:
     def clear(self) -> None:
         """Clear all stored references."""
         self._references.clear()
-
-    def on(self, listener: CompactionEventListener) -> Callable[[], None]:
-        """Subscribe to compaction events."""
-        self._listeners.append(listener)
-
-        def unsubscribe() -> None:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
-
-        return unsubscribe
-
-    def _emit(self, event: str, data: dict[str, Any]) -> None:
-        for listener in self._listeners:
-            try:
-                listener(event, data)
-            except Exception:
-                pass
 
 
 # --- Reference extractors ---

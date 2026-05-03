@@ -24,6 +24,10 @@ from typing import Any
 
 from attocode.errors import ConfigurationError
 
+# OpenShellResult is the canonical generic SandboxResult; the alias preserves
+# the historical module-local name without duplicating the dataclass.
+from attocode.integrations.safety.sandbox.basic import SandboxResult as OpenShellResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,15 +62,6 @@ class OpenShellOptions:
 
     # Credentials (injected as env vars, never on disk)
     credential_env: dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class OpenShellResult:
-    """Result of an OpenShell sandbox validation check."""
-
-    allowed: bool
-    reason: str = ""
-    command: str = ""
 
 
 @dataclass

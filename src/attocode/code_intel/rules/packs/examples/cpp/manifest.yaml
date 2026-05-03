@@ -1,0 +1,4 @@
+name: cpp
+version: 1.0.0
+languages: [c, cpp]
+description: "C / C++ analysis pack — memory safety, deprecated APIs, idiomatic style"

@@ -12,6 +12,7 @@ import json
 from collections import Counter
 from typing import Any
 
+from attocode.tracing.analysis._helpers import safe_int as _int
 from attocode.tracing.analysis.views import DetectedIssue
 from attocode.tracing.types import TraceEventKind, TraceSession
 
@@ -661,12 +662,3 @@ def _tool_fingerprint(tool: str, args: Any) -> str:
     return f"{tool}:{args_str}"
 
 
-def _int(d: dict[str, Any], key: str) -> int:
-    """Safely extract an integer from a data dict."""
-    v = d.get(key)
-    if v is None:
-        return 0
-    try:
-        return int(v)
-    except (TypeError, ValueError):
-        return 0

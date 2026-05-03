@@ -138,7 +138,6 @@ class FileCache:
         ) and self._cache:
             self._evict_lru()
 
-        # Get mtime
         try:
             mtime = os.path.getmtime(path)
         except OSError:

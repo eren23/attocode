@@ -4,12 +4,32 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 SchemaVersion = Literal["1.0"]
+
+
+class ErrorEntry(TypedDict):
+    """One entry in `SwarmState.errors`."""
+
+    timestamp: str
+    category: str
+    message: str
+    severity: str
+
+
+class TaskTransition(TypedDict, total=False):
+    """One entry in `SwarmState.task_transition_log`. Optional fields populated by writer."""
+
+    timestamp: str
+    task_id: str
+    from_state: str
+    to_state: str
+    reason: str
+    assigned_agent: str
 TaskStatus = Literal["pending", "ready", "running", "done", "failed", "blocked", "skipped"]
 RoleType = Literal[
     "orchestrator",
@@ -237,8 +257,8 @@ class SwarmState:
     assignments: dict[str, Any] = field(default_factory=dict)
     attempts: dict[str, Any] = field(default_factory=dict)
     state_seq: int = 0
-    errors: list[dict[str, Any]] = field(default_factory=list)
-    task_transition_log: list[dict[str, Any]] = field(default_factory=list)
+    errors: list[ErrorEntry] = field(default_factory=list)
+    task_transition_log: list[TaskTransition] = field(default_factory=list)
     event_timeline: dict[str, Any] = field(default_factory=dict)
     agent_messages_index: dict[str, Any] = field(default_factory=dict)
     dag_summary: dict[str, int] = field(default_factory=dict)
@@ -251,7 +271,7 @@ class SwarmState:
 
 
 # ---------------------------------------------------------------------------
-# Transparency & Interpretability models (Workstream 2)
+# Transparency & Interpretability models
 # ---------------------------------------------------------------------------
 
 

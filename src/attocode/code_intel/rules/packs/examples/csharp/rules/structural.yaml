@@ -1,0 +1,42 @@
+# C# structural patterns (ast-grep, Tier 2).
+
+- id: csharp-console-writeline-debug
+  name: Console.WriteLine debug leftover
+  structural_pattern: 'Console.WriteLine($X)'
+  message: "Console.WriteLine($X) — debug leftover, route through ILogger"
+  severity: low
+  category: style
+  languages: [csharp]
+  confidence: 0.35
+  tags: [debug]
+  explanation: >
+    ``Console.WriteLine`` bypasses the logging framework: no levels,
+    no MDC, no shipping to log aggregators. In service code prefer the
+    injected ``ILogger`` so output respects the configured pipeline.
+  recommendation: "Use ILogger.LogInformation(\"...\", arg) or remove if it was a debug aid."
+
+- id: csharp-throw-generic-exception
+  name: throw new Exception(...) — too generic
+  structural_pattern: 'throw new Exception($X)'
+  message: "throw new Exception($X) — use a more specific exception type"
+  severity: medium
+  category: correctness
+  languages: [csharp]
+  confidence: 0.7
+  explanation: >
+    Throwing the base ``Exception`` forces callers to catch the world.
+    Specific exception types (ArgumentException, InvalidOperationException,
+    domain-specific subclasses) communicate what went wrong and let
+    callers handle each case appropriately.
+  recommendation: "Throw ArgumentException, InvalidOperationException, or a domain-specific subclass."
+
+- id: csharp-string-format-debug
+  name: Debug string.Format with constants
+  structural_pattern: 'string.Format($FMT, $$$ARGS)'
+  message: "string.Format($FMT, ...) — interpolated strings ($\"...\") read clearer"
+  severity: info
+  category: style
+  languages: [csharp]
+  confidence: 0.3
+  tags: [style]
+  recommendation: "Prefer interpolated strings: $\"Hello {name}\" over string.Format(\"Hello {0}\", name)."

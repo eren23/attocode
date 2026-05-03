@@ -38,7 +38,7 @@ def resolve_working_dir(run_dir: str | Path, state: dict[str, Any] | None = None
     if cfg_path.exists():
         try:
             cfg = load_swarm_yaml(cfg_path)
-        except Exception:
+        except (OSError, ValueError):
             return None
         return _normalize_working_dir(cfg.run.working_dir, run_path)
 
@@ -149,7 +149,7 @@ def _changed_files_from_git(working_dir: Path) -> list[str]:
             timeout=5,
             check=False,
         )
-    except Exception:
+    except (OSError, subprocess.TimeoutExpired):
         return []
 
     if result.returncode != 0:

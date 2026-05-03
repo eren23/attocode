@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cryptography.fernet import Fernet
 
 
-def _get_fernet():
+def _get_fernet() -> Fernet:
     """Get Fernet instance using SECRET_KEY from config."""
     from cryptography.fernet import Fernet
 

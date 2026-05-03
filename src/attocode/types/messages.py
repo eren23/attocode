@@ -17,13 +17,16 @@ class Role(StrEnum):
 
 
 class DangerLevel(StrEnum):
-    """Tool danger classification."""
+    """Tool risk gradation. Two axes share this enum:
+
+    - ``SAFE``/``MODERATE``/``DANGEROUS``: per-tool static annotation (in tool defs).
+    - ``LOW``/``MEDIUM``/``HIGH``/``CRITICAL``: policy-engine decision severity (rule eval).
+    """
 
     SAFE = "safe"
     MODERATE = "moderate"
     DANGEROUS = "dangerous"
 
-    # Aliases for backward compatibility / alternative naming
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
