@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from attocode.code_intel._shared import (
     _get_project_dir,
+    _get_remote_service,
     mcp,
 )
 
@@ -67,6 +68,9 @@ def recall(query: str, scope: str = "", max_results: int = 10) -> str:
         scope: Optional directory scope to filter learnings.
         max_results: Maximum number of learnings to return.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.recall(query, scope=scope, max_results=max_results)
     store = _get_memory_store()
     results = store.recall(query, scope=scope, max_results=max_results)
     if not results:
@@ -115,6 +119,12 @@ def record_learning(
             learning survives renames and ``orphan_scan`` can verify
             reachability via git.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.record_learning(
+            type=type, description=description, details=details,
+            scope=scope, confidence=confidence,
+        )
     store = _get_memory_store()
 
     # Auto-compute the anchor when the caller didn't supply one and the
@@ -164,6 +174,9 @@ def learning_feedback(learning_id: int, helpful: bool) -> str:
         learning_id: The ID from a previous recall result.
         helpful: Whether the learning was actually useful.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.learning_feedback(learning_id, helpful)
     store = _get_memory_store()
     store.record_feedback(learning_id, helpful)
     action = "boosted" if helpful else "reduced"
@@ -183,6 +196,9 @@ def list_learnings(
         type: Optional filter by type (pattern/antipattern/workaround/convention/gotcha).
         scope: Optional filter by directory scope.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.list_learnings(status=status, type=type, scope=scope)
     store = _get_memory_store()
     results = store.list_all(status=status, type=type or None)
     if scope:

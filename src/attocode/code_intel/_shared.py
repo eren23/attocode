@@ -165,6 +165,39 @@ def _get_service() -> CodeIntelService | RemoteTextService:
     return _service
 
 
+def _get_local_service() -> CodeIntelService:
+    """Return the local CodeIntelService, bypassing any remote proxy.
+
+    Some tools (e.g. ``regex_search``, ``call_graph``) have no server-side
+    HTTP route, so they cannot be proxied to a remote. They call this to run
+    against the local index even when a remote is configured, instead of
+    crashing with ``AttributeError`` on the missing remote method.
+    """
+    global _service
+    srv = sys.modules.get("attocode.code_intel.server")
+    if srv is not None and "_service" in srv.__dict__:
+        override = srv.__dict__["_service"]
+        if override is not None and not _is_remote_service(override):
+            return override  # type: ignore[return-value]
+        if override is None:
+            _service = None
+    if _service is not None:
+        from attocode.code_intel import service as code_intel_service_module
+
+        if _service.project_dir not in code_intel_service_module._instances:
+            _service = None
+    if _service is None:
+        from attocode.code_intel.service import CodeIntelService
+
+        _service = CodeIntelService.get_instance(_get_project_dir())
+    return _service
+
+
+def _is_remote_service(obj: object) -> bool:
+    """True when *obj* is a remote proxy rather than the local service."""
+    return type(obj).__name__ == "RemoteTextService"
+
+
 def _get_remote_service() -> RemoteTextService | None:
     """Return the configured remote text service, if any."""
     srv = sys.modules.get("attocode.code_intel.server")
@@ -233,6 +266,35 @@ def clear_remote_service() -> None:
 def get_remote_degraded_reason() -> str:
     """Why remote mode is inactive despite being configured ('' when N/A)."""
     return _remote_degraded_reason
+
+
+def enable_remote_if_configured(
+    project_dir: str,
+    *,
+    local_only: bool = False,
+    remote_url: str = "",
+    remote_token: str = "",
+    remote_repo_id: str = "",
+) -> None:
+    """Enable remote mode from explicit args / config / env, else stay local.
+
+    Single source of truth for the startup wiring previously duplicated (and
+    divergent) between ``server.main`` and ``cli._cmd_serve``. Explicit
+    ``remote_*`` args win; otherwise ``.attocode/config.toml`` + env are read
+    via :func:`load_remote_config`. ``configure_remote_service`` then health/
+    expiry-gates the remote and falls back to local on any problem.
+    """
+    clear_remote_service()
+    if local_only:
+        return
+    if not remote_url:
+        from attocode.code_intel.config import load_remote_config
+
+        rc = load_remote_config(project_dir)
+        if rc.is_configured:
+            remote_url, remote_token, remote_repo_id = rc.server, rc.token, rc.repo_id
+    if remote_url:
+        configure_remote_service(remote_url, remote_token, remote_repo_id)
 
 
 def _get_explorer() -> HierarchicalExplorer:

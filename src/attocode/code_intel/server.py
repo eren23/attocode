@@ -707,20 +707,15 @@ def main() -> None:
     if local_only:
         os.environ["ATTOCODE_LOCAL_ONLY"] = "1"
 
-    # Load remote config from .attocode/config.toml if not explicitly provided
-    clear_remote_service()
-    if not remote_url and not local_only:
-        from attocode.code_intel.config import load_remote_config
-        rc = load_remote_config(project_dir)
-        if rc.is_configured:
-            remote_url = rc.server
-            remote_token = rc.token
-            remote_repo_id = rc.repo_id
-
-    if remote_url:
-        # configure_remote_service logs the outcome and gracefully falls back to
-        # local mode if the remote is unreachable or its token is expired.
-        configure_remote_service(remote_url, remote_token, remote_repo_id)
+    # Enable remote mode from CLI flags / config.toml / env (shared with the
+    # CLI serve path); gracefully falls back to local on a dead/expired remote.
+    enable_remote_if_configured(
+        project_dir,
+        local_only=local_only,
+        remote_url=remote_url,
+        remote_token=remote_token,
+        remote_repo_id=remote_repo_id,
+    )
 
     # Start file watcher and notification queue poller in background
     _start_file_watcher(project_dir)

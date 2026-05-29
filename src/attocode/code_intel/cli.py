@@ -306,19 +306,12 @@ def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
     abs_dir = os.path.abspath(project_dir)
     os.environ["ATTOCODE_PROJECT_DIR"] = abs_dir
 
-    # Remote config handling — mirror the logic in server.py main()
-    from attocode.code_intel._shared import clear_remote_service
-    clear_remote_service()
-
+    # Remote config handling — shared with server.py main() so both startup
+    # paths behave identically (config + env, health/expiry-gated fallback).
+    from attocode.code_intel._shared import enable_remote_if_configured
     if local_only:
         os.environ["ATTOCODE_LOCAL_ONLY"] = "1"
-    else:
-        # Load remote config from .attocode/config.toml when not local-only
-        from attocode.code_intel._shared import configure_remote_service
-        from attocode.code_intel.config import load_remote_config
-        rc = load_remote_config(abs_dir)
-        if rc.is_configured:
-            configure_remote_service(rc.server, rc.token, rc.repo_id)
+    enable_remote_if_configured(abs_dir, local_only=local_only)
 
     if debug:
         import logging
