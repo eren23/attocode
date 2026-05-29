@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Code-Intel reliability (remote/local mode + activation)
+
+The code-intel MCP could be left almost entirely non-functional by a stale
+`[remote]` config, and the rule engine shipped without its language packs.
+This restores a working local-mode baseline.
+
+- **Graceful remote→local fallback.** A configured remote (`.attocode/config.toml`
+  `[remote]`) with an expired JWT or an unreachable server previously routed
+  every service-backed tool there unconditionally, so they all failed with
+  "Connection refused" and no fallback. `configure_remote_service()` now gates
+  on JWT expiry (`config.token_is_expired`) and a `/health` reachability probe
+  (`RemoteTextService.ping`), degrades to local mode with a readable reason
+  (`get_remote_degraded_reason`), and closes the prior client to avoid a socket
+  leak on reconfigure.
+- **IndexStore v2→v3 schema migration.** Opening an existing pre-v3
+  `symbols.db` crashed (`no such column: caller_qualified_name`) because the
+  v3 indexes were created before the schema-version check could migrate — which
+  blocked local mode on any already-indexed repo. Stale data tables are now
+  dropped before recreation on a version mismatch; data rebuilds from source on
+  next index.
+- **BM25 status reporting.** `cache_status_all` / `verify_all_caches` reported
+  the keyword index empty/broken because the store definition queried a
+  non-existent `documents` table; corrected to `kw_docs`.
+- **Remote config persistence.** `save_remote_config` now escapes quotes and
+  backslashes in its TOML writer (previously produced invalid TOML that was
+  silently dropped on reload).
+
+### Changed — Rule packs load by default
+
+- **Shipped language packs are now auto-loaded.** Previously the registry
+  loaded only the 109 builtin regex rules (`list_rules` → `Packs: 0`); the 10
+  shipped example packs — including the ast-grep Tier-2 structural rules — were
+  never loaded. `load_all_packs()` now also loads the shipped packs by default
+  (≈200 rules total, 30 structural). User-installed packs of the same name
+  still shadow the shipped copy; `discover_packs()` keeps its project-local-only
+  contract. Opt out with `ATTOCODE_NO_SHIPPED_PACKS=1`.
+
 ## [0.2.23] - 2026-05-03
 
 ### Added — Phase 1 Code-Intel Roadmap (call graph + rule-engine evolution)
