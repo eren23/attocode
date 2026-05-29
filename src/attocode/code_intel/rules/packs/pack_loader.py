@@ -12,6 +12,7 @@ Each pack directory contains:
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -212,9 +213,31 @@ def load_pack(manifest: PackManifest) -> list[UnifiedRule]:
     return rules
 
 
-def load_all_packs(project_dir: str = "") -> tuple[list[PackManifest], list[UnifiedRule]]:
-    """Discover and load all user-activated packs."""
+def load_all_packs(
+    project_dir: str = "", *, include_shipped: bool | None = None,
+) -> tuple[list[PackManifest], list[UnifiedRule]]:
+    """Discover and load packs.
+
+    Loads user-activated packs from ``.attocode/packs/`` and, by default, the
+    shipped example packs (the language packs that carry the ast-grep
+    structural rules) — otherwise the engine would ship with only the builtin
+    regex rules. A user-installed pack shadows the shipped pack of the same
+    name. Set ``ATTOCODE_NO_SHIPPED_PACKS=1`` (or ``include_shipped=False``)
+    to load only user packs.
+    """
+    if include_shipped is None:
+        include_shipped = os.environ.get("ATTOCODE_NO_SHIPPED_PACKS", "") not in (
+            "1", "true", "True",
+        )
+
     manifests = discover_packs(project_dir)
+    if include_shipped:
+        seen = {m.name for m in manifests}
+        for m in list_example_packs():
+            if m.name not in seen:
+                manifests.append(m)
+                seen.add(m.name)
+
     all_rules: list[UnifiedRule] = []
     for m in manifests:
         all_rules.extend(load_pack(m))
