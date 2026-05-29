@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.24] - 2026-05-29
+
 ### Fixed — Code-Intel reliability (remote/local mode + activation)
 
 The code-intel MCP could be left almost entirely non-functional by a stale
