@@ -89,6 +89,7 @@ class IndexStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
+        self._migrate_stale_schema()
         self._create_tables()
         self._check_schema_version()
 
@@ -96,6 +97,41 @@ class IndexStore:
         if self._conn is None:
             raise RuntimeError("IndexStore connection is closed")
         return self._conn
+
+    def _migrate_stale_schema(self) -> None:
+        """Drop stale data tables BEFORE (re)creating them when the on-disk
+        schema predates the current version.
+
+        ``_create_tables`` builds the v3 indexes (e.g. ``ix_refs_caller`` on
+        ``refs(caller_qualified_name)``). On a pre-v3 DB whose ``refs`` table
+        lacks that column, creating the index raises ``OperationalError`` and
+        the store can't even open — so the wipe in ``_check_schema_version``
+        never runs. Dropping the stale tables here keeps the upgrade path
+        working; data is rebuilt from source on the next index. Children are
+        dropped before ``files`` to respect FK ordering.
+        """
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'schema_version'"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return  # no metadata table => brand-new DB, nothing to migrate
+        if not row or row[0] == SCHEMA_VERSION:
+            return
+        logger.warning(
+            "Index schema is stale (%s, expected %s); dropping data tables in "
+            "%r so the new schema can be created — a full re-index will run on "
+            "next access.",
+            row[0], SCHEMA_VERSION, self.db_path,
+        )
+        conn.executescript(
+            "DROP TABLE IF EXISTS refs;"
+            "DROP TABLE IF EXISTS symbols;"
+            "DROP TABLE IF EXISTS dependencies;"
+            "DROP TABLE IF EXISTS files;"
+        )
+        conn.commit()
 
     def _create_tables(self) -> None:
         conn = self._get_conn()

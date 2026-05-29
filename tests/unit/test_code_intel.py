@@ -47,6 +47,8 @@ def _make_service_with_mocks(
     svc = CodeIntelService.__new__(CodeIntelService)
     svc._project_dir = project_dir
     svc._config = None
+    svc._scoring_config = None
+    svc._context_config = None
     svc._init_lock = threading.Lock()
     svc._ast_service = ast_service
     svc._context_mgr = context_mgr
@@ -56,6 +58,8 @@ def _make_service_with_mocks(
     svc._security_scanner = None
     svc._semantic_search = None
     svc._memory_store = None
+    svc._temporal_analyzer = None
+    svc._lsp_auto_started = False
     return svc
 
 

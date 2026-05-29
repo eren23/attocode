@@ -120,6 +120,34 @@ class RemoteConfig:
         return bool(self.server and self.token)
 
 
+def token_is_expired(token: str, *, leeway_seconds: int = 30) -> bool:
+    """Best-effort check whether a JWT's ``exp`` claim is in the past.
+
+    Decodes the token payload WITHOUT verifying the signature — we don't hold
+    the remote server's signing key, we only need the expiry. Returns ``False``
+    when the token has no ``exp`` claim or can't be parsed (we can't prove it's
+    expired, so let the reachability probe decide). ``leeway_seconds`` treats a
+    token as expired slightly early so we don't start a session on a token
+    about to lapse.
+    """
+    import base64
+    import json
+    import time
+
+    parts = token.split(".")
+    if len(parts) != 3:
+        return False
+    try:
+        payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+    except Exception:
+        return False
+    exp = payload.get("exp")
+    if not isinstance(exp, (int, float)):
+        return False
+    return time.time() >= (float(exp) - leeway_seconds)
+
+
 def load_remote_config(project_dir: str) -> RemoteConfig:
     """Load remote config from .attocode/config.toml, falling back to env vars."""
     config_path = Path(project_dir) / ".attocode" / "config.toml"
@@ -179,7 +207,8 @@ def save_remote_config(project_dir: str, rc: RemoteConfig) -> Path:
                 if isinstance(v, bool):
                     lines.append(f"{k} = {'true' if v else 'false'}")
                 elif isinstance(v, str):
-                    lines.append(f'{k} = "{v}"')
+                    esc = v.replace("\\", "\\\\").replace('"', '\\"')
+                    lines.append(f'{k} = "{esc}"')
                 else:
                     lines.append(f"{k} = {v}")
             lines.append("")

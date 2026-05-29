@@ -59,6 +59,19 @@ class RemoteTextService:
     def close(self) -> None:
         self._client.close()
 
+    def ping(self, timeout: float = 2.0) -> bool:
+        """Best-effort reachability probe (does NOT validate the token).
+
+        Returns True when the server answers with a status < 500, False on
+        connection/timeout errors or a 5xx. Token expiry is checked separately
+        (before this is called) since ``/health`` is typically unauthenticated.
+        """
+        try:
+            resp = self._client.get("/health", timeout=timeout)
+            return resp.status_code < 500
+        except Exception:
+            return False
+
     @staticmethod
     def _unwrap_text(payload: dict[str, Any]) -> str:
         if "result" in payload and isinstance(payload["result"], str):
