@@ -58,6 +58,7 @@ _memory_store: object | None = None  # Backward compat: tests may set this direc
 _explorer: HierarchicalExplorer | None = None
 _service: CodeIntelService | None = None
 _remote_service: RemoteTextService | None = None
+_remote_degraded_reason: str = ""
 
 
 def _check_server_override(name: str) -> object | None:
@@ -173,23 +174,65 @@ def _get_remote_service() -> RemoteTextService | None:
 
 
 def configure_remote_service(remote_url: str, remote_token: str, remote_repo_id: str) -> None:
-    """Configure the shared service getter to proxy through a remote HTTP service."""
-    global _remote_service, _service
+    """Proxy the shared service through a remote HTTP server **if it is usable**.
+
+    Gracefully degrades to local mode (leaving ``_remote_service`` unset) when
+    the JWT is expired or the server is unreachable, recording a human-readable
+    reason in :func:`get_remote_degraded_reason`. This prevents a stale or dead
+    ``[remote]`` config from making every tool fail with "Connection refused".
+    """
+    global _remote_service, _service, _remote_degraded_reason
     from attocode.code_intel.api.providers.remote_provider import RemoteTextService
+    from attocode.code_intel.config import token_is_expired
 
-    _service = None
-    _remote_service = RemoteTextService(remote_url, remote_token, remote_repo_id)
-
-
-def clear_remote_service() -> None:
-    """Reset remote service wiring."""
-    global _remote_service
+    # Drop any previously-configured client (avoid a socket leak on reconfigure).
     if _remote_service is not None:
         try:
             _remote_service.close()
         except Exception:
             pass
     _remote_service = None
+    _service = None
+    _remote_degraded_reason = ""
+
+    if token_is_expired(remote_token):
+        _remote_degraded_reason = (
+            f"remote token expired — using local mode (server={remote_url})"
+        )
+        logger.warning("Code-intel %s", _remote_degraded_reason)
+        return
+
+    candidate = RemoteTextService(remote_url, remote_token, remote_repo_id)
+    if not candidate.ping():
+        _remote_degraded_reason = (
+            f"remote server unreachable at {remote_url} — using local mode"
+        )
+        logger.warning("Code-intel %s", _remote_degraded_reason)
+        try:
+            candidate.close()
+        except Exception:
+            pass
+        return
+
+    _remote_service = candidate
+    logger.info("Code-intel remote mode active: %s (repo=%s)", remote_url, remote_repo_id)
+
+
+def clear_remote_service() -> None:
+    """Reset remote service wiring (back to local mode)."""
+    global _remote_service, _remote_degraded_reason
+    if _remote_service is not None:
+        try:
+            _remote_service.close()
+        except Exception:
+            pass
+    _remote_service = None
+    _remote_degraded_reason = ""
+
+
+def get_remote_degraded_reason() -> str:
+    """Why remote mode is inactive despite being configured ('' when N/A)."""
+    return _remote_degraded_reason
 
 
 def _get_explorer() -> HierarchicalExplorer:

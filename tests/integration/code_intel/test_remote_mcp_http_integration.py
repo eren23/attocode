@@ -79,10 +79,14 @@ def test_remote_mcp_tools_proxy_through_live_http_app(monkeypatch) -> None:
 
     srv.configure_remote_service("http://test", "tok_test", "default")
     try:
-        assert srv.repo_map() == "stub:repo_map"
-        assert srv.dead_code() == "stub:dead_code"
-        assert change_coupling("src/main.py") == "stub:change_coupling"
-        assert srv.fast_search("main") == "stub:fast_search"
+        # Ranked-result tools append a deterministic pin footer
+        # ("\n\n---\nindex_pin: ...") via _stamp_pin, so assert the proxied
+        # payload is present rather than exact-equals. assert_called_once below
+        # is what actually proves the call was proxied to the remote service.
+        assert srv.repo_map().startswith("stub:repo_map")
+        assert srv.dead_code().startswith("stub:dead_code")
+        assert change_coupling("src/main.py").startswith("stub:change_coupling")
+        assert srv.fast_search("main").startswith("stub:fast_search")
 
         mock_service.repo_map.assert_called_once()
         mock_service.dead_code.assert_called_once()

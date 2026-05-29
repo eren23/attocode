@@ -76,7 +76,7 @@ _STORE_DEFS: tuple[dict[str, Any], ...] = (
     {
         "name": "kw_index",
         "path_fragment": os.path.join("index", "kw_index.db"),
-        "tables": ("documents",),
+        "tables": ("kw_docs",),
         "timestamp_table": None,
         "timestamp_col": None,
         "schema_meta": None,

@@ -718,8 +718,9 @@ def main() -> None:
             remote_repo_id = rc.repo_id
 
     if remote_url:
+        # configure_remote_service logs the outcome and gracefully falls back to
+        # local mode if the remote is unreachable or its token is expired.
         configure_remote_service(remote_url, remote_token, remote_repo_id)
-        logger.info("Remote mode: proxying through %s (repo: %s)", remote_url, remote_repo_id)
 
     # Start file watcher and notification queue poller in background
     _start_file_watcher(project_dir)

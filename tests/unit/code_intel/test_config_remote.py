@@ -180,3 +180,17 @@ class TestSaveRemoteConfig:
         assert loaded.server == "https://new.io"
         assert loaded.token == "new"
         assert loaded.repo_id == "r2"
+
+    def test_round_trip_with_special_chars(self, tmp_path, monkeypatch):
+        # Tokens/URLs containing quotes or backslashes must survive the manual
+        # TOML writer — otherwise it emits invalid TOML that load silently drops.
+        monkeypatch.delenv("ATTOCODE_REMOTE_URL", raising=False)
+        monkeypatch.delenv("ATTOCODE_REMOTE_TOKEN", raising=False)
+        monkeypatch.delenv("ATTOCODE_REMOTE_REPO_ID", raising=False)
+
+        rc = RemoteConfig(server='https://h.io/p"q', token='a\\b"c', repo_id="r")
+        save_remote_config(str(tmp_path), rc)
+        loaded = load_remote_config(str(tmp_path))
+
+        assert loaded.server == 'https://h.io/p"q'
+        assert loaded.token == 'a\\b"c'
