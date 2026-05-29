@@ -15,6 +15,21 @@ from attocode.integrations.context.semantic_search import (
 )
 
 
+def _bare_manager(root_dir: str, **overrides) -> SemanticSearchManager:
+    """Construct a manager via the real constructor, then apply overrides.
+
+    ``__post_init__`` defers the expensive provider load (sets ``_provider=None``
+    and ``_keyword_fallback=True``), so the real constructor is cheap and leaves
+    every dataclass field populated. Building this way — instead of
+    ``__new__`` + hand-listing fields — keeps these tests from silently breaking
+    whenever a new field is added to ``SemanticSearchManager``.
+    """
+    mgr = SemanticSearchManager(root_dir=root_dir)
+    for name, value in overrides.items():
+        setattr(mgr, name, value)
+    return mgr
+
+
 class TestQueueReindex:
     def test_queue_reindex_deduplicates_same_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -67,6 +82,10 @@ class TestQueueReindex:
         mgr._keyword_fallback = True
         mgr._store = None
         monkeypatch.setattr(SemanticSearchManager, "_start_reindex_worker", lambda self: None)
+        # queue_reindex calls _ensure_provider() first; without stubbing it the
+        # real BGE provider loads and flips _keyword_fallback back to False,
+        # defeating the simulated "unavailable" state this test is asserting on.
+        monkeypatch.setattr(SemanticSearchManager, "_ensure_provider", lambda self: None)
 
         mgr.queue_reindex(str(tmp_path / "x.py"))
         assert mgr._reindex_queue.qsize() == 0
@@ -166,25 +185,7 @@ class TestKeywordSearchContent:
         return tmp_path
 
     def _make_mgr(self, root: Path) -> SemanticSearchManager:
-        mgr = SemanticSearchManager.__new__(SemanticSearchManager)
-        mgr.root_dir = str(root)
-        mgr._provider = None
-        mgr._store = None
-        mgr._indexed = False
-        mgr._keyword_fallback = True
-        import queue as q
-        import threading
-        mgr._reindex_queue = q.Queue()
-        mgr._reindex_pending = set()
-        mgr._reindex_lock = threading.Lock()
-        mgr._reindex_worker_started = False
-        mgr._kw_docs = []
-        mgr._kw_df = {}
-        mgr._kw_avg_dl = 0.0
-        mgr._kw_index_built = False
-        mgr._bg_indexer = None
-        mgr._index_progress = IndexProgress()
-        return mgr
+        return _bare_manager(str(root), _store=None, _indexed=False, _keyword_fallback=True)
 
     def test_finds_function_by_name(self, repo_with_files: Path) -> None:
         """BM25 should find check_budget() when searching 'budget'."""
@@ -247,46 +248,13 @@ class TestBackgroundIndexer:
         assert progress.total_files == 0
 
     def test_get_index_progress_no_store(self, tmp_path: Path) -> None:
-        mgr = SemanticSearchManager.__new__(SemanticSearchManager)
-        mgr.root_dir = str(tmp_path)
-        mgr._provider = None
-        mgr._store = None
-        mgr._keyword_fallback = True
-        mgr._bg_indexer = None
-        mgr._index_progress = IndexProgress()
-        import queue as q
-        import threading
-        mgr._reindex_queue = q.Queue()
-        mgr._reindex_pending = set()
-        mgr._reindex_lock = threading.Lock()
-        mgr._reindex_worker_started = False
-        mgr._kw_docs = []
-        mgr._kw_df = {}
-        mgr._kw_avg_dl = 0.0
-        mgr._kw_index_built = False
+        mgr = _bare_manager(str(tmp_path), _store=None, _keyword_fallback=True)
 
         progress = mgr.get_index_progress()
         assert progress.status == "idle"
 
     def test_is_index_ready_false_when_no_store(self, tmp_path: Path) -> None:
-        mgr = SemanticSearchManager.__new__(SemanticSearchManager)
-        mgr.root_dir = str(tmp_path)
-        mgr._provider = None
-        mgr._store = None
-        mgr._keyword_fallback = True
-        mgr._bg_indexer = None
-        mgr._bg_thread = None
-        mgr._index_progress = IndexProgress()
-        import queue as q
-        import threading
-        mgr._reindex_queue = q.Queue()
-        mgr._reindex_pending = set()
-        mgr._reindex_lock = threading.Lock()
-        mgr._reindex_worker_started = False
-        mgr._kw_docs = []
-        mgr._kw_df = {}
-        mgr._kw_avg_dl = 0.0
-        mgr._kw_index_built = False
+        mgr = _bare_manager(str(tmp_path), _store=None, _keyword_fallback=True)
 
         assert mgr.is_index_ready() is False
 
@@ -307,23 +275,7 @@ class TestRRFMergePath:
 
         from attocode.integrations.context.semantic_search import SemanticSearchResult
 
-        mgr = SemanticSearchManager.__new__(SemanticSearchManager)
-        mgr.root_dir = str(tmp_path)
-        mgr._keyword_fallback = False
-        mgr._indexed = True
-        import queue as q
-        import threading
-        mgr._reindex_queue = q.Queue()
-        mgr._reindex_pending = set()
-        mgr._reindex_lock = threading.Lock()
-        mgr._reindex_worker_started = False
-        mgr._kw_docs = []
-        mgr._kw_df = {}
-        mgr._kw_avg_dl = 0.0
-        mgr._kw_index_built = False
-        mgr._bg_indexer = None
-        mgr._bg_thread = None
-        mgr._index_progress = IndexProgress()
+        mgr = _bare_manager(str(tmp_path), _keyword_fallback=False, _indexed=True)
 
         # Mock provider
         provider = MagicMock()
@@ -370,23 +322,7 @@ class TestRRFMergePath:
 
         from attocode.integrations.context.semantic_search import SemanticSearchResult
 
-        mgr = SemanticSearchManager.__new__(SemanticSearchManager)
-        mgr.root_dir = str(tmp_path)
-        mgr._keyword_fallback = False
-        mgr._indexed = True
-        import queue as q
-        import threading
-        mgr._reindex_queue = q.Queue()
-        mgr._reindex_pending = set()
-        mgr._reindex_lock = threading.Lock()
-        mgr._reindex_worker_started = False
-        mgr._kw_docs = []
-        mgr._kw_df = {}
-        mgr._kw_avg_dl = 0.0
-        mgr._kw_index_built = False
-        mgr._bg_indexer = None
-        mgr._bg_thread = None
-        mgr._index_progress = IndexProgress()
+        mgr = _bare_manager(str(tmp_path), _keyword_fallback=False, _indexed=True)
 
         provider = MagicMock()
         provider.embed.return_value = [[0.1, 0.2]]
