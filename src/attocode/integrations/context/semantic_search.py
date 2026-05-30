@@ -688,6 +688,18 @@ class SemanticSearchManager:
         if self._keyword_fallback:
             return self._keyword_search(expanded_query, top_k, file_filter)
 
+        # Refuse vectors produced by a different embedding model (manual-reindex
+        # migration): serving them returns semantically garbage results.
+        store_model = getattr(self._store, "model_name", "") if self._store else ""
+        active_model = getattr(self._provider, "name", "")
+        if store_model and active_model and store_model != active_model:
+            logger.warning(
+                "Vector index built with %s but active model is %s; serving "
+                "keyword results only. Run reindex to rebuild vectors.",
+                store_model, active_model,
+            )
+            return self._keyword_search(expanded_query, top_k, file_filter)
+
         # Coverage-based switchover: use keyword fallback while indexing
         if not self._indexed and self._store:
             count = self._store.count()

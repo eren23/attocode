@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import numpy as np
+
 from attocode.integrations.context import embeddings as emb
 
 
@@ -15,7 +17,7 @@ def test_abc_embed_query_defaults_to_embed():
     # BGE (CodeEmbeddingProvider) is symmetric: embed_query delegates to embed.
     p = emb.CodeEmbeddingProvider.__new__(emb.CodeEmbeddingProvider)
     p._model = MagicMock()
-    p._model.encode.return_value = [[0.1, 0.2]]
+    p._model.encode.return_value = np.array([[0.1, 0.2]])
     p._dim = 2
     p.embed_query(["x"])
     called_arg = p._model.encode.call_args[0][0]
@@ -25,7 +27,7 @@ def test_abc_embed_query_defaults_to_embed():
 def test_nomic_uses_distinct_doc_and_query_prefixes():
     p = emb.NomicEmbeddingProvider.__new__(emb.NomicEmbeddingProvider)
     p._model = MagicMock()
-    p._model.encode.return_value = [[0.0]]
+    p._model.encode.return_value = np.array([[0.0]])
     p._dim = 1
 
     p.embed(["hello"])
