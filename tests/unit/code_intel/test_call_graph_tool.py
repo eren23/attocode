@@ -149,7 +149,9 @@ class TestMcpToolDelegation:
 
         svc = CodeIntelService(project_with_calls)
         svc.reindex()
-        monkeypatch.setattr(at, "_get_service", lambda: svc)
+        # call_graph has no server-side route, so it dispatches via
+        # _get_local_service() (bypassing any remote proxy), not _get_service().
+        monkeypatch.setattr(at, "_get_local_service", lambda: svc)
 
         result = at.call_graph("caller", direction="callees", depth=1)
         assert "helper" in result

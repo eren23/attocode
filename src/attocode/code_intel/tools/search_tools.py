@@ -480,15 +480,9 @@ def regex_search(
         max_results: Maximum number of matching lines to return.
         case_insensitive: Whether to match case-insensitively.
     """
-    remote = _get_remote_service()
-    if remote is not None:
-        return remote.regex_search(
-            pattern=pattern,
-            path=path,
-            max_results=max_results,
-            case_insensitive=case_insensitive,
-        )
-
+    # NOTE: regex_search has no server-side HTTP route, so it cannot be
+    # proxied to a remote. It always runs locally (against the trigram index /
+    # local files), even when a remote is configured.
     import re
     from pathlib import Path
 

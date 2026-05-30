@@ -10,6 +10,7 @@ from __future__ import annotations
 from attocode.code_intel._shared import (
     _get_code_analyzer,
     _get_context_mgr,
+    _get_local_service,
     _get_project_dir,
     _get_remote_service,
     _get_service,
@@ -109,7 +110,9 @@ def call_graph(
         direction: "callees" (forward) or "callers" (reverse).
         depth: Maximum BFS hops (default 1).
     """
-    return _get_service().call_graph(symbol, direction=direction, depth=depth)
+    # call_graph has no server-side HTTP route, so it runs locally even when a
+    # remote is configured (the local symbol index carries the call edges).
+    return _get_local_service().call_graph(symbol, direction=direction, depth=depth)
 
 
 @mcp.tool()
