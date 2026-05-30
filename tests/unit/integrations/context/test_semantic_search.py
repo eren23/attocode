@@ -279,11 +279,14 @@ class TestRRFMergePath:
 
         # Mock provider
         provider = MagicMock()
+        provider.name = "local:test-model"
         provider.embed.return_value = [[0.1, 0.2, 0.3]]
+        provider.embed_query.return_value = [[0.1, 0.2, 0.3]]
         mgr._provider = provider
 
-        # Mock vector store with results
+        # Mock vector store with results (matching model so mismatch guard stays off)
         store = MagicMock()
+        store.model_name = "local:test-model"
         store.count.return_value = 100
         vector_result = MagicMock()
         vector_result.id = "func:src/auth.py:authenticate"

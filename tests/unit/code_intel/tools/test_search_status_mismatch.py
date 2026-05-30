@@ -20,6 +20,9 @@ def test_status_reports_model_mismatch(monkeypatch, tmp_path):
     prog.indexed_files = 1
     prog.total_files = 1
     prog.failed_files = 0
+    prog.degraded_reason = ""
+    prog.last_error = ""
+    prog.elapsed_seconds = 0.0
     mgr.get_index_progress.return_value = prog
     store = MagicMock()
     store.model_name = "local:bge-base-en-v1.5"

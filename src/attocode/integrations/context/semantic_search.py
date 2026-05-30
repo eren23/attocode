@@ -381,6 +381,19 @@ class SemanticSearchManager:
                 return None
         return self._dep_graph
 
+    @staticmethod
+    def _path_rank_penalty(file_path: str) -> float:
+        """Multiplicative rank penalty for non-source paths (tests, benchmarks,
+        docs) so genuine source outranks them. 1.0 = no penalty."""
+        p = file_path.replace("\\", "/")
+        for frag in (
+            "/tests/", "tests/", "/test/", "asv_bench/",
+            "/docs_src/", "docs_src/", "/benchmarks/",
+        ):
+            if frag in p or p.startswith(frag):
+                return 0.6
+        return 1.0
+
     def _apply_dependency_boost(
         self,
         fused: list[tuple[str, float]],
@@ -864,6 +877,15 @@ class SemanticSearchManager:
                         fused_score *= (1.0 + boost)
                 boosted.append((item_id, fused_score))
             fused = sorted(boosted, key=lambda x: x[1], reverse=True)
+
+        # Path penalty: down-weight tests/benchmarks/docs so source ranks above them
+        penalized: list[tuple[str, float]] = []
+        for item_id, fused_score in fused:
+            result = result_map.get(item_id)
+            if result:
+                fused_score *= self._path_rank_penalty(result.file_path)
+            penalized.append((item_id, fused_score))
+        fused = sorted(penalized, key=lambda x: x[1], reverse=True)
 
         # Return top-k by fused score
         merged: list[SemanticSearchResult] = []

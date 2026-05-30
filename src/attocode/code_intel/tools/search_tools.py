@@ -204,6 +204,16 @@ def semantic_search_status() -> str:
         f"  AST indexed files: {ast_indexed_files}",
         f"  Health: {'degraded' if degradation_reasons else 'healthy'}",
     ]
+    try:
+        _store = getattr(mgr, "_store", None)
+        _store_model = getattr(_store, "model_name", "") if _store else ""
+        if _store_model and _store_model != mgr.provider_name:
+            lines.append(
+                f"  Model mismatch: index built with {_store_model}, active "
+                f"{mgr.provider_name} — run reindex to rebuild vectors."
+            )
+    except Exception:
+        pass
     if degradation_reasons:
         lines.append(f"  Degradation reason: {', '.join(degradation_reasons)}")
     if getattr(progress, "degraded_reason", ""):
