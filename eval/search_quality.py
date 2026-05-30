@@ -248,14 +248,24 @@ def discover_repos_with_ground_truth() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def evaluate_repo(repo: str) -> RepoResult:
-    """Run search quality evaluation for a single repo."""
+def evaluate_repo(repo: str, reindex: bool = False) -> RepoResult:
+    """Run search quality evaluation for a single repo.
+
+    When ``reindex`` is True, force a full index rebuild (AST + embeddings)
+    before scoring so the eval reflects the current chunking/embedder config
+    rather than a stale or absent index. This is the synchronous build the
+    query path does not perform on its own.
+    """
     repo_path = REPO_CONFIGS[repo]
     queries = load_ground_truth(repo)
     if not queries:
         return RepoResult(repo=repo)
 
     svc = CodeIntelService(repo_path)
+    if reindex:
+        print(f"  reindexing {repo} (force=True, embeddings=True)...", file=sys.stderr)
+        rstats = svc.reindex(force=True, embeddings=True)
+        print(f"  reindex done: {rstats}", file=sys.stderr)
     result = RepoResult(repo=repo, total_queries=len(queries))
 
     for entry in queries:
@@ -610,6 +620,14 @@ def main() -> None:
         action="store_true",
         help="Also run grep-based baseline and show side-by-side comparison",
     )
+    parser.add_argument(
+        "--reindex",
+        action="store_true",
+        help="Force a full reindex (AST + embeddings) of each repo before "
+        "scoring. Required to measure index changes (chunking/embedder); "
+        "respects ATTOCODE_EMBEDDING_MODEL and ATTOCODE_BODY_TOKEN_BUDGET. "
+        "Default off preserves prior behavior (scores the existing index).",
+    )
     args = parser.parse_args()
 
     # Determine repos to evaluate
@@ -635,7 +653,7 @@ def main() -> None:
     all_grep_results: list[GrepRepoResult] = []
     for repo in repos:
         print(f"  Evaluating {repo}...")
-        result = evaluate_repo(repo)
+        result = evaluate_repo(repo, reindex=args.reindex)
 
         if result.total_queries == 0:
             print(f"    No ground-truth queries found, skipping.")

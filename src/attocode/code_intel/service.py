@@ -277,12 +277,23 @@ class CodeIntelService:
     # Tool operations — same signatures as server.py tool functions
     # ------------------------------------------------------------------
 
-    def reindex(self, *, force: bool = False) -> dict:
-        """Re-index the codebase. Returns stats."""
+    def reindex(self, *, force: bool = False, embeddings: bool = False) -> dict:
+        """Re-index the codebase. Returns stats.
+
+        Rebuilds the AST/symbol index. When ``embeddings`` is True, also
+        synchronously rebuilds the semantic-search vector index (otherwise
+        embeddings are built lazily on first search). The synchronous build is
+        what callers like the search-quality eval need so results reflect the
+        current chunking/embedder config rather than a stale or absent index.
+        """
         svc = self._get_ast_service()
         svc.initialize(force=force)
         stats = svc._store.stats() if hasattr(svc, "_store") else {}
-        return {"mode": "full" if force else "incremental", **stats}
+        result = {"mode": "full" if force else "incremental", **stats}
+        if embeddings:
+            chunks = self._get_semantic_search().index()
+            result["embedded_chunks"] = chunks
+        return result
 
     def readiness_report_data(
         self,
