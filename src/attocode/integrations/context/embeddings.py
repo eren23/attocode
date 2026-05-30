@@ -237,7 +237,14 @@ def create_embedding_provider(
         except Exception as e:
             raise RuntimeError(f"OpenAI embedding provider failed: {e}") from e
 
-    # Auto-detect: try code-optimized BGE first, then MiniLM (no API cost)
+    # Auto-detect: code-trained nomic first, then BGE, then MiniLM (no API cost)
+    try:
+        provider = NomicEmbeddingProvider()
+        logger.info("Using code-trained embedding provider: %s", provider.name)
+        _provider_cache[model] = provider
+        return provider
+    except Exception as exc:
+        logger.info("nomic unavailable (%s), trying BGE", exc)
     try:
         provider = CodeEmbeddingProvider()
         logger.info("Using code-optimized embedding provider: %s", provider.name)
