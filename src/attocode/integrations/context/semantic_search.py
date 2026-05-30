@@ -1517,6 +1517,40 @@ class SemanticSearchManager:
             len(docs), len(df), len(files_to_parse),
         )
 
+    def _slice_body(
+        self, file_lines: list[str], start_line: int, end_line: int, max_tokens: int,
+    ) -> str:
+        """Return the symbol's body text (lines after the signature line),
+        trimmed to an approximate token budget.
+
+        start_line/end_line are 1-based and inclusive (codebase_ast convention).
+        The first line is the signature; the body is start_line+1..end_line.
+        Returns "" when there is no body (one-line def) or budget <= 0.
+        """
+        from attocode.integrations.utilities.token_estimate import estimate_tokens
+
+        if max_tokens <= 0:
+            return ""
+        n = len(file_lines)
+        body_start = start_line  # 0-based index of first body line == 1-based start_line
+        body_end = min(end_line, n)  # clamp past EOF; slice upper bound
+        if body_start >= body_end:
+            return ""
+        body = file_lines[body_start:body_end]
+        text = "\n".join(line.rstrip() for line in body).strip()
+        if not text:
+            return ""
+        if estimate_tokens(text) <= max_tokens:
+            return text
+        # Trim from the head, keeping whole lines, until under budget.
+        kept: list[str] = []
+        for line in body:
+            kept.append(line.rstrip())
+            if estimate_tokens("\n".join(kept)) > max_tokens:
+                kept.pop()
+                break
+        return "\n".join(kept).strip()
+
     def _chunk_single_file(
         self, rel_path: str, abs_path: str,
     ) -> list[tuple[str, str, str, str]]:
