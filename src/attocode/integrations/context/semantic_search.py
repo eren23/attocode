@@ -700,7 +700,7 @@ class SemanticSearchManager:
 
         # Embed query — use expanded query for better recall
         try:
-            query_vectors = self._provider.embed([expanded_query])
+            query_vectors = self._provider.embed_query([expanded_query])
             if not query_vectors or not query_vectors[0]:
                 self._index_progress.degraded_reason = "query_embedding_failed"
                 self._index_progress.last_error = "Query embedding returned no vector."
