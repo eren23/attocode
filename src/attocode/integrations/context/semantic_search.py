@@ -600,11 +600,15 @@ class SemanticSearchManager:
                 logger.warning("Embedding batch failed at offset %d", i, exc_info=True)
                 all_vectors.extend([[] for _ in batch])
 
-        # Store (original chunk text is preserved for display, not the NL summary)
+        # Store (display signature at index 3 is preserved, not body/NL summary)
         entries = []
-        for (cid, fpath, ctype, text), vec in zip(chunks, all_vectors, strict=False):
+        for chunk, vec in zip(chunks, all_vectors, strict=False):
             if not vec:
                 continue
+            cid = chunk[0]
+            fpath = chunk[1]
+            ctype = chunk[2]
+            text = chunk[3]
             entries.append(VectorEntry(
                 id=cid,
                 file_path=fpath,
@@ -1553,10 +1557,16 @@ class SemanticSearchManager:
 
     def _chunk_single_file(
         self, rel_path: str, abs_path: str,
-    ) -> list[tuple[str, str, str, str]]:
+    ) -> list[tuple]:
         """Extract chunks from a single file.
 
-        Returns list of (id, file_path, chunk_type, text) tuples.
+        Returns a list of chunk tuples.  File- and class-level chunks are
+        4-tuples ``(id, file_path, chunk_type, text)``.  Function- and
+        method-level chunks are 5-tuples
+        ``(id, file_path, chunk_type, display_text, embed_text)`` where
+        ``display_text`` is the concise signature (stored for display) and
+        ``embed_text`` additionally includes a token-budgeted body so the
+        embedding model sees the implementation.
         """
         from attocode.integrations.context.codebase_ast import parse_file
 
@@ -1565,7 +1575,18 @@ class SemanticSearchManager:
         except Exception:
             return []
 
-        chunks: list[tuple[str, str, str, str]] = []
+        import os
+        try:
+            _body_budget = int(os.environ.get("ATTOCODE_BODY_TOKEN_BUDGET", "400"))
+        except ValueError:
+            _body_budget = 400
+        try:
+            with open(abs_path, encoding="utf-8", errors="ignore") as _fh:
+                _file_lines = _fh.read().splitlines()
+        except OSError:
+            _file_lines = []
+
+        chunks: list[tuple] = []
 
         # File-level summary
         imports = [imp.module for imp in ast.imports[:20]]
@@ -1596,11 +1617,18 @@ class SemanticSearchManager:
                 text_parts.append(f"params: {params}")
             if func.return_type:
                 text_parts.append(f"returns: {func.return_type}")
+            sig_text = " | ".join(text_parts)
+            body = (
+                self._slice_body(_file_lines, func.start_line, func.end_line, _body_budget)
+                if _file_lines else ""
+            )
+            embed_text = f"{sig_text}\n{body}" if body else sig_text
             chunks.append((
                 f"func:{rel_path}:{func.name}",
                 rel_path,
                 "function",
-                " | ".join(text_parts),
+                sig_text,
+                embed_text,
             ))
 
         # Class-level chunks (including method-level)
@@ -1630,17 +1658,26 @@ class SemanticSearchManager:
                     m_parts.append(f"params: {m_params}")
                 if method.return_type:
                     m_parts.append(f"returns: {method.return_type}")
+                m_sig = " | ".join(m_parts)
+                m_body = (
+                    self._slice_body(
+                        _file_lines, method.start_line, method.end_line, _body_budget,
+                    )
+                    if _file_lines else ""
+                )
+                m_embed = f"{m_sig}\n{m_body}" if m_body else m_sig
                 chunks.append((
                     f"method:{rel_path}:{cls.name}.{method.name}",
                     rel_path,
                     "method",
-                    " | ".join(m_parts),
+                    m_sig,
+                    m_embed,
                 ))
 
         return chunks
 
     def _get_embedding_texts(
-        self, chunks: list[tuple[str, str, str, str]], language: str = "python",
+        self, chunks: list[tuple], language: str = "python",
     ) -> list[str]:
         """Return texts to feed to the embedding model.
 
@@ -1658,11 +1695,16 @@ class SemanticSearchManager:
             A list of strings, one per chunk, suitable for embedding.
         """
         if self._summarizer is None:
-            # No NL mode — embed the raw chunk text directly
-            return [c[3] for c in chunks]
+            # No NL mode — embed body-augmented text (index 4) when present,
+            # else the display text (index 3).
+            return [c[4] if len(c) > 4 else c[3] for c in chunks]
 
         result: list[str] = []
-        for cid, _fpath, ctype, text in chunks:
+        for chunk in chunks:
+            cid = chunk[0]
+            _fpath = chunk[1]
+            ctype = chunk[2]
+            text = chunk[3]
             # Derive the symbol name from the chunk ID
             name = cid.split(":")[-1] if ":" in cid else _fpath
             summary = self._summarizer.summarize(text, ctype, name, language)
@@ -1718,9 +1760,13 @@ class SemanticSearchManager:
 
         # Build entries
         entries = []
-        for (cid, fpath, ctype, text), vec in zip(chunks, vectors, strict=False):
+        for chunk, vec in zip(chunks, vectors, strict=False):
             if not vec:
                 continue
+            cid = chunk[0]
+            fpath = chunk[1]
+            ctype = chunk[2]
+            text = chunk[3]
             entries.append(VectorEntry(
                 id=cid,
                 file_path=fpath,
@@ -1990,9 +2036,13 @@ class SemanticSearchManager:
                     texts = self._get_embedding_texts(chunks)
                     vectors = self._provider.embed(texts)
                     entries = []
-                    for (cid, fpath, ctype, text), vec in zip(chunks, vectors, strict=False):
+                    for chunk, vec in zip(chunks, vectors, strict=False):
                         if not vec:
                             continue
+                        cid = chunk[0]
+                        fpath = chunk[1]
+                        ctype = chunk[2]
+                        text = chunk[3]
                         entries.append(VectorEntry(
                             id=cid,
                             file_path=fpath,

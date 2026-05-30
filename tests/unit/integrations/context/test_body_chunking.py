@@ -43,3 +43,47 @@ def test_slice_body_empty_when_no_body(tmp_path):
     mgr = _mgr(tmp_path)
     out = mgr._slice_body(lines, start_line=1, end_line=1, max_tokens=1000)
     assert out == ""
+
+
+import os
+
+
+def _write(tmp_path, rel, text):
+    p = tmp_path / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def test_function_chunk_embeds_body_but_display_text_stays_signature(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_BODY_TOKEN_BUDGET", "400")
+    src = (
+        "def authenticate(user, password):\n"
+        '    """Check creds."""\n'
+        "    salted = hash_password(password)\n"
+        "    return salted == stored_hash\n"
+    )
+    _write(tmp_path, "auth.py", src)
+    mgr = SemanticSearchManager(root_dir=str(tmp_path))
+
+    chunks = mgr._chunk_single_file("auth.py", str(tmp_path / "auth.py"))
+    func = next(c for c in chunks if c[0] == "func:auth.py:authenticate")
+    display_text = func[3]
+
+    # display/stored text stays the concise signature (no body)
+    assert "salted" not in display_text
+
+    # embedded text (what the model sees) DOES include the body
+    embedded = mgr._get_embedding_texts([func])[0]
+    assert "salted" in embedded
+
+
+def test_body_budget_zero_disables_bodies(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_BODY_TOKEN_BUDGET", "0")
+    src = "def f(x):\n    secret_token = 42\n    return secret_token\n"
+    _write(tmp_path, "m.py", src)
+    mgr = SemanticSearchManager(root_dir=str(tmp_path))
+    func = next(c for c in mgr._chunk_single_file("m.py", str(tmp_path / "m.py"))
+               if c[0].startswith("func:"))
+    embedded = mgr._get_embedding_texts([func])[0]
+    assert "secret_token" not in embedded
