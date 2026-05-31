@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.25] - 2026-05-31
+
+### Added — Semantic-search retrieval quality (body-aware chunking + code embedder)
+
+Lifts semantic-search quality by embedding function/method **bodies**, not just
+signatures, and adds a code-aware embedder path plus the eval infrastructure to
+measure it honestly.
+
+- **Body-aware chunking.** Function/method chunks now carry signature **and**
+  body, token-budgeted via `ATTOCODE_BODY_TOKEN_BUDGET` (default 400) through a
+  new `_slice_body` extractor. Validated on a BGE `--reindex` sweep: Python/C
+  retrieval reaches MRR@10 0.60–0.63 (redis 0.633, pandas 0.600), clearing the
+  0.55 target. The body-token budget is a no-op across 200/400/800 on the eval
+  set — the gain comes from embedding bodies at all, not from budget size.
+- **Embedder doc/query asymmetry.** `embed_query` on the provider ABC; the
+  nomic provider applies its `search_query:` prefix and is auto-detected first;
+  the query path uses `embed_query` while document sites keep `embed`.
+- **Model-mismatch guard.** Vectors built by a different embedding model are
+  refused (keyword fallback) instead of served as garbage, and the condition is
+  surfaced in `semantic_search_status`.
+- **Ranking: path down-weight.** `tests/`, `benchmarks/`, `docs_src/`, and
+  `asv_bench/` paths are de-ranked as a final scoring stage.
+
+### Fixed — Coverage/readiness for non-Python repos
+
+- `is_index_ready()` / `get_index_progress()` derived `total_files` from a
+  hardcoded `{python, javascript, typescript}` set while the indexer embeds a
+  wider set (tree-sitter: Go, Rust, C, …). A Go repo therefore reported 0%
+  coverage and `vec_ready=False` despite a fully built, served vector index.
+  Both now route through a shared `SemanticSearchManager._supported_languages()`.
+
+### Added — Eval harness
+
+- `--reindex` flag + `CodeIntelService.reindex(embeddings=True)` for a
+  synchronous embedding rebuild, so index changes are actually measurable.
+- Correctness guards (provenance stamp; fail-loud on 0 embedded chunks),
+  per-repo progress milestones + isolation, `--json` output, and a resumable
+  `eval/run_body_budget_sweep.py` budget-sweep driver.
+
 ## [0.2.24] - 2026-05-29
 
 ### Fixed — Code-Intel reliability (remote/local mode + activation)
