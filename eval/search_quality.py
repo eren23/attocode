@@ -87,6 +87,29 @@ class RepoResult:
     avg_recall: float = 0.0
     total_queries: int = 0
     total_time_ms: float = 0.0
+    # Provenance / correctness (stamped when --reindex is used)
+    model_name: str = ""
+    body_budget: str = ""
+    embedded_chunks: int = 0
+    index_ready: bool = False
+    error: str = ""
+
+    def to_dict(self) -> dict:
+        """Machine-readable summary (used by --json and the sweep comparison)."""
+        return {
+            "repo": self.repo,
+            "total_queries": self.total_queries,
+            "avg_mrr": round(self.avg_mrr, 4),
+            "avg_ndcg": round(self.avg_ndcg, 4),
+            "avg_precision": round(self.avg_precision, 4),
+            "avg_recall": round(self.avg_recall, 4),
+            "total_time_ms": round(self.total_time_ms, 1),
+            "model_name": self.model_name,
+            "body_budget": self.body_budget,
+            "embedded_chunks": self.embedded_chunks,
+            "index_ready": self.index_ready,
+            "error": self.error,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -261,14 +284,36 @@ def evaluate_repo(repo: str, reindex: bool = False) -> RepoResult:
     if not queries:
         return RepoResult(repo=repo)
 
+    result = RepoResult(repo=repo, total_queries=len(queries))
+    result.body_budget = os.environ.get("ATTOCODE_BODY_TOKEN_BUDGET", "")
+
     svc = CodeIntelService(repo_path)
     if reindex:
-        print(f"  reindexing {repo} (force=True, embeddings=True)...", file=sys.stderr)
+        print(f"[{repo}] REINDEX_START force=True embeddings=True", file=sys.stderr)
         rstats = svc.reindex(force=True, embeddings=True)
-        print(f"  reindex done: {rstats}", file=sys.stderr)
-    result = RepoResult(repo=repo, total_queries=len(queries))
+        result.embedded_chunks = int(rstats.get("embedded_chunks", 0))
+        print(f"[{repo}] REINDEX_DONE {rstats}", file=sys.stderr)
 
-    for entry in queries:
+    # Provenance: which model actually served, and is the vector index live.
+    try:
+        mgr = svc._get_semantic_search()
+        result.model_name = mgr.provider_name
+        result.index_ready = bool(mgr.is_index_ready())
+    except Exception as exc:  # noqa: BLE001
+        result.model_name = f"unknown:{type(exc).__name__}"
+
+    # Correctness guard: a --reindex run that embedded zero chunks would score
+    # keyword-only (garbage for measuring vector changes). Fail loud, skip it.
+    if reindex and result.embedded_chunks == 0:
+        result.error = "no_embeddings_built"
+        print(
+            f"[{repo}] GUARD_FAIL: embeddings=True but 0 chunks embedded — "
+            f"skipping (would measure keyword-only, not vectors)",
+            file=sys.stderr,
+        )
+        return result
+
+    for qi, entry in enumerate(queries, 1):
         query_text: str = entry["query"]
         relevant: list[str] = entry["relevant_files"]
         relevant_set = set(relevant)
@@ -277,6 +322,9 @@ def evaluate_repo(repo: str, reindex: bool = False) -> RepoResult:
         t0 = time.perf_counter()
         raw_output = svc.semantic_search(query_text)
         elapsed_ms = (time.perf_counter() - t0) * 1000
+        print(
+            f"[{repo}] QUERY {qi}/{len(queries)} {elapsed_ms:.0f}ms", file=sys.stderr,
+        )
 
         retrieved = parse_search_results(raw_output, max_results=TOP_K_RESULTS)
 
@@ -307,6 +355,12 @@ def evaluate_repo(repo: str, reindex: bool = False) -> RepoResult:
         result.avg_precision = sum(q.precision_at_k for q in result.query_results) / n
         result.avg_recall = sum(q.recall_at_k for q in result.query_results) / n
 
+    print(
+        f"[{repo}] REPO_DONE MRR={result.avg_mrr:.3f} NDCG={result.avg_ndcg:.3f} "
+        f"model={result.model_name} budget={result.body_budget or '-'} "
+        f"vec_ready={result.index_ready} chunks={result.embedded_chunks}",
+        file=sys.stderr,
+    )
     return result
 
 
@@ -403,6 +457,20 @@ def format_markdown_report(results: list[RepoResult]) -> str:
         f"_Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}_",
         "",
     ]
+    # Provenance stamp: which model/budget produced these numbers, so a report
+    # is never ambiguous about what was actually measured.
+    _models = sorted({rr.model_name for rr in results if rr.model_name})
+    _budgets = sorted({rr.body_budget for rr in results if rr.body_budget})
+    if _models or _budgets:
+        lines.append(
+            f"_Model(s): {', '.join(_models) or 'n/a'}  |  "
+            f"Body budget: {', '.join(_budgets) or 'n/a'}_"
+        )
+        lines.append("")
+    _errored = [rr.repo for rr in results if rr.error]
+    if _errored:
+        lines.append(f"> ⚠️ Repos with errors (excluded/invalid): {', '.join(_errored)}")
+        lines.append("")
 
     # Summary table
     lines.extend([
@@ -594,6 +662,44 @@ def format_baseline_comparison_markdown(
 # ---------------------------------------------------------------------------
 
 
+def format_sweep_comparison(runs: list[dict]) -> str:
+    """Render a budget-vs-metrics comparison table from sweep run summaries.
+
+    Each entry in ``runs`` is a dict with keys ``label`` (e.g. the body budget)
+    and ``overall`` (a dict with ``avg_mrr``/``avg_ndcg``/``total_queries``).
+    Pure function — no I/O — so it is unit-testable and reused by the driver.
+    """
+    lines = [
+        "# Sweep Comparison",
+        "",
+        "| Config | Queries | MRR@10 | NDCG@10 |",
+        "|--------|---------|--------|---------|",
+    ]
+    best_mrr = max((r["overall"].get("avg_mrr", 0.0) for r in runs), default=0.0)
+    for r in runs:
+        ov = r["overall"]
+        mrr = ov.get("avg_mrr", 0.0)
+        star = " ⭐" if runs and mrr == best_mrr and mrr > 0 else ""
+        lines.append(
+            f"| {r['label']} | {ov.get('total_queries', 0)} | "
+            f"{mrr:.3f}{star} | {ov.get('avg_ndcg', 0.0):.3f} |"
+        )
+    return "\n".join(lines)
+
+
+def _overall_from_results(results: list[RepoResult]) -> dict:
+    """Query-weighted overall metrics across repos (skips errored repos)."""
+    ok = [rr for rr in results if not rr.error and rr.total_queries > 0]
+    tq = sum(rr.total_queries for rr in ok)
+    if tq == 0:
+        return {"avg_mrr": 0.0, "avg_ndcg": 0.0, "total_queries": 0}
+    return {
+        "avg_mrr": sum(rr.avg_mrr * rr.total_queries for rr in ok) / tq,
+        "avg_ndcg": sum(rr.avg_ndcg * rr.total_queries for rr in ok) / tq,
+        "total_queries": tq,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Evaluate search quality against ground-truth relevance judgments"
@@ -628,6 +734,13 @@ def main() -> None:
         "respects ATTOCODE_EMBEDDING_MODEL and ATTOCODE_BODY_TOKEN_BUDGET. "
         "Default off preserves prior behavior (scores the existing index).",
     )
+    parser.add_argument(
+        "--json",
+        type=str,
+        default=None,
+        help="Write machine-readable per-repo results (incl. provenance) to "
+        "this JSON path. Diffable and salvageable if a run partially completes.",
+    )
     args = parser.parse_args()
 
     # Determine repos to evaluate
@@ -653,10 +766,24 @@ def main() -> None:
     all_grep_results: list[GrepRepoResult] = []
     for repo in repos:
         print(f"  Evaluating {repo}...")
-        result = evaluate_repo(repo, reindex=args.reindex)
+        try:
+            result = evaluate_repo(repo, reindex=args.reindex)
+        except Exception as exc:  # noqa: BLE001 — one repo failing must not kill the sweep
+            import traceback
+            traceback.print_exc()
+            print(f"    ERROR evaluating {repo}: {type(exc).__name__}: {exc}")
+            err = RepoResult(repo=repo)
+            err.error = f"{type(exc).__name__}: {exc}"
+            all_results.append(err)
+            continue
 
         if result.total_queries == 0:
             print(f"    No ground-truth queries found, skipping.")
+            continue
+
+        if result.error:
+            print(f"    SKIPPED ({result.error}).")
+            all_results.append(result)
             continue
 
         all_results.append(result)
@@ -720,6 +847,20 @@ def main() -> None:
         with open(args.report, "w") as f:
             f.write(md_report)
         print(f"\nMarkdown report saved to: {args.report}")
+
+    # Save machine-readable results if requested
+    if args.json:
+        import json
+        payload = {
+            "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "body_budget": os.environ.get("ATTOCODE_BODY_TOKEN_BUDGET", ""),
+            "embedding_model_env": os.environ.get("ATTOCODE_EMBEDDING_MODEL", ""),
+            "overall": _overall_from_results(all_results),
+            "repos": [rr.to_dict() for rr in all_results],
+        }
+        with open(args.json, "w") as f:
+            json.dump(payload, f, indent=2)
+        print(f"JSON results saved to: {args.json}")
 
 
 if __name__ == "__main__":

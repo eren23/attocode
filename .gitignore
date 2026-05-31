@@ -74,3 +74,6 @@ scripts/*
 
 #cursor
 .cursor/
+
+# search-quality sweep scratch output
+eval/sweep_out/
