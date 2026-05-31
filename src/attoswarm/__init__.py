@@ -1,7 +1,4 @@
-"""Attoswarm standalone hybrid swarm orchestrator."""
+"""Attoswarm - Production-grade multi-agent orchestration."""
 
-from __future__ import annotations
-
+__version__ = "0.2.25"
 __all__ = ["__version__"]
-
-__version__ = "0.2.24"
