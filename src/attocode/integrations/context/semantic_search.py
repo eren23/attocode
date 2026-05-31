@@ -555,6 +555,22 @@ class SemanticSearchManager:
         self._ensure_provider()
         return self._provider.name if self._provider else "none"
 
+    @staticmethod
+    def _supported_languages() -> set[str]:
+        """Languages the chunker actually embeds: Python/JS/TS always, plus
+        any tree-sitter languages (Go, C, Rust, ...) when available.
+
+        Coverage/readiness must use this set, not a hardcoded py/js/ts subset,
+        or non-Python repos report 0 coverage despite having a built index.
+        """
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        return {"python", "javascript", "typescript"} | _ts_langs
+
     def index(self, context_manager: Any = None) -> int:
         """Build or update the vector index.
 
@@ -580,13 +596,7 @@ class SemanticSearchManager:
             ctx.discover_files()
 
         # Supported languages: Python, JS, TS always; others when tree-sitter available
-        _ts_langs: set[str] = set()
-        try:
-            from attocode.integrations.context.ts_parser import supported_languages
-            _ts_langs = set(supported_languages())
-        except ImportError:
-            pass
-        _supported = {"python", "javascript", "typescript"} | _ts_langs
+        _supported = self._supported_languages()
 
         chunks: list[tuple[str, str, str, str]] = []
 
@@ -1950,7 +1960,8 @@ class SemanticSearchManager:
                 ctx._ensure_fresh()
                 if not ctx._files:
                     ctx.discover_files()
-                total = len([f for f in ctx._files if f.language in ("python", "javascript", "typescript")])
+                _supported = self._supported_languages()
+                total = len([f for f in ctx._files if f.language in _supported])
                 self._index_progress.total_files = total
             indexed = len(self._store.get_all_indexed_files()) if total > 0 else 0
             coverage = indexed / total if total > 0 else 0.0
@@ -2021,13 +2032,9 @@ class SemanticSearchManager:
         if not ctx._files:
             ctx.discover_files()
 
-        _ts_langs: set[str] = set()
-        try:
-            from attocode.integrations.context.ts_parser import supported_languages
-            _ts_langs = set(supported_languages())
-        except ImportError:
+        _supported = self._supported_languages()
+        if _supported == {"python", "javascript", "typescript"}:
             self._index_progress.degraded_reason = "tree_sitter_languages_unavailable"
-        _supported = {"python", "javascript", "typescript"} | _ts_langs
 
         indexable = [f for f in ctx._files if f.language in _supported]
         self._index_progress.total_files = len(indexable)
