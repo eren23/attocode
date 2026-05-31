@@ -142,31 +142,29 @@ class TestCreateEmbeddingProvider:
             with pytest.raises(ImportError, match="sentence-transformers"):
                 create_embedding_provider("bge")
 
-    def test_auto_detect_tries_bge_first(
+    def test_auto_detect_tries_nomic_first(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        # Auto-detect now prefers the code-trained nomic model.
         mock_st = MagicMock()
         monkeypatch.setitem(sys.modules, "sentence_transformers", mock_st)
+        monkeypatch.delenv("ATTOCODE_EMBEDDING_MODEL", raising=False)
 
         provider = create_embedding_provider("")
 
-        assert isinstance(provider, CodeEmbeddingProvider)
+        assert provider.name == "local:nomic-embed-text-v1.5"
         assert provider.dimension() == 768
 
-    def test_auto_detect_falls_back_to_minilm_when_bge_fails(
+    def test_auto_detect_falls_back_to_minilm_when_local_models_fail(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         mock_st = MagicMock()
         monkeypatch.setitem(sys.modules, "sentence_transformers", mock_st)
 
-        call_count = 0
-        original_init = MagicMock()
-
         def mock_sentence_transformer(model_name: str, **kwargs):  # noqa: ANN003
-            nonlocal call_count
-            call_count += 1
-            if model_name == "BAAI/bge-base-en-v1.5":
-                raise RuntimeError("Failed to load BGE model")
+            # nomic and BGE both fail to load; MiniLM succeeds.
+            if model_name in ("nomic-ai/nomic-embed-text-v1.5", "BAAI/bge-base-en-v1.5"):
+                raise RuntimeError(f"Failed to load {model_name}")
             return MagicMock()
 
         mock_st.SentenceTransformer.side_effect = mock_sentence_transformer
@@ -188,6 +186,9 @@ class TestCreateEmbeddingProvider:
         monkeypatch.delenv("ATTOCODE_EMBEDDING_MODEL", raising=False)
 
         with patch(
+            "attocode.integrations.context.embeddings.NomicEmbeddingProvider.__init__",
+            side_effect=ImportError("No module named 'sentence_transformers'"),
+        ), patch(
             "attocode.integrations.context.embeddings.CodeEmbeddingProvider.__init__",
             side_effect=ImportError("No module named 'sentence_transformers'"),
         ), patch(

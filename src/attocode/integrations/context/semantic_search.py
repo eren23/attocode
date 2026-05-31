@@ -381,6 +381,19 @@ class SemanticSearchManager:
                 return None
         return self._dep_graph
 
+    @staticmethod
+    def _path_rank_penalty(file_path: str) -> float:
+        """Multiplicative rank penalty for non-source paths (tests, benchmarks,
+        docs) so genuine source outranks them. 1.0 = no penalty."""
+        p = file_path.replace("\\", "/")
+        for frag in (
+            "/tests/", "tests/", "/test/", "asv_bench/",
+            "/docs_src/", "docs_src/", "/benchmarks/",
+        ):
+            if frag in p or p.startswith(frag):
+                return 0.6
+        return 1.0
+
     def _apply_dependency_boost(
         self,
         fused: list[tuple[str, float]],
@@ -542,6 +555,22 @@ class SemanticSearchManager:
         self._ensure_provider()
         return self._provider.name if self._provider else "none"
 
+    @staticmethod
+    def _supported_languages() -> set[str]:
+        """Languages the chunker actually embeds: Python/JS/TS always, plus
+        any tree-sitter languages (Go, C, Rust, ...) when available.
+
+        Coverage/readiness must use this set, not a hardcoded py/js/ts subset,
+        or non-Python repos report 0 coverage despite having a built index.
+        """
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        return {"python", "javascript", "typescript"} | _ts_langs
+
     def index(self, context_manager: Any = None) -> int:
         """Build or update the vector index.
 
@@ -567,13 +596,7 @@ class SemanticSearchManager:
             ctx.discover_files()
 
         # Supported languages: Python, JS, TS always; others when tree-sitter available
-        _ts_langs: set[str] = set()
-        try:
-            from attocode.integrations.context.ts_parser import supported_languages
-            _ts_langs = set(supported_languages())
-        except ImportError:
-            pass
-        _supported = {"python", "javascript", "typescript"} | _ts_langs
+        _supported = self._supported_languages()
 
         chunks: list[tuple[str, str, str, str]] = []
 
@@ -600,11 +623,15 @@ class SemanticSearchManager:
                 logger.warning("Embedding batch failed at offset %d", i, exc_info=True)
                 all_vectors.extend([[] for _ in batch])
 
-        # Store (original chunk text is preserved for display, not the NL summary)
+        # Store (display signature at index 3 is preserved, not body/NL summary)
         entries = []
-        for (cid, fpath, ctype, text), vec in zip(chunks, all_vectors, strict=False):
+        for chunk, vec in zip(chunks, all_vectors, strict=False):
             if not vec:
                 continue
+            cid = chunk[0]
+            fpath = chunk[1]
+            ctype = chunk[2]
+            text = chunk[3]
             entries.append(VectorEntry(
                 id=cid,
                 file_path=fpath,
@@ -684,6 +711,18 @@ class SemanticSearchManager:
         if self._keyword_fallback:
             return self._keyword_search(expanded_query, top_k, file_filter)
 
+        # Refuse vectors produced by a different embedding model (manual-reindex
+        # migration): serving them returns semantically garbage results.
+        store_model = getattr(self._store, "model_name", "") if self._store else ""
+        active_model = getattr(self._provider, "name", "")
+        if store_model and active_model and store_model != active_model:
+            logger.warning(
+                "Vector index built with %s but active model is %s; serving "
+                "keyword results only. Run reindex to rebuild vectors.",
+                store_model, active_model,
+            )
+            return self._keyword_search(expanded_query, top_k, file_filter)
+
         # Coverage-based switchover: use keyword fallback while indexing
         if not self._indexed and self._store:
             count = self._store.count()
@@ -696,7 +735,7 @@ class SemanticSearchManager:
 
         # Embed query — use expanded query for better recall
         try:
-            query_vectors = self._provider.embed([expanded_query])
+            query_vectors = self._provider.embed_query([expanded_query])
             if not query_vectors or not query_vectors[0]:
                 self._index_progress.degraded_reason = "query_embedding_failed"
                 self._index_progress.last_error = "Query embedding returned no vector."
@@ -848,6 +887,15 @@ class SemanticSearchManager:
                         fused_score *= (1.0 + boost)
                 boosted.append((item_id, fused_score))
             fused = sorted(boosted, key=lambda x: x[1], reverse=True)
+
+        # Path penalty: down-weight tests/benchmarks/docs so source ranks above them
+        penalized: list[tuple[str, float]] = []
+        for item_id, fused_score in fused:
+            result = result_map.get(item_id)
+            if result:
+                fused_score *= self._path_rank_penalty(result.file_path)
+            penalized.append((item_id, fused_score))
+        fused = sorted(penalized, key=lambda x: x[1], reverse=True)
 
         # Return top-k by fused score
         merged: list[SemanticSearchResult] = []
@@ -1517,12 +1565,52 @@ class SemanticSearchManager:
             len(docs), len(df), len(files_to_parse),
         )
 
+    def _slice_body(
+        self, file_lines: list[str], start_line: int, end_line: int, max_tokens: int,
+    ) -> str:
+        """Return the symbol's body text (lines after the signature line),
+        trimmed to an approximate token budget.
+
+        start_line/end_line are 1-based and inclusive (codebase_ast convention).
+        The first line is the signature; the body is start_line+1..end_line.
+        Returns "" when there is no body (one-line def) or budget <= 0.
+        """
+        from attocode.integrations.utilities.token_estimate import estimate_tokens
+
+        if max_tokens <= 0:
+            return ""
+        n = len(file_lines)
+        body_start = start_line  # 0-based index of first body line == 1-based start_line
+        body_end = min(end_line, n)  # clamp past EOF; slice upper bound
+        if body_start >= body_end:
+            return ""
+        body = file_lines[body_start:body_end]
+        text = "\n".join(line.rstrip() for line in body).strip()
+        if not text:
+            return ""
+        if estimate_tokens(text) <= max_tokens:
+            return text
+        # Trim from the head, keeping whole lines, until under budget.
+        kept: list[str] = []
+        for line in body:
+            kept.append(line.rstrip())
+            if estimate_tokens("\n".join(kept)) > max_tokens:
+                kept.pop()
+                break
+        return "\n".join(kept).strip()
+
     def _chunk_single_file(
         self, rel_path: str, abs_path: str,
-    ) -> list[tuple[str, str, str, str]]:
+    ) -> list[tuple]:
         """Extract chunks from a single file.
 
-        Returns list of (id, file_path, chunk_type, text) tuples.
+        Returns a list of chunk tuples.  File- and class-level chunks are
+        4-tuples ``(id, file_path, chunk_type, text)``.  Function- and
+        method-level chunks are 5-tuples
+        ``(id, file_path, chunk_type, display_text, embed_text)`` where
+        ``display_text`` is the concise signature (stored for display) and
+        ``embed_text`` additionally includes a token-budgeted body so the
+        embedding model sees the implementation.
         """
         from attocode.integrations.context.codebase_ast import parse_file
 
@@ -1531,7 +1619,18 @@ class SemanticSearchManager:
         except Exception:
             return []
 
-        chunks: list[tuple[str, str, str, str]] = []
+        import os
+        try:
+            _body_budget = int(os.environ.get("ATTOCODE_BODY_TOKEN_BUDGET", "400"))
+        except ValueError:
+            _body_budget = 400
+        try:
+            with open(abs_path, encoding="utf-8", errors="ignore") as _fh:
+                _file_lines = _fh.read().splitlines()
+        except OSError:
+            _file_lines = []
+
+        chunks: list[tuple] = []
 
         # File-level summary
         imports = [imp.module for imp in ast.imports[:20]]
@@ -1562,11 +1661,18 @@ class SemanticSearchManager:
                 text_parts.append(f"params: {params}")
             if func.return_type:
                 text_parts.append(f"returns: {func.return_type}")
+            sig_text = " | ".join(text_parts)
+            body = (
+                self._slice_body(_file_lines, func.start_line, func.end_line, _body_budget)
+                if _file_lines else ""
+            )
+            embed_text = f"{sig_text}\n{body}" if body else sig_text
             chunks.append((
                 f"func:{rel_path}:{func.name}",
                 rel_path,
                 "function",
-                " | ".join(text_parts),
+                sig_text,
+                embed_text,
             ))
 
         # Class-level chunks (including method-level)
@@ -1596,17 +1702,26 @@ class SemanticSearchManager:
                     m_parts.append(f"params: {m_params}")
                 if method.return_type:
                     m_parts.append(f"returns: {method.return_type}")
+                m_sig = " | ".join(m_parts)
+                m_body = (
+                    self._slice_body(
+                        _file_lines, method.start_line, method.end_line, _body_budget,
+                    )
+                    if _file_lines else ""
+                )
+                m_embed = f"{m_sig}\n{m_body}" if m_body else m_sig
                 chunks.append((
                     f"method:{rel_path}:{cls.name}.{method.name}",
                     rel_path,
                     "method",
-                    " | ".join(m_parts),
+                    m_sig,
+                    m_embed,
                 ))
 
         return chunks
 
     def _get_embedding_texts(
-        self, chunks: list[tuple[str, str, str, str]], language: str = "python",
+        self, chunks: list[tuple], language: str = "python",
     ) -> list[str]:
         """Return texts to feed to the embedding model.
 
@@ -1624,11 +1739,16 @@ class SemanticSearchManager:
             A list of strings, one per chunk, suitable for embedding.
         """
         if self._summarizer is None:
-            # No NL mode — embed the raw chunk text directly
-            return [c[3] for c in chunks]
+            # No NL mode — embed body-augmented text (index 4) when present,
+            # else the display text (index 3).
+            return [c[4] if len(c) > 4 else c[3] for c in chunks]
 
         result: list[str] = []
-        for cid, _fpath, ctype, text in chunks:
+        for chunk in chunks:
+            cid = chunk[0]
+            _fpath = chunk[1]
+            ctype = chunk[2]
+            text = chunk[3]
             # Derive the symbol name from the chunk ID
             name = cid.split(":")[-1] if ":" in cid else _fpath
             summary = self._summarizer.summarize(text, ctype, name, language)
@@ -1684,9 +1804,13 @@ class SemanticSearchManager:
 
         # Build entries
         entries = []
-        for (cid, fpath, ctype, text), vec in zip(chunks, vectors, strict=False):
+        for chunk, vec in zip(chunks, vectors, strict=False):
             if not vec:
                 continue
+            cid = chunk[0]
+            fpath = chunk[1]
+            ctype = chunk[2]
+            text = chunk[3]
             entries.append(VectorEntry(
                 id=cid,
                 file_path=fpath,
@@ -1836,7 +1960,8 @@ class SemanticSearchManager:
                 ctx._ensure_fresh()
                 if not ctx._files:
                     ctx.discover_files()
-                total = len([f for f in ctx._files if f.language in ("python", "javascript", "typescript")])
+                _supported = self._supported_languages()
+                total = len([f for f in ctx._files if f.language in _supported])
                 self._index_progress.total_files = total
             indexed = len(self._store.get_all_indexed_files()) if total > 0 else 0
             coverage = indexed / total if total > 0 else 0.0
@@ -1907,13 +2032,9 @@ class SemanticSearchManager:
         if not ctx._files:
             ctx.discover_files()
 
-        _ts_langs: set[str] = set()
-        try:
-            from attocode.integrations.context.ts_parser import supported_languages
-            _ts_langs = set(supported_languages())
-        except ImportError:
+        _supported = self._supported_languages()
+        if _supported == {"python", "javascript", "typescript"}:
             self._index_progress.degraded_reason = "tree_sitter_languages_unavailable"
-        _supported = {"python", "javascript", "typescript"} | _ts_langs
 
         indexable = [f for f in ctx._files if f.language in _supported]
         self._index_progress.total_files = len(indexable)
@@ -1956,9 +2077,13 @@ class SemanticSearchManager:
                     texts = self._get_embedding_texts(chunks)
                     vectors = self._provider.embed(texts)
                     entries = []
-                    for (cid, fpath, ctype, text), vec in zip(chunks, vectors, strict=False):
+                    for chunk, vec in zip(chunks, vectors, strict=False):
                         if not vec:
                             continue
+                        cid = chunk[0]
+                        fpath = chunk[1]
+                        ctype = chunk[2]
+                        text = chunk[3]
                         entries.append(VectorEntry(
                             id=cid,
                             file_path=fpath,

@@ -24,6 +24,11 @@ class EmbeddingProvider(ABC):
         """Embed a batch of texts. Returns list of vectors."""
         ...
 
+    def embed_query(self, texts: list[str]) -> list[list[float]]:
+        """Embed query texts. Symmetric providers reuse embed(); asymmetric
+        providers (e.g. nomic) override with a query-specific prefix."""
+        return self.embed(texts)
+
     @abstractmethod
     def dimension(self) -> int:
         """Return the embedding dimension."""
@@ -96,6 +101,12 @@ class NomicEmbeddingProvider(EmbeddingProvider):
     def embed(self, texts: list[str]) -> list[list[float]]:
         # nomic-embed-text recommends prefixing with task type
         prefixed = [f"search_document: {t}" for t in texts]
+        embeddings = self._model.encode(prefixed, convert_to_numpy=True)
+        return [e.tolist() for e in embeddings]
+
+    def embed_query(self, texts: list[str]) -> list[list[float]]:
+        # Queries use a different prefix than documents (asymmetric model).
+        prefixed = [f"search_query: {t}" for t in texts]
         embeddings = self._model.encode(prefixed, convert_to_numpy=True)
         return [e.tolist() for e in embeddings]
 
@@ -226,7 +237,14 @@ def create_embedding_provider(
         except Exception as e:
             raise RuntimeError(f"OpenAI embedding provider failed: {e}") from e
 
-    # Auto-detect: try code-optimized BGE first, then MiniLM (no API cost)
+    # Auto-detect: code-trained nomic first, then BGE, then MiniLM (no API cost)
+    try:
+        provider = NomicEmbeddingProvider()
+        logger.info("Using code-trained embedding provider: %s", provider.name)
+        _provider_cache[model] = provider
+        return provider
+    except Exception as exc:
+        logger.info("nomic unavailable (%s), trying BGE", exc)
     try:
         provider = CodeEmbeddingProvider()
         logger.info("Using code-optimized embedding provider: %s", provider.name)
