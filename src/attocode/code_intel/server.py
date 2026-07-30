@@ -63,6 +63,7 @@ from attocode.code_intel._shared import (  # noqa: F401
     _walk_up,
     clear_remote_service,
     configure_remote_service,
+    enable_remote_if_configured,
     mcp,
 )
 
