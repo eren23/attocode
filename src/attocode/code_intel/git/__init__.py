@@ -1,7 +1,5 @@
-"""Git repository cloning and management.
+"""Compatibility exports for attocode_intel.git."""
+from importlib import import_module as _import_module
 
-These modules require pygit2 (service mode dependency).
-Import them directly when needed:
-    from attocode.code_intel.git.manager import GitRepoManager
-    from attocode.code_intel.git.models import BranchInfo, DiffEntry, TreeEntry
-"""
+def __getattr__(name):
+    return getattr(_import_module("attocode_intel.git"), name)

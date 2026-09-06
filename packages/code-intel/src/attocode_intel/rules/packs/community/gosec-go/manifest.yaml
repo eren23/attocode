@@ -1,0 +1,14 @@
+name: gosec-go
+version: 1.0.0
+languages:
+- go
+description: Hand-ported subset of gosec rules. See PORTING.md for the porting checklist.
+source: community
+source_url: https://github.com/securego/gosec
+source_commit: ''
+source_license: Apache-2.0
+attribution: Rule patterns adapted from gosec (https://github.com/securego/gosec).
+  Original copyright securego authors. Licensed under Apache-2.0.
+imported_at: '2026-04-16T12:20:09Z'
+upstream_rule_count: 10
+imported_rule_count: 0

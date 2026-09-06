@@ -1,33 +1,9 @@
-"""SQLAlchemy declarative base and common mixins."""
+"""Compatibility alias for attocode_intel.db.base."""
+import importlib as _importlib
+import sys as _sys
 
-from __future__ import annotations
-
-import uuid
-from datetime import datetime
-
-from sqlalchemy import DateTime, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-
-
-class Base(DeclarativeBase):
-    """Base class for all ORM models."""
-
-
-class TimestampMixin:
-    """Adds created_at and updated_at columns."""
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
-
-
-def generate_uuid() -> uuid.UUID:
-    return uuid.uuid4()
+_module = _importlib.import_module("attocode_intel.db.base")
+if __name__ == "__main__":
+    _module.main()
+else:
+    _sys.modules[__name__] = _module

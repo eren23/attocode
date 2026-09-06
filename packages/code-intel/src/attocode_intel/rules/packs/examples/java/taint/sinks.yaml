@@ -1,0 +1,37 @@
+sinks:
+  - name: sql_query
+    patterns:
+      - 'createQuery\('
+      - 'prepareStatement\('
+      - 'executeQuery\('
+      - 'createNativeQuery\('
+    cwe: CWE-89
+    message: "SQL injection: tainted data reaches database query"
+    language: java
+
+  - name: runtime_exec
+    patterns:
+      - 'Runtime\.getRuntime\(\)\.exec\('
+      - 'ProcessBuilder\('
+    cwe: CWE-78
+    message: "Command injection: tainted data reaches process execution"
+    language: java
+
+  - name: file_access
+    patterns:
+      - 'new\s+File\('
+      - 'new\s+FileInputStream\('
+      - 'new\s+FileOutputStream\('
+      - 'Paths\.get\('
+      - 'Files\.readAllBytes\('
+    cwe: CWE-22
+    message: "Path traversal: tainted data used in file path"
+    language: java
+
+  - name: response_write
+    patterns:
+      - 'response\.getWriter\(\)\.(?:print|write)\('
+      - 'response\.getOutputStream\('
+    cwe: CWE-79
+    message: "XSS: tainted data written directly to HTTP response"
+    language: java

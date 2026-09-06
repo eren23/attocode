@@ -971,8 +971,8 @@ async def test_cors_response_has_allow_origin():
 
 
 @pytest.mark.asyncio
-async def test_auth_jwt_on_analysis_endpoint():
-    """JWT tokens should work on endpoints that previously used verify_api_key."""
+async def test_service_rejects_unscoped_cached_projects():
+    """An authenticated request cannot bypass repository authorization via a cache."""
     try:
         import jose  # noqa: F401
 
@@ -1011,13 +1011,13 @@ async def test_auth_jwt_on_analysis_endpoint():
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         # These endpoints previously used verify_api_key
         r = await c.get("/api/v1/projects/default/map", headers=headers)
-        assert r.status_code == 200
+        assert r.status_code == 404
 
         r = await c.get("/api/v1/projects/default/symbols", params={"path": "foo.py"}, headers=headers)
-        assert r.status_code == 200
+        assert r.status_code == 404
 
         r = await c.get("/api/v1/projects", headers=headers)
-        assert r.status_code == 200
+        assert r.status_code == 403
 
     deps.reset()
     CodeIntelService._reset_instances()

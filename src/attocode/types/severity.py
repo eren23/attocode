@@ -1,15 +1,9 @@
-"""Shared severity levels for findings, security patterns, etc."""
+"""Compatibility alias for attocode_intel._internal.types.severity."""
+import importlib as _importlib
+import sys as _sys
 
-from __future__ import annotations
-
-from enum import StrEnum
-
-
-class Severity(StrEnum):
-    """Finding severity level."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    INFO = "info"
+_module = _importlib.import_module("attocode_intel._internal.types.severity")
+if __name__ == "__main__":
+    _module.main()
+else:
+    _sys.modules[__name__] = _module

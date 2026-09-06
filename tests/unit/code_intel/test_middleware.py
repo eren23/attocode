@@ -25,7 +25,7 @@ async def logging_client():
 
 @pytest.mark.asyncio
 async def test_logging_middleware_logs_request(logging_client, caplog):
-    with caplog.at_level(logging.INFO, logger="attocode.code_intel.api.middleware"):
+    with caplog.at_level(logging.INFO, logger="attocode_intel.api.middleware"):
         await logging_client.get("/health")
     assert "GET" in caplog.text
     assert "/health" in caplog.text
@@ -34,6 +34,6 @@ async def test_logging_middleware_logs_request(logging_client, caplog):
 
 @pytest.mark.asyncio
 async def test_logging_middleware_logs_duration(logging_client, caplog):
-    with caplog.at_level(logging.INFO, logger="attocode.code_intel.api.middleware"):
+    with caplog.at_level(logging.INFO, logger="attocode_intel.api.middleware"):
         await logging_client.get("/health")
     assert "ms" in caplog.text

@@ -1,28 +1,5 @@
-"""Pluggable rule-based analysis engine.
+"""Compatibility exports for attocode_intel.rules."""
+from importlib import import_module as _import_module
 
-Provides a unified rule model, registry, loader, executor, enricher,
-and formatter for multi-language static analysis with language packs,
-user plugins, and deterministic pre-filtering.
-"""
-
-from attocode.code_intel.rules.model import (
-    AutoFix,
-    EnrichedFinding,
-    FewShotExample,
-    RuleCategory,
-    RuleSeverity,
-    RuleSource,
-    RuleTier,
-    UnifiedRule,
-)
-
-__all__ = [
-    "AutoFix",
-    "EnrichedFinding",
-    "FewShotExample",
-    "RuleCategory",
-    "RuleSeverity",
-    "RuleSource",
-    "RuleTier",
-    "UnifiedRule",
-]
+def __getattr__(name):
+    return getattr(_import_module("attocode_intel.rules"), name)

@@ -1,0 +1,21 @@
+# Adapted from eslint rule 'no-new-func'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: no-new-func
+name: Function constructor used to evaluate code
+message: Function constructor compiles strings into code
+severity: high
+category: security
+languages: [javascript, typescript]
+confidence: 0.85
+cwe: CWE-95
+pattern: '\bnew\s+Function\s*\('
+explanation: |
+  Constructing a function from a string source compiles arbitrary code
+  at runtime, bypassing lexical scope and lint/type analysis.
+recommendation: |
+  Define functions inline or via factory closures. If runtime code
+  generation is genuinely needed, isolate it in a worker with limited
+  capabilities.
+references:
+  - https://eslint.org/docs/latest/rules/no-new-func

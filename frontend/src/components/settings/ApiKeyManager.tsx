@@ -23,6 +23,7 @@ export function ApiKeyManager({ orgId }: { orgId: string }) {
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [knowledgeWrite, setKnowledgeWrite] = useState(false);
 
   const keys = useQuery({
     queryKey: ["api-keys", orgId],
@@ -34,7 +35,7 @@ export function ApiKeyManager({ orgId }: { orgId: string }) {
     mutationFn: (keyName: string) =>
       apiFetch<ApiKeyCreateResponse>(`/api/v1/orgs/${orgId}/api-keys`, {
         method: "POST",
-        body: JSON.stringify({ name: keyName }),
+        body: JSON.stringify({ name: keyName, scopes: knowledgeWrite ? ["intelligence:read", "intelligence:write"] : ["intelligence:read"] }),
       }),
     onSuccess: (data) => {
       setNewKey(data.key);
@@ -90,6 +91,10 @@ export function ApiKeyManager({ orgId }: { orgId: string }) {
           >
             Create
           </Button>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={knowledgeWrite} onChange={event => setKnowledgeWrite(event.target.checked)} />
+            Allow sharing and editing knowledge
+          </label>
         </div>
       )}
 

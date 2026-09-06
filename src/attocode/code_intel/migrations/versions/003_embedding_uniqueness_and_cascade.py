@@ -1,51 +1,9 @@
-"""Add unique constraint on embeddings and CASCADE on FK.
+"""Compatibility alias for attocode_intel.migrations.versions.003_embedding_uniqueness_and_cascade."""
+import importlib as _importlib
+import sys as _sys
 
-C6: Ensure one embedding per (content_sha, embedding_model, chunk_type).
-N5: Add ON DELETE CASCADE to embeddings.content_sha FK.
-
-Revision ID: 003
-Revises: 002
-Create Date: 2026-03-11
-"""
-from __future__ import annotations
-
-from typing import Sequence, Union
-
-from alembic import op
-
-revision: str = "003"
-down_revision: Union[str, None] = "002"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
-
-
-def upgrade() -> None:
-    # C6: unique constraint on (content_sha, embedding_model, chunk_type)
-    op.create_unique_constraint(
-        "uq_embedding_content_model_chunk",
-        "embeddings",
-        ["content_sha", "embedding_model", "chunk_type"],
-    )
-
-    # N5: replace FK with CASCADE version
-    op.drop_constraint("embeddings_content_sha_fkey", "embeddings", type_="foreignkey")
-    op.create_foreign_key(
-        "embeddings_content_sha_fkey",
-        "embeddings",
-        "file_contents",
-        ["content_sha"],
-        ["sha256"],
-        ondelete="CASCADE",
-    )
-
-
-def downgrade() -> None:
-    op.drop_constraint("embeddings_content_sha_fkey", "embeddings", type_="foreignkey")
-    op.create_foreign_key(
-        "embeddings_content_sha_fkey",
-        "embeddings",
-        "file_contents",
-        ["content_sha"],
-        ["sha256"],
-    )
-    op.drop_constraint("uq_embedding_content_model_chunk", "embeddings", type_="unique")
+_module = _importlib.import_module("attocode_intel.migrations.versions.003_embedding_uniqueness_and_cascade")
+if __name__ == "__main__":
+    _module.main()
+else:
+    _sys.modules[__name__] = _module

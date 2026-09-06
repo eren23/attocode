@@ -1,0 +1,58 @@
+# Go structural patterns (ast-grep, Tier 2).
+#
+# Many Go ``pkg.Func(arg)`` patterns are parsed by tree-sitter as
+# ``type_conversion_expression`` (treating ``pkg.Func`` as a qualified
+# type) rather than ``call_expression``. We disambiguate via
+# ``structural_context`` + ``structural_selector`` so the matcher binds
+# to the actual call.
+
+- id: go-debug-fmt-println
+  name: Debug fmt.Println left in source
+  structural_pattern: 'fmt.Println($X)'
+  structural_context: 'func _() { fmt.Println($X) }'
+  structural_selector: call_expression
+  message: "fmt.Println($X) left in source — switch to log.Printf or remove"
+  severity: low
+  category: style
+  languages: [go]
+  confidence: 0.35
+  tags: [debug]
+  explanation: >
+    ``fmt.Println`` writes straight to stdout with no level filtering or
+    structure. In services, prefer ``log`` / ``slog`` so output can be
+    routed and silenced.
+  recommendation: "Use log.Printf, slog.Info, or remove if it was a debug aid."
+  examples:
+    - bad: "fmt.Println(\"got request\", req)"
+      good: "slog.Info(\"got request\", \"req\", req)"
+      explanation: "Structured logging keeps fields queryable and respects levels."
+
+- id: go-production-panic
+  name: panic() in production code
+  structural_pattern: 'panic($X)'
+  message: "panic($X) — production code should return errors instead of crashing"
+  severity: medium
+  category: correctness
+  languages: [go]
+  confidence: 0.55
+  explanation: >
+    Go convention is to return ``error`` and let callers decide what to
+    do. ``panic`` is reserved for truly unrecoverable invariants (init
+    failures, programmer errors).
+  recommendation: "Return an error from the function and let the caller handle it."
+
+- id: go-blocking-sleep
+  name: Blocking time.Sleep call
+  structural_pattern: 'time.Sleep($X)'
+  structural_context: 'func _() { time.Sleep($X) }'
+  structural_selector: call_expression
+  message: "time.Sleep($X) blocks the goroutine — usually a workaround for a missing sync primitive"
+  severity: low
+  category: suspicious
+  languages: [go]
+  confidence: 0.45
+  explanation: >
+    Hardcoded sleeps are flaky in tests and waste latency in production.
+    Replace with channel/select waits, context deadlines, or proper
+    backoff with a ticker.
+  recommendation: "Use a ticker, context.WithTimeout, or a synchronization channel."

@@ -1,6 +1,5 @@
-"""Content-addressed storage and branch overlay model.
+"""Compatibility exports for attocode_intel.storage."""
+from importlib import import_module as _import_module
 
-These modules require SQLAlchemy (service mode dependencies).
-Import them directly when needed:
-    from attocode.code_intel.storage.content_store import ContentStore
-"""
+def __getattr__(name):
+    return getattr(_import_module("attocode_intel.storage"), name)

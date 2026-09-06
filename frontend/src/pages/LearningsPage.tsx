@@ -5,6 +5,7 @@ import {
   useRecordLearning,
   useRecallLearnings,
   useLearningFeedback,
+  useUpdateLearning,
 } from "@/api/hooks/useLearnings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,21 +16,24 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { TabGroup } from "@/components/ui/tabs";
 import { BookOpen, Plus, Search, ThumbsUp, ThumbsDown } from "lucide-react";
 
-const LEARNING_TYPES = ["pattern", "convention", "gotcha", "context", "decision"] as const;
+const LEARNING_TYPES = ["pattern", "convention", "gotcha", "antipattern", "workaround"] as const;
 type LearningType = (typeof LEARNING_TYPES)[number];
 
 const TYPE_COLORS: Record<LearningType, string> = {
   pattern: "bg-blue-500/15 text-blue-400 border-blue-500/20",
   convention: "bg-green-500/15 text-green-400 border-green-500/20",
   gotcha: "bg-red-500/15 text-red-400 border-red-500/20",
-  context: "bg-purple-500/15 text-purple-400 border-purple-500/20",
-  decision: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  antipattern: "bg-purple-500/15 text-purple-400 border-purple-500/20",
+  workaround: "bg-amber-500/15 text-amber-400 border-amber-500/20",
 };
 
 const TYPE_FILTER_TABS = ["All", ...LEARNING_TYPES.map((t) => t.charAt(0).toUpperCase() + t.slice(1))] as const;
 
 export function LearningsPage() {
   const { repoId } = useParams();
+  const updateLearning = useUpdateLearning(repoId!);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editDescription, setEditDescription] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("All");
   const [scopeFilter, setScopeFilter] = useState("");
   const learnings = useLearnings(repoId!, {
@@ -187,12 +191,12 @@ export function LearningsPage() {
               {recallLearnings.data.results.map((item) => (
                 <div key={item.id} className="rounded-md border border-border bg-muted/30 p-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge className={TYPE_COLORS[item.type as LearningType] ?? TYPE_COLORS.context}>
+                    <Badge className={TYPE_COLORS[item.type as LearningType] ?? TYPE_COLORS.antipattern}>
                       {item.type}
                     </Badge>
                     {item.scope && <span className="text-xs text-muted-foreground font-mono">{item.scope}</span>}
                     <Badge variant="outline" className="ml-auto text-[10px] tabular-nums">
-                      {(item.relevance_score * 100).toFixed(0)}% relevant
+                      {item.stale ? "Source changed" : "Matching knowledge"}
                     </Badge>
                   </div>
                   <p className="text-sm">{item.description}</p>
@@ -206,6 +210,7 @@ export function LearningsPage() {
         </CardContent>
       </Card>
 
+      {(learnings.error || updateLearning.error || recordLearning.error) && <p role="alert">{String(learnings.error || updateLearning.error || recordLearning.error)}</p>}
       {/* Learnings List */}
       {learnings.isLoading ? (
         <LoadingSpinner />
@@ -228,7 +233,7 @@ export function LearningsPage() {
               <CardContent className="flex items-start gap-4 py-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge className={TYPE_COLORS[learning.type as LearningType] ?? TYPE_COLORS.context}>
+                    <Badge className={TYPE_COLORS[learning.type as LearningType] ?? TYPE_COLORS.antipattern}>
                       {learning.type}
                     </Badge>
                     {learning.scope && (
@@ -236,7 +241,13 @@ export function LearningsPage() {
                     )}
                     <span className="text-xs text-muted-foreground">#{learning.id}</span>
                   </div>
-                  <p className="text-sm">{learning.description}</p>
+                  {learning.stale && <Badge variant="warning">Source changed — verify this learning</Badge>}
+                  {editing === learning.id ? <div className="space-y-2">
+                    <Input aria-label="Learning description" value={editDescription} onChange={e => setEditDescription(e.target.value)} />
+                    <Button size="sm" disabled={updateLearning.isPending || !editDescription.trim()} onClick={() => updateLearning.mutate({learning_id: learning.id, description: editDescription}, {onSuccess: () => setEditing(null)})}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                  </div> : <p className="text-sm">{learning.description}</p>}
+                  <p className="mt-1 text-xs text-muted-foreground">{learning.author_id} {learning.revision && `· ${learning.revision.slice(0, 8)}`}</p>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Confidence:</span>
                     <div className="h-2 w-24 rounded-full bg-border overflow-hidden">
@@ -251,6 +262,8 @@ export function LearningsPage() {
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
+                  <Button size="sm" variant="ghost" onClick={() => {setEditing(learning.id); setEditDescription(learning.description);}}>Edit</Button>
+                  <Button size="sm" variant="ghost" disabled={updateLearning.isPending} onClick={() => updateLearning.mutate({learning_id: learning.id, status: "archived"})}>Archive</Button>
                   <button
                     onClick={() => learningFeedback.mutate({ learningId: learning.id, helpful: true })}
                     className="rounded p-1.5 text-muted-foreground hover:bg-green-500/10 hover:text-green-400 transition-colors"

@@ -1,0 +1,14 @@
+name: eslint-typescript
+version: 1.0.0
+languages:
+- typescript
+description: Hand-ported subset of eslint rules. See PORTING.md for the porting checklist.
+source: community
+source_url: https://github.com/eslint/eslint
+source_commit: ''
+source_license: MIT
+attribution: Rule patterns adapted from ESLint core rules (https://github.com/eslint/eslint).
+  Original copyright OpenJS Foundation and contributors. Licensed under MIT.
+imported_at: '2026-04-16T12:20:09Z'
+upstream_rule_count: 10
+imported_rule_count: 0

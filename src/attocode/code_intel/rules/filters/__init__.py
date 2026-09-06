@@ -1,5 +1,5 @@
-"""Deterministic pre-filter pipeline for findings.
+"""Compatibility exports for attocode_intel.rules.filters."""
+from importlib import import_module as _import_module
 
-Reduces noise before the connected agent sees findings.
-No LLM needed — these are all mechanical, deterministic filters.
-"""
+def __getattr__(name):
+    return getattr(_import_module("attocode_intel.rules.filters"), name)

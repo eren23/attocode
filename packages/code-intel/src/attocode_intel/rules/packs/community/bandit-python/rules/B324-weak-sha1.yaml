@@ -1,0 +1,21 @@
+# Adapted from bandit rule 'B324 weak_sha1_hash'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: B324-weak-sha1
+name: Use of weak SHA-1 hash
+message: SHA-1 is cryptographically broken; use SHA-256 or stronger
+severity: high
+category: security
+languages: [python]
+confidence: 0.85
+cwe: CWE-327
+pattern: '\bhashlib\.sha1\s*\('
+explanation: |
+  SHA-1 has known collision attacks (SHAttered, 2017) and should not be
+  used for cryptographic purposes.
+recommendation: |
+  Use ``hashlib.sha256`` (or SHA-3). For non-security hashing such as
+  ETags or cache keys, pass ``usedforsecurity=False``.
+references:
+  - https://bandit.readthedocs.io/en/latest/blacklists/blacklist_calls.html
+  - https://cwe.mitre.org/data/definitions/327.html

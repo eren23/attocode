@@ -2,6 +2,12 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 
+[manifest]
+members = [
+    "attocode",
+    "attocode-code-intel",
+]
+
 [[package]]
 name = "aiosqlite"
 version = "0.22.1"
@@ -134,6 +140,7 @@ version = "0.2.25"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
+    { name = "attocode-code-intel" },
     { name = "click" },
     { name = "httpx" },
     { name = "matplotlib" },
@@ -287,6 +294,7 @@ requires-dist = [
     { name = "arq", marker = "extra == 'service'", specifier = ">=0.26" },
     { name = "asyncpg", marker = "extra == 'service'", specifier = ">=0.30" },
     { name = "attocode", extras = ["anthropic", "openai", "tree-sitter", "watch", "semantic", "graph", "code-intel"], marker = "extra == 'full'" },
+    { name = "attocode-code-intel", editable = "packages/code-intel" },
     { name = "bcrypt", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "bcrypt", marker = "extra == 'service'", specifier = ">=4.0" },
     { name = "bump-my-version", marker = "extra == 'dev'", specifier = ">=0.28" },
@@ -368,6 +376,200 @@ requires-dist = [
     { name = "watchfiles", marker = "extra == 'watch'", specifier = ">=1.0" },
 ]
 provides-extras = ["anthropic", "openai", "tree-sitter", "tree-sitter-all", "watch", "semantic", "semantic-nomic", "graph", "code-intel", "service", "full", "docs", "dev"]
+
+[[package]]
+name = "attocode-code-intel"
+version = "0.1.0"
+source = { editable = "packages/code-intel" }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "click" },
+    { name = "filelock" },
+    { name = "httpx" },
+    { name = "mcp" },
+    { name = "numpy" },
+    { name = "pathspec" },
+    { name = "psutil" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "pyyaml" },
+    { name = "rich" },
+    { name = "structlog" },
+    { name = "tenacity" },
+    { name = "tiktoken" },
+    { name = "tomli-w" },
+    { name = "tomlkit" },
+    { name = "tree-sitter" },
+    { name = "tree-sitter-bash" },
+    { name = "tree-sitter-c" },
+    { name = "tree-sitter-c-sharp" },
+    { name = "tree-sitter-cpp" },
+    { name = "tree-sitter-css" },
+    { name = "tree-sitter-elixir" },
+    { name = "tree-sitter-go" },
+    { name = "tree-sitter-hcl" },
+    { name = "tree-sitter-html" },
+    { name = "tree-sitter-java" },
+    { name = "tree-sitter-javascript" },
+    { name = "tree-sitter-json" },
+    { name = "tree-sitter-kotlin" },
+    { name = "tree-sitter-lua" },
+    { name = "tree-sitter-php" },
+    { name = "tree-sitter-python" },
+    { name = "tree-sitter-ruby" },
+    { name = "tree-sitter-rust" },
+    { name = "tree-sitter-scala" },
+    { name = "tree-sitter-swift" },
+    { name = "tree-sitter-toml" },
+    { name = "tree-sitter-typescript" },
+    { name = "tree-sitter-yaml" },
+    { name = "tree-sitter-zig" },
+    { name = "watchfiles" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "bcrypt" },
+    { name = "bump-my-version" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "python-jose", extra = ["cryptography"] },
+    { name = "respx" },
+    { name = "ruff" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+docs = [
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "pymdown-extensions" },
+]
+graph = [
+    { name = "networkx" },
+]
+http = [
+    { name = "fastapi" },
+    { name = "networkx" },
+    { name = "python-multipart" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+semantic = [
+    { name = "sentence-transformers" },
+]
+semantic-nomic = [
+    { name = "einops" },
+    { name = "sentence-transformers" },
+]
+service = [
+    { name = "alembic" },
+    { name = "arq" },
+    { name = "asyncpg" },
+    { name = "bcrypt" },
+    { name = "cryptography" },
+    { name = "fastapi" },
+    { name = "httpx-oauth" },
+    { name = "networkx" },
+    { name = "pgvector" },
+    { name = "pydantic-settings" },
+    { name = "pygit2" },
+    { name = "python-jose", extra = ["cryptography"] },
+    { name = "python-multipart" },
+    { name = "redis", extra = ["hiredis"] },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+tree-sitter-all = [
+    { name = "tree-sitter-language-pack" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.20" },
+    { name = "alembic", marker = "extra == 'service'", specifier = ">=1.14" },
+    { name = "arq", marker = "extra == 'service'", specifier = ">=0.26" },
+    { name = "asyncpg", marker = "extra == 'service'", specifier = ">=0.30" },
+    { name = "bcrypt", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "bcrypt", marker = "extra == 'service'", specifier = ">=4.0" },
+    { name = "bump-my-version", marker = "extra == 'dev'", specifier = ">=0.28" },
+    { name = "click", specifier = ">=8.1" },
+    { name = "cryptography", marker = "extra == 'service'", specifier = ">=41.0" },
+    { name = "einops", marker = "extra == 'semantic-nomic'" },
+    { name = "fastapi", marker = "extra == 'http'", specifier = ">=0.115" },
+    { name = "fastapi", marker = "extra == 'service'", specifier = ">=0.115" },
+    { name = "filelock", specifier = ">=3.16" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "httpx-oauth", marker = "extra == 'service'", specifier = ">=0.15" },
+    { name = "mcp", specifier = ">=1.26,<2" },
+    { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
+    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
+    { name = "networkx", marker = "extra == 'graph'", specifier = ">=3.0" },
+    { name = "networkx", marker = "extra == 'http'", specifier = ">=3.0" },
+    { name = "networkx", marker = "extra == 'service'", specifier = ">=3.0" },
+    { name = "numpy", specifier = ">=2" },
+    { name = "pathspec", specifier = ">=0.12" },
+    { name = "pgvector", marker = "extra == 'service'", specifier = ">=0.3" },
+    { name = "psutil", specifier = ">=6" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pydantic-settings", marker = "extra == 'service'", specifier = ">=2.0" },
+    { name = "pygit2", marker = "extra == 'service'", specifier = ">=1.14" },
+    { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
+    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14" },
+    { name = "python-dotenv", specifier = ">=1" },
+    { name = "python-jose", extras = ["cryptography"], marker = "extra == 'dev'", specifier = ">=3.3" },
+    { name = "python-jose", extras = ["cryptography"], marker = "extra == 'service'", specifier = ">=3.3" },
+    { name = "python-multipart", marker = "extra == 'http'", specifier = ">=0.0.18" },
+    { name = "python-multipart", marker = "extra == 'service'", specifier = ">=0.0.18" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "redis", extras = ["hiredis"], marker = "extra == 'service'", specifier = ">=5.0" },
+    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.22" },
+    { name = "rich", specifier = ">=13" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
+    { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=3.0" },
+    { name = "sentence-transformers", marker = "extra == 'semantic-nomic'", specifier = ">=3.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'dev'", specifier = ">=2.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'service'", specifier = ">=2.0" },
+    { name = "structlog", specifier = ">=24.1" },
+    { name = "tenacity", specifier = ">=9" },
+    { name = "tiktoken", specifier = ">=0.7" },
+    { name = "tomli-w", specifier = ">=1" },
+    { name = "tomlkit", specifier = ">=0.13" },
+    { name = "tree-sitter", specifier = ">=0.23" },
+    { name = "tree-sitter-bash" },
+    { name = "tree-sitter-c" },
+    { name = "tree-sitter-c-sharp" },
+    { name = "tree-sitter-cpp" },
+    { name = "tree-sitter-css" },
+    { name = "tree-sitter-elixir" },
+    { name = "tree-sitter-go" },
+    { name = "tree-sitter-hcl" },
+    { name = "tree-sitter-html" },
+    { name = "tree-sitter-java" },
+    { name = "tree-sitter-javascript" },
+    { name = "tree-sitter-json" },
+    { name = "tree-sitter-kotlin" },
+    { name = "tree-sitter-language-pack", marker = "extra == 'tree-sitter-all'", specifier = ">=0.6" },
+    { name = "tree-sitter-lua" },
+    { name = "tree-sitter-php" },
+    { name = "tree-sitter-python" },
+    { name = "tree-sitter-ruby" },
+    { name = "tree-sitter-rust" },
+    { name = "tree-sitter-scala" },
+    { name = "tree-sitter-swift" },
+    { name = "tree-sitter-toml" },
+    { name = "tree-sitter-typescript" },
+    { name = "tree-sitter-yaml" },
+    { name = "tree-sitter-zig" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'http'", specifier = ">=0.34" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.34" },
+    { name = "watchfiles", specifier = ">=1" },
+]
+provides-extras = ["tree-sitter-all", "semantic", "semantic-nomic", "graph", "service", "docs", "dev", "http"]
 
 [[package]]
 name = "attrs"
@@ -3831,6 +4033,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/30/dd94ed1ab0bc3198e16ed2140a6f4d2474c1cd561d8c6847ab269af73654/tree_sitter_toml-0.7.0-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:860ffa4513b2dc3083d8e412bd815a350b0a9490624b37e7c8f6ed5c6f9ce63c", size = 30498, upload-time = "2024-12-03T05:03:43.447Z" },
     { url = "https://files.pythonhosted.org/packages/a2/dd/0681d43aa09dd161565858bcfdd4402c8d10259f142de734448f5ce17418/tree_sitter_toml-0.7.0-cp39-abi3-win_amd64.whl", hash = "sha256:2760a04f06937b01b1562a2135cd7e8207e399e73ef75bbebc77e37b1ad3b15d", size = 16756, upload-time = "2024-12-03T05:03:44.227Z" },
     { url = "https://files.pythonhosted.org/packages/17/e4/cce587001e620f1972e70aeabc1b38893a85681be9ec5a64e4be9ce17410/tree_sitter_toml-0.7.0-cp39-abi3-win_arm64.whl", hash = "sha256:fd00fd8a51c65aa19c40539431cb1773d87c30af5757b4041fa6c229058420b4", size = 15651, upload-time = "2024-12-03T05:03:45.261Z" },
+]
+
+[[package]]
+name = "tree-sitter-typescript"
+version = "0.23.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/fc/bb52958f7e399250aee093751e9373a6311cadbe76b6e0d109b853757f35/tree_sitter_typescript-0.23.2.tar.gz", hash = "sha256:7b167b5827c882261cb7a50dfa0fb567975f9b315e87ed87ad0a0a3aedb3834d", size = 773053, upload-time = "2024-11-11T02:36:11.396Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/28/95/4c00680866280e008e81dd621fd4d3f54aa3dad1b76b857a19da1b2cc426/tree_sitter_typescript-0.23.2-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:3cd752d70d8e5371fdac6a9a4df9d8924b63b6998d268586f7d374c9fba2a478", size = 286677, upload-time = "2024-11-11T02:35:58.839Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/2f/1f36fda564518d84593f2740d5905ac127d590baf5c5753cef2a88a89c15/tree_sitter_typescript-0.23.2-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:c7cc1b0ff5d91bac863b0e38b1578d5505e718156c9db577c8baea2557f66de8", size = 302008, upload-time = "2024-11-11T02:36:00.733Z" },
+    { url = "https://files.pythonhosted.org/packages/96/2d/975c2dad292aa9994f982eb0b69cc6fda0223e4b6c4ea714550477d8ec3a/tree_sitter_typescript-0.23.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4b1eed5b0b3a8134e86126b00b743d667ec27c63fc9de1b7bb23168803879e31", size = 351987, upload-time = "2024-11-11T02:36:02.669Z" },
+    { url = "https://files.pythonhosted.org/packages/49/d1/a71c36da6e2b8a4ed5e2970819b86ef13ba77ac40d9e333cb17df6a2c5db/tree_sitter_typescript-0.23.2-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e96d36b85bcacdeb8ff5c2618d75593ef12ebaf1b4eace3477e2bdb2abb1752c", size = 344960, upload-time = "2024-11-11T02:36:04.443Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/cb/f57b149d7beed1a85b8266d0c60ebe4c46e79c9ba56bc17b898e17daf88e/tree_sitter_typescript-0.23.2-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:8d4f0f9bcb61ad7b7509d49a1565ff2cc363863644a234e1e0fe10960e55aea0", size = 340245, upload-time = "2024-11-11T02:36:06.473Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/ab/dd84f0e2337296a5f09749f7b5483215d75c8fa9e33738522e5ed81f7254/tree_sitter_typescript-0.23.2-cp39-abi3-win_amd64.whl", hash = "sha256:3f730b66396bc3e11811e4465c41ee45d9e9edd6de355a58bbbc49fa770da8f9", size = 278015, upload-time = "2024-11-11T02:36:07.631Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/e4/81f9a935789233cf412a0ed5fe04c883841d2c8fb0b7e075958a35c65032/tree_sitter_typescript-0.23.2-cp39-abi3-win_arm64.whl", hash = "sha256:05db58f70b95ef0ea126db5560f3775692f609589ed6f8dd0af84b7f19f1cbb7", size = 274052, upload-time = "2024-11-11T02:36:09.514Z" },
 ]
 
 [[package]]

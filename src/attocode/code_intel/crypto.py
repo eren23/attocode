@@ -1,31 +1,9 @@
-"""Encryption utilities for credential storage using Fernet."""
+"""Compatibility alias for attocode_intel.crypto."""
+import importlib as _importlib
+import sys as _sys
 
-from __future__ import annotations
-
-import base64
-import hashlib
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from cryptography.fernet import Fernet
-
-
-def _get_fernet() -> Fernet:
-    """Get Fernet instance using SECRET_KEY from config."""
-    from cryptography.fernet import Fernet
-
-    from attocode.code_intel.api.deps import get_config
-
-    config = get_config()
-    key = hashlib.sha256(config.secret_key.encode()).digest()
-    return Fernet(base64.urlsafe_b64encode(key))
-
-
-def encrypt_credential(plaintext: str) -> bytes:
-    """Encrypt a credential value for storage."""
-    return _get_fernet().encrypt(plaintext.encode())
-
-
-def decrypt_credential(encrypted: bytes) -> str:
-    """Decrypt a stored credential value."""
-    return _get_fernet().decrypt(encrypted).decode()
+_module = _importlib.import_module("attocode_intel.crypto")
+if __name__ == "__main__":
+    _module.main()
+else:
+    _sys.modules[__name__] = _module

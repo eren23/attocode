@@ -1,0 +1,22 @@
+# Adapted from bandit rule 'B602 subprocess_with_shell_true'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: B602-shell-true
+name: Subprocess invoked with shell=True
+message: subprocess with shell=True is vulnerable to command injection
+severity: high
+category: security
+languages: [python]
+confidence: 0.8
+cwe: CWE-78
+pattern: '\bsubprocess\.\w+\([^)]*\bshell\s*=\s*True'
+explanation: |
+  ``subprocess.run/Popen/call`` with ``shell=True`` invokes the shell to
+  parse the command. If any argument comes from user input, the shell
+  will interpret meta-characters (``;``, ``|``, ``&&``, backticks).
+recommendation: |
+  Pass arguments as a list (``subprocess.run(["ls", "-la", path])``)
+  without ``shell=True``. The OS calls execve directly — no shell parsing.
+references:
+  - https://bandit.readthedocs.io/en/latest/plugins/b602_subprocess_popen_with_shell_equals_true.html
+  - https://cwe.mitre.org/data/definitions/78.html

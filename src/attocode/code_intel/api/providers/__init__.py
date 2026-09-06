@@ -1,1 +1,5 @@
-"""Data providers for mode-aware route handling."""
+"""Compatibility exports for attocode_intel.api.providers."""
+from importlib import import_module as _import_module
+
+def __getattr__(name):
+    return getattr(_import_module("attocode_intel.api.providers"), name)

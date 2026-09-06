@@ -1,0 +1,20 @@
+# Adapted from gosec rule 'G402 tls_min_version'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: G402-tls-min-version
+name: TLS MinVersion below TLS 1.2
+message: TLS configured with old protocol version (SSLv3/TLS1.0/TLS1.1)
+severity: high
+category: security
+languages: [go]
+confidence: 0.85
+cwe: CWE-326
+pattern: '\bMinVersion\s*:\s*tls\.Version(SSL30|TLS10|TLS11)\b'
+explanation: |
+  TLS 1.0/1.1 and SSL 3.0 have known vulnerabilities (BEAST, POODLE,
+  Lucky13). Modern services should require TLS 1.2 or 1.3.
+recommendation: |
+  Use ``MinVersion: tls.VersionTLS12`` (or ``VersionTLS13``).
+references:
+  - https://github.com/securego/gosec
+  - https://cwe.mitre.org/data/definitions/326.html

@@ -210,4 +210,4 @@ def test_cmd_setup_api_unreachable_exits_zero_with_instructions(
 
     assert exc_info.value.code == 0
     assert "API server not reachable" in captured.err
-    assert "uvicorn attocode.code_intel.api.app:create_app" in captured.err
+    assert "uvicorn attocode_intel.api.app:create_app" in captured.err

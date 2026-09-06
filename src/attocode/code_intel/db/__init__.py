@@ -1,7 +1,5 @@
-"""Database layer for service mode (PostgreSQL + SQLAlchemy async).
+"""Compatibility exports for attocode_intel.db."""
+from importlib import import_module as _import_module
 
-These modules require SQLAlchemy/asyncpg (service mode dependencies).
-Import them directly when needed:
-    from attocode.code_intel.db.engine import init_engine, dispose_engine, get_session
-    from attocode.code_intel.db.models import Organization, User, ...
-"""
+def __getattr__(name):
+    return getattr(_import_module("attocode_intel.db"), name)

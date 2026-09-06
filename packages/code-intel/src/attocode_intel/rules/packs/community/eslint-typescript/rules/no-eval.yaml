@@ -1,0 +1,22 @@
+# Adapted from eslint rule 'no-eval'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: no-eval
+name: Dynamic code evaluation
+message: Avoid dynamic code evaluation — arbitrary code execution risk
+severity: critical
+category: security
+languages: [javascript, typescript]
+confidence: 0.85
+cwe: CWE-95
+pattern: '\beval\s*\('
+explanation: |
+  The eval function interprets arbitrary strings as JavaScript and runs
+  them in the local scope. Hard to sandbox; trivial to abuse if any
+  input crosses a trust boundary.
+recommendation: |
+  Use JSON.parse for JSON, a real parser for DSLs, or feature flags /
+  dispatch tables for dynamic behavior.
+references:
+  - https://eslint.org/docs/latest/rules/no-eval
+  - https://cwe.mitre.org/data/definitions/95.html

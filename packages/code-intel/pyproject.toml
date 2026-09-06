@@ -1,0 +1,136 @@
+[build-system]
+requires = [
+    "hatchling",
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "attocode-code-intel"
+version = "0.1.0"
+description = "Codebase intelligence for coding agents and teams"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "rich>=13",
+    "click>=8.1",
+    "httpx>=0.27",
+    "aiosqlite>=0.20",
+    "pydantic>=2",
+    "pyyaml>=6",
+    "python-dotenv>=1",
+    "tiktoken>=0.7",
+    "pathspec>=0.12",
+    "structlog>=24.1",
+    "tenacity>=9",
+    "psutil>=6",
+    "mcp>=1.26,<2",
+    "tomli_w>=1",
+    "tomlkit>=0.13",
+    "filelock>=3.16",
+    "numpy>=2",
+    "watchfiles>=1",
+    "tree-sitter>=0.23",
+    "tree-sitter-python",
+    "tree-sitter-javascript",
+    "tree-sitter-go",
+    "tree-sitter-rust",
+    "tree-sitter-java",
+    "tree-sitter-ruby",
+    "tree-sitter-c",
+    "tree-sitter-cpp",
+    "tree-sitter-c-sharp",
+    "tree-sitter-php",
+    "tree-sitter-swift",
+    "tree-sitter-kotlin",
+    "tree-sitter-scala",
+    "tree-sitter-lua",
+    "tree-sitter-elixir",
+    "tree-sitter-bash",
+    "tree-sitter-hcl",
+    "tree-sitter-zig",
+    "tree-sitter-yaml",
+    "tree-sitter-toml",
+    "tree-sitter-json",
+    "tree-sitter-html",
+    "tree-sitter-css",
+    "tree-sitter-typescript",
+]
+
+[project.optional-dependencies]
+tree-sitter-all = [
+    "tree-sitter-language-pack>=0.6",
+]
+semantic = [
+    "sentence-transformers>=3.0",
+]
+semantic-nomic = [
+    "sentence-transformers>=3.0",
+    "einops",
+]
+graph = [
+    "networkx>=3.0",
+]
+service = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "python-multipart>=0.0.18",
+    "networkx>=3.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "pydantic-settings>=2.0",
+    "bcrypt>=4.0",
+    "python-jose[cryptography]>=3.3",
+    "httpx-oauth>=0.15",
+    "pygit2>=1.14",
+    "redis[hiredis]>=5.0",
+    "arq>=0.26",
+    "pgvector>=0.3",
+    "cryptography>=41.0",
+]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "pymdown-extensions>=10.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.14",
+    "mypy>=1.10",
+    "ruff>=0.5",
+    "respx>=0.22",
+    "bump-my-version>=0.28",
+    "sqlalchemy[asyncio]>=2.0",
+    "bcrypt>=4.0",
+    "python-jose[cryptography]>=3.3",
+]
+http = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "python-multipart>=0.0.18",
+    "networkx>=3.0",
+]
+
+[project.scripts]
+attocode-code-intel = "attocode_intel.entrypoint:main"
+
+[project.urls]
+Homepage = "https://github.com/eren23/attocode"
+Repository = "https://github.com/eren23/attocode"
+"Bug Tracker" = "https://github.com/eren23/attocode/issues"
+Changelog = "https://github.com/eren23/attocode/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/attocode_intel",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+testpaths = [
+    "tests",
+]

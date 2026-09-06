@@ -1,0 +1,116 @@
+{
+  "workload": "python-import-chain",
+  "results": [
+    {
+      "files": 100,
+      "cold_bootstrap_ms": 207.5,
+      "cold_tokens": 1368,
+      "cold_lookup_ms": 5.0,
+      "cold_coverage": {
+        "tier": "small",
+        "phase": "ready",
+        "total_files": 101,
+        "parsed_files": 101,
+        "parse_coverage": 1.0,
+        "reference_indexed_files": 101,
+        "reference_coverage": 1.0,
+        "dep_graph_files": 99,
+        "embedding_coverage": 0.0,
+        "elapsed_ms": 94.9,
+        "discovered_files": 101,
+        "discovery_truncated": false
+      },
+      "warm_bootstrap_ms": 46.0,
+      "warm_tokens": 1368,
+      "warm_lookup_ms": 3.7,
+      "warm_coverage": {
+        "tier": "small",
+        "phase": "ready",
+        "total_files": 101,
+        "parsed_files": 101,
+        "parse_coverage": 1.0,
+        "reference_indexed_files": 101,
+        "reference_coverage": 1.0,
+        "dep_graph_files": 99,
+        "embedding_coverage": 0.0,
+        "elapsed_ms": 43.5,
+        "discovered_files": 101,
+        "discovery_truncated": false
+      }
+    },
+    {
+      "files": 1000,
+      "cold_bootstrap_ms": 430.0,
+      "cold_tokens": 1342,
+      "cold_lookup_ms": 22.1,
+      "cold_coverage": {
+        "tier": "medium",
+        "phase": "ready",
+        "total_files": 1001,
+        "parsed_files": 1001,
+        "parse_coverage": 1.0,
+        "reference_indexed_files": 1001,
+        "reference_coverage": 1.0,
+        "dep_graph_files": 999,
+        "embedding_coverage": 0.0,
+        "elapsed_ms": 396.6,
+        "discovered_files": 1001,
+        "discovery_truncated": false
+      },
+      "warm_bootstrap_ms": 418.4,
+      "warm_tokens": 1342,
+      "warm_lookup_ms": 21.9,
+      "warm_coverage": {
+        "tier": "medium",
+        "phase": "ready",
+        "total_files": 1001,
+        "parsed_files": 1001,
+        "parse_coverage": 1.0,
+        "reference_indexed_files": 1001,
+        "reference_coverage": 1.0,
+        "dep_graph_files": 999,
+        "embedding_coverage": 0.0,
+        "elapsed_ms": 384.5,
+        "discovered_files": 1001,
+        "discovery_truncated": false
+      }
+    },
+    {
+      "files": 10000,
+      "cold_bootstrap_ms": 7316.8,
+      "cold_tokens": 1052,
+      "cold_lookup_ms": 246.0,
+      "cold_coverage": {
+        "tier": "large",
+        "phase": "ready",
+        "total_files": 10001,
+        "parsed_files": 10001,
+        "parse_coverage": 1.0,
+        "reference_indexed_files": 10001,
+        "reference_coverage": 1.0,
+        "dep_graph_files": 9999,
+        "embedding_coverage": 0.0,
+        "elapsed_ms": 8225.6,
+        "discovered_files": 10001,
+        "discovery_truncated": false
+      },
+      "warm_bootstrap_ms": 6675.6,
+      "warm_tokens": 1052,
+      "warm_lookup_ms": 242.4,
+      "warm_coverage": {
+        "tier": "large",
+        "phase": "ready",
+        "total_files": 10001,
+        "parsed_files": 10001,
+        "parse_coverage": 1.0,
+        "reference_indexed_files": 10001,
+        "reference_coverage": 1.0,
+        "dep_graph_files": 9999,
+        "embedding_coverage": 0.0,
+        "elapsed_ms": 7983.7,
+        "discovered_files": 10001,
+        "discovery_truncated": false
+      }
+    }
+  ]
+}

@@ -1,15 +1,9 @@
-"""Password hashing and verification via bcrypt."""
+"""Compatibility alias for attocode_intel.api.auth.passwords."""
+import importlib as _importlib
+import sys as _sys
 
-from __future__ import annotations
-
-import bcrypt
-
-
-def hash_password(password: str) -> str:
-    """Hash a plaintext password with bcrypt."""
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
+_module = _importlib.import_module("attocode_intel.api.auth.passwords")
+if __name__ == "__main__":
+    _module.main()
+else:
+    _sys.modules[__name__] = _module

@@ -1,0 +1,4 @@
+name: php
+version: 1.0.0
+languages: [php]
+description: "PHP analysis pack — XSS / SQLi / RCE patterns, deprecated APIs, idiomatic style"
