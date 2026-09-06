@@ -3,7 +3,8 @@
 Validated locally on macOS with Python 3.12.12:
 
 - **2,066 existing regression tests passed**, with 5 skips and 1 expected failure, covering code intelligence, extracted context modules, and the MCP tool audit.
-- **23 standalone product tests passed**, including workspace separation, file freshness, local/shared knowledge, repository authorization, real stdio/HTTP MCP, resource access, response budgets, idle workspace eviction, and remote installation validation.
+- **24 standalone product tests passed**, including workspace separation, file freshness, local/shared knowledge, repository authorization, real stdio/HTTP MCP, resource access, response budgets, idle workspace eviction, remote installation validation, and concurrent AST hydration.
+- A CI rerun exposed a project-summary race while background hydration added AST entries. Analysis now reads a cache snapshot. A deterministic regression adds a file from another thread during summary iteration, verifies that the current response stays consistent, and verifies that the next response includes the newly indexed file.
 - **All 20 schema migrations applied to a fresh PostgreSQL 16/pgvector container.** The 21 product tests present at that validation point passed against PostgreSQL; the subsequently added repository-source validation test passed with the full 22-test suite. The disposable container was stopped and removed.
 - **The wheel installed into an isolated environment** without the `attocode` distribution. An import guard rejected agent, swarm, TUI, Anthropic, and OpenAI SDK imports; navigation and bundled rules still worked. The clean installation resolved MCP 1.29.1; the main regression environment used MCP 1.26.0.
 - **Generated Codex, Claude Code, and Cursor configurations passed `doctor`**, each opening a real stdio MCP session and querying the selected workspace. The fixture path contained spaces. User-level client configurations were not changed.

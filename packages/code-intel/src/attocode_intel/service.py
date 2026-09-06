@@ -671,7 +671,8 @@ class CodeIntelService:
 
         svc = self._get_ast_service()
         index = svc._index
-        ast_cache = svc._ast_cache
+        # Background hydration may add entries while analysis iterates the cache.
+        ast_cache = svc._ast_cache.copy()
         churn_scores = _get_churn_scores(self._project_dir, files)
 
         all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
@@ -711,7 +712,7 @@ class CodeIntelService:
         from attocode_intel.helpers import _analyze_conventions
 
         svc = self._get_ast_service()
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
         if not ast_cache:
             return {"sample_size": 0, "path": path, "stats": {}, "dir_stats": {}}
 
@@ -998,7 +999,7 @@ class CodeIntelService:
         """Fallback module analysis using directory structure when graph is sparse."""
         from collections import Counter as _Counter
 
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
 
         # Group all indexed files by top-level directory
         dir_groups: dict[str, list[str]] = {}
@@ -1100,7 +1101,7 @@ class CodeIntelService:
             return {"level": level, "text": "", "files_included": 0}
 
         svc = self._get_ast_service()
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
         dep_graph = ctx.dependency_graph
         depth = min(depth, 3)
 
@@ -1717,7 +1718,7 @@ class CodeIntelService:
 
         svc = self._get_ast_service()
         index = svc._index
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
 
         ctx = self._get_context_mgr()
         all_file_paths = {fi.relative_path for fi in ctx._files}
@@ -2023,7 +2024,7 @@ class CodeIntelService:
 
         svc = self._get_ast_service()
         ctx = self._get_context_mgr()
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
         all_files = {fi.relative_path: fi for fi in ctx._files}
 
         depth = min(depth, cc.max_depth)
@@ -2128,7 +2129,7 @@ class CodeIntelService:
         repo = ctx.get_repo_map(include_symbols=False, max_tokens=500)
         svc = self._get_ast_service()
         index = svc._index
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
 
         sections: list[tuple[str, str, int]] = []
 
@@ -2254,7 +2255,7 @@ class CodeIntelService:
             sections.append(f"## Hotspots\n{hs_text}")
 
         svc = self._get_ast_service()
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
         if ast_cache:
             candidates = sorted(
                 [fi for fi in files if fi.relative_path in ast_cache],
@@ -2327,7 +2328,7 @@ class CodeIntelService:
 
         svc = self._get_ast_service()
         index = svc._index
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
         churn_scores = _get_churn_scores(self._project_dir, files)
 
         all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
@@ -2375,7 +2376,7 @@ class CodeIntelService:
         from attocode_intel.helpers import _analyze_conventions, _format_conventions
 
         svc = self._get_ast_service()
-        ast_cache = svc._ast_cache
+        ast_cache = svc._ast_cache.copy()
         if not ast_cache:
             return "No files parsed — cannot detect conventions."
 

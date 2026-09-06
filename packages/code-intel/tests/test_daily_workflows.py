@@ -7,6 +7,50 @@ from attocode_intel.gateway import OperationGateway
 from attocode_intel.onboarding import configure_client
 
 
+async def test_project_summary_during_background_hydration(tmp_path):
+    from threading import Event, Thread
+    from types import SimpleNamespace
+
+    (tmp_path / "early.py").write_text("import fastapi\n")
+    (tmp_path / "late.py").write_text("import django\n")
+    gateway = OperationGateway(str(tmp_path), watch=False)
+    reading, hydrated = Event(), Event()
+    worker = None
+
+    class EarlyAST:
+        @property
+        def imports(self):
+            reading.set()
+            assert hydrated.wait(5), "Background hydration did not finish"
+            return [SimpleNamespace(module="fastapi")]
+
+    try:
+        await gateway.execute("project_summary", {})
+        ast = next(iter(gateway._stores.values()))["service"]._ast_service
+        ast._ast_cache = {"early.py": EarlyAST()}
+
+        def hydrate():
+            if reading.wait(5):
+                ast._ast_cache["late.py"] = SimpleNamespace(
+                    imports=[SimpleNamespace(module="django")]
+                )
+                hydrated.set()
+
+        worker = Thread(target=hydrate, daemon=True)
+        worker.start()
+        first = await gateway.execute("project_summary", {})
+        assert hydrated.is_set()
+        assert "FastAPI" in first.content[0].text
+        assert "Django" not in first.content[0].text
+        second = await gateway.execute("project_summary", {})
+        assert "Django" in second.content[0].text
+    finally:
+        reading.set()
+        if worker:
+            worker.join(timeout=5)
+        await gateway.close()
+
+
 async def test_knowledge_is_shared_between_local_clients_and_stale(tmp_path):
     (tmp_path / "helpers.py").write_text("def helper(): pass\n")
     first = OperationGateway(str(tmp_path), watch=False)
