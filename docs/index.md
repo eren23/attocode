@@ -73,4 +73,4 @@ uv build --package attocode-code-intel
 
 The standalone workflow tests Python 3.12/3.13, real stdio and HTTP MCP, repository isolation, PostgreSQL knowledge operations, budgets, and wheel independence. Releases use `intel-v*` tags; the legacy agent keeps its separate release workflow.
 
-[Product and operations guide](intelligence.md) · [Generated tool catalog](intelligence-tools.md) · [Legacy agent documentation](legacy-agent.md) · [MIT license](LICENSE)
+[Product and operations guide](intelligence.md) · [Generated tool catalog](intelligence-tools.md) · [Legacy agent documentation](legacy-agent.md) · [MIT license](https://github.com/eren23/attocode/blob/main/LICENSE)

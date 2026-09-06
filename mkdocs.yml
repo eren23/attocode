@@ -52,6 +52,8 @@ nav:
   - Home: index.md
   - Intelligence Product: intelligence.md
   - Intelligence Tools: intelligence-tools.md
+  - Intelligence Validation: intelligence-validation.md
+  - Intelligence Releases: intelligence-release.md
   - Legacy Agent: legacy-agent.md
   - Getting Started: getting-started.md
   - CLI Reference: cli-reference.md

@@ -1,3 +1,5 @@
+> The coding agent is frozen legacy functionality. Active development is focused on [Attocode Intelligence](intelligence.md). The guide below documents the preserved agent.
+
 # Legacy coding agent
 
 The agent, TUI, and swarm are frozen for feature development. Existing commands and APIs remain available; fixes needed for compatibility and data integrity are supported. New product development lives in `packages/code-intel`.
@@ -182,7 +184,7 @@ src/attocode/
 
 ## Lessons
 
-The [`lessons/`](lessons/) directory contains a **26-lesson course** teaching you to build production-ready AI coding agents from scratch. The lessons use TypeScript and cover everything from the core agent loop to multi-agent coordination.
+The [`lessons/`](lessons/index.md) directory contains a **26-lesson course** teaching you to build production-ready AI coding agents from scratch. The lessons use TypeScript and cover everything from the core agent loop to multi-agent coordination.
 
 ```bash
 cd lessons
@@ -194,7 +196,7 @@ The lessons are also available on the [documentation site](https://eren23.github
 
 ## Legacy TypeScript Version
 
-The [`legacy/`](legacy/) directory contains the original TypeScript implementation of Attocode (v0.2.6). The Python version is the active implementation and has surpassed the TypeScript version in features. See [`legacy/PORTING_REPORT.md`](legacy/PORTING_REPORT.md) for a detailed feature comparison.
+The [`legacy/`](https://github.com/eren23/attocode/tree/main/legacy) directory contains the original TypeScript implementation of Attocode (v0.2.6). The Python version is the active implementation and has surpassed the TypeScript version in features. See [`legacy/PORTING_REPORT.md`](https://github.com/eren23/attocode/blob/main/legacy/PORTING_REPORT.md) for a detailed feature comparison.
 
 ## Testing
 
@@ -208,16 +210,16 @@ uv run ruff check src/ tests/            # Linting
 
 Full documentation is available at **[eren23.github.io/attocode](https://eren23.github.io/attocode/)**.
 
-- [Architecture](docs/ARCHITECTURE.md) --- Module relationships and data flow
-- [Providers](docs/PROVIDERS.md) --- LLM provider adapter reference
-- [Sandbox](docs/SANDBOX.md) --- Platform-aware command isolation
-- [Budget](docs/BUDGET.md) --- Token economics and doom-loop detection
-- [MCP](docs/MCP.md) --- Model Context Protocol integration
-- [Swarm Guide](docs/swarm-guide.md) --- Multi-agent orchestration
-- [Hybrid Swarm](docs/hybrid-swarm-operations.md) --- Start vs continue vs resume, monitor/detach flows, and runbook
-- [Research Campaigns](docs/research-guide.md) --- Multi-experiment research workflows with dedicated worktrees
-- [Contributing](CONTRIBUTING.md) --- How to contribute
+- [Architecture](ARCHITECTURE.md) --- Module relationships and data flow
+- [Providers](PROVIDERS.md) --- LLM provider adapter reference
+- [Sandbox](SANDBOX.md) --- Platform-aware command isolation
+- [Budget](BUDGET.md) --- Token economics and doom-loop detection
+- [MCP](MCP.md) --- Model Context Protocol integration
+- [Swarm Guide](swarm-guide.md) --- Multi-agent orchestration
+- [Hybrid Swarm](hybrid-swarm-operations.md) --- Start vs continue vs resume, monitor/detach flows, and runbook
+- [Research Campaigns](research-guide.md) --- Multi-experiment research workflows with dedicated worktrees
+- [Contributing](https://github.com/eren23/attocode/blob/main/CONTRIBUTING.md) --- How to contribute
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+See [LICENSE](https://github.com/eren23/attocode/blob/main/LICENSE) for details.
