@@ -15,4 +15,6 @@ Validated locally on macOS with Python 3.12.12:
 
 The synthetic 10,000-source-file run discovered 10,001 files including project configuration and recovered all 9,999 expected dependency edges. Cold bootstrap took **7.32 s**, a focused lookup **246 ms**, and warm bootstrap **6.68 s**. Both bootstrap responses contained **1,052 tokens** under a 2,000-token budget. Raw results and workload caveats are in `packages/code-intel/evals/results/`.
 
-The GitHub `pypi-intelligence` environment is configured to accept only `intel-v*` tags. Publishing requires a matching PyPI trusted publisher and passes through the complete reusable intelligence workflow. No package has been published or service deployed at this validation point; the GitHub workflows still need their first run.
+The [first GitHub Intelligence run](https://github.com/eren23/attocode/actions/runs/34064068334) passed on Linux for commit `09aaeca`: Python 3.12 and 3.13 each applied all migrations, passed the complete 23-test product suite against PostgreSQL, passed the navigation and catalog gates, and verified an isolated wheel. The dashboard and Docker runtime jobs also passed.
+
+The GitHub `pypi-intelligence` environment is configured to accept only `intel-v*` tags. Publishing requires a matching PyPI trusted publisher and passes through the complete reusable intelligence workflow. No package has been published or service deployed at this validation point. See the [release procedure](intelligence-release.md) for the account setup and verification steps.
