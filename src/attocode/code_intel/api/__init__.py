@@ -1,1 +1,5 @@
-"""FastAPI HTTP API for Attocode Code Intelligence."""
+"""Compatibility exports for attocode_intel.api."""
+from importlib import import_module as _import_module
+
+def __getattr__(name):
+    return getattr(_import_module("attocode_intel.api"), name)

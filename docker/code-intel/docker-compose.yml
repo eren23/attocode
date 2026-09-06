@@ -21,8 +21,10 @@ services:
     volumes:
       # Mount a local project to analyze (read-only)
       - ${PROJECT_DIR:-.}:/project:ro
-      # Writable volume for SQLite cache (graph.db, embeddings.db, memory.db)
+      # Preserve the existing knowledge/cache volume and add writable AST storage.
       - code-intel-cache:/project/.attocode/cache
+      - code-intel-index:/project/.attocode/index
 
 volumes:
   code-intel-cache:
+  code-intel-index:

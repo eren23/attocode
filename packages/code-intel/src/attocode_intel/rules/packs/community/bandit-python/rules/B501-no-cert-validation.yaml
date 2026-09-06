@@ -1,0 +1,23 @@
+# Adapted from bandit rule 'B501 request_with_no_cert_validation'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: B501-no-cert-validation
+name: HTTPS request with TLS verification disabled
+message: TLS certificate verification disabled — vulnerable to MITM
+severity: high
+category: security
+languages: [python]
+confidence: 0.85
+cwe: CWE-295
+pattern: '\bverify\s*=\s*False\b'
+explanation: |
+  Setting ``verify=False`` on requests/httpx/urllib3 calls disables TLS
+  certificate validation. An attacker on the network can intercept,
+  read, or modify the traffic.
+recommendation: |
+  Leave verification enabled. If self-signed CAs are needed, point
+  ``verify`` at a CA bundle path (``verify="/path/to/ca.crt"``) rather
+  than disabling.
+references:
+  - https://bandit.readthedocs.io/en/latest/plugins/b501_request_with_no_cert_validation.html
+  - https://cwe.mitre.org/data/definitions/295.html

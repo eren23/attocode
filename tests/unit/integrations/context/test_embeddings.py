@@ -237,6 +237,9 @@ class TestCreateEmbeddingProvider:
         ), patch(
             "attocode.integrations.context.embeddings.LocalEmbeddingProvider.__init__",
             side_effect=ImportError("nope"),
+        ), patch(
+            "attocode.integrations.context.embeddings.NomicEmbeddingProvider.__init__",
+            side_effect=ImportError("nope"),
         ):
             provider = create_embedding_provider("")
 

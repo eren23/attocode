@@ -24,6 +24,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "attocode-code-intel>=0.1.0,<0.2",
     "textual>=1.0.0",
     "rich>=13.0.0",
     "click>=8.1.0",
@@ -136,7 +137,6 @@ dev = [
 attocode = "attocode.cli:_entry_point"
 attocodepy = "attocode.cli:_entry_point"
 attoswarm = "attoswarm.cli:main"
-attocode-code-intel = "attocode.code_intel.server:main"
 
 [project.urls]
 Homepage = "https://github.com/eren23/attocode"
@@ -167,6 +167,7 @@ exclude = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+pythonpath = ["packages/code-intel/src"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: tests that use real services (not mocked)",
@@ -224,3 +225,9 @@ replace = '__version__ = "{new_version}"'
 filename = "CHANGELOG.md"
 search = "## [Unreleased]"
 replace = "## [Unreleased]\n\n## [{new_version}] - {now:%Y-%m-%d}"
+
+[tool.uv.workspace]
+members = ["packages/code-intel"]
+
+[tool.uv.sources]
+attocode-code-intel = { workspace = true }

@@ -1,0 +1,18 @@
+# Adapted from eslint rule 'no-with'
+# See ../LICENSE and ../NOTICE for license terms.
+
+id: no-with
+name: Use of with statement
+message: with statement is forbidden in strict mode
+severity: high
+category: correctness
+languages: [javascript, typescript]
+confidence: 0.9
+pattern: '\bwith\s*\('
+explanation: |
+  ``with`` extends the scope chain at runtime, making variable
+  resolution ambiguous. It's banned in strict mode and ES modules.
+recommendation: |
+  Bind the object to a local variable and access fields explicitly.
+references:
+  - https://eslint.org/docs/latest/rules/no-with

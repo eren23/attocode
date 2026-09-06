@@ -1,0 +1,69 @@
+# C# security and correctness rules (Tier 1 regex).
+
+- id: csharp-md5-deprecated
+  name: MD5 used for security purposes
+  pattern: '\bMD5(?:CryptoServiceProvider|\.Create)\b'
+  message: "MD5 is broken for security — use SHA256 or BCrypt for new code"
+  severity: medium
+  category: security
+  languages: [csharp]
+  cwe: CWE-327
+  confidence: 0.8
+  recommendation: "Use SHA256.Create() for hashing; BCrypt.Net for password storage."
+
+- id: csharp-sha1-deprecated
+  name: SHA-1 used for security purposes
+  pattern: '\bSHA1(?:CryptoServiceProvider|\.Create)\b'
+  message: "SHA-1 is broken for collision resistance — use SHA256 instead"
+  severity: medium
+  category: security
+  languages: [csharp]
+  cwe: CWE-327
+  confidence: 0.8
+  recommendation: "Use SHA256.Create()."
+
+- id: csharp-process-start-shell
+  name: Process.Start with concatenated arguments
+  pattern: 'Process\.Start\s*\([^,)]*\+[^)]+\)'
+  message: "Process.Start with string concat — risk of command injection"
+  severity: high
+  category: security
+  languages: [csharp]
+  cwe: CWE-78
+  confidence: 0.55
+  recommendation: "Use ProcessStartInfo with ArgumentList so each arg is escaped individually."
+
+- id: csharp-sql-string-concat
+  name: SQL query built via string concat
+  pattern: 'new\s+SqlCommand\s*\([^)]*\+'
+  message: "SqlCommand with concatenated SQL — use parameterized queries"
+  severity: high
+  category: security
+  languages: [csharp]
+  cwe: CWE-89
+  confidence: 0.7
+  recommendation: "Use cmd.Parameters.AddWithValue(\"@name\", value) to pass user input."
+
+- id: csharp-empty-catch
+  name: Empty catch swallows exceptions
+  pattern: 'catch\s*\([^)]*\)\s*\{\s*\}'
+  message: "Empty catch block silently swallows the exception — at least log it"
+  severity: medium
+  category: correctness
+  languages: [csharp]
+  confidence: 0.85
+  recommendation: "Log the exception (Logger.LogError(ex, \"...\")) or rethrow."
+
+- id: csharp-task-result-blocking
+  name: .Result on a Task
+  pattern: '\.Result\b(?![a-zA-Z_])'
+  message: ".Result blocks the calling thread and can deadlock — await the task"
+  severity: medium
+  category: correctness
+  languages: [csharp]
+  confidence: 0.5
+  explanation: >
+    Calling ``.Result`` on a Task blocks the thread until completion.
+    In UI/ASP.NET sync contexts this can deadlock when the awaited
+    continuation needs the same thread. Always prefer ``await``.
+  recommendation: "Use 'await task' in async methods, or Task.Run(...).GetAwaiter().GetResult() at the boundary."

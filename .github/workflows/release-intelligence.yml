@@ -1,0 +1,43 @@
+name: Release intelligence
+on:
+  push:
+    tags: ['intel-v*']
+permissions:
+  contents: read
+jobs:
+  checks:
+    uses: ./.github/workflows/intelligence.yml
+  build:
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Validate tag
+        run: python -c 'import os, tomllib; v = tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"]; assert os.environ["GITHUB_REF_NAME"] == "intel-v" + v'
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
+      - run: uv run --no-sync pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -q
+      - run: uv build --package attocode-code-intel
+      - name: Verify wheel without the agent
+        run: |
+          uv venv /tmp/intelligence-wheel
+          uv pip install --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
+          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: intelligence-dist
+          path: dist/
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi-intelligence
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: intelligence-dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

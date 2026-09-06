@@ -1,0 +1,14 @@
+name: bandit-python
+version: 1.0.0
+languages:
+- python
+description: Hand-ported subset of bandit rules. See PORTING.md for the porting checklist.
+source: community
+source_url: https://github.com/PyCQA/bandit
+source_commit: ''
+source_license: Apache-2.0
+attribution: Rule patterns adapted from Bandit (https://github.com/PyCQA/bandit).
+  Original copyright PyCQA. Licensed under Apache-2.0.
+imported_at: '2026-04-16T12:20:09Z'
+upstream_rule_count: 10
+imported_rule_count: 0

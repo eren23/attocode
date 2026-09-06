@@ -1,0 +1,13 @@
+# NOTICE — eslint-typescript
+
+Rule patterns adapted from ESLint core rules (https://github.com/eslint/eslint). Original copyright OpenJS Foundation and contributors. Licensed under MIT.
+
+Upstream: https://github.com/eslint/eslint
+Commit:   (unspecified)
+License:  MIT
+
+Modifications:
+- Translated rule patterns to attocode UnifiedRule schema
+- Subset selection (high-value rules first)
+
+See LICENSE for full license terms.

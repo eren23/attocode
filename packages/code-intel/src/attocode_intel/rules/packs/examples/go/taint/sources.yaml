@@ -1,0 +1,26 @@
+sources:
+  - name: http_request
+    patterns:
+      - 'r\.URL\.Query\(\)'
+      - 'r\.FormValue\('
+      - 'r\.Body'
+      - 'r\.Header\.Get\('
+      - 'r\.PostFormValue\('
+      - 'r\.URL\.Path'
+      - 'r\.URL\.RawQuery'
+      - 'r\.Host'
+      - 'r\.Cookies?\('
+      - 'req\.(?:Body|URL|Header|Form|PostForm)'
+    language: go
+
+  - name: os_args
+    patterns:
+      - 'os\.Args'
+      - 'flag\.(?:String|Int|Bool|Float64|Duration|Var)\('
+    language: go
+
+  - name: env_var
+    patterns:
+      - 'os\.Getenv\('
+      - 'os\.LookupEnv\('
+    language: go

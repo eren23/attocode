@@ -1,0 +1,13 @@
+# NOTICE — gosec-go
+
+Rule patterns adapted from gosec (https://github.com/securego/gosec). Original copyright securego authors. Licensed under Apache-2.0.
+
+Upstream: https://github.com/securego/gosec
+Commit:   (unspecified)
+License:  Apache-2.0
+
+Modifications:
+- Translated rule patterns to attocode UnifiedRule schema
+- Subset selection (high-value rules first)
+
+See LICENSE for full license terms.

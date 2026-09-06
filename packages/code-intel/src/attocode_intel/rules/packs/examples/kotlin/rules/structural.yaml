@@ -1,0 +1,38 @@
+# Kotlin structural patterns (ast-grep, Tier 2).
+
+- id: kotlin-todo-call
+  name: TODO() call left in code
+  structural_pattern: 'TODO()'
+  message: "TODO() — throws NotImplementedError at runtime; finish the implementation"
+  severity: high
+  category: correctness
+  languages: [kotlin]
+  confidence: 0.9
+  explanation: >
+    ``TODO()`` is the placeholder for unfinished code; it throws
+    ``NotImplementedError`` when reached. Useful during scaffolding,
+    should not survive into mainline.
+  recommendation: "Implement the function or open a tracking issue and gate the path."
+
+- id: kotlin-system-out-println
+  name: System.out.println left in source
+  structural_pattern: 'System.out.println($X)'
+  message: "System.out.println($X) — use Timber/SLF4J or remove"
+  severity: low
+  category: style
+  languages: [kotlin]
+  confidence: 0.35
+  tags: [debug]
+  recommendation: "Use Timber.i(\"...\") on Android or the project's logger."
+
+- id: kotlin-empty-catch
+  name: Empty catch swallows exception
+  structural_pattern: 'catch ($E: $T) {}'
+  structural_context: 'fun _f() { try {} catch ($E: $T) {} }'
+  structural_selector: catch_block
+  message: "Empty catch block silently swallows exceptions — log or rethrow"
+  severity: medium
+  category: correctness
+  languages: [kotlin]
+  confidence: 0.85
+  recommendation: "Log via Timber.e(e, \"context\") or rethrow as a more meaningful exception."

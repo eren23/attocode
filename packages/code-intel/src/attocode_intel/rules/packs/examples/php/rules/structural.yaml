@@ -1,0 +1,41 @@
+# PHP structural patterns (ast-grep, Tier 2).
+
+- id: php-var-dump-debug
+  name: var_dump debug leftover
+  structural_pattern: 'var_dump($X)'
+  message: "var_dump($X) — debug leftover, remove before commit"
+  severity: low
+  category: style
+  languages: [php]
+  confidence: 0.85
+  tags: [debug]
+  explanation: >
+    ``var_dump`` writes raw debug output to the current output stream,
+    typically into the page response in web contexts. Often committed
+    accidentally during local debugging.
+  recommendation: "Remove the var_dump or route through your logger."
+
+- id: php-print-r-debug
+  name: print_r debug leftover
+  structural_pattern: 'print_r($X)'
+  message: "print_r($X) — debug leftover, remove before commit"
+  severity: low
+  category: style
+  languages: [php]
+  confidence: 0.7
+  tags: [debug]
+  recommendation: "Remove the print_r or route through your logger."
+
+- id: php-die-with-message
+  name: die() / exit() with debug message
+  structural_pattern: 'die($X)'
+  message: "die($X) — terminates request, often a debug statement that escaped"
+  severity: medium
+  category: suspicious
+  languages: [php]
+  confidence: 0.5
+  explanation: >
+    ``die`` and ``exit`` halt the current request with the given output.
+    Useful in error handlers and CLI scripts; often a leftover debug
+    statement when found mid-handler.
+  recommendation: "Throw an exception so the framework can render an error page."

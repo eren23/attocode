@@ -1,0 +1,81 @@
+name: Intelligence
+on:
+  pull_request:
+    paths: ['packages/code-intel/**', 'src/attocode/**', 'frontend/**', 'docker/code-intel/**', 'pyproject.toml', 'uv.lock', 'docs/intelligence-tools.md', '.github/workflows/intelligence.yml', '.github/workflows/release-intelligence.yml']
+  push:
+    branches: [main]
+    paths: ['packages/code-intel/**', 'src/attocode/**', 'frontend/**', 'docker/code-intel/**', 'pyproject.toml', 'uv.lock', 'docs/intelligence-tools.md', '.github/workflows/intelligence.yml', '.github/workflows/release-intelligence.yml']
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  product:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.12', '3.13']
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: intelligence
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:test@localhost:5432/intelligence
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
+      - name: Apply all migrations
+        run: uv run --no-sync python -c 'import asyncio, os; from attocode_intel.api.app import _run_migrations; asyncio.run(_run_migrations(os.environ["TEST_DATABASE_URL"]))'
+      - name: Product tests with PostgreSQL
+        run: uv run --no-sync pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -q
+      - name: Daily navigation gate
+        run: uv run --no-sync python packages/code-intel/evals/daily.py --output intelligence-eval.json
+      - name: Catalog stays synchronized
+        run: |
+          uv run --no-sync python packages/code-intel/scripts/generate_catalog.py
+          git diff --exit-code -- docs/intelligence-tools.md
+      - name: Build and verify standalone wheel
+        run: |
+          uv build --package attocode-code-intel
+          uv venv /tmp/intelligence-wheel
+          uv pip install --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
+          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: intelligence-${{ matrix.python }}
+          path: |
+            dist/
+            intelligence-eval.json
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: docker build -t intelligence-test -f docker/code-intel/Dockerfile .
+      - run: uv run --with httpx --no-project python packages/code-intel/scripts/smoke_image.py intelligence-test

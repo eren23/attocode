@@ -1,5 +1,5 @@
 site_name: Attocode
-site_description: Production AI coding agent built in Python
+site_description: Codebase intelligence for coding agents and teams
 site_url: https://eren23.github.io/attocode/
 repo_url: https://github.com/eren23/attocode
 repo_name: eren23/attocode
@@ -50,6 +50,9 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Intelligence Product: intelligence.md
+  - Intelligence Tools: intelligence-tools.md
+  - Legacy Agent: legacy-agent.md
   - Getting Started: getting-started.md
   - CLI Reference: cli-reference.md
   - Architecture:

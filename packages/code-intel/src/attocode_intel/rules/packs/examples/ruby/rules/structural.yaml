@@ -1,0 +1,41 @@
+# Ruby structural patterns (ast-grep, Tier 2).
+
+- id: ruby-puts-debug
+  name: puts debug leftover
+  structural_pattern: 'puts $X'
+  message: "puts $X — debug leftover, use Rails.logger.debug or remove"
+  severity: low
+  category: style
+  languages: [ruby]
+  confidence: 0.35
+  tags: [debug]
+  explanation: >
+    Bare ``puts`` writes to stdout with no level filtering. In Rails
+    apps prefer ``Rails.logger.debug`` so output respects the configured
+    log level and is captured in production logs.
+  recommendation: "Use Rails.logger.debug \"...\" or remove if it was a debug aid."
+
+- id: ruby-pp-debug
+  name: pp / p debug leftover
+  structural_pattern: 'pp $X'
+  message: "pp $X — pretty-print debug leftover, remove before commit"
+  severity: low
+  category: style
+  languages: [ruby]
+  confidence: 0.7
+  tags: [debug]
+  recommendation: "Remove the pp call or route through Rails.logger.debug."
+
+- id: ruby-binding-pry
+  name: binding.pry / debugger left in code
+  structural_pattern: 'binding.pry'
+  message: "binding.pry — interactive debugger left in code; will hang in production"
+  severity: high
+  category: correctness
+  languages: [ruby]
+  confidence: 0.95
+  tags: [debug]
+  explanation: >
+    ``binding.pry`` opens an interactive REPL. In production this hangs
+    the request waiting for stdin. Should never be committed.
+  recommendation: "Remove the binding.pry call before committing."

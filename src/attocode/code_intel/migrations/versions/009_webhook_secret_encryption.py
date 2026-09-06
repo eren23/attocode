@@ -1,25 +1,9 @@
-"""Add encrypted secret column to webhook_configs.
+"""Compatibility alias for attocode_intel.migrations.versions.009_webhook_secret_encryption."""
+import importlib as _importlib
+import sys as _sys
 
-Revision ID: 009
-Revises: 008
-Create Date: 2026-03-14
-"""
-from __future__ import annotations
-
-from typing import Sequence, Union
-
-import sqlalchemy as sa
-from alembic import op
-
-revision: str = "009"
-down_revision: Union[str, None] = "008"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
-
-
-def upgrade() -> None:
-    op.add_column("webhook_configs", sa.Column("secret_encrypted", sa.Text(), nullable=True))
-
-
-def downgrade() -> None:
-    op.drop_column("webhook_configs", "secret_encrypted")
+_module = _importlib.import_module("attocode_intel.migrations.versions.009_webhook_secret_encryption")
+if __name__ == "__main__":
+    _module.main()
+else:
+    _sys.modules[__name__] = _module

@@ -1,30 +1,9 @@
-"""Worker entry point: python -m attocode.code_intel.workers.run"""
+"""Compatibility alias for attocode_intel.workers.run."""
+import importlib as _importlib
+import sys as _sys
 
-from __future__ import annotations
-
-import logging
-import os
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-def main() -> None:
-    """Start the ARQ worker."""
-    from arq import run_worker
-
-    from attocode.code_intel.workers.settings import WorkerSettings
-
-    # Initialize database engine
-    database_url = os.environ.get("DATABASE_URL", "")
-    if database_url:
-        from attocode.code_intel.db.engine import init_engine
-
-        init_engine(database_url)
-
-    logger.info("Starting ARQ worker...")
-    run_worker(WorkerSettings)
-
-
+_module = _importlib.import_module("attocode_intel.workers.run")
 if __name__ == "__main__":
-    main()
+    _module.main()
+else:
+    _sys.modules[__name__] = _module

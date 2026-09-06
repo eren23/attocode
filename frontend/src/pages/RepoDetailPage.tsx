@@ -1,3 +1,4 @@
+import { AgentConnection } from "@/components/AgentConnection";
 import { Outlet, useParams, Link, useLocation } from "react-router";
 import { useRepo } from "@/api/hooks/useOrgs";
 import { useRepoWebSocket } from "@/api/hooks/useWebSocket";
@@ -28,6 +29,8 @@ export function RepoDetailPage() {
     { label: "Search", icon: Search, href: ROUTES.SEARCH(orgId!, repoId!) },
     { label: "Analysis", icon: BarChart3, href: ROUTES.ANALYSIS(orgId!, repoId!) },
     { label: "Graph", icon: Network, href: ROUTES.GRAPH(orgId!, repoId!) },
+    { label: "Knowledge", icon: Database, href: `/orgs/${orgId}/repos/${repoId}/learnings` },
+    { label: "Security", icon: BarChart3, href: `/orgs/${orgId}/repos/${repoId}/security` },
     { label: "Embeddings", icon: Database, href: ROUTES.EMBEDDINGS(orgId!, repoId!) },
   ];
 
@@ -46,6 +49,7 @@ function RepoTabs({
   tabs: { label: string; icon: React.ComponentType<{ className?: string }>; href: string }[];
 }) {
   const location = useLocation();
+  const { repoId } = useParams();
 
   return (
     <div className="space-y-6">
@@ -75,6 +79,7 @@ function RepoTabs({
         ))}
       </div>
 
+      {repoId && <AgentConnection repoId={repoId} />}
       <Outlet />
     </div>
   );

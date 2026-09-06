@@ -1,0 +1,51 @@
+sinks:
+  - name: sql_query
+    patterns:
+      - 'db\.Query\('
+      - 'db\.QueryRow\('
+      - 'db\.QueryContext\('
+      - 'db\.QueryRowContext\('
+      - 'db\.Exec\('
+      - 'db\.ExecContext\('
+      - 'tx\.Query\('
+      - 'tx\.QueryContext\('
+      - 'tx\.Exec\('
+      - 'tx\.ExecContext\('
+    cwe: CWE-89
+    message: "SQL injection: tainted data reaches database query"
+    language: go
+
+  - name: exec_command
+    patterns:
+      - 'exec\.Command\('
+      - 'exec\.CommandContext\('
+    cwe: CWE-78
+    message: "Command injection: tainted data reaches shell execution"
+    language: go
+
+  - name: template_html
+    patterns:
+      - 'template\.HTML\('
+      - 'template\.JS\('
+      - 'template\.URL\('
+    cwe: CWE-79
+    message: "XSS: tainted data passed to template.HTML (bypasses escaping)"
+    language: go
+
+  - name: file_access
+    patterns:
+      - 'os\.Open\('
+      - 'os\.Create\('
+      - 'os\.ReadFile\('
+      - 'os\.WriteFile\('
+      - 'filepath\.Join\('
+    cwe: CWE-22
+    message: "Path traversal: tainted data used in file path"
+    language: go
+
+  - name: http_redirect
+    patterns:
+      - 'http\.Redirect\('
+    cwe: CWE-601
+    message: "Open redirect: tainted data in redirect URL"
+    language: go

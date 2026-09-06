@@ -1,0 +1,50 @@
+# Kotlin correctness rules (Tier 1 regex).
+
+- id: kotlin-not-null-assertion
+  name: Non-null assertion operator (!!)
+  pattern: '\w+!!'
+  message: "!! throws NPE if null — use safe call (?.) or explicit check"
+  severity: medium
+  category: correctness
+  languages: [kotlin]
+  cwe: CWE-476
+  confidence: 0.5
+  explanation: >
+    The ``!!`` operator turns a nullable into a non-null at the cost
+    of a NullPointerException at runtime. Defeats Kotlin's null safety.
+    Acceptable only after a confirmed invariant (with a comment).
+  recommendation: "Use ?.let { ... }, ?: throw IllegalStateException(\"why\"), or pattern-match the nullable."
+
+- id: kotlin-runtime-exception-throw
+  name: throw RuntimeException — too generic
+  pattern: 'throw\s+RuntimeException\s*\('
+  message: "throw RuntimeException — use a more specific exception type"
+  severity: medium
+  category: correctness
+  languages: [kotlin]
+  confidence: 0.7
+  recommendation: "Throw IllegalStateException, IllegalArgumentException, or a domain-specific subclass."
+
+- id: kotlin-runblocking-in-coroutine
+  name: runBlocking inside a coroutine
+  pattern: '\brunBlocking\s*[\{\(]'
+  message: "runBlocking inside a coroutine blocks the dispatcher — usually a mistake"
+  severity: medium
+  category: correctness
+  languages: [kotlin]
+  confidence: 0.4
+  explanation: >
+    ``runBlocking`` blocks the current thread until the coroutine
+    completes. Inside another coroutine you usually want to ``await``
+    or ``async``-launch instead.
+  recommendation: "Use coroutineScope { ... } or async { ... }.await() inside coroutines."
+
+- id: kotlin-print-debug
+  name: println debug leftover
+  pattern: '\bprintln\s*\('
+  message: "println — debug leftover, route through Timber/SLF4J"
+  severity: low
+  category: style
+  languages: [kotlin]
+  confidence: 0.5
+  recommendation: "Use Timber.d(\"...\") on Android or your project's logger."
