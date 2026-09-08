@@ -866,7 +866,7 @@ class ASTService:
         if tool_name == "references" and query is not None:
             q_line = int(query.get("line", 0)) + 1  # LSP is 0-indexed
             q_name, _q_qname, _q_kind = self._resolve_symbol_at_line(rel, q_line)
-            callee_name = q_name
+            callee_name = query.get("symbol_name", q_name)
 
         for item in results:
             # LSPLocation has .uri, .range (.start.line, .start.character)
@@ -877,11 +877,14 @@ class ASTService:
             if hasattr(item, "uri"):
                 uri = item.uri
                 if uri.startswith("file://"):
-                    item_file = uri[7:]
+                    from urllib.parse import unquote, urlparse
+                    item_file = unquote(urlparse(uri).path)
                 item_rel = self._to_rel(item_file)
             else:
                 item_rel = rel
 
+            if not Path(item_file).resolve().is_relative_to(Path(self._root_dir).resolve()):
+                continue
             line = item.range.start.line + 1  # LSP is 0-indexed
 
             # Look up the symbol whose body contains this line — for
@@ -889,8 +892,7 @@ class ASTService:
             # for ``references`` results it's the *enclosing* function
             # (the caller of ``callee_name``).
             name, qname, kind = self._resolve_symbol_at_line(item_rel, line)
-            if not name:
-                # Can't determine symbol name — skip to avoid polluting index
+            if not name and not callee_name:
                 continue
 
             if tool_name == "definition":
@@ -914,7 +916,10 @@ class ASTService:
                 if callee_name:
                     ref = SymbolRef(
                         symbol_name=callee_name,
-                        ref_kind="call",
+                        ref_kind=("call" if any(
+                            r.file_path == item_rel and r.line == line and r.ref_kind == "call"
+                            for r in self._index.get_references(callee_name)
+                        ) else "reference"),
                         file_path=item_rel,
                         line=line,
                         source="lsp",
@@ -931,7 +936,7 @@ class ASTService:
                 references.append(ref)
 
         if definitions or references:
-            return self._index.merge_lsp_results(rel, definitions, references)
+            return self._index.merge_lsp_results(rel, definitions, references, verified_symbol=bool(query and query.get("symbol_name")))
         return 0
 
     # ------------------------------------------------------------------
@@ -1048,18 +1053,24 @@ class ASTService:
         if ast is None:
             return ("", "", "")
 
-        # Check functions
+        candidates = []
         for func in ast.functions:
             if func.start_line <= line <= func.end_line:
-                return (func.name, func.name, "function")
+                candidates.append((func.end_line - func.start_line, func.name,
+                                   func.qualified_name or func.name,
+                                   "method" if func.is_method else "function"))
 
         # Check classes and their methods
         for cls in ast.classes:
             if cls.start_line <= line <= cls.end_line:
+                candidates.append((cls.end_line - cls.start_line, cls.name, cls.name, "class"))
                 for method in cls.methods:
                     if method.start_line <= line <= method.end_line:
-                        return (method.name, f"{cls.name}.{method.name}", "method")
-                return (cls.name, cls.name, "class")
+                        candidates.append((method.end_line - method.start_line, method.name,
+                                           f"{cls.name}.{method.name}", "method"))
+
+        if candidates:
+            return min(candidates, key=lambda c: (c[0], c[3] == "class"))[1:]
 
         return ("", "", "")
 
@@ -1116,8 +1127,8 @@ class ASTService:
         for func in ast.functions:
             loc = SymbolLocation(
                 name=func.name,
-                qualified_name=func.name,
-                kind="function",
+                qualified_name=func.qualified_name or func.name,
+                kind="method" if func.is_method else "function",
                 file_path=rel_path,
                 start_line=func.start_line,
                 end_line=func.end_line,
@@ -1198,7 +1209,7 @@ class ASTService:
         # via smallest span on tie.
         scopes: list[tuple[str, int, int]] = []
         for fn in ast.functions:
-            scopes.append((fn.name, fn.start_line, fn.end_line))
+            scopes.append((fn.qualified_name or fn.name, fn.start_line, fn.end_line))
         for cls in ast.classes:
             for method in cls.methods:
                 scopes.append(
@@ -1215,6 +1226,26 @@ class ASTService:
                         best_q = qname
                         best_span = span
             return best_q
+
+        from .syntax_evidence import reference_candidates
+        candidates = reference_candidates(abs_path, content, ast.language)
+        if candidates is not None:
+            aliases = {imp.alias: imp.names[-1] for imp in ast.imports if imp.alias and imp.names}
+            seen = set()
+            for name, kind, line in candidates:
+                parts = name.split(".")
+                parts[0] = aliases.get(parts[0], parts[0])
+                qualified = ".".join(parts)
+                bare = parts[-1]
+                symbol = qualified if qualified in self._index.definitions else bare
+                if bare not in known_symbols or (symbol, kind, line) in seen:
+                    continue
+                seen.add((symbol, kind, line))
+                self._index.add_reference(SymbolRef(
+                    symbol_name=symbol, ref_kind=kind, file_path=rel_path, line=line,
+                    source="tree-sitter", caller_qualified_name=_enclosing_qname(line),
+                ))
+            return
 
         # Build a regex pattern for call sites: symbol_name(
         # Only scan for symbols that are actually defined somewhere.

@@ -211,6 +211,8 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
                 "tools": len(catalog.tools),
                 "metadata": metadata,
                 "status": "ok",
+                "languages": (result.structuredContent or {}).get("capabilities", {}).get("languages", {}),
+                "precision_hint": "Optional installed language servers improve reference lookup. Restart the agent after setup; ATTOCODE_INTEL_PRECISION=off disables enrichment.",
             }
 
     async with asyncio.timeout(30):

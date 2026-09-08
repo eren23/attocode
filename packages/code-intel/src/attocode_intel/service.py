@@ -136,18 +136,19 @@ class CodeIntelService:
 
     def _get_lsp_manager(self) -> LSPManager:
         if self._lsp_manager is None:
+            # AST initialization takes the same non-reentrant lock.
+            ast_svc = self._get_ast_service()
             with self._init_lock:
                 if self._lsp_manager is None:
                     from attocode_intel._internal.integrations.lsp.client import LSPConfig, LSPManager
 
                     config = LSPConfig(
                         enabled=True,
-                        root_uri=f"file://{self._project_dir}",
+                        root_uri=Path(self._project_dir).resolve().as_uri(),
                     )
                     mgr = LSPManager(config=config)
                     # Wire LSP results back into the cross-ref index
                     try:
-                        ast_svc = self._get_ast_service()
                         mgr.on_result_callback = ast_svc.ingest_lsp_results
                     except Exception:
                         pass  # ASTService may not be ready yet
@@ -516,6 +517,8 @@ class CodeIntelService:
             "changed_files": changed_files,
             "impacted_files": impacted,
             "total_impacted": len(impacted),
+            "interpretation": "potential_graph_reachability",
+            "absence_proven": False,
             "layers": layers,
         }
 
@@ -536,10 +539,12 @@ class CodeIntelService:
                 for loc in definitions
             ],
             "references": [
-                {"ref_kind": ref.ref_kind, "file_path": ref.file_path, "line": ref.line}
+                {"ref_kind": ref.ref_kind, "file_path": ref.file_path, "line": ref.line,
+                 "source": ref.source, "symbol": ref.symbol_name}
                 for ref in references
             ],
             "total_references": len(references),
+            "ambiguous": len({(d.file_path, d.qualified_name) for d in definitions}) > 1,
         }
 
     def call_graph_data(
@@ -1784,7 +1789,7 @@ class CodeIntelService:
         lines = [f"Definitions matching '{name}' ({len(scored)} results):"]
         for loc, score in scored:
             lines.append(
-                f"  [{score:.0%}] {loc.kind} {loc.qualified_name}  "
+                f"  [score {score:.3f}] {loc.kind} {loc.qualified_name}  "
                 f"in {loc.file_path}:{loc.start_line}-{loc.end_line}"
             )
         return "\n".join(lines)
@@ -1813,9 +1818,9 @@ class CodeIntelService:
         svc = self._get_ast_service()
         impacted = svc.get_impact(changed_files)
         if not impacted:
-            return f"No other files are impacted by changes to {', '.join(changed_files)}"
+            return f"No indexed relationships found for {', '.join(changed_files)}. Missing relationships do not prove absence of impact."
         lines = [f"Impact analysis for {', '.join(changed_files)}:"]
-        lines.append(f"\n  {len(impacted)} files affected:")
+        lines.append(f"\n  {len(impacted)} potentially related files (static graph reachability):")
         for f in sorted(impacted):
             lines.append(f"    {f}")
         return "\n".join(lines)
@@ -2081,11 +2086,15 @@ class CodeIntelService:
             if include_symbols and file_ast:
                 max_sym = cc.center_symbol_cap if dist == 0 else cc.neighbor_symbol_cap
                 sym_lines: list[str] = []
-                for fn in file_ast.functions[:max_sym]:
+                functions = sorted(file_ast.functions, key=lambda fn: (fn.is_nested, fn.name.startswith("_"), fn.start_line))
+                # Keep a representative API surface when functions and types coexist.
+                classes = sorted(file_ast.classes, key=lambda cls: (-len(cls.methods), cls.start_line))
+                fn_limit = max_sym if not classes else max(1, max_sym // 2)
+                for fn in functions[:fn_limit]:
                     params = ", ".join(p.name for p in fn.parameters[:cc.param_preview_limit])
                     ret = f" -> {fn.return_type}" if fn.return_type else ""
                     sym_lines.append(f"    fn {fn.name}({params}){ret}")
-                for cls in file_ast.classes[:max_sym]:
+                for cls in classes[:max_sym - len(sym_lines)]:
                     bases = f"({', '.join(cls.bases[:cc.base_preview_limit])})" if cls.bases else ""
                     methods_preview = ", ".join(m.name for m in cls.methods[:cc.method_preview_limit])
                     sym_lines.append(f"    class {cls.name}{bases}: {methods_preview}")

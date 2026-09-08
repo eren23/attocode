@@ -32,7 +32,13 @@ After publishing the standalone distribution, the installation command will be `
 
 Ask your agent to start with `bootstrap(task_hint="what you are changing")`. It receives relevant code, structure, recalled knowledge, and index coverage within a token budget. Follow with symbol search, references, dependencies, impact analysis, and test suggestions. `review_change` reports structured findings and identifies failed analysis passes.
 
+Reference and call-graph queries automatically use installed language servers when available. The base engine remains usable without them; set `ATTOCODE_INTEL_PRECISION=off` to use only structural analysis. `doctor` distinguishes installed servers from verified precision queries. `capabilities` reports definitions, references, dependencies, and test heuristics separately for each language.
+
+Index readiness describes indexing progress. Analysis metadata separately reports unresolved imports, evidence sources, and precision failures. Missing relationships do not prove absence of impact, and suggested tests are candidates rather than complete coverage. Search ranking scores are not confidence percentages.
+
 Local file watchers and per-operation filesystem checks pick up edits, new files, deletions, and import-only changes. `notify_file_changed` is also available. Learnings persist in the existing `.attocode/cache/memory.db`, so different agents can reuse them. Use `record_learning`, `recall`, `update_learning`, and `learning_feedback` to maintain knowledge.
+
+Bootstrap excludes knowledge whose source anchors have changed; explicit `recall` still returns those entries with their stale flag.
 
 New installations use the compact **daily** tool profile. `init --profile full` exposes the complete local catalog, including rules and security analysis, history, architecture, retrieval pins, snapshots, overlays, and cache maintenance. Direct server invocations default to `full` for compatibility. `capabilities` reports the actual catalog and optional enhancements.
 

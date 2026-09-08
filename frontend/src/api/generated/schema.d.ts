@@ -286,6 +286,8 @@ export interface ImpactLayer {
 }
 
 export interface ImpactResult {
+  interpretation?: string;
+  absence_proven?: boolean;
   changed_files: string[];
   impacted_files: string[];
   total_impacted: number;
@@ -412,9 +414,11 @@ export interface PresenceEntry {
 }
 
 export interface CrossRefResult {
+  analysis_status?: string;
+  ambiguous?: boolean | null;
   symbol: string;
   definitions: { file: string; line: number }[];
-  references: { file: string; line: number }[];
+  references: { file: string; line: number; source?: string; ref_kind?: string }[];
 }
 
 export interface JobInfo {

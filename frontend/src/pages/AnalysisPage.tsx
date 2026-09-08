@@ -237,7 +237,7 @@ function ImpactTab({ orgId, repoId }: { orgId: string; repoId: string }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Traces the dependency graph to find files affected by your changes.
+            Traces indexed dependencies to find files potentially related to your changes.
             <strong className="text-foreground/80"> Direct</strong> = files that import changed files.
             Higher orders = transitive dependencies (files that import those files, and so on).
           </p>
@@ -332,10 +332,13 @@ function ImpactTab({ orgId, repoId }: { orgId: string; repoId: string }) {
                 <Badge variant="default">{impact.data.total_impacted} total</Badge>
               </>
             ) : (
-              <Badge variant="default">{impact.data.total_impacted} impacted</Badge>
+              <Badge variant="default">{impact.data.total_impacted} potentially related</Badge>
             )}
           </div>
 
+          <p className="text-xs text-muted-foreground">
+            These are potential relationships from a partial static analysis. Verify the relevant callers and tests before drawing conclusions about safety.
+          </p>
           {/* Impact flow visualization */}
           {impact.data.layers && impact.data.layers.length > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground overflow-x-auto pb-1">
@@ -417,8 +420,8 @@ function ImpactTab({ orgId, repoId }: { orgId: string; repoId: string }) {
           ) : (
             <EmptyState
               icon={<Waypoints className="h-12 w-12" />}
-              title="No downstream impact"
-              description="The changed files do not appear to affect other files in the dependency graph."
+              title="No indexed relationships found"
+              description="The index may miss relationships. This result does not establish that the change has no downstream impact."
             />
           )}
         </div>
@@ -428,7 +431,7 @@ function ImpactTab({ orgId, repoId }: { orgId: string; repoId: string }) {
         <EmptyState
           icon={<Waypoints className="h-12 w-12" />}
           title="Impact Analysis"
-          description="Select files to discover which other files would be affected by changes."
+          description="Select files to inspect potential downstream relationships."
         />
       )}
     </div>

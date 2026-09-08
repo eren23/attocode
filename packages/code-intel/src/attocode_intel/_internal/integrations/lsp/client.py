@@ -118,7 +118,7 @@ BUILTIN_SERVERS: dict[str, LanguageServerConfig] = {
     "typescript": LanguageServerConfig(
         command="typescript-language-server",
         args=["--stdio"],
-        extensions=[".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+        extensions=[".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
         language_id="typescript",
     ),
     "python": LanguageServerConfig(
@@ -182,8 +182,10 @@ class _LSPClient:
         self._request_id = 0
         self._pending: dict[int, asyncio.Future[Any]] = {}
         self._buffer = b""
+        self._notifications: set[asyncio.Task] = set()
         self._initialized = False
         self._reader_task: asyncio.Task[None] | None = None
+        self._stderr_task: asyncio.Task[None] | None = None
         self._is_stopping = False  # Suppress spurious errors during shutdown
         self._trace_enabled = False  # Protocol tracing (set via feature flag)
 
@@ -214,6 +216,7 @@ class _LSPClient:
 
         # Start reading responses in background
         self._reader_task = asyncio.create_task(self._read_loop())
+        self._stderr_task = asyncio.create_task(self._drain_stderr())
 
         # Initialize
         await self._request("initialize", {
@@ -335,6 +338,10 @@ class _LSPClient:
                         logger.warning("LSP %s: process still alive after kill + cancel", self._config.language_id)
 
         finally:
+            if self._stderr_task is not None:
+                self._stderr_task.cancel()
+                await asyncio.gather(self._stderr_task, return_exceptions=True)
+                self._stderr_task = None
             self._process = None
             self._initialized = False
             self._reader_task = None
@@ -575,7 +582,10 @@ class _LSPClient:
         self._notify("textDocument/didOpen", {
             "textDocument": {
                 "uri": uri,
-                "languageId": self._config.language_id,
+                "languageId": ("typescriptreact" if uri.endswith(".tsx") else
+                               "javascriptreact" if uri.endswith(".jsx") else
+                               "javascript" if uri.endswith((".js", ".mjs", ".cjs")) else
+                               self._config.language_id),
                 "version": 1,
                 "text": text,
             },
@@ -615,18 +625,38 @@ class _LSPClient:
         self._pending[req_id] = future
 
         message = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
-        self._send_message(message)
-
         try:
+            # initialized/didOpen/didChange must reach the server before the query.
+            if self._notifications:
+                await asyncio.gather(*tuple(self._notifications))
+            await self._send_message(message)
             return await asyncio.wait_for(future, timeout=self._timeout)
-        except TimeoutError:
+        except TimeoutError as exc:
+            raise ToolError(f"Request {method} timed out", tool_name="lsp") from exc
+        finally:
             self._pending.pop(req_id, None)
-            raise ToolError(f"Request {method} timed out", tool_name="lsp") from None
 
     def _notify(self, method: str, params: Any) -> None:
         """Send a JSON-RPC notification (no response expected)."""
         message = {"jsonrpc": "2.0", "method": method, "params": params}
-        asyncio.ensure_future(self._send_message(message))
+        task = asyncio.ensure_future(self._send_message(message))
+        self._notifications.add(task)
+        task.add_done_callback(self._notification_done)
+
+    def _notification_done(self, task: asyncio.Task) -> None:
+        self._notifications.discard(task)
+        if not task.cancelled() and (error := task.exception()) is not None:
+            logger.debug("LSP notification failed: %s", error)
+
+    async def _drain_stderr(self) -> None:
+        # An unread pipe can block an otherwise healthy language server.
+        if self._process is None or self._process.stderr is None:
+            return
+        try:
+            while chunk := await self._process.stderr.read(4096):
+                logger.debug("LSP stderr: %s", chunk.decode(errors="replace")[:1000])
+        except (OSError, asyncio.CancelledError):
+            pass
 
     async def _send_message(self, message: dict[str, Any]) -> None:
         """Send a message with Content-Length header framing.
@@ -749,7 +779,24 @@ class _LSPClient:
                 logger.debug("LSP IN [notif]: %s", method)
 
         msg_id = message.get("id")
-        if msg_id is not None and msg_id in self._pending:
+        if msg_id is not None and "method" in message:
+            method = message["method"]
+            params = message.get("params") or {}
+            response = {"jsonrpc": "2.0", "id": msg_id}
+            if method == "workspace/configuration":
+                response["result"] = [None for _ in params.get("items", [])]
+            elif method == "workspace/workspaceFolders":
+                response["result"] = [{"uri": self._root_uri, "name": "workspace"}]
+            elif method == "workspace/applyEdit":
+                response["result"] = {"applied": False, "failureReason": "Analysis client is read-only"}
+            elif method in {"client/registerCapability", "client/unregisterCapability", "window/workDoneProgress/create"}:
+                response["result"] = None
+            else:
+                response["error"] = {"code": -32601, "message": "Method not supported"}
+            task = asyncio.ensure_future(self._send_message(response))
+            self._notifications.add(task)
+            task.add_done_callback(self._notification_done)
+        elif msg_id is not None and msg_id in self._pending:
             future = self._pending.pop(msg_id)
             if future.done():
                 return
@@ -895,7 +942,11 @@ class LSPManager:
         if feature("LSP_PROTOCOL_TRACE"):
             client.enable_protocol_trace(True)
 
-        await client.start()
+        try:
+            await client.start()
+        except BaseException:
+            await client.stop()
+            raise
         self._clients[language_id] = client
         self._emit("lsp.started", {
             "language_id": language_id,

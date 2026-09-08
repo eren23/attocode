@@ -227,6 +227,7 @@ class CrossRefIndex:
         file_path: str,
         definitions: list[SymbolLocation],
         references: list[SymbolRef],
+        *, verified_symbol: bool = False,
     ) -> int:
         """Merge LSP-sourced results into the index.
 
@@ -234,13 +235,14 @@ class CrossRefIndex:
         Returns the number of new entries added.
         """
         with self._lock:
-            return self._merge_lsp_results_locked(file_path, definitions, references)
+            return self._merge_lsp_results_locked(file_path, definitions, references, verified_symbol=verified_symbol)
 
     def _merge_lsp_results_locked(
         self,
         file_path: str,
         definitions: list[SymbolLocation],
         references: list[SymbolRef],
+        *, verified_symbol: bool = False,
     ) -> int:
         added = 0
 
@@ -287,7 +289,7 @@ class CrossRefIndex:
                     break
 
             if dup_index is not None:
-                if lsp_ref.caller_qualified_name:
+                if lsp_ref.caller_qualified_name or verified_symbol:
                     existing[dup_index] = lsp_ref
                     if lsp_ref.ref_kind == "call":
                         self.add_call_edge(
@@ -513,9 +515,7 @@ class CrossRefIndex:
 
     def get_references(self, symbol_name: str) -> list[SymbolRef]:
         """Look up all call sites / references for a symbol (exact or suffix match)."""
-        # Exact match first
-        if symbol_name in self.references:
-            return self.references[symbol_name]
+        # Include exact and qualified candidates; an exact key must not hide others.
         # Suffix match (e.g. "clear" matches refs keyed as "MCPMetaTools.clear")
         results: list[SymbolRef] = []
         for ref_name, refs in self.references.items():

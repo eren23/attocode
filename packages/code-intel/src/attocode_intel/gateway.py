@@ -95,7 +95,8 @@ class OperationGateway:
                 if service._ast_service._store:
                     service._ast_service._store.close()
             if service._lsp_manager:
-                asyncio.run(service._lsp_manager.stop_all())
+                runner = stores.get("async_runner") or stores.setdefault("async_runner", asyncio.Runner())
+                runner.run(service._lsp_manager.stop_all())
             for resource in (service._memory_store, service._semantic_search):
                 if resource:
                     resource.close()
@@ -234,12 +235,13 @@ class OperationGateway:
         start = time.monotonic()
         budget = int(args.get("max_tokens", 8000))
         knowledge = args.pop("_knowledge", None)
+        precision_result = None
         with FileLock(str(lock_dir / "operations.lock"), timeout=30), bind_request(context):
             if name == "capabilities":
                 from importlib.util import find_spec
 
+                from attocode_intel.analysis_coverage import language_capabilities
                 from attocode_intel.remote import remote_profile
-
                 payload = {
                     "workspace": context.workspace,
                     "source": context.source,
@@ -252,6 +254,7 @@ class OperationGateway:
                         "watcher_active": "watcher" in context.stores,
                     },
                     "guidance": INSTRUCTIONS,
+                    "languages": language_capabilities(getattr(context.stores.get("precision"), "verified_languages", ())),
                 }
                 text = json.dumps(payload, indent=2)
             else:
@@ -290,6 +293,11 @@ class OperationGateway:
                         "freshness", FreshnessTracker(context.project_dir)
                     )
                     tracker.refresh(service)
+                if name in {"cross_references", "call_graph"}:
+                    from attocode_intel.precision import PrecisionSession
+                    session = context.stores.setdefault("precision", PrecisionSession(service))
+                    runner = context.stores.get("async_runner") or context.stores.setdefault("async_runner", asyncio.Runner())
+                    precision_result = runner.run(session.enrich(args.get("symbol_name", args.get("symbol", ""))))
                 payload = None
                 if name in LEARNING_TOOLS:
                     payload = execute_local_knowledge(context, name, args)
@@ -319,7 +327,8 @@ class OperationGateway:
                 else:
                     result = tool.fn(**args)
                     if inspect.isawaitable(result):
-                        result = asyncio.run(result)
+                        runner = context.stores.get("async_runner") or context.stores.setdefault("async_runner", asyncio.Runner())
+                        result = runner.run(result)
                     text = result if isinstance(result, str) else json.dumps(result, default=str)
                     if name in {
                         "symbols",
@@ -355,6 +364,7 @@ class OperationGateway:
                     knowledge = execute_local_knowledge(
                         context, "recall", {"query": args["task_hint"], "max_results": 5}
                     )
+                knowledge = [entry for entry in knowledge or [] if not entry.get("stale")]
                 if knowledge:
                     knowledge_text = bounded_text(json.dumps(knowledge), max(1, budget // 4))[0]
                     text = (
@@ -370,6 +380,10 @@ class OperationGateway:
             header = f"Source: {context.source} | Workspace: {context.workspace} | Revision: {context.revision} | Index: {phase}\n"
             if phase != "ready" or coverage.get("discovery_truncated"):
                 header += "Coverage is incomplete; missing results do not prove absence.\n"
+            from attocode_intel.analysis_coverage import analysis_report
+            analysis = analysis_report(service, precision_result)
+            if name in {"cross_references", "dependencies", "call_graph", "impact_analysis", "suggest_tests"}:
+                header += "Analysis: partial; relationships are candidates and missing results do not prove absence.\n"
             text, truncated = bounded_text(header + text, budget)
             truncated = truncated or "[Truncated;" in text
             metadata = {
@@ -377,6 +391,7 @@ class OperationGateway:
                 "source": context.source,
                 "revision": context.revision,
                 "coverage": coverage,
+                "analysis": analysis,
                 "freshness": "committed_snapshot" if context.source == "remote" else "working_tree",
                 "truncated": truncated,
                 "duration_ms": round((time.monotonic() - start) * 1000, 2),

@@ -67,6 +67,10 @@ export function SymbolDetail({ symbol, repoId }: SymbolDetailProps) {
 
         {crossRefs.data && (
           <>
+            <p className="text-xs text-muted-foreground">
+              Relationships may be incomplete. Missing results do not prove there are no uses.
+              {crossRefs.data.ambiguous && " Multiple definitions match this name; verify the intended symbol."}
+            </p>
             {crossRefs.data.definitions.length > 0 && (
               <div>
                 <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -99,6 +103,7 @@ export function SymbolDetail({ symbol, repoId }: SymbolDetailProps) {
                       className="block w-full truncate text-left font-mono text-[11px] text-muted-foreground hover:text-foreground"
                     >
                       {r.file}:{r.line}
+                      {r.source && <span className="ml-2 text-[10px]">{r.source === "lsp" ? "LSP" : "candidate"}</span>}
                     </button>
                   ))}
                 </div>
@@ -108,7 +113,7 @@ export function SymbolDetail({ symbol, repoId }: SymbolDetailProps) {
             {crossRefs.data.definitions.length > 0 &&
               crossRefs.data.references.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  No call sites indexed
+                  No references indexed
                 </p>
               )}
 

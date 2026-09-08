@@ -56,6 +56,8 @@ class DependencyGraph:
     forward: dict[str, set[str]] = field(default_factory=dict)  # file -> files it imports
     reverse: dict[str, set[str]] = field(default_factory=dict)  # file -> files that import it
 
+    unresolved: dict[str, list[str]] = field(default_factory=dict)
+
     def add_edge(self, source: str, target: str) -> None:
         """Add a dependency edge: source imports target."""
         self.forward.setdefault(source, set()).add(target)
@@ -359,7 +361,8 @@ def _build_file_index(
     Returns:
         Mapping of normalized paths (with ``/``) to relative paths.
     """
-    file_index: dict[str, str] = {}
+    from .module_resolution import FileIndex
+    file_index = FileIndex()
     for f in files:
         normalized = f.relative_path.replace(os.sep, "/")
         file_index[normalized] = f.relative_path
@@ -377,6 +380,7 @@ def _build_file_index(
                         extra[stripped] = rel_path
         file_index.update(extra)
 
+    file_index.configure_javascript(root_dir)
     return file_index
 
 
@@ -427,111 +431,71 @@ def _resolve_js_import(module: str, source_file: str, file_index: dict[str, str]
     Returns:
         Resolved relative path or None if not found.
     """
-    # Only resolve relative imports
-    if not module.startswith("."):
+    if module.startswith("."):
+        candidates = [os.path.normpath(str(Path(source_file).parent / module))]
+    elif hasattr(file_index, "javascript_candidates"):
+        candidates = list(file_index.javascript_candidates(module, source_file))
+    else:
         return None
-
-    base = Path(source_file).parent
-    resolved = str((base / module).as_posix())
-
-    # Try with various extensions
-    for suffix in ("", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.js"):
-        key = resolved + suffix
-        if key in file_index:
-            return file_index[key]
-
+    for resolved in candidates:
+        # TS resolves source .ts files behind emitted .js imports.
+        variants = [resolved]
+        if resolved.endswith((".js", ".jsx", ".mjs", ".cjs")):
+            variants += [str(Path(resolved).with_suffix(ext)) for ext in (".ts", ".tsx", ".mts", ".cts")]
+        for candidate in variants:
+            for suffix in ("", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".json", "/index.ts", "/index.tsx", "/index.js", "/index.cjs", "/index.mjs"):
+                key = os.path.normpath(candidate + suffix).replace(os.sep, "/")
+                if key in file_index:
+                    return file_index[key]
     return None
 
 
 def _resolve_rust_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
-    """Resolve a Rust use/mod statement to a relative file path.
+    """Resolve local Rust modules, including nested workspace crate roots.
 
-    Handles:
-    - ``use crate::worker::MainWorker`` → ``src/worker.rs`` or ``src/worker/mod.rs``
-    - ``use super::utils`` → relative to parent module
-    - ``mod worker;`` → ``worker.rs`` or ``worker/mod.rs`` in same dir
-    - Skips stdlib (``std::``) and external crates
+    External dependencies and ambiguous matches remain unresolved.
     """
-    if not module:
+    if not module or module.startswith(("std::", "core::", "alloc::", "extern ")):
         return None
-
-    # Skip stdlib and well-known external crates
-    if module.startswith(("std::", "core::", "alloc::", "extern ")):
-        return None
-
-    source_dir = str(Path(source_file).parent)
-    source_name = Path(source_file).stem
-
-    # Handle `mod foo;` declarations (module is just the mod name)
-    if not module.startswith(("crate::", "self::", "super::")):
-        # Could be a mod declaration or an external crate — try local resolution
-        parts = module.replace("::", "/").split("/")
-        # Simple mod: try sibling file or subdir
-        if len(parts) == 1:
-            mod_name = parts[0]
-            # If source is mod.rs or lib.rs/main.rs, mod is a child
-            if source_name in ("mod", "lib", "main"):
-                candidates = [
-                    f"{source_dir}/{mod_name}.rs",
-                    f"{source_dir}/{mod_name}/mod.rs",
-                ]
-            else:
-                # Sibling module
-                candidates = [
-                    f"{source_dir}/{mod_name}.rs",
-                    f"{source_dir}/{mod_name}/mod.rs",
-                ]
-            for c in candidates:
-                normalized = c.replace(os.sep, "/")
-                if normalized in file_index:
-                    return file_index[normalized]
-        return None
-
-    # Handle crate:: paths
-    if module.startswith("crate::"):
-        remainder = module[len("crate::"):]
-        parts = remainder.replace("::", "/").split("/")
-        # Find crate root (look for src/ dir pattern)
-        crate_src = "src"
-        # Try src/<path>.rs and src/<path>/mod.rs
-        for i in range(len(parts), 0, -1):
-            candidate = crate_src + "/" + "/".join(parts[:i])
-            for suffix in (".rs", "/mod.rs"):
-                key = candidate + suffix
-                normalized = key.replace(os.sep, "/")
-                if normalized in file_index:
-                    return file_index[normalized]
-        return None
-
-    # Handle self:: paths (relative to current module)
-    if module.startswith("self::"):
-        remainder = module[len("self::"):]
-        parts = remainder.replace("::", "/").split("/")
-        # If source is mod.rs, resolve relative to its directory
-        base = source_dir
-        for i in range(len(parts), 0, -1):
-            candidate = base + "/" + "/".join(parts[:i])
-            for suffix in (".rs", "/mod.rs"):
-                key = candidate + suffix
-                normalized = key.replace(os.sep, "/")
-                if normalized in file_index:
-                    return file_index[normalized]
-        return None
-
-    # Handle super:: paths (relative to parent module)
-    if module.startswith("super::"):
-        remainder = module[len("super::"):]
-        parts = remainder.replace("::", "/").split("/")
-        parent = str(Path(source_dir).parent)
-        for i in range(len(parts), 0, -1):
-            candidate = parent + "/" + "/".join(parts[:i])
-            for suffix in (".rs", "/mod.rs"):
-                key = candidate + suffix
-                normalized = key.replace(os.sep, "/")
-                if normalized in file_index:
-                    return file_index[normalized]
-        return None
-
+    source = Path(source_file)
+    roots = [parent for parent in (source.parent, *source.parents)
+             if any(str(parent / entry) in file_index for entry in ("lib.rs", "main.rs"))]
+    crate_root = roots[0] if roots else Path("src")
+    current = source.parent if source.stem in {"lib", "main", "mod"} else source.with_suffix("")
+    if module.startswith("mod:"):
+        parts = [module[4:]]
+        base = current
+    else:
+        parts = module.split("::")
+        if parts[0] == "crate":
+            base, parts = crate_root, parts[1:]
+        elif parts[0] == "self":
+            base, parts = current, parts[1:]
+        elif parts[0] == "super":
+            base = current
+            while parts and parts[0] == "super":
+                base, parts = base.parent, parts[1:]
+        else:
+            # Rust 2015 crate-relative paths, then workspace crate source roots.
+            base = crate_root
+            if len(parts) > 1:
+                name = parts[0].replace("_", "-")
+                candidates = {str(Path(f).parent) for f in file_index.values()
+                              if Path(f).name == "lib.rs" and name in Path(f).parts}
+                if len(candidates) == 1:
+                    base, parts = Path(candidates.pop()), parts[1:]
+    for length in range(len(parts), 0, -1):
+        candidate = str(base.joinpath(*parts[:length]))
+        for suffix in (".rs", "/mod.rs"):
+            key = os.path.normpath(candidate + suffix).replace(os.sep, "/")
+            if key in file_index:
+                return file_index[key]
+    # Root-level reexports live in the crate entrypoint, not a same-named file.
+    if len(parts) == 1 and not module.startswith("mod:"):
+        for entry in ("lib.rs", "main.rs"):
+            key = str(base / entry)
+            if key in file_index:
+                return file_index[key]
     return None
 
 
@@ -549,7 +513,7 @@ def _resolve_go_import(module: str, source_file: str, file_index: dict[str, str]
     # Relative imports (rare but valid in Go)
     if module.startswith("./") or module.startswith("../"):
         base = Path(source_file).parent
-        resolved = str((base / module).as_posix())
+        resolved = os.path.normpath(str(base / module)).replace(os.sep, "/")
         # Go packages are directories — look for any .go file in that dir
         for suffix in (".go", "/main.go", "/"+Path(resolved).name+".go"):
             key = resolved + suffix
@@ -623,7 +587,7 @@ def _resolve_ruby_import(module: str, source_file: str, file_index: dict[str, st
     # require_relative: module starts with ./ or ../
     if module.startswith("./") or module.startswith("../"):
         base = Path(source_file).parent
-        resolved = str((base / module).as_posix())
+        resolved = os.path.normpath(str(base / module)).replace(os.sep, "/")
         for suffix in ("", ".rb"):
             key = resolved + suffix
             if key in file_index:
@@ -693,6 +657,14 @@ def _resolve_c_import(module: str, source_file: str, file_index: dict[str, str])
     return None
 
 
+IMPORT_RESOLVERS = {
+    "python": _resolve_python_import, "javascript": _resolve_js_import,
+    "typescript": _resolve_js_import, "rust": _resolve_rust_import,
+    "go": _resolve_go_import, "java": _resolve_java_import,
+    "ruby": _resolve_ruby_import, "c": _resolve_c_import, "cpp": _resolve_c_import,
+}
+
+
 def _compute_dynamic_cap(files: list[FileInfo], configured_max: int) -> int:
     """Compute a dynamic file cap based on repo composition.
 
@@ -747,18 +719,7 @@ def build_dependency_graph(
     # Build index with prefix-stripped alternate keys for src/ layout
     file_index = _build_file_index(files, root_dir)
 
-    # Dispatch table for language-specific import resolvers
-    _resolvers: dict[str, Any] = {
-        "python": _resolve_python_import,
-        "javascript": _resolve_js_import,
-        "typescript": _resolve_js_import,
-        "rust": _resolve_rust_import,
-        "go": _resolve_go_import,
-        "java": _resolve_java_import,
-        "ruby": _resolve_ruby_import,
-        "c": _resolve_c_import,
-        "cpp": _resolve_c_import,
-    }
+    _resolvers = IMPORT_RESOLVERS
 
     # Languages that have parseable imports
     supported_langs = set(_resolvers.keys())
@@ -777,6 +738,8 @@ def build_dependency_graph(
             target = resolver(imp.module, f.relative_path, file_index)
             if target is not None and target != f.relative_path:
                 graph.add_edge(f.relative_path, target)
+            elif target is None:
+                graph.unresolved.setdefault(f.relative_path, []).append(imp.module)
 
     return graph
 
@@ -1262,7 +1225,7 @@ class CodebaseContextManager:
         """
         # Normalize to relative path
         try:
-            rel = os.path.relpath(file_path, self.root_dir)
+            rel = os.path.relpath(file_path, self.root_dir) if os.path.isabs(file_path) else os.path.normpath(file_path)
         except ValueError:
             rel = file_path
         self._dirty_files.add(rel)
@@ -1274,7 +1237,7 @@ class CodebaseContextManager:
             file_path: Path of the file to invalidate.
         """
         try:
-            rel = os.path.relpath(file_path, self.root_dir)
+            rel = os.path.relpath(file_path, self.root_dir) if os.path.isabs(file_path) else os.path.normpath(file_path)
         except ValueError:
             rel = file_path
         self._ast_cache.pop(rel, None)
@@ -1344,7 +1307,10 @@ class CodebaseContextManager:
                             if not rev:
                                 del self._dep_graph.reverse[target]
                     # Also remove as a reverse dep target
-                    self._dep_graph.reverse.pop(rel_path, None)
+                    importers = self._dep_graph.reverse.pop(rel_path, set())
+                    for importer in importers:
+                        self._dep_graph.forward.get(importer, set()).discard(rel_path)
+                    self._dep_graph.unresolved.pop(rel_path, None)
                 self._file_mtimes.pop(rel_path, None)
                 continue
 
@@ -1380,17 +1346,14 @@ class CodebaseContextManager:
                             del self._dep_graph.reverse[target]
 
                 # Add new edges
+                self._dep_graph.unresolved.pop(rel_path, None)
                 for imp in new_ast.imports:
-                    if new_ast.language == "python":
-                        target = _resolve_python_import(
-                            imp.module, rel_path, file_index
-                        )
-                    else:
-                        target = _resolve_js_import(
-                            imp.module, rel_path, file_index
-                        )
+                    resolver = IMPORT_RESOLVERS.get(new_ast.language)
+                    target = resolver(imp.module, rel_path, file_index) if resolver else None
                     if target is not None and target != rel_path:
                         self._dep_graph.add_edge(rel_path, target)
+                    elif target is None:
+                        self._dep_graph.unresolved.setdefault(rel_path, []).append(imp.module)
 
             # Update file mtime
             try:
