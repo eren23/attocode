@@ -1174,6 +1174,7 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
             name=fn["name"],
             qualified_name=fn.get("qualified_name", ""),
             is_nested=fn.get("is_nested", False),
+            is_method=fn.get("is_method", False),
             start_line=fn.get("start_line", 0),
             end_line=fn.get("end_line", 0),
             parameters=param_defs,

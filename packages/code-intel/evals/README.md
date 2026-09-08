@@ -21,3 +21,5 @@ uv run python packages/code-intel/evals/client_comparison.py \
 ```
 
 Reports include cost, latency, token usage, actual tool calls, permission failures and known-file anchor hits. An anchor miss can be a different valid caller or test; it is not automatically a wrong answer. Inspect the private traces before interpreting results. These navigation questions do not measure successful coding changes, and single runs do not establish a competitive ranking.
+
+By default the client chooses whether to use connected tools. Add `--require-navigation-tools` to require symbol and reference lookups through each connected server before native verification; reports record whether MCP tools were actually used.

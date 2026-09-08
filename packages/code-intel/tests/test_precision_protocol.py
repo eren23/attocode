@@ -160,3 +160,21 @@ async def test_noisy_server_timeout_preserves_navigation_and_shuts_down(tmp_path
     finally:
         await gateway.close()
     assert process.returncode == 0
+
+
+async def test_precise_reference_preserves_the_nested_caller(tmp_path, monkeypatch):
+    script = tmp_path / "server.py"
+    script.write_text(SERVER)
+    monkeypatch.setitem(BUILTIN_SERVERS, "python", LanguageServerConfig(
+        command=sys.executable, args=[str(script)], extensions=[".py"], language_id="python"))
+    (tmp_path / "helper.py").write_text("def helper(): return 1\n")
+    (tmp_path / "caller.py").write_text("def outer():\n    def inner():\n        return helper()\n    return inner()\n")
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        result = await gateway.execute("cross_references", {"symbol_name": "helper"})
+        assert not result.isError
+        ast = next(iter(gateway._stores.values()))["service"]._ast_service
+        refs = ast.get_callers("helper")
+        assert any(r.caller_qualified_name == "outer.inner" and r.source == "lsp" for r in refs)
+    finally:
+        await gateway.close()

@@ -1183,6 +1183,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
         if ntype in config.function_types:
             name = _find_name(node, source_bytes)
             definition_start = node.start_point[0] + 1
+            assigned_method = False
             qualified_name = parent_function + "." + name if parent_function else name
             if language in ("javascript", "typescript") and node.parent:
                 parent = node.parent
@@ -1190,6 +1191,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                           else parent.child_by_field_name("name") if parent.type == "variable_declarator"
                           else parent.child_by_field_name("key") if parent.type == "pair" else None)
                 if target:
+                    assigned_method = target.type == "member_expression"
                     definition_start = target.start_point[0] + 1
                     qualified_name = _node_text(target, source_bytes)
                     name = qualified_name.rsplit(".", 1)[-1]
@@ -1226,6 +1228,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 "parent_class": effective_parent,
                 "qualified_name": qualified_name,
                 "is_nested": bool(parent_function),
+                "is_method": assigned_method,
             }
             if docstring:
                 fn_data["docstring"] = docstring

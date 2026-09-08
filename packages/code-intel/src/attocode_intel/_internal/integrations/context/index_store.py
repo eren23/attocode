@@ -18,7 +18,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 
 
 @dataclass(slots=True)

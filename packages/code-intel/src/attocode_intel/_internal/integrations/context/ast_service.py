@@ -1053,18 +1053,24 @@ class ASTService:
         if ast is None:
             return ("", "", "")
 
-        # Check functions
+        candidates = []
         for func in ast.functions:
             if func.start_line <= line <= func.end_line:
-                return (func.name, func.name, "function")
+                candidates.append((func.end_line - func.start_line, func.name,
+                                   func.qualified_name or func.name,
+                                   "method" if func.is_method else "function"))
 
         # Check classes and their methods
         for cls in ast.classes:
             if cls.start_line <= line <= cls.end_line:
+                candidates.append((cls.end_line - cls.start_line, cls.name, cls.name, "class"))
                 for method in cls.methods:
                     if method.start_line <= line <= method.end_line:
-                        return (method.name, f"{cls.name}.{method.name}", "method")
-                return (cls.name, cls.name, "class")
+                        candidates.append((method.end_line - method.start_line, method.name,
+                                           f"{cls.name}.{method.name}", "method"))
+
+        if candidates:
+            return min(candidates, key=lambda c: (c[0], c[3] == "class"))[1:]
 
         return ("", "", "")
 
@@ -1122,7 +1128,7 @@ class ASTService:
             loc = SymbolLocation(
                 name=func.name,
                 qualified_name=func.qualified_name or func.name,
-                kind="function",
+                kind="method" if func.is_method else "function",
                 file_path=rel_path,
                 start_line=func.start_line,
                 end_line=func.end_line,

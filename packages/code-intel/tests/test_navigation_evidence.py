@@ -35,6 +35,8 @@ async def test_commonjs_navigation_and_import_edits(tmp_path):
     try:
         found = await query(gateway, "search_symbols", name="json")
         assert any(row["qualified_name"] == "exports.json" for row in found["data"])
+        methods = await query(gateway, "search_symbols", name="json", kind="method")
+        assert any(row["qualified_name"] == "exports.json" for row in methods["data"])
         refs = await query(gateway, "cross_references", symbol_name="json")
         assert any(row["file_path"] == "test/response.js" and row["line"] == 2 for row in refs["data"]["references"])
         deps = await query(gateway, "dependencies", path="lib/response.js")
