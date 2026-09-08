@@ -187,7 +187,7 @@ class TestServerTools:
         assert "MyClass" in result
         assert "class" in result
         assert "b.py" in result
-        assert "[98%]" in result
+        assert "[score 0.980]" in result
         mock_ast.search_symbol.assert_called_once_with("MyClass", limit=5, kind_filter="class")
 
     def test_dependencies_tool(self):
@@ -214,7 +214,7 @@ class TestServerTools:
         result = impact_analysis(["a.py"])
         assert "affected1.py" in result
         assert "affected2.py" in result
-        assert "2 files affected" in result
+        assert "2 potentially related files" in result
 
     def test_impact_analysis_no_impact(self):
         import attocode.code_intel.server as srv
@@ -225,7 +225,8 @@ class TestServerTools:
         srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = impact_analysis(["isolated.py"])
-        assert "No other files are impacted" in result
+        assert "No indexed relationships found" in result
+        assert "do not prove absence" in result
 
     def test_cross_references_tool(self):
         import attocode.code_intel.server as srv

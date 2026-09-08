@@ -298,6 +298,8 @@ class SymbolSearchResponse(BaseModel):
 
 
 class DependencyResponse(BaseModel):
+    analysis_status: str = "partial"
+    absence_proven: bool = False
     path: str
     imports: list[str]
     imported_by: list[str]
@@ -326,6 +328,8 @@ class ImpactLayer(BaseModel):
 
 
 class ImpactAnalysisResponse(BaseModel):
+    interpretation: str = "potential_graph_reachability"
+    absence_proven: bool = False
     changed_files: list[str]
     impacted_files: list[str]
     total_impacted: int
@@ -333,12 +337,16 @@ class ImpactAnalysisResponse(BaseModel):
 
 
 class ReferenceItem(BaseModel):
+    source: str = "unknown"
+    symbol: str = ""
     ref_kind: str = ""
     file_path: str = ""
     line: int = 0
 
 
 class CrossRefResponse(BaseModel):
+    analysis_status: str = "partial"
+    ambiguous: bool | None = None
     symbol: str
     definitions: list[SymbolItem]
     references: list[ReferenceItem]

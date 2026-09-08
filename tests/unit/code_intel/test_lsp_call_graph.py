@@ -145,7 +145,7 @@ class TestIngestLspResultsCallGraph:
         callee (``helper``) carrying the *enclosing function* as caller,
         and the call-edges include the expected pairs (modulo whatever
         the regex pass already found)."""
-        results = [_loc("mod.py", 4), _loc("mod.py", 7)]
+        results = [_loc(str(Path(ast_service._root_dir) / "mod.py"), 4), _loc(str(Path(ast_service._root_dir) / "mod.py"), 7)]
         added = ast_service.ingest_lsp_results(
             tool_name="references",
             file_path="mod.py",
@@ -179,7 +179,7 @@ class TestIngestLspResultsCallGraph:
         ast_service.ingest_lsp_results(
             tool_name="references",
             file_path="mod.py",
-            results=[_loc("mod.py", 4)],
+            results=[_loc(str(Path(ast_service._root_dir) / "mod.py"), 4)],
         )
         after = _snapshot_edges(ast_service._index)
         assert before == after, (before, after)
@@ -192,7 +192,7 @@ class TestIngestLspResultsCallGraph:
         ast_service.ingest_lsp_results(
             tool_name="definition",
             file_path="mod.py",
-            results=[_loc("mod.py", 0, 1)],
+            results=[_loc(str(Path(ast_service._root_dir) / "mod.py"), 0, 1)],
             query={"line": 0, "col": 4},
         )
         after = _snapshot_edges(ast_service._index)
@@ -218,7 +218,7 @@ class TestIngestLspResultsCallGraph:
         ast_service.ingest_lsp_results(
             tool_name="references",
             file_path="mod.py",
-            results=[_loc("mod.py", 4)],  # 0-indexed: line 5
+            results=[_loc(str(Path(ast_service._root_dir) / "mod.py"), 4)],  # 0-indexed: line 5
         )
 
         # The tree-sitter ref for 'helper' at line 5 must still exist.
@@ -234,7 +234,7 @@ class TestIngestLspResultsCallGraph:
         added = ast_service.ingest_lsp_results(
             tool_name="references",
             file_path="mod.py",
-            results=[_loc("mod.py", 4)],
+            results=[_loc(str(Path(ast_service._root_dir) / "mod.py"), 4)],
             query={"line": 999, "col": 0},
         )
         assert added >= 0

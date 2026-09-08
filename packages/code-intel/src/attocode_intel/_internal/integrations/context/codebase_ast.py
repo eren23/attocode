@@ -66,6 +66,8 @@ class FunctionDef:
     is_classmethod: bool = False
     is_property: bool = False
     type_params: list[str] = field(default_factory=list)
+    qualified_name: str = ""
+    is_nested: bool = False
 
 
 @dataclass(slots=True)
@@ -1170,6 +1172,8 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
         ]
         functions.append(FunctionDef(
             name=fn["name"],
+            qualified_name=fn.get("qualified_name", ""),
+            is_nested=fn.get("is_nested", False),
             start_line=fn.get("start_line", 0),
             end_line=fn.get("end_line", 0),
             parameters=param_defs,
@@ -1217,6 +1221,9 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
         imports.append(ImportDef(
             module=imp.get("module", ""),
             is_from=imp.get("is_from", False),
+            names=imp.get("names", []),
+            alias=imp.get("alias", ""),
+            line=imp.get("start_line", 0),
         ))
 
     return FileAST(

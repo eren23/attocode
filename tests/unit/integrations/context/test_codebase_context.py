@@ -653,7 +653,7 @@ class TestResolveRustImport:
 
     def test_super_import(self) -> None:
         idx = self._index(["src/utils.rs", "src/sub/child.rs"])
-        result = _resolve_rust_import("super::utils", "src/sub/child.rs", idx)
+        result = _resolve_rust_import("super::super::utils", "src/sub/child.rs", idx)
         assert result == "src/utils.rs"
 
     def test_mod_declaration(self) -> None:

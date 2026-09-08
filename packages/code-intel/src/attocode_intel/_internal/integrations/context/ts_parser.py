@@ -55,16 +55,17 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
     ),
     "javascript": _LangConfig(
         grammar_module="tree_sitter_javascript",
-        function_types=("function_declaration", "arrow_function", "generator_function_declaration"),
-        class_types=("class_declaration",),
-        import_types=("import_statement",),
+        function_types=("function_declaration", "arrow_function", "function_expression", "generator_function_declaration"),
+        class_types=("class_declaration", "interface_declaration", "type_alias_declaration", "enum_declaration"),
+        import_types=("import_statement", "export_statement"),
         method_types=("method_definition",),
     ),
     "typescript": _LangConfig(
-        grammar_module="tree_sitter_javascript",
-        function_types=("function_declaration", "arrow_function", "generator_function_declaration"),
-        class_types=("class_declaration",),
-        import_types=("import_statement",),
+        grammar_module="tree_sitter_typescript",
+        language_func="language_typescript",
+        function_types=("function_declaration", "arrow_function", "function_expression", "generator_function_declaration"),
+        class_types=("class_declaration", "interface_declaration", "type_alias_declaration", "enum_declaration"),
+        import_types=("import_statement", "export_statement"),
         method_types=("method_definition",),
     ),
     "go": _LangConfig(
@@ -78,7 +79,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         grammar_module="tree_sitter_rust",
         function_types=("function_item",),
         class_types=("struct_item", "enum_item", "impl_item", "trait_item"),
-        import_types=("use_declaration",),
+        import_types=("use_declaration", "mod_item"),
     ),
     "java": _LangConfig(
         grammar_module="tree_sitter_java",
@@ -340,7 +341,7 @@ def _get_parser(language: str):
     if not _TS_AVAILABLE and not _try_init_tree_sitter():
         return None
 
-    config = LANGUAGE_CONFIGS.get(language)
+    config = LANGUAGE_CONFIGS.get("typescript" if language == "tsx" else language)
     if config is None:
         return None
 
@@ -350,7 +351,7 @@ def _get_parser(language: str):
         import tree_sitter as ts
 
         grammar_mod = importlib.import_module(config.grammar_module)
-        lang_fn = getattr(grammar_mod, config.language_func, None) or grammar_mod.language
+        lang_fn = getattr(grammar_mod, "language_tsx" if language == "tsx" else config.language_func)
         lang = ts.Language(lang_fn())
         parser = ts.Parser(lang)
         _PARSERS[language] = parser
@@ -409,7 +410,7 @@ def _find_name(node, source_bytes: bytes) -> str:
     if declarator:
         if declarator.type == "function_declarator":
             for child in declarator.children:
-                if child.type == "identifier":
+                if child.type in ("identifier", "field_identifier", "qualified_identifier"):
                     return _node_text(child, source_bytes)
         # pointer_declarator or other wrappers around function_declarator
         for sub in declarator.children:
@@ -1139,7 +1140,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
     if language not in LANGUAGE_CONFIGS:
         return None
 
-    parser = _get_parser(language)
+    parser = _get_parser("tsx" if Path(file_path).suffix == ".tsx" else language)
     if parser is None:
         return None
 
@@ -1165,13 +1166,33 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
     imports: list[dict] = []
     top_level_vars: list[str] = []
 
-    def _process_node(node, parent_class: str = "") -> None:
+    def _process_node(node, parent_class: str = "", parent_function: str = "") -> None:
         """Recursively process tree-sitter nodes."""
         ntype = node.type
 
+        # A CommonJS assignment names its function through the left-hand side.
+        if language in ("javascript", "typescript") and ntype == "call_expression":
+            fn = node.child_by_field_name("function")
+            args = node.child_by_field_name("arguments")
+            if fn and _node_text(fn, source_bytes) == "require" and args:
+                values = args.named_children
+                if len(values) == 1 and values[0].type == "string":
+                    imports.append({"module": _node_text(values[0], source_bytes)[1:-1],
+                                    "start_line": node.start_point[0] + 1})
         # Functions
         if ntype in config.function_types:
             name = _find_name(node, source_bytes)
+            definition_start = node.start_point[0] + 1
+            qualified_name = parent_function + "." + name if parent_function else name
+            if language in ("javascript", "typescript") and node.parent:
+                parent = node.parent
+                target = (parent.child_by_field_name("left") if parent.type == "assignment_expression"
+                          else parent.child_by_field_name("name") if parent.type == "variable_declarator"
+                          else parent.child_by_field_name("key") if parent.type == "pair" else None)
+                if target:
+                    definition_start = target.start_point[0] + 1
+                    qualified_name = _node_text(target, source_bytes)
+                    name = qualified_name.rsplit(".", 1)[-1]
             if not name:
                 return
 
@@ -1197,12 +1218,14 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 "name": name,
                 "parameters": params,
                 "return_type": ret_type,
-                "start_line": node.start_point[0] + 1,
+                "start_line": definition_start,
                 "end_line": node.end_point[0] + 1,
                 "is_async": is_async_fn,
                 "decorators": decorators,
                 "visibility": visibility,
                 "parent_class": effective_parent,
+                "qualified_name": qualified_name,
+                "is_nested": bool(parent_function),
             }
             if docstring:
                 fn_data["docstring"] = docstring
@@ -1219,6 +1242,10 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                     functions.append(fn_data)
             else:
                 functions.append(fn_data)
+            body = node.child_by_field_name("body")
+            if body:
+                for child in body.named_children:
+                    _process_node(child, parent_function=(effective_parent + "." + name if effective_parent else qualified_name))
             return
 
         # Methods inside classes (some languages have specific method types)
@@ -1251,6 +1278,10 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
         # Classes
         if ntype in config.class_types:
             name = _find_name(node, source_bytes)
+            if language == "rust" and ntype == "impl_item":
+                target_type = node.child_by_field_name("type")
+                if target_type:
+                    name = _node_text(target_type, source_bytes)
             if not name:
                 # For impl blocks in Rust, try type field
                 type_node = node.child_by_field_name("type")
@@ -1333,6 +1364,50 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
 
         # Imports
         if ntype in config.import_types:
+            if language == "rust":
+                from .syntax_evidence import rust_imports
+                imports.extend(rust_imports(node, source_bytes))
+                if ntype == "mod_item" and node.child_by_field_name("body"):
+                    for child in node.child_by_field_name("body").named_children:
+                        _process_node(child)
+                return
+            if language in ("javascript", "typescript"):
+                source = node.child_by_field_name("source")
+                if source:
+                    imports.append({"module": _node_text(source, source_bytes)[1:-1],
+                                    "start_line": node.start_point[0] + 1})
+                # Exported declarations still need their definitions extracted.
+                for child in node.named_children:
+                    _process_node(child, parent_class)
+                return
+            if language == "python":
+                import ast as python_ast
+                try:
+                    statement = python_ast.parse(_node_text(node, source_bytes)).body[0]
+                    if isinstance(statement, python_ast.ImportFrom):
+                        for binding in statement.names:
+                            imports.append({"module": "." * statement.level + (statement.module or ""),
+                                            "names": [binding.name], "alias": binding.asname or "",
+                                            "is_from": True, "start_line": node.start_point[0] + 1})
+                    elif isinstance(statement, python_ast.Import):
+                        for binding in statement.names:
+                            imports.append({"module": binding.name, "names": [binding.name],
+                                            "alias": binding.asname or "", "start_line": node.start_point[0] + 1})
+                    return
+                except (SyntaxError, ValueError):
+                    pass
+            if language == "go":
+                stack = [node]
+                while stack:
+                    item = stack.pop()
+                    if item.type == "import_spec":
+                        path = item.child_by_field_name("path")
+                        if path:
+                            imports.append({"module": _node_text(path, source_bytes).strip('"'),
+                                            "start_line": item.start_point[0] + 1})
+                    else:
+                        stack.extend(reversed(item.named_children))
+                return
             module = _extract_import_module(node, source_bytes, language)
             if module:
                 is_from = language == "python" and ntype == "import_from_statement"
@@ -1421,7 +1496,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
 
         # Recurse into children
         for child in node.children:
-            _process_node(child, parent_class=parent_class)
+            _process_node(child, parent_class=parent_class, parent_function=parent_function)
 
     # Process top-level nodes
     for child in root.children:

@@ -56,6 +56,10 @@ class FreshnessTracker:
         }
         if not changed:
             return
+        from attocode_intel.request_context import current_request
+        request = current_request.get()
+        if request and (precision := request.stores.get("precision")):
+            precision.invalidate(changed)
         ast = service._ast_service
         ast.stop_hydration()
         if previous.keys() != manifest.keys():

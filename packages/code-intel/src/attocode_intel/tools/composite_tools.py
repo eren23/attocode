@@ -503,6 +503,37 @@ def suggest_tests(
     except Exception as exc:
         logger.debug("Import-based test discovery failed: %s", exc)
 
+    # Follow actual reverse-import paths beyond immediate importers.
+    try:
+        from pathlib import Path
+        from collections import deque
+        ctx = _get_context_mgr()
+        graph = ctx.dependency_graph
+        for changed in files:
+            queue = deque([(changed, 0)])
+            seen = {changed}
+            while queue:
+                source, depth = queue.popleft()
+                for target in sorted(graph.get_importers(source)) if graph else []:
+                    if target in seen:
+                        continue
+                    seen.add(target)
+                    queue.append((target, depth + 1))
+                    parts = Path(target).parts
+                    filename = Path(target).name
+                    if (any(p in {"test", "tests", "__tests__", "spec"} for p in parts)
+                            or filename.startswith("test_") or ".test." in filename
+                            or ".spec." in filename or filename.endswith("_test.go")):
+                        _add_suggestion(target, 2 if depth == 0 else 3,
+                                        f"Reverse import path from `{changed}` ({depth + 1} edges)")
+            path = Path(project_dir) / changed
+            if path.suffix == ".rs" and path.is_file():
+                content = path.read_text(encoding="utf-8")
+                if "#[test]" in content or "#[cfg(test)]" in content:
+                    _add_suggestion(changed, 1, "Contains Rust inline test declarations; select the owning Cargo package")
+    except (OSError, AttributeError) as exc:
+        logger.debug("Indirect test discovery incomplete: %s", exc)
+
     # --- Format output ---
     if not suggestions:
         # Fallback: suggest running all tests
@@ -523,10 +554,32 @@ def suggest_tests(
         ])
         return "\n".join(lines)
 
-    # Sort by priority, then alphabetically
+    # Prefer tests with concrete syntax references to changed definitions.
+    symbol_hits: dict[str, int] = {}
+    representatives: set[str] = set()
+    try:
+        from attocode_intel._shared import _get_ast_service
+        ast = _get_ast_service()
+        for changed in files:
+            for symbol in ast.get_file_symbols(changed):
+                if symbol.kind == "variable":
+                    continue
+                matches = {ref.file_path for ref in ast.get_callers(symbol.qualified_name)
+                           if ref.file_path in suggestions}
+                if matches:
+                    representatives.add(min(matches, key=lambda path: (
+                        symbol.name.lower() not in path.lower(), len(path), path)))
+                for path in matches:
+                    symbol_hits[path] = symbol_hits.get(path, 0) + 1
+                    _add_suggestion(path, suggestions[path]["priority"],
+                                    f"Syntax reference to `{symbol.qualified_name}`; verify ambiguous matches")
+    except (AttributeError, OSError) as exc:
+        logger.debug("Test reference ranking incomplete: %s", exc)
+
+    # Sort by evidence, then put repository tests before documentation examples.
     sorted_suggestions = sorted(
         suggestions.items(),
-        key=lambda kv: (kv[1]["priority"], kv[0]),
+        key=lambda kv: (kv[1]["priority"], kv[0] not in representatives, -symbol_hits.get(kv[0], 0), kv[0].startswith("docs"), kv[0]),
     )
 
     priority_labels = {
@@ -550,7 +603,7 @@ def suggest_tests(
             lines.append(f"\n## Priority {priority} ({label})\n")
 
         lines.append(f"  {test_path}")
-        for reason in info["reasons"]:
+        for reason in info["reasons"][:3]:
             lines.append(f"    - {reason}")
 
     # Summary
@@ -564,8 +617,8 @@ def suggest_tests(
         lines.append(f"  {label}: {by_priority[p]} test file(s)")
 
     lines.append(
-        f"\nRun these {len(sorted_suggestions)} test(s) to validate the changes "
-        f"to {len(files)} file(s)."
+        "\nThese are test candidates based on naming and static relationships. "
+        "They are not complete coverage or proof that a change is safe."
     )
 
     return "\n".join(lines)
