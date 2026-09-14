@@ -56,7 +56,7 @@ async def test_ambiguous_selection_keeps_reference_uncertainty(repository, monke
             "symbol_name": "helper", "file_path": "helper.py", "line": 1}))["data"]
         assert selected["definition"]["file_path"] == "helper.py"
         assert selected["ambiguous"]
-        assert "candidate" in selected["reference_caveat"]
+        assert "reference_candidates" in selected["reference_caveat"]
         assert decode(await gateway.execute_mcp("inspect_symbol", {"symbol_name": "unknown"}))["data"]["status"] == "not_found"
         with pytest.raises(ValueError, match="inside"):
             await gateway.execute_mcp("inspect_symbol", {"symbol_name": "helper", "file_path": "../elsewhere.py"})

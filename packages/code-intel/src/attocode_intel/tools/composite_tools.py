@@ -403,7 +403,8 @@ def suggest_tests(files: list[str], symbol_name: str | None = None, task_hint: s
     return format_test_suggestions(suggest_tests_data(files, symbol_name=symbol_name, task_hint=task_hint))
 
 
-def suggest_tests_data(files: list[str], *, symbol_name: str | None = None, task_hint: str | None = None) -> dict:
+def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
+                       task_hint: str | None = None, linked_reference_files=None) -> dict:
     """Reusable evidence; callers format or budget it without repeating graph traversal."""
     project_dir = _get_project_dir()
 
@@ -532,8 +533,9 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None, task
         from attocode_intel._shared import _get_ast_service
         from attocode_intel.test_ranking import rank_symbol_tests
         return {"files": files, "symbol_name": symbol_name, "task_hint": task_hint,
-                "candidates": rank_symbol_tests(_get_ast_service(), suggestions, files, symbol_name, task_hint, distances),
-                "ranking": "Selected-symbol syntax, lexical test names, then module/import distance; verify candidates",
+                "candidates": rank_symbol_tests(_get_ast_service(), suggestions, files, symbol_name,
+                                                task_hint, distances, linked_reference_files),
+                "ranking": "Selected-symbol links, reverse-import distance, then lexical test names; verify candidates",
                 "absence_proven": False}
 
     # Prefer tests with concrete syntax references to changed definitions.

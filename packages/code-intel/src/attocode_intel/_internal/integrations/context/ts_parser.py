@@ -1377,8 +1377,38 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
             if language in ("javascript", "typescript"):
                 source = node.child_by_field_name("source")
                 if source:
-                    imports.append({"module": _node_text(source, source_bytes)[1:-1],
-                                    "start_line": node.start_point[0] + 1})
+                    module = _node_text(source, source_bytes)[1:-1]
+                    bindings = []
+                    stack = list(node.named_children)
+                    while stack:
+                        child = stack.pop()
+                        if child.type in {"import_specifier", "export_specifier"}:
+                            identifiers = [item for item in child.named_children
+                                           if item.type in {"identifier", "type_identifier"}]
+                            if identifiers:
+                                imported = _node_text(identifiers[0], source_bytes)
+                                local = (_node_text(identifiers[1], source_bytes)
+                                         if len(identifiers) > 1 else imported)
+                                bindings.append({"module": module, "names": [imported],
+                                                 "alias": local if local != imported else "",
+                                                 "is_from": True,
+                                                 "is_reexport": ntype == "export_statement",
+                                                 "start_line": node.start_point[0] + 1})
+                            continue
+                        if child.type in {"namespace_import", "namespace_export"}:
+                            identifier = next((item for item in child.named_children
+                                               if item.type == "identifier"), None)
+                            if identifier:
+                                bindings.append({"module": module, "names": ["*"],
+                                                 "alias": _node_text(identifier, source_bytes),
+                                                 "is_from": True,
+                                                 "is_reexport": ntype == "export_statement",
+                                                 "start_line": node.start_point[0] + 1})
+                            continue
+                        stack.extend(child.named_children)
+                    imports.extend(bindings or [{"module": module,
+                                                 "is_reexport": ntype == "export_statement",
+                                                 "start_line": node.start_point[0] + 1}])
                 # Exported declarations still need their definitions extracted.
                 for child in node.named_children:
                     _process_node(child, parent_class)

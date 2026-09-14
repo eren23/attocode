@@ -95,6 +95,7 @@ class ImportDef:
     names: list[str] = field(default_factory=list)
     alias: str = ""
     is_from: bool = False
+    is_reexport: bool = False
     line: int = 0
 
 
@@ -1224,6 +1225,7 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
             is_from=imp.get("is_from", False),
             names=imp.get("names", []),
             alias=imp.get("alias", ""),
+            is_reexport=imp.get("is_reexport", False),
             line=imp.get("start_line", 0),
         ))
 

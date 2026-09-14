@@ -32,15 +32,25 @@ def scoped_references(service, symbol_name, file_path=None, line=None):
     if file_path is not None or line is not None:
         definitions = select_definitions(service, symbol_name, file_path, line)
         data["definitions"] = [location(d) for d in definitions]
-        # A path selects the definition, not the target of ambiguous syntax references.
         data["selection_unique"] = len(definitions) == 1
         if not definitions:
             data["references"] = []
             data["total_references"] = 0
-        elif data["ambiguous"]:
-            data["reference_caveat"] = "Same-name references may target another definition; verify source."
+            data["reference_candidates"] = []
+            data["total_reference_candidates"] = 0
+        elif len(definitions) == 1:
+            from attocode_intel.symbol_links import classify_symbol_references
+            linked, candidates = classify_symbol_references(service._get_ast_service(), definitions[0])
+            data["references"] = linked
+            data["total_references"] = len(linked)
+            data["reference_candidates"] = candidates[:20]
+            data["total_reference_candidates"] = len(candidates)
+            data["reference_caveat"] = (
+                "References are linked by same-file identity, explicit import bindings, or a language server. "
+                "Same-name syntax matches without that evidence remain reference_candidates."
+            )
     data["references"] = sorted(data["references"], key=lambda r: (
-        r["file_path"], r["line"], r["ref_kind"], r["source"]))
+        r["file_path"], r["line"], r["ref_kind"], r["source"], r.get("symbol", "")))
     seen = set()
     unique = []
     for ref in data["references"]:
@@ -82,7 +92,9 @@ def inspect_symbol_data(service, symbol_name, file_path=None, line=None, source_
 
     references = scoped_references(service, symbol_name, path, definition.start_line)
     imports = service.dependencies_data(path)
-    tests = suggest_tests_data([path], symbol_name=definition.qualified_name, task_hint=task_hint)["candidates"]
+    linked_test_files = {ref["file_path"] for ref in references["references"]}
+    tests = suggest_tests_data([path], symbol_name=definition.qualified_name, task_hint=task_hint,
+                               linked_reference_files=linked_test_files)["candidates"]
     if source_start_line is not None and (isinstance(source_start_line, bool) or int(source_start_line) != source_start_line):
         raise ValueError("source_start_line must be an integer inside the selected definition")
     start = max(1, definition.start_line) if source_start_line is None else int(source_start_line)
@@ -99,8 +111,10 @@ def inspect_symbol_data(service, symbol_name, file_path=None, line=None, source_
                    "text": "\n".join(source[start - 1:end]),
                    "truncated": start > definition.start_line or end < definition.end_line},
         "references": references["references"][:8], "total_references": references["total_references"],
+        "reference_candidates": references.get("reference_candidates", [])[:5],
+        "total_reference_candidates": references.get("total_reference_candidates", 0),
         "ambiguous": references["ambiguous"],
-        "reference_caveat": "Syntax references are candidates; selecting a definition does not resolve same-name references.",
+        "reference_caveat": references.get("reference_caveat", "Syntax references are candidates; verify source."),
         "imports": relationships[:5], "total_imports": len(relationships),
         "tests": tests[:5], "total_tests": len(tests), "absence_proven": False,
         "follow_up": {

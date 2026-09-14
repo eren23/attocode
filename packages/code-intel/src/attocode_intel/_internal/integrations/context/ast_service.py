@@ -1352,6 +1352,7 @@ class ASTService:
                     ref_kind="import",
                     file_path=rel_path,
                     line=imp.line,
+                    syntax_name=imp.alias or name,
                 )
                 index.add_reference(ref)
 
@@ -1409,7 +1410,8 @@ class ASTService:
                 seen.add((symbol, kind, line))
                 index.add_reference(SymbolRef(
                     symbol_name=symbol, ref_kind=kind, file_path=rel_path, line=line,
-                    source="tree-sitter", caller_qualified_name=_enclosing_qname(line),
+                    source="tree-sitter", syntax_name=name,
+                    caller_qualified_name=_enclosing_qname(line),
                 ))
             return
 
@@ -1448,7 +1450,7 @@ class ASTService:
             caller = _enclosing_qname(i)
 
             # Find function/method calls: name(
-            for m in re.finditer(r"\b(\w+)\s*\(", clean_line):
+            for m in re.finditer(r"(?<!\.)\b(\w+)\s*\(", clean_line):
                 name = m.group(1)
                 if name in known_symbols and name not in ("if", "for", "while", "return", "print"):
                     ref = SymbolRef(
@@ -1456,19 +1458,21 @@ class ASTService:
                         ref_kind="call",
                         file_path=rel_path,
                         line=i,
+                        syntax_name=name,
                         caller_qualified_name=caller,
                     )
                     index.add_reference(ref)
 
             # Find attribute access: obj.method(
-            for m in re.finditer(r"\b\w+\.(\w+)\s*\(", clean_line):
-                attr_name = m.group(1)
+            for m in re.finditer(r"\b(\w+)\.(\w+)\s*\(", clean_line):
+                attr_name = m.group(2)
                 if attr_name in known_symbols:
                     ref = SymbolRef(
                         symbol_name=attr_name,
                         ref_kind="attribute",
                         file_path=rel_path,
                         line=i,
+                        syntax_name=m.group(0).rsplit("(", 1)[0].strip(),
                         caller_qualified_name=caller,
                     )
                     index.add_reference(ref)

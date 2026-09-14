@@ -72,7 +72,7 @@ def test_search_symbols_finds_by_name(service: CodeIntelService):
     assert len(result) > 0
     # Should mention the App class or main.py and include ranking output.
     assert "App" in result
-    assert "%" in result
+    assert "[score " in result
 
 
 def test_dependencies_reports_imports(service: CodeIntelService):
