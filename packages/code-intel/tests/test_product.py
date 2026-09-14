@@ -148,7 +148,12 @@ async def test_real_stdio_protocol(tmp_path):
             result = await session.call_tool("search_symbols", {"name": "protocol_symbol"})
             assert not result.isError
             assert "helper.py" in result.content[0].text
-            assert result.structuredContent["metadata"]["source"] == "local"
+            import json
+
+            from attocode_intel.output import response_tokens
+            assert result.structuredContent is None
+            assert json.loads(result.content[0].text)["metadata"]["source"] == "local"
+            assert response_tokens(result) <= 2000
             guidelines = await session.read_resource("attocode://guidelines")
             assert "bootstrap" in guidelines.contents[0].text
             templates = await session.list_resource_templates()

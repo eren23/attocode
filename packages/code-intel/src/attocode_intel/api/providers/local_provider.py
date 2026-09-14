@@ -86,6 +86,7 @@ class LocalAnalysisProvider:
             definitions=[SymbolItem(**d) for d in data["definitions"]],
             references=[ReferenceItem(**r) for r in data["references"]],
             total_references=data["total_references"],
+            ambiguous=data.get("ambiguous"),
         )
 
     async def impact_analysis(self, files: list[str], branch: str) -> ImpactAnalysisResponse:

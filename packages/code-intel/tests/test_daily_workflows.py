@@ -71,7 +71,7 @@ async def test_knowledge_is_shared_between_local_clients_and_stale(tmp_path):
         row = recalled.structuredContent["data"][0]
         assert row["id"] == number and row["stale"]
         bootstrap = await second.execute("bootstrap", {"task_hint": "helpers", "max_tokens": 1000})
-        assert "Relevant project knowledge" in bootstrap.content[0].text
+        assert "Helpers have no side effects" not in bootstrap.content[0].text
         await second.execute("update_learning", {"learning_id": number, "status": "archived"})
         assert not (await second.execute("list_learnings", {})).structuredContent["data"]
     finally:

@@ -187,7 +187,7 @@ class TestServerTools:
         assert "MyClass" in result
         assert "class" in result
         assert "b.py" in result
-        assert "[98%]" in result
+        assert "[score 0.980]" in result
         mock_ast.search_symbol.assert_called_once_with("MyClass", limit=5, kind_filter="class")
 
     def test_dependencies_tool(self):
@@ -214,7 +214,7 @@ class TestServerTools:
         result = impact_analysis(["a.py"])
         assert "affected1.py" in result
         assert "affected2.py" in result
-        assert "2 files affected" in result
+        assert "2 potentially related files" in result
 
     def test_impact_analysis_no_impact(self):
         import attocode.code_intel.server as srv
@@ -225,7 +225,8 @@ class TestServerTools:
         srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = impact_analysis(["isolated.py"])
-        assert "No other files are impacted" in result
+        assert "No indexed relationships found" in result
+        assert "do not prove absence" in result
 
     def test_cross_references_tool(self):
         import attocode.code_intel.server as srv
@@ -2953,26 +2954,26 @@ class TestRelevantContextTool:
 
     def test_relevant_context_depth_cap(self):
         import attocode.code_intel.server as srv
+        from attocode.integrations.context.ast_service import ASTService
 
-        svc = MagicMock()
-        svc.initialized = True
-        svc._to_rel.side_effect = lambda p: p
-        svc.get_dependencies.return_value = set()
-        svc.get_dependents.return_value = set()
-        svc._ast_cache = {}
-
-        ctx = MagicMock()
-        ctx._files = []
-
+        for name, dependency in (("a", "b"), ("b", "c"), ("c", "d"), ("d", None)):
+            source = f"from {dependency} import operation_{dependency}\n" if dependency else ""
+            (self.tmp_path / f"{name}.py").write_text(source + f"def operation_{name}(): return 1\n")
+        svc = ASTService(str(self.tmp_path))
+        svc.initialize_skeleton()
         srv._ast_service = svc
-        srv._context_mgr = ctx
+        srv._context_mgr = svc._context_mgr
         srv._service = _make_service_with_mocks(
-            str(self.tmp_path), ast_service=svc, context_mgr=ctx,
+            str(self.tmp_path), ast_service=svc, context_mgr=svc._context_mgr,
         )
 
-        # depth > 2 should be capped to 2
-        result = srv.relevant_context(["a.py"], depth=5)
+        try:
+            result = srv.relevant_context(["a.py"], depth=5)
+        finally:
+            svc._store.close()
         assert "depth=2" in result
+        assert all(path in result for path in ("a.py", "b.py", "c.py"))
+        assert "d.py" not in result
 
 
 # ---------------------------------------------------------------------------

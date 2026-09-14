@@ -396,23 +396,15 @@ def explain_impact(
 
 
 @mcp.tool()
-def suggest_tests(
-    files: list[str],
-) -> str:
-    """Suggest which tests to run based on changed files.
-
-    Analyzes dependencies and test file conventions to recommend
-    the most relevant test files for a set of changed source files.
-
-    Args:
-        files: Changed source file paths (relative to project root).
-
-    Returns:
-        Prioritized list of test files to run with reasoning.
-    """
+def suggest_tests(files: list[str], symbol_name: str | None = None, task_hint: str | None = None) -> str:
+    """Suggest candidate tests using imports and syntax; optionally focus on a symbol and task."""
     if not files:
-        return "Error: No files specified. Provide a list of changed source files."
+        return "Error: No files specified. Provide a list of changed files."
+    return format_test_suggestions(suggest_tests_data(files, symbol_name=symbol_name, task_hint=task_hint))
 
+
+def suggest_tests_data(files: list[str], *, symbol_name: str | None = None, task_hint: str | None = None) -> dict:
+    """Reusable evidence; callers format or budget it without repeating graph traversal."""
     project_dir = _get_project_dir()
 
     # Collect test suggestions with priorities
@@ -420,6 +412,7 @@ def suggest_tests(
     # Priority 2: Test files that import the changed module
     # Priority 3: Tests for dependent modules
     suggestions: dict[str, dict] = {}  # path -> {priority, reasons}
+    distances: dict[str, int] = {}
 
     def _add_suggestion(path: str, priority: int, reason: str) -> None:
         """Add or update a test suggestion."""
@@ -503,6 +496,84 @@ def suggest_tests(
     except Exception as exc:
         logger.debug("Import-based test discovery failed: %s", exc)
 
+    # Follow actual reverse-import paths beyond immediate importers.
+    try:
+        from collections import deque
+        from pathlib import Path
+        ctx = _get_context_mgr()
+        graph = ctx.dependency_graph
+        for changed in files:
+            queue = deque([(changed, 0)])
+            seen = {changed}
+            while queue:
+                source, depth = queue.popleft()
+                for target in sorted(graph.get_importers(source)) if graph else []:
+                    if target in seen:
+                        continue
+                    seen.add(target)
+                    queue.append((target, depth + 1))
+                    parts = Path(target).parts
+                    filename = Path(target).name
+                    if (any(p in {"test", "tests", "__tests__", "spec"} for p in parts)
+                            or filename.startswith("test_") or ".test." in filename
+                            or ".spec." in filename or filename.endswith("_test.go")):
+                        _add_suggestion(target, 2 if depth == 0 else 3,
+                                        f"Reverse import path from `{changed}` ({depth + 1} edges)")
+                        distances[target] = min(distances.get(target, depth + 1), depth + 1)
+            path = Path(project_dir) / changed
+            if path.suffix == ".rs" and path.is_file():
+                content = path.read_text(encoding="utf-8")
+                if "#[test]" in content or "#[cfg(test)]" in content:
+                    _add_suggestion(changed, 1, "Contains Rust inline test declarations; select the owning Cargo package")
+    except (OSError, AttributeError) as exc:
+        logger.debug("Indirect test discovery incomplete: %s", exc)
+
+    if symbol_name or task_hint:
+        from attocode_intel._shared import _get_ast_service
+        from attocode_intel.test_ranking import rank_symbol_tests
+        return {"files": files, "symbol_name": symbol_name, "task_hint": task_hint,
+                "candidates": rank_symbol_tests(_get_ast_service(), suggestions, files, symbol_name, task_hint, distances),
+                "ranking": "Selected-symbol syntax, lexical test names, then module/import distance; verify candidates",
+                "absence_proven": False}
+
+    # Prefer tests with concrete syntax references to changed definitions.
+    symbol_hits: dict[str, int] = {}
+    representatives: set[str] = set()
+    try:
+        from attocode_intel._shared import _get_ast_service
+        ast = _get_ast_service()
+        for changed in files:
+            for symbol in ast.get_file_symbols(changed):
+                if symbol.kind == "variable":
+                    continue
+                matches = {ref.file_path for ref in ast.get_callers(symbol.qualified_name)
+                           if ref.file_path in suggestions}
+                if matches:
+                    representatives.add(min(matches, key=lambda path: (
+                        symbol.name.lower() not in path.lower(), len(path), path)))
+                for path in matches:
+                    symbol_hits[path] = symbol_hits.get(path, 0) + 1
+                    _add_suggestion(path, suggestions[path]["priority"],
+                                    f"Syntax reference to `{symbol.qualified_name}`; verify ambiguous matches")
+    except (AttributeError, OSError) as exc:
+        logger.debug("Test reference ranking incomplete: %s", exc)
+
+    # Sort by evidence, then put repository tests before documentation examples.
+    sorted_suggestions = sorted(
+        suggestions.items(),
+        key=lambda kv: (kv[1]["priority"], kv[0] not in representatives, -symbol_hits.get(kv[0], 0), kv[0].startswith("docs"), kv[0]),
+    )
+
+    return {"files": files, "candidates": [
+        {"file_path": path, "priority": info["priority"], "reasons": info["reasons"][:3]}
+        for path, info in sorted_suggestions
+    ], "absence_proven": False}
+
+
+def format_test_suggestions(data: dict) -> str:
+    files = data["files"]
+    suggestions = {row["file_path"]: row for row in data["candidates"]}
+    sorted_suggestions = list(suggestions.items())
     # --- Format output ---
     if not suggestions:
         # Fallback: suggest running all tests
@@ -522,12 +593,6 @@ def suggest_tests(
             "  - Consider creating test files for untested modules",
         ])
         return "\n".join(lines)
-
-    # Sort by priority, then alphabetically
-    sorted_suggestions = sorted(
-        suggestions.items(),
-        key=lambda kv: (kv[1]["priority"], kv[0]),
-    )
 
     priority_labels = {
         1: "DIRECT",
@@ -550,12 +615,12 @@ def suggest_tests(
             lines.append(f"\n## Priority {priority} ({label})\n")
 
         lines.append(f"  {test_path}")
-        for reason in info["reasons"]:
+        for reason in info["reasons"][:3]:
             lines.append(f"    - {reason}")
 
     # Summary
     by_priority: dict[int, int] = {}
-    for info in suggestions.values():
+    for _, info in sorted_suggestions:
         by_priority[info["priority"]] = by_priority.get(info["priority"], 0) + 1
 
     lines.append("\n## Summary\n")
@@ -564,8 +629,8 @@ def suggest_tests(
         lines.append(f"  {label}: {by_priority[p]} test file(s)")
 
     lines.append(
-        f"\nRun these {len(sorted_suggestions)} test(s) to validate the changes "
-        f"to {len(files)} file(s)."
+        "\nThese are test candidates based on naming and static relationships. "
+        "They are not complete coverage or proof that a change is safe."
     )
 
     return "\n".join(lines)
@@ -592,13 +657,12 @@ def architecture_drift(
     project_dir = _get_project_dir()
 
     # If a custom config_path is given, verify it exists
-    if config_path:
-        if not os.path.isfile(config_path):
-            return (
-                f"Error: Architecture config not found at '{config_path}'.\n"
-                "Create a .attocode/architecture.yaml file defining your layers and rules.\n"
-                "See documentation for the expected YAML format."
-            )
+    if config_path and not os.path.isfile(config_path):
+        return (
+            f"Error: Architecture config not found at '{config_path}'.\n"
+            "Create a .attocode/architecture.yaml file defining your layers and rules.\n"
+            "See documentation for the expected YAML format."
+        )
 
     # Check that the default config exists when no override is given
     if not config_path:

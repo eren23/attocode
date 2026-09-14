@@ -234,6 +234,49 @@ async def test_remote_catalog_reports_only_supported_operations(team):
     assert not {"snapshot_restore", "notify_file_changed", "clear_all"} & names
 
 
+async def test_compact_remote_inspection_and_cursor_authorization(team):
+    import json
+    from pathlib import Path
+
+    from attocode_intel.output import response_tokens
+    from attocode_intel.remote import remote_profile
+    from sqlalchemy import delete
+
+    a, b = team.identities
+    repo = team.repos[0]
+    Path(repo.clone_path, "helper.py").write_text("def alpha_only(): return 1\nalpha_only()\nalpha_only()\n")
+    subprocess.run(["git", "-C", repo.clone_path, "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                    "-c", "core.hooksPath=/dev/null", "commit", "-am", "references"], check=True, capture_output=True)
+
+    async def call(identity, name, **args):
+        identity_token = remote_identity.set(identity)
+        profile_token = remote_profile.set("daily")
+        try:
+            return await team.gateway.execute_mcp(name, {"workspace": str(repo.id), **args})
+        finally:
+            remote_profile.reset(profile_token)
+            remote_identity.reset(identity_token)
+
+    inspected = await call(a, "inspect_symbol", symbol_name="alpha_only")
+    assert inspected.structuredContent is None and response_tokens(inspected) <= 2000
+    content = json.loads(inspected.content[0].text)
+    assert content["metadata"]["source"] == "remote"
+    assert content["metadata"]["revision"] != "working-tree"
+    assert content["data"]["definition"]["file_path"] == "helper.py"
+    page = await call(a, "cross_references", symbol_name="alpha_only", page_size=1)
+    cursor = json.loads(page.content[0].text)["data"]["next_cursor"]
+    assert cursor
+    with pytest.raises(HTTPException):
+        await call(b, "cross_references", symbol_name="alpha_only", cursor=cursor)
+    with pytest.raises(ValueError, match="inside"):
+        await call(a, "inspect_symbol", symbol_name="alpha_only", file_path="../../private.py")
+    async with team.sessions() as session:
+        await session.execute(delete(OrgMembership).where(OrgMembership.user_id == a.user_id))
+        await session.commit()
+    with pytest.raises(HTTPException):
+        await call(a, "cross_references", symbol_name="alpha_only", cursor=cursor)
+
+
 def test_team_repository_sources_cannot_select_server_files(monkeypatch):
     from attocode_intel.api.repository_source import validate_remote_source
     monkeypatch.setattr("attocode_intel.api.deps.get_config", lambda: SimpleNamespace(is_service_mode=True))

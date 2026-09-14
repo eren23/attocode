@@ -18,7 +18,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "5"
 
 
 @dataclass(slots=True)
@@ -494,6 +494,7 @@ class IndexStore:
                 DELETE FROM symbols;
                 DELETE FROM dependencies;
                 DELETE FROM files;
+                DELETE FROM metadata WHERE key = 'structural_snapshot_v1';
             """)
             conn.commit()
 

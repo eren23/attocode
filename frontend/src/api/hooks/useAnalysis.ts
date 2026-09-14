@@ -124,9 +124,11 @@ export function useSearchSymbols(repoId: string, query: string, dir?: string) {
 }
 
 interface BackendCrossRef {
+  analysis_status?: string;
+  ambiguous?: boolean | null;
   symbol: string;
   definitions: { file_path: string; start_line: number; end_line: number; kind: string; name: string; qualified_name: string; signature: string }[];
-  references: { ref_kind: string; file_path: string; line: number }[];
+  references: { ref_kind: string; file_path: string; line: number; source?: string }[];
   total_references: number;
 }
 
@@ -138,9 +140,11 @@ export function useCrossRefs(repoId: string, symbol: string) {
         `/api/v2/projects/${repoId}/cross-refs?symbol=${encodeURIComponent(symbol)}`,
       );
       return {
+        analysis_status: raw.analysis_status,
+        ambiguous: raw.ambiguous,
         symbol: raw.symbol,
         definitions: raw.definitions.map((d) => ({ file: d.file_path, line: d.start_line })),
-        references: raw.references.map((r) => ({ file: r.file_path, line: r.line })),
+        references: raw.references.map((r) => ({ file: r.file_path, line: r.line, source: r.source, ref_kind: r.ref_kind })),
       } satisfies CrossRefResult;
     },
     enabled: !!repoId && !!symbol,

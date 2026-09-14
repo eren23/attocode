@@ -135,7 +135,18 @@ class CrossRefIndex:
         with self._lock:
             self._persist_file_locked(file_path)
 
-    def _persist_file_locked(self, file_path: str) -> None:
+    def persist_files(self, file_paths: set[str]) -> None:
+        """Persist a changed batch without rescanning all references per file."""
+        with self._lock:
+            grouped: dict[str, list[SymbolRef]] = {}
+            for refs in self.references.values():
+                for ref in refs:
+                    if ref.file_path in file_paths:
+                        grouped.setdefault(ref.file_path, []).append(ref)
+            for path in sorted(file_paths):
+                self._persist_file_locked(path, grouped.get(path, []))
+
+    def _persist_file_locked(self, file_path: str, references=None) -> None:
         if self._store is None:
             return
         # Collect symbols for this file
@@ -155,17 +166,18 @@ class CrossRefIndex:
 
         # Collect references originating from this file
         ref_dicts: list[dict[str, Any]] = []
-        for ref_name, refs in self.references.items():
-            for ref in refs:
-                if ref.file_path == file_path:
-                    ref_dicts.append({
-                        "symbol_name": ref.symbol_name,
-                        "ref_kind": ref.ref_kind,
-                        "line": ref.line,
-                        "column": 0,
-                        "source": ref.source,
-                        "caller_qualified_name": ref.caller_qualified_name,
-                    })
+        refs = references if references is not None else (
+            ref for refs in self.references.values() for ref in refs if ref.file_path == file_path
+        )
+        for ref in refs:
+            ref_dicts.append({
+                "symbol_name": ref.symbol_name,
+                "ref_kind": ref.ref_kind,
+                "line": ref.line,
+                "column": 0,
+                "source": ref.source,
+                "caller_qualified_name": ref.caller_qualified_name,
+            })
         self._store.save_references(file_path, ref_dicts)
 
     def load_from_store(self) -> int:
@@ -227,6 +239,7 @@ class CrossRefIndex:
         file_path: str,
         definitions: list[SymbolLocation],
         references: list[SymbolRef],
+        *, verified_symbol: bool = False,
     ) -> int:
         """Merge LSP-sourced results into the index.
 
@@ -234,13 +247,14 @@ class CrossRefIndex:
         Returns the number of new entries added.
         """
         with self._lock:
-            return self._merge_lsp_results_locked(file_path, definitions, references)
+            return self._merge_lsp_results_locked(file_path, definitions, references, verified_symbol=verified_symbol)
 
     def _merge_lsp_results_locked(
         self,
         file_path: str,
         definitions: list[SymbolLocation],
         references: list[SymbolRef],
+        *, verified_symbol: bool = False,
     ) -> int:
         added = 0
 
@@ -287,7 +301,7 @@ class CrossRefIndex:
                     break
 
             if dup_index is not None:
-                if lsp_ref.caller_qualified_name:
+                if lsp_ref.caller_qualified_name or verified_symbol:
                     existing[dup_index] = lsp_ref
                     if lsp_ref.ref_kind == "call":
                         self.add_call_edge(
@@ -513,9 +527,7 @@ class CrossRefIndex:
 
     def get_references(self, symbol_name: str) -> list[SymbolRef]:
         """Look up all call sites / references for a symbol (exact or suffix match)."""
-        # Exact match first
-        if symbol_name in self.references:
-            return self.references[symbol_name]
+        # Include exact and qualified candidates; an exact key must not hide others.
         # Suffix match (e.g. "clear" matches refs keyed as "MCPMetaTools.clear")
         results: list[SymbolRef] = []
         for ref_name, refs in self.references.items():

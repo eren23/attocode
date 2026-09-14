@@ -127,48 +127,25 @@ async def lsp_enrich(files: list[str]) -> str:
     if remote is not None:
         return await remote.lsp_enrich(files)
 
-    from attocode_intel._shared import _get_ast_service
+    from attocode_intel.precision import PrecisionSession
+    from attocode_intel.request_context import current_request
 
-    lsp = _get_lsp_manager()
-    project_dir = _get_project_dir()
-    ast_svc = _get_ast_service()
-
-    # Wire callback if not already wired
-    if lsp.on_result_callback is None:
-        lsp.on_result_callback = ast_svc.ingest_lsp_results
-
-    enriched = 0
-    errors: list[str] = []
-
-    for f in files:
-        abs_path = f if os.path.isabs(f) else os.path.join(project_dir, f)
-        rel_path = os.path.relpath(abs_path, project_dir)
-
-        # Get symbols defined in this file
-        symbols = ast_svc.get_file_symbols(rel_path)
-        if not symbols:
-            continue
-
-        for sym in symbols:
-            try:
-                # Query LSP for definition (fires callback → ingest_lsp_results)
-                await lsp.get_definition(abs_path, sym.start_line - 1, 0)
-                # Query LSP for references
-                await lsp.get_references(abs_path, sym.start_line - 1, 0)
-                enriched += 1
-            except Exception as exc:
-                errors.append(f"{rel_path}:{sym.name}: {exc}")
-                break  # stop on first error per file (LSP probably down)
-
-    lines = [
-        "LSP enrichment complete.",
-        f"  Files processed: {len(files)}",
-        f"  Symbols enriched: {enriched}",
-    ]
-    if errors:
-        lines.append(f"  Errors: {len(errors)}")
-        for err in errors[:5]:
-            lines.append(f"    {err}")
+    service = _get_service()
+    request = current_request.get()
+    session = (request.stores.setdefault("precision", PrecisionSession(service))
+               if request else PrecisionSession(service))
+    ast_svc = service._get_ast_service()
+    outcomes = []
+    for file in files:
+        rel_path = os.path.relpath(file, service.project_dir) if os.path.isabs(file) else file
+        for symbol in ast_svc.get_file_symbols(rel_path):
+            outcome = await session.enrich(symbol.qualified_name, rel_path)
+            outcomes.extend(outcome.get("queries", [{"status": outcome["status"]}]))
+    verified = sum(item["status"] == "verified" for item in outcomes)
+    lines = ["LSP enrichment complete.", f"  Files processed: {len(files)}",
+             f"  Symbols enriched: {verified}",
+             f"  Unverified queries: {len(outcomes) - verified}",
+             "Missing relationships do not prove absence; syntax candidates remain available."]
     return "\n".join(lines)
 
 

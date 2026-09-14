@@ -9,8 +9,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from attocode_intel._internal.integrations.utilities.token_estimate import count_tokens
 from attocode_intel.gateway import OperationGateway
+from attocode_intel.output import response_tokens
 
 
 async def evaluate(size: int, root: Path):
@@ -26,16 +26,16 @@ async def evaluate(size: int, root: Path):
         gateway = OperationGateway(str(root), profile="daily", watch=False)
         try:
             started = time.monotonic()
-            bootstrap = await gateway.execute(
+            bootstrap = await gateway.execute_mcp(
                 "bootstrap", {"task_hint": f"operation_{size - 1}", "max_tokens": 2000}
             )
             result[f"{label}_bootstrap_ms"] = round((time.monotonic() - started) * 1000, 1)
-            tokens = count_tokens(bootstrap.content[0].text)
+            tokens = response_tokens(bootstrap)
             result[f"{label}_tokens"] = tokens
             assert tokens <= 2000
             assert result[f"{label}_bootstrap_ms"] < 30_000, "Bootstrap exceeded 30 second gate"
             started = time.monotonic()
-            symbol = await gateway.execute("symbols", {"path": f"module_{size - 1}.py"})
+            symbol = await gateway.execute_mcp("symbols", {"path": f"module_{size - 1}.py"})
             result[f"{label}_lookup_ms"] = round((time.monotonic() - started) * 1000, 1)
             assert f"operation_{size - 1}" in symbol.content[0].text
             assert result[f"{label}_lookup_ms"] < 5000, "Focused lookup exceeded 5 second gate"

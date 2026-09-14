@@ -13,21 +13,27 @@ from collections import Counter, deque
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from attocode_intel.config import CodeIntelConfig
 from attocode_intel._internal.integrations.utilities.token_estimate import estimate_tokens
+from attocode_intel.config import CodeIntelConfig
 
 if TYPE_CHECKING:
     from attocode_intel._internal.integrations.context.ast_service import ASTService
     from attocode_intel._internal.integrations.context.code_analyzer import CodeAnalyzer
-    from attocode_intel._internal.integrations.context.codebase_context import CodebaseContextManager
-    from attocode_intel._internal.integrations.context.hierarchical_explorer import HierarchicalExplorer
+    from attocode_intel._internal.integrations.context.codebase_context import (
+        CodebaseContextManager,
+    )
+    from attocode_intel._internal.integrations.context.hierarchical_explorer import (
+        HierarchicalExplorer,
+    )
     from attocode_intel._internal.integrations.context.memory_store import MemoryStore
     from attocode_intel._internal.integrations.context.semantic_search import (
         ContextAssemblyConfig,
         SearchScoringConfig,
         SemanticSearchManager,
     )
-    from attocode_intel._internal.integrations.context.temporal_coupling import TemporalCouplingAnalyzer
+    from attocode_intel._internal.integrations.context.temporal_coupling import (
+        TemporalCouplingAnalyzer,
+    )
     from attocode_intel._internal.integrations.lsp.client import LSPManager
     from attocode_intel._internal.integrations.security.scanner import SecurityScanner
 
@@ -89,14 +95,15 @@ class CodeIntelService:
             with self._init_lock:
                 if self._ast_service is None:
                     from attocode_intel._internal.integrations.context.ast_service import ASTService
-
                     from attocode_intel.request_context import current_request
                     svc = ASTService(self._project_dir) if current_request.get() else ASTService.get_instance(self._project_dir)
                     if current_request.get():
                         svc._context_mgr.max_files = int(os.environ.get("ATTOCODE_INTEL_MAX_FILES", "100000"))
                     if not svc.initialized:
                         logger.info("Initializing ASTService (skeleton)...")
-                        svc.initialize_skeleton(indexing_depth=indexing_depth)
+                        from attocode_intel.telemetry import measure
+                        with measure("indexing"):
+                            svc.initialize_skeleton(indexing_depth=indexing_depth)
                         # Start background hydration for non-small repos
                         if (svc._hydration_state
                                 and svc._hydration_state.phase != "ready"):
@@ -129,25 +136,31 @@ class CodeIntelService:
         if self._code_analyzer is None:
             with self._init_lock:
                 if self._code_analyzer is None:
-                    from attocode_intel._internal.integrations.context.code_analyzer import CodeAnalyzer
+                    from attocode_intel._internal.integrations.context.code_analyzer import (
+                        CodeAnalyzer,
+                    )
 
                     self._code_analyzer = CodeAnalyzer()
         return self._code_analyzer
 
     def _get_lsp_manager(self) -> LSPManager:
         if self._lsp_manager is None:
+            # AST initialization takes the same non-reentrant lock.
+            ast_svc = self._get_ast_service()
             with self._init_lock:
                 if self._lsp_manager is None:
-                    from attocode_intel._internal.integrations.lsp.client import LSPConfig, LSPManager
+                    from attocode_intel._internal.integrations.lsp.client import (
+                        LSPConfig,
+                        LSPManager,
+                    )
 
                     config = LSPConfig(
                         enabled=True,
-                        root_uri=f"file://{self._project_dir}",
+                        root_uri=Path(self._project_dir).resolve().as_uri(),
                     )
                     mgr = LSPManager(config=config)
                     # Wire LSP results back into the cross-ref index
                     try:
-                        ast_svc = self._get_ast_service()
                         mgr.on_result_callback = ast_svc.ingest_lsp_results
                     except Exception:
                         pass  # ASTService may not be ready yet
@@ -174,7 +187,9 @@ class CodeIntelService:
         if self._security_scanner is None:
             with self._init_lock:
                 if self._security_scanner is None:
-                    from attocode_intel._internal.integrations.security.scanner import SecurityScanner
+                    from attocode_intel._internal.integrations.security.scanner import (
+                        SecurityScanner,
+                    )
 
                     self._security_scanner = SecurityScanner(root_dir=self._project_dir)
         return self._security_scanner
@@ -183,7 +198,9 @@ class CodeIntelService:
         if self._semantic_search is None:
             with self._init_lock:
                 if self._semantic_search is None:
-                    from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
+                    from attocode_intel._internal.integrations.context.semantic_search import (
+                        SemanticSearchManager,
+                    )
 
                     kwargs: dict[str, object] = {"root_dir": self._project_dir}
                     if self._scoring_config is not None:
@@ -210,7 +227,9 @@ class CodeIntelService:
         if self._memory_store is None:
             with self._init_lock:
                 if self._memory_store is None:
-                    from attocode_intel._internal.integrations.context.memory_store import MemoryStore
+                    from attocode_intel._internal.integrations.context.memory_store import (
+                        MemoryStore,
+                    )
 
                     self._memory_store = MemoryStore(self._project_dir)
         return self._memory_store
@@ -454,6 +473,7 @@ class CodeIntelService:
     def symbols_data(self, path: str) -> list[dict]:
         """Return raw symbol locations for a file."""
         svc = self._get_ast_service()
+        svc.ensure_file_parsed(path)
         locs = svc.get_file_symbols(path)
         return [
             {
@@ -483,6 +503,7 @@ class CodeIntelService:
     def dependencies_data(self, path: str) -> dict:
         """Return structured dependency data."""
         svc = self._get_ast_service()
+        svc.ensure_file_parsed(path)
         deps = svc.get_dependencies(path)
         dependents = svc.get_dependents(path)
         return {
@@ -516,6 +537,8 @@ class CodeIntelService:
             "changed_files": changed_files,
             "impacted_files": impacted,
             "total_impacted": len(impacted),
+            "interpretation": "potential_graph_reachability",
+            "absence_proven": False,
             "layers": layers,
         }
 
@@ -523,6 +546,8 @@ class CodeIntelService:
         """Return structured cross-reference data."""
         svc = self._get_ast_service()
         definitions = svc.find_symbol(symbol_name)
+        for definition in definitions:
+            svc.ensure_references_indexed(definition.file_path)
         references = svc.get_callers(symbol_name)
         return {
             "symbol": symbol_name,
@@ -536,10 +561,12 @@ class CodeIntelService:
                 for loc in definitions
             ],
             "references": [
-                {"ref_kind": ref.ref_kind, "file_path": ref.file_path, "line": ref.line}
+                {"ref_kind": ref.ref_kind, "file_path": ref.file_path, "line": ref.line,
+                 "source": ref.source, "symbol": ref.symbol_name}
                 for ref in references
             ],
             "total_references": len(references),
+            "ambiguous": len({(d.file_path, d.qualified_name) for d in definitions}) > 1,
         }
 
     def call_graph_data(
@@ -555,6 +582,8 @@ class CodeIntelService:
         ``depth`` caps the BFS hops; results from intermediate hops are
         included alongside the final frontier.
         """
+        if direction not in {"callers", "callees"} or depth < 1:
+            raise ValueError("call_graph requires callers/callees direction and depth >= 1")
         svc = self._get_ast_service()
         definitions = svc.find_symbol(symbol)
         # Ensure the file(s) containing the symbol have references parsed
@@ -1784,7 +1813,7 @@ class CodeIntelService:
         lines = [f"Definitions matching '{name}' ({len(scored)} results):"]
         for loc, score in scored:
             lines.append(
-                f"  [{score:.0%}] {loc.kind} {loc.qualified_name}  "
+                f"  [score {score:.3f}] {loc.kind} {loc.qualified_name}  "
                 f"in {loc.file_path}:{loc.start_line}-{loc.end_line}"
             )
         return "\n".join(lines)
@@ -1813,9 +1842,9 @@ class CodeIntelService:
         svc = self._get_ast_service()
         impacted = svc.get_impact(changed_files)
         if not impacted:
-            return f"No other files are impacted by changes to {', '.join(changed_files)}"
+            return f"No indexed relationships found for {', '.join(changed_files)}. Missing relationships do not prove absence of impact."
         lines = [f"Impact analysis for {', '.join(changed_files)}:"]
-        lines.append(f"\n  {len(impacted)} files affected:")
+        lines.append(f"\n  {len(impacted)} potentially related files (static graph reachability):")
         for f in sorted(impacted):
             lines.append(f"    {f}")
         return "\n".join(lines)
@@ -2018,20 +2047,21 @@ class CodeIntelService:
         max_tokens: int = 4000,
         include_symbols: bool = True,
     ) -> str:
-        from attocode_intel._internal.integrations.context.semantic_search import ContextAssemblyConfig
+        from attocode_intel._internal.integrations.context.semantic_search import (
+            ContextAssemblyConfig,
+        )
 
         cc = self._context_config or ContextAssemblyConfig()
 
         svc = self._get_ast_service()
         ctx = self._get_context_mgr()
-        ast_cache = svc._ast_cache.copy()
         all_files = {fi.relative_path: fi for fi in ctx._files}
 
         depth = min(depth, cc.max_depth)
         center_rels: list[str] = []
         for f in files:
-            rel = svc._to_rel(f)
-            if rel:
+            rel = os.path.normpath(svc._to_rel(f))
+            if rel in all_files:
                 center_rels.append(rel)
         if not center_rels:
             return "No valid files provided."
@@ -2069,7 +2099,9 @@ class CodeIntelService:
 
         for rel, (dist, relationship) in sorted_files:
             fi = all_files.get(rel)
-            file_ast = ast_cache.get(rel)
+            if include_symbols and fi is not None:
+                svc.ensure_file_parsed(rel)
+            file_ast = svc._ast_cache.get(rel)
             lang = fi.language if fi else ""
             line_count = fi.line_count if fi else 0
             importance = fi.importance if fi else 0.0
@@ -2081,11 +2113,15 @@ class CodeIntelService:
             if include_symbols and file_ast:
                 max_sym = cc.center_symbol_cap if dist == 0 else cc.neighbor_symbol_cap
                 sym_lines: list[str] = []
-                for fn in file_ast.functions[:max_sym]:
+                functions = sorted(file_ast.functions, key=lambda fn: (fn.is_nested, fn.name.startswith("_"), fn.start_line))
+                # Keep a representative API surface when functions and types coexist.
+                classes = sorted(file_ast.classes, key=lambda cls: (-len(cls.methods), cls.start_line))
+                fn_limit = max_sym if not classes else max(1, max_sym // 2)
+                for fn in functions[:fn_limit]:
                     params = ", ".join(p.name for p in fn.parameters[:cc.param_preview_limit])
                     ret = f" -> {fn.return_type}" if fn.return_type else ""
                     sym_lines.append(f"    fn {fn.name}({params}){ret}")
-                for cls in file_ast.classes[:max_sym]:
+                for cls in classes[:max_sym - len(sym_lines)]:
                     bases = f"({', '.join(cls.bases[:cc.base_preview_limit])})" if cls.bases else ""
                     methods_preview = ", ".join(m.name for m in cls.methods[:cc.method_preview_limit])
                     sym_lines.append(f"    class {cls.name}{bases}: {methods_preview}")
@@ -2204,8 +2240,10 @@ class CodeIntelService:
         return "\n\n".join(output_parts)
 
     def bootstrap(self, task_hint: str = "", max_tokens: int = 8000, indexing_depth: str = "auto") -> str:
+        from attocode_intel._internal.integrations.context.semantic_search import (
+            ContextAssemblyConfig,
+        )
         from attocode_intel.helpers import _analyze_conventions, _format_conventions
-        from attocode_intel._internal.integrations.context.semantic_search import ContextAssemblyConfig
 
         cc = self._context_config or ContextAssemblyConfig()
 
