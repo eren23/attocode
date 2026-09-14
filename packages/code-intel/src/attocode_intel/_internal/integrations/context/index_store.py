@@ -16,9 +16,17 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from filelock import FileLock
+
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "5"
+SCHEMA_VERSION = "6"
+SQLITE_BUSY_TIMEOUT_MS = 30_000
+INDEX_INIT_LOCK_TIMEOUT_SECONDS = 30
+
+
+class IndexSchemaVersionError(RuntimeError):
+    """The persisted structural index cannot be opened by this client version."""
 
 
 @dataclass(slots=True)
@@ -58,6 +66,7 @@ class StoredReference:
     line: int
     column: int
     source: str  # "tree-sitter" | "lsp"
+    syntax_name: str = ""  # identifier/member expression as written in source
     caller_qualified_name: str = ""  # enclosing function/method (call-graph edge)
 
 
@@ -85,13 +94,46 @@ class IndexStore:
 
     def __post_init__(self) -> None:
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        try:
+            if self.db_path == ":memory:":
+                self._initialize_connection()
+            else:
+                # Multiple MCP clients commonly share one workspace. Serialize
+                # schema inspection/rebuild so simultaneous restarts do not race
+                # over DDL while hydration is opening the same SQLite store.
+                with FileLock(f"{self.db_path}.init.lock", timeout=INDEX_INIT_LOCK_TIMEOUT_SECONDS):
+                    self._initialize_connection()
+        except Exception:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+            raise
+
+    def _initialize_connection(self) -> None:
+        self._conn = sqlite3.connect(
+            self.db_path,
+            check_same_thread=False,
+            timeout=SQLITE_BUSY_TIMEOUT_MS / 1000,
+        )
+        self._conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._migrate_stale_schema()
         self._create_tables()
         self._check_schema_version()
+
+    @staticmethod
+    def _compare_schema_version(stored: str) -> int:
+        try:
+            stored_version = int(stored)
+            current_version = int(SCHEMA_VERSION)
+        except ValueError as error:
+            raise IndexSchemaVersionError(
+                f"Unrecognized structural index schema {stored!r}; "
+                "upgrade Attocode or rebuild the workspace index."
+            ) from error
+        return (stored_version > current_version) - (stored_version < current_version)
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -119,6 +161,11 @@ class IndexStore:
             return  # no metadata table => brand-new DB, nothing to migrate
         if not row or row[0] == SCHEMA_VERSION:
             return
+        if self._compare_schema_version(row[0]) > 0:
+            raise IndexSchemaVersionError(
+                f"Structural index schema {row[0]} is newer than this client's "
+                f"schema {SCHEMA_VERSION}; restart using the upgraded Attocode executable."
+            )
         logger.warning(
             "Index schema is stale (%s, expected %s); dropping data tables in "
             "%r so the new schema can be created — a full re-index will run on "
@@ -169,6 +216,7 @@ class IndexStore:
                 line INTEGER NOT NULL DEFAULT 0,
                 col INTEGER NOT NULL DEFAULT 0,
                 source TEXT NOT NULL DEFAULT 'tree-sitter',
+                syntax_name TEXT NOT NULL DEFAULT '',
                 caller_qualified_name TEXT NOT NULL DEFAULT ''
             );
 
@@ -195,6 +243,11 @@ class IndexStore:
         ).fetchone()
         if row:
             if row[0] != SCHEMA_VERSION:
+                if self._compare_schema_version(row[0]) > 0:
+                    raise IndexSchemaVersionError(
+                        f"Structural index schema {row[0]} is newer than this client's "
+                        f"schema {SCHEMA_VERSION}; restart using the upgraded Attocode executable."
+                    )
                 # Schema migrations clear all persisted index data — the
                 # first request after upgrade will trigger a full
                 # re-index that may take a while on big repos. We log
@@ -397,6 +450,7 @@ class IndexStore:
                 r.get("line", 0),
                 r.get("column", 0),
                 r.get("source", "tree-sitter"),
+                r.get("syntax_name", ""),
                 r.get("caller_qualified_name", ""),
             )
             for r in refs
@@ -406,8 +460,8 @@ class IndexStore:
             conn.executemany(
                 """INSERT INTO refs
                    (file_path, symbol_name, ref_kind, line, col, source,
-                    caller_qualified_name)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    syntax_name, caller_qualified_name)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 rows,
             )
             conn.commit()
@@ -419,18 +473,19 @@ class IndexStore:
             if file_path:
                 rows = conn.execute(
                     "SELECT id, file_path, symbol_name, ref_kind, line, col, "
-                    "source, caller_qualified_name FROM refs WHERE file_path = ?",
+                    "source, syntax_name, caller_qualified_name FROM refs WHERE file_path = ?",
                     (file_path,),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT id, file_path, symbol_name, ref_kind, line, col, "
-                    "source, caller_qualified_name FROM refs"
+                    "source, syntax_name, caller_qualified_name FROM refs"
                 ).fetchall()
         return [
             StoredReference(
                 id=r[0], file_path=r[1], symbol_name=r[2], ref_kind=r[3],
-                line=r[4], column=r[5], source=r[6], caller_qualified_name=r[7],
+                line=r[4], column=r[5], source=r[6], syntax_name=r[7],
+                caller_qualified_name=r[8],
             )
             for r in rows
         ]

@@ -58,6 +58,7 @@ class SymbolRef:
     file_path: str
     line: int
     source: str = "tree-sitter"  # "tree-sitter" | "lsp"
+    syntax_name: str = ""  # identifier/member expression as written in source
     # Qualified name of the function/method enclosing this reference. Empty
     # when the reference is at module top level or the enclosing symbol
     # could not be resolved. Populated for call-graph construction.
@@ -176,6 +177,7 @@ class CrossRefIndex:
                 "line": ref.line,
                 "column": 0,
                 "source": ref.source,
+                "syntax_name": ref.syntax_name,
                 "caller_qualified_name": ref.caller_qualified_name,
             })
         self._store.save_references(file_path, ref_dicts)
@@ -220,6 +222,7 @@ class CrossRefIndex:
                 file_path=r.file_path,
                 line=r.line,
                 source=r.source,
+                syntax_name=getattr(r, "syntax_name", ""),
                 caller_qualified_name=getattr(r, "caller_qualified_name", ""),
             )
             self.add_reference(ref)
@@ -284,6 +287,7 @@ class CrossRefIndex:
                 symbol_name=ref.symbol_name, ref_kind=ref.ref_kind,
                 file_path=ref.file_path, line=ref.line,
                 source="lsp",
+                syntax_name=ref.syntax_name,
                 caller_qualified_name=ref.caller_qualified_name,
             )
             # LSP wins on (file, line) collision — but ONLY when the
@@ -302,6 +306,8 @@ class CrossRefIndex:
 
             if dup_index is not None:
                 if lsp_ref.caller_qualified_name or verified_symbol:
+                    if not lsp_ref.syntax_name:
+                        lsp_ref.syntax_name = existing[dup_index].syntax_name
                     existing[dup_index] = lsp_ref
                     if lsp_ref.ref_kind == "call":
                         self.add_call_edge(

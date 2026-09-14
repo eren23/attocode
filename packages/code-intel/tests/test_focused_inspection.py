@@ -26,10 +26,143 @@ async def test_selected_symbol_beats_module_and_filename_matches(tmp_path, monke
         assert bundle["tests"] == suggestions["candidates"][:5]
         assert bundle["tests"][0]["file_path"] == "test_regression.py"
         assert bundle["tests"][0]["evidence"]["selected_symbol_reference"]
-        assert "verify same-name" in bundle["tests"][0]["reasons"][0]
+        assert "linked to selected symbol" in bundle["tests"][0]["reasons"][0]
         changed = decode(await gateway.execute_mcp("inspect_symbol", {**args, "symbol_name": other}))
         assert changed["tests"][0]["file_path"] != "test_regression.py"
         assert not suggestions["absence_proven"]
+    finally:
+        await gateway.close()
+
+async def test_selected_definition_separates_same_name_references_and_tests(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    (tmp_path / "backend.ts").write_text(
+        'export function getAncestryChain(){ return ["backend"] }\n')
+    (tmp_path / "frontend.ts").write_text(
+        'export function getAncestryChain(){ return ["frontend"] }\n')
+    (tmp_path / "backend.test.ts").write_text(
+        'import {getAncestryChain} from "./backend";\n'
+        'test("backend", () => getAncestryChain());\n'
+        'test("unrelated member", () => other.getAncestryChain());\n')
+    (tmp_path / "frontend.test.ts").write_text(
+        'import {getAncestryChain} from "./frontend";\n'
+        'test("frontend", () => getAncestryChain());\n')
+    (tmp_path / "noise.test.ts").write_text(
+        'function getAncestryChain(){ return [] }\n'
+        'test("noise", () => getAncestryChain());\n')
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        selected = decode(await gateway.execute_mcp("inspect_symbol", {
+            "symbol_name": "getAncestryChain", "file_path": "backend.ts", "line": 1}))
+        assert {ref["file_path"] for ref in selected["references"]} == {"backend.test.ts"}
+        assert all(ref["resolution"] == "import_binding" for ref in selected["references"])
+        assert {ref["file_path"] for ref in selected["reference_candidates"]} == {
+            "backend.test.ts", "frontend.test.ts", "noise.test.ts"}
+        assert any(ref.get("syntax") == "other.getAncestryChain"
+                   for ref in selected["reference_candidates"])
+        assert selected["tests"][0]["file_path"] == "backend.test.ts"
+        assert selected["tests"][0]["evidence"]["selected_symbol_reference"]
+        assert all(not row["evidence"]["selected_symbol_reference"]
+                   for row in selected["tests"][1:])
+        assert "get" not in selected["tests"][-1]["evidence"]["symbol_terms"]
+    finally:
+        await gateway.close()
+
+    # The written member expression must survive the persistent-index path;
+    # otherwise restart would turn it back into a linked bare-name call.
+    reopened = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        selected = decode(await reopened.execute_mcp("inspect_symbol", {
+            "symbol_name": "getAncestryChain", "file_path": "backend.ts", "line": 1}))
+        assert any(ref.get("syntax") == "other.getAncestryChain"
+                   for ref in selected["reference_candidates"])
+    finally:
+        await reopened.close()
+
+
+@pytest.mark.parametrize("language", ["python", "typescript"])
+async def test_alias_reexports_link_calls_to_original_definition(tmp_path, monkeypatch, language):
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    if language == "python":
+        package = tmp_path / "pkg"
+        package.mkdir()
+        (package / "impl.py").write_text("def calculate(): return 1\n")
+        (package / "__init__.py").write_text("from .impl import calculate as compute\n")
+        (tmp_path / "test_calc.py").write_text(
+            "from pkg import compute as run\ndef test_calc(): assert run() == 1\n")
+        file_path, test_path = "pkg/impl.py", "test_calc.py"
+    else:
+        (tmp_path / "impl.ts").write_text("export function calculate(){ return 1 }\n")
+        (tmp_path / "barrel.ts").write_text(
+            'export {calculate as compute} from "./impl";\n')
+        (tmp_path / "calc.test.ts").write_text(
+            'import {compute as run} from "./barrel";\n'
+            'test("calculate", () => run());\n')
+        file_path, test_path = "impl.ts", "calc.test.ts"
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        selected = decode(await gateway.execute_mcp("inspect_symbol", {
+            "symbol_name": "calculate", "file_path": file_path, "line": 1}))
+        test_refs = [ref for ref in selected["references"] if ref["file_path"] == test_path]
+        assert any(ref["ref_kind"] == "call" for ref in test_refs)
+        assert not selected["reference_candidates"]
+        assert selected["tests"][0]["file_path"] == test_path
+        assert selected["tests"][0]["evidence"] == {
+            "selected_symbol_reference": True,
+            "reference_resolution": "linked",
+            "symbol_terms": [],
+            "task_terms": [],
+            "import_distance": 2,
+        }
+    finally:
+        await gateway.close()
+
+
+async def test_typescript_wildcard_and_namespace_reexports_link_calls(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    (tmp_path / "impl.ts").write_text("export function calculate(){ return 1 }\n")
+    (tmp_path / "wildcard.ts").write_text('export * from "./impl";\n')
+    (tmp_path / "namespace.ts").write_text('export * as math from "./impl";\n')
+    (tmp_path / "wildcard.test.ts").write_text(
+        'import {calculate as execute} from "./wildcard";\n'
+        'test("wildcard", () => execute());\n')
+    (tmp_path / "namespace.test.ts").write_text(
+        'import {math} from "./namespace";\n'
+        'test("namespace", () => math.calculate());\n')
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        selected = decode(await gateway.execute_mcp("inspect_symbol", {
+            "symbol_name": "calculate", "file_path": "impl.ts", "line": 1}))
+        calls = {(ref["file_path"], ref["symbol"]) for ref in selected["references"]
+                 if ref["ref_kind"] == "call"}
+        assert calls == {("wildcard.test.ts", "execute"),
+                         ("namespace.test.ts", "math.calculate")}
+        assert not selected["reference_candidates"]
+        assert {row["file_path"] for row in selected["tests"][:2]} == {
+            "wildcard.test.ts", "namespace.test.ts"}
+        assert all(row["evidence"]["selected_symbol_reference"] for row in selected["tests"][:2])
+    finally:
+        await gateway.close()
+
+
+async def test_same_file_methods_use_enclosing_class_scope(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    (tmp_path / "models.ts").write_text(
+        "class Backend {\n"
+        "  run(){ return 1 }\n"
+        "  invoke(){ return this.run() }\n"
+        "}\n"
+        "class Frontend {\n"
+        "  run(){ return 2 }\n"
+        "  invoke(){ return this.run() }\n"
+        "}\n")
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        selected = decode(await gateway.execute_mcp("inspect_symbol", {
+            "symbol_name": "Backend.run", "file_path": "models.ts", "line": 2}))
+        assert [(ref["line"], ref["resolution"]) for ref in selected["references"]] == [
+            (3, "same_file")]
+        assert any(ref["line"] == 7 and ref["resolution"] == "same_name_candidate"
+                   for ref in selected["reference_candidates"])
     finally:
         await gateway.close()
 

@@ -1,12 +1,21 @@
 """Restart reuse must preserve evidence and reject changed or incomplete caches."""
 
 import os
+import sqlite3
+import time
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from attocode_intel._internal.integrations.context import ast_service
 from attocode_intel._internal.integrations.context.ast_service import ASTService
+from attocode_intel._internal.integrations.context.index_store import (
+    SQLITE_BUSY_TIMEOUT_MS,
+    IndexSchemaVersionError,
+    IndexStore,
+    StoredFile,
+)
 from attocode_intel.freshness import FreshnessTracker
 from attocode_intel.symbol_inspection import select_definitions
 
@@ -20,6 +29,44 @@ def repository(root):
 def close(service):
     service.stop_hydration()
     service._store.close()
+
+
+def test_index_store_waits_for_short_cross_process_writes(tmp_path):
+    db_path = str(tmp_path / "symbols.db")
+    store = IndexStore(db_path=db_path)
+    try:
+        assert store._get_conn().execute("PRAGMA busy_timeout").fetchone()[0] == SQLITE_BUSY_TIMEOUT_MS
+        with sqlite3.connect(db_path) as writer, ThreadPoolExecutor(max_workers=1) as pool:
+            writer.execute("BEGIN IMMEDIATE")
+            writer.execute("UPDATE metadata SET value = value WHERE key = 'schema_version'")
+            waiting_write = pool.submit(store.set_meta, "after_lock", "saved")
+            time.sleep(0.05)
+            assert not waiting_write.done()
+            writer.commit()
+            waiting_write.result(timeout=2)
+        assert store.get_meta("after_lock") == "saved"
+    finally:
+        store.close()
+
+
+def test_older_client_refuses_newer_schema_without_deleting_data(tmp_path):
+    db_path = str(tmp_path / "symbols.db")
+    store = IndexStore(db_path=db_path)
+    store.save_file(StoredFile(
+        path="sentinel.py", mtime=1, size=1, language="python",
+        line_count=1, content_hash="sentinel",
+    ))
+    store.close()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE metadata SET value = '999' WHERE key = 'schema_version'")
+        conn.commit()
+
+    with pytest.raises(IndexSchemaVersionError, match="newer than this client's"):
+        IndexStore(db_path=db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT value FROM metadata WHERE key = 'schema_version'").fetchone() == ("999",)
+        assert conn.execute("SELECT path FROM files").fetchall() == [("sentinel.py",)]
 
 
 def test_restart_restores_complete_index_beyond_skeleton_budget(tmp_path, monkeypatch):

@@ -6,7 +6,7 @@ import re
 import tokenize
 from collections import Counter
 
-STOP_WORDS = frozenset({"a", "an", "and", "are", "as", "at", "be", "by", "code", "def", "do", "does", "for", "from", "function", "how", "in", "is", "it", "method", "of", "on", "or", "return", "self", "test", "tests", "the", "this", "to", "use", "value", "with"})
+STOP_WORDS = frozenset({"a", "an", "and", "are", "as", "at", "be", "by", "code", "def", "do", "does", "for", "from", "function", "get", "how", "in", "is", "it", "method", "of", "on", "or", "return", "self", "test", "tests", "the", "this", "to", "use", "value", "with"})
 
 
 def terms(text):

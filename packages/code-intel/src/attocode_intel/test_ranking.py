@@ -14,14 +14,18 @@ def is_test_path(path):
             or name.endswith(("_test.py", "_test.go", "Test.java", "Test.kt")))
 
 
-def rank_symbol_tests(ast, suggestions, files, symbol_name, task_hint, distances):
+def rank_symbol_tests(ast, suggestions, files, symbol_name, task_hint, distances,
+                      linked_reference_files=None):
     selected = [s for f in files for s in ast.get_file_symbols(f)
                 if s.file_path == f and (s.name == symbol_name or s.qualified_name == symbol_name)]
     symbol_terms = terms(symbol_name or "")
     hint_terms = terms(task_hint or "")
-    direct = set()
-    for symbol in selected:
-        direct.update(r.file_path for r in ast.get_callers(symbol.qualified_name) if is_test_path(r.file_path))
+    direct = set(linked_reference_files or ())
+    if linked_reference_files is None:
+        for symbol in selected:
+            from attocode_intel.symbol_links import classify_symbol_references
+            linked, _ = classify_symbol_references(ast, symbol)
+            direct.update(r["file_path"] for r in linked if is_test_path(r["file_path"]))
     # Search indexed test names as well as paths. A generic suite filename can
     # contain a focused regression; filename matching alone should not hide it.
     matches = {}
@@ -37,7 +41,7 @@ def rank_symbol_tests(ast, suggestions, files, symbol_name, task_hint, distances
             continue
         reasons = []
         if path in direct:
-            reasons.append(f"Syntax reference to selected symbol `{symbol_name}`; verify same-name targets")
+            reasons.append(f"Reference linked to selected symbol `{symbol_name}` by import or language-server evidence")
         if symbol_hits:
             reasons.append("Test name/path matches symbol terms: " + ", ".join(sorted(symbol_hits)))
         if hint_hits:
@@ -46,13 +50,15 @@ def rank_symbol_tests(ast, suggestions, files, symbol_name, task_hint, distances
         matches[path] = {"file_path": path, "priority": 1 if path in direct else info["priority"],
                          "reasons": (reasons + info["reasons"])[:3],
                          "evidence": {"selected_symbol_reference": path in direct,
+                                      "reference_resolution": "linked" if path in direct else None,
                                       "symbol_terms": sorted(symbol_hits), "task_terms": sorted(hint_hits),
                                       "import_distance": distances.get(path)}}
     def order(row):
         evidence = row["evidence"]
-        # Selected-symbol references are strongest. Topic-specific test names can
-        # outrank a broad module import, but remain explicitly lexical candidates.
+        # Selected-symbol references are strongest, followed by an actual reverse
+        # import path. Lexical matches remain useful candidates after graph evidence.
         return (not evidence["selected_symbol_reference"],
+                evidence["import_distance"] is None,
                 -(len(evidence["task_terms"]) + len(evidence["symbol_terms"])),
                 row["priority"], evidence["import_distance"] if evidence["import_distance"] is not None else float("inf"),
                 row["file_path"].startswith("docs/"), row["file_path"])
