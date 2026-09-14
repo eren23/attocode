@@ -194,15 +194,18 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
             await session.initialize()
             catalog = await session.list_tools()
             result = await session.call_tool(
-                "capabilities", {"workspace": str(root)} if "url" not in entry else {}
+                "capabilities", {"max_tokens": 16000, **({"workspace": str(root)} if "url" not in entry else {})}
             )
             if result.isError:
                 raise RuntimeError(result.content)
-            metadata = (result.structuredContent or {}).get("metadata", {})
+            payload = result.structuredContent
+            if payload is None:
+                payload = json.loads(next(item.text for item in result.content if item.type == "text"))
+            metadata = payload.get("metadata", {})
             if "url" not in entry and metadata.get("workspace") != str(root):
                 raise RuntimeError("Server selected a different workspace")
             query = await session.call_tool(
-                "project_summary", {"workspace": metadata["workspace"], "max_tokens": 128}
+                "project_summary", {"workspace": metadata["workspace"], "max_tokens": 512}
             )
             if query.isError:
                 raise RuntimeError("Bounded project query failed")
@@ -211,7 +214,7 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
                 "tools": len(catalog.tools),
                 "metadata": metadata,
                 "status": "ok",
-                "languages": (result.structuredContent or {}).get("capabilities", {}).get("languages", {}),
+                "languages": payload.get("capabilities", payload.get("data", {})).get("languages", {}),
                 "precision_hint": "Optional installed language servers improve reference lookup. Restart the agent after setup; ATTOCODE_INTEL_PRECISION=off disables enrichment.",
             }
 

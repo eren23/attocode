@@ -699,6 +699,8 @@ def _compute_dynamic_cap(files: list[FileInfo], configured_max: int) -> int:
 def build_dependency_graph(
     files: list[FileInfo],
     root_dir: str,
+    *,
+    ast_cache: dict | None = None,
 ) -> DependencyGraph:
     """Build a dependency graph from file imports.
 
@@ -729,7 +731,9 @@ def build_dependency_graph(
             continue
 
         try:
-            ast = parse_file(f.path)
+            ast = ast_cache.get(f.relative_path) if ast_cache is not None else None
+            if ast is None:
+                ast = parse_file(f.path)
         except Exception:
             continue
 
@@ -795,6 +799,9 @@ class CodebaseContextManager:
             List of FileInfo objects for discovered files.
         """
         root = Path(self.root_dir)
+        from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
+
+        ignore = IgnoreManager(root)
         files: list[FileInfo] = []
         _SAFETY_CEILING = 50_000  # noqa: N806  # OOM guard for massive repos
 
@@ -803,6 +810,7 @@ class CodebaseContextManager:
             dirnames[:] = [
                 d for d in dirnames
                 if d not in self.ignore_patterns and not d.startswith(".")
+                and not ignore.is_ignored(os.path.relpath(os.path.join(dirpath, d), root) + "/")
             ]
 
             for filename in filenames:
@@ -818,6 +826,8 @@ class CodebaseContextManager:
                 try:
                     rel_path = os.path.relpath(full_path, root)
                 except ValueError:
+                    continue
+                if ignore.is_ignored(rel_path):
                     continue
 
                 lang = EXTENSION_LANGUAGES.get(ext, "")
@@ -992,7 +1002,9 @@ class CodebaseContextManager:
         except Exception:
             pass
 
-        from attocode_intel._internal.integrations.context.codebase_ast import parse_file as _parse_file
+        from attocode_intel._internal.integrations.context.codebase_ast import (
+            parse_file as _parse_file,
+        )
 
         _SYMBOL_LANGS = {"python", "javascript", "typescript", "rust", "go", "java", "ruby", "c", "cpp"}  # noqa: N806
         for f in self._files:

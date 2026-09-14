@@ -2954,26 +2954,26 @@ class TestRelevantContextTool:
 
     def test_relevant_context_depth_cap(self):
         import attocode.code_intel.server as srv
+        from attocode.integrations.context.ast_service import ASTService
 
-        svc = MagicMock()
-        svc.initialized = True
-        svc._to_rel.side_effect = lambda p: p
-        svc.get_dependencies.return_value = set()
-        svc.get_dependents.return_value = set()
-        svc._ast_cache = {}
-
-        ctx = MagicMock()
-        ctx._files = []
-
+        for name, dependency in (("a", "b"), ("b", "c"), ("c", "d"), ("d", None)):
+            source = f"from {dependency} import operation_{dependency}\n" if dependency else ""
+            (self.tmp_path / f"{name}.py").write_text(source + f"def operation_{name}(): return 1\n")
+        svc = ASTService(str(self.tmp_path))
+        svc.initialize_skeleton()
         srv._ast_service = svc
-        srv._context_mgr = ctx
+        srv._context_mgr = svc._context_mgr
         srv._service = _make_service_with_mocks(
-            str(self.tmp_path), ast_service=svc, context_mgr=ctx,
+            str(self.tmp_path), ast_service=svc, context_mgr=svc._context_mgr,
         )
 
-        # depth > 2 should be capped to 2
-        result = srv.relevant_context(["a.py"], depth=5)
+        try:
+            result = srv.relevant_context(["a.py"], depth=5)
+        finally:
+            svc._store.close()
         assert "depth=2" in result
+        assert all(path in result for path in ("a.py", "b.py", "c.py"))
+        assert "d.py" not in result
 
 
 # ---------------------------------------------------------------------------

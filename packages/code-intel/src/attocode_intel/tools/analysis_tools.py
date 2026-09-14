@@ -76,7 +76,10 @@ def hotspots(top_n: int = 15) -> str:
 
 
 @mcp.tool()
-def cross_references(symbol_name: str) -> str:
+def cross_references(
+    symbol_name: str, file_path: str | None = None, line: int | None = None,
+    cursor: str | None = None, page_size: int | None = None,
+) -> str:
     """Find where a symbol is defined and all places it is referenced.
 
     Shows both the definition locations and all call sites, imports,
@@ -84,7 +87,14 @@ def cross_references(symbol_name: str) -> str:
 
     Args:
         symbol_name: Name of the symbol to look up.
+        file_path: Select a definition in this repository-relative file.
+        line: Select the definition's start line when names still collide.
+        cursor: Continue a gateway result from the same query and snapshot.
+        page_size: Maximum references per page (1-100; daily MCP defaults to 20).
     """
+    if cursor or file_path is not None or line is not None or page_size is not None:
+        # Pagination belongs to the authenticated operation gateway.
+        raise ValueError("Use the operation gateway for scoped or paginated references")
     return _get_service().cross_references(symbol_name)
 
 

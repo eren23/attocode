@@ -178,3 +178,45 @@ async def test_precise_reference_preserves_the_nested_caller(tmp_path, monkeypat
         assert any(r.caller_qualified_name == "outer.inner" and r.source == "lsp" for r in refs)
     finally:
         await gateway.close()
+
+
+async def test_cold_reference_query_opens_indexed_candidates(tmp_path, monkeypatch):
+    script = tmp_path / "server.py"
+    script.write_text(SERVER.replace("result = [location(root/'caller.py', i)",
+                                    "result = [] if (root/'caller.py').as_uri() not in opened else [location(root/'caller.py', i)"))
+    monkeypatch.setitem(BUILTIN_SERVERS, "python", LanguageServerConfig(
+        command=sys.executable, args=[str(script)], extensions=[".py"], language_id="python"))
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "auto")
+    (tmp_path / "helper.py").write_text("def helper(): return 1\n")
+    (tmp_path / "caller.py").write_text("from helper import helper\nhelper()\n")
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        result = (await gateway.execute("inspect_symbol", {"symbol_name": "helper"})).structuredContent
+        assert result["metadata"]["analysis"]["precision"]["status"] == "verified"
+        assert any(r["source"] == "lsp" and r["file_path"] == "caller.py" for r in result["data"]["references"])
+    finally:
+        await gateway.close()
+
+
+async def test_cold_retry_shares_the_two_second_deadline(tmp_path, monkeypatch):
+    import time
+
+    script = tmp_path / "server.py"
+    server = SERVER.replace("result = [location(root/'caller.py', i)",
+                            "result = [] if (root/'caller.py').as_uri() not in opened else [location(root/'caller.py', i)")
+    server = server.replace("uri = params['textDocument']['uri']", "if method.endswith('references'): __import__('time').sleep(1.2)\n        uri = params['textDocument']['uri']")
+    script.write_text(server)
+    monkeypatch.setitem(BUILTIN_SERVERS, "python", LanguageServerConfig(
+        command=sys.executable, args=[str(script)], extensions=[".py"], language_id="python"))
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "auto")
+    (tmp_path / "helper.py").write_text("def helper(): return 1\n")
+    (tmp_path / "caller.py").write_text("helper()\n")
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        start = time.monotonic()
+        result = (await gateway.execute("cross_references", {"symbol_name": "helper"})).structuredContent
+        assert time.monotonic() - start < 2.8
+        assert result["metadata"]["analysis"]["precision"]["queries"][0]["status"] == "timeout"
+        assert result["data"]["references"]
+    finally:
+        await gateway.close()

@@ -13,6 +13,7 @@ Wraps ``codebase_ast.parse_file`` / ``diff_file_ast`` and
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -27,12 +28,6 @@ from attocode_intel._internal.integrations.context.codebase_ast import (
     diff_imports,
     parse_file,
 )
-from attocode_intel._internal.integrations.context.hydration import (
-    HydrationState,
-    classify_tier,
-    skeleton_budget,
-    TIER_SMALL,
-)
 from attocode_intel._internal.integrations.context.codebase_context import (
     CodebaseContextManager,
 )
@@ -40,6 +35,12 @@ from attocode_intel._internal.integrations.context.cross_references import (
     CrossRefIndex,
     SymbolLocation,
     SymbolRef,
+)
+from attocode_intel._internal.integrations.context.hydration import (
+    TIER_SMALL,
+    HydrationState,
+    classify_tier,
+    skeleton_budget,
 )
 from attocode_intel._internal.integrations.context.index_store import IndexStore, StoredFile
 
@@ -86,6 +87,10 @@ class ASTService:
             db_path = os.path.join(self._root_dir, _INDEX_DIR, _INDEX_DB)
             self._store = IndexStore(db_path=db_path)
         self._index.set_store(self._store)
+        self._snapshot_tracker = None
+        self._snapshot_start = None
+        self._last_snapshot_repair = None
+        self._parse_lock = threading.RLock()
 
     @classmethod
     def get_instance(cls, root_dir: str) -> ASTService:
@@ -144,6 +149,7 @@ class ASTService:
         """
         if self._hydration_state is not None:
             return {**self._hydration_state.to_dict(),
+                    "snapshot_repair": self._last_snapshot_repair,
                     "discovered_files": self._context_mgr.discovered_file_count,
                     "discovery_truncated": self._context_mgr.discovery_truncated}
 
@@ -199,7 +205,11 @@ class ASTService:
         loads cached symbols/refs from SQLite and only re-parses files whose
         mtime has changed (incremental mode).  Otherwise does a full scan.
         """
-        files = self._context_mgr.discover_files()
+        self._store.set_meta("structural_snapshot_v1", "")
+        self._snapshot_start = None
+        from attocode_intel.telemetry import measure
+        with measure("discovery"):
+            files = self._context_mgr.discover_files()
         self._index = CrossRefIndex()
         self._index.set_store(self._store)
         self._ast_cache.clear()
@@ -338,7 +348,10 @@ class ASTService:
         ``initialize()``.  For larger repos, remaining files are left for
         background hydration or on-demand parsing.
         """
-        files = self._context_mgr.discover_files()
+        from attocode_intel.telemetry import measure
+        self._snapshot_start = self._snapshot_identity()
+        with measure("discovery"):
+            files = self._context_mgr.discover_files()
         self._index = CrossRefIndex()
         self._index.set_store(self._store)
         self._ast_cache.clear()
@@ -382,6 +395,13 @@ class ASTService:
         )
         self._hydration_state = state
 
+        if self._restore_snapshot(files, parseable, state):
+            self._initialized = True
+            return state
+        # A partial or interrupted rebuild must never be restored as complete.
+        self._store.set_meta("structural_snapshot_v1", "")
+        self._store.clear_all()
+
         to_parse = parseable[:budget]
 
         for fi in to_parse:
@@ -419,6 +439,7 @@ class ASTService:
                 for rel in self._ast_cache:
                     self._index.persist_file(rel)
                 self._store.record_scan_time()
+                self._save_snapshot()
 
         dep_graph = self._context_mgr.dependency_graph
         if dep_graph:
@@ -429,25 +450,141 @@ class ASTService:
         self._initialized = True
         return state
 
+    def _snapshot_identity(self) -> dict:
+        from attocode_intel.freshness import FreshnessTracker
+
+        if self._snapshot_tracker is None:
+            self._snapshot_tracker = FreshnessTracker(self._root_dir)
+        manifest = self._snapshot_tracker.scan_manifest()
+        return {
+            "files": {path: list(identity) for path, identity in manifest.items()},
+            "ignore": list(self._snapshot_tracker._ignore_identity or ()),
+        }
+
+    def _restore_snapshot(self, files, parseable, state) -> bool:
+        """Restore a completed index and repair offline edits when necessary.
+
+        ASTs are reparsed to preserve all existing context/analysis consumers;
+        expensive reference extraction and persistence are reused. Older caches
+        without the completion record are rebuilt once.
+        """
+        raw = self._store.get_meta("structural_snapshot_v1")
+        if not raw:
+            return False
+        try:
+            saved = json.loads(raw)
+            if saved["counts"] != self._store.stats():
+                return False
+            cached = {fi.relative_path: parse_file(fi.path) for fi in parseable}
+            if self._snapshot_identity() != self._snapshot_start:
+                return False
+            self._index.load_from_store()
+            if (saved["identity"] != self._snapshot_start
+                    or saved["discovered"] != sorted(fi.relative_path for fi in files)
+                    or saved["parsed"] != sorted(cached)):
+                from .index_repair import changed_paths, repair_index
+
+                changed = changed_paths(saved["identity"], self._snapshot_start)
+                changed |= set(saved["parsed"]) ^ cached.keys()
+                self._last_snapshot_repair = repair_index(self, cached, self._snapshot_start, changed)
+                return True
+            from attocode_intel._internal.integrations.context.codebase_context import (
+                DependencyGraph,
+            )
+
+            graph = DependencyGraph(unresolved=saved["unresolved"])
+            for source, targets in self._index.file_dependencies.items():
+                for target in targets:
+                    graph.add_edge(source, target)
+            self._context_mgr._dep_graph = graph
+            self._ast_cache = cached
+            self._reference_indexed_files = set(cached)
+            state.parsed_files = len(cached)
+            state.reference_indexed_files = len(cached)
+            state.dep_graph_files = len(graph.forward)
+            state.phase = "ready"
+            return True
+        except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
+            logger.debug("Cannot restore structural snapshot", exc_info=True)
+            self._index = CrossRefIndex()
+            self._index.set_store(self._store)
+            self._ast_cache.clear()
+            self._reference_indexed_files.clear()
+            state.parsed_files = state.reference_indexed_files = 0
+            state.phase = "skeleton"
+            return False
+
+    def _save_snapshot(self) -> bool:
+        """Publish the completion record last, after all files and graph edges."""
+        if self._snapshot_start is None:
+            return False
+        if (len(self._ast_cache) != self._count_parseable_source_files()
+                or set(self._ast_cache) != self._reference_indexed_files
+                or self._snapshot_identity() != self._snapshot_start):
+            return False
+        graph = self._context_mgr.dependency_graph
+        self._store.clear_dependencies()
+        self._store.save_dependencies_batch([
+            (source, target) for source, targets in self._index.file_dependencies.items()
+            for target in targets
+        ])
+        self._store.set_meta("structural_snapshot_v1", json.dumps({
+            "identity": self._snapshot_start,
+            "discovered": sorted(fi.relative_path for fi in self._context_mgr._files),
+            "parsed": sorted(self._ast_cache),
+            "counts": self._store.stats(),
+            "unresolved": graph.unresolved if graph else {},
+        }, separators=(",", ":")))
+        return True
+
+    def repair_changed_files(self, *, expected_manifest=None) -> bool:
+        """Checkpoint edits against a complete in-memory snapshot."""
+        state = self._hydration_state
+        if state is None or state.phase != "ready" or self._snapshot_start is None:
+            return False
+        from .index_repair import changed_paths, repair_index
+
+        self.stop_hydration()
+        identity = self._snapshot_identity()
+        if expected_manifest is not None and identity["files"] != {
+            path: list(value) for path, value in expected_manifest.items()
+        }:
+            raise ValueError("Workspace changed during freshness checks; retry")
+        changed = changed_paths(self._snapshot_start, identity)
+        if (self._snapshot_start["files"].keys() != identity["files"].keys()
+                or self._snapshot_start["ignore"] != identity["ignore"]):
+            self._context_mgr.discover_files()
+        supported = self._supported_source_languages()
+        parseable = {fi.relative_path: fi for fi in self._context_mgr._files
+                     if ("bash" if fi.language == "shell" else fi.language) in supported}
+        changed |= self._ast_cache.keys() ^ parseable.keys()
+        asts = {path: ast for path, ast in self._ast_cache.items() if path in parseable}
+        for path in changed & parseable.keys():
+            asts[path] = parse_file(parseable[path].path)
+        self._last_snapshot_repair = repair_index(self, asts, identity, changed)
+        return True
+
     def ensure_file_parsed(self, rel_path: str) -> bool:
         """Parse a single file on-demand if not already in cache.
 
         Returns True if the file was newly parsed, False if already cached.
         """
-        if rel_path in self._ast_cache:
-            return False
-        abs_path = os.path.join(self._root_dir, rel_path)
-        if not os.path.isfile(abs_path):
-            return False
-        try:
-            ast = parse_file(abs_path)
-        except Exception:
-            return False
-        self._ast_cache[rel_path] = ast
-        self._index_definitions(rel_path, ast)
-        if self._hydration_state:
-            self._hydration_state.parsed_files += 1
-        return True
+        with self._parse_lock:
+            if rel_path in self._ast_cache:
+                return False
+            abs_path = os.path.join(self._root_dir, rel_path)
+            if not os.path.isfile(abs_path):
+                return False
+            try:
+                ast = parse_file(abs_path)
+            except Exception:
+                return False
+            self._index_definitions(rel_path, ast)
+            # Publish only after definitions are visible to concurrent queries.
+            self._ast_cache[rel_path] = ast
+            if self._hydration_state:
+                self._hydration_state.parsed_files += 1
+            return True
 
     def ensure_references_indexed(self, rel_path: str) -> bool:
         """Index references for a file on-demand if not already done."""
@@ -525,16 +662,7 @@ class ASTService:
             for fi in batch:
                 if self._hydration_stop.is_set():
                     return
-                rel = fi.relative_path
-                if rel in self._ast_cache:
-                    continue  # on-demand already parsed this file
-                try:
-                    ast = parse_file(fi.path)
-                except Exception:
-                    continue
-                self._ast_cache[rel] = ast
-                self._index_definitions(rel, ast)
-                state.parsed_files += 1
+                self.ensure_file_parsed(fi.relative_path)
 
         # Phase 2b: Index references for all parsed files
         # Snapshot keys to avoid dict-changed-size during concurrent on-demand
@@ -551,7 +679,9 @@ class ASTService:
                 state.reference_indexed_files += 1
 
         # Discovery defers expensive graphs for large repositories. Build them now.
-        from attocode_intel._internal.integrations.context.codebase_context import build_dependency_graph
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            build_dependency_graph,
+        )
         dep_graph = self._context_mgr.dependency_graph
         if dep_graph is None or not dep_graph.forward:
             self._context_mgr._dep_graph = build_dependency_graph(ctx_files, self._root_dir)
@@ -578,6 +708,7 @@ class ASTService:
                     for stored in batch:
                         self._index.persist_file(stored.path)
                 self._store.record_scan_time()
+                self._save_snapshot()
             except Exception:
                 logger.debug("Failed to persist after hydration", exc_info=True)
 
@@ -591,7 +722,11 @@ class ASTService:
         on large repositories.  Files are parsed in batches of
         *batch_size* concurrently.
         """
-        files = self._context_mgr.discover_files()
+        self._store.set_meta("structural_snapshot_v1", "")
+        self._snapshot_start = None
+        from attocode_intel.telemetry import measure
+        with measure("discovery"):
+            files = self._context_mgr.discover_files()
         self._index = CrossRefIndex()
         self._ast_cache.clear()
 
@@ -653,6 +788,8 @@ class ASTService:
 
         rel = self._to_rel(path)
         abs_path = os.path.join(self._root_dir, rel)
+        self._store.set_meta("structural_snapshot_v1", "")
+        self._snapshot_start = None
 
         # Handle deletion
         if not Path(abs_path).exists():
@@ -771,9 +908,38 @@ class ASTService:
         ranked by match quality and symbol importance.
         """
         self._ensure_initialized()
+        self._parse_symbol_candidates(name)
         return self._index.search_definitions(
             name, limit=limit, kind_filter=kind_filter,
         )
+
+    def _parse_symbol_candidates(self, name: str) -> None:
+        """Discover literal name candidates while the index is still partial.
+
+        Source text only shortlists files; the parser and normal symbol ranking
+        determine results. Comments and call sites cannot become definitions.
+        Fuzzy matches and references still have progressive coverage.
+        """
+        state = self._hydration_state
+        if state is None or state.phase == "ready" or not name.strip():
+            return
+        # Qualified names need not appear contiguously in source (Class.method).
+        needle = name.rsplit(".", 1)[-1].lower()
+        if not needle:
+            return
+        supported = self._supported_source_languages()
+        for fi in self._context_mgr._files:
+            if state.phase == "ready":
+                break
+            language = "bash" if fi.language == "shell" else fi.language
+            if language not in supported or fi.relative_path in self._ast_cache:
+                continue
+            try:
+                content = Path(fi.path).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if needle in content.lower():
+                self.ensure_file_parsed(fi.relative_path)
 
     def get_callers(self, symbol: str) -> list[SymbolRef]:
         """Return all call sites / references for *symbol*."""
@@ -1121,8 +1287,9 @@ class ASTService:
                 f"AST index rebuild failed after store integrity error for {rel_path}"
             ) from rebuild_exc
 
-    def _index_definitions(self, rel_path: str, ast: FileAST) -> None:
+    def _index_definitions(self, rel_path: str, ast: FileAST, *, index=None) -> None:
         """Phase 1: Index all *definitions* (functions, classes, methods)."""
+        index = self._index if index is None else index
         # Top-level functions
         for func in ast.functions:
             loc = SymbolLocation(
@@ -1133,7 +1300,7 @@ class ASTService:
                 start_line=func.start_line,
                 end_line=func.end_line,
             )
-            self._index.add_definition(loc)
+            index.add_definition(loc)
 
         # Classes and their methods
         for cls in ast.classes:
@@ -1145,7 +1312,7 @@ class ASTService:
                 start_line=cls.start_line,
                 end_line=cls.end_line,
             )
-            self._index.add_definition(cls_loc)
+            index.add_definition(cls_loc)
 
             for method in cls.methods:
                 method_loc = SymbolLocation(
@@ -1156,7 +1323,7 @@ class ASTService:
                     start_line=method.start_line,
                     end_line=method.end_line,
                 )
-                self._index.add_definition(method_loc)
+                index.add_definition(method_loc)
 
         # Top-level variables/constants
         for var_name in ast.top_level_vars:
@@ -1168,14 +1335,15 @@ class ASTService:
                 start_line=0,
                 end_line=0,
             )
-            self._index.add_definition(var_loc)
+            index.add_definition(var_loc)
 
-    def _index_references(self, rel_path: str, ast: FileAST) -> None:
+    def _index_references(self, rel_path: str, ast: FileAST, *, index=None) -> None:
         """Phase 2: Index import references and call-site references.
 
         Should be called after all definitions are indexed so that
         ``known_symbols`` is complete.
         """
+        index = self._index if index is None else index
         # Import references
         for imp in ast.imports:
             for name in imp.names:
@@ -1185,7 +1353,7 @@ class ASTService:
                     file_path=rel_path,
                     line=imp.line,
                 )
-                self._index.add_reference(ref)
+                index.add_reference(ref)
 
         # Extract call-site references from source (lightweight regex scan)
         abs_path = os.path.join(self._root_dir, rel_path)
@@ -1195,10 +1363,8 @@ class ASTService:
             return
 
         # Collect known symbol names for targeted scanning
-        known_symbols: set[str] = set()
-        for qname_list in self._index.definitions.values():
-            for loc in qname_list:
-                known_symbols.add(loc.name)
+        with index._lock:
+            known_symbols = set(index._name_to_qnames)
 
         if not known_symbols:
             return
@@ -1237,11 +1403,11 @@ class ASTService:
                 parts[0] = aliases.get(parts[0], parts[0])
                 qualified = ".".join(parts)
                 bare = parts[-1]
-                symbol = qualified if qualified in self._index.definitions else bare
+                symbol = qualified if qualified in index.definitions else bare
                 if bare not in known_symbols or (symbol, kind, line) in seen:
                     continue
                 seen.add((symbol, kind, line))
-                self._index.add_reference(SymbolRef(
+                index.add_reference(SymbolRef(
                     symbol_name=symbol, ref_kind=kind, file_path=rel_path, line=line,
                     source="tree-sitter", caller_qualified_name=_enclosing_qname(line),
                 ))
@@ -1292,7 +1458,7 @@ class ASTService:
                         line=i,
                         caller_qualified_name=caller,
                     )
-                    self._index.add_reference(ref)
+                    index.add_reference(ref)
 
             # Find attribute access: obj.method(
             for m in re.finditer(r"\b\w+\.(\w+)\s*\(", clean_line):
@@ -1305,4 +1471,4 @@ class ASTService:
                         line=i,
                         caller_qualified_name=caller,
                     )
-                    self._index.add_reference(ref)
+                    index.add_reference(ref)

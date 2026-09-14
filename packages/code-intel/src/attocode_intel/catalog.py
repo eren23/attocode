@@ -7,9 +7,15 @@ from copy import deepcopy
 from mcp.types import Tool, ToolAnnotations
 
 INSTRUCTIONS = (
-    "Use Attocode Intelligence to understand the selected codebase. Start unfamiliar tasks with "
-    "bootstrap(task_hint=...). Locate code with search_symbols or semantic_search; inspect relevant_context "
-    "and cross_references before changes. Use impact_analysis and suggest_tests to select verification. "
+    "If connected intelligence tools are deferred (for example in Claude), discover them through ToolSearch "
+    "using a query such as 'attocode-code-intel inspect_symbol' for a known function or "
+    "'attocode-code-intel bootstrap' to locate unfamiliar behavior, then call the returned tool. "
+    "When a symbol is known, call inspect_symbol directly to get its source, references, imports and candidate tests; "
+    "add task_hint for focused excerpts and test ranking, and select a file/line if ambiguous. "
+    "For an unfamiliar repository or behavior, bootstrap(task_hint=...) locates relevant code and provides a map. "
+    "Use search_symbols to discover names. Focused excerpts are separate contiguous ranges; cite each range separately. "
+    "Native search remains useful for literal text and checking returned evidence. "
+    "Use impact_analysis and suggest_tests for change planning and verification. "
     "Check source, revision, and coverage; incomplete indexes are not proof of no dependencies. "
     "After edits notify_file_changed. Keep uncommitted code local."
 )
@@ -19,6 +25,7 @@ DAILY = frozenset(
         "project_summary",
         "explore_codebase",
         "search_symbols",
+        "inspect_symbol",
         "semantic_search",
         "fast_search",
         "symbols",
@@ -200,4 +207,10 @@ def tool_catalog(profile: str = "full", *, remote: bool = False) -> list[Tool]:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
     )
+    # Apply common arguments to synthetic tools too (knowledge and cross-repo search).
+    for tool in result:
+        tool.inputSchema.setdefault("properties", {}).setdefault("max_tokens", {
+            "type": "integer", "minimum": 1, "maximum": 32000, "default": 8000,
+            "description": "Readable response budget; daily MCP budgets the entire serialized result.",
+        })
     return result

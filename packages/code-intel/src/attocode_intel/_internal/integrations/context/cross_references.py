@@ -135,7 +135,18 @@ class CrossRefIndex:
         with self._lock:
             self._persist_file_locked(file_path)
 
-    def _persist_file_locked(self, file_path: str) -> None:
+    def persist_files(self, file_paths: set[str]) -> None:
+        """Persist a changed batch without rescanning all references per file."""
+        with self._lock:
+            grouped: dict[str, list[SymbolRef]] = {}
+            for refs in self.references.values():
+                for ref in refs:
+                    if ref.file_path in file_paths:
+                        grouped.setdefault(ref.file_path, []).append(ref)
+            for path in sorted(file_paths):
+                self._persist_file_locked(path, grouped.get(path, []))
+
+    def _persist_file_locked(self, file_path: str, references=None) -> None:
         if self._store is None:
             return
         # Collect symbols for this file
@@ -155,17 +166,18 @@ class CrossRefIndex:
 
         # Collect references originating from this file
         ref_dicts: list[dict[str, Any]] = []
-        for ref_name, refs in self.references.items():
-            for ref in refs:
-                if ref.file_path == file_path:
-                    ref_dicts.append({
-                        "symbol_name": ref.symbol_name,
-                        "ref_kind": ref.ref_kind,
-                        "line": ref.line,
-                        "column": 0,
-                        "source": ref.source,
-                        "caller_qualified_name": ref.caller_qualified_name,
-                    })
+        refs = references if references is not None else (
+            ref for refs in self.references.values() for ref in refs if ref.file_path == file_path
+        )
+        for ref in refs:
+            ref_dicts.append({
+                "symbol_name": ref.symbol_name,
+                "ref_kind": ref.ref_kind,
+                "line": ref.line,
+                "column": 0,
+                "source": ref.source,
+                "caller_qualified_name": ref.caller_qualified_name,
+            })
         self._store.save_references(file_path, ref_dicts)
 
     def load_from_store(self) -> int:

@@ -7,8 +7,20 @@ permissions:
 jobs:
   checks:
     uses: ./.github/workflows/intelligence.yml
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require complete performance evidence for this engine
+        env:
+          INTELLIGENCE_EVIDENCE_URL: ${{ vars.INTELLIGENCE_EVIDENCE_URL }}
+          INTELLIGENCE_EVIDENCE_SHA256: ${{ vars.INTELLIGENCE_EVIDENCE_SHA256 }}
+        run: python packages/code-intel/evals/release_gate.py --download --project .
   build:
-    needs: checks
+    needs: [checks, performance]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

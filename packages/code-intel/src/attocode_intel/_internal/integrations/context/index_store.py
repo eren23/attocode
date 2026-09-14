@@ -494,6 +494,7 @@ class IndexStore:
                 DELETE FROM symbols;
                 DELETE FROM dependencies;
                 DELETE FROM files;
+                DELETE FROM metadata WHERE key = 'structural_snapshot_v1';
             """)
             conn.commit()
 

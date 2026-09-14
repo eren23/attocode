@@ -7,6 +7,8 @@ import inspect
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
@@ -14,8 +16,8 @@ from filelock import FileLock
 from mcp import types
 from mcp.server.lowlevel import Server
 
-from attocode_intel.catalog import INSTRUCTIONS, registered_tools, tool_catalog
-from attocode_intel.output import bounded_text
+from attocode_intel.catalog import INSTRUCTIONS, is_write, registered_tools, tool_catalog
+from attocode_intel.output import bounded_compact, bounded_text, response_tokens
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
 
 
@@ -41,13 +43,30 @@ class OperationGateway:
         self._active = {}
         self._last_used = {}
         self._lifecycle = asyncio.Lock()
+        self._catalogs = {}
 
-    def catalog(self):
+    def effective_profile(self):
         from attocode_intel.remote import remote_profile
+        return remote_profile.get() if self.resolver else self.profile
 
-        return tool_catalog(
-            remote_profile.get() if self.resolver else self.profile, remote=bool(self.resolver)
-        )
+    def _catalog(self):
+        key = (self.effective_profile(), bool(self.resolver))
+        if key not in self._catalogs:
+            from jsonschema.validators import validator_for
+            catalog = tool_catalog(key[0], remote=key[1])
+            self._catalogs[key] = (catalog, {tool.name: validator_for(tool.inputSchema)(tool.inputSchema)
+                                           for tool in catalog})
+        return self._catalogs[key]
+
+    def catalog(self, *, mcp=False):
+        catalog = deepcopy(self._catalog()[0])
+        if mcp and self.effective_profile() == "daily":
+            for tool in catalog:
+                budget = tool.inputSchema["properties"]["max_tokens"]
+                budget.update(default=2000, description="Estimated token budget for the complete serialized MCP result, including provenance.")
+                if is_write(tool.name):
+                    budget["minimum"] = 512
+        return catalog
 
     async def close(self):
         self._closed = True
@@ -117,19 +136,46 @@ class OperationGateway:
                 )
                 tracker.refresh(context.service)
 
-    async def execute(self, name: str, arguments: dict) -> types.CallToolResult:
+    async def execute_mcp(self, name: str, arguments: dict) -> types.CallToolResult:
+        return await self.execute(name, arguments, compact=self.effective_profile() == "daily")
+
+    async def execute(self, name: str, arguments: dict, *, compact=False) -> types.CallToolResult:
+        from attocode_intel.telemetry import emit, enabled
+        from attocode_intel.telemetry import timings as active_timings
+        start = time.monotonic()
+        timings = {}
+        token = active_timings.set(timings)
+        try:
+            result = await self._dispatch(name, arguments, compact, timings)
+            if enabled():
+                emit({"operation": name, "compact": compact, "timings_ms": timings,
+                      "total_ms": round((time.monotonic() - start) * 1000, 2),
+                      "response_bytes": len(result.model_dump_json(exclude_none=True).encode()),
+                      "response_tokens": response_tokens(result), "error": bool(result.isError)})
+            return result
+        except Exception:
+            emit({"operation": name, "compact": compact, "timings_ms": timings,
+                  "total_ms": round((time.monotonic() - start) * 1000, 2), "error": True})
+            raise
+        finally:
+            active_timings.reset(token)
+
+    async def _dispatch(self, name, arguments, compact, timings):
         if self._closed:
             raise ValueError("Gateway is closed")
         args = dict(arguments)
+        if compact:
+            args.setdefault("max_tokens", 2000)
         workspace = args.pop("workspace", "")
         revision = args.pop("revision", "")
-        names = {tool.name for tool in self.catalog()}
-        if name not in names:
+        before = time.monotonic()
+        validators = self._catalog()[1]
+        if name not in validators:
             raise ValueError(f"Tool {name!r} is not available in profile {self.profile!r}")
-        import jsonschema
-
-        schema = next(t.inputSchema for t in self.catalog() if t.name == name)
-        jsonschema.validate(arguments, schema)
+        validators[name].validate(arguments)
+        if compact and is_write(name) and args["max_tokens"] < 512:
+            raise ValueError("Write operations require max_tokens >= 512 so their outcome can be acknowledged")
+        timings["validation"] = round((time.monotonic() - before) * 1000, 2)
         if name == "cross_repo_search":
             results = []
             for target in args["workspaces"]:
@@ -150,12 +196,19 @@ class OperationGateway:
                             "workspace": structured["metadata"]["workspace"],
                             "revision": structured["metadata"]["revision"],
                             "source": structured["metadata"]["source"],
+                            "freshness": structured["metadata"]["freshness"],
+                            "index": structured["metadata"]["coverage"].get("phase", "unknown"),
                             "fusion_score": 1 / (60 + rank),
                         }
                     )
             results.sort(key=lambda row: row["fusion_score"], reverse=True)
             results = results[: args.get("top_k", 10)]
-            text, truncated = bounded_text(json.dumps(results), 8000)
+            budget = args.get("max_tokens", 8000)
+            text, truncated = bounded_text(json.dumps(results), budget)
+            if compact:
+                return bounded_compact({"truncated": truncated, "ranking": "reciprocal_rank",
+                                        "workspaces": args["workspaces"],
+                                        "analysis": {"status": "partial", "absence_proven": False}}, results, budget)
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text=text)],
                 structuredContent={
@@ -169,11 +222,17 @@ class OperationGateway:
             )
         if self.resolver:
             context = await self.resolver(workspace, revision, name)
+            if compact and is_write(name):
+                self._check_write_budget(context, args["max_tokens"])
             from attocode_intel.knowledge import KNOWLEDGE_TOOLS, execute_knowledge
 
             if name in KNOWLEDGE_TOOLS:
                 budget = args.pop("max_tokens", 8000)
                 data = await execute_knowledge(context, name, args)
+                if compact:
+                    return self._compact(name, {"workspace": context.workspace, "revision": context.revision,
+                                               "source": "remote", "freshness": "committed_snapshot",
+                                               "truncated": False}, data, budget)
                 header = f"Source: remote | Workspace: {context.workspace} | Revision: {context.revision}\n"
                 text, truncated = bounded_text(header + json.dumps(data), budget)
                 return types.CallToolResult(
@@ -214,9 +273,8 @@ class OperationGateway:
                 ),
                 self.watch_debounce,
             )
-        from contextvars import copy_context
-
         try:
+            timings["enqueued_at"] = time.monotonic()
             return await asyncio.get_running_loop().run_in_executor(
                 self._workers[key],
                 copy_context().run,
@@ -224,19 +282,43 @@ class OperationGateway:
                 context,
                 name,
                 args,
+                compact,
+                timings,
             )
         finally:
             if key in self._active:
                 self._active[key] -= 1
 
-    def _execute_sync(self, context, name, args):
+    @staticmethod
+    def _check_write_budget(context, budget):
+        bounded_compact({"workspace": context.workspace, "source": context.source,
+                         "revision": context.revision, "freshness": "committed_snapshot" if context.source == "remote" else "working_tree"},
+                        {"status": "completed"}, budget - 128)
+
+    @staticmethod
+    def _compact(name, metadata, payload, budget):
+        try:
+            return bounded_compact(metadata, payload, budget)
+        except ValueError:
+            if not is_write(name):
+                raise
+            return bounded_compact({**metadata, "truncated": True},
+                                   {"status": "completed", "result_omitted": True}, budget)
+
+    def _execute_sync(self, context, name, args, compact=False, timings=None):
+        timings = timings if timings is not None else {}
+        timings["queue"] = round((time.monotonic() - timings.pop("enqueued_at", time.monotonic())) * 1000, 2)
         lock_dir = Path(context.project_dir) / ".attocode" / "cache"
         lock_dir.mkdir(parents=True, exist_ok=True)
         start = time.monotonic()
         budget = int(args.get("max_tokens", 8000))
         knowledge = args.pop("_knowledge", None)
         precision_result = None
+        operation_args = dict(args)
         with FileLock(str(lock_dir / "operations.lock"), timeout=30), bind_request(context):
+            if compact and is_write(name):
+                self._check_write_budget(context, budget)
+            timings["lock"] = round((time.monotonic() - start) * 1000, 2)
             if name == "capabilities":
                 from importlib.util import find_spec
 
@@ -292,13 +374,21 @@ class OperationGateway:
                     tracker = context.stores.setdefault(
                         "freshness", FreshnessTracker(context.project_dir)
                     )
+                    before = time.monotonic()
                     tracker.refresh(service)
-                if name in {"cross_references", "call_graph"}:
+                    timings["freshness"] = round((time.monotonic() - before) * 1000, 2)
+                if name == "notify_file_changed":
+                    context.stores.pop("reference_pages", None)
+                if name in {"cross_references", "call_graph", "inspect_symbol"} and not args.get("cursor"):
                     from attocode_intel.precision import PrecisionSession
                     session = context.stores.setdefault("precision", PrecisionSession(service))
                     runner = context.stores.get("async_runner") or context.stores.setdefault("async_runner", asyncio.Runner())
-                    precision_result = runner.run(session.enrich(args.get("symbol_name", args.get("symbol", ""))))
+                    before = time.monotonic()
+                    precision_result = runner.run(session.enrich(args.get("symbol_name", args.get("symbol", "")),
+                                                                  args.get("file_path"), args.get("line")), context=copy_context())
+                    timings["precision"] = round((time.monotonic() - before) * 1000, 2)
                 payload = None
+                before = time.monotonic()
                 if name in LEARNING_TOOLS:
                     payload = execute_local_knowledge(context, name, args)
                     text = json.dumps(payload)
@@ -324,31 +414,37 @@ class OperationGateway:
                         ],
                     }
                     text = mgr.format_results(results)
+                elif name == "inspect_symbol":
+                    from attocode_intel.symbol_inspection import inspect_symbol_data
+                    payload = inspect_symbol_data(service, args["symbol_name"], args.get("file_path"), args.get("line"),
+                                                  args.get("source_start_line"), args.get("task_hint"))
+                    text = json.dumps(payload)
+                elif name == "suggest_tests":
+                    from attocode_intel.tools.composite_tools import (
+                        format_test_suggestions,
+                        suggest_tests_data,
+                    )
+                    payload = suggest_tests_data(args["files"], symbol_name=args.get("symbol_name"), task_hint=args.get("task_hint"))
+                    text = format_test_suggestions(payload)
+                elif name == "cross_references":
+                    from attocode_intel.reference_pages import continuation
+                    from attocode_intel.symbol_inspection import scoped_references
+                    saved = continuation(context, args)
+                    payload = saved["payload"] if saved else scoped_references(
+                        service, args["symbol_name"], args.get("file_path"), args.get("line"))
+                    text = json.dumps(payload)
+                elif name in {"symbols", "search_symbols", "dependencies", "call_graph", "file_analysis",
+                              "hotspots", "dependency_graph", "impact_analysis"}:
+                    method = getattr(service, name + "_data")
+                    parameters = inspect.signature(method).parameters
+                    payload = method(**{key: value for key, value in args.items() if key in parameters})
+                    text = json.dumps(payload, default=str, indent=2)
                 else:
                     result = tool.fn(**args)
                     if inspect.isawaitable(result):
                         runner = context.stores.get("async_runner") or context.stores.setdefault("async_runner", asyncio.Runner())
-                        result = runner.run(result)
+                        result = runner.run(result, context=copy_context())
                     text = result if isinstance(result, str) else json.dumps(result, default=str)
-                    if name in {
-                        "symbols",
-                        "search_symbols",
-                        "dependencies",
-                        "cross_references",
-                        "call_graph",
-                        "file_analysis",
-                        "hotspots",
-                        "dependency_graph",
-                    }:
-                        method = getattr(service, name + "_data")
-                        parameters = inspect.signature(method).parameters
-                        payload = method(
-                            **{key: value for key, value in args.items() if key in parameters}
-                        )
-                    elif name == "impact_analysis":
-                        payload = service.impact_analysis_data(
-                            args.get("files", args.get("changed_files", []))
-                        )
                     if name in {
                         "install_pack",
                         "install_community_pack",
@@ -357,6 +453,7 @@ class OperationGateway:
                         "evolve_rules",
                     }:
                         context.stores.pop("rules", None)
+                timings["execution"] = round((time.monotonic() - before) * 1000, 2)
             if name == "bootstrap" and args.get("task_hint"):
                 if context.source == "local":
                     from attocode_intel.local_knowledge import execute_local_knowledge
@@ -381,10 +478,17 @@ class OperationGateway:
             if phase != "ready" or coverage.get("discovery_truncated"):
                 header += "Coverage is incomplete; missing results do not prove absence.\n"
             from attocode_intel.analysis_coverage import analysis_report
-            analysis = analysis_report(service, precision_result)
+            analysis = (analysis_report(service, precision_result) if not compact or name == "capabilities" else
+                        {"status": "partial" if ast_service else "not_started", "absence_proven": False,
+                         "precision": precision_result or {"status": "not_requested"}})
+            if name == "capabilities":
+                payload["analysis"] = analysis
+                payload["coverage"] = coverage
+                text = json.dumps(payload)
             if name in {"cross_references", "dependencies", "call_graph", "impact_analysis", "suggest_tests"}:
                 header += "Analysis: partial; relationships are candidates and missing results do not prove absence.\n"
-            text, truncated = bounded_text(header + text, budget)
+            body = text
+            text, truncated = bounded_text(header + text, budget) if not compact else (text, False)
             truncated = truncated or "[Truncated;" in text
             metadata = {
                 "workspace": context.workspace,
@@ -396,7 +500,25 @@ class OperationGateway:
                 "truncated": truncated,
                 "duration_ms": round((time.monotonic() - start) * 1000, 2),
             }
+            if name == "inspect_symbol":
+                metadata["truncated"] |= bool(payload.get("source", {}).get("truncated")) or any(
+                    payload.get("total_" + section, 0) > len(payload.get(section, []))
+                    for section in ("references", "imports", "tests", "definitions"))
             structured = {"result": text, "metadata": metadata}
+            before = time.monotonic()
+            if name == "cross_references" and (compact or operation_args.get("cursor") or operation_args.get("page_size") is not None):
+                from attocode_intel.reference_pages import paginate
+                page = paginate(context, operation_args, payload, metadata, budget, compact)
+                timings["serialization"] = round((time.monotonic() - before) * 1000, 2)
+                if compact:
+                    return page
+                payload, metadata = page
+                text, _ = bounded_text(header + json.dumps(payload), budget)
+                structured = {"result": text, "metadata": metadata}
+            if compact:
+                result = self._compact(name, metadata, payload if payload is not None else {"result": body}, budget)
+                timings["serialization"] = round((time.monotonic() - before) * 1000, 2)
+                return result
             if payload is not None:
                 structured["capabilities" if name == "capabilities" else "data"] = payload
             return types.CallToolResult(
@@ -409,7 +531,7 @@ def create_mcp_server(gateway: OperationGateway) -> Server:
 
     @server.list_tools()
     async def list_tools():
-        return gateway.catalog()
+        return gateway.catalog(mcp=True)
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict):
@@ -431,7 +553,7 @@ def create_mcp_server(gateway: OperationGateway) -> Server:
                 arguments = {**arguments, "workspace": paths[0]}
             elif len(paths) > 1:
                 raise ValueError(f"Multiple workspace roots; supply workspace explicitly: {paths}")
-        return await gateway.execute(name, arguments)
+        return await gateway.execute_mcp(name, arguments)
 
     @server.list_resources()
     async def list_resources():

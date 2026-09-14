@@ -113,20 +113,22 @@ python scripts/benchmark_3way.py --skip-code-intel
 python scripts/benchmark_3way.py --slice published_20 --resume
 ```
 
-### Latest Results (v0.2.15, 20 repos)
+### Historical structural-output results (v0.2.15, 20 repos)
+
+These 0–5 scores reward output structure, labels, locations, and other textual patterns. They do not independently establish factual answer accuracy or superiority over an agent using native tools. For source-grounded claim grading, finite-pool retrieval metrics, counterfactual controls, and separate prose review, use the [answer-quality evaluation](../../packages/code-intel/evals/README.md#source-grounded-answer-quality).
 
 | Metric | grep | ast-grep | code-intel |
 |--------|------|----------|------------|
-| **Avg Quality** | 4.0/5 | 2.8/5 | **4.7/5** |
+| **Structural score** | 4.0/5 | 2.8/5 | **4.7/5** |
 | **Avg Time** | 95ms | 493ms | 2,731ms |
 
 \* v0.2.15 includes BM25 keyword index caching (8x speedup on large repos), trigram pre-filtering for BM25, and numpy-accelerated vector search (183x at 10K vectors). Overall 35% faster than v0.2.11 (4,182ms → 2,731ms).
 
 **Key findings:**
-- Code-intel delivers the highest quality (4.7/5) with structured, concise output
+- Code-intel has the highest structural-output score (4.7/5) in this historical run
 - grep is fast (95ms) and surprisingly competitive (4.0/5) for simple lookups
-- ast-grep adds limited value — slower than grep with lower quality (2.8/5)
-- Semantic search is the remaining speed bottleneck on large repos, but quality justifies the cost (5/5 vs 3-4/5 for grep/ast-grep)
+- ast-grep has a lower structural score (2.8/5) and higher latency than grep in this run
+- Semantic search is the remaining speed bottleneck on large repos; its structural score alone does not establish whether the extra time improves answers
 - BM25 keyword cache reduces warm-start keyword search from 20s to 2.5s on cockroach-scale repos
 
 Charts and per-repo analysis: `eval/3way_comparison_20repos.md`

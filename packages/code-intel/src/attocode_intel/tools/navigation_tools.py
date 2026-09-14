@@ -64,6 +64,28 @@ def search_symbols(name: str, limit: int = 30, kind: str = "") -> str:
 
 
 @mcp.tool()
+def inspect_symbol(symbol_name: str, file_path: str | None = None, line: int | None = None,
+                   source_start_line: int | None = None, task_hint: str | None = None) -> str:
+    """Understand a symbol in one call: definition, source, references, imports and candidate tests.
+
+    Use for codebase questions, tracing behavior across files, or gathering evidence before a change.
+    The file path is optional: supply a symbol name to locate its implementation. An ambiguous name returns
+    choices; supply a repository-relative file_path and definition start line to select one.
+    Supply task_hint to prioritize relevant code excerpts and symbol-specific tests. Excerpts include exact
+    file/line ranges and enclosing branch context for Python and JavaScript/TypeScript. Keep each context_ranges
+    group with its excerpt. Syntax-local matches do not establish complete behavior or data-flow coverage.
+    For long definitions, follow next_source or set source_start_line to read another excerpt.
+    Each call reads current source; inspect again from the beginning if the file changes between pages.
+    Missing relationships do not prove absence. Follow the returned queries for more evidence.
+    """
+    import json
+
+    from attocode_intel.symbol_inspection import inspect_symbol_data
+
+    return json.dumps(inspect_symbol_data(_get_service(), symbol_name, file_path, line, source_start_line, task_hint))
+
+
+@mcp.tool()
 def explore_codebase(
     path: str = "",
     max_items: int = 30,
@@ -108,7 +130,7 @@ def bootstrap(
     max_tokens: int = 8000,
     indexing_depth: str = "auto",
 ) -> str:
-    """All-in-one codebase orientation -- the best first tool call.
+    """Find where a behavior is implemented in an unfamiliar codebase using task_hint.
 
     Detects codebase size and returns an optimized bundle:
     - Project summary (identity, stats, entry points, architecture)
