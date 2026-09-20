@@ -73,7 +73,6 @@ class FilterBenchmarkResult:
 def run_filter_benchmark(
     *,
     model: str = "claude-haiku-4-5-20251001",
-    api_key: str = "",
     max_findings: int = 0,
 ) -> FilterBenchmarkResult:
     """Run the LLM FP filter against the rule accuracy corpus ground truth.
@@ -83,7 +82,6 @@ def run_filter_benchmark(
 
     Args:
         model: LLM model to use.
-        api_key: API key (falls back to env).
         max_findings: Limit findings to classify (0 = all).
 
     Returns:
@@ -151,7 +149,6 @@ def run_filter_benchmark(
             code_context=code_context or finding.code_snippet,
             explanation=finding.explanation,
             model=model,
-            api_key=api_key,
         )
 
         result.classifications.append(classification)

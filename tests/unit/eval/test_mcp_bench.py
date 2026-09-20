@@ -230,8 +230,12 @@ class TestLLMFPFilter:
         assert result.verdict == FPVerdict.UNCERTAIN
 
     def test_classify_finding_no_api_key(self, monkeypatch):
-        # Ensure no ANTHROPIC_API_KEY in env
+        # No key on either route, so the call must short-circuit offline.
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.setattr(
+            "eval.meta_harness._llm_client.load_env", lambda: None,
+        )
         result = classify_finding(
             rule_id="rule-5",
             severity="high",
@@ -241,7 +245,6 @@ class TestLLMFPFilter:
             line=42,
             matched_line="cursor.execute(query)",
             code_context="def handler():\n    cursor.execute(query)",
-            api_key="",
         )
         assert result.verdict == FPVerdict.UNCERTAIN
         assert "No API key" in result.reasoning

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from eval.rule_accuracy.calibration import compute_calibration, format_calibration_report
 from eval.rule_accuracy.castle_score import CASTLEResult, compute_castle_scores
 from eval.rule_accuracy.runner import BenchmarkResult, RuleAccuracyResult
 
@@ -31,7 +32,11 @@ def format_accuracy_report(
         f"**Overall**: P={o.precision:.2f} R={o.recall:.2f} F1={o.f1:.2f} "
         f"| TP={o.true_positives} FP={o.false_positives} FN={o.false_negatives}"
     )
-    lines.append(f"**Files scanned**: {len(result.file_results)}\n")
+    lines.append(f"**Files scanned**: {len(result.file_results)}")
+    scorer_line = f"**Scorer**: {result.scorer}"
+    if result.scorer_note:
+        scorer_line += f" ({result.scorer_note})"
+    lines.append(scorer_line + "\n")
 
     # CASTLE scores
     castle_scores = compute_castle_scores(result.per_rule, rule_severities)
@@ -96,5 +101,10 @@ def format_accuracy_report(
                 lines.append(f"  Missing (FN): lines {fr.fn_lines}")
             if fr.fp_lines:
                 lines.append(f"  Unexpected (FP): lines {fr.fp_lines}")
+
+    # Calibration — does confidence=0.8 mean 80% of those findings are real?
+    if result.scored:
+        calibration = compute_calibration(result.scored)
+        lines.append("\n" + format_calibration_report(calibration))
 
     return "\n".join(lines)

@@ -180,6 +180,10 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 
+[[tool.mypy.overrides]]
+module = ["jev"]
+ignore_missing_imports = true
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
