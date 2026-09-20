@@ -171,6 +171,23 @@ _register(FeatureFlag(
                 "new conversation thread). Requires provider support.",
     default=False,
 ))
+_register(FeatureFlag(
+    name="CONFIDENCE",
+    kind=FlagKind.ENUM,
+    description="Where a finding's confidence comes from. off = the hardcoded "
+                "constants; jev = a calibrated probability; llm = the Haiku "
+                "false-positive classifier.",
+    default="off",
+    valid_values=["off", "jev", "llm"],
+))
+_register(FeatureFlag(
+    name="CONFIDENCE_MODE",
+    kind=FlagKind.ENUM,
+    description="What to do with an estimate. shadow = log it beside the "
+                "constant and change nothing; live = use it.",
+    default="shadow",
+    valid_values=["shadow", "live"],
+))
 
 
 # -----------------------------------------------------------------------------

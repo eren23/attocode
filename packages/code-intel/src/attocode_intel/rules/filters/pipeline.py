@@ -5,7 +5,8 @@ Reduces noise before the connected coding agent sees findings:
 2. Test file adjuster — lower severity for test/spec files
 3. Confidence threshold — drop findings below minimum confidence
 
-No LLM in this pipeline. These are all mechanical, deterministic filters.
+Deterministic by default. Setting ATTOCODE_FLAG_CONFIDENCE adds one model call
+per finding between stages 2 and 3, which second-guesses the constants.
 """
 
 from __future__ import annotations
@@ -98,6 +99,7 @@ def run_pipeline(
     Pipeline stages:
     1. Dedup overlapping findings
     2. Adjust severity for test files
+    2b. Estimate p(true positive), if ATTOCODE_FLAG_CONFIDENCE is set
     3. Apply confidence threshold
 
     Args:
@@ -118,6 +120,13 @@ def run_pipeline(
     if adjust_test_severity:
         findings = adjust_test_file_severity(findings)
 
+    # 2b. Second-guess the constants (no-op unless ATTOCODE_FLAG_CONFIDENCE is set).
+    #     Before the threshold on purpose: in live mode the threshold gates on
+    #     the estimate rather than on the constant.
+    from attocode_intel import confidence
+
+    confidence.score(findings, min_confidence=min_confidence)
+
     # 3. Confidence threshold
     findings = filter_by_confidence(findings, min_confidence)
     conf_removed = original_count - dedup_removed - len(findings)
@@ -133,3 +142,4 @@ def run_pipeline(
     findings.sort(key=lambda f: (_sev_order.get(f.severity, 9), f.file, f.line))
 
     return findings
+
