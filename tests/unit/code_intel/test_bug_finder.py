@@ -98,6 +98,21 @@ class TestScanDiff:
         assert report.files_scanned == 1
         assert len(report.findings) >= 2
 
+    def test_scan_diff_reports_new_file_lines(self) -> None:
+        diff = (
+            "--- a/bad.py\n"
+            "+++ b/bad.py\n"
+            "@@ -10,3 +10,3 @@\n"
+            " a\n"
+            "-b\n"
+            "+result = eval(x)\n"
+            " c\n"
+            "@@ -40,1 +41,2 @@\n"
+            " d\n"
+            "+exec(y)\n"
+        )
+        assert sorted(f.line for f in scan_diff(diff).findings) == [11, 42]
+
     def test_scan_diff_skips_non_code(self) -> None:
         diff = (
             "--- a/readme.md\n"
