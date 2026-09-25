@@ -170,15 +170,15 @@ def classify_finding(
         )
 
     prompt = _CLASSIFICATION_PROMPT.format(
-        rule_id=rule_id,
-        severity=severity,
-        description=description,
-        cwe=cwe or "N/A",
-        file=file,
+        rule_id=redact(rule_id),
+        severity=redact(severity),
+        description=redact(description)[:1000],
+        cwe=redact(cwe or "N/A"),
+        file=redact(file),
         line=line,
-        code_context=redact(code_context[:2000]),
-        matched_line=redact(matched_line[:200]),
-        explanation=explanation or description,
+        code_context=redact(code_context)[:2000],
+        matched_line=redact(matched_line)[:200],
+        explanation=redact(explanation or description)[:2000],
     )
 
     start = time.monotonic()

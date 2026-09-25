@@ -177,12 +177,17 @@ def _analyze_impl(
     reg = _get_registry()
 
     # Query applicable rules
+    from attocode_intel import confidence
+    from attocode_intel.confidence.settings import workspace
+
+    with workspace(project_dir):
+        threshold = confidence.rule_threshold(min_confidence)
     rules = reg.query(
         language=language,
         category=category,
         severity=severity,
         pack=pack,
-        min_confidence=min_confidence,
+        min_confidence=threshold,
     )
 
     if not rules:
@@ -218,13 +223,14 @@ def _analyze_impl(
         )
 
     # Pre-filter pipeline (dedup, test-file adjustment, confidence threshold)
-    findings = run_pipeline(findings, min_confidence=min_confidence)
+    findings = run_pipeline(findings, min_confidence=min_confidence, project_dir=project_dir)
 
     # Enrich with context
     enrich_findings(findings, project_dir=project_dir)
 
     # Format for agent
-    return format_findings(findings, max_findings=max_findings)
+    text = format_findings(findings, max_findings=max_findings)
+    return text + ("\n\n" + confidence.summary() if confidence.summary() else "")
 
 
 @mcp.tool()

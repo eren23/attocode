@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Standalone code intelligence (#96, #97, #98)
+
+- `packages/code-intel` ships code intelligence as the standalone
+  `attocode_intel` package for MCP clients and teams. The old
+  `attocode.code_intel.*` modules are aliases to it.
+- `inspect_symbol` returns exact source ranges, task-focused excerpts, callers,
+  and candidate tests in one call.
+- Completed indexes stay valid across restarts. Edits, additions, renames, and
+  deletions repair the index incrementally.
+- Daily-profile MCP responses are one bounded JSON text envelope with
+  provenance and reference pagination. Daily-profile consumers must read this
+  envelope.
+- Reference results are more precise.
+
+### Added — Measured confidence scorers (#99)
+
+- `attocode_intel/confidence/` can replace the hardcoded finding confidences
+  with a jev estimate or an LLM (Haiku) estimate.
+- `ATTOCODE_FLAG_CONFIDENCE` selects `off`, `jev`, or `llm`.
+  `ATTOCODE_FLAG_CONFIDENCE_MODE` selects `shadow` or `live`. The defaults are
+  `off` and `shadow`, so behavior does not change unless you ask.
+- Redaction removes secrets from source context before a scorer sends it to a
+  third-party API.
+
+### Added — Per-workspace confidence settings
+
+- A workspace can turn on a scorer in `.attocode/config.toml` under
+  `[confidence]` with `scorer`, `mode`, and `backend`. Feature flags override
+  environment variables. Environment variables override the workspace file.
+- The scorer reads credentials from the workspace `.env` or the process
+  environment. It does not copy them into `os.environ`. Hosted repositories
+  cannot configure credentials.
+- `analyze`, `ci_scan`, and full `review_change` report how many findings the
+  scorer estimated. They also report how many findings kept the baseline and
+  how many the 25-call cap skipped.
+- In live mode, rule queries include rules below the old confidence threshold.
+  The scorer can then promote their findings.
+- The scorers redact every field they send, not only the code.
+- `eval/rule_accuracy/demo` holds a rebuildable calibration page and the triage
+  of the 82 saved findings. Its numbers are historical evidence, not accuracy
+  guarantees.
+
+### Fixed
+
+- `bug_scan` reported wrong line numbers. The diff parser ignored hunk headers,
+  so `Finding.line` counted added lines instead of file lines. Line numbers now
+  come from the new-file side of each hunk.
+- The `eval/rule_accuracy` benchmark also removes `ok:`, `ruleid:`, and `nosec`
+  markers from the context that model scorers see. These markers could reveal
+  the expected answer.
+- The global code-intel MCP server starts correctly with no arguments.
+
 ## [0.2.25] - 2026-05-31
 
 ### Added — Semantic-search retrieval quality (body-aware chunking + code embedder)

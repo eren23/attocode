@@ -511,7 +511,9 @@ def execute_rules(
                     confidence=rule.confidence,
                     file=rel_path,
                     line=line_no,
-                    code_snippet=line.rstrip()[:200],
+                    # Provider redaction must see the complete literal before
+                    # imposing a payload budget (a truncated key may not match).
+                    code_snippet=line.rstrip(),
                     description=description,
                     explanation=rule.explanation,
                     recommendation=rule.recommendation,

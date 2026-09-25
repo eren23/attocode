@@ -1,15 +1,14 @@
 """Jev scorer — a calibrated probability in place of a hardcoded constant.
 
-Jev (TypeSafe System One) answers a yes/no question with a probability rather
-than a sampled opinion. Measured against eval/rule_accuracy this is the
-best-calibrated scorer available: ECE 0.07 against 0.21 for the constants.
+Jev (TypeSafe System One) answers a yes/no question with a probability.
+Historical comparisons and their limitations live in eval/rule_accuracy/demo.
 
 It needs no client library. The backend is a public HTTP endpoint and one POST
-is the whole protocol, so this module speaks it directly and needs only an
-OPENROUTER_API_KEY.
+is the whole protocol. Supported backends are OpenRouter, TypeSafe, and a
+local server, with credentials selected for the configured backend.
 
 If the standalone `jev` CLI happens to be importable, its decide() is used
-instead. That is the same request, and it also appends a row to
+outside workspace-scoped requests. It also appends a row to
 ~/.jev/decisions.jsonl, which is what `jev label` and `jev report` read.
 
 An unkeyed or unreachable backend yields no estimate, and the caller keeps its
@@ -20,12 +19,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+import math
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
+from attocode_intel.confidence import settings
 from attocode_intel.confidence.redact import redact
 
 if TYPE_CHECKING:
@@ -51,6 +51,8 @@ def _load_env() -> None:
     Neither is on a hook's or a subprocess's environment by default.
     """
     global _env_loaded
+    if settings.project_dir():
+        return  # Scoped requests read .env without mutating process credentials.
     if _env_loaded:
         return
     _env_loaded = True
@@ -89,37 +91,40 @@ CRITERIA = {
 def available() -> bool:
     """True when a backend can be reached: a key, or a local server."""
     _load_env()
-    return bool(
-        _HAS_JEV  # the CLI resolves its own key from ~/.jev/env
-        or os.environ.get("OPENROUTER_API_KEY")
-        or os.environ.get("TYPESAFE_API_KEY")
-        or os.environ.get("ATTOCODE_LOCAL_ONLY")
-    )
+    chosen = backend()
+    return bool(chosen == "local" and (
+        settings.environment().get("JEV_BASE_URL")
+        or settings.environment().get("JEV_BACKEND") == "local"
+        or settings.local_settings().get("backend") == "local"
+        or settings.environment().get("ATTOCODE_LOCAL_ONLY", "").lower() in {"1", "true", "yes", "on"}
+    ) or settings.environment().get(_BACKENDS[chosen][2])
+        or (_HAS_JEV and not settings.project_dir()))
 
 
 def _decide(site: str, state: dict[str, Any], questions: dict[str, Any],
             incumbent: str, chosen: str) -> dict[str, Any]:
     """One decision. Uses the jev CLI when present, else a direct POST."""
-    if _HAS_JEV:
+    if _HAS_JEV and not settings.project_dir():
         result: dict[str, Any] = jev.decide(
             site, state, questions, incumbent=incumbent, backend=chosen,
         )
         return result
 
+    env = settings.environment()
     url, model, keyvar = _BACKENDS[chosen]
     if url is None:
         # 127.0.0.1, not localhost: localhost resolves to ::1 first.
-        base = os.environ.get("JEV_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+        base = env.get("JEV_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
         url = base + "/v1/systemone"
     headers = {"Content-Type": "application/json"}
-    key = os.environ.get(keyvar)
+    key = env.get(keyvar)
     if key:
         headers["Authorization"] = "Bearer " + key
     body = json.dumps(
-        {"model": os.environ.get("JEV_MODEL", model), "state": state, "questions": questions}
+        {"model": env.get("JEV_MODEL", model), "state": state, "questions": questions}
     ).encode()
     request = urllib.request.Request(url, data=body, headers=headers)  # noqa: S310
-    timeout = float(os.environ.get("JEV_TIMEOUT", "20"))
+    timeout = float(env.get("JEV_TIMEOUT", "20"))
     with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
         parsed: dict[str, Any] = json.loads(response.read())
     return {"answers": parsed.get("answers"), "error": None}
@@ -127,12 +132,20 @@ def _decide(site: str, state: dict[str, Any], questions: dict[str, Any],
 
 def backend() -> str:
     """Pick a Jev backend: local when offline or unkeyed, else the configured one."""
-    if os.environ.get("ATTOCODE_LOCAL_ONLY"):
-        return "local"
     _load_env()
-    if not os.environ.get("OPENROUTER_API_KEY"):
+    env = settings.environment()
+    if env.get("ATTOCODE_LOCAL_ONLY", "").lower() in {"1", "true", "yes", "on"}:
         return "local"
-    return os.environ.get("JEV_BACKEND", "openrouter")
+    explicit = env.get("JEV_BACKEND") or settings.local_settings().get("backend")
+    if explicit:
+        if explicit not in _BACKENDS:
+            raise ValueError("Unsupported Jev backend")
+        return explicit
+    if env.get("OPENROUTER_API_KEY"):
+        return "openrouter"
+    if env.get("TYPESAFE_API_KEY"):
+        return "typesafe"
+    return "local"
 
 
 def _state(finding: Any) -> dict[str, Any]:
@@ -143,11 +156,11 @@ def _state(finding: Any) -> dict[str, Any]:
         *getattr(finding, "context_after", []),
     ])
     return {
-        "file": finding.file,
+        "file": redact(finding.file),
         "line": finding.line,
-        "rule": getattr(finding, "rule_id", ""),
-        "message": getattr(finding, "description", ""),
-        "code": redact(code[:3000]),
+        "rule": redact(getattr(finding, "rule_id", "")),
+        "message": redact(getattr(finding, "description", ""))[:1000],
+        "code": redact(code)[:3000],
     }
 
 
@@ -176,12 +189,17 @@ def estimate(findings: Sequence[Any], *, min_confidence: float) -> list[float | 
         except Exception:  # thread plus network; a finding is not worth an outage
             logger.debug("jev: decide failed for %s:%s", finding.file, finding.line)
             return None
-        if row.get("error"):
-            logger.debug("jev: %s", row["error"])
+        try:
+            if row.get("error"):
+                return None
+            value = ((row.get("answers") or {}).get("p") or {}).get("noul")
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                return None
+            return float(value) if math.isfinite(value) and 0 <= value <= 1 else None
+        except (AttributeError, TypeError, ValueError, OverflowError):
             return None
-        answer = (row.get("answers") or {}).get("p") or {}
-        value = answer.get("noul")
-        return float(value) if isinstance(value, int | float) else None
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        return list(pool.map(ask, findings))
+        from contextvars import copy_context
+        futures = [pool.submit(copy_context().run, ask, finding) for finding in findings]
+        return [future.result() for future in futures]

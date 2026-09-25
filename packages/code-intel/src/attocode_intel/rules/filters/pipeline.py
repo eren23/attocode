@@ -93,6 +93,7 @@ def run_pipeline(
     *,
     min_confidence: float = 0.5,
     adjust_test_severity: bool = True,
+    project_dir: str = "",
 ) -> list[EnrichedFinding]:
     """Run the full deterministic pre-filter pipeline.
 
@@ -124,8 +125,14 @@ def run_pipeline(
     #     Before the threshold on purpose: in live mode the threshold gates on
     #     the estimate rather than on the constant.
     from attocode_intel import confidence
+    from attocode_intel.confidence.settings import workspace
 
-    confidence.score(findings, min_confidence=min_confidence)
+    with workspace(project_dir):
+        if confidence.settings.selected() != "off" and project_dir:
+            from attocode_intel.rules.enricher import enrich_findings
+
+            enrich_findings(findings, project_dir=project_dir)
+        confidence.score(findings, min_confidence=min_confidence)
 
     # 3. Confidence threshold
     findings = filter_by_confidence(findings, min_confidence)
@@ -142,4 +149,3 @@ def run_pipeline(
     findings.sort(key=lambda f: (_sev_order.get(f.severity, 9), f.file, f.line))
 
     return findings
-

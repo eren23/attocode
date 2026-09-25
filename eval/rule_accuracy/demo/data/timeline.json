@@ -1,0 +1,2058 @@
+{
+  "findings": [
+    {
+      "rule": "security/aws_access_key",
+      "file": "tp_hardcoded_secrets.py",
+      "line": 5,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "AWS access key ID detected",
+      "snippet": "AWS_KEY = \"[REDACTED:20 chars]\"",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 0,
+        "e": 684,
+        "p": 0.75
+      },
+      "llm": {
+        "s": 0,
+        "e": 1947,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "The value is explicitly redacted with `[REDACTED:20 chars]` placeholder text rather than an actual AWS access key, indicating this is test/example code demonstrating the security issue rather than a real credential exposure."
+      }
+    },
+    {
+      "rule": "bug/use-of-eval()-can-execute-arbitrary-code",
+      "file": "tn_safe_eval.py",
+      "line": 9,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Use of eval() can execute arbitrary code",
+      "snippet": "    return ast.literal_eval(data_str)  # ok: security/python_dynamic_eval",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 0,
+        "e": 683,
+        "p": 0.06
+      },
+      "llm": {
+        "s": 0,
+        "e": 1942,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "`ast.literal_eval()` is explicitly designed to safely evaluate Python literal structures (strings, numbers, tuples, lists, dicts, booleans, None) without executing arbitrary code, unlike `eval()`, and the code comment explicitly indicates this is an approved safe pattern."
+      }
+    },
+    {
+      "rule": "bug/use-of-eval()-can-execute-arbitrary-code",
+      "file": "tp_code_injection.js",
+      "line": 5,
+      "lang": "javascript",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Use of eval() can execute arbitrary code",
+      "snippet": "    return eval(userInput);",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 0,
+        "e": 752,
+        "p": 0.93
+      },
+      "llm": {
+        "s": 1,
+        "e": 1840,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly passes `userInput` to `eval()` without any validation, sanitization, or filtering, making it trivially exploitable to execute arbitrary code if an attacker controls the input."
+      }
+    },
+    {
+      "rule": "security/js_dynamic_eval",
+      "file": "tp_code_injection.js",
+      "line": 5,
+      "lang": "javascript",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Dynamic code evaluation detected — code injection risk",
+      "snippet": "    return eval(userInput);",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 0,
+        "e": 684,
+        "p": 0.94
+      },
+      "llm": {
+        "s": 1,
+        "e": 1706,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly evaluates unsanitized user input with `eval()`, which is a classic code injection vulnerability that allows attackers to execute arbitrary JavaScript code; there is no visible input validation, sanitization, or mitigation present."
+      }
+    },
+    {
+      "rule": "security/js_settimer_string_arg",
+      "file": "tp_code_injection.js",
+      "line": 13,
+      "lang": "javascript",
+      "sec": 1,
+      "tp": 1,
+      "desc": "setTimeout/setInterval called with a string argument — behaves like eval()",
+      "snippet": "    setTimeout(\"alert(1)\", 1000);",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 0,
+        "e": 685,
+        "p": 0.94
+      },
+      "llm": {
+        "s": 1,
+        "e": 2228,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly passes a string literal to setTimeout, which evaluates it as code similar to eval(); while this specific example uses a harmless string, the pattern is a known security anti-pattern that could enable code injection if the string were constructed from user input, and the filename \"tp_code_injection.js\" suggests this is intentionally demonstrating the vulnerability."
+      }
+    },
+    {
+      "rule": "bug/use-of-eval()-can-execute-arbitrary-code",
+      "file": "tp_code_injection.py",
+      "line": 4,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Use of eval() can execute arbitrary code",
+      "snippet": "def bad_eval(user_input):  # nosec B307",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1,
+        "e": 682,
+        "p": 0.26
+      },
+      "llm": {
+        "s": 1,
+        "e": 2229,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "The `# nosec B307` comment is a Bandit suppression directive explicitly instructing the security scanner to ignore this finding, indicating this is either intentionally flagged test code, example code, or a false alarm the developers have already reviewed and dismissed."
+      }
+    },
+    {
+      "rule": "bug/use-of-eval()-can-execute-arbitrary-code",
+      "file": "tp_code_injection.py",
+      "line": 5,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Use of eval() can execute arbitrary code",
+      "snippet": "    result = eval(user_input)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1,
+        "e": 685,
+        "p": 0.93
+      },
+      "llm": {
+        "s": 1,
+        "e": 1613,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly passes `user_input` (which is attacker-controlled by definition) to `eval()` without any validation or sanitization, allowing arbitrary code execution."
+      }
+    },
+    {
+      "rule": "security/python_dynamic_eval",
+      "file": "tp_code_injection.py",
+      "line": 5,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Dynamic code evaluation detected — code injection risk",
+      "snippet": "    result = eval(user_input)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1,
+        "e": 712,
+        "p": 0.93
+      },
+      "llm": {
+        "s": 1,
+        "e": 1770,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly passes `user_input` to `eval()` without any validation or sanitization, creating a direct code injection vulnerability where an attacker can execute arbitrary Python code through the user-controlled input."
+      }
+    },
+    {
+      "rule": "bug/use-of-exec()-can-execute-arbitrary-code",
+      "file": "tp_code_injection.py",
+      "line": 8,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Use of exec() can execute arbitrary code",
+      "snippet": "def bad_exec(code_str):  # nosec B102",
+      "before": [],
+      "after": [],
+      "constant": 0.8,
+      "jev": {
+        "s": 1,
+        "e": 685,
+        "p": 0.41
+      },
+      "llm": {
+        "s": 1,
+        "e": 2355,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "The code contains a `# nosec B102` comment which is a Bandit directive explicitly suppressing this security warning, indicating the developer has consciously reviewed and accepted this pattern (likely for test/demonstration purposes given the filename \"tp_code_injection.py\" suggests a test case)."
+      }
+    },
+    {
+      "rule": "bug/use-of-exec()-can-execute-arbitrary-code",
+      "file": "tp_code_injection.py",
+      "line": 9,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Use of exec() can execute arbitrary code",
+      "snippet": "    exec(code_str)",
+      "before": [],
+      "after": [],
+      "constant": 0.8,
+      "jev": {
+        "s": 1,
+        "e": 684,
+        "p": 0.85
+      },
+      "llm": {
+        "s": 1,
+        "e": 1806,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly executes a string variable (`code_str`) with `exec()` without any visible validation, sanitization, or input restrictions, making it vulnerable to arbitrary code execution if the string originates from untrusted sources."
+      }
+    },
+    {
+      "rule": "security/python_dynamic_exec",
+      "file": "tp_code_injection.py",
+      "line": 9,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Dynamic code execution detected — code injection risk",
+      "snippet": "    exec(code_str)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1,
+        "e": 685,
+        "p": 0.85
+      },
+      "llm": {
+        "s": 2,
+        "e": 1784,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The `exec()` function executes arbitrary Python code from `code_str` with no visible input validation, sanitization, or constraints, creating a direct code injection vulnerability if `code_str` originates from untrusted sources or user input."
+      }
+    },
+    {
+      "rule": "bug/use-of-eval()-can-execute-arbitrary-code",
+      "file": "tp_code_injection.py",
+      "line": 13,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Use of eval() can execute arbitrary code",
+      "snippet": "    eval(code)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1,
+        "e": 685,
+        "p": 0.84
+      },
+      "llm": {
+        "s": 2,
+        "e": 1923,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The use of eval() with an unsanitized `code` parameter is a classic code injection vulnerability that allows arbitrary code execution if `code` is derived from user input or untrusted sources, and the filename \"tp_code_injection.py\" suggests this is demonstrating a code injection issue rather than a legitimate use case."
+      }
+    },
+    {
+      "rule": "security/python_dynamic_eval",
+      "file": "tp_code_injection.py",
+      "line": 13,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Dynamic code evaluation detected — code injection risk",
+      "snippet": "    eval(code)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1,
+        "e": 747,
+        "p": 0.86
+      },
+      "llm": {
+        "s": 2,
+        "e": 2006,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The use of `eval()` on an unsanitized variable `code` is a classic code injection vulnerability (CWE-95) that allows arbitrary code execution if an attacker can control the input, and no input validation or sanitization is evident in the provided context."
+      }
+    },
+    {
+      "rule": "go/go-exec-command-var",
+      "file": "tp_command_injection.go",
+      "line": 11,
+      "lang": "go",
+      "sec": 1,
+      "tp": 1,
+      "desc": "exec.Command with variable argument — command injection risk",
+      "snippet": "\texec.Command(cmd).Output()",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1,
+        "e": 682,
+        "p": 0.71
+      },
+      "llm": {
+        "s": 2,
+        "e": 1716,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The variable `cmd` is passed directly to `exec.Command()` without any visible validation, sanitization, or restriction, making it vulnerable to command injection if the variable originates from untrusted user input or external sources."
+      }
+    },
+    {
+      "rule": "security/python_os_system",
+      "file": "tp_command_injection.py",
+      "line": 8,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "os.system() — command injection risk via shell execution",
+      "snippet": "    os.system(cmd)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1,
+        "e": 685,
+        "p": 0.8
+      },
+      "llm": {
+        "s": 2,
+        "e": 1904,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code uses os.system() with an unsanitized variable `cmd` without any visible input validation, sanitization, or context limiting its source, creating a direct command injection vulnerability exploitable by an attacker who can control the `cmd` variable."
+      }
+    },
+    {
+      "rule": "bug/subprocess-with-shell=true-is-vulnerable",
+      "file": "tp_command_injection.py",
+      "line": 11,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "subprocess with shell=True is vulnerable to injection",
+      "snippet": "    subprocess.call(user_cmd, shell=True)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1,
+        "e": 683,
+        "p": 0.91
+      },
+      "llm": {
+        "s": 2,
+        "e": 1964,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code passes user_cmd directly to subprocess.call() with shell=True, which allows shell metacharacter injection if user_cmd originates from untrusted input, and there is no visible input validation or sanitization to mitigate this risk."
+      }
+    },
+    {
+      "rule": "security/python_shell_true",
+      "file": "tp_command_injection.py",
+      "line": 11,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "subprocess with shell=True — command injection risk",
+      "snippet": "    subprocess.call(user_cmd, shell=True)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 682,
+        "e": 1139,
+        "p": 0.93
+      },
+      "llm": {
+        "s": 2,
+        "e": 1773,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code passes an unsanitized user-controlled variable (`user_cmd`) directly to `subprocess.call()` with `shell=True`, which enables command injection attacks where an attacker can inject arbitrary shell commands through the `user_cmd` parameter."
+      }
+    },
+    {
+      "rule": "security/python_shell_true",
+      "file": "tp_command_injection.py",
+      "line": 14,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "subprocess with shell=True — command injection risk",
+      "snippet": "    subprocess.Popen(cmd, shell=True)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 682,
+        "e": 1140,
+        "p": 0.84
+      },
+      "llm": {
+        "s": 2,
+        "e": 1884,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code uses subprocess.Popen with shell=True on an unsanitized variable `cmd`, which enables command injection attacks if `cmd` is derived from user input or untrusted sources, as shell=True invokes a shell interpreter that processes special characters and command separators."
+      }
+    },
+    {
+      "rule": "rust/rs-todo-macro",
+      "file": "tp_correctness.rs",
+      "line": 12,
+      "lang": "rust",
+      "sec": 0,
+      "tp": 1,
+      "desc": "todo!() panics at runtime — unfinished implementation",
+      "snippet": "    todo!(\"implement this\");",
+      "before": [],
+      "after": [],
+      "constant": 0.95,
+      "jev": {
+        "s": 683,
+        "e": 993,
+        "p": 0.8
+      },
+      "llm": {
+        "s": 2,
+        "e": 2123,
+        "p": 0.9,
+        "verdict": "true_positive",
+        "why": "The `todo!()` macro will panic at runtime if this code path is executed, representing an unfinished implementation that could crash the application; while this may be intentional during development, it is a legitimate security/stability issue that should be resolved before production deployment."
+      }
+    },
+    {
+      "rule": "bug/use-of-eval()-can-execute-arbitrary-code",
+      "file": "tp_eval.ts",
+      "line": 5,
+      "lang": "typescript",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Use of eval() can execute arbitrary code",
+      "snippet": "    return eval(code);",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 683,
+        "e": 1010,
+        "p": 0.75
+      },
+      "llm": {
+        "s": 2,
+        "e": 1764,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly calls eval() on the `code` parameter with no visible input validation, sanitization, or restrictions, making it vulnerable to arbitrary code execution if an attacker can control the input."
+      }
+    },
+    {
+      "rule": "security/js_dynamic_eval",
+      "file": "tp_eval.ts",
+      "line": 5,
+      "lang": "typescript",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Dynamic code evaluation detected — code injection risk",
+      "snippet": "    return eval(code);",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 684,
+        "e": 1138,
+        "p": 0.82
+      },
+      "llm": {
+        "s": 3,
+        "e": 1791,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The `eval()` function executes arbitrary code from the `code` parameter without any visible validation, sanitization, or constraints, creating a direct code injection vulnerability if this parameter originates from user input or untrusted sources."
+      }
+    },
+    {
+      "rule": "security/generic_api_key",
+      "file": "tp_hardcoded_secrets.py",
+      "line": 4,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Hardcoded API key detected",
+      "snippet": "API_KEY = \"[REDACTED:32 chars]\"",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 684,
+        "e": 1137,
+        "p": 0.84
+      },
+      "llm": {
+        "s": 3,
+        "e": 2621,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "The value is redacted in the display (\"[REDACTED:32 chars]\"), which suggests this may be example/test code or a sanitized report, but without seeing the actual unredacted value, the file name (\"tp_hardcoded_secrets.py\"), and whether this is production code, a definitive determination cannot be made—if the actual assignment contains a real API key string, it would be a TRUE_POSITIVE, but if it's a "
+      }
+    },
+    {
+      "rule": "security/slack_webhook",
+      "file": "tp_hardcoded_secrets.py",
+      "line": 7,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Slack webhook URL detected",
+      "snippet": "SLACK_WEBHOOK = \"[REDACTED:62 chars]\"",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 684,
+        "e": 1029,
+        "p": 0.8
+      },
+      "llm": {
+        "s": 3,
+        "e": 2036,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The variable name explicitly indicates a Slack webhook URL is being stored, and even though the actual value is redacted in this view, the presence of a hardcoded webhook secret in source code is a legitimate security vulnerability (CWE-798) that could expose the webhook to unauthorized use if committed to version control or accessed by unauthorized parties."
+      }
+    },
+    {
+      "rule": "security/jwt_token",
+      "file": "tp_hardcoded_secrets.py",
+      "line": 8,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "JWT token detected in source code",
+      "snippet": "JWT_TOKEN = \"[REDACTED:108 chars]\"",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 685,
+        "e": 1267,
+        "p": 0.83
+      },
+      "llm": {
+        "s": 3,
+        "e": 2462,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "The variable name \"tp_hardcoded_secrets.py\" and the pattern of a hardcoded JWT token assignment indicate this is likely a test file demonstrating hardcoded secrets vulnerability, but the actual presence of a JWT token (even if redacted in display) stored as a hardcoded constant in source code represents a real security risk if deployed to production, as JWT tokens should never be committed to repo"
+      }
+    },
+    {
+      "rule": "security/connection_string",
+      "file": "tp_hardcoded_secrets.py",
+      "line": 11,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Database connection string with possible credentials",
+      "snippet": "    conn = \"[REDACTED:55 chars]\"",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 685,
+        "e": 1139,
+        "p": 0.73
+      },
+      "llm": {
+        "s": 3,
+        "e": 2062,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "The code is redacted making it impossible to determine if actual credentials are present, but the filename \"tp_hardcoded_secrets.py\" suggests this is likely intentional test code designed to trigger security analysis rules, which would make it a FALSE_POSITIVE in practice."
+      }
+    },
+    {
+      "rule": "go/go-sql-string-concat",
+      "file": "tp_sql_injection.go",
+      "line": 7,
+      "lang": "go",
+      "sec": 1,
+      "tp": 1,
+      "desc": "SQL query built with string concatenation — SQL injection risk",
+      "snippet": "\tdb.Query(\"SELECT * FROM users WHERE id = '\" + userID + \"'\")",
+      "before": [],
+      "after": [],
+      "constant": 0.8,
+      "jev": {
+        "s": 685,
+        "e": 1140,
+        "p": 0.89
+      },
+      "llm": {
+        "s": 3,
+        "e": 2002,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly concatenates an unsanitized `userID` variable into a SQL query string without using parameterized queries or prepared statements, creating a classic SQL injection vulnerability where an attacker controlling `userID` could execute arbitrary SQL commands."
+      }
+    },
+    {
+      "rule": "security/go_sql_sprintf",
+      "file": "tp_sql_injection.go",
+      "line": 11,
+      "lang": "go",
+      "sec": 1,
+      "tp": 0,
+      "desc": "SQL query built with fmt.Sprintf — SQL injection risk",
+      "snippet": "\tquery := fmt.Sprintf(\"SELECT * FROM users WHERE name = '%s'\", name)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 685,
+        "e": 1027,
+        "p": 0.87
+      },
+      "llm": {
+        "s": 3,
+        "e": 1906,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "This code directly concatenates an unsanitized `name` parameter into a SQL query using fmt.Sprintf without any input validation, sanitization, or parameterized queries, creating a clear SQL injection vulnerability where an attacker can manipulate the query by providing malicious input like `' OR '1'='1`."
+      }
+    },
+    {
+      "rule": "java/java-sql-concat",
+      "file": "tp_sql_injection.java",
+      "line": 6,
+      "lang": "java",
+      "sec": 1,
+      "tp": 1,
+      "desc": "SQL query built with concatenation — SQL injection risk",
+      "snippet": "        em.createQuery(\"SELECT u FROM User u WHERE u.name = '\" + userInput + \"'\");",
+      "before": [],
+      "after": [],
+      "constant": 0.8,
+      "jev": {
+        "s": 685,
+        "e": 1136,
+        "p": 0.94
+      },
+      "llm": {
+        "s": 3,
+        "e": 1819,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly concatenates unsanitized user input into a JPA query string without parameterization or validation, creating a direct SQL injection vulnerability that can be exploited by an attacker controlling the userInput variable."
+      }
+    },
+    {
+      "rule": "java/java-sql-concat",
+      "file": "tp_sql_injection.java",
+      "line": 11,
+      "lang": "java",
+      "sec": 1,
+      "tp": 0,
+      "desc": "SQL query built with concatenation — SQL injection risk",
+      "snippet": "        stmt.executeQuery(\"SELECT * FROM users WHERE id = \" + id);",
+      "before": [],
+      "after": [],
+      "constant": 0.8,
+      "jev": {
+        "s": 685,
+        "e": 1137,
+        "p": 0.93
+      },
+      "llm": {
+        "s": 3,
+        "e": 1721,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly concatenates an unsanitized variable `id` into a SQL query without using parameterized queries or prepared statements, creating a direct SQL injection vulnerability where an attacker could manipulate the `id` parameter to execute arbitrary SQL commands."
+      }
+    },
+    {
+      "rule": "security/python_sql_format_string",
+      "file": "tp_sql_injection.py",
+      "line": 8,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "SQL query uses %-formatting — SQL injection risk",
+      "snippet": "    cursor.execute(\"SELECT * FROM users WHERE id = %s\" % user_id)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 712,
+        "e": 1137,
+        "p": 0.65
+      },
+      "llm": {
+        "s": 3,
+        "e": 1813,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code uses %-formatting (string interpolation) for SQL query construction instead of parameterized queries with placeholders, creating a direct SQL injection vulnerability if `user_id` is attacker-controlled, which is a typical web parameter."
+      }
+    },
+    {
+      "rule": "security/python_sql_fstring",
+      "file": "tp_sql_injection.py",
+      "line": 12,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "f-string in SQL query — SQL injection risk",
+      "snippet": "    cursor.execute(f\"SELECT * FROM {table}\")",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 747,
+        "e": 1191,
+        "p": 0.85
+      },
+      "llm": {
+        "s": 3,
+        "e": 1848,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly interpolates a variable `table` into a SQL query using an f-string without any validation, sanitization, or use of parameterized queries, creating a direct SQL injection vulnerability if `table` is user-controlled or derived from untrusted input."
+      }
+    },
+    {
+      "rule": "security/python_sql_concat",
+      "file": "tp_sql_injection.py",
+      "line": 16,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "SQL query built with string concatenation — SQL injection risk",
+      "snippet": "    cursor.execute(\"SELECT * FROM users WHERE name = '\" + name + \"'\")",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 752,
+        "e": 1139,
+        "p": 0.92
+      },
+      "llm": {
+        "s": 3,
+        "e": 1870,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly concatenates an unsanitized `name` variable into a SQL query string without using parameterized queries or any input validation, creating a classic SQL injection vulnerability where an attacker can manipulate the query by injecting SQL metacharacters through the name parameter."
+      }
+    },
+    {
+      "rule": "security/go_tls_insecure",
+      "file": "tp_tls_insecure.go",
+      "line": 8,
+      "lang": "go",
+      "sec": 1,
+      "tp": 0,
+      "desc": "TLS certificate verification disabled (InsecureSkipVerify: true)",
+      "snippet": "\t\tInsecureSkipVerify: true,",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 993,
+        "e": 1312,
+        "p": 0.83
+      },
+      "llm": {
+        "s": 1613,
+        "e": 3284,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "Setting InsecureSkipVerify to true disables TLS certificate verification, creating a vulnerability to man-in-the-middle attacks regardless of context; while this may be intentional for testing, the filename pattern \"tp_tls_insecure.go\" suggests test code, but the rule correctly flags this as a security anti-pattern that should not reach production."
+      }
+    },
+    {
+      "rule": "go/go-tls-insecure",
+      "file": "tp_tls_insecure.go",
+      "line": 8,
+      "lang": "go",
+      "sec": 1,
+      "tp": 1,
+      "desc": "TLS certificate verification disabled — MITM risk",
+      "snippet": "\t\tInsecureSkipVerify: true,",
+      "before": [],
+      "after": [],
+      "constant": 0.95,
+      "jev": {
+        "s": 1010,
+        "e": 1474,
+        "p": 0.75
+      },
+      "llm": {
+        "s": 1706,
+        "e": 3177,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "Setting `InsecureSkipVerify: true` in TLS configuration disables certificate verification, creating a genuine vulnerability to man-in-the-middle attacks regardless of context, unless this is definitively test/development code (which the filename suggests but cannot be confirmed without full file context)."
+      }
+    },
+    {
+      "rule": "security/python_pickle_loads",
+      "file": "tp_unsafe_deser.py",
+      "line": 9,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "pickle.load/loads — deserialization of untrusted data risk",
+      "snippet": "    return pickle.loads(data)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1027,
+        "e": 1422,
+        "p": 0.83
+      },
+      "llm": {
+        "s": 1716,
+        "e": 3150,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly deserializes untrusted data using pickle.loads() without any validation, sanitization, or restriction, which allows arbitrary code execution through malicious pickle payloads (CWE-502), and the filename \"tp_unsafe_deser.py\" suggests this is intentionally unsafe code being tested."
+      }
+    },
+    {
+      "rule": "security/python_marshal_loads",
+      "file": "tp_unsafe_deser.py",
+      "line": 15,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "marshal.load/loads — unsafe deserialization of arbitrary code objects",
+      "snippet": "    return marshal.loads(data)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1029,
+        "e": 1568,
+        "p": 0.88
+      },
+      "llm": {
+        "s": 1721,
+        "e": 3126,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "marshal.loads() deserializes arbitrary Python code objects without validation, and if the `data` parameter originates from untrusted sources (user input, network, files), an attacker can execute arbitrary code by crafting malicious serialized objects."
+      }
+    },
+    {
+      "rule": "typescript/ts-await-in-loop",
+      "file": "tn_safe_async.ts",
+      "line": 5,
+      "lang": "typescript",
+      "sec": 0,
+      "tp": 0,
+      "desc": "Possible sequential await in loop — requests may execute one at a time",
+      "snippet": "    const results = await Promise.all(urls.map(url => fetch(url)));",
+      "before": [],
+      "after": [],
+      "constant": 0.55,
+      "jev": {
+        "s": 1136,
+        "e": 1564,
+        "p": 0.08
+      },
+      "llm": {
+        "s": 1764,
+        "e": 3046,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "The code already uses Promise.all() to parallelize requests, which is the recommended pattern; the rule appears to be incorrectly flagging proper parallel execution as sequential awaiting."
+      }
+    },
+    {
+      "rule": "typescript/ts-array-push-spread",
+      "file": "tp_array_spread.ts",
+      "line": 4,
+      "lang": "typescript",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Array.push(...spread) can hit call stack limit for large arrays",
+      "snippet": "    target.push(...source);",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1137,
+        "e": 1510,
+        "p": 0.66
+      },
+      "llm": {
+        "s": 1770,
+        "e": 3400,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "The pattern `Array.push(...spread)` is genuinely vulnerable to stack overflow with large arrays since JavaScript engines have argument count limits (~65k-130k elements), and without visible input validation or size constraints in the provided code context, an attacker controlling the `source` array size could trigger a RangeError."
+      }
+    },
+    {
+      "rule": "typescript/ts-await-in-loop",
+      "file": "tp_await_loop.ts",
+      "line": 5,
+      "lang": "typescript",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Possible sequential await in loop — requests may execute one at a time",
+      "snippet": "        const result = await fetch(url);",
+      "before": [],
+      "after": [],
+      "constant": 0.55,
+      "jev": {
+        "s": 1137,
+        "e": 1486,
+        "p": 0.72
+      },
+      "llm": {
+        "s": 1773,
+        "e": 3619,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "This is a code style/performance linting rule, not a security vulnerability—sequential awaits are often intentional when operations have dependencies or when parallel execution would cause issues, and this pattern alone is benign without evidence of security exploitation."
+      }
+    },
+    {
+      "rule": "java/java-catch-exception",
+      "file": "tp_correctness.java",
+      "line": 7,
+      "lang": "java",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Catching generic Exception — too broad, may mask bugs",
+      "snippet": "        } catch (Exception e) {",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1138,
+        "e": 1476,
+        "p": 0.73
+      },
+      "llm": {
+        "s": 1784,
+        "e": 3347,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "While catching generic Exception is a code quality concern that can mask bugs, whether this is a security issue depends on the specific exception handling logic and context not visible in the provided code snippet (the catch block body is missing), and this appears to be test/example code based on the filename \"tp_correctness.java\"."
+      }
+    },
+    {
+      "rule": "go/go-error-string-compare",
+      "file": "tp_go_correctness.go",
+      "line": 7,
+      "lang": "go",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Comparing error strings is fragile — use errors.Is or errors.As",
+      "snippet": "\treturn err.Error() == \"not found\"",
+      "before": [],
+      "after": [],
+      "constant": 0.9,
+      "jev": {
+        "s": 1138,
+        "e": 1533,
+        "p": 0.92
+      },
+      "llm": {
+        "s": 1791,
+        "e": 3280,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "Comparing error strings via `err.Error()` is fragile and violates Go best practices; the code should use `errors.Is()` to check if the error matches a specific sentinel error value, as error messages are not guaranteed to be stable across versions or implementations."
+      }
+    },
+    {
+      "rule": "go/go-string-tolower-compare",
+      "file": "tp_go_perf.go",
+      "line": 14,
+      "lang": "go",
+      "sec": 0,
+      "tp": 1,
+      "desc": "strings.ToLower() allocates a new string for comparison — use EqualFold",
+      "snippet": "\treturn strings.ToLower(a) == strings.ToLower(b)",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1139,
+        "e": 1504,
+        "p": 0.92
+      },
+      "llm": {
+        "s": 1806,
+        "e": 3631,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "This is a legitimate performance issue where strings.ToLower() allocates unnecessary memory for case-insensitive comparison; strings.EqualFold() is the correct idiomatic Go function that performs the same comparison without allocation, making this a valid code quality and efficiency concern rather than a security vulnerability per se, but correctly flagged as a performance anti-pattern."
+      }
+    },
+    {
+      "rule": "security/bearer_token",
+      "file": "tp_hardcoded_secrets.py",
+      "line": 6,
+      "lang": "python",
+      "sec": 1,
+      "tp": 0,
+      "desc": "Possible hardcoded bearer/auth token",
+      "snippet": "GITHUB_TOKEN = \"[REDACTED:38 chars]\"",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1139,
+        "e": 1512,
+        "p": 0.8
+      },
+      "llm": {
+        "s": 1813,
+        "e": 3413,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "A hardcoded token assigned to a variable named GITHUB_TOKEN represents a genuine security vulnerability (CWE-798) regardless of redaction in display, as the actual code file would contain the plaintext secret, enabling unauthorized API access and credential compromise."
+      }
+    },
+    {
+      "rule": "java/java-string-concat-loop",
+      "file": "tp_performance.java",
+      "line": 7,
+      "lang": "java",
+      "sec": 0,
+      "tp": 1,
+      "desc": "String concatenation in loop — O(N^2) due to immutable strings",
+      "snippet": "            result += \"item: \";",
+      "before": [],
+      "after": [],
+      "constant": 0.6,
+      "jev": {
+        "s": 1139,
+        "e": 1504,
+        "p": 0.84
+      },
+      "llm": {
+        "s": 1819,
+        "e": 3173,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "String concatenation using += in a loop creates O(N²) performance due to immutable String objects in Java, which is a legitimate performance anti-pattern that should be replaced with StringBuilder for efficiency."
+      }
+    },
+    {
+      "rule": "python/py-mutable-default-arg",
+      "file": "tp_python_correctness.py",
+      "line": 3,
+      "lang": "python",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Mutable default argument — shared across all calls",
+      "snippet": "def bad_mutable_default(items=[]):",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1140,
+        "e": 1430,
+        "p": 0.88
+      },
+      "llm": {
+        "s": 1840,
+        "e": 3282,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The mutable default argument `items=[]` is a genuine Python bug where the same list object is reused across function calls, leading to unexpected state persistence and data corruption if the list is modified within the function."
+      }
+    },
+    {
+      "rule": "python/py-mutable-default-arg",
+      "file": "tp_python_correctness.py",
+      "line": 7,
+      "lang": "python",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Mutable default argument — shared across all calls",
+      "snippet": "def bad_mutable_dict(config={}):",
+      "before": [],
+      "after": [],
+      "constant": 0.85,
+      "jev": {
+        "s": 1140,
+        "e": 1483,
+        "p": 0.88
+      },
+      "llm": {
+        "s": 1848,
+        "e": 3281,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "Using a mutable default argument (empty dict) is a well-known Python pitfall where mutations persist across function calls, creating a shared state bug that will cause incorrect behavior if the dictionary is modified within the function."
+      }
+    },
+    {
+      "rule": "python/py-bare-except",
+      "file": "tp_python_correctness.py",
+      "line": 14,
+      "lang": "python",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Bare except catches SystemExit, KeyboardInterrupt — too broad",
+      "snippet": "    except:",
+      "before": [],
+      "after": [],
+      "constant": 0.9,
+      "jev": {
+        "s": 1191,
+        "e": 1526,
+        "p": 0.8
+      },
+      "llm": {
+        "s": 1870,
+        "e": 3280,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "A bare except clause is a legitimate security and code quality issue as it indiscriminately catches all exceptions including SystemExit and KeyboardInterrupt, preventing normal program termination and masking critical errors, regardless of surrounding context."
+      }
+    },
+    {
+      "rule": "go/go-template-html-unescaped",
+      "file": "tp_template_xss.go",
+      "line": 7,
+      "lang": "go",
+      "sec": 1,
+      "tp": 1,
+      "desc": "template.HTML bypasses Go's auto-escaping — XSS risk",
+      "snippet": "\treturn template.HTML(userInput)",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1267,
+        "e": 1662,
+        "p": 0.82
+      },
+      "llm": {
+        "s": 1884,
+        "e": 3281,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly wraps unsanitized userInput into template.HTML without any validation or sanitization, which explicitly bypasses Go's HTML auto-escaping and creates a direct XSS vulnerability if userInput contains attacker-controlled data."
+      }
+    },
+    {
+      "rule": "rust/rs-unsafe-block",
+      "file": "tp_unsafe.rs",
+      "line": 5,
+      "lang": "rust",
+      "sec": 1,
+      "tp": 1,
+      "desc": "unsafe block — verify memory safety invariants",
+      "snippet": "    unsafe {",
+      "before": [],
+      "after": [],
+      "constant": 0.8,
+      "jev": {
+        "s": 1312,
+        "e": 1661,
+        "p": 0.69
+      },
+      "llm": {
+        "s": 1904,
+        "e": 3483,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "The finding is valid that unsafe blocks require SAFETY comments per Rust best practices, but without seeing the actual unsafe code implementation and its surrounding context, the actual memory safety risk cannot be determined—it could range from a minor documentation issue to a genuine vulnerability depending on what operations are performed within the block."
+      }
+    },
+    {
+      "rule": "rust/rs-unwrap-usage",
+      "file": "tp_unsafe.rs",
+      "line": 11,
+      "lang": "rust",
+      "sec": 1,
+      "tp": 1,
+      "desc": "unwrap() panics on None/Err — use expect() or proper error handling",
+      "snippet": "    input.parse::<i32>().unwrap()",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1422,
+        "e": 1709,
+        "p": 0.81
+      },
+      "llm": {
+        "s": 1906,
+        "e": 3371,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "The code calls unwrap() on a parse result without validation or error handling, which will panic if the input string cannot be parsed as i32; this is a genuine code quality issue that should use proper error handling (expect with message or ?) especially if input comes from external sources."
+      }
+    },
+    {
+      "rule": "rust/rs-unsafe-block",
+      "file": "tp_unsafe.rs",
+      "line": 15,
+      "lang": "rust",
+      "sec": 1,
+      "tp": 1,
+      "desc": "unsafe block — verify memory safety invariants",
+      "snippet": "    unsafe {",
+      "before": [],
+      "after": [],
+      "constant": 0.8,
+      "jev": {
+        "s": 1430,
+        "e": 1757,
+        "p": 0.71
+      },
+      "llm": {
+        "s": 1923,
+        "e": 3601,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "The unsafe block lacks a SAFETY comment explaining the memory safety invariants being relied upon, which is a legitimate code quality and maintainability concern that could mask actual safety violations; without seeing the code inside the unsafe block, we cannot verify if memory safety guarantees are properly maintained, making this a valid finding that requires developer attention."
+      }
+    },
+    {
+      "rule": "security/python_yaml_unsafe",
+      "file": "tp_unsafe_deser.py",
+      "line": 12,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "yaml.load() without SafeLoader — arbitrary code execution risk",
+      "snippet": "    return yaml.load(data)",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1474,
+        "e": 1895,
+        "p": 0.9
+      },
+      "llm": {
+        "s": 1942,
+        "e": 3641,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "`yaml.load()` without a Loader argument defaults to the unsafe FullLoader/UnsafeLoader in PyYAML, allowing arbitrary Python code execution through deserialization of untrusted YAML data, which is a well-known vulnerability; the code shows no input validation, sanitization, or use of `yaml.safe_load()`, making this exploitable if `data` comes from an untrusted source."
+      }
+    },
+    {
+      "rule": "security/js_innerhtml",
+      "file": "tp_xss.js",
+      "line": 5,
+      "lang": "javascript",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Direct innerHTML assignment — XSS risk",
+      "snippet": "    document.getElementById(\"output\").innerHTML = userInput;",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1476,
+        "e": 1789,
+        "p": 0.92
+      },
+      "llm": {
+        "s": 1947,
+        "e": 3318,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly assigns unsanitized `userInput` to `innerHTML` without any validation, sanitization, or encoding, creating a clear XSS vulnerability where an attacker can inject malicious scripts through the userInput variable."
+      }
+    },
+    {
+      "rule": "security/js_document_write",
+      "file": "tp_xss.js",
+      "line": 9,
+      "lang": "javascript",
+      "sec": 1,
+      "tp": 1,
+      "desc": "document.write() — XSS risk and bad practice",
+      "snippet": "    document.write(data);",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1483,
+        "e": 1897,
+        "p": 0.83
+      },
+      "llm": {
+        "s": 1964,
+        "e": 3279,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "The variable `data` is passed directly to `document.write()` without any visible sanitization or validation, creating a genuine XSS vulnerability if `data` originates from untrusted user input or external sources."
+      }
+    },
+    {
+      "rule": "security/js_dangerously_set",
+      "file": "tp_xss.js",
+      "line": 14,
+      "lang": "javascript",
+      "sec": 1,
+      "tp": 1,
+      "desc": "dangerouslySetInnerHTML — XSS risk in React",
+      "snippet": "    return { dangerouslySetInnerHTML: { __html: props.content } };",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1486,
+        "e": 1970,
+        "p": 0.84
+      },
+      "llm": {
+        "s": 2002,
+        "e": 3301,
+        "p": 0.95,
+        "verdict": "true_positive",
+        "why": "The code directly uses `props.content` in `dangerouslySetInnerHTML` without any visible sanitization or validation, creating an XSS vulnerability if `props.content` is attacker-controlled or comes from untrusted sources."
+      }
+    },
+    {
+      "rule": "rust/rs-clone-in-loop",
+      "file": "tn_safe_correctness.rs",
+      "line": 9,
+      "lang": "rust",
+      "sec": 0,
+      "tp": 0,
+      "desc": "clone() in potential hot path — deep copy may be expensive",
+      "snippet": "    item.clone()",
+      "before": [],
+      "after": [],
+      "constant": 0.4,
+      "jev": {
+        "s": 1504,
+        "e": 1897,
+        "p": 0.52
+      },
+      "llm": {
+        "s": 2006,
+        "e": 3392,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "The filename \"tn_safe_correctness.rs\" and isolated context suggest this is test or example code demonstrating correctness patterns rather than production code in a performance-critical hot path, making the clone operation acceptable for safety verification purposes."
+      }
+    },
+    {
+      "rule": "go/go-defer-statement",
+      "file": "tn_safe_go.go",
+      "line": 15,
+      "lang": "go",
+      "sec": 0,
+      "tp": 0,
+      "desc": "defer call — if inside a loop, defers accumulate until function returns",
+      "snippet": "\tdefer f.Close()",
+      "before": [],
+      "after": [],
+      "constant": 0.35,
+      "jev": {
+        "s": 1504,
+        "e": 1895,
+        "p": 0.48
+      },
+      "llm": {
+        "s": 2036,
+        "e": 4444,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "The defer statement is on line 15 and without evidence that it's inside a loop from the provided context, the static analyzer appears to have flagged it as a precautionary warning; the actual code would need to be verified to show whether the defer is loop-enclosed, but the single-line context suggests it's likely at function scope level."
+      }
+    },
+    {
+      "rule": "java/java-null-return",
+      "file": "tp_correctness.java",
+      "line": 8,
+      "lang": "java",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Returning null — consider Optional or empty collection",
+      "snippet": "            return null;",
+      "before": [],
+      "after": [],
+      "constant": 0.4,
+      "jev": {
+        "s": 1510,
+        "e": 1865,
+        "p": 0.63
+      },
+      "llm": {
+        "s": 2062,
+        "e": 3616,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "Returning null is a genuine code quality issue that can lead to NullPointerException at call sites; while not directly exploitable as a security vulnerability, it represents poor practice that the static analysis tool is correctly flagging as a best-practice violation, especially given the filename suggests correctness testing."
+      }
+    },
+    {
+      "rule": "rust/rs-clone-in-loop",
+      "file": "tp_correctness.rs",
+      "line": 6,
+      "lang": "rust",
+      "sec": 0,
+      "tp": 1,
+      "desc": "clone() in potential hot path — deep copy may be expensive",
+      "snippet": "        result.push(item.clone());",
+      "before": [],
+      "after": [],
+      "constant": 0.4,
+      "jev": {
+        "s": 1512,
+        "e": 1839,
+        "p": 0.48
+      },
+      "llm": {
+        "s": 2123,
+        "e": 3802,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "This is test/correctness code (filename indicates tp_correctness.rs) where performance is not a security concern, and the clone pattern is standard for collecting owned values into a vector without any indication of a hot path or performance-critical operation."
+      }
+    },
+    {
+      "rule": "go/go-defer-statement",
+      "file": "tp_go_correctness.go",
+      "line": 13,
+      "lang": "go",
+      "sec": 0,
+      "tp": 1,
+      "desc": "defer call — if inside a loop, defers accumulate until function returns",
+      "snippet": "\t\tdefer f.Close()",
+      "before": [],
+      "after": [],
+      "constant": 0.35,
+      "jev": {
+        "s": 1526,
+        "e": 1895,
+        "p": 0.61
+      },
+      "llm": {
+        "s": 2228,
+        "e": 3858,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "The defer statement itself is flagged as potentially problematic, but without seeing the surrounding context (whether this code is inside a loop, the function scope, and file structure), it cannot be definitively determined if this is a true resource leak vulnerability or a false positive from incomplete context analysis."
+      }
+    },
+    {
+      "rule": "go/go-sprintf-allocation",
+      "file": "tp_go_perf.go",
+      "line": 10,
+      "lang": "go",
+      "sec": 0,
+      "tp": 1,
+      "desc": "fmt.Sprintf allocates a new string per call — consider alternatives in hot paths",
+      "snippet": "\treturn fmt.Sprintf(\"key:%d\", id)",
+      "before": [],
+      "after": [],
+      "constant": 0.5,
+      "jev": {
+        "s": 1533,
+        "e": 1936,
+        "p": 0.75
+      },
+      "llm": {
+        "s": 2229,
+        "e": 3906,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "Without evidence that this code is in a performance-critical hot path (loop or frequently-called function), the finding flags a minor allocation concern that is negligible for most real-world applications; the rule itself acknowledges \"not every Sprintf is a problem\" and requires performance-sensitive context to be valid."
+      }
+    },
+    {
+      "rule": "go/go-reflect-in-loop",
+      "file": "tp_go_reflect.go",
+      "line": 11,
+      "lang": "go",
+      "sec": 0,
+      "tp": 1,
+      "desc": "reflect.ValueOf/TypeOf in potential hot path — reflection is slow",
+      "snippet": "\t\tt := reflect.TypeOf(item)",
+      "before": [],
+      "after": [],
+      "constant": 0.45,
+      "jev": {
+        "s": 1564,
+        "e": 1938,
+        "p": 0.55
+      },
+      "llm": {
+        "s": 2355,
+        "e": 4014,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "This is a static analysis flag for performance anti-patterns rather than a security vulnerability; without seeing the loop context and call frequency, the finding cannot be validated as problematic, and reflection performance issues are operational concerns, not security issues (CWE is N/A, and severity is marked as low)."
+      }
+    },
+    {
+      "rule": "go/go-debug-fmt-println",
+      "file": "tp_go_reflect.go",
+      "line": 12,
+      "lang": "go",
+      "sec": 0,
+      "tp": 0,
+      "desc": "fmt.Println(t.Name()) left in source — switch to log.Printf or remove",
+      "snippet": "\t\tfmt.Println(t.Name())",
+      "before": [],
+      "after": [],
+      "constant": 0.35,
+      "jev": {
+        "s": 1568,
+        "e": 2034,
+        "p": 0.67
+      },
+      "llm": {
+        "s": 2462,
+        "e": 3950,
+        "p": 0.09999999999999998,
+        "verdict": "false_positive",
+        "why": "The code is calling `t.Name()` where `t` is a reflection type object, which returns a compile-time constant string that cannot be controlled by an attacker; this appears to be debugging/development code that should use structured logging, but it is not a security vulnerability."
+      }
+    },
+    {
+      "rule": "java/java-null-return",
+      "file": "tp_null_return.java",
+      "line": 5,
+      "lang": "java",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Returning null — consider Optional or empty collection",
+      "snippet": "        return null;",
+      "before": [],
+      "after": [],
+      "constant": 0.4,
+      "jev": {
+        "s": 1661,
+        "e": 1986,
+        "p": 0.74
+      },
+      "llm": {
+        "s": 2621,
+        "e": 3939,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "The finding flags a null return which is a code quality issue, but without seeing the complete method signature, caller context, and whether this is production code or test code, it cannot be definitively classified as exploitable or benign."
+      }
+    },
+    {
+      "rule": "java/java-null-return",
+      "file": "tp_null_return.java",
+      "line": 12,
+      "lang": "java",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Returning null — consider Optional or empty collection",
+      "snippet": "        return null;",
+      "before": [],
+      "after": [],
+      "constant": 0.4,
+      "jev": {
+        "s": 1662,
+        "e": 1997,
+        "p": 0.74
+      },
+      "llm": {
+        "s": 3046,
+        "e": 4504,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "Returning null is a legitimate code smell that can lead to NullPointerException bugs at runtime; while not directly exploitable by attackers, it represents poor practice that should be addressed by using Optional or empty collections as recommended."
+      }
+    },
+    {
+      "rule": "python/py-string-concat-loop",
+      "file": "tp_python_perf.py",
+      "line": 6,
+      "lang": "python",
+      "sec": 0,
+      "tp": 1,
+      "desc": "String concatenation in loop creates N intermediate strings",
+      "snippet": "        result += \"item: \"",
+      "before": [],
+      "after": [],
+      "constant": 0.5,
+      "jev": {
+        "s": 1709,
+        "e": 2188,
+        "p": 0.74
+      },
+      "llm": {
+        "s": 3126,
+        "e": 5570,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "String concatenation in a loop with += is a genuine performance anti-pattern in Python that creates O(N²) complexity; while not a security vulnerability per se, it is a valid code quality/performance issue that the rule correctly identifies, especially if the loop iterates many times."
+      }
+    },
+    {
+      "rule": "python/py-debug-print-leftover",
+      "file": "tp_python_style.py",
+      "line": 5,
+      "lang": "python",
+      "sec": 0,
+      "tp": 0,
+      "desc": "Debug print(key) left in source — remove before commit or switch to logger",
+      "snippet": "        print(key)",
+      "before": [],
+      "after": [],
+      "constant": 0.35,
+      "jev": {
+        "s": 1757,
+        "e": 2189,
+        "p": 0.77
+      },
+      "llm": {
+        "s": 3150,
+        "e": 4533,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "This is a legitimate debug print statement left in source code that should be removed or replaced with proper logging before production deployment, as indicated by the rule's intent to catch leftover debugging artifacts."
+      }
+    },
+    {
+      "rule": "python/py-isinstance-chain",
+      "file": "tp_python_style.py",
+      "line": 8,
+      "lang": "python",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Chained isinstance calls — consider match/case or dict dispatch",
+      "snippet": "    if isinstance(x, int) or isinstance(x, float):",
+      "before": [],
+      "after": [],
+      "constant": 0.6,
+      "jev": {
+        "s": 1789,
+        "e": 2188,
+        "p": 0.83
+      },
+      "llm": {
+        "s": 3173,
+        "e": 4624,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "This is a style/readability suggestion rather than a security vulnerability—the code is functionally correct and secure; the finding flags a minor code quality issue that could be refactored for better maintainability, but poses no actual security risk."
+      }
+    },
+    {
+      "rule": "go/go-sprintf-allocation",
+      "file": "tp_sql_injection.go",
+      "line": 11,
+      "lang": "go",
+      "sec": 1,
+      "tp": 0,
+      "desc": "fmt.Sprintf allocates a new string per call — consider alternatives in hot paths",
+      "snippet": "\tquery := fmt.Sprintf(\"SELECT * FROM users WHERE name = '%s'\", name)",
+      "before": [],
+      "after": [],
+      "constant": 0.5,
+      "jev": {
+        "s": 1839,
+        "e": 2206,
+        "p": 0.58
+      },
+      "llm": {
+        "s": 3177,
+        "e": 5112,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "The static analysis rule flags fmt.Sprintf for performance concerns in hot paths, but this is a single query construction (not in a loop) and the code has a far more critical SQL injection vulnerability that should be the focus, not the allocation efficiency."
+      }
+    },
+    {
+      "rule": "typescript/ts-any-type",
+      "file": "tp_style.ts",
+      "line": 3,
+      "lang": "typescript",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Explicit 'any' type — loses type safety",
+      "snippet": "function badAnyType(data: any) {",
+      "before": [],
+      "after": [],
+      "constant": 0.6,
+      "jev": {
+        "s": 1865,
+        "e": 2189,
+        "p": 0.9
+      },
+      "llm": {
+        "s": 3279,
+        "e": 5534,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "The function parameter accepts `any` type without type checking or validation, which eliminates TypeScript's type safety and could allow unexpected data types to be processed, increasing the risk of runtime errors or security issues if the function performs operations that depend on specific types."
+      }
+    },
+    {
+      "rule": "typescript/ts-any-type",
+      "file": "tp_style.ts",
+      "line": 4,
+      "lang": "typescript",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Explicit 'any' type — loses type safety",
+      "snippet": "    const result: any = process(data);",
+      "before": [],
+      "after": [],
+      "constant": 0.6,
+      "jev": {
+        "s": 1895,
+        "e": 2227,
+        "p": 0.89
+      },
+      "llm": {
+        "s": 3280,
+        "e": 4850,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "The use of `any` type does lose type safety and could mask bugs, but without knowing what `process()` returns, whether `data` is user-controlled, and how `result` is subsequently used, the actual security impact cannot be determined from this snippet alone."
+      }
+    },
+    {
+      "rule": "security/python_weak_hash",
+      "file": "tp_weak_crypto.py",
+      "line": 5,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Weak hash algorithm (MD5/SHA1) — not suitable for security",
+      "snippet": "    return hashlib.md5(data).hexdigest()",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1895,
+        "e": 2286,
+        "p": 0.81
+      },
+      "llm": {
+        "s": 3280,
+        "e": 5120,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "MD5 is cryptographically broken and should not be used for security-sensitive operations like password hashing or integrity verification, but the finding is UNCERTAIN because the actual use case is unknown—if this is for non-security purposes like checksums, cache keys, or test data, it may be acceptable, whereas if used for authentication or integrity protection, it would be a TRUE_POSITIVE."
+      }
+    },
+    {
+      "rule": "security/python_weak_hash",
+      "file": "tp_weak_crypto.py",
+      "line": 8,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Weak hash algorithm (MD5/SHA1) — not suitable for security",
+      "snippet": "    return hashlib.sha1(data).hexdigest()",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1895,
+        "e": 2231,
+        "p": 0.85
+      },
+      "llm": {
+        "s": 3281,
+        "e": 5007,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "SHA1 is cryptographically weak and unsuitable for security-critical operations like password hashing or digital signatures, but without seeing the full context (function name, purpose, data source, and usage) it's unclear whether this is a legitimate non-security use case (checksums, file integrity verification, legacy compatibility) or an actual security vulnerability."
+      }
+    },
+    {
+      "rule": "security/python_weak_random",
+      "file": "tp_weak_random.py",
+      "line": 5,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Weak PRNG (random module) — not suitable for security-sensitive operations",
+      "snippet": "    return random.random()",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1897,
+        "e": 2274,
+        "p": 0.69
+      },
+      "llm": {
+        "s": 3281,
+        "e": 5054,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "The finding is technically correct that `random.random()` is cryptographically weak, but without knowing the context of how this return value is used (e.g., whether it's for non-security purposes like simulations or for security-critical operations like token generation), and given the filename suggests this may be test/demo code, a definitive classification requires understanding the actual appli"
+      }
+    },
+    {
+      "rule": "security/python_weak_random",
+      "file": "tp_weak_random.py",
+      "line": 8,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Weak PRNG (random module) — not suitable for security-sensitive operations",
+      "snippet": "    return random.randint(100000, 999999)",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1897,
+        "e": 2227,
+        "p": 0.75
+      },
+      "llm": {
+        "s": 3282,
+        "e": 5219,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "While `random.randint()` is cryptographically weak and the flag is technically correct that it shouldn't be used for security operations, the severity depends on the actual use case (e.g., generating a 6-digit OTP code is security-sensitive and requires `secrets`, but generating a game number is benign), which cannot be definitively determined from this isolated code snippet alone."
+      }
+    },
+    {
+      "rule": "security/python_weak_random",
+      "file": "tp_weak_random.py",
+      "line": 11,
+      "lang": "python",
+      "sec": 1,
+      "tp": 1,
+      "desc": "Weak PRNG (random module) — not suitable for security-sensitive operations",
+      "snippet": "    return random.choice(\"abcdefghijklmnop\")",
+      "before": [],
+      "after": [],
+      "constant": 0.7,
+      "jev": {
+        "s": 1936,
+        "e": 2383,
+        "p": 0.68
+      },
+      "llm": {
+        "s": 3284,
+        "e": 5375,
+        "p": null,
+        "verdict": "uncertain",
+        "why": "While `random.choice()` is indeed cryptographically weak and the rule correctly identifies it, the security impact depends on the function's purpose—if this generates non-security-critical tokens (e.g., UI identifiers or test data), it's a false positive, but if it generates session tokens, passwords, or security keys, it's a true positive requiring `secrets` module instead."
+      }
+    },
+    {
+      "rule": "typescript/ts-console-log",
+      "file": "tp_await_loop.ts",
+      "line": 6,
+      "lang": "typescript",
+      "sec": 0,
+      "tp": 0,
+      "desc": "console.log left in code — use proper logging or remove",
+      "snippet": "        console.log(result);",
+      "before": [],
+      "after": [],
+      "constant": 0.35,
+      "jev": {
+        "s": 1938,
+        "e": 2395,
+        "p": 0.73
+      },
+      "llm": {
+        "s": 3301,
+        "e": 4986,
+        "p": 0.15000000000000002,
+        "verdict": "false_positive",
+        "why": "This is a code quality/style issue rather than a security vulnerability; console.log statements are informational debugging output that don't introduce exploitable security risks, and without seeing the full context (file name suggests it's test/example code for async patterns), this appears to be development or documentation code where such logging is acceptable."
+      }
+    },
+    {
+      "rule": "go/go-mutex-lock",
+      "file": "tp_go_reflect.go",
+      "line": 17,
+      "lang": "go",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Mutex lock — verify no I/O (network, file, HTTP) happens before Unlock",
+      "snippet": "\tmu.Lock()",
+      "before": [],
+      "after": [],
+      "constant": 0.3,
+      "jev": {
+        "s": 1970,
+        "e": 2325,
+        "p": 0.22
+      },
+      "llm": {
+        "s": 3318,
+        "e": 4996,
+        "p": 0.09999999999999998,
+        "verdict": "false_positive",
+        "why": "The finding only flags the Lock() call in isolation without evidence of I/O operations in the critical section; without seeing the code between Lock() and Unlock(), this is a generic informational flag that requires manual verification rather than indicating an actual security issue."
+      }
+    },
+    {
+      "rule": "python/py-global-import-in-function",
+      "file": "tp_python_perf.py",
+      "line": 10,
+      "lang": "python",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Import inside function — runs on every call (acceptable for optional deps)",
+      "snippet": "    import json",
+      "before": [],
+      "after": [],
+      "constant": 0.4,
+      "jev": {
+        "s": 1986,
+        "e": 2345,
+        "p": 0.62
+      },
+      "llm": {
+        "s": 3347,
+        "e": 4869,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "Importing `json` (a standard library module) inside a function is a minor performance consideration but not a security issue, and the rule itself acknowledges this is \"acceptable for optional deps\" - `json` is a built-in module with no security implications regardless of import location."
+      }
+    },
+    {
+      "rule": "python/py-dict-keys-iteration",
+      "file": "tp_python_style.py",
+      "line": 4,
+      "lang": "python",
+      "sec": 0,
+      "tp": 1,
+      "desc": "Iterating .keys() is redundant — iterate the dict directly",
+      "snippet": "    for key in d.keys():",
+      "before": [],
+      "after": [],
+      "constant": 0.9,
+      "jev": {
+        "s": 1997,
+        "e": 2361,
+        "p": 0.89
+      },
+      "llm": {
+        "s": 3371,
+        "e": 4991,
+        "p": 0.050000000000000044,
+        "verdict": "false_positive",
+        "why": "This is a code style issue, not a security vulnerability—the rule flags redundant `.keys()` iteration as a Python anti-pattern (since `for key in d:` is preferred), but this has no security implications and does not represent an exploitable issue."
+      }
+    },
+    {
+      "rule": "typescript/ts-console-log",
+      "file": "tp_style.ts",
+      "line": 5,
+      "lang": "typescript",
+      "sec": 0,
+      "tp": 1,
+      "desc": "console.log left in code — use proper logging or remove",
+      "snippet": "    console.log(result);",
+      "before": [],
+      "after": [],
+      "constant": 0.35,
+      "jev": {
+        "s": 2034,
+        "e": 2376,
+        "p": 0.8
+      },
+      "llm": {
+        "s": 3392,
+        "e": 4962,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "This is a legitimate code quality issue where console.log should be replaced with proper logging framework calls or removed before production deployment, as console output is not suitable for production applications and can expose sensitive information or clutter logs."
+      }
+    },
+    {
+      "rule": "typescript/ts-console-log",
+      "file": "tp_style.ts",
+      "line": 10,
+      "lang": "typescript",
+      "sec": 0,
+      "tp": 1,
+      "desc": "console.log left in code — use proper logging or remove",
+      "snippet": "    console.log(\"debug\");",
+      "before": [],
+      "after": [],
+      "constant": 0.35,
+      "jev": {
+        "s": 2188,
+        "e": 2576,
+        "p": 0.87
+      },
+      "llm": {
+        "s": 3400,
+        "e": 4624,
+        "p": 0.85,
+        "verdict": "true_positive",
+        "why": "This is a legitimate code quality issue where debug console.log statements should be removed or replaced with proper structured logging before production deployment, as they can leak sensitive information and impact performance."
+      }
+    }
+  ],
+  "jev_wall": 2578,
+  "llm_wall": 5571,
+  "jev_workers": 16,
+  "llm_workers": 32
+}

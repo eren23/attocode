@@ -34,15 +34,19 @@ def review(service, files, mode="full"):
         passes.append({"name": "security", "status": "failed", "error": str(exc)})
     if mode == "full":
         try:
+            from attocode_intel import confidence
+            from attocode_intel.confidence.settings import workspace
             from attocode_intel.rules.enricher import enrich_findings
             from attocode_intel.rules.executor import execute_rules
             from attocode_intel.rules.filters.pipeline import run_pipeline
             from attocode_intel.tools.rule_tools import _collect_files, _get_registry
 
-            rules = _get_registry().query(min_confidence=0.5)
+            with workspace(service.project_dir):
+                rules = _get_registry().query(min_confidence=confidence.rule_threshold(0.5))
             scanned = _collect_files(sorted(selected), "", service.project_dir)
             result = run_pipeline(
-                execute_rules(scanned, rules, project_dir=service.project_dir), min_confidence=0.5
+                execute_rules(scanned, rules, project_dir=service.project_dir), min_confidence=0.5,
+                project_dir=service.project_dir,
             )
             enrich_findings(result, project_dir=service.project_dir)
             findings.extend(
@@ -54,6 +58,7 @@ def review(service, files, mode="full"):
                     "name": "rules",
                     "status": "completed" if rules and scanned else "unavailable",
                     "files_scanned": len(scanned),
+                    "confidence": {k: v for k, v in confidence.last_report().items() if k != "findings"},
                 }
             )
         except Exception as exc:

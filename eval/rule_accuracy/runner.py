@@ -24,7 +24,10 @@ _EXPECT_RE = re.compile(r"(?:#|//)\s*expect:\s*([\w./-]+)")
 _NO_EXPECT_RE = re.compile(r"(?:#|//)\s*no-expect:")
 # The same markers, for removal: they sit inline on the judged line, so a model
 # scorer would otherwise read the correct rule id straight out of its context.
-_ANNOTATION_RE = re.compile(r"[ \t]*(?:#|//)\s*(?:no-)?expect:.*$", re.MULTILINE)
+_ANNOTATION_RE = re.compile(
+    r"[ \t]*(?:#|//)\s*(?:(?:no-)?expect:|ok:|(?:todo)?ruleid:|nosec\b).*$",
+    re.MULTILINE,
+)
 
 CORPUS_DIR = Path(__file__).parent / "corpus"
 
@@ -173,6 +176,7 @@ def _strip_annotations(findings: list[Any]) -> None:
     """
     for f in findings:
         f.code_snippet = _ANNOTATION_RE.sub("", f.code_snippet)
+        f.description = _ANNOTATION_RE.sub("", f.description)
         f.context_before = [_ANNOTATION_RE.sub("", line) for line in f.context_before]
         f.context_after = [_ANNOTATION_RE.sub("", line) for line in f.context_after]
 
@@ -229,6 +233,7 @@ def run_accuracy_benchmark(
     from attocode.code_intel.rules.loader import load_builtin_rules
     from attocode.code_intel.rules.packs.pack_loader import list_example_packs, load_pack
     from attocode.code_intel.rules.executor import execute_rules
+    from attocode.code_intel.rules.enricher import enrich_findings
     from attocode.code_intel.rules.filters.pipeline import filter_by_confidence, run_pipeline
     from attocode_intel import confidence
 
@@ -263,6 +268,7 @@ def run_accuracy_benchmark(
         expectations, is_tn_file = _parse_file_annotations(file_path)
         meta[file_path] = (language, cwe, expectations, is_tn_file)
         found = execute_rules([file_path], rules, project_dir=str(Path(file_path).parent))
+        enrich_findings(found, project_dir=str(Path(file_path).parent))
         _strip_annotations(found)
         for f in found:
             owner[id(f)] = file_path

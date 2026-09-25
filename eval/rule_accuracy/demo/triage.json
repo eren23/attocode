@@ -1,0 +1,1002 @@
+[
+  {
+    "sample_index": 0,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:476"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 1,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/readiness.py:482"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 2,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:478"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 3,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/bug_finder.py:109"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 4,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:280"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 5,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:143"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 6,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "regex_boundaries",
+    "rationale": "The regex matches the suffix of 'retrieval (' in a parameter docstring, not Python eval.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py:693"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 7,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/bug_finder.py:102"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 8,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "regex_boundaries",
+    "rationale": "asyncio.create_subprocess_exec launches a subprocess with argument vectors; it is not Python's exec builtin.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/lsp/client.py:206"
+    ],
+    "fix": "Require the intended call identity, not a matching identifier suffix.",
+    "acceptance": "create_subprocess_exec is excluded; exec(user_code) remains detected."
+  },
+  {
+    "sample_index": 9,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:394"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 10,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "regex_boundaries",
+    "rationale": "asyncio.create_subprocess_exec launches a subprocess with argument vectors; it is not Python's exec builtin.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/mcp/client.py:87"
+    ],
+    "fix": "Require the intended call identity, not a matching identifier suffix.",
+    "acceptance": "create_subprocess_exec is excluded; exec(user_code) remains detected."
+  },
+  {
+    "sample_index": 11,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/bug_finder.py:104"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 12,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "invariants",
+    "rationale": "Assertions check struct.pack sizes against fixed binary-format constants. These are developer invariants; the rule explicitly permits dev-time invariants.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/trigram_index.py:493"
+    ],
+    "fix": "Keep the invariant; add a negative fixture alongside a positive input-validation assertion.",
+    "acceptance": "Fixed serialization invariants are distinguished from security/input validation."
+  },
+  {
+    "sample_index": 13,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "invariants",
+    "rationale": "Assertions check struct.pack sizes against fixed binary-format constants. These are developer invariants; the rule explicitly permits dev-time invariants.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/trigram_index.py:499"
+    ],
+    "fix": "Keep the invariant; add a negative fixture alongside a positive input-validation assertion.",
+    "acceptance": "Fixed serialization invariants are distinguished from security/input validation."
+  },
+  {
+    "sample_index": 14,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "invariants",
+    "rationale": "The earlier guard exits when both target_file and search_name are absent. The assert narrows the already-validated else branch.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/cli.py:2413"
+    ],
+    "fix": "Preserve the input guard and add a negative fixture for this control flow.",
+    "acceptance": "The earlier input guard is recognized; unguarded production validation remains detected."
+  },
+  {
+    "sample_index": 15,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "invariants",
+    "rationale": "__post_init__ initializes the connection immediately before _create_tables; this assertion expresses an internal construction invariant.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/blob_oid.py:86"
+    ],
+    "fix": "Add a negative fixture for initialized object invariants.",
+    "acceptance": "The normal constructor path remains correct under python -O."
+  },
+  {
+    "sample_index": 16,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "sync_sleep",
+    "rationale": "The sleep throttles batches in _run_background_indexing, invoked by a dedicated threading.Thread, not the asyncio event loop.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py:2015",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py:2132"
+    ],
+    "fix": "Restrict the blocking-sleep rule to async/hot-path evidence.",
+    "acceptance": "A dedicated worker sleep is excluded; time.sleep inside async def is retained."
+  },
+  {
+    "sample_index": 17,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "sync_sleep",
+    "rationale": "This is a synchronous CLI progress-polling loop; its sleep intentionally spaces status updates.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/cli.py:2094"
+    ],
+    "fix": "Restrict the blocking-sleep rule to async/hot-path evidence.",
+    "acceptance": "Synchronous polling remains unflagged; an async sleep blocks test is detected."
+  },
+  {
+    "sample_index": 18,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "cli_output",
+    "rationale": "This print emits CLI help, an installation diagnostic, or requested command results. The rule's own explanation permits CLI output.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/cli.py:83"
+    ],
+    "fix": "Include rule explanation and CLI purpose in scoring; add negative fixtures for legitimate output.",
+    "acceptance": "All four CLI outputs are excluded; leftover debug printing in a service handler is detected."
+  },
+  {
+    "sample_index": 19,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "cli_output",
+    "rationale": "This print emits CLI help, an installation diagnostic, or requested command results. The rule's own explanation permits CLI output.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/cli.py:546"
+    ],
+    "fix": "Include rule explanation and CLI purpose in scoring; add negative fixtures for legitimate output.",
+    "acceptance": "All four CLI outputs are excluded; leftover debug printing in a service handler is detected."
+  },
+  {
+    "sample_index": 20,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "cli_output",
+    "rationale": "This print emits CLI help, an installation diagnostic, or requested command results. The rule's own explanation permits CLI output.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/installer.py:1803"
+    ],
+    "fix": "Include rule explanation and CLI purpose in scoring; add negative fixtures for legitimate output.",
+    "acceptance": "All four CLI outputs are excluded; leftover debug printing in a service handler is detected."
+  },
+  {
+    "sample_index": 21,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "cli_output",
+    "rationale": "This print emits CLI help, an installation diagnostic, or requested command results. The rule's own explanation permits CLI output.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/cli.py:608"
+    ],
+    "fix": "Include rule explanation and CLI purpose in scoring; add negative fixtures for legitimate output.",
+    "acceptance": "All four CLI outputs are excluded; leftover debug printing in a service handler is detected."
+  },
+  {
+    "sample_index": 22,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "optional_imports",
+    "rationale": "The import loads an optional tree-sitter language binding only when that language parser is requested. The rule explicitly permits optional dependencies.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/code_analyzer.py:235"
+    ],
+    "fix": "Add optional-dependency negative fixtures.",
+    "acceptance": "Lazy optional language imports are not treated as a performance defect."
+  },
+  {
+    "sample_index": 23,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "optional_imports",
+    "rationale": "The import loads an optional tree-sitter language binding only when that language parser is requested. The rule explicitly permits optional dependencies.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/code_analyzer.py:238"
+    ],
+    "fix": "Add optional-dependency negative fixtures.",
+    "acceptance": "Lazy optional language imports are not treated as a performance defect."
+  },
+  {
+    "sample_index": 24,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "regex_boundaries",
+    "rationale": "The indented import is in a module-level try/except availability probe, not inside a function.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/code_analyzer.py:61"
+    ],
+    "fix": "Use syntax ancestry rather than indentation to identify imports inside functions.",
+    "acceptance": "Module-level try imports are excluded; actual function-local imports can still be inspected."
+  },
+  {
+    "sample_index": 25,
+    "status": "unresolved",
+    "priority": "P3",
+    "group": "stdlib_lazy_import",
+    "rationale": "tomllib is required by Python 3.12 and imported inside a metadata helper. The placement matches the rule, but no meaningful performance impact has been established.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/codebase_context.py:282"
+    ],
+    "fix": "Measure call frequency/import overhead; move to module scope only if worthwhile or for consistency.",
+    "acceptance": "Demonstrate equivalent behavior for absent/malformed pyproject files and record whether measured overhead warrants a change."
+  },
+  {
+    "sample_index": 26,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "type_checks",
+    "rationale": "These are bounded validation/type checks on different values or an exception and its cause, not a long type-dispatch chain.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/installer.py:203"
+    ],
+    "fix": "Require a genuine repeated type-dispatch chain rather than adjacent isinstance tokens.",
+    "acceptance": "These validation guards are excluded; a long repeated dispatch fixture remains detected."
+  },
+  {
+    "sample_index": 27,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "type_checks",
+    "rationale": "These are bounded validation/type checks on different values or an exception and its cause, not a long type-dispatch chain.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/output.py:71"
+    ],
+    "fix": "Require a genuine repeated type-dispatch chain rather than adjacent isinstance tokens.",
+    "acceptance": "These validation guards are excluded; a long repeated dispatch fixture remains detected."
+  },
+  {
+    "sample_index": 28,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "type_checks",
+    "rationale": "These are bounded validation/type checks on different values or an exception and its cause, not a long type-dispatch chain.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/precision.py:126"
+    ],
+    "fix": "Require a genuine repeated type-dispatch chain rather than adjacent isinstance tokens.",
+    "acceptance": "These validation guards are excluded; a long repeated dispatch fixture remains detected."
+  },
+  {
+    "sample_index": 29,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "type_checks",
+    "rationale": "These are bounded validation/type checks on different values or an exception and its cause, not a long type-dispatch chain.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/installer.py:126"
+    ],
+    "fix": "Require a genuine repeated type-dispatch chain rather than adjacent isinstance tokens.",
+    "acceptance": "These validation guards are excluded; a long repeated dispatch fixture remains detected."
+  },
+  {
+    "sample_index": 30,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "nonloop_concat",
+    "rationale": "A fixed number of conditional concatenations builds one response, SQL query, or descriptor. The matched operation is not cumulative string growth within a loop.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/gateway.py:489"
+    ],
+    "fix": "Require loop ancestry and repeated growth of the same accumulator.",
+    "acceptance": "These four sites are excluded; growing a string per loop iteration remains detected."
+  },
+  {
+    "sample_index": 31,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "nonloop_concat",
+    "rationale": "A fixed number of conditional concatenations builds one response, SQL query, or descriptor. The matched operation is not cumulative string growth within a loop.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/gateway.py:479"
+    ],
+    "fix": "Require loop ancestry and repeated growth of the same accumulator.",
+    "acceptance": "These four sites are excluded; growing a string per loop iteration remains detected."
+  },
+  {
+    "sample_index": 32,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "nonloop_concat",
+    "rationale": "A fixed number of conditional concatenations builds one response, SQL query, or descriptor. The matched operation is not cumulative string growth within a loop.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/tools/adr_tools.py:276"
+    ],
+    "fix": "Require loop ancestry and repeated growth of the same accumulator.",
+    "acceptance": "These four sites are excluded; growing a string per loop iteration remains detected."
+  },
+  {
+    "sample_index": 33,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "nonloop_concat",
+    "rationale": "A fixed number of conditional concatenations builds one response, SQL query, or descriptor. The matched operation is not cumulative string growth within a loop.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/rules/sarif.py:44"
+    ],
+    "fix": "Require loop ancestry and repeated growth of the same accumulator.",
+    "acceptance": "These four sites are excluded; growing a string per loop iteration remains detected."
+  },
+  {
+    "sample_index": 34,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "local_defaults",
+    "rationale": "The default is a credential-free Redis URL pointing to localhost, with REDIS_URL overriding it.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/workers/settings.py:23"
+    ],
+    "fix": "Distinguish credential-bearing connection strings from local endpoint defaults.",
+    "acceptance": "Local credential-free URLs are excluded; an embedded-password URL remains detected."
+  },
+  {
+    "sample_index": 35,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:518"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 36,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:500"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 37,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:499"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 38,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:497"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 39,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:506"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 40,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:502"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 41,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:503"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 42,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:488"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 43,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:487"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 44,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:494"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 45,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "local_defaults",
+    "rationale": "This is a documented loopback host or default service port, not a hardcoded external service dependency or secret.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/config.py:77"
+    ],
+    "fix": "Add negative fixtures for configurable local defaults.",
+    "acceptance": "Loopback defaults with configuration overrides do not become security findings."
+  },
+  {
+    "sample_index": 46,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "local_defaults",
+    "rationale": "This is a documented loopback host or default service port, not a hardcoded external service dependency or secret.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/entrypoint.py:87"
+    ],
+    "fix": "Add negative fixtures for configurable local defaults.",
+    "acceptance": "Loopback defaults with configuration overrides do not become security findings."
+  },
+  {
+    "sample_index": 47,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "local_defaults",
+    "rationale": "This is a documented loopback host or default service port, not a hardcoded external service dependency or secret.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/config.py:16"
+    ],
+    "fix": "Add negative fixtures for configurable local defaults.",
+    "acceptance": "Loopback defaults with configuration overrides do not become security findings."
+  },
+  {
+    "sample_index": 48,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "local_defaults",
+    "rationale": "This is a documented loopback host or default service port, not a hardcoded external service dependency or secret.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/cli.py:265"
+    ],
+    "fix": "Add negative fixtures for configurable local defaults.",
+    "acceptance": "Loopback defaults with configuration overrides do not become security findings."
+  },
+  {
+    "sample_index": 49,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "local_defaults",
+    "rationale": "This is a documented loopback host or default service port, not a hardcoded external service dependency or secret.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/cli.py:266"
+    ],
+    "fix": "Add negative fixtures for configurable local defaults.",
+    "acceptance": "Loopback defaults with configuration overrides do not become security findings."
+  },
+  {
+    "sample_index": 50,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "local_defaults",
+    "rationale": "This is a documented loopback host or default service port, not a hardcoded external service dependency or secret.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/server.py:669"
+    ],
+    "fix": "Add negative fixtures for configurable local defaults.",
+    "acceptance": "Loopback defaults with configuration overrides do not become security findings."
+  },
+  {
+    "sample_index": 51,
+    "status": "unresolved",
+    "priority": "P2",
+    "group": "development_credential",
+    "rationale": "The development bootstrap uses a fixed password against a loopback API. This is a real literal, but production exposure and whether a persistent development account is reachable have not been established.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/cli.py:2263",
+      "packages/code-intel/src/attocode_intel/cli.py:2282"
+    ],
+    "fix": "Generate a per-install development password or explicitly gate fixed test credentials to disposable development environments; inspect bind and account exposure first.",
+    "acceptance": "Development setup still works; non-development startup cannot create or retain a known-password account without explicit opt-in."
+  },
+  {
+    "sample_index": 52,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The word/assert expression occurs inside a generated test fixture or keyword list, not an executable production security guard.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/testing/fixtures.py:60"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 53,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:314"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 54,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The word/assert expression occurs inside a generated test fixture or keyword list, not an executable production security guard.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/codebase_context.py:630"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 55,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The word/assert expression occurs inside a generated test fixture or keyword list, not an executable production security guard.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py:43"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 56,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:628"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 57,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:355"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 58,
+    "status": "confirmed",
+    "priority": "P2",
+    "group": "cors_default",
+    "rationale": "The default explicitly allows every origin and flows into CORSMiddleware. Credentials are disabled when '*' is present; this is a confirmed permissive configuration, not proof of an exploitable authentication bypass.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/config.py:19",
+      "packages/code-intel/src/attocode_intel/config.py:80",
+      "packages/code-intel/src/attocode_intel/api/app.py:125"
+    ],
+    "fix": "Make origins explicit for hosted/service deployments while preserving an intentional local-development configuration.",
+    "acceptance": "Test configured origins, wildcard credential behavior, and default service-mode policy; reject unrelated origins under the restricted deployment configuration."
+  },
+  {
+    "sample_index": 59,
+    "status": "confirmed",
+    "priority": "P2",
+    "group": "cors_default",
+    "rationale": "The default explicitly allows every origin and flows into CORSMiddleware. Credentials are disabled when '*' is present; this is a confirmed permissive configuration, not proof of an exploitable authentication bypass.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/config.py:19",
+      "packages/code-intel/src/attocode_intel/config.py:80",
+      "packages/code-intel/src/attocode_intel/api/app.py:125"
+    ],
+    "fix": "Make origins explicit for hosted/service deployments while preserving an intentional local-development configuration.",
+    "acceptance": "Test configured origins, wildcard credential behavior, and default service-mode policy; reject unrelated origins under the restricted deployment configuration."
+  },
+  {
+    "sample_index": 60,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:506"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 61,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:280"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 62,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/bug_finder.py:102"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 63,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:394"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 64,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/bug_finder.py:104"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 65,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:264"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 66,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:325"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 67,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:331"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 68,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:160"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 69,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/bug_finder.py:106"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 70,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:154"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 71,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/scanner.py:66"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 72,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "internal_sql",
+    "rationale": "The interpolated busy timeout is a module-level integer constant (30_000), not user-controlled SQL.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/index_store.py:24",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/index_store.py:118"
+    ],
+    "fix": "Add a negative fixture for fixed numeric PRAGMA values.",
+    "acceptance": "Fixed busy-timeout SQL is excluded; user-controlled query interpolation remains detected."
+  },
+  {
+    "sample_index": 73,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "internal_sql",
+    "rationale": "ARCHIVE_TABLE and STAGING_TABLE are module-level constant identifiers used during internal vector-table rotation.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/embedding_rotation.py:63",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/embedding_rotation.py:65",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/embedding_rotation.py:520"
+    ],
+    "fix": "Track identifier origins; do not replace SQL identifiers with value placeholders.",
+    "acceptance": "Fixed table-name rotation is excluded; external/unvalidated table input remains detected."
+  },
+  {
+    "sample_index": 74,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "internal_sql",
+    "rationale": "ARCHIVE_TABLE and STAGING_TABLE are module-level constant identifiers used during internal vector-table rotation.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/embedding_rotation.py:63",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/embedding_rotation.py:65",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/embedding_rotation.py:520"
+    ],
+    "fix": "Track identifier origins; do not replace SQL identifiers with value placeholders.",
+    "acceptance": "Fixed table-name rotation is excluded; external/unvalidated table input remains detected."
+  },
+  {
+    "sample_index": 75,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "internal_sql",
+    "rationale": "Every production caller supplies fixed table tuples, including _STORE_DEFS. No external table-name input reaches this helper in the inspected callers.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/tools/maintenance_tools.py:54",
+      "packages/code-intel/src/attocode_intel/tools/maintenance_tools.py:123",
+      "packages/code-intel/src/attocode_intel/tools/maintenance_tools.py:507",
+      "packages/code-intel/src/attocode_intel/tools/pin_store.py:48"
+    ],
+    "fix": "Keep this as a negative fixture and add source/caller evidence to review of SQL identifier interpolation.",
+    "acceptance": "Internal fixed table names are excluded; a helper accepting an unvalidated external name remains flagged."
+  },
+  {
+    "sample_index": 76,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/scanner.py:67"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 77,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:196"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 78,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/scanner.py:68"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 79,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "detector_literals",
+    "rationale": "The match is a rule definition, diagnostic string, or documentation, not execution of the operation the rule warns about.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/security/patterns.py:184"
+    ],
+    "fix": "Improve rule matching to distinguish executable syntax from detector literals; preserve this case as a negative fixture.",
+    "acceptance": "The detector literal is not reported, while a real executable positive fixture remains detected."
+  },
+  {
+    "sample_index": 80,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "git_blob_hash",
+    "rationale": "SHA-1 is used to reproduce the Git blob object ID format for stale-source detection, not password hashing or signing.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/knowledge.py:86",
+      "packages/code-intel/src/attocode_intel/local_knowledge.py:29"
+    ],
+    "fix": "Preserve Git-compatible IDs and add a non-cryptographic identity negative fixture.",
+    "acceptance": "Hash output equals git hash-object for the same bytes; security-sensitive SHA-1 use remains detected."
+  },
+  {
+    "sample_index": 81,
+    "status": "false_positive",
+    "priority": "P3",
+    "group": "git_blob_hash",
+    "rationale": "SHA-1 is used to reproduce the Git blob object ID format for stale-source detection, not password hashing or signing.",
+    "evidence": [
+      "packages/code-intel/src/attocode_intel/knowledge.py:86",
+      "packages/code-intel/src/attocode_intel/local_knowledge.py:29"
+    ],
+    "fix": "Preserve Git-compatible IDs and add a non-cryptographic identity negative fixture.",
+    "acceptance": "Hash output equals git hash-object for the same bytes; security-sensitive SHA-1 use remains detected."
+  }
+]
