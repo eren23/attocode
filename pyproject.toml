@@ -210,6 +210,8 @@ markers = [
 
 [tool.mypy]
 python_version = "3.12"
+mypy_path = ["src", "packages/code-intel/src"]
+explicit_package_bases = true
 strict = true
 warn_return_any = true
 warn_unused_configs = true
