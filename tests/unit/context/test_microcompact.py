@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from attocode.integrations.context.compaction import (
-    TOOL_DECAY_PROFILES,
-    ToolDecayProfile,
     _DEFAULT_PROFILE,
+    TOOL_DECAY_PROFILES,
     microcompact,
 )
 from attocode.types.messages import Message, Role, ToolCall

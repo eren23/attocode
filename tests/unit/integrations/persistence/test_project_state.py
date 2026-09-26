@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.integrations.persistence.project_state import (
     ProjectState,
     ProjectStateManager,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestProjectState:

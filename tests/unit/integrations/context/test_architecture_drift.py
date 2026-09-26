@@ -6,22 +6,15 @@ violation reporting, and edge cases.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
-import pytest
-
 from attocode.integrations.context.architecture_drift import (
     ArchLayer,
     ArchReport,
-    ArchRule,
     ArchViolation,
     check_drift,
     classify_file,
     format_report,
     load_architecture,
 )
-
 
 # ---------------------------------------------------------------------------
 # Layer classification

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.code_intel.bug_finder import (
     BugReport,
     Finding,

@@ -7,13 +7,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 from attoswarm.workspace.worktree import (
+    _agent_branch_name,
     _delete_branch,
     _prune_worktrees,
-    _agent_branch_name,
     cleanup_worktrees,
     ensure_workspace_for_agent,
 )
-
 
 # ---------------------------------------------------------------------------
 # _prune_worktrees

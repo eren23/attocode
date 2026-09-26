@@ -226,7 +226,7 @@ async def run_test_verification(
                 proc.communicate(),
                 timeout=timeout,
             )
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             return TestVerificationResult(

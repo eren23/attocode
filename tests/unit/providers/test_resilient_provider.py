@@ -4,27 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from attocode.errors import ProviderError
 from attocode.providers.resilient_provider import (
     ResilienceConfig,
-    ResilienceStats,
     ResilientProvider,
     SimpleCircuitBreaker,
 )
 from attocode.types.messages import (
-    ChatOptions,
     ChatResponse,
     Message,
     Role,
     StopReason,
     TokenUsage,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.budget.budget_pool import BudgetPoolConfig
 from attocode.integrations.budget.dynamic_budget import (
+    PRIORITY_MULTIPLIERS,
     ChildPriority,
-    ChildPriorityRecord,
     DynamicBudgetConfig,
     DynamicBudgetPool,
     DynamicBudgetStats,
-    PRIORITY_MULTIPLIERS,
     create_dynamic_budget_pool,
 )
-
 
 # =============================================================================
 # Helpers

@@ -66,7 +66,7 @@ class TestADRTools:
 
     def test_list_adrs(self):
         """Test list_adrs returns a string."""
-        from attocode.code_intel.tools.adr_tools import record_adr, list_adrs
+        from attocode.code_intel.tools.adr_tools import list_adrs, record_adr
 
         record_adr(title="Test ADR", context="ctx", decision="dec")
         result = list_adrs()
@@ -74,7 +74,7 @@ class TestADRTools:
 
     def test_get_adr(self):
         """Test get_adr returns a string."""
-        from attocode.code_intel.tools.adr_tools import record_adr, get_adr
+        from attocode.code_intel.tools.adr_tools import get_adr, record_adr
 
         record_adr(title="Test ADR", context="ctx", decision="dec")
         result = get_adr(number=1)

@@ -9,7 +9,6 @@ import pytest
 from attocode.code_intel.cli import _cmd_connect, _notify_remote
 from attocode.code_intel.config import RemoteConfig, load_remote_config
 
-
 # ---------------------------------------------------------------------------
 # _cmd_connect
 # ---------------------------------------------------------------------------

@@ -709,20 +709,20 @@ class SwarmTaskQueue:
         dependency and logs a warning. Returns list of broken edges
         as 'A -> B' strings.
         """
-        WHITE, GRAY, BLACK = 0, 1, 2
-        color: dict[str, int] = {tid: WHITE for tid in self.tasks}
+        white, gray, black = 0, 1, 2
+        color: dict[str, int] = {tid: white for tid in self.tasks}
         broken: list[str] = []
 
         def dfs(node: str) -> None:
-            color[node] = GRAY
+            color[node] = gray
             task = self.tasks.get(node)
             if task is None:
-                color[node] = BLACK
+                color[node] = black
                 return
             for dep_id in list(task.dependencies):
                 if dep_id not in color:
                     continue
-                if color[dep_id] == GRAY:
+                if color[dep_id] == gray:
                     # Back edge — break it
                     task.dependencies.remove(dep_id)
                     broken.append(f"{node} -> {dep_id}")
@@ -730,12 +730,12 @@ class SwarmTaskQueue:
                         "Dependency cycle detected and broken: %s depends on %s",
                         node, dep_id,
                     )
-                elif color[dep_id] == WHITE:
+                elif color[dep_id] == white:
                     dfs(dep_id)
-            color[node] = BLACK
+            color[node] = black
 
         for tid in list(self.tasks):
-            if color.get(tid, WHITE) == WHITE:
+            if color.get(tid, white) == white:
                 dfs(tid)
 
         return broken

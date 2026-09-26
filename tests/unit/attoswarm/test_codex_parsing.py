@@ -6,10 +6,9 @@ import json
 
 import pytest
 
-from attoswarm.cli import _unwrap_codex_jsonl
 from attoswarm.adapters.codex import CodexAdapter
 from attoswarm.adapters.stream_parser import parse_backend_stream_line
-
+from attoswarm.cli import _unwrap_codex_jsonl
 
 # ── _unwrap_codex_jsonl ──────────────────────────────────────────────
 

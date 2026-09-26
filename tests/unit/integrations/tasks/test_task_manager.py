@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from attocode.integrations.tasks.task_manager import TaskManager
-from attocode.types.agent import PlanTask, TaskStatus
+from attocode.types.agent import TaskStatus
 
 
 class TestCreateTask:
@@ -304,9 +304,9 @@ class TestGetAllAndByStatus:
 
     def test_get_tasks_by_status(self) -> None:
         tm = TaskManager()
-        t1 = tm.create_task("Pending")
+        tm.create_task("Pending")
         t2 = tm.create_task("Will complete")
-        t3 = tm.create_task("Also pending")
+        tm.create_task("Also pending")
         tm.complete_task(t2)
         pending = tm.get_tasks_by_status(TaskStatus.PENDING)
         assert len(pending) == 2
@@ -418,7 +418,7 @@ class TestSummaryAndClear:
         tm = TaskManager()
         t1 = tm.create_task("A")
         t2 = tm.create_task("B")
-        t3 = tm.create_task("C")
+        tm.create_task("C")
         tm.start_task(t1)
         tm.complete_task(t1)
         tm.start_task(t2)

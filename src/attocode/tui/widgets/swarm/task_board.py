@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Static
 from textual.widgets._data_table import RowDoesNotExist
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 _COLUMN_TITLES = {
     "pending": "PENDING",

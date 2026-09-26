@@ -13,7 +13,6 @@ from attoswarm.config.loader import load_swarm_yaml
 from attoswarm.coordinator.loop import HybridCoordinator
 from attoswarm.protocol.io import read_json
 
-
 LIVE_FLAG = os.getenv("ATTO_LIVE_SWARM") == "1"
 
 

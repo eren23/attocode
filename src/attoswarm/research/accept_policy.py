@@ -32,10 +32,7 @@ class ThresholdPolicy:
         direction: str,
         history: list[float],
     ) -> tuple[bool, str]:
-        if direction == "minimize":
-            delta = baseline - candidate
-        else:
-            delta = candidate - baseline
+        delta = baseline - candidate if direction == "minimize" else candidate - baseline
 
         if delta > self._threshold:
             return True, f"Improvement of {delta:.4f} exceeds threshold {self._threshold}"
@@ -64,10 +61,7 @@ class StatisticalPolicy:
     ) -> tuple[bool, str]:
         if len(history) < self._min_samples:
             # Fall back to simple comparison
-            if direction == "minimize":
-                improved = candidate < baseline
-            else:
-                improved = candidate > baseline
+            improved = candidate < baseline if direction == "minimize" else candidate > baseline
             if improved:
                 return True, f"Improved (insufficient samples for z-test, n={len(history)})"
             return False, f"No improvement (insufficient samples, n={len(history)})"
@@ -77,10 +71,7 @@ class StatisticalPolicy:
         variance = sum((x - mean) ** 2 for x in history) / len(history)
         std = math.sqrt(variance) if variance > 0 else 0.001
 
-        if direction == "minimize":
-            z = (mean - candidate) / std
-        else:
-            z = (candidate - mean) / std
+        z = (mean - candidate) / std if direction == "minimize" else (candidate - mean) / std
 
         if z >= self._z_threshold:
             return True, f"Statistically significant (z={z:.2f} >= {self._z_threshold:.2f})"

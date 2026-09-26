@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import os
 import time
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from attoswarm.tui.stores import ResearchStateStore, StateStore, _to_epoch
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture()
@@ -245,7 +247,7 @@ class TestBuildAgentActivity:
         assert result["w1"] == "Reading app.py"
 
 
-class TestBuildAgentList:
+class TestBuildAgentListActivity:
     def test_falls_back_to_row_activity(self, store: StateStore) -> None:
         state = {
             "active_agents": [

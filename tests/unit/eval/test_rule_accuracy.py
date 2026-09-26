@@ -1,29 +1,27 @@
 """Tests for rule accuracy benchmark modules."""
 from __future__ import annotations
 
-import tempfile
-import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-from eval.rule_accuracy.runner import RuleAccuracyResult, BenchmarkResult
-from eval.rule_accuracy.castle_score import (
-    compute_castle_score,
-    compute_castle_scores,
-    CASTLEResult,
-)
 from eval.rule_accuracy.calibration import (
     compute_calibration,
     format_calibration_report,
-    CalibrationResult,
+)
+from eval.rule_accuracy.castle_score import (
+    compute_castle_score,
+    compute_castle_scores,
 )
 from eval.rule_accuracy.regression import (
-    save_baseline,
-    load_baseline,
     check_regression,
+    load_baseline,
+    save_baseline,
 )
+from eval.rule_accuracy.runner import BenchmarkResult, RuleAccuracyResult
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # TestRuleAccuracyResult

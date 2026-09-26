@@ -176,14 +176,12 @@ class ResultPipeline:
         # Stage 3: Sequential DAG updates
         for result in results:
             # Check if test verification changed success status
-            if result.task_id in verification_results:
-                if not verification_results[result.task_id]:
-                    result.success = False
+            if result.task_id in verification_results and not verification_results[result.task_id]:
+                result.success = False
             # Check if syntax verification changed success status
-            if result.task_id in syntax_results:
-                if not syntax_results[result.task_id]:
-                    result.success = False
-                    pipeline_result.syntax_failures.append(result.task_id)
+            if result.task_id in syntax_results and not syntax_results[result.task_id]:
+                result.success = False
+                pipeline_result.syntax_failures.append(result.task_id)
 
             try:
                 completed = await handlers.pipeline_update_dag(result, result.success)

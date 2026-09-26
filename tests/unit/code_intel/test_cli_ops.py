@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import sys
 import types
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import httpx
 import pytest
 
 from attocode.code_intel.config import RemoteConfig
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_cmd_test_connection_requires_remote_config(tmp_path: Path) -> None:

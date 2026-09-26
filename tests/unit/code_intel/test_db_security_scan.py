@@ -52,7 +52,6 @@ def test_secret_patterns_import():
 
 def test_aws_key_pattern():
     """Verify AWS key pattern matches correctly."""
-    import re
 
     from attocode.integrations.security.patterns import SECRET_PATTERNS
 
@@ -63,7 +62,6 @@ def test_aws_key_pattern():
 
 def test_private_key_pattern():
     """Verify private key pattern matches."""
-    import re
 
     from attocode.integrations.security.patterns import SECRET_PATTERNS
 

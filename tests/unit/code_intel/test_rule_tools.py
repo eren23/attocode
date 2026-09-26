@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # TestRegisterRule — tests register_rule (YAML -> registry) via the tool func
 # ---------------------------------------------------------------------------

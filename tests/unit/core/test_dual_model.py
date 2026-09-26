@@ -8,7 +8,6 @@ from attocode.core.dual_model import (
     ArchitectPlan,
     DualModelConfig,
     DualModelWorkflow,
-    EditorResult,
 )
 
 

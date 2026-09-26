@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
-import pytest
-
 from attocode.code_intel.rules.metavar import (
     apply_metavar_fix,
     check_metavar_constraints,

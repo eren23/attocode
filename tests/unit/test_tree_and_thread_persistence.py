@@ -7,7 +7,6 @@ import pytest
 from attocode.commands import CommandResult, render_thread_tree
 from attocode.integrations.utilities.thread_manager import ThreadManager
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -139,7 +138,7 @@ class TestRenderThreadTree:
         result = render_thread_tree(mgr)
         lines = result.splitlines()
         # First child should use |- connector, last child should use L connector
-        connector_lines = [l for l in lines if "\u251c" in l or "\u2514" in l]
+        connector_lines = [line for line in lines if "\u251c" in line or "\u2514" in line]
         assert len(connector_lines) == 2
         # Last child should use L connector
         assert "\u2514" in connector_lines[-1]

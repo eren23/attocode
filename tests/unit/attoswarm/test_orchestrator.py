@@ -8,18 +8,20 @@ Covers: _handle_result, _split_by_conflicts, _restore_state,
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import TYPE_CHECKING, Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from attoswarm.config.schema import SwarmYamlConfig
-from attoswarm.coordinator.aot_graph import AoTGraph, AoTNode
+from attoswarm.coordinator.aot_graph import AoTNode
 from attoswarm.coordinator.orchestrator import PlanningFailure, SwarmOrchestrator
 from attoswarm.coordinator.subagent_manager import TaskResult
 from attoswarm.protocol.io import read_json
 from attoswarm.protocol.models import LauncherInfo, LineageSpec, TaskSpec
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture()

@@ -35,7 +35,7 @@ class TestCausalChainAnalyzer:
         analyzer = CausalChainAnalyzer(g, FailureAnalyzer())
 
         # Analyze b first (failed because of a)
-        chain_a = analyzer.analyze_failure("a", FailureAttribution(
+        analyzer.analyze_failure("a", FailureAttribution(
             task_id="a", cause="timeout", confidence=0.9,
         ))
         chain_b = analyzer.analyze_failure("b")

@@ -9,12 +9,15 @@ import pytest
 
 from attocode.agent.agent import ProductionAgent
 from attocode.agent.builder import AgentBuilder
-from attocode.agent.message_builder import DEFAULT_SYSTEM_PROMPT, build_initial_messages, build_system_prompt
+from attocode.agent.message_builder import (
+    build_initial_messages,
+    build_system_prompt,
+)
 from attocode.integrations.persistence.store import SessionStore
 from attocode.providers.mock import MockProvider
 from attocode.tools.base import Tool, ToolSpec
 from attocode.tools.registry import ToolRegistry
-from attocode.types.agent import AgentConfig, AgentStatus, CompletionReason
+from attocode.types.agent import AgentConfig, AgentStatus
 from attocode.types.budget import ExecutionBudget
 from attocode.types.events import AgentEvent, EventType
 from attocode.types.messages import (
@@ -23,7 +26,6 @@ from attocode.types.messages import (
     TokenUsage,
     ToolCall,
 )
-
 
 # --- Message Builder Tests ---
 
@@ -98,7 +100,7 @@ class TestProductionAgent:
         agent = ProductionAgent(provider=provider, registry=ToolRegistry())
 
         assert agent.status == AgentStatus.IDLE
-        result = await agent.run("test")
+        await agent.run("test")
         assert agent.status == AgentStatus.COMPLETED
 
     @pytest.mark.asyncio

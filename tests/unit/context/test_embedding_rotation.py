@@ -732,16 +732,20 @@ class TestMigration016DowngradeSafety:
         ATTOCODE_ALLOW_DESTRUCTIVE_016_DOWNGRADE and raise RuntimeError
         when there are dual-version rows without the flag set. We verify
         the import and check the function exists."""
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "mig_016",
-            "src/attocode/code_intel/migrations/versions/016_embedding_provenance_columns.py",
-        )
-        assert spec is not None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)  # type: ignore[union-attr]
-        import inspect
-        source = inspect.getsource(module.downgrade)
+        # Read the source instead of importing it: importing needs alembic,
+        # which only the service extra installs.
+        import ast
+        from pathlib import Path
+
+        import attocode_intel
+
+        path = (Path(attocode_intel.__file__).parent
+                / "migrations/versions/016_embedding_provenance_columns.py")
+        text = path.read_text()
+        func = next(n for n in ast.parse(text).body
+                    if isinstance(n, ast.FunctionDef) and n.name == "downgrade")
+        source = ast.get_source_segment(text, func)
+        assert source is not None
         # Codex-fix guardrails present:
         assert "ATTOCODE_ALLOW_DESTRUCTIVE_016_DOWNGRADE" in source
         assert "Refusing to downgrade migration 016" in source

@@ -10,7 +10,6 @@ from attocode.integrations.context.temporal_coupling import (
     TemporalCouplingAnalyzer,
 )
 
-
 # Simulated git log output (--numstat --format=%H|%an|%aI)
 _SAMPLE_GIT_LOG = """\
 abc1234|Alice|2026-03-01

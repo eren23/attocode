@@ -131,7 +131,7 @@ def run_compilation_checks(
 def _check_python_syntax(file_path: str) -> list[CompilationError]:
     """Check Python file syntax using compile(). In-process, <10ms/file."""
     try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
             source = f.read()
         compile(source, file_path, "exec")
         return []
@@ -356,7 +356,7 @@ def _check_javascript_syntax(
 def _check_json_syntax(file_path: str) -> list[CompilationError]:
     """Check JSON file syntax. In-process, <1ms/file."""
     try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
             content = f.read()
         json.loads(content)
         return []

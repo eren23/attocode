@@ -8,17 +8,15 @@ from __future__ import annotations
 import json
 import re
 
-import pytest
-
-from attocode.code_intel.rules.metavar import (
-    compile_metavar_pattern,
-    has_metavars,
-)
 from attocode.code_intel.rules.combinators import (
     AllNode,
     EitherNode,
     MatchContext,
     RegexNode,
+)
+from attocode.code_intel.rules.metavar import (
+    compile_metavar_pattern,
+    has_metavars,
 )
 from attocode.code_intel.rules.model import (
     EnrichedFinding,
@@ -26,7 +24,6 @@ from attocode.code_intel.rules.model import (
     RuleSeverity,
 )
 from attocode.code_intel.rules.sarif import findings_to_sarif, sarif_to_json
-
 
 # ---------------------------------------------------------------------------
 # Helpers

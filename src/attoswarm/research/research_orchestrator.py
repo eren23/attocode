@@ -9,16 +9,18 @@ import time
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attoswarm.research.accept_policy import NeverRegressPolicy
-from attoswarm.research.config import ResearchConfig
 from attoswarm.research.evaluator import CommandEvaluator, EvalResult, Evaluator, constraints_pass
 from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState, SteeringNote
 from attoswarm.research.experiment_db import ExperimentDB
 from attoswarm.research.hypothesis import HypothesisGenerator
 from attoswarm.research.scoreboard import Scoreboard
 from attoswarm.research.worktree_manager import WorktreeManager
+
+if TYPE_CHECKING:
+    from attoswarm.research.config import ResearchConfig
 
 logger = logging.getLogger(__name__)
 
@@ -456,13 +458,16 @@ class ResearchOrchestrator:
         }
         exp.artifacts = list(eval_result.artifacts)
 
-        # Guard against catastrophic regression (>50% drop from baseline)
-        if (self._state.baseline_value is not None
-                and eval_result.metric_value is not None
-                and self._state.baseline_value > 0
-                and eval_result.metric_value < self._state.baseline_value * 0.5):
+        # Guard against catastrophic regression: >50% worse than baseline in the
+        # metric's own direction (for "minimize", a lower value is an improvement).
+        baseline, value = self._state.baseline_value, eval_result.metric_value
+        catastrophic = False
+        if baseline is not None and value is not None and baseline > 0:
+            worse_by = value - baseline if self._config.metric_direction == "minimize" else baseline - value
+            catastrophic = worse_by > baseline * 0.5
+        if catastrophic:
             exp.status = "invalid"
-            exp.reject_reason = f"catastrophic regression ({eval_result.metric_value:.1f} vs baseline {self._state.baseline_value:.1f})"
+            exp.reject_reason = f"catastrophic regression ({value:.1f} vs baseline {baseline:.1f})"
         elif not eval_result.success:
             exp.status = "invalid"
             exp.reject_reason = eval_result.error or "evaluation failed"
@@ -792,9 +797,7 @@ class ResearchOrchestrator:
     def _validation_count(self, root_experiment_id: str) -> int:
         count = 0
         for exp in self._experiments:
-            if exp.experiment_id == root_experiment_id and exp.status in {"candidate", "accepted"}:
-                count += 1
-            elif exp.parent_experiment_id == root_experiment_id and exp.status in {"validated", "accepted"}:
+            if exp.experiment_id == root_experiment_id and exp.status in {"candidate", "accepted"} or exp.parent_experiment_id == root_experiment_id and exp.status in {"validated", "accepted"}:
                 count += 1
         return count
 

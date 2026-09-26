@@ -5,8 +5,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from attocode.code_intel.rules.ci import (
     CIConfig,
     CIRunner,

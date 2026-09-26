@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -20,6 +19,9 @@ from attoswarm.config.schema import SwarmYamlConfig
 from attoswarm.coordinator.orchestrator import SwarmOrchestrator
 from attoswarm.coordinator.subagent_manager import AgentStatus
 from attoswarm.protocol.models import TaskSpec
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture()

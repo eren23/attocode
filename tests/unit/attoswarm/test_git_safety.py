@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from typing import TYPE_CHECKING
 
 import pytest
 
 from attoswarm.workspace.git_safety import GitSafetyNet, GitSafetyState
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _make_git_repo(path: Path) -> None:

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from attocode.integrations.quality.dead_letter_queue import DeadLetterQueue
 
 

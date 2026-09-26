@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.agent.watch import (
     FileWatcher,
-    TriggerMatch,
     WatchConfig,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestFileWatcher:

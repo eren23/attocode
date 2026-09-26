@@ -14,7 +14,6 @@ from attocode.integrations.safety.policy_engine import (
     is_protected_path,
 )
 
-
 # ---------------------------------------------------------------------------
 # is_protected_path unit tests
 # ---------------------------------------------------------------------------

@@ -21,9 +21,7 @@ Covers:
 
 from __future__ import annotations
 
-import json
-import os
-from dataclasses import asdict, fields
+from dataclasses import asdict
 from typing import Any
 
 import pytest
@@ -31,11 +29,11 @@ import pytest
 from attocode.integrations.swarm.config_loader import (
     _guess_provider_prefix,
     _to_snake,
+    load_swarm_yaml_config,
     merge_swarm_configs,
     normalize_capabilities,
     normalize_swarm_model_config,
     parse_swarm_yaml,
-    load_swarm_yaml_config,
     yaml_to_swarm_config,
 )
 from attocode.integrations.swarm.helpers import (
@@ -99,7 +97,6 @@ from attocode.integrations.swarm.types import (
     WorkerRole,
     swarm_event,
 )
-
 
 # ============================================================================
 # StrEnum Tests

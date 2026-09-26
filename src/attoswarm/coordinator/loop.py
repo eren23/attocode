@@ -21,7 +21,6 @@ from attoswarm.coordinator.budget_gate import DiminishingReturnsTracker
 from attoswarm.coordinator.failure_handler import (
     cascade_skip_blocked as _cascade_skip_blocked_impl,
 )
-from attoswarm.coordinator.health_monitor import HealthMonitor
 from attoswarm.coordinator.failure_handler import (
     enforce_task_duration_limits as _enforce_task_duration_limits_impl,
 )
@@ -34,6 +33,7 @@ from attoswarm.coordinator.failure_handler import (
 from attoswarm.coordinator.failure_handler import (
     mark_running_task_failed as _mark_running_task_failed_impl,
 )
+from attoswarm.coordinator.health_monitor import HealthMonitor
 from attoswarm.coordinator.merge_queue import MergeQueue
 from attoswarm.coordinator.output_harvester import (
     capture_partial_output as _capture_partial_output_impl,

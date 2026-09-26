@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
 from attocode.errors import ToolNotFoundError, ToolTimeoutError
 from attocode.tools.base import Tool, ToolSpec
-from attocode.tools.permission import AllowAllPermissions, PermissionDecision, PermissionResult
+from attocode.tools.permission import PermissionDecision, PermissionResult
 from attocode.tools.registry import ToolRegistry
 from attocode.types.messages import DangerLevel
 

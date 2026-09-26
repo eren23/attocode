@@ -112,12 +112,12 @@ async def enrich_task_context_async(
 
             results = await asyncio.gather(*coros, return_exceptions=True)
 
-            for label, result in zip(labels, results):
+            for label, result in zip(labels, results, strict=False):
                 if isinstance(result, Exception) or not result:
                     continue
                 enrichments[label] = _format_enrichment(label, result)
 
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         pass  # Use whatever completed in time
     except Exception:
         pass  # Don't let enrichment failures block dispatch
@@ -287,7 +287,7 @@ async def dispatch_ready_tasks(coordinator: HybridCoordinator) -> None:
                 enrichment = await asyncio.wait_for(
                     enrichment_futures.pop(task.task_id), timeout=2.0,
                 )
-            except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+            except (TimeoutError, asyncio.CancelledError, Exception):
                 enrichment = {}
 
         coordinator.task_attempts[task.task_id] = coordinator.task_attempts.get(task.task_id, 0) + 1

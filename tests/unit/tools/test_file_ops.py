@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from attocode.tools.file_ops import (
+    create_file_tools,
     edit_file,
     glob_files,
     list_files,
     read_file,
     write_file,
-    create_file_tools,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestReadFile:

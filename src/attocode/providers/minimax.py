@@ -264,7 +264,7 @@ class MinimaxProvider(OpenAIProvider):
         options: ChatOptions | None = None,
     ) -> AsyncIterator[StreamChunk]:
         from attocode.integrations.streaming.handler import adapt_openrouter_stream
-        from attocode.types.messages import StreamChunk as SC, StreamChunkType
+        from attocode.types.messages import StreamChunk, StreamChunkType
 
         messages = self._maybe_strip_images(messages)
         client = self._stream_client()
@@ -306,7 +306,7 @@ class MinimaxProvider(OpenAIProvider):
 
                     filtered = "".join(result_parts)
                     if filtered:
-                        yield SC(type=StreamChunkType.TEXT, content=filtered)
+                        yield StreamChunk(type=StreamChunkType.TEXT, content=filtered)
 
         except httpx.HTTPStatusError as e:
             status = e.response.status_code

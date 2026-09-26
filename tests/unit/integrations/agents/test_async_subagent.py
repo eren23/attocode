@@ -5,8 +5,8 @@ import asyncio
 import pytest
 
 from attocode.integrations.agents.async_subagent import (
-    AsyncSubagentManager,
     AsyncSubagentConfig,
+    AsyncSubagentManager,
     SubagentHandle,
     SubagentStatus,
 )
@@ -65,7 +65,7 @@ class TestAsyncSubagentManager:
         async def slow_work():
             await asyncio.sleep(10)
 
-        handle = await mgr.spawn("researcher", "deep analysis", slow_work, timeout=0.1)
+        await mgr.spawn("researcher", "deep analysis", slow_work, timeout=0.1)
         results = await mgr.wait_all(timeout=5.0)
         timed_out = [r for r in results if r.status == SubagentStatus.TIMED_OUT]
         assert len(timed_out) == 1
@@ -78,7 +78,7 @@ class TestAsyncSubagentManager:
         async def failing_work():
             raise ValueError("test error")
 
-        handle = await mgr.spawn("coder", "bad task", failing_work)
+        await mgr.spawn("coder", "bad task", failing_work)
         results = await mgr.wait_all(timeout=5.0)
         failed = [r for r in results if r.status == SubagentStatus.FAILED]
         assert len(failed) == 1

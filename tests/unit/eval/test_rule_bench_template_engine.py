@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from eval.meta_harness.rule_bench.corpus import ExpectedFinding, LabeledSample
 from eval.meta_harness.rule_bench.template_engine import (
     SUPPORTED_LANGUAGES,
-    Template,
     TEMPLATES_DIR,
     gate_against_corpus,
     load_templates,
     substitute_slots,
     validate_template_instance,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestLoadTemplates:

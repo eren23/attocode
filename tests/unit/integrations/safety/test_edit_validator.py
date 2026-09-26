@@ -1,9 +1,9 @@
 """Tests for the edit validator module."""
 
 from attocode.integrations.safety.edit_validator import (
+    LANGUAGE_MAP,
     EditValidator,
     ValidationResult,
-    LANGUAGE_MAP,
 )
 
 

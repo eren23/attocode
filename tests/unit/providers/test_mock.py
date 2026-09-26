@@ -12,7 +12,6 @@ from attocode.types.messages import (
     Role,
     StopReason,
     StreamChunkType,
-    TokenUsage,
     ToolCall,
 )
 

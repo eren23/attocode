@@ -6,10 +6,12 @@ import json
 import logging
 import re
 import sqlite3
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState, SteeringNote
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

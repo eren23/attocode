@@ -6,12 +6,8 @@ P0 critical: these 49 LOC underlie ALL state persistence.
 from __future__ import annotations
 
 import json
-import os
 import threading
-from pathlib import Path
-from typing import Any
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attoswarm.protocol.io import (
     append_jsonl,
@@ -21,6 +17,8 @@ from attoswarm.protocol.io import (
     write_json_fast,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ── ensure_parent ─────────────────────────────────────────────────────
 

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import RichLog, Static
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 _EVENT_STYLES = {
     "spawn": "cyan",

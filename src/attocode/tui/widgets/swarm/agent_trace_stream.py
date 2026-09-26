@@ -13,7 +13,6 @@ from typing import Any
 from rich.text import Text
 from textual.widgets import RichLog
 
-
 _ENTRY_TYPE_STYLES: dict[str, str] = {
     "tool_call": "cyan",
     "llm_request": "blue",

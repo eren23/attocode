@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.context.cross_mode import (
-    CrossModeSearcher,
-    SearchSuggestion,
     _chars_in_order,
     suggest_files_for_grep_query,
     suggest_grep_for_filename_query,

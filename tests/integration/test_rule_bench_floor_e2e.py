@@ -21,7 +21,6 @@ from typing import Any
 import pytest
 
 from attoswarm.research.evaluator import EvalResult
-
 from eval.meta_harness.meta_loop import MetaHarnessRunner, _BenchSpec
 from eval.meta_harness.rule_bench.predicate import rule_accept_predicate
 

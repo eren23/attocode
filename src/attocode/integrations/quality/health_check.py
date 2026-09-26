@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode.types.events import SimpleEventListener
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass

@@ -1,11 +1,12 @@
 """Tests for CodeIntelService progressive hydration integration."""
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.integrations.context.ast_service import ASTService
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _create_python_files(root: Path, count: int) -> None:

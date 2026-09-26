@@ -6,14 +6,15 @@ Covers: widget fingerprinting, layout=True removal, worker-thread data flow.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock, patch
+from typing import TYPE_CHECKING, Any
+from unittest.mock import patch
 
 import pytest
 
 from attoswarm.tui.stores import StateStore
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ class TestEventTimelineFingerprint:
     def test_fingerprint_in_widget_source(self) -> None:
         """Verify the widget uses _prev_fingerprint, not _prev_event_count."""
         import inspect
+
         from attocode.tui.widgets.swarm.event_timeline import EventTimeline
 
         source = inspect.getsource(EventTimeline._rebuild)
@@ -169,7 +171,7 @@ class TestReactiveLayoutFlags:
     def test_task_board_no_layout_flag(self) -> None:
         from attocode.tui.widgets.swarm.task_board import TaskBoard
 
-        descriptor = TaskBoard.__dict__["agents"] if "agents" in TaskBoard.__dict__ else None
+        descriptor = TaskBoard.__dict__.get("agents", None)
         # TaskBoard uses 'tasks' reactive
         descriptor = TaskBoard.__dict__.get("tasks")
         if descriptor is not None:
@@ -259,6 +261,7 @@ class TestTabSwitchDelay:
     def test_tab_switch_timer_value(self) -> None:
         """The tab switch delay should be 50ms (0.05s), not 300ms."""
         import inspect
+
         from attoswarm.tui.app import AttoswarmApp
 
         source = inspect.getsource(AttoswarmApp.on_tabbed_content_tab_activated)
@@ -275,6 +278,7 @@ class TestTracePollInterval:
     def test_trace_poll_interval(self) -> None:
         """Trace polling should use 1.5s interval."""
         import inspect
+
         from attoswarm.tui.app import AttoswarmApp
 
         source = inspect.getsource(AttoswarmApp.on_agents_data_table_agent_selected)

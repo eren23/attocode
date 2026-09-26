@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.core.completion import (
     CompletionAnalysis,
-    analyze_completion,
     _has_future_intent,
     _has_incomplete_action,
+    analyze_completion,
 )
 from attocode.types.agent import CompletionReason
 from attocode.types.messages import ChatResponse, StopReason, ToolCall

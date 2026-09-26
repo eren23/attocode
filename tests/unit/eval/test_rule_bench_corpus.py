@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from eval.meta_harness.rule_bench.corpus import CorpusLoader
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write(path: Path, text: str) -> None:

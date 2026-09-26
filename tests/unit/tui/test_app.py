@@ -78,7 +78,7 @@ class TestAttocodeAppPilot:
     @pytest.mark.asyncio
     async def test_app_mounts(self) -> None:
         app = AttocodeApp()
-        async with app.run_test() as pilot:
+        async with app.run_test():
             # Verify widgets are mounted
             assert app.query_one("#message-log", MessageLog)
             assert app.query_one("#tool-panel", ToolCallsPanel)
@@ -89,7 +89,7 @@ class TestAttocodeAppPilot:
     @pytest.mark.asyncio
     async def test_status_bar_initial(self) -> None:
         app = AttocodeApp(model_name="test-model", git_branch="feat/x")
-        async with app.run_test() as pilot:
+        async with app.run_test():
             status = app.query_one("#status-bar", StatusBar)
             assert status.mode == "ready"
             assert status.model_name == "test-model"
@@ -203,7 +203,7 @@ class TestAttocodeAppPilot:
     @pytest.mark.asyncio
     async def test_public_api_methods(self) -> None:
         app = AttocodeApp()
-        async with app.run_test() as pilot:
+        async with app.run_test():
             # These should not crash
             app.add_system_message("hello")
             app.update_budget(0.5)
@@ -220,7 +220,7 @@ class TestAttocodeAppPilot:
         monkeypatch.setattr(providers.base, "get_model_context_window", lambda _model_id: 333_000)
 
         app = AttocodeApp(agent=_FakeAgent(), model_name="openrouter/test-model", git_branch="main")
-        async with app.run_test() as pilot:
+        async with app.run_test():
             status = app.query_one("#status-bar", StatusBar)
             assert status.context_window == 333_000
             assert status.max_tokens == 1_000_000

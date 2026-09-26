@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
-import pytest
-
 from attocode.commands import _export_command
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import pytest
 
 
 @dataclass
@@ -91,7 +94,7 @@ class TestExportCommand:
         ]
         agent.config = FakeConfig()
 
-        result = _export_command(agent, "html")
+        _export_command(agent, "html")
         exports = list((tmp_path / ".attocode" / "exports").glob("*.html"))
         html_content = exports[0].read_text()
         assert "<script>" not in html_content
