@@ -160,7 +160,10 @@ class RuleTestRunner:
         findings = execute_rules(
             [file_path], self._rules, project_dir=self._project_dir,
         )
-        findings = run_pipeline(findings, min_confidence=0.0)
+        from attocode_intel.confidence.settings import disabled
+
+        with disabled():
+            findings = run_pipeline(findings, min_confidence=0.0)
 
         # Build finding lookup: line -> list of rule_ids
         finding_map: dict[int, list[str]] = {}

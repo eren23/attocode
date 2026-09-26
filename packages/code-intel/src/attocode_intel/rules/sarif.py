@@ -96,7 +96,7 @@ def _build_result(finding: EnrichedFinding) -> dict[str, Any]:
                 "region": {
                     "startLine": finding.line,
                     "startColumn": 1,
-                    "snippet": {"text": finding.code_snippet},
+                    "snippet": {"text": finding.code_snippet[:200]},
                 },
             },
         }],

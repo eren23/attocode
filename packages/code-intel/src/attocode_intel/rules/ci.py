@@ -36,6 +36,7 @@ class CIResult:
     files_scanned: int = 0
     rules_applied: int = 0
     findings_above_threshold: int = 0
+    confidence: dict = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -183,10 +184,15 @@ class CIRunner:
         reg.register_many(user_rules)
 
         # Query applicable rules
+        from attocode_intel import confidence
+        from attocode_intel.confidence.settings import workspace
+
+        with workspace(self.project_dir):
+            threshold = confidence.rule_threshold(self.config.min_confidence)
         rules = reg.query(
             language=language,
             category=category,
-            min_confidence=self.config.min_confidence,
+            min_confidence=threshold,
         )
 
         # Exclude rules from config
@@ -206,7 +212,8 @@ class CIRunner:
 
         # Execute
         findings = execute_rules(file_list, rules, project_dir=self.project_dir)
-        findings = run_pipeline(findings, min_confidence=self.config.min_confidence)
+        findings = run_pipeline(findings, min_confidence=self.config.min_confidence,
+                                project_dir=self.project_dir)
         enrich_findings(findings, project_dir=self.project_dir)
 
         # Diff-only filtering: only keep findings on changed lines
@@ -236,6 +243,7 @@ class CIRunner:
             files_scanned=len(file_list),
             rules_applied=len(rules),
             findings_above_threshold=len(above),
+            confidence={k: v for k, v in confidence.last_report().items() if k != "findings"},
         )
 
         # Write SARIF if configured
@@ -287,6 +295,13 @@ def format_ci_summary(result: CIResult) -> str:
         f"Files scanned: {result.files_scanned} | Rules applied: {result.rules_applied}",
         f"Findings: {len(result.findings)} total, {result.findings_above_threshold} above threshold",
     ]
+    audit = result.confidence
+    if audit and audit.get("scorer") != "off":
+        lines.append(
+            f"Confidence: {audit['scorer']} ({audit['mode']}); "
+            f"{audit['estimated']}/{audit['total']} scored, {audit['fallback']} fallback, "
+            f"{audit['skipped']} skipped by cap (baseline retained)."
+        )
 
     if result.findings:
         # Group by severity

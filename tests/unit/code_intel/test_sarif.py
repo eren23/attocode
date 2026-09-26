@@ -136,3 +136,13 @@ class TestSarifToJson:
         sarif = findings_to_sarif([])
         json_str = sarif_to_json(sarif, indent=4)
         assert "    " in json_str
+
+
+def test_long_snippet_truncated_for_display_only():
+    from attocode.code_intel.rules.formatter import format_findings
+
+    finding = _make_finding(code_snippet="x" * 10_000)  # e.g. a minified bundle line
+    region = findings_to_sarif([finding])["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"]
+    assert len(region["snippet"]["text"]) == 200
+    assert max(len(line) for line in format_findings([finding]).splitlines()) < 300
+    assert len(finding.code_snippet) == 10_000  # scorers and redaction still see the whole line

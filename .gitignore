@@ -29,6 +29,9 @@ node_modules/
 .attocode/sessions/
 .attocode/recordings/
 .attocode/cache/
+.attocode/reports/
+.attocode/rule_feedback.json
+.attocode/packs/python/
 .attocode/.attocode/
 .attocode/dev-state.json
 .attocode/config.toml

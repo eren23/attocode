@@ -1,0 +1,104 @@
+{
+  "recorded_date": "2026-09-20",
+  "original_recording_revision": "not recorded in scratchpad datasets",
+  "historical_metrics": "bin midpoint calibration proxy; finding-level rule-annotation matching",
+  "datasets_sanitized": true,
+  "assets": [
+    {
+      "path": "eval/rule_accuracy/demo/data/real.json",
+      "kind": "data",
+      "bytes": 223842,
+      "sha256": "6cde5102e85ba7678068852dc839462cf9aadafc331b480f719b3ba3ac87deed"
+    },
+    {
+      "path": "eval/rule_accuracy/demo/data/findings.json",
+      "kind": "data",
+      "bytes": 24343,
+      "sha256": "bf207c77fd774656c453b5b22536cf219bc91de57be49453c68b2a765d1819b5"
+    },
+    {
+      "path": "eval/rule_accuracy/demo/data/timeline.json",
+      "kind": "data",
+      "bytes": 70433,
+      "sha256": "7a888e1a9343cb85437f03d2fd9d3f7e23c24ceaac8592f9bafb09c506b34eac"
+    },
+    {
+      "path": "eval/rule_accuracy/demo/data/race.json",
+      "kind": "data",
+      "bytes": 38562,
+      "sha256": "6c6f3b4562f51da05af43aca0fe186cdbe7757b224252dc6277c3472a47deb4e"
+    },
+    {
+      "path": "eval/rule_accuracy/demo/data/compact.json",
+      "kind": "data",
+      "bytes": 17251,
+      "sha256": "01a1067faf2a33be1296d63b772ae5bcd6909eded8244a8795fc97f7c88da8fd"
+    },
+    {
+      "path": "eval/rule_accuracy/demo/data/stats.json",
+      "kind": "data",
+      "bytes": 5866,
+      "sha256": "d0d7ef3926263899eb61fea2e1577b95b7877ff17ea863e71ced8d60b1f86e07"
+    },
+    {
+      "path": ".playwright-mcp/calibration-walkthrough.mp4",
+      "kind": "media",
+      "bytes": 5880524,
+      "sha256": "2d17d8533e7d1027799cb149abe21b67dfc26b6ce470a88a29beda4b0b6b0079"
+    },
+    {
+      "path": ".playwright-mcp/poster.jpg",
+      "kind": "media",
+      "bytes": 61805,
+      "sha256": "9a0f2f9f0ccd929163c17f8806e737f3abd86c2379439d041bb311dc167d409e"
+    },
+    {
+      "path": ".playwright-mcp/shots/01-speed-mid-race.png",
+      "kind": "media",
+      "bytes": 41911,
+      "sha256": "ffbfab3b0e80c21dc35f2df8638961c5be851354b28232df61c9dc24c0750f58"
+    },
+    {
+      "path": ".playwright-mcp/shots/02-speed-numbers.png",
+      "kind": "media",
+      "bytes": 28436,
+      "sha256": "dedc753eee68b63f0d9185ada79f5a77c080fb04283ba3179ede77744a681f65"
+    },
+    {
+      "path": ".playwright-mcp/shots/03-case-scanner-flags-itself.png",
+      "kind": "media",
+      "bytes": 279198,
+      "sha256": "9989d4554ab998115483f5acae5cbaf5ff9f0522f8bd6a10e4188aba0d87aee9"
+    },
+    {
+      "path": ".playwright-mcp/shots/04-case-jev-keeps-classifier-drops.png",
+      "kind": "media",
+      "bytes": 333582,
+      "sha256": "15a1300818bc9f348bb66914410ab3919a7100e5783fc0b82735b05eab95d822"
+    },
+    {
+      "path": ".playwright-mcp/shots/05-case-declined-after-redaction.png",
+      "kind": "media",
+      "bytes": 276721,
+      "sha256": "003c739ba9ad0e7a4749df6f604237b1fa96c0e75060effccf03310ee8025521"
+    },
+    {
+      "path": ".playwright-mcp/shots/06-case-real-sql-fstring.png",
+      "kind": "media",
+      "bytes": 272744,
+      "sha256": "d06b172bc2e2af574adcb8b1a128c671fb23524659294576db67fc3048dfd863"
+    },
+    {
+      "path": ".playwright-mcp/shots/07-calibration.png",
+      "kind": "media",
+      "bytes": 204226,
+      "sha256": "dc19bcc34c39fa847edd826c3da020482b2280c41d01aba0653d84543628cd2a"
+    },
+    {
+      "path": ".playwright-mcp/shots/08-case-both-beat-the-constant.png",
+      "kind": "media",
+      "bytes": 329274,
+      "sha256": "e61b9f0460a861d137ea63148373e497cb7adc5189f534dfcc7c55cbb306e1c5"
+    }
+  ]
+}

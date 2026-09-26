@@ -150,25 +150,36 @@ def scan_text(
     return findings
 
 
-def parse_diff_files(diff_text: str) -> list[tuple[str, str]]:
-    """Parse a unified diff into (file_path, changed_content) pairs."""
-    files: list[tuple[str, str]] = []
-    current_file = ""
-    current_lines: list[str] = []
+_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
 
+
+def _added_lines(diff_text: str) -> list[tuple[str, list[tuple[int, str]]]]:
+    """Added lines per file, numbered as they sit in the new file.
+
+    A hunk header sets the new-file line; context lines advance it, removed
+    lines do not. A diff without hunk headers numbers added lines from 1.
+    """
+    files: list[tuple[str, list[tuple[int, str]]]] = []
+    lineno = 1
     for line in diff_text.split("\n"):
         if line.startswith("+++ b/"):
-            if current_file and current_lines:
-                files.append((current_file, "\n".join(current_lines)))
-            current_file = line[6:]
-            current_lines = []
+            files.append((line[6:], []))
+            lineno = 1
+        elif not files:
+            continue
+        elif m := _HUNK_RE.match(line):
+            lineno = int(m.group(1))
         elif line.startswith("+") and not line.startswith("+++"):
-            current_lines.append(line[1:])  # Strip the leading +
+            files[-1][1].append((lineno, line[1:]))
+            lineno += 1
+        elif line.startswith(" ") or not line:  # context; some tools strip the space
+            lineno += 1
+    return [(path, added) for path, added in files if added]
 
-    if current_file and current_lines:
-        files.append((current_file, "\n".join(current_lines)))
 
-    return files
+def parse_diff_files(diff_text: str) -> list[tuple[str, str]]:
+    """Parse a unified diff into (file_path, changed_content) pairs."""
+    return [(path, "\n".join(text for _, text in added)) for path, added in _added_lines(diff_text)]
 
 
 def scan_diff(diff_text: str) -> BugReport:
@@ -177,16 +188,16 @@ def scan_diff(diff_text: str) -> BugReport:
     Parses the diff, extracts added lines, and runs
     pattern-based analysis on each changed file.
     """
-    files = parse_diff_files(diff_text)
+    files = _added_lines(diff_text)
     all_findings: list[Finding] = []
     total_lines = 0
 
-    for file_path, content in files:
+    for file_path, added in files:
         if not file_path.endswith((".py", ".js", ".ts", ".go", ".rs", ".java")):
             continue
-        findings = scan_text(content, file_path)
-        all_findings.extend(findings)
-        total_lines += content.count("\n") + 1
+        for lineno, text in added:
+            all_findings.extend(scan_text(text, file_path, line_offset=lineno - 1))
+        total_lines += len(added)
 
     return BugReport(
         findings=all_findings,

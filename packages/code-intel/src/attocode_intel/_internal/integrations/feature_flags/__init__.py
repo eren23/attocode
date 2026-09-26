@@ -173,6 +173,7 @@ _register(FeatureFlag(
 ))
 _register(FeatureFlag(
     name="CONFIDENCE",
+    env_var="ATTOCODE_FLAG_CONFIDENCE",
     kind=FlagKind.ENUM,
     description="Where a finding's confidence comes from. off = the hardcoded "
                 "constants; jev = a calibrated probability; llm = the Haiku "
@@ -182,6 +183,7 @@ _register(FeatureFlag(
 ))
 _register(FeatureFlag(
     name="CONFIDENCE_MODE",
+    env_var="ATTOCODE_FLAG_CONFIDENCE_MODE",
     kind=FlagKind.ENUM,
     description="What to do with an estimate. shadow = log it beside the "
                 "constant and change nothing; live = use it.",
@@ -217,6 +219,13 @@ class FlagResolver:
         """Remove an override, reverting to env/default resolution."""
         self._overrides.pop(name, None)
         self._resolved.pop(name, None)
+
+    def resolve_with_default(self, name: str, default: Any) -> Any:
+        """Resolve a request-specific default without caching it process-wide."""
+        flag = ALL_FLAGS[name]
+        env_var = flag.env_var or f"ATTOCODE_FLAG_{_to_env_name(name)}"
+        value = self._overrides.get(name, os.environ.get(env_var, default))
+        return self._coerce(flag, value)
 
     def get(self, name: str) -> Any:
         """Resolve a flag value.

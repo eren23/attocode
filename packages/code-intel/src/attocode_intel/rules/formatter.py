@@ -84,13 +84,13 @@ def _format_single(
         start_line = f.line - len(f.context_before)
         for i, ctx_line in enumerate(f.context_before):
             lines.append(f"  {start_line + i:>4} | {ctx_line}")
-        lines.append(f"> {f.line:>4} | {f.code_snippet}")
+        lines.append(f"> {f.line:>4} | {f.code_snippet[:200]}")
         for i, ctx_line in enumerate(f.context_after):
             lines.append(f"  {f.line + 1 + i:>4} | {ctx_line}")
         lines.append("```")
     elif f.code_snippet:
         lines.append("```")
-        lines.append(f"> {f.line:>4} | {f.code_snippet}")
+        lines.append(f"> {f.line:>4} | {f.code_snippet[:200]}")
         lines.append("```")
     lines.append("")
 
