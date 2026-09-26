@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `attocode-code-intel` command is available again after an upgrade from
   0.2.25.
 - The wheel includes the code-intel MIT license beside the attocode license.
+- Do not install `attocode-code-intel` from source in the same environment.
+  Both packages then own the same files, and removing one breaks the other.
 
 ### Added — Standalone code intelligence (#96, #97, #98)
 

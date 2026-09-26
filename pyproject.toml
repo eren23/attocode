@@ -28,6 +28,8 @@ dependencies = [
     # ponytail: attocode_intel ships inside this wheel until attocode-code-intel
     # passes its release gate and is on PyPI. Then depend on it again and drop
     # the bundled package, the extra script, and the lines below.
+    # Ceiling: attocode-code-intel installed from source in the same env owns
+    # the same files, and uninstalling either one removes them.
     "tomlkit>=0.13",
     "filelock>=3.16",
     "watchfiles>=1",
