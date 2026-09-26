@@ -153,6 +153,8 @@ docs = [
 ]
 dev = [
     "pytest>=8.0",
+    # Structural rules run the sg / ast-grep binary; tests exercise that path.
+    "ast-grep-cli>=0.42",
     "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
     "pytest-textual-snapshot>=1.0",
