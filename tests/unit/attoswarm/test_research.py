@@ -1235,8 +1235,14 @@ def test_preflight_check_fails_with_bad_eval_command(tmp_path: Path) -> None:
     assert state.total_experiments == 0
 
 
-def test_catastrophic_regression_guard(tmp_path: Path) -> None:
-    """Experiments with >50% metric drop are flagged as invalid."""
+@pytest.mark.parametrize(
+    ("direction", "value", "catastrophic"),
+    [("maximize", 10.0, True), ("minimize", 200.0, True), ("minimize", 10.0, False)],
+)
+def test_catastrophic_regression_guard(
+    tmp_path: Path, direction: str, value: float, catastrophic: bool,
+) -> None:
+    """Results >50% worse than baseline, in the metric's direction, are invalid."""
     repo = tmp_path / "repo"
     _init_repo(repo, {"target.txt": "base\n"})
 
@@ -1248,8 +1254,7 @@ def test_catastrophic_regression_guard(tmp_path: Path) -> None:
             if call_count["n"] <= 2:
                 # Pre-flight + baseline
                 return EvalResult(metric_value=100.0)
-            # Experiment eval — catastrophic drop
-            return EvalResult(metric_value=10.0)
+            return EvalResult(metric_value=value)
 
     async def noop_spawn(task: dict) -> SimpleNamespace:
         return SimpleNamespace(result_summary="done", tokens_used=1, cost_usd=0.0)
@@ -1261,17 +1266,16 @@ def test_catastrophic_regression_guard(tmp_path: Path) -> None:
             eval_command="",
             total_max_experiments=1,
             target_files=["target.txt"],
+            metric_direction=direction,
         ),
         "test guard",
         evaluator=DroppingEvaluator(),
         spawn_fn=noop_spawn,
     )
 
-    state = asyncio.run(orch.run())
-    assert state.invalid_count >= 1
+    asyncio.run(orch.run())
     exp = orch._experiments[0]
-    assert exp.status == "invalid"
-    assert "catastrophic regression" in exp.reject_reason
+    assert ("catastrophic regression" in (exp.reject_reason or "")) is catastrophic
 
 
 def test_event_log_written_during_campaign(tmp_path: Path) -> None:
