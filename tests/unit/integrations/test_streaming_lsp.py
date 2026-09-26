@@ -288,7 +288,7 @@ class TestStreamHandlerProcessStream:
 
         async def error_stream() -> AsyncIterator[StreamChunk]:
             raise ValueError("parse error")
-            yield  # noqa: unreachable - makes this an async generator
+            yield  # unreachable - makes this an async generator
 
         with pytest.raises(ValueError):
             await handler.process_stream(error_stream())
@@ -1070,16 +1070,20 @@ class TestPTYShellManagerDetectShell:
             assert result == "/usr/local/bin/fish"
 
     def test_fallback_to_bash_on_unix(self) -> None:
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("platform.system", return_value="Linux"):
-                result = PTYShellManager._detect_shell()
-                assert result == "/bin/bash"
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("platform.system", return_value="Linux"),
+        ):
+            result = PTYShellManager._detect_shell()
+            assert result == "/bin/bash"
 
     def test_windows_fallback(self) -> None:
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("platform.system", return_value="Windows"):
-                result = PTYShellManager._detect_shell()
-                assert result == "cmd.exe"
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("platform.system", return_value="Windows"),
+        ):
+            result = PTYShellManager._detect_shell()
+            assert result == "cmd.exe"
 
 
 class TestPTYShellManagerAsync:
@@ -1932,9 +1936,11 @@ class TestLSPManagerAsync:
         from attocode.errors import ConfigurationError
 
         mgr = LSPManager()
-        with patch("shutil.which", return_value=None):
-            with pytest.raises(ConfigurationError, match="Language server not found"):
-                await mgr.start_server("python")
+        with (
+            patch("shutil.which", return_value=None),
+            pytest.raises(ConfigurationError, match="Language server not found"),
+        ):
+            await mgr.start_server("python")
 
     @pytest.mark.asyncio
     async def test_stop_server_not_started_noop(self) -> None:

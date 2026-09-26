@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class PlanningFailure(RuntimeError):
+class PlanningFailure(RuntimeError):  # noqa: N818 - public API name
     """Raised when shared-workspace planning cannot produce runnable tasks."""
 
 
@@ -329,9 +329,13 @@ class SwarmOrchestrator:
             if status.current_tool in ("Edit", "Write", "Read") and tool_input:
                 # Extract likely file path (first token)
                 candidate = tool_input.split(",")[0].split('"')[1] if '"' in tool_input else tool_input.split()[0] if tool_input.split() else ""
-                if candidate and "/" in candidate and len(status.files_touched) < 50:
-                    if candidate not in status.files_touched:
-                        status.files_touched.append(candidate)
+                if (
+                    candidate
+                    and "/" in candidate
+                    and len(status.files_touched) < 50
+                    and candidate not in status.files_touched
+                ):
+                    status.files_touched.append(candidate)
             self._emit("agent.tool_call", task_id=task_id, agent_id=agent_id,
                         message=f"{status.current_tool}",
                         data={"tool": status.current_tool, "input_summary": getattr(event, "tool_input_summary", "")[:100]})

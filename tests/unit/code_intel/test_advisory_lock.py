@@ -112,14 +112,14 @@ class TestLockFailureSilentlyCaught:
         session = AsyncMock()
 
         with (
-            patch("attocode.code_intel.storage.branch_overlay.BranchOverlay") as MockOverlay,
+            patch("attocode.code_intel.storage.branch_overlay.BranchOverlay") as mock_overlay,
             patch("attocode.code_intel.storage.content_store.ContentStore"),
             patch("attocode.code_intel.storage.symbol_store.SymbolStore"),
             patch("attocode.code_intel.storage.embedding_store.EmbeddingStore"),
         ):
             overlay = AsyncMock()
             overlay.resolve_manifest = AsyncMock(return_value={})
-            MockOverlay.return_value = overlay
+            mock_overlay.return_value = overlay
 
             pipeline = IncrementalPipeline(session)
             # Should not raise despite the lock failure

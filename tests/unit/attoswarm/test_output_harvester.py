@@ -393,9 +393,11 @@ class TestHandleCompletionClaim:
         task.artifacts = []
         coord._find_task.return_value = task
 
-        with patch("attoswarm.coordinator.output_harvester.detect_file_changes"):
-            with patch("attoswarm.coordinator.loop.SKIP_REVIEW_KINDS", {"research"}):
-                await handle_completion_claim(coord, "w1", "task-1")
+        with (
+            patch("attoswarm.coordinator.output_harvester.detect_file_changes"),
+            patch("attoswarm.coordinator.loop.SKIP_REVIEW_KINDS", {"research"}),
+        ):
+            await handle_completion_claim(coord, "w1", "task-1")
 
         coord._transition_task.assert_called_with("task-1", "done", "worker", "terminal_claim")
         coord._persist_task.assert_called_with(task, status="done")
@@ -414,9 +416,11 @@ class TestHandleCompletionClaim:
         task.artifacts = ["src/main.py"]
         coord._find_task.return_value = task
 
-        with patch("attoswarm.coordinator.output_harvester.detect_file_changes"):
-            with patch("attoswarm.coordinator.loop.SKIP_REVIEW_KINDS", set()):
-                await handle_completion_claim(coord, "w1", "task-1")
+        with (
+            patch("attoswarm.coordinator.output_harvester.detect_file_changes"),
+            patch("attoswarm.coordinator.loop.SKIP_REVIEW_KINDS", set()),
+        ):
+            await handle_completion_claim(coord, "w1", "task-1")
 
         coord._transition_task.assert_called_with(
             "task-1", "reviewing", "worker", "completion_claim"

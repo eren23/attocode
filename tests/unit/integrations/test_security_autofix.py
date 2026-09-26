@@ -197,10 +197,10 @@ class TestFixDiffGeneration:
         finding = matching[0]
         # The '+' line in the diff must contain the replacement text
         plus_lines = [
-            l for l in finding.fix_diff.splitlines()
-            if l.startswith("+") and not l.startswith("+++")
+            line for line in finding.fix_diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
         ]
-        assert any(replacement_fragment in l for l in plus_lines), (
+        assert any(replacement_fragment in line for line in plus_lines), (
             f"Expected '{replacement_fragment}' in a '+' line of the diff"
         )
 
@@ -221,8 +221,8 @@ class TestFixDiffGeneration:
         ]
         finding = matching[0]
         minus_lines = [
-            l for l in finding.fix_diff.splitlines()
-            if l.startswith("-") and not l.startswith("---")
+            line for line in finding.fix_diff.splitlines()
+            if line.startswith("-") and not line.startswith("---")
         ]
         assert len(minus_lines) == 1, "Expected exactly one removal line"
         # The removal line should contain the original search string

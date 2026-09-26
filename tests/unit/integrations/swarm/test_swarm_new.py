@@ -225,7 +225,8 @@ class TestFailureClassifier:
 
 class TestSwarmStateStore:
     def setup_method(self):
-        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            self._tmp = tmp
         self.store = SwarmStateStore(self._tmp.name)
 
     def test_save_and_get_session(self):

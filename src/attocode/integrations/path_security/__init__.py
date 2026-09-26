@@ -104,10 +104,10 @@ Allows:
     # ``../`` (parent of working dir): also dangerous.
     # BUT ``.../..`` is valid — ``...`` is a directory named three dots,
     # so ``.../..`` means the parent of that directory (the current directory).
-    if normalized == ".." or normalized == "../" or normalized.endswith("/.."):
-        if not (normalized.startswith(".../..") or
-                normalized.lstrip("./").startswith(".../")):
-            return True
+    if (normalized == ".." or normalized == "../" or normalized.endswith("/..")) and not (
+        normalized.startswith(".../..") or normalized.lstrip("./").startswith(".../")
+    ):
+        return True
 
     # System directory escape: ``../etc/passwd``, ``../../etc/shadow``
     # Also block ``./../etc`` — escaping via the current directory marker.

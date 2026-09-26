@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import TYPE_CHECKING
 
 from attocode.integrations.context.ast_service import ASTService
@@ -84,9 +85,6 @@ class TestEnsureReferencesIndexed:
         svc.ensure_file_parsed(rel)
         svc.ensure_references_indexed(rel)
         assert rel in svc._reference_indexed_files
-
-
-import time
 
 
 class TestStartHydration:

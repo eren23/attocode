@@ -711,7 +711,7 @@ async def execute_tool_calls_concurrent(
             *[execute_single_tool(ctx, tc, timeout=timeout, max_result_chars=max_result_chars)
               for tc in safe],
         )
-        for tc, (result, _) in zip(safe, safe_results):
+        for tc, (result, _) in zip(safe, safe_results, strict=False):
             results_by_id[tc.id] = result
 
     # Run exclusive tools sequentially with abort-on-bash-failure

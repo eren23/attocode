@@ -39,9 +39,11 @@ class TestAnthropicProviderInit:
         assert provider.name == "anthropic"
 
     def test_no_api_key(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ProviderError, match="ANTHROPIC_API_KEY"):
-                AnthropicProvider()
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            pytest.raises(ProviderError, match="ANTHROPIC_API_KEY"),
+        ):
+            AnthropicProvider()
 
 
 class TestAnthropicChat:

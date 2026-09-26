@@ -188,9 +188,8 @@ class FileWatcher:
                     except OSError:
                         continue
 
-                    if key in self._file_mtimes:
-                        if mtime > self._file_mtimes[key]:
-                            changed.append(key)
+                    if key in self._file_mtimes and mtime > self._file_mtimes[key]:
+                        changed.append(key)
                     self._file_mtimes[key] = mtime
 
         return changed

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import time
 
 import pytest
@@ -307,10 +308,10 @@ class TestLearningStore:
     def test_retrieve_relevant_respects_limit(self) -> None:
         store = self._make_store()
         for i in range(5):
-            l = store.propose_learning(self._make_proposal(
+            learning = store.propose_learning(self._make_proposal(
                 description=f"Common pattern number {i}",
             ))
-            store.validate_learning(l.id, approved=True)
+            store.validate_learning(learning.id, approved=True)
 
         results = store.retrieve_relevant("pattern", limit=2)
         assert len(results) <= 2
@@ -574,7 +575,7 @@ class TestLearningStore:
         store.propose_learning(self._make_proposal())
         store.close()
         # After close, operations should raise
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.ProgrammingError):
             store.propose_learning(self._make_proposal())
 
     # --- _extract_keywords ---

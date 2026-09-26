@@ -113,12 +113,14 @@ def _make_stable_app(run_dir: Path) -> AttoswarmApp:
                         yield EventsLog(id="events-full")
                     with TabPane("Messages", id="tab-messages"):
                         yield MessagesLog(id="messages-log-widget")
-                    with TabPane("Decisions", id="tab-decisions"):
-                        with Vertical(id="decisions-outer"):
-                            yield DecisionsPane(id="decisions-pane")
-                            yield BudgetProjectionWidget(id="budget-projection")
-                            yield FailureChainWidget(id="failure-chain")
-                            yield ConflictPanel(id="conflict-panel")
+                    with (
+                        TabPane("Decisions", id="tab-decisions"),
+                        Vertical(id="decisions-outer"),
+                    ):
+                        yield DecisionsPane(id="decisions-pane")
+                        yield BudgetProjectionWidget(id="budget-projection")
+                        yield FailureChainWidget(id="failure-chain")
+                        yield ConflictPanel(id="conflict-panel")
             yield Footer()
 
         def on_mount(self) -> None:

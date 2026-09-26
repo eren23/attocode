@@ -63,7 +63,7 @@ _EVAL_PATTERN = r"ev" + r"al\("
 
 
 def _make_rule(
-    id: str = "test-rule",
+    id: str = "test-rule",  # noqa: A002 - mirrors UnifiedRule.id; callers pass id=
     severity: RuleSeverity = RuleSeverity.HIGH,
     category: RuleCategory = RuleCategory.SECURITY,
     pattern: str = _EVAL_PATTERN,

@@ -112,7 +112,7 @@ async def enrich_task_context_async(
 
             results = await asyncio.gather(*coros, return_exceptions=True)
 
-            for label, result in zip(labels, results):
+            for label, result in zip(labels, results, strict=False):
                 if isinstance(result, Exception) or not result:
                     continue
                 enrichments[label] = _format_enrichment(label, result)

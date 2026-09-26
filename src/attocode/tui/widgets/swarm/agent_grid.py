@@ -357,7 +357,7 @@ class AgentsDataTable(Widget):
         # Detect if order changed (requires full rebuild)
         order_changed = new_order != self._prev_order
 
-        _FIELDS = [
+        row_fields = [
             "status", "agent_id", "task_id", "activity", "tools", "errs",
             "model", "elapsed", "tokens",
         ]
@@ -398,7 +398,7 @@ class AgentsDataTable(Widget):
             for aid in old_keys & new_keys:
                 old_rd = self._prev_agent_map[aid]
                 new_rd = new_map[aid]
-                for col_idx, field in enumerate(_FIELDS):
+                for col_idx, field in enumerate(row_fields):
                     if old_rd.get(field) != new_rd.get(field):
                         try:
                             if col_idx < len(col_keys):

@@ -187,16 +187,18 @@ class TestVisionToolExecution:
         """Test graceful handling of URL download failure."""
         tool = create_vision_tool(provider_name="mock", api_key="test")
 
-        with patch("attocode.tools.vision._is_private_ip", return_value=False):
-            with patch("httpx.AsyncClient") as mock_client_cls:
-                mock_client = AsyncMock()
-                mock_client.get = AsyncMock(side_effect=Exception("Connection refused"))
-                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_client.__aexit__ = AsyncMock(return_value=False)
-                mock_client_cls.return_value = mock_client
+        with (
+            patch("attocode.tools.vision._is_private_ip", return_value=False),
+            patch("httpx.AsyncClient") as mock_client_cls,
+        ):
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=Exception("Connection refused"))
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
 
-                result = await tool.execute({"image": "https://example.com/broken.jpg"})
-                assert "Error downloading image" in result
+            result = await tool.execute({"image": "https://example.com/broken.jpg"})
+            assert "Error downloading image" in result
 
     @pytest.mark.asyncio
     async def test_invalid_image_input(self) -> None:
@@ -410,18 +412,20 @@ class TestBuildInitialMessagesWithImages:
         """User-dropped images should NOT be restricted by working_dir."""
         from attocode.agent.message_builder import build_initial_messages
         from attocode.types.messages import MessageWithStructuredContent
-        with tempfile.TemporaryDirectory() as img_dir:
-            with tempfile.TemporaryDirectory() as project_dir:
-                # Image is in a DIFFERENT directory than working_dir
-                img = os.path.join(img_dir, "desktop_screenshot.png")
-                Path(img).write_bytes(b"\x89PNG\r\n" + b"\x00" * 100)
-                msgs = build_initial_messages(
-                    "Explain this", images=[img], working_dir=project_dir,
-                )
-                user_msg = msgs[1]
-                # Should still include the image (no working_dir restriction)
-                assert isinstance(user_msg, MessageWithStructuredContent)
-                assert len(user_msg.content) == 2
+        with (
+            tempfile.TemporaryDirectory() as img_dir,
+            tempfile.TemporaryDirectory() as project_dir,
+        ):
+            # Image is in a DIFFERENT directory than working_dir
+            img = os.path.join(img_dir, "desktop_screenshot.png")
+            Path(img).write_bytes(b"\x89PNG\r\n" + b"\x00" * 100)
+            msgs = build_initial_messages(
+                "Explain this", images=[img], working_dir=project_dir,
+            )
+            user_msg = msgs[1]
+            # Should still include the image (no working_dir restriction)
+            assert isinstance(user_msg, MessageWithStructuredContent)
+            assert len(user_msg.content) == 2
 
     def test_with_invalid_image_falls_back(self) -> None:
         from attocode.agent.message_builder import build_initial_messages

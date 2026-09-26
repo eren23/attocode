@@ -214,7 +214,7 @@ def test_unsupported_backend_raises() -> None:
     coord = _make_coordinator()
     try:
         coord._default_command("unknown", "m")
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError as exc:
         assert "unknown" in str(exc)
 

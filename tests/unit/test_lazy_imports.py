@@ -16,7 +16,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def test_code_intel_lazy_import_bugReport():
+def test_code_intel_lazy_import_bug_report():
     """Importing BugReport from attocode.code_intel should succeed."""
     # Force a fresh lookup through __getattr__
     mod = importlib.import_module("attocode.code_intel")
@@ -25,10 +25,10 @@ def test_code_intel_lazy_import_bugReport():
 
     try:
         # Access through the lazy __getattr__
-        BugReport = mod.BugReport
-        assert BugReport is not None
+        bug_report = mod.BugReport
+        assert bug_report is not None
         # It should be a class (dataclass)
-        assert isinstance(BugReport, type) or callable(BugReport)
+        assert isinstance(bug_report, type) or callable(bug_report)
     except ImportError:
         # If tree-sitter or other optional deps are missing, the import
         # itself should still succeed via __getattr__; only instantiation
@@ -85,14 +85,14 @@ def test_context_lazy_import_microcompact():
 # ---------------------------------------------------------------------------
 
 
-def test_context_lazy_import_ToolDecayProfile():
+def test_context_lazy_import_tool_decay_profile():
     """Importing ToolDecayProfile from attocode.integrations.context should succeed."""
     mod = importlib.import_module("attocode.integrations.context")
     saved = mod.__dict__.pop("ToolDecayProfile") if "ToolDecayProfile" in mod.__dict__ else None
 
     try:
-        ToolDecayProfile = mod.ToolDecayProfile
-        assert ToolDecayProfile is not None
+        tool_decay_profile = mod.ToolDecayProfile
+        assert tool_decay_profile is not None
     except ImportError:
         pytest.skip("Optional dependency missing for ToolDecayProfile module")
     finally:

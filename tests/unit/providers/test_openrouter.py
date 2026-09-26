@@ -37,15 +37,19 @@ class TestOpenRouterProviderInit:
         assert provider.name == "openrouter"
 
     def test_missing_api_key_raises(self) -> None:
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": ""}, clear=False):
-            with pytest.raises(ProviderError, match="OPENROUTER_API_KEY"):
-                OpenRouterProvider(api_key="")
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": ""}, clear=False),
+            pytest.raises(ProviderError, match="OPENROUTER_API_KEY"),
+        ):
+            OpenRouterProvider(api_key="")
 
     def test_missing_api_key_no_env(self) -> None:
         env = {k: v for k, v in __import__("os").environ.items() if k != "OPENROUTER_API_KEY"}
-        with patch.dict("os.environ", env, clear=True):
-            with pytest.raises(ProviderError, match="OPENROUTER_API_KEY"):
-                OpenRouterProvider()
+        with (
+            patch.dict("os.environ", env, clear=True),
+            pytest.raises(ProviderError, match="OPENROUTER_API_KEY"),
+        ):
+            OpenRouterProvider()
 
 
 # ---------------------------------------------------------------------------

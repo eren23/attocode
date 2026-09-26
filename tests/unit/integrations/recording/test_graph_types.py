@@ -597,7 +597,7 @@ class TestToMermaid:
         assert mermaid.startswith("graph TD")
         # Only style definitions, no node or edge lines (besides classDef)
         lines = mermaid.strip().split("\n")
-        non_style_lines = [l for l in lines[1:] if "classDef" not in l]
+        non_style_lines = [line for line in lines[1:] if "classDef" not in line]
         assert len(non_style_lines) == 0
 
     def test_mermaid_edges_filtered_to_visible_nodes(self) -> None:

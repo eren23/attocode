@@ -7,14 +7,14 @@ import subprocess
 import time
 from typing import TYPE_CHECKING, Any
 
-log = logging.getLogger(__name__)
-
 from attoswarm.protocol.io import read_json, write_json_atomic
 from attoswarm.protocol.locks import locked_file
 from attoswarm.protocol.models import AgentOutbox, PermissionRequest
 
 if TYPE_CHECKING:
     from attoswarm.coordinator.loop import HybridCoordinator
+
+log = logging.getLogger(__name__)
 
 
 async def harvest_outputs(coordinator: HybridCoordinator) -> None:

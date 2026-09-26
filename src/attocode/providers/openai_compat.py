@@ -9,14 +9,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import httpx
 
-logger = logging.getLogger(__name__)
-
 from attocode.types.messages import (
     Message,
     MessageWithStructuredContent,
     Role,
     ToolDefinition,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def describe_request_error(e: httpx.RequestError) -> str:

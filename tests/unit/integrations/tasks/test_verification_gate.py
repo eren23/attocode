@@ -27,7 +27,7 @@ from attocode.integrations.tasks.verification_gate import (
 
 
 def _make_subtask(
-    id: str = "task-1",
+    id: str = "task-1",  # noqa: A002 - mirrors SubTask.id; callers pass id=
     description: str = "Implement feature X",
 ) -> SubTask:
     return SubTask(id=id, description=description)

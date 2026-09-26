@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import time
 import uuid
@@ -522,9 +523,6 @@ class TestParseContentBridge:
 
 
 # --- Debouncer ---
-
-
-import asyncio
 
 
 class TestDebouncer:

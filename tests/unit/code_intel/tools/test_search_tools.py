@@ -199,7 +199,7 @@ class TestRegexSearch:
         result = regex_search(pattern="match_line_", max_results=5)
         assert "limited to 5 results" in result
         # Count the file:line: entries — should be exactly 5
-        match_lines = [l for l in result.splitlines() if "many_lines.py:" in l]
+        match_lines = [line for line in result.splitlines() if "many_lines.py:" in line]
         assert len(match_lines) == 5
 
     def test_regex_search_no_matches(self):
