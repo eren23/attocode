@@ -345,10 +345,18 @@ class TestEvolveLoop:
         )
         assert zero_count >= 1
 
-    def test_population_and_fitnesses_correspond_after_loop(self, fixture_corpus: Path):
+    def test_population_and_fitnesses_correspond_after_loop(
+        self, fixture_corpus: Path, monkeypatch,
+    ):
         """C1 — `EvolutionState.fitnesses[i]` must rank `population[i]`.
         Specifically: after a plateau exit, the returned population is
         the actually-evaluated last generation, NOT next_pop."""
+        from types import SimpleNamespace
+
+        import attocode.code_intel.rules.evolution as evo
+
+        # Fitness includes wall-clock speed; a fixed clock keeps re-evaluations equal.
+        monkeypatch.setattr(evo, "time", SimpleNamespace(monotonic=lambda: 0.0))
         seed = _rule("r1", pattern=r"\bdanger\b")
         state = evolve(
             [seed],
