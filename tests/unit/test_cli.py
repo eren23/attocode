@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -16,7 +17,6 @@ from attocode.config import (
     AttoConfig,
     find_project_root,
     infer_project_root_from_session_dir,
-    get_user_config_dir,
     load_config,
     load_json_config,
     load_rules,
