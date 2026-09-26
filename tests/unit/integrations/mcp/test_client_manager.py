@@ -188,7 +188,7 @@ class TestMCPClientManagerConnectEager:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             connected = await mgr.connect_eager()
@@ -215,7 +215,7 @@ class TestMCPClientManagerConnectEager:
         mock_client = MagicMock()
         mock_client.connect = AsyncMock(side_effect=RuntimeError("connection refused"))
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             connected = await mgr.connect_eager()
@@ -231,7 +231,7 @@ class TestMCPClientManagerConnectEager:
         mock_client = MagicMock()
         mock_client.connect = AsyncMock(side_effect=ValueError("port in use"))
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -247,7 +247,7 @@ class TestMCPClientManagerConnectEager:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -263,7 +263,7 @@ class TestMCPClientManagerConnectEager:
 
         call_count = 0
 
-        def client_factory(**kwargs):
+        def client_factory(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             client = MagicMock()
@@ -276,7 +276,7 @@ class TestMCPClientManagerConnectEager:
             return client
 
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             side_effect=client_factory,
         ):
             connected = await mgr.connect_eager()
@@ -309,7 +309,7 @@ class TestMCPClientManagerEnsureConnected:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -331,7 +331,7 @@ class TestMCPClientManagerEnsureConnected:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             result = await mgr.ensure_connected("lazy")
@@ -347,7 +347,7 @@ class TestMCPClientManagerEnsureConnected:
         mock_client = MagicMock()
         mock_client.connect = AsyncMock(side_effect=ConnectionError("timeout"))
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             result = await mgr.ensure_connected("srv")
@@ -370,7 +370,7 @@ class TestMCPClientManagerDisconnect:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -392,8 +392,8 @@ class TestMCPClientManagerDisconnect:
         clients = iter([mock_client_a, mock_client_b])
 
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
-            side_effect=lambda **kw: next(clients),
+            "attocode.integrations.mcp.transports.create_transport",
+            side_effect=lambda *a, **kw: next(clients),
         ):
             await mgr.connect_eager()
 
@@ -421,7 +421,7 @@ class TestMCPClientManagerDisconnect:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -437,7 +437,7 @@ class TestMCPClientManagerDisconnect:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -465,7 +465,7 @@ class TestMCPClientManagerToolAccess:
         tools = [_make_tool("read"), _make_tool("write")]
         mock_client = _make_mock_client(tools=tools)
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -488,8 +488,8 @@ class TestMCPClientManagerToolAccess:
             _make_mock_client(tools=tools_b),
         ])
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
-            side_effect=lambda **kw: next(clients),
+            "attocode.integrations.mcp.transports.create_transport",
+            side_effect=lambda *a, **kw: next(clients),
         ):
             await mgr.connect_eager()
 
@@ -514,7 +514,7 @@ class TestMCPClientManagerToolAccess:
         tools = [_make_tool("my_tool")]
         mock_client = _make_mock_client(tools=tools)
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -539,7 +539,7 @@ class TestMCPClientManagerCallTool:
         tools = [_make_tool("greet")]
         mock_client = _make_mock_client(tools=tools, call_result=expected_result)
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -556,7 +556,7 @@ class TestMCPClientManagerCallTool:
 
         mock_client = _make_mock_client(tools=[])
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -574,7 +574,7 @@ class TestMCPClientManagerCallTool:
         tools = [_make_tool("lazy_tool")]
         mock_client = _make_mock_client(tools=tools, call_result=expected_result)
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             result = await mgr.call_tool("lazy_tool", {"key": "value"})
@@ -591,7 +591,7 @@ class TestMCPClientManagerCallTool:
         mock_client = MagicMock()
         mock_client.connect = AsyncMock(side_effect=RuntimeError("boom"))
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             result = await mgr.call_tool("any_tool", {})
@@ -626,8 +626,8 @@ class TestMCPClientManagerCallTool:
         )
         clients = iter([client_a, client_b])
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
-            side_effect=lambda **kw: next(clients),
+            "attocode.integrations.mcp.transports.create_transport",
+            side_effect=lambda *a, **kw: next(clients),
         ):
             await mgr.connect_eager()
 
@@ -667,7 +667,7 @@ class TestMCPClientManagerToolSummaries:
         ]
         mock_client = _make_mock_client(tools=tools)
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -687,7 +687,7 @@ class TestMCPClientManagerToolSummaries:
         tools = [_make_tool("eager_tool")]
         mock_client = _make_mock_client(tools=tools)
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -706,8 +706,8 @@ class TestMCPClientManagerToolSummaries:
         client_b = _make_mock_client(tools=[_make_tool("tool_b", "desc_b")])
         clients = iter([client_a, client_b])
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
-            side_effect=lambda **kw: next(clients),
+            "attocode.integrations.mcp.transports.create_transport",
+            side_effect=lambda *a, **kw: next(clients),
         ):
             await mgr.connect_eager()
 
@@ -736,16 +736,14 @@ class TestMCPClientManagerConnect:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ) as mock_cls:
             await mgr.connect_eager()
 
         mock_cls.assert_called_once_with(
-            server_command="npx",
-            server_args=["-y", "@test/server"],
+            {"type": "stdio", "command": "npx", "args": ["-y", "@test/server"], "env": {"KEY": "val"}},
             server_name="srv",
-            env={"KEY": "val"},
         )
 
     @pytest.mark.asyncio
@@ -756,18 +754,19 @@ class TestMCPClientManagerConnect:
 
         mock_client = _make_mock_client()
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ) as mock_cls:
             await mgr.connect_eager()
 
-        # env={} is falsy, so `or None` in _connect yields None
         mock_cls.assert_called_once_with(
-            server_command="node",
-            server_args=[],
+            {"type": "stdio", "command": "node", "args": [], "env": {}},
             server_name="srv",
-            env=None,
         )
+        # An empty env must not wipe the child's environment (PATH, HOME, ...).
+        from attocode.integrations.mcp.client import _expand_env
+
+        assert _expand_env({}) is None
 
     @pytest.mark.asyncio
     async def test_connect_sets_connecting_then_connected(self) -> None:
@@ -786,7 +785,7 @@ class TestMCPClientManagerConnect:
         mock_client = _make_mock_client()
         mock_client.connect = track_connect
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             await mgr.connect_eager()
@@ -803,7 +802,7 @@ class TestMCPClientManagerConnect:
         mock_client = MagicMock()
         mock_client.connect = AsyncMock(side_effect=TypeError("unexpected"))
         with patch(
-            "attocode.integrations.mcp.client_manager.MCPClient",
+            "attocode.integrations.mcp.transports.create_transport",
             return_value=mock_client,
         ):
             connected = await mgr.connect_eager()

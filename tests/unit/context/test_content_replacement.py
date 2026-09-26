@@ -6,6 +6,7 @@ from attocode.integrations.context.compaction import (
     CODE_INTEL_TOOLS,
     ContentReplacementState,
 )
+from attocode.integrations.utilities.token_estimate import estimate_tokens
 
 
 def test_record_and_query_replacement() -> None:
@@ -61,7 +62,7 @@ def test_get_restorable_respects_budget() -> None:
     """Token budget limits which items are returned."""
     state = ContentReplacementState()
 
-    # Add three items: 250 tokens each (1000 chars / 4)
+    # Add three equal items
     for i in range(3):
         state.record_replacement(
             message_id=f"msg-{i}",
@@ -70,8 +71,8 @@ def test_get_restorable_respects_budget() -> None:
             turn_number=i,
         )
 
-    # Budget for only 2 items (each is 250 tokens)
-    restorable = state.get_restorable(token_budget=500)
+    # Budget for only 2 items
+    restorable = state.get_restorable(token_budget=2 * estimate_tokens("a" * 1000))
     assert len(restorable) == 2
 
     # Budget for 0
@@ -103,11 +104,10 @@ def test_total_evicted_tokens() -> None:
     """total_evicted_tokens returns the sum of all estimated tokens."""
     state = ContentReplacementState()
 
-    # 400 chars -> 100 tokens, 800 chars -> 200 tokens
     state.record_replacement("a", "bash", "x" * 400, turn_number=1)
     state.record_replacement("b", "grep", "y" * 800, turn_number=2)
 
-    assert state.total_evicted_tokens == 300  # 100 + 200
+    assert state.total_evicted_tokens == estimate_tokens("x" * 400) + estimate_tokens("y" * 800)
 
 
 def test_to_dict_serialization() -> None:
@@ -125,7 +125,7 @@ def test_to_dict_serialization() -> None:
     d = state.to_dict()
 
     assert d["count"] == 1
-    assert d["total_tokens"] == len("code analysis results here") // 4
+    assert d["total_tokens"] == estimate_tokens("code analysis results here")
     assert d["code_intel_count"] == 1
     assert "msg-1" in d["items"]
 

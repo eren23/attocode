@@ -313,7 +313,7 @@ class TestMCPClientManagerConnectEager:
         mock_client.tools = []
         mock_client.is_connected = True
 
-        with patch("attocode.integrations.mcp.client_manager.MCPClient", return_value=mock_client):
+        with patch("attocode.integrations.mcp.transports.create_transport", return_value=mock_client):
             connected = await mgr.connect_eager()
 
         assert "eager" in connected
@@ -338,7 +338,7 @@ class TestMCPClientManagerConnectEager:
         mock_client = MagicMock()
         mock_client.connect = AsyncMock(side_effect=RuntimeError("boom"))
 
-        with patch("attocode.integrations.mcp.client_manager.MCPClient", return_value=mock_client):
+        with patch("attocode.integrations.mcp.transports.create_transport", return_value=mock_client):
             connected = await mgr.connect_eager()
 
         assert connected == []

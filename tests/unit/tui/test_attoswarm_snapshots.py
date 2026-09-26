@@ -9,6 +9,8 @@ Generate/update baselines:
 
 from __future__ import annotations
 
+import os
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -25,6 +27,20 @@ from tests.helpers.fixtures import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+@pytest.fixture(autouse=True)
+def _utc_clock():
+    """The views print wall-clock times, so pin the zone the snapshots were made in."""
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = "UTC"
+    time.tzset()
+    yield
+    if old is None:
+        os.environ.pop("TZ", None)
+    else:
+        os.environ["TZ"] = old
+    time.tzset()
 
 
 # ---------------------------------------------------------------------------
