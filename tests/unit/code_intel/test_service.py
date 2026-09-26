@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 
-from attocode.code_intel.config import CodeIntelConfig
 from attocode.code_intel.service import CodeIntelService
 
 

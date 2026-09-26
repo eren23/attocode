@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from attocode.integrations.context.context_engineering import (
     ContextEngineeringManager,
-    FailureRecord,
 )
 from attocode.types.messages import Message, Role
 
@@ -45,7 +44,7 @@ class TestRecitation:
         cem._recitation_interval = 5
         msgs = [Message(role=Role.USER, content="hi")]
         # First call at iteration 0 should inject
-        result1 = cem.inject_recitation(msgs, current_iteration=0)
+        cem.inject_recitation(msgs, current_iteration=0)
         # Second call at iteration 2 should NOT inject (within interval)
         result2 = cem.inject_recitation(msgs, current_iteration=2)
         assert len(result2) == len(msgs)

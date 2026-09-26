@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.integrations.context.code_analyzer import (
     CodeAnalyzer,
@@ -19,6 +17,8 @@ from attocode.integrations.context.code_analyzer import (
     _regex_analyze_python,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ============================================================
 # Dataclass Tests

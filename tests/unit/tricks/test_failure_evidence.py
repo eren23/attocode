@@ -5,13 +5,13 @@ from __future__ import annotations
 import time
 
 from attocode.tricks.failure_evidence import (
+    Failure,
+    FailureCategory,
+    FailureInput,
     FailureTracker,
     FailureTrackerConfig,
-    FailureInput,
-    FailureCategory,
     categorize_error,
     generate_suggestion,
-    Failure,
 )
 
 

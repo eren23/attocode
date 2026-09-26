@@ -1,6 +1,5 @@
 """Comprehensive tests for the delegation protocol module."""
 
-import pytest
 
 from attocode.integrations.agents.delegation import (
     DelegationProtocol,
@@ -8,7 +7,6 @@ from attocode.integrations.agents.delegation import (
     DelegationResult,
     DelegationStatus,
 )
-
 
 # ---------------------------------------------------------------------------
 # Data classes & enum

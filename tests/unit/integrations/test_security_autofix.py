@@ -9,17 +9,19 @@ diff under an "Autofix:" heading when present, and omit it otherwise.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+from attocode.integrations.security.patterns import Category, Severity
 from attocode.integrations.security.scanner import (
+    _AUTOFIX_TEMPLATES,
     SecurityFinding,
     SecurityScanner,
-    _AUTOFIX_TEMPLATES,
 )
-from attocode.integrations.security.patterns import Category, Severity
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Helpers

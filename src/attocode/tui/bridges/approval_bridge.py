@@ -114,7 +114,7 @@ class ApprovalBridge:
 
             try:
                 result = await asyncio.wait_for(self._pending, timeout=timeout)
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 logger.warning(
                     "Approval request timed out for tool %s (timeout=%ss)",
                     tool_name, timeout,
@@ -189,7 +189,7 @@ class BudgetBridge:
 
             try:
                 result = await asyncio.wait_for(self._pending, timeout=timeout)
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 logger.warning(
                     "Budget extension request timed out (timeout=%ss)", timeout,
                 )

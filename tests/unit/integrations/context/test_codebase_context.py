@@ -5,13 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import pytest
-
 from attocode.integrations.context.codebase_context import (
-    CONFIG_PATTERNS,
-    DEFAULT_IGNORES,
     EXTENSION_LANGUAGES,
-    TEST_PATTERNS,
     CodebaseContextManager,
     DependencyGraph,
     FileInfo,
@@ -22,9 +17,7 @@ from attocode.integrations.context.codebase_context import (
     _resolve_java_import,
     _resolve_ruby_import,
     _resolve_rust_import,
-    build_dependency_graph,
 )
-
 
 # --- Helper to build a temp project layout ---
 
@@ -390,7 +383,7 @@ class TestBuildDependencyGraph:
         )
 
         mgr = CodebaseContextManager(root_dir=str(tmp_path))
-        files = mgr.discover_files()
+        mgr.discover_files()
 
         graph = mgr.dependency_graph
         assert graph is not None
@@ -411,7 +404,7 @@ class TestBuildDependencyGraph:
         )
 
         mgr = CodebaseContextManager(root_dir=str(tmp_path))
-        files = mgr.discover_files()
+        mgr.discover_files()
 
         graph = mgr.dependency_graph
         assert graph is not None
@@ -446,7 +439,7 @@ class TestBuildDependencyGraph:
         )
 
         mgr = CodebaseContextManager(root_dir=str(tmp_path))
-        files = mgr.discover_files()
+        mgr.discover_files()
         graph = mgr.dependency_graph
         assert graph is not None
 
@@ -461,7 +454,7 @@ class TestBuildDependencyGraph:
         )
 
         mgr = CodebaseContextManager(root_dir=str(tmp_path))
-        files = mgr.discover_files()
+        mgr.discover_files()
         graph = mgr.dependency_graph
         assert graph is not None
 
@@ -801,7 +794,7 @@ class TestMultiLanguageDependencyGraph:
         )
 
         mgr = CodebaseContextManager(root_dir=str(tmp_path))
-        files = mgr.discover_files()
+        mgr.discover_files()
         graph = mgr.dependency_graph
         assert graph is not None
 
@@ -820,7 +813,7 @@ class TestMultiLanguageDependencyGraph:
         )
 
         mgr = CodebaseContextManager(root_dir=str(tmp_path))
-        files = mgr.discover_files()
+        mgr.discover_files()
         graph = mgr.dependency_graph
         assert graph is not None
 

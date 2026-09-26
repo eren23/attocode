@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from attoswarm.coordinator.trace_context import (
@@ -89,9 +87,8 @@ class TestTraceContext:
     @pytest.mark.asyncio
     async def test_completed_spans_collected(self) -> None:
         ctx = TraceContext(trace_id="run1")
-        async with start_span("op1", trace_id="run1"):
-            async with start_span("op2"):
-                pass
+        async with start_span("op1", trace_id="run1"), start_span("op2"):
+            pass
         spans = ctx.completed_spans
         assert len(spans) == 2
         assert spans[0].operation == "op2"  # inner completes first

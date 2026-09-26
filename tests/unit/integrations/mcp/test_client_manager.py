@@ -18,7 +18,6 @@ from attocode.integrations.mcp.client_manager import (
 )
 from attocode.integrations.mcp.config import MCPServerConfig
 
-
 # =====================================================================
 # Helpers
 # =====================================================================

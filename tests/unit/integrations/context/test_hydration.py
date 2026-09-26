@@ -1,8 +1,6 @@
 """Tests for hydration state and tier classification."""
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.context.hydration import (
     TIER_HUGE,
     TIER_LARGE,

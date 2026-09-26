@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import math
-import tempfile
 import time
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.integrations.context.frecency import (
-    FrecencyTracker,
     FrecencyResult,
+    FrecencyTracker,
     get_tracker,
     reset_tracker,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestFrecencyScore:
@@ -53,8 +52,8 @@ class TestFrecencyScore:
         tracker = FrecencyTracker(db_path=tmp_path / "frecency", ai_mode=False)
 
         # Manually insert an old timestamp (35 days ago)
-        import sqlite3
         import json
+        import sqlite3
         old_time = time.time() - (35 * 86400)
         conn = sqlite3.connect(tmp_path / "frecency" / "frecency.db")
         conn.execute(
@@ -221,7 +220,7 @@ class TestGlobalTracker:
 
     def test_reset_tracker(self, tmp_path: Path):
         """reset_tracker should clear the singleton."""
-        tracker = get_tracker(db_path=tmp_path / "frecency")
+        get_tracker(db_path=tmp_path / "frecency")
         reset_tracker()
 
         # After reset, should get a new instance

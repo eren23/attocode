@@ -15,7 +15,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-
 # -----------------------------------------------------------------------------
 # Types
 # -----------------------------------------------------------------------------
@@ -66,10 +65,7 @@ def is_unc_path(path: str) -> bool:
     ``file:////server`` URL form.  These can leak NTLM credentials to
     untrusted network servers in corporate/AD environments.
     """
-    for pattern in _UNC_PATTERNS:
-        if pattern.match(path):
-            return True
-    return False
+    return any(pattern.match(path) for pattern in _UNC_PATTERNS)
 
 
 # -----------------------------------------------------------------------------
@@ -265,10 +261,7 @@ def safe_canonicalize(
         if working_dir:
             base = os.path.abspath(working_dir)
             # Resolve the path relative to working_dir
-            if not os.path.isabs(path):
-                full = os.path.join(base, path)
-            else:
-                full = path
+            full = os.path.join(base, path) if not os.path.isabs(path) else path
             canonical = os.path.abspath(full)
         else:
             canonical = os.path.abspath(path)

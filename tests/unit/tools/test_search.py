@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from attocode.tools.search import create_search_tools, grep_search
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestGrepSearch:

@@ -213,7 +213,7 @@ def test_build_start_cmd_forwards_no_git_safety(tmp_path: Path, monkeypatch) -> 
     run_dir.mkdir(parents=True, exist_ok=True)
 
     runner = CliRunner()
-    result = runner.invoke(
+    runner.invoke(
         main,
         ["start", str(cfg), "--no-git-safety", "--detach", "--skip-doctor", "test goal"],
     )
@@ -275,7 +275,7 @@ def test_start_monitor_detach_leaves_coordinator_running(tmp_path: Path, monkeyp
     assert result.exit_code == 0
     assert "Dashboard detached; coordinator still running" in result.output
     proc = proc_holder["proc"]
-    assert getattr(proc, "terminate_calls") == 0
+    assert proc.terminate_calls == 0
 
 
 def test_start_monitor_stop_waits_for_coordinator(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -331,8 +331,8 @@ def test_start_monitor_stop_waits_for_coordinator(tmp_path: Path, monkeypatch) -
     assert result.exit_code == 0
     assert "Waiting for coordinator shutdown..." in result.output
     proc = proc_holder["proc"]
-    assert getattr(proc, "wait_calls") == [8]
-    assert getattr(proc, "terminate_calls") == 0
+    assert proc.wait_calls == [8]
+    assert proc.terminate_calls == 0
 
 
 # ── L2: --preview --no-monitor falls back to dry_run ─────────────────
@@ -417,7 +417,7 @@ def test_quick_monitor_detach_leaves_coordinator_running(tmp_path: Path, monkeyp
     assert result.exit_code == 0
     assert "Dashboard detached; coordinator still running" in result.output
     proc = proc_holder["proc"]
-    assert getattr(proc, "terminate_calls") == 0
+    assert proc.terminate_calls == 0
 
 
 def test_start_preview_no_monitor_falls_back_to_dry_run(tmp_path: Path, monkeypatch) -> None:
@@ -489,10 +489,10 @@ def test_start_continue_from_builds_child_lineage(tmp_path: Path, monkeypatch) -
 
     assert result.exit_code == 0
     lineage = captured["lineage"]
-    assert getattr(lineage, "parent_run_id") == "parent-123"
-    assert getattr(lineage, "continuation_mode") == "child"
-    assert getattr(lineage, "base_ref") == "attoswarm/parent-123"
-    assert getattr(lineage, "base_commit") == "abc123"
+    assert lineage.parent_run_id == "parent-123"
+    assert lineage.continuation_mode == "child"
+    assert lineage.base_ref == "attoswarm/parent-123"
+    assert lineage.base_commit == "abc123"
     assert Path(str(captured["run_dir"])) != parent_run
 
 
@@ -543,8 +543,8 @@ def test_start_continue_from_allows_commit_only_parent(tmp_path: Path, monkeypat
 
     assert result.exit_code == 0
     lineage = captured["lineage"]
-    assert getattr(lineage, "base_ref") == ""
-    assert getattr(lineage, "base_commit") == "abc123"
+    assert lineage.base_ref == ""
+    assert lineage.base_commit == "abc123"
 
 
 def test_continue_command_invokes_child_run(tmp_path: Path, monkeypatch) -> None:
@@ -582,7 +582,7 @@ def test_continue_command_invokes_child_run(tmp_path: Path, monkeypatch) -> None
     )
 
     assert result.exit_code == 0
-    assert getattr(captured["lineage"], "parent_run_id") == "parent-123"
+    assert captured["lineage"].parent_run_id == "parent-123"
 
 
 def test_continue_monitor_uses_same_child_run_dir_for_subprocess_and_tui(tmp_path: Path, monkeypatch) -> None:
@@ -737,9 +737,7 @@ def test_snapshot_file_state_returns_empty_for_non_git_dir(tmp_path: Path) -> No
 
 def test_snapshot_file_state_returns_empty_on_error(tmp_path: Path, monkeypatch) -> None:
     """If subprocess raises, the function catches the error and returns empty set."""
-    import subprocess as _sp
 
-    original_run = _sp.run
 
     def _boom(*args, **kwargs):
         raise OSError("simulated failure")

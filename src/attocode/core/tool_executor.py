@@ -29,6 +29,7 @@ if __name__ != "__main__":
     pass
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 # Defaults

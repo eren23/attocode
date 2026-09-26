@@ -2,11 +2,11 @@
 
 from attocode.tricks.json_utils import (
     extract_json,
-    extract_json_objects,
     extract_json_array,
-    safe_parse,
-    fix_trailing_commas,
+    extract_json_objects,
     fix_single_quotes,
+    fix_trailing_commas,
+    safe_parse,
     truncate_json,
 )
 

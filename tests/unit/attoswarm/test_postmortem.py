@@ -7,7 +7,6 @@ from pathlib import Path
 
 from attoswarm.coordinator.decompose_metrics import DecomposeMetrics
 from attoswarm.coordinator.postmortem import PostMortemGenerator, PostMortemReport
-from attoswarm.coordinator.trace_query import TraceQueryEngine
 
 
 class TestDecomposeMetrics:

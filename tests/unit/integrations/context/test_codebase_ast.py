@@ -2,20 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.integrations.context.codebase_ast import (
     ClassDef,
-    DependencyChanges,
     FileAST,
-    FileChangeResult,
     FunctionDef,
     ImportDef,
-    ParamDef,
-    PropertyDef,
-    SymbolChange,
     diff_file_ast,
     diff_imports,
     parse_file,
@@ -25,6 +18,8 @@ from attocode.integrations.context.codebase_ast import (
     parse_rust,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ============================================================
 # ParamDef Extraction Tests

@@ -5,32 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import platform
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from attocode.errors import ToolError
-from attocode.integrations.streaming.handler import (
-    StreamCallback,
-    StreamConfig,
-    StreamEventListener,
-    StreamHandler,
-    _StreamState,
-    adapt_anthropic_stream,
-    adapt_openrouter_stream,
-    format_chunk_for_terminal,
-)
-from attocode.integrations.streaming.pty_shell import (
-    CommandResult,
-    PTYEventListener,
-    PTYShellConfig,
-    PTYShellManager,
-    ShellState,
-    format_shell_state,
-)
 from attocode.integrations.lsp.client import (
     BUILTIN_SERVERS,
     COMPLETION_KIND_MAP,
@@ -45,6 +25,21 @@ from attocode.integrations.lsp.client import (
     _LSPClient,
     _parse_range,
 )
+from attocode.integrations.streaming.handler import (
+    StreamConfig,
+    StreamHandler,
+    _StreamState,
+    adapt_anthropic_stream,
+    adapt_openrouter_stream,
+    format_chunk_for_terminal,
+)
+from attocode.integrations.streaming.pty_shell import (
+    CommandResult,
+    PTYShellConfig,
+    PTYShellManager,
+    ShellState,
+    format_shell_state,
+)
 from attocode.types.messages import (
     ChatResponse,
     StreamChunk,
@@ -53,6 +48,8 @@ from attocode.types.messages import (
     ToolCall,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 # ──────────────────────────────────────────────────────────────────────
 # Helpers
@@ -2054,7 +2051,7 @@ class TestLSPManagerAsync:
         events: list[tuple[str, dict]] = []
         mgr.on(lambda e, d: events.append((e, d)))
 
-        cfg = LanguageServerConfig(command="x", language_id="python")
+        LanguageServerConfig(command="x", language_id="python")
         mock_client = MagicMock(spec=_LSPClient)
         mock_client.stop = AsyncMock()
         mgr._clients["python"] = mock_client

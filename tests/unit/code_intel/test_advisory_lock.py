@@ -5,10 +5,7 @@ from __future__ import annotations
 import uuid
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from attocode.code_intel.indexing.incremental import IncrementalPipeline
-
 
 # ---------------------------------------------------------------------------
 # acquire_branch_lock — key derivation

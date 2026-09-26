@@ -21,7 +21,6 @@ from attocode.integrations.tasks.verification_gate import (
     check_type_errors,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -301,7 +300,7 @@ class TestCheckTestsPass:
         mock_isfile.return_value = True
         mock_isdir.return_value = False
         mock_run.return_value = (True, "pytest run")
-        result = check_tests_pass("/hybrid")
+        check_tests_pass("/hybrid")
         # Should use pytest (first branch)
         args = mock_run.call_args[0][0]
         assert "pytest" in args
@@ -756,7 +755,7 @@ class TestVerifyLLMReview:
         gate = VerificationGate(
             provider=provider, working_dir="/project"
         )
-        result = await gate.verify(
+        await gate.verify(
             _make_subtask(),
             "some result",
             run_tests=False,

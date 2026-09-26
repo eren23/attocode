@@ -7,8 +7,8 @@ import json
 from dataclasses import dataclass, field
 from unittest.mock import AsyncMock, MagicMock
 
-from attoswarm.adapters.codex_mcp import CodexMcpAdapter
 from attoswarm.adapters.base import AgentHandle, AgentMessage, AgentProcessSpec
+from attoswarm.adapters.codex_mcp import CodexMcpAdapter
 
 
 def _adapter() -> CodexMcpAdapter:
@@ -261,9 +261,8 @@ class TestHarvesterThreadWiring:
 
         # Simulate what the harvester does
         payload = {"thread_id": "t-500", "message": "Done"}
-        if payload.get("thread_id"):
-            if hasattr(adapter, "store_thread_id"):
-                adapter.store_thread_id("agent-1", payload["thread_id"])
+        if payload.get("thread_id") and hasattr(adapter, "store_thread_id"):
+            adapter.store_thread_id("agent-1", payload["thread_id"])
 
         assert adapter.get_thread_id("agent-1") == "t-500"
 

@@ -264,7 +264,8 @@ class MinimaxProvider(OpenAIProvider):
         options: ChatOptions | None = None,
     ) -> AsyncIterator[StreamChunk]:
         from attocode.integrations.streaming.handler import adapt_openrouter_stream
-        from attocode.types.messages import StreamChunk as SC, StreamChunkType
+        from attocode.types.messages import StreamChunk as SC
+        from attocode.types.messages import StreamChunkType
 
         messages = self._maybe_strip_images(messages)
         client = self._stream_client()

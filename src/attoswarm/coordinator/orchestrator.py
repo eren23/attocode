@@ -614,7 +614,7 @@ class SwarmOrchestrator:
                 self._persist_state()
                 return 1
             self._record_decision("decomposing", "decomposition_complete",
-                                  f"Produced {len(tasks)} tasks", f"Goal complexity drove task count")
+                                  f"Produced {len(tasks)} tasks", "Goal complexity drove task count")
 
             # 3b. Validate decomposition (Phase 3)
             if self._decompose_validation:

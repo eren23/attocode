@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,7 +12,6 @@ from attocode.integrations.agents.blackboard import (
     NamespaceMetrics,
     SharedBlackboard,
 )
-
 
 # =============================================================================
 # Fixtures

@@ -3,23 +3,20 @@ from __future__ import annotations
 
 import pytest
 
-from eval.mcp_bench.schema import BenchSuiteResult, TaskResult, BenchConfig
-from eval.mcp_bench.scoring import (
-    score_deterministic,
-    _score_security,
-    _score_generic,
-    match_ground_truth,
-    score_task,
-)
-from eval.mcp_bench.schema import BenchTask
+from eval.llm_fp_filter.benchmark import FilterBenchmarkResult
 from eval.llm_fp_filter.filter import (
+    FPVerdict,
     _parse_response,
     classify_finding,
-    FPVerdict,
-    FPClassification,
 )
-from eval.llm_fp_filter.benchmark import FilterBenchmarkResult
-
+from eval.mcp_bench.schema import BenchSuiteResult, BenchTask, TaskResult
+from eval.mcp_bench.scoring import (
+    _score_generic,
+    _score_security,
+    match_ground_truth,
+    score_deterministic,
+    score_task,
+)
 
 # ---------------------------------------------------------------------------
 # TestBenchSuiteResult

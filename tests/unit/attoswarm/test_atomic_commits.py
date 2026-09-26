@@ -9,9 +9,8 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -20,6 +19,8 @@ from attoswarm.coordinator.result_pipeline import PipelineResult, ResultPipeline
 from attoswarm.coordinator.subagent_manager import TaskResult
 from attoswarm.workspace.git_safety import GitSafetyNet
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ── helpers ──────────────────────────────────────────────────────────
 

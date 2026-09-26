@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState, SteeringNote
+if TYPE_CHECKING:
+    from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState, SteeringNote
 
 
 class Scoreboard:

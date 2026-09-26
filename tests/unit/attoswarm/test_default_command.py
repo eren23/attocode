@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 from unittest.mock import patch
 
-import pytest
-
 from attoswarm.config.schema import OrchestrationConfig, RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import SKIP_REVIEW_KINDS, HybridCoordinator
 from attoswarm.protocol.models import TaskSpec
@@ -135,7 +133,7 @@ def test_codex_mcp_ignores_model_flag() -> None:
 
 
 def test_preflight_maps_codex_mcp_to_codex_binary() -> None:
-    from attoswarm.protocol.models import RoleSpec, SwarmManifest, BudgetSpec, MergePolicy
+    from attoswarm.protocol.models import BudgetSpec, MergePolicy, RoleSpec, SwarmManifest
 
     coord = _make_coordinator()
     # Set up manifest directly to avoid _bootstrap_manifest's code index build

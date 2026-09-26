@@ -21,7 +21,6 @@ from attocode.tools.vision import (
 )
 from attocode.types.messages import ChatResponse, StopReason
 
-
 # ---------------------------------------------------------------------------
 # Input detection helpers
 # ---------------------------------------------------------------------------

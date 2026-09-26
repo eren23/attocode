@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.context.cross_references import (
     CrossRefIndex,
     SymbolLocation,
     _split_name_tokens,
 )
-
 
 # ------------------------------------------------------------------
 # _split_name_tokens

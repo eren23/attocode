@@ -8,7 +8,6 @@ from unittest.mock import patch
 import pytest
 
 from attocode.integrations.context.semantic_cache import (
-    CacheEntry,
     SemanticCacheConfig,
     SemanticCacheManager,
     cosine_similarity,

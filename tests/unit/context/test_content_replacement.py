@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from attocode.integrations.context.compaction import (
-    CODE_INTEL_TOOLS,
     ContentReplacementState,
 )
 from attocode.integrations.utilities.token_estimate import estimate_tokens

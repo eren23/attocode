@@ -6,15 +6,12 @@ import re
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from attocode.code_intel.rules.model import (
     RuleCategory,
     RuleSeverity,
     UnifiedRule,
 )
 from attocode.code_intel.rules.testing import (
-    Expectation,
     RuleTestRunner,
     _finding_matches_rule,
     format_test_report,

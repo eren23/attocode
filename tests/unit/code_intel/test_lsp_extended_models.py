@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from attocode.code_intel.api.models import (
     LSPCompletionsResponse,
-    LSPIncomingCallItem,
     LSPIncomingCallsResponse,
     LSPOutgoingCallItem,
     LSPOutgoingCallsResponse,

@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import httpx
 import pytest
 
 from attocode.errors import ProviderError
 from attocode.providers.openai import OpenAIProvider
 from attocode.types.messages import (
-    ChatOptions,
-    ChatResponse,
     ImageContentBlock,
     ImageSource,
     ImageSourceType,
@@ -21,7 +18,6 @@ from attocode.types.messages import (
     Role,
     StopReason,
     TextContentBlock,
-    TokenUsage,
     ToolCall,
     ToolDefinition,
 )

@@ -5,8 +5,8 @@ from attocode.core.agent_state_machine import (
     AgentStateMachine,
     InvalidTransitionError,
 )
-from attocode.core.completion import CompletionAnalysis, analyze_completion
 from attocode.core.autonomous import AutonomousPipeline, PipelineConfig, PipelinePhase
+from attocode.core.completion import CompletionAnalysis, analyze_completion
 from attocode.core.dual_model import DualModelConfig, DualModelWorkflow
 from attocode.core.loop import (
     BudgetPreflightResult,

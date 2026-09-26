@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from attocode.integrations.recording.graph_types import (
     EdgeKind,
     GraphEdge,
@@ -28,7 +26,6 @@ from attocode.integrations.recording.graph_types import (
     SessionGraph,
     _node_label,
 )
-
 
 # ---------------------------------------------------------------------------
 # NodeKind enum
@@ -658,10 +655,10 @@ class TestMultipleAgents:
     def test_auto_edges_within_same_agent_only(self) -> None:
         """Sequential edges should only connect nodes of the same agent."""
         graph = SessionGraph()
-        a1 = graph.add_node(NodeKind.MESSAGE, agent_id="a1", timestamp=1.0)
-        b1 = graph.add_node(NodeKind.MESSAGE, agent_id="a2", timestamp=2.0)
-        a2 = graph.add_node(NodeKind.MESSAGE, agent_id="a1", timestamp=3.0)
-        b2 = graph.add_node(NodeKind.MESSAGE, agent_id="a2", timestamp=4.0)
+        graph.add_node(NodeKind.MESSAGE, agent_id="a1", timestamp=1.0)
+        graph.add_node(NodeKind.MESSAGE, agent_id="a2", timestamp=2.0)
+        graph.add_node(NodeKind.MESSAGE, agent_id="a1", timestamp=3.0)
+        graph.add_node(NodeKind.MESSAGE, agent_id="a2", timestamp=4.0)
 
         # Should have 2 auto-sequential edges:
         # a1 first -> a1 second (within agent a1)

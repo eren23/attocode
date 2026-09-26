@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from attocode.code_intel.storage.diff_engine import (
-    DiffHunk,
-    DiffLine,
-    PatchEntry,
     _compute_hunks,
 )
 

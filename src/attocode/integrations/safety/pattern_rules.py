@@ -200,11 +200,8 @@ def compile_pattern_rule(line: str, source: str = "user") -> PatternRule | None:
         idx = tool_pattern.index("?")
         tool_part, arg_part = tool_pattern[:idx], tool_pattern[idx + 1:]
         tool_pattern = tool_part
-        # Parse field:value format — kept as-is for matches_args to handle
-        if ":" in arg_part:
-            arg_pattern = arg_part  # "command:rm -rf /" stored directly
-        else:
-            arg_pattern = arg_part
+        # A field:value pattern ("command:rm -rf /") is stored as-is; matches_args parses it.
+        arg_pattern = arg_part
 
     # Validate decision
     decision_map = {

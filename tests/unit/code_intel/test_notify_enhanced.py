@@ -11,7 +11,7 @@ Covers:
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -20,7 +20,6 @@ from attocode.code_intel.api import deps
 from attocode.code_intel.api.app import create_app
 from attocode.code_intel.api.routes import notify
 from attocode.code_intel.config import CodeIntelConfig
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

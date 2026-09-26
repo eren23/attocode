@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import random
 import re
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -28,6 +28,9 @@ from attocode.code_intel.rules.model import (
     RuleTier,
     UnifiedRule,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _rule(
@@ -364,7 +367,7 @@ class TestEvolveLoop:
     ):
         """C2 — crossover children must not all share parent_a.id, so
         post-evolution populations have diverse identifiers."""
-        seed = _rule("r1", pattern=r"\bdanger\b")
+        _rule("r1", pattern=r"\bdanger\b")
         # Force-disable plateau by setting plateau_gens > max so we
         # actually hit max_generations and population evolves several
         # times. Composite-perfect seeds will plateau — use a less

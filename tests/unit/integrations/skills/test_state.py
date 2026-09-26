@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from attocode.integrations.skills.state import SkillStateStore
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestInit:

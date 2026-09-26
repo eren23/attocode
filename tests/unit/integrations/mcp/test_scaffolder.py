@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -11,8 +11,13 @@ from attocode.integrations.mcp.scaffolder import (
     MCPScaffolder,
     MCPScaffolderError,
     MCPServerSpec,
+)
+from attocode.integrations.mcp.scaffolder import (
     MCPToolSpec as ToolSpec,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestMCPScaffolder:

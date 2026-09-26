@@ -19,12 +19,10 @@ from __future__ import annotations
 import pytest
 
 from attocode.integrations.recording.graph_types import (
-    GraphNode,
     NodeKind,
     SessionGraph,
 )
 from attocode.integrations.recording.playback import PlaybackEngine, PlaybackState
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -198,12 +196,12 @@ class TestJumpNavigation:
 
     def test_jump_to_clamps_negative(self) -> None:
         engine = PlaybackEngine(_simple_graph())
-        state = engine.jump_to(-5)
+        engine.jump_to(-5)
         assert engine.current_index == 0
 
     def test_jump_to_clamps_beyond_end(self) -> None:
         engine = PlaybackEngine(_simple_graph())
-        state = engine.jump_to(100)
+        engine.jump_to(100)
         assert engine.current_index == 4
 
     def test_jump_to_start(self) -> None:

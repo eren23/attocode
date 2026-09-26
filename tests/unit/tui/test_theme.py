@@ -9,7 +9,6 @@ from attocode.tui.theme import (
     HIGH_CONTRAST_THEME,
     LIGHT_THEME,
     THEMES,
-    ThemeColors,
     ThemeName,
     get_theme,
 )

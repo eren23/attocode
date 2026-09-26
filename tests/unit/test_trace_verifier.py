@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from tests.helpers.fixtures import (
     SyntheticAgent,
@@ -16,6 +14,8 @@ from tests.helpers.fixtures import (
 )
 from tests.helpers.trace_verifier import TraceVerifier
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # =============================================================================
 # Fixture helpers

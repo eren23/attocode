@@ -565,7 +565,6 @@ class TestEnhancedBashTool:
         assert _normalize_timeout(300) == 0.3  # >= 300 treated as ms
 
     def test_sanitize_env(self):
-        import os
         from attocode.tools.bash import _sanitize_env
         env = _sanitize_env()
         assert env["TERM"] == "dumb"

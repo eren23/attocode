@@ -13,11 +13,9 @@ Only the structural text content is compared.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
 from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
-
 
 # Regex patterns for normalization
 _TERMINAL_HASH_RE = re.compile(r'terminal-\d+(-)')

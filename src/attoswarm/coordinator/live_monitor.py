@@ -6,12 +6,14 @@ Separates high-frequency UI data from heavyweight checkpoint state.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attoswarm.protocol.io import append_jsonl, write_json_fast
 from attoswarm.protocol.models import utc_now_iso
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 
 class LiveMonitor:

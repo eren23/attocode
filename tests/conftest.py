@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -14,6 +12,10 @@ from attocode.providers.mock import MockProvider
 from attocode.tools.registry import ToolRegistry
 from attocode.types.agent import AgentConfig
 from attocode.types.budget import ExecutionBudget
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 
 @pytest.fixture

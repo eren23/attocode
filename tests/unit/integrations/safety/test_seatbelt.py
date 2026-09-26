@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -187,7 +186,7 @@ class TestSeatbeltExecute:
         # First call (inside wait_for) raises TimeoutError;
         # second call (after kill) returns empty
         mock_proc.communicate.side_effect = [
-            asyncio.TimeoutError(),
+            TimeoutError(),
             (b"", b""),
         ]
         mock_proc.kill = MagicMock()

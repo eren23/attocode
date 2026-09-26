@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import tempfile
-import time
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.integrations.context.query_history import (
     QueryHistoryTracker,
-    QueryHistoryStats,
     get_query_tracker,
     reset_query_tracker,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestQueryHistoryTrackSelection:
@@ -216,7 +214,7 @@ class TestQueryHistorySingleton:
 
     def test_reset(self, tmp_path: Path):
         """reset_tracker clears singleton."""
-        tracker = get_query_tracker(db_path=tmp_path / "h")
+        get_query_tracker(db_path=tmp_path / "h")
         reset_query_tracker()
 
         new_tracker = get_query_tracker(db_path=tmp_path / "h")

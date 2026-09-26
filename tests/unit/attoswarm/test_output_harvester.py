@@ -6,12 +6,10 @@ accumulation -> task state transition) has zero coverage.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,8 +21,9 @@ from attoswarm.coordinator.output_harvester import (
     harvest_outputs,
 )
 from attoswarm.protocol.io import read_json, write_json_atomic
-from attoswarm.protocol.models import AgentOutbox
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

@@ -8,9 +8,9 @@ from attocode.tui.widgets.swarm.dag_view import DependencyDAGView, DependencyTre
 from attocode.tui.widgets.swarm.decisions_pane import DecisionsPane
 from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
 from attocode.tui.widgets.swarm.event_timeline import (
+    _AGENT_COLORS,
     EventsLog,
     EventTimeline,
-    _AGENT_COLORS,
     _agent_color,
     _agent_color_cache,
 )

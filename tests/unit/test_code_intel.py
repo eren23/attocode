@@ -1864,6 +1864,7 @@ class TestInstaller:
 
     def test_install_hermes_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import yaml
+
         from attocode.code_intel.installer import install_hermes
 
         monkeypatch.setattr("shutil.which", lambda x: None)
@@ -1882,6 +1883,7 @@ class TestInstaller:
 
     def test_install_goose_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import yaml
+
         from attocode.code_intel.installer import install_goose
 
         monkeypatch.setattr("shutil.which", lambda x: None)
@@ -3821,6 +3823,7 @@ class TestNotifyCLI:
     def test_notify_stdin_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """--stdin should parse JSON with tool_input.file_path from Claude Code hooks."""
         import io
+
         from attocode.code_intel.cli import _cmd_notify
 
         monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
@@ -3837,6 +3840,7 @@ class TestNotifyCLI:
     def test_notify_stdin_plain_lines(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """--stdin should also accept plain file paths (one per line)."""
         import io
+
         from attocode.code_intel.cli import _cmd_notify
 
         monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))

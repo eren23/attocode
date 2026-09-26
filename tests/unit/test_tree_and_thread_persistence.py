@@ -7,7 +7,6 @@ import pytest
 from attocode.commands import CommandResult, render_thread_tree
 from attocode.integrations.utilities.thread_manager import ThreadManager
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.swarm.critic import (
     _build_review_prompt,
     _extract_content,
@@ -11,14 +9,12 @@ from attocode.integrations.swarm.critic import (
     build_fixup_tasks,
 )
 from attocode.integrations.swarm.types import (
-    FixupTask,
     SubtaskType,
     SwarmTask,
     SwarmTaskResult,
     SwarmTaskStatus,
     WaveReviewResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -2,16 +2,16 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.integrations.context.ast_service import ASTService
 from attocode.integrations.context.hydration import (
     TIER_MEDIUM,
     TIER_SMALL,
-    HydrationState,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _create_python_files(root: Path, count: int) -> None:

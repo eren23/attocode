@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.context.fuzzy import (
     FuzzyMatcher,
-    FuzzyMatch,
     _smith_waterman,
     fuzzy_match,
     fuzzy_match_filename,
     fuzzy_match_in_lines,
-    fuzzy_search,
 )
 
 

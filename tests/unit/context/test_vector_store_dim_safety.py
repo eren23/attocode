@@ -7,8 +7,6 @@ down the new behavior: **raise, never wipe.**
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from attocode.integrations.context.vector_store import (

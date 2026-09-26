@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 def test_org_isolation_blocks_cross_org():
     """Verify that a repo from a different org raises 404."""
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import MagicMock
 
     from attocode.code_intel.api.auth.context import AuthContext
 

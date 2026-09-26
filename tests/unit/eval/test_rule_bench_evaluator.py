@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -19,14 +19,14 @@ from attocode.code_intel.rules.model import (
     UnifiedRule,
 )
 from attocode.code_intel.rules.registry import RuleRegistry
-
 from eval.meta_harness.rule_bench.config import RuleBenchConfig, RuleOverride
 from eval.meta_harness.rule_bench.corpus import (
     CorpusLoader,
-    ExpectedFinding,
-    LabeledSample,
 )
 from eval.meta_harness.rule_bench.evaluator import RuleBenchEvaluator
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _stub_rule(

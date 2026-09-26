@@ -8,7 +8,6 @@ import pytest
 
 from attocode.errors import ConfigurationError, ProviderError
 from attocode.providers.fallback_chain import (
-    FallbackStats,
     ProviderFallbackChain,
 )
 from attocode.providers.resilient_provider import SimpleCircuitBreaker
@@ -19,7 +18,6 @@ from attocode.types.messages import (
     StopReason,
     TokenUsage,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -7,6 +7,17 @@ import time
 
 import pytest
 
+from attocode.integrations.quality.auto_checkpoint import (
+    AutoCheckpointManager,
+    Checkpoint,
+    CheckpointConfig,
+)
+from attocode.integrations.quality.health_check import (
+    HealthChecker,
+    HealthCheckerConfig,
+    HealthReport,
+    format_health_report,
+)
 from attocode.integrations.quality.learning_store import (
     Learning,
     LearningProposal,
@@ -22,19 +33,6 @@ from attocode.integrations.quality.self_improvement import (
     SelfImprovementConfig,
     SelfImprovementProtocol,
 )
-from attocode.integrations.quality.auto_checkpoint import (
-    AutoCheckpointManager,
-    Checkpoint,
-    CheckpointConfig,
-)
-from attocode.integrations.quality.health_check import (
-    HealthChecker,
-    HealthCheckerConfig,
-    HealthCheckResult,
-    HealthReport,
-    format_health_report,
-)
-
 
 # ──────────────────────────────────────────────────────────────────────
 # LearningStore
@@ -243,7 +241,7 @@ class TestLearningStore:
     def test_get_validated_learnings(self) -> None:
         store = self._make_store()
         l1 = store.propose_learning(self._make_proposal(description="Learning 1"))
-        l2 = store.propose_learning(self._make_proposal(description="Learning 2"))
+        store.propose_learning(self._make_proposal(description="Learning 2"))
         store.validate_learning(l1.id, approved=True)
 
         validated = store.get_validated_learnings()
@@ -455,7 +453,7 @@ class TestLearningStore:
     def test_get_stats(self) -> None:
         store = self._make_store()
         l1 = store.propose_learning(self._make_proposal(description="L1"))
-        l2 = store.propose_learning(self._make_proposal(
+        store.propose_learning(self._make_proposal(
             description="L2", type=LearningType.WORKAROUND,
         ))
         store.validate_learning(l1.id, approved=True)

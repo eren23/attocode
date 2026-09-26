@@ -10,7 +10,6 @@ from typing import Any
 from rich.text import Text
 from textual.widgets import Static
 
-
 _LEVEL_STYLES: dict[str, str] = {
     "ok": "green",
     "caution": "yellow",

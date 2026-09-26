@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from attocode.integrations.swarm.quality_gate import (
     ArtifactReport,
-    QualityGateConfig,
+    _build_quality_prompt,
     evaluate_worker_output,
     run_pre_flight_checks,
-    _build_quality_prompt,
 )
 from attocode.integrations.swarm.types import (
     SubtaskType,
@@ -21,7 +19,6 @@ from attocode.integrations.swarm.types import (
     SwarmTaskResult,
     SwarmTaskStatus,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -304,7 +301,7 @@ class TestEvaluateWorkerOutput:
         result = _make_result(tool_calls=5, output="pytest ran, all passed")
 
         evidence = {"passed": True, "checks": [{"name": "tests", "passed": True, "message": "ok"}]}
-        gate_result = await evaluate_worker_output(
+        await evaluate_worker_output(
             provider=provider,
             orchestrator_model="test-model",
             task=task,
