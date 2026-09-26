@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — The attocode wheel includes code intelligence
+
+- The `attocode` wheel includes the `attocode_intel` package. It does not
+  depend on `attocode-code-intel` from PyPI, because that package is not
+  published yet.
+- The `attocode-code-intel` command is available again after an upgrade from
+  0.2.25.
+- The wheel includes the code-intel MIT license beside the attocode license.
+
 ### Added — Standalone code intelligence (#96, #97, #98)
 
 - `packages/code-intel` ships code intelligence as the standalone
