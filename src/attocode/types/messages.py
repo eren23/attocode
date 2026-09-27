@@ -48,6 +48,7 @@ class StreamChunkType(StrEnum):
     TEXT = "text"
     TOOL_CALL = "tool_call"
     THINKING = "thinking"
+    CONTENT_BLOCKS = "content_blocks"
     USAGE = "usage"
     ERROR = "error"
     DONE = "done"
@@ -202,6 +203,8 @@ class ChatResponse:
     usage: TokenUsage | None = None
     thinking: str | None = None
     model: str | None = None
+    # Provider content blocks to send back unchanged (Anthropic thinking signatures).
+    raw_content: list[dict[str, Any]] | None = None
 
     @property
     def has_tool_calls(self) -> bool:
@@ -217,3 +220,4 @@ class StreamChunk:
     tool_call: ToolCall | None = None
     usage: TokenUsage | None = None
     error: str | None = None
+    blocks: list[dict[str, Any]] | None = None

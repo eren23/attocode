@@ -223,16 +223,17 @@ class TestAnthropicFormatting:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("model", "sends_temperature", "thinking"),
+        ("model", "sends_temperature", "adaptive"),
         [
-            ("claude-sonnet-4-6", True, None),
-            ("claude-sonnet-5", False, {"type": "disabled"}),
-            ("claude-opus-5", False, {"type": "disabled"}),
-            ("claude-opus-5-5", False, None),  # rejects "disabled" thinking
+            ("claude-sonnet-4-6", True, False),
+            ("claude-sonnet-5", False, True),
+            ("claude-opus-5", False, True),
+            ("claude-opus-5-5", False, True),
+            ("claude-fable-5-1", False, True),
         ],
     )
     async def test_model_request_rules(
-        self, provider: AnthropicProvider, model: str, sends_temperature: bool, thinking: dict | None,
+        self, provider: AnthropicProvider, model: str, sends_temperature: bool, adaptive: bool,
     ) -> None:
         provider._client.post = AsyncMock(return_value=_mock_response(json={
             "content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn", "usage": {},
@@ -240,7 +241,8 @@ class TestAnthropicFormatting:
         await provider.chat([Message(role=Role.USER, content="hi")], ChatOptions(model=model, temperature=0.0))
         body = provider._client.post.call_args.kwargs["json"]
         assert ("temperature" in body) is sends_temperature
-        assert body.get("thinking") == thinking
+        assert (body.get("thinking", {}).get("type") == "adaptive") is adaptive
+        assert (body.get("output_config") == {"effort": "low"}) is adaptive
 
     def test_trailing_assistant_turn_gets_user_continuation(self, provider: AnthropicProvider) -> None:
         formatted = provider._format_messages([
@@ -249,6 +251,94 @@ class TestAnthropicFormatting:
         ])
         assert formatted[-2] == {"role": "assistant", "content": "Part one"}
         assert formatted[-1]["role"] == "user"
+
+
+THINKING_TURN = [
+    {"type": "thinking", "thinking": "plan", "signature": "sig-1"},
+    {"type": "text", "text": "Let me check"},
+    {"type": "tool_use", "id": "tc_1", "name": "read_file", "input": {"path": "foo.py"}},
+]
+
+
+def _history(raw_content: list[dict]) -> list[Message]:
+    return [
+        Message(role=Role.USER, content="read foo"),
+        Message(
+            role=Role.ASSISTANT, content="Let me check",
+            tool_calls=[ToolCall(id="tc_1", name="read_file", arguments={"path": "foo.py"})],
+            metadata={"raw_content": raw_content},
+        ),
+        Message(role=Role.TOOL, content="file content", tool_call_id="tc_1"),
+    ]
+
+
+class TestAnthropicThinkingRoundTrip:
+    @pytest.mark.asyncio
+    async def test_thinking_blocks_go_back_unchanged(self, provider: AnthropicProvider) -> None:
+        provider._client.post = AsyncMock(return_value=_mock_response(json={
+            "content": THINKING_TURN, "stop_reason": "tool_use", "usage": {},
+        }))
+        resp = await provider.chat([Message(role=Role.USER, content="read foo")])
+        assert resp.raw_content == THINKING_TURN
+
+        await provider.chat(_history(resp.raw_content))
+        sent = provider._client.post.call_args.kwargs["json"]["messages"]
+        assert sent[1] == {"role": "assistant", "content": THINKING_TURN}
+
+    def test_raw_blocks_dropped_when_tool_calls_changed(self, provider: AnthropicProvider) -> None:
+        msgs = _history(THINKING_TURN)
+        msgs[1].tool_calls = [ToolCall(id="tc_other", name="read_file", arguments={})]
+        formatted = provider._format_messages(msgs)
+        assert [b["type"] for b in formatted[1]["content"]] == ["text", "tool_use"]
+
+    @pytest.mark.asyncio
+    async def test_rejected_signature_strips_thinking_and_retries(self, provider: AnthropicProvider) -> None:
+        rejected = _mock_response(400, text=(
+            "messages.1.content.0: Invalid `signature` in `thinking` block. "
+            "The block is bound to a different conversation."
+        ))
+        ok = _mock_response(json={"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn", "usage": {}})
+        provider._client.post = AsyncMock(side_effect=[rejected, ok])
+
+        msgs = _history(THINKING_TURN)
+        resp = await provider.chat(msgs)
+
+        assert resp.content == "ok"
+        retry = provider._client.post.call_args_list[1].kwargs["json"]["messages"]
+        assert [b["type"] for b in retry[1]["content"]] == ["text", "tool_use"]
+        assert "raw_content" not in msgs[1].metadata  # later requests skip the rejected blocks too
+
+    @pytest.mark.asyncio
+    async def test_stream_rebuilds_blocks_with_signature(self) -> None:
+        import json
+
+        from attocode.integrations.streaming.handler import adapt_anthropic_stream
+        from attocode.types.messages import StreamChunkType
+
+        events = [
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "pl"}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "an"}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "sig-1"}},
+            {"type": "content_block_stop", "index": 0},
+            {"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": ""}},
+            {"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": "Let me check"}},
+            {"type": "content_block_stop", "index": 1},
+            {"type": "content_block_start", "index": 2, "content_block": {
+                "type": "tool_use", "id": "tc_1", "name": "read_file", "input": {}}},
+            {"type": "content_block_delta", "index": 2, "delta": {
+                "type": "input_json_delta", "partial_json": '{"path": "foo.py"}'}},
+            {"type": "content_block_stop", "index": 2},
+            {"type": "message_stop"},
+        ]
+
+        async def lines():
+            for e in events:
+                yield f"data: {json.dumps(e)}"
+
+        chunks = [c async for c in adapt_anthropic_stream(lines())]
+        blocks = next(c.blocks for c in chunks if c.type == StreamChunkType.CONTENT_BLOCKS)
+        assert blocks == THINKING_TURN
 
 
 class TestAnthropicErrors:

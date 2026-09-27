@@ -35,10 +35,13 @@ NO_SAMPLING_PREFIXES = (
     "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-sonnet-5",
     "claude-fable", "claude-mythos",
 )
-# These models think when the request omits `thinking`. The agent loop does not send
-# thinking blocks back yet, so keep thinking off, as it was on Sonnet 4.
-# ponytail: explicit off; send thinking blocks back with signatures to turn adaptive on.
-THINKS_BY_DEFAULT = frozenset({"claude-sonnet-5", "claude-opus-5"})
+# Adaptive thinking. Opus 5.5 and Fable cannot turn thinking off, and turning it off on
+# Opus 5 can put tool calls in the visible text. Low effort keeps cost near the old
+# thinking-off runs. Prefixes, so claude-opus-5 also matches claude-opus-5-5.
+ADAPTIVE_THINKING_PREFIXES = ("claude-sonnet-5", "claude-opus-5", "claude-fable", "claude-mythos")
+# ponytail: one effort for every request; make it a ChatOptions field if a caller needs more.
+THINKING_EFFORT = "low"
+THINKING_BLOCK_TYPES = frozenset({"thinking", "redacted_thinking"})
 
 class AnthropicProvider:
     """Anthropic API provider using httpx."""
@@ -91,29 +94,14 @@ class AnthropicProvider:
         options: ChatOptions | None = None,
     ) -> ChatResponse:
         client = self._ensure_client()
-        model = (options and options.model) or self._model
-        max_tokens = (options and options.max_tokens) or self._max_tokens
-
-        body: dict[str, Any] = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "messages": self._format_messages(messages),
-        }
-
-        self._apply_model_rules(body, model, options)
-
-        system_msgs = [m for m in messages if m.role == Role.SYSTEM]
-        if system_msgs:
-            body["system"] = self._format_system(system_msgs)
-            body["messages"] = [m for m in body["messages"] if m.get("role") != "system"]
-
-        if options and options.tools:
-            body["tools"] = [self._format_tool(t) for t in options.tools]
+        body = self._build_body(messages, options)
 
         try:
             response = await client.post(self._api_url, json=body)
+            if _thinking_rejected(response.status_code, response.text) and _strip_thinking(messages):
+                response = await client.post(self._api_url, json=self._build_body(messages, options))
             response.raise_for_status()
-            return self._parse_response(response.json(), model)
+            return self._parse_response(response.json(), body["model"])
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
             raise ProviderError(
@@ -136,17 +124,52 @@ class AnthropicProvider:
         from attocode.integrations.streaming.handler import adapt_anthropic_stream
 
         client = self._ensure_client()
-        model = (options and options.model) or self._model
-        max_tokens = (options and options.max_tokens) or self._max_tokens
 
+        try:
+            for attempt in range(2):
+                body = {**self._build_body(messages, options), "stream": True}
+                async with client.stream("POST", self._api_url, json=body) as response:
+                    if response.status_code >= 400:
+                        # Must read body INSIDE async-with before response closes
+                        await response.aread()
+                        status = response.status_code
+                        if attempt == 0 and _thinking_rejected(status, response.text) and _strip_thinking(messages):
+                            continue
+                        error_body = response.text[:500]
+                        raise ProviderError(
+                            f"Anthropic API error {status}: {error_body}",
+                            provider="anthropic",
+                            status_code=status,
+                            retryable=status in (429, 500, 502, 503, 529),
+                        )
+                    async for chunk in adapt_anthropic_stream(response.aiter_lines()):
+                        yield chunk
+                    return
+        except ProviderError:
+            raise
+        except httpx.TimeoutException as e:
+            raise ProviderError("Anthropic API timeout", provider="anthropic", retryable=True) from e
+        except httpx.RequestError as e:
+            raise ProviderError(f"Anthropic request error: {e}", provider="anthropic", retryable=True) from e
+
+    def _build_body(
+        self,
+        messages: list[Message | MessageWithStructuredContent],
+        options: ChatOptions | None,
+    ) -> dict[str, Any]:
+        model = (options and options.model) or self._model
         body: dict[str, Any] = {
             "model": model,
-            "max_tokens": max_tokens,
+            "max_tokens": (options and options.max_tokens) or self._max_tokens,
             "messages": self._format_messages(messages),
-            "stream": True,
         }
 
-        self._apply_model_rules(body, model, options)
+        if options and options.temperature is not None and not model.startswith(NO_SAMPLING_PREFIXES):
+            body["temperature"] = options.temperature
+        if model.startswith(ADAPTIVE_THINKING_PREFIXES):
+            # "summarized" fills the TUI thinking panel. The default, "omitted", sends empty text.
+            body["thinking"] = {"type": "adaptive", "display": "summarized"}
+            body["output_config"] = {"effort": THINKING_EFFORT}
 
         system_msgs = [m for m in messages if m.role == Role.SYSTEM]
         if system_msgs:
@@ -155,35 +178,7 @@ class AnthropicProvider:
 
         if options and options.tools:
             body["tools"] = [self._format_tool(t) for t in options.tools]
-
-        try:
-            async with client.stream("POST", self._api_url, json=body) as response:
-                if response.status_code >= 400:
-                    # Must read body INSIDE async-with before response closes
-                    await response.aread()
-                    status = response.status_code
-                    error_body = response.text[:500]
-                    raise ProviderError(
-                        f"Anthropic API error {status}: {error_body}",
-                        provider="anthropic",
-                        status_code=status,
-                        retryable=status in (429, 500, 502, 503, 529),
-                    )
-                async for chunk in adapt_anthropic_stream(response.aiter_lines()):
-                    yield chunk
-        except ProviderError:
-            raise
-        except httpx.TimeoutException as e:
-            raise ProviderError("Anthropic API timeout", provider="anthropic", retryable=True) from e
-        except httpx.RequestError as e:
-            raise ProviderError(f"Anthropic request error: {e}", provider="anthropic", retryable=True) from e
-
-    @staticmethod
-    def _apply_model_rules(body: dict[str, Any], model: str, options: ChatOptions | None) -> None:
-        if options and options.temperature is not None and not model.startswith(NO_SAMPLING_PREFIXES):
-            body["temperature"] = options.temperature
-        if model in THINKS_BY_DEFAULT:
-            body["thinking"] = {"type": "disabled"}
+        return body
 
     def _format_messages(self, messages: list[Message | MessageWithStructuredContent]) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
@@ -209,6 +204,11 @@ class AnthropicProvider:
                 "role": "user",
                 "content": [{"type": "tool_result", "tool_use_id": msg.tool_call_id, "content": str(msg.content)}],
             }
+        raw = (msg.metadata or {}).get("raw_content") if msg.role == Role.ASSISTANT else None
+        # Thinking blocks go back unchanged, in their original order. Use the raw blocks
+        # only while they still pair with the message's tool calls.
+        if raw and [b["id"] for b in raw if b["type"] == "tool_use"] == [tc.id for tc in msg.tool_calls or []]:
+            return {"role": "assistant", "content": raw}
         if msg.role == Role.ASSISTANT and msg.tool_calls:
             blocks: list[dict[str, Any]] = []
             content = msg.content
@@ -284,6 +284,7 @@ class AnthropicProvider:
         stop = data.get("stop_reason", "end_turn")
         stop_reason = StopReason.TOOL_USE if stop == "tool_use" else (StopReason.MAX_TOKENS if stop == "max_tokens" else StopReason.END_TURN)
 
+        content = data.get("content", [])
         return ChatResponse(
             content="\n".join(text_parts),
             tool_calls=tool_calls or None,
@@ -291,7 +292,30 @@ class AnthropicProvider:
             model=model,
             stop_reason=stop_reason,
             thinking=thinking,
+            raw_content=content if any(b["type"] in THINKING_BLOCK_TYPES for b in content) else None,
         )
 
     async def close(self) -> None:
         await self._client.aclose()
+
+
+def _thinking_rejected(status: int, text: str) -> bool:
+    """The API rejected a thinking block's signature.
+
+    Opus 5.5 and Fable 5.1 bind each thinking block to the history before it. Compaction
+    and tool-result truncation edit that history, so the API rejects the later blocks.
+    """
+    return status == 400 and "signature" in text and "thinking" in text
+
+
+def _strip_thinking(messages: list[Message | MessageWithStructuredContent]) -> bool:
+    """Drop the stored thinking blocks from the history. Return True if there were any.
+
+    The API accepts turns without their thinking. This changes the caller's messages, so
+    later requests do not send the same rejected blocks again.
+    """
+    stripped = False
+    for msg in messages:
+        if msg.metadata and msg.metadata.pop("raw_content", None) is not None:
+            stripped = True
+    return stripped

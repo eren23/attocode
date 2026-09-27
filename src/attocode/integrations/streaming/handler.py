@@ -41,6 +41,7 @@ class _StreamState:
     tool_calls: list[ToolCall] = field(default_factory=list)
     current_tool_call: dict[str, Any] | None = None
     usage: TokenUsage | None = None
+    raw_content: list[dict[str, Any]] | None = None
 
 
 StreamEventListener = SimpleEventListener
@@ -89,6 +90,7 @@ class StreamHandler(SimpleEventEmitter):
             content=state.content,
             tool_calls=state.tool_calls if state.tool_calls else None,
             usage=state.usage,
+            raw_content=state.raw_content,
         )
         self._emit("stream.complete", {"response": response})
         return response
@@ -119,6 +121,9 @@ class StreamHandler(SimpleEventEmitter):
                     self._emit(
                         "stream.tool_call", {"tool_call": chunk.tool_call}
                     )
+
+            case StreamChunkType.CONTENT_BLOCKS:
+                state.raw_content = chunk.blocks
 
             case StreamChunkType.USAGE:
                 if chunk.usage:
@@ -264,10 +269,14 @@ async def adapt_anthropic_stream(
     """
     import json
 
+    from attocode.providers.anthropic import THINKING_BLOCK_TYPES
+
     current_tool_id: str | None = None
     current_tool_name: str | None = None
     tool_args_json: str = ""
     _in_thinking_block: bool = False
+    # Rebuilt content blocks. The API sends one block at a time, so deltas go to the last one.
+    blocks: list[dict[str, Any]] = []
 
     async for line in lines:
         if not line.startswith("data: "):
@@ -280,6 +289,7 @@ async def adapt_anthropic_stream(
 
             if event_type == "content_block_start":
                 block = parsed.get("content_block", {})
+                blocks.append(dict(block))
                 if block.get("type") == "tool_use":
                     current_tool_id = block.get("id", "")
                     current_tool_name = block.get("name", "")
@@ -290,14 +300,19 @@ async def adapt_anthropic_stream(
 
             elif event_type == "content_block_delta":
                 delta = parsed.get("delta", {})
+                current = blocks[-1] if blocks else {}
                 if delta.get("type") == "text_delta":
+                    current["text"] = current.get("text", "") + delta["text"]
                     yield StreamChunk(
                         type=StreamChunkType.TEXT, content=delta["text"]
                     )
                 elif delta.get("type") == "thinking_delta":
+                    current["thinking"] = current.get("thinking", "") + delta.get("thinking", "")
                     yield StreamChunk(
                         type=StreamChunkType.THINKING, content=delta.get("thinking", "")
                     )
+                elif delta.get("type") == "signature_delta":
+                    current["signature"] = delta.get("signature", "")
                 elif delta.get("type") == "input_json_delta":
                     tool_args_json += delta.get("partial_json", "")
 
@@ -308,6 +323,8 @@ async def adapt_anthropic_stream(
                         args = json.loads(tool_args_json) if tool_args_json else {}
                     except json.JSONDecodeError:
                         args = {}
+                    if blocks:
+                        blocks[-1]["input"] = args
                     yield StreamChunk(
                         type=StreamChunkType.TOOL_CALL,
                         tool_call=ToolCall(
@@ -336,6 +353,8 @@ async def adapt_anthropic_stream(
                     )
 
             elif event_type == "message_stop":
+                if any(b.get("type") in THINKING_BLOCK_TYPES for b in blocks):
+                    yield StreamChunk(type=StreamChunkType.CONTENT_BLOCKS, blocks=blocks)
                 yield StreamChunk(type=StreamChunkType.DONE)
                 return
 
