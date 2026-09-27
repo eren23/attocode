@@ -135,3 +135,22 @@ def test_volume_replay_requires_every_reference_page(modules):
     assert responses.preserved(before, after, {}, 1)
     after["responses"][0]["data"]["next_cursor"] = "unfinished"
     assert not responses.preserved(before, after, {}, 1)
+
+
+def test_injected_fault_leaves_no_trace_in_git(modules, tmp_path):
+    import subprocess
+    study, *_ = modules
+    source = tmp_path / "lib/response.js"
+    source.parent.mkdir()
+    source.write_text("var spaces = app.get('json spaces');\n")
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, text=True).stdout
+    git("init", "-q")
+    git("add", ".")
+    git(*study.GIT_USER, "commit", "-qm", "Frozen benchmark input")
+    study.commit_fault(tmp_path, {"repo": "express"})
+    assert "var spaces = undefined;" in source.read_text()
+    # An agent cannot find the fault with a diff, the log, or the reflog.
+    assert git("status", "--porcelain") == "" and git("diff", "HEAD") == ""
+    assert len(git("log", "--all", "--oneline").splitlines()) == 1 and git("reflog") == ""
+    assert "app.get('json spaces')" not in git("log", "--all", "-p")

@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from study_clients import CLIENTS, invoke, preflight, subscription_env
-from study_tasks import TASKS, acceptance, evidence, inject, prompt
+from study_tasks import FAULTS, TASKS, acceptance, evidence, inject, prompt
 from workflows import SCENARIOS, engine_fingerprint, snapshot
 
 LANES = ("native", "intel_base", "intel_precision", "serena")
@@ -32,6 +32,21 @@ def design(mode):
         return QUALITY_TASKS, 3, LANES
     tasks = [task for task in TASKS if mode != "pilot" or task["id"] == "express:lookup"]
     return tasks, 3 if mode == "pilot" else 5, PILOT_LANES if mode == "pilot" else LANES
+
+
+GIT_USER = ["-c", "user.name=Intelligence evaluation", "-c", "user.email=eval@localhost"]
+
+
+def commit_fault(root, task):
+    """Inject the fault into the only commit, so that git cannot show the edit.
+
+    The repair tasks measure code navigation. An uncommitted fault is one `git diff` away.
+    """
+    inject(root, task)
+    subprocess.run(["git", "add", FAULTS[task["repo"]][0]], cwd=root, check=True)
+    subprocess.run(["git", *GIT_USER, "commit", "-q", "--amend", "--no-edit"], cwd=root, check=True)
+    subprocess.run(["git", "reflog", "expire", "--expire=now", "--all"], cwd=root, check=True)
+    subprocess.run(["git", "gc", "-q", "--prune=now"], cwd=root, check=True)
 
 
 def source_hash(root):
@@ -322,17 +337,16 @@ def run(args):
             write_json(directory / "onboarding.json", onboarding)
         subprocess.run(["git", "init", "-q", str(root)], check=True)
         subprocess.run(["git", "add", "."], cwd=root, check=True)
-        subprocess.run(["git", "-c", "user.name=Intelligence evaluation", "-c", "user.email=eval@localhost",
-                        "commit", "-qm", "Frozen benchmark input"], cwd=root, check=True)
-        setup_seconds = time.monotonic() - setup
+        subprocess.run(["git", *GIT_USER, "commit", "-qm", "Frozen benchmark input"], cwd=root, check=True)
         if task["family"] == "change":
-            inject(root, task)
+            commit_fault(root, task)
+        setup_seconds = time.monotonic() - setup
         write_json(directory / "started.json", {**row, "time": time.time(), "study_id": manifest["study_id"]})
         stages = []
         try:
             for stage, text in enumerate(task["prompts"]):
                 if stage:
-                    inject(root, task)
+                    commit_fault(root, task)
                     quota = json.loads(args.quota.read_text())
                     if not preflight(row["client"], quota, env)["ready"]:
                         raise RuntimeError("Subscription quota could not be verified for returning session")
