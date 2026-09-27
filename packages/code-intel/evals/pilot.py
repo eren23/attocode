@@ -77,9 +77,12 @@ def wiring(args):
             servers[name] = next(iter(servers_for(manifest, args.study, root, lane, directory / name, client).values()))
         root = directory / "current"
         previous = "previous.search_symbols(name='json'), " if manifest["mode"] == "pilot" else ""
+        # Scored agents send task_hint, which takes the focused-excerpt path. Wiring must
+        # take that path too: tree-sitter 0.26.0 crashed only there, and wiring passed.
         prompt = ("This is an excluded wiring check, not a scored trial. Use a native read tool to read "
                   "lib/response.js. Use " + previous + "current.inspect_symbol(symbol_name='json', "
-                  "file_path='lib/response.js'), and serena.find_symbol to locate json in lib/response.js including its body. "
+                  "file_path='lib/response.js', task_hint='json response body'), "
+                  "and serena.find_symbol to locate json in lib/response.js including its body. "
                   "Read an actual usage with native tools and return JSON with definition and usage (path, 1-based line, "
                   "exact source-line quote), tests (paths or []), and summary. Use repository-relative paths. "
                   "Do not edit files, delegate, install packages, use the network, or change client settings.")
