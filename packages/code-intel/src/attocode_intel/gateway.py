@@ -16,7 +16,13 @@ from filelock import FileLock
 from mcp import types
 from mcp.server.lowlevel import Server
 
-from attocode_intel.catalog import INSTRUCTIONS, is_write, registered_tools, tool_catalog
+from attocode_intel.catalog import (
+    INSTRUCTIONS,
+    INSTRUCTIONS_NO_WATCH,
+    is_write,
+    registered_tools,
+    tool_catalog,
+)
 from attocode_intel.output import bounded_compact, bounded_text, response_tokens
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
 
@@ -38,6 +44,7 @@ class OperationGateway:
         self._workers = {}
         self._stores = {}
         self.watch, self.watch_debounce = watch, watch_debounce
+        self.instructions = INSTRUCTIONS if watch else INSTRUCTIONS_NO_WATCH
         self._closed = False
         self.max_workspaces = max(1, max_workspaces)
         self._active = {}
@@ -335,7 +342,7 @@ class OperationGateway:
                         "embeddings_package_installed": bool(find_spec("sentence_transformers")),
                         "watcher_active": "watcher" in context.stores,
                     },
-                    "guidance": INSTRUCTIONS,
+                    "guidance": self.instructions,
                     "languages": language_capabilities(getattr(context.stores.get("precision"), "verified_languages", ())),
                 }
                 text = json.dumps(payload, indent=2)
@@ -527,7 +534,7 @@ class OperationGateway:
 
 
 def create_mcp_server(gateway: OperationGateway) -> Server:
-    server = Server("attocode-code-intel", version="0.1.0", instructions=INSTRUCTIONS)
+    server = Server("attocode-code-intel", version="0.1.0", instructions=gateway.instructions)
 
     @server.list_tools()
     async def list_tools():
@@ -587,7 +594,7 @@ def create_mcp_server(gateway: OperationGateway) -> Server:
         from mcp.server.lowlevel.helper_types import ReadResourceContents
 
         if str(uri) == "attocode://guidelines":
-            return [ReadResourceContents(INSTRUCTIONS, mime_type="text/plain")]
+            return [ReadResourceContents(gateway.instructions, mime_type="text/plain")]
         parsed = urlparse(str(uri))
         if parsed.scheme != "attocode":
             raise ValueError("Unknown resource scheme")

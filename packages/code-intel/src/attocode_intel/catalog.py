@@ -17,8 +17,12 @@ INSTRUCTIONS = (
     "Native search remains useful for literal text and checking returned evidence. "
     "Use impact_analysis and suggest_tests for change planning and verification. "
     "Check source, revision, and coverage; incomplete indexes are not proof of no dependencies. "
-    "After edits notify_file_changed. Keep uncommitted code local."
+    "{watch} Keep uncommitted code local."
 )
+# ponytail: two variants of one sentence; the server knows whether it watches files.
+WATCHING = "The server watches the project, so it indexes your edits without a call."
+NOT_WATCHING = "This server does not watch files: after edits, call notify_file_changed."
+INSTRUCTIONS, INSTRUCTIONS_NO_WATCH = INSTRUCTIONS.format(watch=WATCHING), INSTRUCTIONS.format(watch=NOT_WATCHING)
 DAILY = frozenset(
     {
         "bootstrap",

@@ -194,3 +194,9 @@ def test_real_http_protocol_and_auth(tmp_path):
         result = client.post("/mcp/", json=body, headers=headers).json()["result"]
         assert not result.get("isError"), result
         assert "http_symbol" in result["content"][0]["text"]
+
+
+def test_instructions_ask_for_notify_file_changed_only_without_a_watcher():
+    from attocode_intel.gateway import OperationGateway
+    assert "notify_file_changed" not in OperationGateway("", "daily").instructions
+    assert "notify_file_changed" in OperationGateway("", "daily", watch=False).instructions
