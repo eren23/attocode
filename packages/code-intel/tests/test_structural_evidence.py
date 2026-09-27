@@ -14,6 +14,24 @@ def excerpts(text, hint, path='example.py'):
     return result
 
 
+def test_excerpts_after_line_256_do_not_crash_the_interpreter():
+    # tree-sitter 0.26.0 frees the row integers of Point objects. Rows up to 256 are
+    # immortal small integers, so only a definition after line 256 shows the fault.
+    # Run it in a subprocess: the fault is a segfault, which would stop pytest.
+    import subprocess
+    import sys
+    script = (
+        "from types import SimpleNamespace\n"
+        "from attocode_intel.focused_evidence import source_excerpts\n"
+        "lines = [''] * 300 + ['res.json = function json(obj) {', '  var app = this.app;',\n"
+        "    '  if (obj === undefined) { obj = {}; }', '  return this.send(obj);', '};']\n"
+        "d = SimpleNamespace(file_path='lib/response.js', start_line=301, end_line=305)\n"
+        "for _ in range(30): source_excerpts(lines, d, 'res json send app')\n"
+    )
+    result = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr[-2000:]
+
+
 def test_separated_multiline_guard_stays_with_effect():
     source = 'def redirect(status, body):\n    if (status != 307\n            and status != 308):\n' + '\n'.join(
         '        unrelated = 1' for _ in range(25)) + '\n        body.clear()\n'

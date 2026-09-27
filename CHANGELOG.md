@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.27] - 2026-09-27
+
+### Fixed — Code intelligence no longer crashes with tree-sitter 0.26
+
+- The `tree-sitter` dependency is now `>=0.23,<0.26`. A new install of 0.2.26
+  gets tree-sitter 0.26.0.
+- tree-sitter 0.26.0 frees the row integers of `Point` objects too early. When
+  a definition is after line 256, `inspect_symbol` with a `task_hint` then
+  crashes the code intelligence server with a segmentation fault. The MCP
+  client shows this as "Transport closed".
+- To repair an existing 0.2.26 install, upgrade to 0.2.27, or install
+  `tree-sitter<0.26` in the same environment.
+
 ## [0.2.26] - 2026-09-26
 
 ### Changed — The attocode wheel includes code intelligence
