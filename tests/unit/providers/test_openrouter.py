@@ -83,6 +83,14 @@ class TestOpenRouterHeaders:
 
 
 class TestFormatMessages:
+    def test_trailing_assistant_turn_gets_user_continuation(self, provider: OpenRouterProvider) -> None:
+        result = provider._format_messages([
+            Message(role=Role.USER, content="write a long essay"),
+            Message(role=Role.ASSISTANT, content="Part one"),
+        ])
+        assert result[-2]["role"] == "assistant"
+        assert result[-1]["role"] == "user"
+
     def test_user_message(self, provider: OpenRouterProvider) -> None:
         msgs = [Message(role=Role.USER, content="Hello")]
         result = provider._format_messages(msgs)

@@ -133,7 +133,7 @@ def discover_exercism_problems(
 
 async def solve_problem(
     problem: ExercismProblem,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-5",
     timeout: float = 300.0,
 ) -> ProblemResult:
     """Attempt to solve an Exercism problem using attocode."""
@@ -188,7 +188,7 @@ async def solve_problem(
 
 async def run_benchmark(
     problems: list[ExercismProblem],
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-5",
     concurrency: int = 1,
     timeout: float = 300.0,
 ) -> list[ProblemResult]:
@@ -266,7 +266,7 @@ def main():
     run_parser.add_argument("--exercism-dir", default=os.path.expanduser("~/exercism"))
     run_parser.add_argument("--languages", nargs="+", default=["python", "go", "javascript"])
     run_parser.add_argument("--limit", type=int)
-    run_parser.add_argument("--model", default="claude-sonnet-4-20250514")
+    run_parser.add_argument("--model", default="claude-sonnet-5")
     run_parser.add_argument("--concurrency", type=int, default=1)
     run_parser.add_argument("--timeout", type=float, default=300.0)
     run_parser.add_argument("--output", default="polyglot_results.json")

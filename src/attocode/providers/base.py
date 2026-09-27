@@ -237,6 +237,11 @@ def _lookup_builtin(model_id: str) -> ModelInfo | None:
         base = re.sub(r"-\d{8}$", "", known_id)
         if model_id.startswith(base) or short_id.startswith(base):
             return info
+    # ponytail: loose family match (e.g. gpt-4-turbo -> gpt-4o); list the model if it matters.
+    for known_id, info in BUILTIN_MODELS.items():
+        base = known_id.rsplit("-", 1)[0]
+        if model_id.startswith(base) or short_id.startswith(base):
+            return info
     return None
 
 

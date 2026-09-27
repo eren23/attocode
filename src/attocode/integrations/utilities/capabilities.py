@@ -130,7 +130,10 @@ def get_capabilities(model_id: str) -> ModelCapabilities:
 
     Returns a default set for unknown models.
     """
-    # Exact match
+    # Exact match, then without an OpenRouter-style provider prefix
+    if model_id in _CAPABILITY_DB:
+        return _CAPABILITY_DB[model_id]
+    model_id = model_id.rsplit("/", 1)[-1]
     if model_id in _CAPABILITY_DB:
         return _CAPABILITY_DB[model_id]
 

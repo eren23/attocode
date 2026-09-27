@@ -295,7 +295,7 @@ async def generate_answer(
             system=system,
             messages=[{"role": "user", "content": user_msg}],
         )
-        answer = response.content[0].text
+        answer = next((b.text for b in response.content if b.type == "text"), "")
         elapsed_ms = int((time.monotonic() - start) * 1000)
         return answer, elapsed_ms
     except Exception as e:

@@ -206,6 +206,17 @@ class TestThreeTierResolution:
         # "claude-opus-4-20260101" should match "claude-opus-4-20250514"
         assert get_model_context_window("claude-opus-4-20260101") == 200_000
 
+    def test_undated_ids_resolve_by_family(self) -> None:
+        # Undated IDs must not match a sibling version, but unlisted family members still resolve.
+        assert get_model_context_window("claude-opus-5") == 1_000_000
+        assert get_model_context_window("gpt-4-turbo") == 128_000
+
+    def test_capabilities_strip_provider_prefix(self) -> None:
+        from attocode.integrations.utilities.capabilities import get_capabilities
+
+        caps = get_capabilities("anthropic/claude-sonnet-5")
+        assert (caps.max_input_tokens, caps.max_output_tokens) == (1_000_000, 128_000)
+
     @pytest.mark.asyncio
     async def test_cache_takes_priority(self) -> None:
         """When cache is populated, its values take precedence over builtins."""

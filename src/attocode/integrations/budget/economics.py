@@ -6,6 +6,7 @@ with soft/hard limits. Integrates loop detection and phase tracking.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -171,7 +172,8 @@ def estimate_call_cost(
     output_tokens: int,
 ) -> CostEstimate:
     """Estimate cost for an LLM call based on model rates."""
-    rates = MODEL_COST_RATES.get(model)
+    bare = re.sub(r"-\d{8}$", "", model.rsplit("/", 1)[-1])
+    rates = MODEL_COST_RATES.get(model) or MODEL_COST_RATES.get(bare)
     if rates is None:
         # Try prefix matching
         for key, val in MODEL_COST_RATES.items():
