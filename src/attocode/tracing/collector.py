@@ -7,9 +7,9 @@ patterns (LLM calls, tool execution, budget, compaction, subagents).
 Usage::
 
     collector = TraceCollector(output_dir=".attocode/traces", session_id="abc")
-    collector.start_session(goal="Build REST API", model="claude-sonnet-4-20250514")
+    collector.start_session(goal="Build REST API", model="claude-sonnet-5")
 
-    collector.record_llm_request(iteration=1, messages_count=5, model="claude-sonnet-4-20250514")
+    collector.record_llm_request(iteration=1, messages_count=5, model="claude-sonnet-5")
     collector.record_llm_response(iteration=1, tokens=1200, cost=0.003, duration_ms=850)
     collector.record_tool_call(iteration=1, tool_name="bash", args={"command": "ls"},
                                result="file.py", duration_ms=120)

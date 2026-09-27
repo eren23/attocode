@@ -74,7 +74,7 @@ class TestModelCatalog:
     def test_get_existing_model(self, catalog: ModelCatalog) -> None:
         """get returns entry for known model."""
         # Use a model from PROVIDER_MODEL_OPTIONS
-        entry = catalog.get("claude-sonnet-4-20250514")
+        entry = catalog.get("claude-sonnet-5")
         assert entry is not None
         assert entry.provider == "anthropic"
 

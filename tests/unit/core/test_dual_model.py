@@ -20,8 +20,8 @@ class TestDualModelConfig:
 
     def test_custom(self) -> None:
         config = DualModelConfig(
-            architect_model="claude-opus-4-20250514",
-            editor_model="claude-haiku-4-20250414",
+            architect_model="claude-opus-5",
+            editor_model="claude-haiku-4-5",
             enabled=True,
         )
         assert config.enabled is True
@@ -35,7 +35,7 @@ class TestDualModelWorkflow:
     def test_enabled_with_config(self) -> None:
         wf = DualModelWorkflow(DualModelConfig(
             enabled=True,
-            architect_model="claude-opus-4-20250514",
+            architect_model="claude-opus-5",
         ))
         assert wf.enabled is True
 

@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Load .env files
 load_dotenv()
 
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "claude-sonnet-5"
 DEFAULT_MAX_TOKENS = 8192
 DEFAULT_TEMPERATURE = 0.0
 
@@ -24,8 +24,8 @@ USER_DIR_NAME = ".attocode"
 
 # Provider defaults for setup wizard
 PROVIDER_MODEL_DEFAULTS: dict[str, str] = {
-    "anthropic": "claude-sonnet-4-20250514",
-    "openrouter": "anthropic/claude-sonnet-4",
+    "anthropic": "claude-sonnet-5",
+    "openrouter": "anthropic/claude-sonnet-5",
     "openai": "gpt-5.4-mini",
     "zai": "glm-5",
     "minimax": "MiniMax-M2.7",
@@ -41,13 +41,13 @@ PROVIDER_ENV_VARS: dict[str, str] = {
 
 PROVIDER_MODEL_OPTIONS: dict[str, list[str]] = {
     "anthropic": [
-        "claude-sonnet-4-20250514",
-        "claude-opus-4-20250514",
-        "claude-haiku-3-20250714",
+        "claude-sonnet-5",
+        "claude-opus-5",
+        "claude-haiku-4-5",
     ],
     "openrouter": [
-        "anthropic/claude-sonnet-4",
-        "anthropic/claude-opus-4",
+        "anthropic/claude-sonnet-5",
+        "anthropic/claude-opus-5",
         "openai/gpt-4o",
     ],
     "openai": [

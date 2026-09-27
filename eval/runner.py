@@ -178,7 +178,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to dataset JSONL file",
     )
     run_parser.add_argument(
-        "--model", default="claude-sonnet-4-20250514",
+        "--model", default="claude-sonnet-5",
         help="Model to use",
     )
     run_parser.add_argument(

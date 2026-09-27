@@ -2889,7 +2889,7 @@ async def _init_command(agent: Any) -> CommandResult:
     }
 
     # Auto-generate swarm.yaml with user's current model
-    model = "anthropic/claude-sonnet-4-20250514"
+    model = "anthropic/claude-sonnet-5"
     config = getattr(agent, "_config", None) if agent else None
     if config:
         model = getattr(config, "model", None) or model

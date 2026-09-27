@@ -16,7 +16,7 @@ from typing import Any
 
 # Default configuration values
 DEFAULTS: dict[str, Any] = {
-    "model": "claude-sonnet-4-20250514",
+    "model": "claude-sonnet-5",
     "maxTokens": 200_000,
     "temperature": 0.0,
     "sandbox": {"mode": "auto"},

@@ -240,18 +240,18 @@ class TestModeModelPreferences:
 
     def test_set_and_get(self) -> None:
         mgr = ModeManager()
-        mgr.set_mode_model(AgentMode.CODE, "claude-opus-4-20250514")
-        assert mgr.get_mode_model(AgentMode.CODE) == "claude-opus-4-20250514"
+        mgr.set_mode_model(AgentMode.CODE, "claude-opus-5")
+        assert mgr.get_mode_model(AgentMode.CODE) == "claude-opus-5"
 
     def test_set_with_string(self) -> None:
         mgr = ModeManager()
-        mgr.set_mode_model("architect", "claude-sonnet-4-20250514")
-        assert mgr.get_mode_model(AgentMode.ARCHITECT) == "claude-sonnet-4-20250514"
+        mgr.set_mode_model("architect", "claude-sonnet-5")
+        assert mgr.get_mode_model(AgentMode.ARCHITECT) == "claude-sonnet-5"
 
     def test_get_uses_current_mode(self) -> None:
         mgr = ModeManager(mode=AgentMode.ASK)
-        mgr.set_mode_model(AgentMode.ASK, "claude-haiku-35")
-        assert mgr.get_mode_model() == "claude-haiku-35"
+        mgr.set_mode_model(AgentMode.ASK, "claude-haiku-4-5")
+        assert mgr.get_mode_model() == "claude-haiku-4-5"
 
     def test_get_unset_mode_returns_none(self) -> None:
         mgr = ModeManager()

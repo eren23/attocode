@@ -37,6 +37,7 @@ _KNOWN_VISION_MODELS: set[str] = {
     "gpt-4o", "gpt-4o-mini", "gpt-4-turbo",
     "claude-sonnet-4-20250514", "claude-opus-4-20250514",
     "claude-haiku-4-20250414", "claude-haiku-3-5-20241022",
+    "claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5",
     "google/gemini-2.0-flash", "google/gemini-2.5-pro-preview",
     "glm-4.6v", "glm-4.5v",  # ZAI vision models
 }

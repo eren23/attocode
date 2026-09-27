@@ -1992,9 +1992,9 @@ class TestNormalizeSwarmModelConfig:
         assert result.orchestrator_model == "anthropic/claude-sonnet"
 
     def test_bare_claude_auto_corrected(self) -> None:
-        cfg = SwarmConfig(orchestrator_model="claude-sonnet-4-20250514")
+        cfg = SwarmConfig(orchestrator_model="claude-sonnet-5")
         result, warnings = normalize_swarm_model_config(cfg)
-        assert result.orchestrator_model == "anthropic/claude-sonnet-4-20250514"
+        assert result.orchestrator_model == "anthropic/claude-sonnet-5"
         assert len(warnings) == 1
         assert "auto-corrected" in warnings[0]
 

@@ -53,8 +53,8 @@ async def test_live_two_claude_smoke(tmp_path: Path) -> None:
         config_path,
         tmp_path,
         roles=[
-            {"role_id": "impl", "role_type": "worker", "backend": "claude", "model": "claude-sonnet-4-20250514", "count": 2, "task_kinds": ["implement"]},
-            {"role_id": "merger", "role_type": "merger", "backend": "claude", "model": "claude-sonnet-4-20250514", "count": 1, "task_kinds": ["merge"]},
+            {"role_id": "impl", "role_type": "worker", "backend": "claude", "model": "claude-sonnet-5", "count": 2, "task_kinds": ["implement"]},
+            {"role_id": "merger", "role_type": "merger", "backend": "claude", "model": "claude-sonnet-5", "count": 1, "task_kinds": ["merge"]},
         ],
     )
 
@@ -77,7 +77,7 @@ async def test_live_claude_codex_smoke(tmp_path: Path) -> None:
         config_path,
         tmp_path,
         roles=[
-            {"role_id": "impl", "role_type": "worker", "backend": "claude", "model": "claude-sonnet-4-20250514", "count": 1, "task_kinds": ["implement"]},
+            {"role_id": "impl", "role_type": "worker", "backend": "claude", "model": "claude-sonnet-5", "count": 1, "task_kinds": ["implement"]},
             {"role_id": "merger", "role_type": "merger", "backend": "codex", "model": "gpt-5.3-codex", "count": 1, "task_kinds": ["merge"]},
         ],
     )

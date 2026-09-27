@@ -85,6 +85,9 @@ _CLAUDE_FULL = {
     Capability.MULTI_TOOL_USE,
 }
 
+_register("claude-opus-5", _CLAUDE_FULL, max_output_tokens=128_000, max_input_tokens=1_000_000)
+_register("claude-sonnet-5", _CLAUDE_FULL, max_output_tokens=128_000, max_input_tokens=1_000_000)
+_register("claude-haiku-4-5", _CLAUDE_FULL, max_output_tokens=64_000, max_input_tokens=200_000)
 _register("claude-opus-4-20250514", _CLAUDE_FULL, max_output_tokens=32_000, max_input_tokens=200_000)
 _register("claude-sonnet-4-20250514", _CLAUDE_FULL, max_output_tokens=16_000, max_input_tokens=200_000)
 _register("claude-haiku-4-20250514", _CLAUDE_FULL - {Capability.EXTENDED_THINKING, Capability.COMPUTER_USE}, max_output_tokens=8192, max_input_tokens=200_000)

@@ -134,9 +134,9 @@ class TestParseResponse:
             ],
             "usage": {"prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11},
         }
-        result = provider._parse_response(data, "anthropic/claude-sonnet-4")
+        result = provider._parse_response(data, "anthropic/claude-sonnet-5")
         assert result.content == "Hello!"
-        assert result.model == "anthropic/claude-sonnet-4"
+        assert result.model == "anthropic/claude-sonnet-5"
         assert result.stop_reason == StopReason.END_TURN
         assert result.usage is not None
         assert result.usage.input_tokens == 8

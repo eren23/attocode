@@ -23,7 +23,7 @@ class AgentBuilder:
         agent = (
             AgentBuilder()
             .with_provider("anthropic", api_key="sk-...")
-            .with_model("claude-sonnet-4-20250514")
+            .with_model("claude-sonnet-5")
             .with_budget(max_tokens=500_000)
             .with_working_dir("/path/to/project")
             .build()

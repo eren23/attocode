@@ -729,3 +729,4 @@ class TestVisionCapabilityCheck:
         clear_cache()
         assert is_vision_capable("gpt-4o") is True
         assert is_vision_capable("claude-sonnet-4-20250514") is True
+        assert is_vision_capable("claude-sonnet-5") is True
