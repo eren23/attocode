@@ -151,7 +151,7 @@ wheels = [
 
 [[package]]
 name = "attocode"
-version = "0.2.26"
+version = "0.2.27"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -391,8 +391,8 @@ requires-dist = [
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "tomli-w", specifier = ">=1.0" },
     { name = "tomlkit", specifier = ">=0.13" },
-    { name = "tree-sitter", specifier = ">=0.23" },
-    { name = "tree-sitter", marker = "extra == 'tree-sitter'", specifier = ">=0.23" },
+    { name = "tree-sitter", specifier = ">=0.23,<0.26" },
+    { name = "tree-sitter", marker = "extra == 'tree-sitter'", specifier = ">=0.23,<0.26" },
     { name = "tree-sitter-bash" },
     { name = "tree-sitter-bash", marker = "extra == 'tree-sitter'" },
     { name = "tree-sitter-c" },
@@ -610,7 +610,7 @@ requires-dist = [
     { name = "tiktoken", specifier = ">=0.7" },
     { name = "tomli-w", specifier = ">=1" },
     { name = "tomlkit", specifier = ">=0.13" },
-    { name = "tree-sitter", specifier = ">=0.23" },
+    { name = "tree-sitter", specifier = ">=0.23,<0.26" },
     { name = "tree-sitter-bash" },
     { name = "tree-sitter-c" },
     { name = "tree-sitter-c-sharp" },
