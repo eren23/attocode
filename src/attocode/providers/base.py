@@ -7,6 +7,7 @@ and streaming configuration.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -230,7 +231,13 @@ def _lookup_builtin(model_id: str) -> ModelInfo | None:
     short_id = model_id.rsplit("/", 1)[-1]
     if short_id != model_id and short_id in BUILTIN_MODELS:
         return BUILTIN_MODELS[short_id]
-    # Prefix match (dated variant → base entry)
+    # Prefix match (dated variant → base entry). Strip only a date suffix: the last
+    # dash-part of an undated ID such as "claude-opus-5" is its version.
+    for known_id, info in BUILTIN_MODELS.items():
+        base = re.sub(r"-\d{8}$", "", known_id)
+        if model_id.startswith(base) or short_id.startswith(base):
+            return info
+    # ponytail: loose family match (e.g. gpt-4-turbo -> gpt-4o); list the model if it matters.
     for known_id, info in BUILTIN_MODELS.items():
         base = known_id.rsplit("-", 1)[0]
         if model_id.startswith(base) or short_id.startswith(base):

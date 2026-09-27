@@ -27,9 +27,18 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 DEFAULT_API_URL = "https://api.anthropic.com/v1/messages"
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "claude-sonnet-5"
 DEFAULT_MAX_TOKENS = 8192
 API_VERSION = "2023-06-01"
+# Claude 4.7 and later reject a non-default temperature, top_p, or top_k with a 400.
+NO_SAMPLING_PREFIXES = (
+    "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-sonnet-5",
+    "claude-fable", "claude-mythos",
+)
+# These models think when the request omits `thinking`. The agent loop does not send
+# thinking blocks back yet, so keep thinking off, as it was on Sonnet 4.
+# ponytail: explicit off; send thinking blocks back with signatures to turn adaptive on.
+THINKS_BY_DEFAULT = frozenset({"claude-sonnet-5", "claude-opus-5"})
 
 class AnthropicProvider:
     """Anthropic API provider using httpx."""
@@ -91,8 +100,7 @@ class AnthropicProvider:
             "messages": self._format_messages(messages),
         }
 
-        if options and options.temperature is not None:
-            body["temperature"] = options.temperature
+        self._apply_model_rules(body, model, options)
 
         system_msgs = [m for m in messages if m.role == Role.SYSTEM]
         if system_msgs:
@@ -138,8 +146,7 @@ class AnthropicProvider:
             "stream": True,
         }
 
-        if options and options.temperature is not None:
-            body["temperature"] = options.temperature
+        self._apply_model_rules(body, model, options)
 
         system_msgs = [m for m in messages if m.role == Role.SYSTEM]
         if system_msgs:
@@ -171,6 +178,13 @@ class AnthropicProvider:
         except httpx.RequestError as e:
             raise ProviderError(f"Anthropic request error: {e}", provider="anthropic", retryable=True) from e
 
+    @staticmethod
+    def _apply_model_rules(body: dict[str, Any], model: str, options: ChatOptions | None) -> None:
+        if options and options.temperature is not None and not model.startswith(NO_SAMPLING_PREFIXES):
+            body["temperature"] = options.temperature
+        if model in THINKS_BY_DEFAULT:
+            body["thinking"] = {"type": "disabled"}
+
     def _format_messages(self, messages: list[Message | MessageWithStructuredContent]) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
         for msg in messages:
@@ -179,6 +193,14 @@ class AnthropicProvider:
             formatted = self._format_single(msg)
             if formatted:
                 result.append(formatted)
+        # A trailing assistant turn is a prefill, which Claude 4.6 and later reject
+        # with a 400. The loop leaves one after a text-only max_tokens stop, so ask
+        # for the continuation in a user turn.
+        if result and result[-1]["role"] == "assistant":
+            result.append({
+                "role": "user",
+                "content": "Your previous response was cut off. Continue from where it stopped.",
+            })
         return result
 
     def _format_single(self, msg: Message | MessageWithStructuredContent) -> dict[str, Any] | None:

@@ -1,4 +1,24 @@
 models:
+  claude-opus-5:
+    provider: anthropic
+    max_context_tokens: 1000000
+    max_output_tokens: 128000
+    pricing:
+      input_per_million: 5.0
+      output_per_million: 25.0
+      cache_read_per_million: 0.5
+      cache_write_per_million: 6.25
+
+  claude-sonnet-5:
+    provider: anthropic
+    max_context_tokens: 1000000
+    max_output_tokens: 128000
+    pricing:
+      input_per_million: 2.0
+      output_per_million: 10.0
+      cache_read_per_million: 0.2
+      cache_write_per_million: 2.5
+
   claude-opus-4-20250514:
     provider: anthropic
     max_context_tokens: 200000
@@ -9,15 +29,15 @@ models:
       cache_read_per_million: 1.5
       cache_write_per_million: 18.75
 
-  claude-opus-4-6-20260312:
+  claude-opus-4-6:
     provider: anthropic
-    max_context_tokens: 200000
-    max_output_tokens: 32000
+    max_context_tokens: 1000000
+    max_output_tokens: 128000
     pricing:
-      input_per_million: 15.0
-      output_per_million: 75.0
-      cache_read_per_million: 1.5
-      cache_write_per_million: 18.75
+      input_per_million: 5.0
+      output_per_million: 25.0
+      cache_read_per_million: 0.5
+      cache_write_per_million: 6.25
 
   claude-sonnet-4-20250514:
     provider: anthropic
@@ -29,10 +49,10 @@ models:
       cache_read_per_million: 0.3
       cache_write_per_million: 3.75
 
-  claude-sonnet-4-6-20260312:
+  claude-sonnet-4-6:
     provider: anthropic
-    max_context_tokens: 200000
-    max_output_tokens: 16000
+    max_context_tokens: 1000000
+    max_output_tokens: 128000
     pricing:
       input_per_million: 3.0
       output_per_million: 15.0
@@ -42,12 +62,12 @@ models:
   claude-haiku-4-5-20251001:
     provider: anthropic
     max_context_tokens: 200000
-    max_output_tokens: 8192
+    max_output_tokens: 64000
     pricing:
-      input_per_million: 0.80
-      output_per_million: 4.0
-      cache_read_per_million: 0.08
-      cache_write_per_million: 1.0
+      input_per_million: 1.0
+      output_per_million: 5.0
+      cache_read_per_million: 0.1
+      cache_write_per_million: 1.25
 
   claude-haiku-3-5-20241022:
     provider: anthropic

@@ -45,7 +45,7 @@ class FakeContext:
 
 @dataclass
 class FakeConfig:
-    model: str = "claude-sonnet-4-20250514"
+    model: str = "claude-sonnet-5"
 
 
 class TestExportCommand:
@@ -70,7 +70,7 @@ class TestExportCommand:
         assert "Attocode Session Export" in html_content
         assert "test-session-123" in html_content
         assert "How do I fix this bug?" in html_content
-        assert "claude-sonnet-4" in html_content
+        assert "claude-sonnet-5" in html_content
 
     def test_export_default_is_html(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Default export format is HTML."""

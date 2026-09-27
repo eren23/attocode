@@ -120,7 +120,7 @@ class TestRoutingManager:
         mgr.register_provider(ProviderConfig(name="claude"))
         mgr.register_provider(ProviderConfig(name="gpt"))
         mgr.add_rule(RoutingRule(condition="model_contains", value="claude", provider_name="claude"))
-        decision = mgr.route(model="claude-3-opus")
+        decision = mgr.route(model="claude-opus-5")
         assert decision.provider_name == "claude"
 
 

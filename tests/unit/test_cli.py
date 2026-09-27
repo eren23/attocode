@@ -29,7 +29,7 @@ class TestAttoConfig:
     def test_defaults(self) -> None:
         c = AttoConfig()
         assert c.provider == "anthropic"
-        assert c.model == "claude-sonnet-4-20250514"
+        assert c.model == "claude-sonnet-5"
         assert c.max_iterations == 100
         assert c.compaction_warning_threshold == pytest.approx(0.7)
         assert c.compaction_threshold == pytest.approx(0.8)

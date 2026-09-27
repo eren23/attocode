@@ -31,7 +31,7 @@ def call_llm(prompt: str, model: str = "", max_tokens: int = 4096) -> str:
         import openai
 
         if not model:
-            model = "anthropic/claude-sonnet-4"
+            model = "anthropic/claude-sonnet-5"
         client = openai.OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=or_key,
@@ -47,14 +47,18 @@ def call_llm(prompt: str, model: str = "", max_tokens: int = 4096) -> str:
         import anthropic
 
         if not model:
-            model = "claude-sonnet-4-20250514"
+            model = "claude-sonnet-5"
         client = anthropic.Anthropic(api_key=anthropic_key)
+        # Sonnet 5 and Opus 5 think when `thinking` is omitted; keep the old thinking-off behavior.
+        extra = {"thinking": {"type": "disabled"}} if model in ("claude-sonnet-5", "claude-opus-5") else {}
         response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
+            **extra,
         )
-        return response.content[0].text
+        # Thinking blocks can come first, so read the first text block.
+        return next((b.text for b in response.content if b.type == "text"), "")
 
     raise RuntimeError(
         "No API key found. Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY "

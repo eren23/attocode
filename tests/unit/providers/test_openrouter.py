@@ -83,6 +83,14 @@ class TestOpenRouterHeaders:
 
 
 class TestFormatMessages:
+    def test_trailing_assistant_turn_gets_user_continuation(self, provider: OpenRouterProvider) -> None:
+        result = provider._format_messages([
+            Message(role=Role.USER, content="write a long essay"),
+            Message(role=Role.ASSISTANT, content="Part one"),
+        ])
+        assert result[-2]["role"] == "assistant"
+        assert result[-1]["role"] == "user"
+
     def test_user_message(self, provider: OpenRouterProvider) -> None:
         msgs = [Message(role=Role.USER, content="Hello")]
         result = provider._format_messages(msgs)
@@ -134,9 +142,9 @@ class TestParseResponse:
             ],
             "usage": {"prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11},
         }
-        result = provider._parse_response(data, "anthropic/claude-sonnet-4")
+        result = provider._parse_response(data, "anthropic/claude-sonnet-5")
         assert result.content == "Hello!"
-        assert result.model == "anthropic/claude-sonnet-4"
+        assert result.model == "anthropic/claude-sonnet-5"
         assert result.stop_reason == StopReason.END_TURN
         assert result.usage is not None
         assert result.usage.input_tokens == 8

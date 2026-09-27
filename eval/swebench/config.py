@@ -18,7 +18,7 @@ class SWEBenchEvalConfig:
     """Configuration for a SWE-bench evaluation run."""
 
     # Model
-    model: str = "claude-sonnet-4-20250514"
+    model: str = "claude-sonnet-5"
     provider: str = "anthropic"
 
     # Budget
@@ -92,7 +92,7 @@ def build_swarm_yaml_dict(
 def config_from_dict(d: dict[str, Any]) -> SWEBenchEvalConfig:
     """Create SWEBenchEvalConfig from a flat dict (e.g. CLI args)."""
     return SWEBenchEvalConfig(
-        model=d.get("model", "claude-sonnet-4-20250514"),
+        model=d.get("model", "claude-sonnet-5"),
         provider=d.get("provider", "anthropic"),
         max_tokens=d.get("max_tokens", 2_000_000),
         max_cost_usd=d.get("max_cost_usd", 5.0),

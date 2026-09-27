@@ -179,3 +179,10 @@ class TestPostInitClamping:
     def test_clamped_value_stored_as_original(self) -> None:
         em = ExecutionEconomicsManager(budget=ExecutionBudget(max_tokens=0))
         assert em._original_max_tokens == 100_000
+
+
+def test_cost_rates_resolve_prefixed_and_dated_ids() -> None:
+    from attocode.integrations.budget.economics import estimate_call_cost
+
+    assert estimate_call_cost("anthropic/claude-opus-5", 1_000_000, 0).total_cost == pytest.approx(5.0)
+    assert estimate_call_cost("claude-haiku-4-5-20251001", 1_000_000, 0).total_cost == pytest.approx(1.0)

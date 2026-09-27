@@ -30,7 +30,7 @@ def _make_task(**overrides) -> SwarmTask:
 
 
 def _make_worker(**overrides) -> SwarmWorkerSpec:
-    defaults = {"name": "worker-1", "model": "claude-sonnet-4-20250514"}
+    defaults = {"name": "worker-1", "model": "claude-sonnet-5"}
     defaults.update(overrides)
     return SwarmWorkerSpec(**defaults)
 
@@ -114,7 +114,7 @@ class TestMapAgentType:
         assert _map_agent_type(_make_worker(policy_profile="codex")) == "codex"
 
     def test_model_fallback_claude(self) -> None:
-        assert _map_agent_type(_make_worker(model="claude-sonnet-4-20250514")) == "claude"
+        assert _map_agent_type(_make_worker(model="claude-sonnet-5")) == "claude"
 
     def test_model_fallback_gpt(self) -> None:
         assert _map_agent_type(_make_worker(model="gpt-4o")) == "codex"

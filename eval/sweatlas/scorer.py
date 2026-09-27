@@ -186,7 +186,7 @@ Respond with ONLY a JSON object (no markdown fences):
             max_tokens=200,
             messages=[{"role": "user", "content": judge_prompt}],
         )
-        text = response.content[0].text.strip()
+        text = next((b.text for b in response.content if b.type == "text"), "").strip()
 
         # Parse JSON
         if text.startswith("```"):

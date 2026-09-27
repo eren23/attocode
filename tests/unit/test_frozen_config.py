@@ -38,14 +38,14 @@ def test_frozen_reads_all_fields() -> None:
     """Frozen config delegates reads for all key fields."""
     cfg = AttoConfig(
         provider="openrouter",
-        model="anthropic/claude-opus-4",
+        model="anthropic/claude-opus-5",
         max_tokens=16384,
         temperature=0.7,
     )
     frozen = cfg.freeze()
 
     assert frozen.provider == "openrouter"
-    assert frozen.model == "anthropic/claude-opus-4"
+    assert frozen.model == "anthropic/claude-opus-5"
     assert frozen.max_tokens == 16384
     assert frozen.temperature == 0.7
 

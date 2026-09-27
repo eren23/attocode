@@ -140,12 +140,12 @@ class TestGraphNode:
         node = GraphNode(
             node_id="l-1",
             kind=NodeKind.LLM_CALL,
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-5",
             input_tokens=1000,
             output_tokens=500,
             cost=0.015,
         )
-        assert node.model == "claude-sonnet-4-20250514"
+        assert node.model == "claude-sonnet-5"
         assert node.input_tokens == 1000
         assert node.output_tokens == 500
         assert node.cost == 0.015

@@ -114,7 +114,7 @@ class TestAnthropicChat:
 
     @pytest.mark.asyncio
     async def test_cost_calculation(self, provider: AnthropicProvider) -> None:
-        model = "claude-sonnet-4-20250514"
+        model = "claude-sonnet-5"
         mock_response = _mock_response(json={
             "content": [{"type": "text", "text": "ok"}],
             "stop_reason": "end_turn",
@@ -220,6 +220,35 @@ class TestAnthropicFormatting:
         assert "tools" in body
         assert body["tools"][0]["name"] == "test_tool"
         assert body["tools"][0]["input_schema"]["type"] == "object"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("model", "sends_temperature", "thinking"),
+        [
+            ("claude-sonnet-4-6", True, None),
+            ("claude-sonnet-5", False, {"type": "disabled"}),
+            ("claude-opus-5", False, {"type": "disabled"}),
+            ("claude-opus-5-5", False, None),  # rejects "disabled" thinking
+        ],
+    )
+    async def test_model_request_rules(
+        self, provider: AnthropicProvider, model: str, sends_temperature: bool, thinking: dict | None,
+    ) -> None:
+        provider._client.post = AsyncMock(return_value=_mock_response(json={
+            "content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn", "usage": {},
+        }))
+        await provider.chat([Message(role=Role.USER, content="hi")], ChatOptions(model=model, temperature=0.0))
+        body = provider._client.post.call_args.kwargs["json"]
+        assert ("temperature" in body) is sends_temperature
+        assert body.get("thinking") == thinking
+
+    def test_trailing_assistant_turn_gets_user_continuation(self, provider: AnthropicProvider) -> None:
+        formatted = provider._format_messages([
+            Message(role=Role.USER, content="write a long essay"),
+            Message(role=Role.ASSISTANT, content="Part one"),
+        ])
+        assert formatted[-2] == {"role": "assistant", "content": "Part one"}
+        assert formatted[-1]["role"] == "user"
 
 
 class TestAnthropicErrors:

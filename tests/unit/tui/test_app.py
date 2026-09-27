@@ -58,10 +58,10 @@ class TestAttocodeAppComposition:
         app = AttocodeApp(
             on_submit=lambda v: submitted.append(v),
             on_cancel=lambda: cancelled.append(True),
-            model_name="claude-sonnet-4-20250514",
+            model_name="claude-sonnet-5",
             git_branch="main",
         )
-        assert app._model_name == "claude-sonnet-4-20250514"
+        assert app._model_name == "claude-sonnet-5"
         assert app._git_branch == "main"
 
     def test_app_bindings_do_not_expose_embedded_swarm_actions(self) -> None:

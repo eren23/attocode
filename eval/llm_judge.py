@@ -154,7 +154,7 @@ async def score_output(
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = response.content[0].text.strip()
+        text = next((b.text for b in response.content if b.type == "text"), "").strip()
 
         # Parse JSON — handle potential markdown fences
         if text.startswith("```"):
@@ -200,7 +200,7 @@ async def compare_outputs(
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = response.content[0].text.strip()
+        text = next((b.text for b in response.content if b.type == "text"), "").strip()
 
         if text.startswith("```"):
             text = text.split("```")[1]

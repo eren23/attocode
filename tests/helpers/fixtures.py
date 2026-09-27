@@ -52,7 +52,7 @@ class SyntheticAgent:
             "command": self.command,
             "restart_count": self.restart_count,
             "stderr_tail": self.stderr_tail,
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-5",
             "started_at_epoch": 1_708_776_000.0,
             "tokens_used": 0,
             "activity": "",
@@ -139,7 +139,7 @@ def create_synthetic_run(
                 "role_id": a.role_id,
                 "role_type": a.role_type,
                 "backend": a.backend,
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-5",
                 "count": 1,
             }
             for a in spec.agents

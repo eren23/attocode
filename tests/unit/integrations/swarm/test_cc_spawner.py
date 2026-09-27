@@ -41,7 +41,7 @@ def _make_worker(**overrides) -> SwarmWorkerSpec:
     """Create a minimal SwarmWorkerSpec with sensible defaults."""
     defaults = {
         "name": "worker-1",
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-5",
     }
     defaults.update(overrides)
     return SwarmWorkerSpec(**defaults)

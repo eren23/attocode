@@ -101,7 +101,7 @@ class TestCreateProvider:
     def test_create_with_model(self) -> None:
         from attocode.providers.anthropic import AnthropicProvider
 
-        provider = create_provider("anthropic", api_key="sk-test", model="claude-opus-4-20250514")
+        provider = create_provider("anthropic", api_key="sk-test", model="claude-opus-5")
         assert isinstance(provider, AnthropicProvider)
 
     def test_auto_detect_anthropic(self) -> None:

@@ -1,7 +1,7 @@
 """CLI for SWE-bench evaluation: run, grade, compare, efficiency, leaderboard.
 
 Usage:
-    python -m eval.swebench run --limit 10 --model claude-sonnet-4-20250514
+    python -m eval.swebench run --limit 10 --model claude-sonnet-5
     python -m eval.swebench grade --run-id eval-1234
     python -m eval.swebench compare eval-1234 eval-5678
     python -m eval.swebench efficiency --run-id eval-1234
@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--huggingface", action="store_true", help="Load from HuggingFace")
     run_parser.add_argument("--limit", type=int, help="Max instances to run")
     run_parser.add_argument("--instance-ids", nargs="+", help="Specific instance IDs")
-    run_parser.add_argument("--model", default="claude-sonnet-4-20250514")
+    run_parser.add_argument("--model", default="claude-sonnet-5")
     run_parser.add_argument("--provider", default="anthropic")
     run_parser.add_argument("--max-tokens", type=int, default=2_000_000)
     run_parser.add_argument("--max-cost", type=float, default=5.0)

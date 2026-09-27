@@ -171,10 +171,10 @@ def test_preflight_maps_codex_mcp_to_codex_binary() -> None:
 
 def test_model_flag_included_when_model_set() -> None:
     coord = _make_coordinator()
-    cmd = coord._default_command("claude", "claude-sonnet-4-20250514")
+    cmd = coord._default_command("claude", "claude-sonnet-5")
     script = cmd[-1]
     assert "--model" in script
-    assert "claude-sonnet-4-20250514" in script
+    assert "claude-sonnet-5" in script
 
 
 def test_model_flag_omitted_when_model_empty() -> None:

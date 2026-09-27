@@ -6,6 +6,7 @@ with soft/hard limits. Integrates loop detection and phase tracking.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -149,6 +150,9 @@ class EnforcementLevel(StrEnum):
 
 # Per-model cost rates (per million tokens)
 MODEL_COST_RATES: dict[str, tuple[float, float]] = {
+    "claude-sonnet-5": (2.0, 10.0),
+    "claude-opus-5": (5.0, 25.0),
+    "claude-haiku-4-5": (1.0, 5.0),
     "claude-sonnet-4-20250514": (3.0, 15.0),
     "claude-opus-4-20250514": (15.0, 75.0),
     "claude-haiku-3-5-20241022": (0.25, 1.25),
@@ -168,7 +172,8 @@ def estimate_call_cost(
     output_tokens: int,
 ) -> CostEstimate:
     """Estimate cost for an LLM call based on model rates."""
-    rates = MODEL_COST_RATES.get(model)
+    bare = re.sub(r"-\d{8}$", "", model.rsplit("/", 1)[-1])
+    rates = MODEL_COST_RATES.get(model) or MODEL_COST_RATES.get(bare)
     if rates is None:
         # Try prefix matching
         for key, val in MODEL_COST_RATES.items():

@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "anthropic/claude-sonnet-4"
+DEFAULT_MODEL = "anthropic/claude-sonnet-5"
 
 
 @dataclass(slots=True)
@@ -228,7 +228,12 @@ class OpenRouterProvider:
         return format_openai_content(content)
 
     def _format_messages(self, messages: list[Message | MessageWithStructuredContent]) -> list[dict[str, Any]]:
-        return format_openai_messages(messages, self._format_content)
+        result = format_openai_messages(messages, self._format_content)
+        # A trailing assistant turn is a prefill, which Claude 4.6 and later reject.
+        # The loop leaves one after a text-only max_tokens stop.
+        if result and result[-1].get("role") == "assistant" and not result[-1].get("tool_calls"):
+            result.append({"role": "user", "content": "Your previous response was cut off. Continue from where it stopped."})
+        return result
 
     def _format_tool(self, tool: ToolDefinition) -> dict[str, Any]:
         return format_openai_tool(tool)
