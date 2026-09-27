@@ -1192,6 +1192,7 @@ async def run_execution_loop(
                 role=Role.ASSISTANT,
                 content=response.content or "",
                 tool_calls=response.tool_calls,
+                metadata={"raw_content": response.raw_content} if response.raw_content else None,
             )
             ctx.add_message(assistant_msg)
 
