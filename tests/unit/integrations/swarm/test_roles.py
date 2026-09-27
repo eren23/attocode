@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.swarm.roles import (
     BUILTIN_ROLES,
     RoleConfig,
@@ -13,7 +11,6 @@ from attocode.integrations.swarm.roles import (
     get_role_config,
     get_scout_config,
 )
-
 
 # ---------------------------------------------------------------------------
 # BUILTIN_ROLES

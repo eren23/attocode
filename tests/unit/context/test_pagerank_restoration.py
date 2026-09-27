@@ -6,15 +6,10 @@ ranks, limits, budgets, and excludes files.
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
-import pytest
-
 from attocode.integrations.context.codebase_context import (
     CodebaseContextManager,
     FileInfo,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

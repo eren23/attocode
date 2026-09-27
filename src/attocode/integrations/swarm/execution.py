@@ -644,11 +644,11 @@ async def _handle_successful_completion(
         try:
             from attocode.integrations.tasks.task_splitter import SubTask as _SubTask
             from attocode.integrations.tasks.verification_gate import (
-                VerificationGate as _VG,
+                VerificationGate as _VerificationGate,
             )
 
             _wd = getattr(ctx, "working_dir", None) or "."
-            _gate = _VG(
+            _gate = _VerificationGate(
                 provider=ctx.provider if ctx.config.enable_wave_review else None,
                 model=ctx.config.orchestrator_model,
                 working_dir=_wd,
@@ -1312,7 +1312,7 @@ def _classify_failure(output: str, tool_calls: int | None = None) -> str:
         )
         classification = classify_swarm_failure(output, tool_calls)
         # Map failure classes back to TaskFailureMode-compatible strings
-        _CLASS_TO_MODE: dict[SwarmFailureClass, str] = {
+        class_to_mode: dict[SwarmFailureClass, str] = {
             SwarmFailureClass.RATE_LIMITED: "rate-limit",
             SwarmFailureClass.TIMEOUT: "timeout",
             SwarmFailureClass.PROVIDER_SPEND_LIMIT: "terminal",
@@ -1323,7 +1323,7 @@ def _classify_failure(output: str, tool_calls: int | None = None) -> str:
             SwarmFailureClass.PERMISSION_REQUIRED: "terminal",
             SwarmFailureClass.PROVIDER_TRANSIENT: "recoverable",
         }
-        return _CLASS_TO_MODE.get(classification.failure_class, "error")
+        return class_to_mode.get(classification.failure_class, "error")
     except Exception:
         pass
 

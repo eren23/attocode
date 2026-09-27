@@ -1,35 +1,30 @@
 """Tests for new swarm modules: request_throttle, swarm_budget, failure_classifier, swarm_state_store."""
 
-import asyncio
 import tempfile
 import time
 
 import pytest
 
+from attocode.integrations.swarm.failure_classifier import (
+    NON_RETRYABLE,
+    SwarmFailureClass,
+    _has_any,
+    classify_swarm_failure,
+)
 from attocode.integrations.swarm.request_throttle import (
-    SwarmThrottle,
-    ThrottleConfig,
-    ThrottleStats,
     FREE_TIER_THROTTLE,
     PAID_TIER_THROTTLE,
+    SwarmThrottle,
+    ThrottleConfig,
 )
 from attocode.integrations.swarm.swarm_budget import (
     SwarmBudget,
     SwarmBudgetConfig,
-    WorkerSpending,
-)
-from attocode.integrations.swarm.failure_classifier import (
-    classify_swarm_failure,
-    SwarmFailureClass,
-    FailureClassification,
-    NON_RETRYABLE,
-    _has_any,
 )
 from attocode.integrations.swarm.swarm_state_store import (
-    SwarmStateStore,
     SwarmStateSnapshot,
+    SwarmStateStore,
 )
-
 
 # ---------------------------------------------------------------------------
 # RequestThrottle tests
@@ -230,7 +225,8 @@ class TestFailureClassifier:
 
 class TestSwarmStateStore:
     def setup_method(self):
-        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            self._tmp = tmp
         self.store = SwarmStateStore(self._tmp.name)
 
     def test_save_and_get_session(self):

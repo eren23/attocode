@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from attoswarm.research.evaluator import EvalResult
-
 from eval.meta_harness.rule_bench.predicate import (
     DEFAULT_FLOOR_RATIO,
     make_rule_accept_predicate,

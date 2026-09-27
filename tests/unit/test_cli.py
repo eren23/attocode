@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -16,7 +17,6 @@ from attocode.config import (
     AttoConfig,
     find_project_root,
     infer_project_root_from_session_dir,
-    get_user_config_dir,
     load_config,
     load_json_config,
     load_rules,
@@ -146,9 +146,14 @@ class TestLoadRules:
 
 
 class TestLoadConfig:
-    def test_defaults(self) -> None:
+    def test_defaults(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Hermetic: the developer's ~/.attocode/config.json and API keys must not leak in.
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.chdir(tmp_path)
+        for var in ("ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY", "ZAI_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
         config = load_config()
-        assert config.provider in ("anthropic", "openrouter", "openai", "zai")
+        assert config.provider == "anthropic"
         assert config.max_iterations == 100
 
     def test_cli_args_override(self) -> None:

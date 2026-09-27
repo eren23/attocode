@@ -15,10 +15,20 @@ import time
 
 import pytest
 
+from attocode.tricks.failure_evidence import (
+    Failure,
+    FailureCategory,
+    FailureInput,
+    FailureTracker,
+    FailureTrackerConfig,
+    create_repeat_warning,
+    format_failure_context,
+    generate_suggestion,
+)
 from attocode.tricks.kv_cache import (
+    CacheableContentBlock,
     CacheAwareConfig,
     CacheAwareContext,
-    CacheableContentBlock,
     DynamicContent,
     analyze_cache_efficiency,
     normalize_json,
@@ -48,17 +58,6 @@ from attocode.tricks.reversible_compaction import (
     extract_function_references,
     extract_url_references,
 )
-from attocode.tricks.failure_evidence import (
-    FailureCategory,
-    FailureInput,
-    FailureTracker,
-    FailureTrackerConfig,
-    categorize_error,
-    create_repeat_warning,
-    format_failure_context,
-    generate_suggestion,
-    Failure,
-)
 from attocode.tricks.serialization_diversity import (
     DiverseSerializer,
     DiverseSerializerConfig,
@@ -66,7 +65,6 @@ from attocode.tricks.serialization_diversity import (
     are_semantic_equivalent,
     generate_variations,
 )
-
 
 # =============================================================================
 # CacheAwareContext Tests

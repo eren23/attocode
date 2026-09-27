@@ -5,11 +5,9 @@ from __future__ import annotations
 import pytest
 
 from attocode.providers.mock import MockProvider
-from attocode.tools.registry import ToolRegistry
 from attocode.tools.standard import create_standard_registry
 from attocode.types.messages import (
     ChatOptions,
-    ChatResponse,
     Message,
     Role,
     StopReason,

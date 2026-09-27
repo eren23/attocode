@@ -45,7 +45,6 @@ def test_slice_body_empty_when_no_body(tmp_path):
     assert out == ""
 
 
-import os
 
 
 def _write(tmp_path, rel, text):

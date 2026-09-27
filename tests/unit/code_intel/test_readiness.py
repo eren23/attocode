@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
-
-import pytest
 
 from attocode.code_intel.readiness import (
     PhaseResult,
@@ -16,9 +13,10 @@ from attocode.code_intel.readiness import (
     ReadinessPhase,
     ReadinessReport,
     ReadinessSeverity,
-    TracerBulletResult,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Helpers

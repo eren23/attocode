@@ -16,18 +16,19 @@ Covers:
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock
+from typing import TYPE_CHECKING
 
 import pytest
 
 from attoswarm.config.schema import AdaptiveConfig, SwarmYamlConfig
-from attoswarm.coordinator.aot_graph import AoTGraph, AoTNode
+from attoswarm.coordinator.aot_graph import AoTNode
 from attoswarm.coordinator.orchestrator import SwarmOrchestrator
 from attoswarm.coordinator.result_pipeline import PipelineHandlers, ResultPipeline
 from attoswarm.coordinator.subagent_manager import TaskResult
 from attoswarm.protocol.models import TaskSpec
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture()
@@ -215,6 +216,7 @@ class TestConflictCacheInvalidation:
 class TestCLITracePostmortem:
     def test_trace_empty_dir(self, tmp_path: Path) -> None:
         from click.testing import CliRunner
+
         from attoswarm.cli import main
 
         run_dir = tmp_path / "run"
@@ -226,6 +228,7 @@ class TestCLITracePostmortem:
 
     def test_trace_with_events(self, tmp_path: Path) -> None:
         from click.testing import CliRunner
+
         from attoswarm.cli import main
 
         run_dir = tmp_path / "run"
@@ -247,6 +250,7 @@ class TestCLITracePostmortem:
 
     def test_trace_task_filter(self, tmp_path: Path) -> None:
         from click.testing import CliRunner
+
         from attoswarm.cli import main
 
         run_dir = tmp_path / "run"
@@ -268,6 +272,7 @@ class TestCLITracePostmortem:
 
     def test_postmortem_generates_from_state(self, tmp_path: Path) -> None:
         from click.testing import CliRunner
+
         from attoswarm.cli import main
 
         run_dir = tmp_path / "run"
@@ -289,6 +294,7 @@ class TestCLITracePostmortem:
 
     def test_postmortem_displays_existing(self, tmp_path: Path) -> None:
         from click.testing import CliRunner
+
         from attoswarm.cli import main
 
         run_dir = tmp_path / "run"

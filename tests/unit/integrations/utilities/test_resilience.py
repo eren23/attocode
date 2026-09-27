@@ -22,7 +22,6 @@ from attocode.integrations.utilities.resilience import (
     resilient_fetch,
 )
 
-
 # ============================================================
 # Circuit Breaker Tests
 # ============================================================

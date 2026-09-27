@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import threading
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from attocode.shared.budget_tracker import (
-    WorkerBudgetCheckResult,
     WorkerBudgetConfig,
     WorkerBudgetTracker,
     compute_tool_fingerprint,
@@ -16,6 +15,9 @@ from attocode.shared.budget_tracker import (
 from attocode.shared.persistence import JSONFilePersistenceAdapter, SQLitePersistenceAdapter
 from attocode.shared.shared_context_state import SharedContextConfig, SharedContextState
 from attocode.shared.shared_economics_state import SharedEconomicsConfig, SharedEconomicsState
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestSharedContextState:

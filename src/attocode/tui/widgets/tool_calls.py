@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 from textual.containers import VerticalScroll
+from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Collapsible, Static
-from textual.css.query import NoMatches
 
-import logging
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:

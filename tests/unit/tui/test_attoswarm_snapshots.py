@@ -9,7 +9,8 @@ Generate/update baselines:
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
+import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -25,6 +26,25 @@ from tests.helpers.fixtures import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
+
+    from textual.app import ComposeResult
+
+    from attoswarm.tui.app import AttoswarmApp
+
+
+@pytest.fixture(autouse=True)
+def _utc_clock():
+    """The views print wall-clock times, so pin the zone the snapshots were made in."""
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = "UTC"
+    time.tzset()
+    yield
+    if old is None:
+        os.environ.pop("TZ", None)
+    else:
+        os.environ["TZ"] = old
+    time.tzset()
 
 
 # ---------------------------------------------------------------------------
@@ -32,13 +52,12 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
+def _make_stable_app(run_dir: Path) -> AttoswarmApp:
     """Create an AttoswarmApp subclass with deterministic output.
 
     Disables the clock at composition time so the SVG content doesn't
     vary between runs.
     """
-    from textual.app import ComposeResult
 
     from attoswarm.tui.app import AttoswarmApp, SwarmSummaryBar
 
@@ -46,15 +65,22 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
         def compose(self) -> ComposeResult:
             # Override compose to match AttoswarmApp layout but with clock disabled
             from textual.containers import Horizontal, Vertical
-            from textual.widgets import Footer, Header, Input, ProgressBar, Static, TabbedContent, TabPane
+            from textual.widgets import (
+                Footer,
+                Header,
+                Input,
+                ProgressBar,
+                Static,
+                TabbedContent,
+                TabPane,
+            )
 
             from attoswarm.tui.widgets import (
-                AgentTraceStream,
                 AgentsDataTable,
+                AgentTraceStream,
                 BudgetProjectionWidget,
                 ConflictPanel,
                 DecisionsPane,
-                DependencyTree,
                 DetailInspector,
                 EventsLog,
                 FailureChainWidget,
@@ -87,12 +113,14 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
                         yield EventsLog(id="events-full")
                     with TabPane("Messages", id="tab-messages"):
                         yield MessagesLog(id="messages-log-widget")
-                    with TabPane("Decisions", id="tab-decisions"):
-                        with Vertical(id="decisions-outer"):
-                            yield DecisionsPane(id="decisions-pane")
-                            yield BudgetProjectionWidget(id="budget-projection")
-                            yield FailureChainWidget(id="failure-chain")
-                            yield ConflictPanel(id="conflict-panel")
+                    with (
+                        TabPane("Decisions", id="tab-decisions"),
+                        Vertical(id="decisions-outer"),
+                    ):
+                        yield DecisionsPane(id="decisions-pane")
+                        yield BudgetProjectionWidget(id="budget-projection")
+                        yield FailureChainWidget(id="failure-chain")
+                        yield ConflictPanel(id="conflict-panel")
             yield Footer()
 
         def on_mount(self) -> None:
@@ -115,7 +143,7 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
 # ---------------------------------------------------------------------------
 
 
-def test_snapshot_empty_init(snap_compare: "Callable", tmp_path: Path) -> None:
+def test_snapshot_empty_init(snap_compare: Callable, tmp_path: Path) -> None:
     """Empty/init state — no agents, no tasks, blank dashboard."""
     spec = SyntheticRunSpec(
         phase="initializing",
@@ -129,7 +157,7 @@ def test_snapshot_empty_init(snap_compare: "Callable", tmp_path: Path) -> None:
 
 
 
-def test_snapshot_executing(snap_compare: "Callable", tmp_path: Path) -> None:
+def test_snapshot_executing(snap_compare: Callable, tmp_path: Path) -> None:
     """Executing state — 3 agents, 5 tasks (mix of done/running/pending)."""
     agents = [
         SyntheticAgent(agent_id="a1", role_id="coder", status="busy", task_id="t3"),
@@ -168,7 +196,7 @@ def test_snapshot_executing(snap_compare: "Callable", tmp_path: Path) -> None:
 
 
 
-def test_snapshot_completed(snap_compare: "Callable", tmp_path: Path) -> None:
+def test_snapshot_completed(snap_compare: Callable, tmp_path: Path) -> None:
     """Completed state — all tasks done, budget summary."""
     agents = [
         SyntheticAgent(agent_id="a1", role_id="coder", status="idle"),
@@ -196,7 +224,7 @@ def test_snapshot_completed(snap_compare: "Callable", tmp_path: Path) -> None:
 
 
 
-def test_snapshot_failed_with_errors(snap_compare: "Callable", tmp_path: Path) -> None:
+def test_snapshot_failed_with_errors(snap_compare: Callable, tmp_path: Path) -> None:
     """Failed state — timeout error, failed tasks, error panel."""
     agents = [
         SyntheticAgent(agent_id="a1", role_id="coder", status="exited", exit_code=1),
@@ -229,7 +257,7 @@ def test_snapshot_failed_with_errors(snap_compare: "Callable", tmp_path: Path) -
 
 
 
-def test_snapshot_many_agents(snap_compare: "Callable", tmp_path: Path) -> None:
+def test_snapshot_many_agents(snap_compare: Callable, tmp_path: Path) -> None:
     """Many agents — 6 agents, 7 tasks, table overflow."""
     agents = [
         SyntheticAgent(agent_id=f"a{i}", role_id=role, status="busy" if i < 4 else "idle", task_id=f"t{i}" if i < 4 else None)

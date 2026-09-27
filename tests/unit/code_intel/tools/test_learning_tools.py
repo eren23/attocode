@@ -58,7 +58,7 @@ class TestLearningTools:
 
     def test_recall(self):
         """Test recall returns a string."""
-        from attocode.code_intel.tools.learning_tools import record_learning, recall
+        from attocode.code_intel.tools.learning_tools import recall, record_learning
 
         record_learning(type="pattern", description="Use dataclasses")
         result = recall(query="dataclasses")
@@ -66,7 +66,7 @@ class TestLearningTools:
 
     def test_learning_feedback(self):
         """Test learning_feedback returns a string."""
-        from attocode.code_intel.tools.learning_tools import record_learning, learning_feedback
+        from attocode.code_intel.tools.learning_tools import learning_feedback, record_learning
 
         record_learning(type="pattern", description="Use dataclasses")
         result = learning_feedback(learning_id=1, helpful=True)
@@ -74,7 +74,7 @@ class TestLearningTools:
 
     def test_list_learnings(self):
         """Test list_learnings returns a string."""
-        from attocode.code_intel.tools.learning_tools import record_learning, list_learnings
+        from attocode.code_intel.tools.learning_tools import list_learnings, record_learning
 
         record_learning(type="pattern", description="Use dataclasses")
         result = list_learnings()

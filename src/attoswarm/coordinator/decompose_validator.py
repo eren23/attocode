@@ -283,7 +283,8 @@ class DecomposeValidator:
                 abs_path = os.path.join(self._root_dir, f)
                 try:
                     if os.path.exists(abs_path):
-                        total_lines += sum(1 for _ in open(abs_path, encoding="utf-8", errors="ignore"))
+                        with open(abs_path, encoding="utf-8", errors="ignore") as fh:
+                            total_lines += sum(1 for _ in fh)
                 except Exception:
                     pass
 

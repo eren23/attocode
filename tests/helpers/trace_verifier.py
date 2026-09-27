@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from attoswarm.coordinator.loop import TRANSITIONS
 from attoswarm.protocol.io import read_json
-
 
 # Markers that should never appear in raw agent output — they indicate
 # the agent is echoing/injecting control signals.

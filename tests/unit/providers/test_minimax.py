@@ -249,7 +249,7 @@ def test_sanitize_multiple_tool_calls():
 def test_build_body_sanitizes_orphaned_tool_results():
     """_build_body strips orphaned tool results before sending."""
     from attocode.providers.minimax import MinimaxProvider
-    from attocode.types.messages import Message, Role, ToolCall
+    from attocode.types.messages import Message, Role
 
     p = MinimaxProvider(api_key="test")
     msgs = [

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import textwrap
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,6 +14,8 @@ from attoswarm.coordinator.task_file_parser import (
     validate_tasks,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ── YAML parsing ─────────────────────────────────────────────────────
 

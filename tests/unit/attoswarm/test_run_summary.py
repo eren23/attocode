@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from attoswarm.run_summary import collect_modified_files, collect_timeout_stats, resolve_working_dir
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_collect_modified_files_prefers_changes_manifest(tmp_path: Path) -> None:

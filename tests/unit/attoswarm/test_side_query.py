@@ -5,14 +5,12 @@ Verifies the side-query pattern for code-intel enrichment.
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from attoswarm.coordinator.task_dispatcher import enrich_task_context_async
 from attoswarm.protocol.models import TaskSpec
-
 
 # ---------------------------------------------------------------------------
 # Helpers

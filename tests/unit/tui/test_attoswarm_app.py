@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
-from tests.helpers.fixtures import SyntheticAgent, SyntheticRunSpec, SyntheticTask, create_synthetic_run
+from typing import TYPE_CHECKING
 
 from attoswarm.protocol.io import write_json_atomic
 from attoswarm.tui.app import AttoswarmApp
+from tests.helpers.fixtures import (
+    SyntheticAgent,
+    SyntheticRunSpec,
+    SyntheticTask,
+    create_synthetic_run,
+)
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_state(run_dir: Path, phase: str = "executing") -> None:

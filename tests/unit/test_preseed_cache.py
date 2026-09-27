@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _init_git_repo(tmp_path: Path) -> None:

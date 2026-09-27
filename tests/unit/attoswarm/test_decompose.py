@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attoswarm.coordinator.decompose import (
     build_decompose_prompt,
     classify_goal_complexity,

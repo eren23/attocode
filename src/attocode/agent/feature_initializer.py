@@ -371,9 +371,9 @@ def initialize_features(
     if lsp and hasattr(ctx, "registry") and ctx.registry is not None:
         try:
             from attocode.tools.lsp import (
-                create_lsp_tools,
-                create_call_hierarchy_tools,
                 create_all_lsp_tools,
+                create_call_hierarchy_tools,
+                create_lsp_tools,
             )
 
             # Base tools: definition, references, hover, diagnostics

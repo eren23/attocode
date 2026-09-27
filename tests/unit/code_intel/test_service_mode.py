@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
-import os
 import time
 import uuid
 
@@ -14,8 +14,8 @@ from attocode.code_intel.config import CodeIntelConfig
 
 # Skip tests requiring service deps if not installed
 try:
-    import jose  # noqa: F401
     import bcrypt  # noqa: F401
+    import jose  # noqa: F401
     HAS_SERVICE_DEPS = True
 except ImportError:
     HAS_SERVICE_DEPS = False
@@ -382,7 +382,7 @@ class TestCloneStorageManager:
     def test_init_creates_dir(self, tmp_path):
         from attocode.code_intel.git.storage import CloneStorageManager
 
-        mgr = CloneStorageManager(str(tmp_path / "clones"), max_gb=1.0)
+        CloneStorageManager(str(tmp_path / "clones"), max_gb=1.0)
         assert (tmp_path / "clones").exists()
 
     def test_total_usage_empty(self, tmp_path):
@@ -523,9 +523,6 @@ class TestParseContentBridge:
 
 
 # --- Debouncer ---
-
-
-import asyncio
 
 
 class TestDebouncer:

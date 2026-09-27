@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.utilities.mode_manager import (
     EXEC_TOOLS,
     MODE_PROMPTS,
@@ -11,7 +9,6 @@ from attocode.integrations.utilities.mode_manager import (
     READ_TOOLS,
     WRITE_TOOLS,
     AgentMode,
-    ModeCheckResult,
     ModeManager,
     ProposedChange,
     _is_test_command,

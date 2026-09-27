@@ -21,7 +21,6 @@ from attocode.integrations.context.ts_parser import (
     ts_parse_file,
 )
 
-
 # ============================================================
 # Language detection tests
 # ============================================================

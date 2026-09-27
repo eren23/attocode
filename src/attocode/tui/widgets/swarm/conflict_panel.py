@@ -11,7 +11,6 @@ from typing import Any
 from rich.text import Text
 from textual.widgets import Static
 
-
 _RESOLUTION_STYLES: dict[str, str] = {
     "auto_merged": "green",
     "advisor_resolved": "cyan",

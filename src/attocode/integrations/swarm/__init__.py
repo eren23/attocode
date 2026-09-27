@@ -4,14 +4,6 @@ from attocode.integrations.swarm.cc_spawner import (
     create_cc_spawn_fn,
     spawn_cc_worker,
 )
-from attocode.integrations.swarm.opencode_spawner import (
-    create_opencode_spawn_fn,
-    spawn_opencode_worker,
-)
-from attocode.integrations.swarm.openshell_spawner import (
-    create_openshell_spawn_fn,
-    spawn_openshell_worker,
-)
 from attocode.integrations.swarm.compilation_check import (
     CompilationCheckResult,
     CompilationError,
@@ -57,6 +49,14 @@ from attocode.integrations.swarm.model_selector import (
     probe_worker_models,
     select_alternative_model,
     select_worker_for_capability,
+)
+from attocode.integrations.swarm.opencode_spawner import (
+    create_opencode_spawn_fn,
+    spawn_opencode_worker,
+)
+from attocode.integrations.swarm.openshell_spawner import (
+    create_openshell_spawn_fn,
+    spawn_openshell_worker,
 )
 from attocode.integrations.swarm.orchestrator import (
     OrchestratorInternals,

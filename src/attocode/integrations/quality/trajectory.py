@@ -124,9 +124,7 @@ class TrajectoryTracker:
         # Same tool+args repeated
         signatures = [(t.tool_name, str(sorted(t.tool_args.items()))) for t in recent if t.tool_name]
         unique_sigs = set(signatures)
-        if len(unique_sigs) <= 2 and len(signatures) >= 4:
-            return True
-        return False
+        return bool(len(unique_sigs) <= 2 and len(signatures) >= 4)
 
     def get_summary(self, *, last_n: int = 10) -> dict[str, Any]:
         """Get a summary of recent trajectory for /trace command."""

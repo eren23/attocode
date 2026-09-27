@@ -4,10 +4,10 @@ Tests the data structures used by TUI widgets without requiring
 Textual rendering infrastructure.
 """
 
+from attocode.tui.widgets.collapsible_diff import CollapsibleFile
+from attocode.tui.widgets.diagnostics_panel import DiagnosticItem
 from attocode.tui.widgets.error_detail_panel import ErrorDetail
 from attocode.tui.widgets.file_change_summary import FileChange
-from attocode.tui.widgets.diagnostics_panel import DiagnosticItem
-from attocode.tui.widgets.collapsible_diff import CollapsibleFile
 from attocode.tui.widgets.side_by_side_diff import SideBySideLine
 
 

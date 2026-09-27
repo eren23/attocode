@@ -8,32 +8,27 @@ be fully functional at import time.
 from __future__ import annotations
 
 import importlib
-import sys
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Test 9a: code_intel lazy import -- BugReport
 # ---------------------------------------------------------------------------
 
 
-def test_code_intel_lazy_import_bugReport():
+def test_code_intel_lazy_import_bug_report():
     """Importing BugReport from attocode.code_intel should succeed."""
     # Force a fresh lookup through __getattr__
     mod = importlib.import_module("attocode.code_intel")
     # Clear cached value if present so __getattr__ path is exercised
-    if "BugReport" in mod.__dict__:
-        saved = mod.__dict__.pop("BugReport")
-    else:
-        saved = None
+    saved = mod.__dict__.pop("BugReport") if "BugReport" in mod.__dict__ else None
 
     try:
         # Access through the lazy __getattr__
-        BugReport = getattr(mod, "BugReport")
-        assert BugReport is not None
+        bug_report = mod.BugReport
+        assert bug_report is not None
         # It should be a class (dataclass)
-        assert isinstance(BugReport, type) or callable(BugReport)
+        assert isinstance(bug_report, type) or callable(bug_report)
     except ImportError:
         # If tree-sitter or other optional deps are missing, the import
         # itself should still succeed via __getattr__; only instantiation
@@ -53,13 +48,10 @@ def test_code_intel_lazy_import_bugReport():
 def test_code_intel_lazy_import_scan_diff():
     """Importing scan_diff function from attocode.code_intel should succeed."""
     mod = importlib.import_module("attocode.code_intel")
-    if "scan_diff" in mod.__dict__:
-        saved = mod.__dict__.pop("scan_diff")
-    else:
-        saved = None
+    saved = mod.__dict__.pop("scan_diff") if "scan_diff" in mod.__dict__ else None
 
     try:
-        scan_diff = getattr(mod, "scan_diff")
+        scan_diff = mod.scan_diff
         assert callable(scan_diff)
     except ImportError:
         pytest.skip("Optional dependency missing for scan_diff module")
@@ -76,13 +68,10 @@ def test_code_intel_lazy_import_scan_diff():
 def test_context_lazy_import_microcompact():
     """Importing microcompact from attocode.integrations.context should succeed."""
     mod = importlib.import_module("attocode.integrations.context")
-    if "microcompact" in mod.__dict__:
-        saved = mod.__dict__.pop("microcompact")
-    else:
-        saved = None
+    saved = mod.__dict__.pop("microcompact") if "microcompact" in mod.__dict__ else None
 
     try:
-        microcompact = getattr(mod, "microcompact")
+        microcompact = mod.microcompact
         assert callable(microcompact)
     except ImportError:
         pytest.skip("Optional dependency missing for microcompact module")
@@ -96,17 +85,14 @@ def test_context_lazy_import_microcompact():
 # ---------------------------------------------------------------------------
 
 
-def test_context_lazy_import_ToolDecayProfile():
+def test_context_lazy_import_tool_decay_profile():
     """Importing ToolDecayProfile from attocode.integrations.context should succeed."""
     mod = importlib.import_module("attocode.integrations.context")
-    if "ToolDecayProfile" in mod.__dict__:
-        saved = mod.__dict__.pop("ToolDecayProfile")
-    else:
-        saved = None
+    saved = mod.__dict__.pop("ToolDecayProfile") if "ToolDecayProfile" in mod.__dict__ else None
 
     try:
-        ToolDecayProfile = getattr(mod, "ToolDecayProfile")
-        assert ToolDecayProfile is not None
+        tool_decay_profile = mod.ToolDecayProfile
+        assert tool_decay_profile is not None
     except ImportError:
         pytest.skip("Optional dependency missing for ToolDecayProfile module")
     finally:
@@ -123,11 +109,11 @@ def test_invalid_attribute_raises_code_intel():
     """Accessing a nonexistent attribute on code_intel should raise AttributeError."""
     mod = importlib.import_module("attocode.code_intel")
     with pytest.raises(AttributeError, match="no attribute"):
-        _ = getattr(mod, "ThisDoesNotExist_XYZ_12345")
+        _ = mod.ThisDoesNotExist_XYZ_12345
 
 
 def test_invalid_attribute_raises_context():
     """Accessing a nonexistent attribute on context should raise AttributeError."""
     mod = importlib.import_module("attocode.integrations.context")
     with pytest.raises(AttributeError, match="no attribute"):
-        _ = getattr(mod, "ThisDoesNotExist_XYZ_12345")
+        _ = mod.ThisDoesNotExist_XYZ_12345

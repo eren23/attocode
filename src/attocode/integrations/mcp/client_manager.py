@@ -13,11 +13,11 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.mcp.client import MCPCallResult, MCPClient, MCPTool
-from attocode.integrations.mcp.transports import MCPTransport
 
 if TYPE_CHECKING:
     from attocode.integrations.mcp.config import MCPServerConfig
     from attocode.integrations.mcp.meta_tools import MCPMetaTools
+    from attocode.integrations.mcp.transports import MCPTransport
 
 
 class ConnectionState(StrEnum):

@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.context.query_constraints import (
     Constraint,
     GitStatus,
-    ParsedQuery,
     _matches_glob,
     filter_files_by_constraints,
     matches_constraints,

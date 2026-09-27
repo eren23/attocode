@@ -4,18 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from attocode.tracing.types import TraceEvent, TraceEventKind, TraceSession
-from attocode.tracing.analysis.session_analyzer import SessionAnalyzer
 from attocode.tracing.analysis.inefficiency_detector import InefficiencyDetector
+from attocode.tracing.analysis.session_analyzer import SessionAnalyzer
 from attocode.tracing.analysis.token_analyzer import TokenAnalyzer
 from attocode.tracing.analysis.views import (
-    DetectedIssue,
     SessionSummaryView,
     TimelineEntry,
-    TokenFlowPoint,
-    TreeNode,
 )
-
+from attocode.tracing.types import TraceEvent, TraceEventKind, TraceSession
 
 # ---------------------------------------------------------------------------
 # Helpers

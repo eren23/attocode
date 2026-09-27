@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -13,17 +12,12 @@ from attocode.providers.anthropic import AnthropicProvider
 from attocode.providers.base import get_model_pricing
 from attocode.types.messages import (
     ChatOptions,
-    ImageContentBlock,
-    ImageSource,
     Message,
-    MessageWithStructuredContent,
     Role,
     StopReason,
-    TextContentBlock,
     ToolCall,
     ToolDefinition,
 )
-
 
 MOCK_URL = "https://api.anthropic.com/v1/messages"
 MOCK_REQUEST = httpx.Request("POST", MOCK_URL)
@@ -45,9 +39,11 @@ class TestAnthropicProviderInit:
         assert provider.name == "anthropic"
 
     def test_no_api_key(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ProviderError, match="ANTHROPIC_API_KEY"):
-                AnthropicProvider()
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            pytest.raises(ProviderError, match="ANTHROPIC_API_KEY"),
+        ):
+            AnthropicProvider()
 
 
 class TestAnthropicChat:

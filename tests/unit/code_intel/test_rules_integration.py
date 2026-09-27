@@ -9,12 +9,9 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from attocode.code_intel.rules.executor import execute_rules
 from attocode.code_intel.rules.filters.pipeline import run_pipeline
 from attocode.code_intel.rules.loader import load_yaml_rules
-from attocode.code_intel.rules.model import RuleSource
 
 
 class TestMetavarIntegration:

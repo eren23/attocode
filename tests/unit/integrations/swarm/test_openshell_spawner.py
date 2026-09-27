@@ -14,12 +14,10 @@ from attocode.integrations.swarm.openshell_spawner import (
     spawn_openshell_worker,
 )
 from attocode.integrations.swarm.types import (
-    SpawnResult,
     SwarmConfig,
     SwarmTask,
     SwarmWorkerSpec,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

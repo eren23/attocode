@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-from pathlib import Path
-from unittest.mock import MagicMock
+from typing import TYPE_CHECKING
 
 import pytest
 
 from attoswarm.workspace.file_ledger import FileLedger, FileVersion, WriteResult
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture

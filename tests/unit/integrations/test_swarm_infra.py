@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -21,8 +19,6 @@ from attocode.integrations.swarm.model_selector import (
 )
 from attocode.integrations.swarm.quality_gate import (
     ArtifactReport,
-    ConcreteCheckResult,
-    QualityGateResult,
     check_artifacts,
     check_artifacts_enhanced,
     run_concrete_checks,
@@ -52,10 +48,11 @@ from attocode.integrations.swarm.types import (
     SwarmWorkerSpec,
     TaskFailureMode,
     WorkerCapability,
-    WorkerRole,
 )
 from attocode.integrations.swarm.worker_pool import SwarmWorkerPool
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # =============================================================================
 # Helpers

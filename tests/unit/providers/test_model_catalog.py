@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from attocode.providers.base import ModelInfo, ModelPricing
+from attocode.providers.base import ModelPricing
 from attocode.providers.catalog import (
     CatalogEntry,
     ModelCatalog,

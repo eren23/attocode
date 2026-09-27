@@ -94,9 +94,11 @@ class TestInitModelCache:
         """Cache should populate even without OPENROUTER_API_KEY (public endpoint)."""
         mock_client = _make_mock_client(OPENROUTER_RESPONSE)
 
-        with patch.dict("os.environ", {}, clear=True):
-            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
-                await init_model_cache()
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await init_model_cache()
 
         assert is_cache_initialized()
         assert get_cached_context_length("anthropic/claude-sonnet-4") == 200_000
@@ -105,9 +107,11 @@ class TestInitModelCache:
     async def test_populates_cache_on_success(self) -> None:
         mock_client = _make_mock_client(OPENROUTER_RESPONSE)
 
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
-            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
-                await init_model_cache()
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}),
+            patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await init_model_cache()
 
         assert is_cache_initialized()
         assert get_cached_context_length("anthropic/claude-sonnet-4") == 200_000
@@ -122,9 +126,11 @@ class TestInitModelCache:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
-            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
-                await init_model_cache()  # should not raise
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}),
+            patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await init_model_cache()  # should not raise
 
         assert not is_cache_initialized()
 
@@ -133,10 +139,12 @@ class TestInitModelCache:
         """Second call within TTL should be a no-op."""
         mock_client = _make_mock_client(OPENROUTER_RESPONSE)
 
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
-            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
-                await init_model_cache()
-                await init_model_cache()  # should skip
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}),
+            patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await init_model_cache()
+            await init_model_cache()  # should skip
 
         # Only one HTTP call
         assert mock_client.get.call_count == 1
@@ -147,9 +155,11 @@ class TestCachedLookups:
     async def _populate(self) -> None:
         mock_client = _make_mock_client(OPENROUTER_RESPONSE)
 
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
-            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
-                await init_model_cache()
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}),
+            patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await init_model_cache()
 
     def test_exact_match(self) -> None:
         assert get_cached_context_length("anthropic/claude-sonnet-4") == 200_000
@@ -210,9 +220,11 @@ class TestThreeTierResolution:
             ],
         })
 
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
-            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
-                await init_model_cache()
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}),
+            patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await init_model_cache()
 
         # Dynamic cache value should win over builtin 200_000
         assert get_model_context_window("claude-sonnet-4-20250514") == 250_000
@@ -328,9 +340,11 @@ class TestCapabilitiesCache:
     @pytest.fixture(autouse=True)
     async def _populate(self) -> None:
         mock_client = _make_mock_client(OPENROUTER_RESPONSE)
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
-            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
-                await init_model_cache()
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}),
+            patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await init_model_cache()
 
     def test_vision_model_detected(self) -> None:
         caps = get_cached_capabilities("anthropic/claude-sonnet-4")
@@ -355,9 +369,11 @@ class TestIsVisionCapable:
     @pytest.fixture(autouse=True)
     async def _populate(self) -> None:
         mock_client = _make_mock_client(OPENROUTER_RESPONSE)
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
-            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
-                await init_model_cache()
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}),
+            patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await init_model_cache()
 
     def test_cached_vision_model(self) -> None:
         assert is_vision_capable("anthropic/claude-sonnet-4") is True

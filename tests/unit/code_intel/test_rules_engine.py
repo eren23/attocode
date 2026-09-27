@@ -6,12 +6,31 @@ filter pipeline, pack loader, taint loader, and plugin loader.
 
 from __future__ import annotations
 
-import os
 import re
 import textwrap
 
-import pytest
-
+from attocode.code_intel.rules.enricher import enrich_findings
+from attocode.code_intel.rules.executor import (
+    detect_language,
+    execute_rules,
+)
+from attocode.code_intel.rules.filters.pipeline import (
+    adjust_test_file_severity,
+    dedup_findings,
+    filter_by_confidence,
+    run_pipeline,
+)
+from attocode.code_intel.rules.formatter import (
+    format_findings,
+    format_packs_list,
+    format_rules_list,
+    format_summary,
+)
+from attocode.code_intel.rules.loader import (
+    load_builtin_rules,
+    load_user_rules,
+    load_yaml_rules,
+)
 from attocode.code_intel.rules.model import (
     AutoFix,
     EnrichedFinding,
@@ -19,45 +38,20 @@ from attocode.code_intel.rules.model import (
     RuleCategory,
     RuleSeverity,
     RuleSource,
-    RuleTier,
     UnifiedRule,
     from_bug_pattern,
     from_security_pattern,
 )
-from attocode.code_intel.rules.registry import RuleRegistry
-from attocode.code_intel.rules.loader import (
-    load_builtin_rules,
-    load_yaml_rules,
-    load_user_rules,
-)
-from attocode.code_intel.rules.executor import (
-    detect_language,
-    execute_rules,
-)
-from attocode.code_intel.rules.enricher import enrich_findings
-from attocode.code_intel.rules.formatter import (
-    format_findings,
-    format_rules_list,
-    format_summary,
-    format_packs_list,
-)
-from attocode.code_intel.rules.filters.pipeline import (
-    dedup_findings,
-    adjust_test_file_severity,
-    filter_by_confidence,
-    run_pipeline,
-)
 from attocode.code_intel.rules.packs.pack_loader import (
     discover_packs,
     list_example_packs,
-    load_all_packs,
     load_pack,
 )
 from attocode.code_intel.rules.plugins.plugin_loader import (
     discover_plugins,
     load_all_plugins,
 )
-
+from attocode.code_intel.rules.registry import RuleRegistry
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -69,7 +63,7 @@ _EVAL_PATTERN = r"ev" + r"al\("
 
 
 def _make_rule(
-    id: str = "test-rule",
+    id: str = "test-rule",  # noqa: A002 - mirrors UnifiedRule.id; callers pass id=
     severity: RuleSeverity = RuleSeverity.HIGH,
     category: RuleCategory = RuleCategory.SECURITY,
     pattern: str = _EVAL_PATTERN,
@@ -746,7 +740,7 @@ class TestRegistryThreadSafety:
 
 class TestEnricherCache:
     def test_cache_invalidates_on_mtime_change(self, tmp_path) -> None:
-        from attocode.code_intel.rules.enricher import _read_file_lines, _file_cache
+        from attocode.code_intel.rules.enricher import _file_cache, _read_file_lines
         f = tmp_path / "test.txt"
         f.write_text("line1\nline2\n")
 
@@ -766,7 +760,7 @@ class TestEnricherCache:
         _file_cache.pop(str(f), None)
 
     def test_cache_returns_cached_on_same_mtime(self, tmp_path) -> None:
-        from attocode.code_intel.rules.enricher import _read_file_lines, _file_cache
+        from attocode.code_intel.rules.enricher import _file_cache, _read_file_lines
         f = tmp_path / "test.txt"
         f.write_text("content\n")
 

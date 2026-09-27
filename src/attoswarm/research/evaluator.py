@@ -293,7 +293,7 @@ class CompositeEvaluator:
         errors: list[str] = []
         raw_parts: list[str] = []
 
-        for (_, weight), result in zip(self._weights, results):
+        for (_, weight), result in zip(self._weights, results, strict=False):
             if isinstance(result, Exception):
                 errors.append(str(result))
                 continue

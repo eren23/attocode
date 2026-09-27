@@ -6,12 +6,10 @@ accumulation -> task state transition) has zero coverage.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,8 +21,9 @@ from attoswarm.coordinator.output_harvester import (
     harvest_outputs,
 )
 from attoswarm.protocol.io import read_json, write_json_atomic
-from attoswarm.protocol.models import AgentOutbox
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -394,9 +393,11 @@ class TestHandleCompletionClaim:
         task.artifacts = []
         coord._find_task.return_value = task
 
-        with patch("attoswarm.coordinator.output_harvester.detect_file_changes"):
-            with patch("attoswarm.coordinator.loop.SKIP_REVIEW_KINDS", {"research"}):
-                await handle_completion_claim(coord, "w1", "task-1")
+        with (
+            patch("attoswarm.coordinator.output_harvester.detect_file_changes"),
+            patch("attoswarm.coordinator.loop.SKIP_REVIEW_KINDS", {"research"}),
+        ):
+            await handle_completion_claim(coord, "w1", "task-1")
 
         coord._transition_task.assert_called_with("task-1", "done", "worker", "terminal_claim")
         coord._persist_task.assert_called_with(task, status="done")
@@ -415,9 +416,11 @@ class TestHandleCompletionClaim:
         task.artifacts = ["src/main.py"]
         coord._find_task.return_value = task
 
-        with patch("attoswarm.coordinator.output_harvester.detect_file_changes"):
-            with patch("attoswarm.coordinator.loop.SKIP_REVIEW_KINDS", set()):
-                await handle_completion_claim(coord, "w1", "task-1")
+        with (
+            patch("attoswarm.coordinator.output_harvester.detect_file_changes"),
+            patch("attoswarm.coordinator.loop.SKIP_REVIEW_KINDS", set()),
+        ):
+            await handle_completion_claim(coord, "w1", "task-1")
 
         coord._transition_task.assert_called_with(
             "task-1", "reviewing", "worker", "completion_claim"

@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from attocode.integrations.swarm.worktree_manager import (
     MergeResult,
     WorktreeInfo,
     WorktreeManager,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

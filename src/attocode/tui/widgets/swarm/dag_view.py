@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static, Tree
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 _STATUS_SYMBOLS = {
     "pending": "\u25cb",    # ○

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -24,7 +23,6 @@ from attocode.integrations.tasks.planning import (
     PlanStep,
 )
 from attocode.types.agent import TaskStatus
-
 
 # ---------------------------------------------------------------------------
 # Mock LLM provider

@@ -8,12 +8,9 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
 from attoswarm.cli import _parse_activity_label
 from attoswarm.tui.stores import StateStore
-from attoswarm.tui.widgets import _AGENT_COLORS, _agent_color, _agent_color_cache
-
+from attoswarm.tui.widgets import _agent_color, _agent_color_cache
 
 # ── _parse_activity_label ─────────────────────────────────────────────
 

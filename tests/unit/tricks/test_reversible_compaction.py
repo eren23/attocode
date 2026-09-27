@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from attocode.tricks.reversible_compaction import (
-    ReversibleCompactor,
-    ReversibleCompactionConfig,
     Reference,
-    extract_file_references,
-    extract_url_references,
-    extract_function_references,
+    ReversibleCompactionConfig,
+    ReversibleCompactor,
     extract_error_references,
+    extract_file_references,
+    extract_function_references,
+    extract_url_references,
     quick_extract,
 )
 

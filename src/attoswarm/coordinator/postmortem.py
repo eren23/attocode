@@ -14,10 +14,11 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from attoswarm.coordinator.causal_analyzer import CausalChainAnalyzer
     from attoswarm.coordinator.decompose_metrics import DecomposeMetrics
     from attoswarm.coordinator.trace_query import TraceQueryEngine

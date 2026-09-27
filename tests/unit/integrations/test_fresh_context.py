@@ -13,7 +13,6 @@ from attocode.integrations.context.auto_compaction import (
 from attocode.types.events import EventType
 from attocode.types.messages import Message, Role
 
-
 MAX_TOKENS = 10_000
 
 

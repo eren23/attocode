@@ -2,16 +2,17 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-
-import pytest
+import time
+from typing import TYPE_CHECKING
 
 from attocode.integrations.context.ast_service import ASTService
 from attocode.integrations.context.hydration import (
     TIER_MEDIUM,
     TIER_SMALL,
-    HydrationState,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _create_python_files(root: Path, count: int) -> None:
@@ -84,9 +85,6 @@ class TestEnsureReferencesIndexed:
         svc.ensure_file_parsed(rel)
         svc.ensure_references_indexed(rel)
         assert rel in svc._reference_indexed_files
-
-
-import time
 
 
 class TestStartHydration:

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import math
 
-import pytest
-
 from eval.meta_harness.rule_bench.scoring import (
     DEFAULT_SEVERITY_WEIGHTS,
     LanguageScore,

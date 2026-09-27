@@ -14,10 +14,12 @@ flagging this test file's own literals as dangerous.
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from attocode.integrations.security.patterns import ANTI_PATTERNS
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Build dynamic-code-runner fixtures at runtime so source code never contains
 # literals that would trigger the security hook. Equivalent strings at runtime.

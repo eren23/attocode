@@ -5,10 +5,8 @@ from __future__ import annotations
 import pytest
 
 from attocode.integrations.quality.trajectory import (
-    PatternDetection,
     TrajectoryPattern,
     TrajectoryTracker,
-    TrajectoryTriple,
 )
 
 

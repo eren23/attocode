@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.integrations.context.cross_references import (
     CrossRefIndex,
     SymbolLocation,

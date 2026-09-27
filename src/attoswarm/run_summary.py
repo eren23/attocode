@@ -99,10 +99,7 @@ def _normalize_working_dir(raw: Any, run_dir: Path) -> Path | None:
     if not isinstance(raw, str) or not raw.strip():
         return None
     path = Path(raw)
-    if not path.is_absolute():
-        path = (run_dir / raw).resolve()
-    else:
-        path = path.resolve()
+    path = (run_dir / raw).resolve() if not path.is_absolute() else path.resolve()
     return path if path.exists() else None
 
 

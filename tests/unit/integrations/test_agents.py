@@ -2,40 +2,43 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pytest
-from pathlib import Path
-from typing import Any
 
 # agents
 from attocode.integrations.agents.blackboard import SharedBlackboard
-from attocode.integrations.agents.registry import (
-    BUILTIN_AGENTS,
-    AgentDefinition,
-    AgentRegistry,
-)
 from attocode.integrations.agents.delegation import (
     DelegationProtocol,
     DelegationRequest,
     DelegationResult,
     DelegationStatus,
 )
+from attocode.integrations.agents.registry import (
+    BUILTIN_AGENTS,
+    AgentDefinition,
+    AgentRegistry,
+)
 
-# tasks
-from attocode.integrations.tasks.task_manager import TaskManager
-from attocode.integrations.tasks.work_log import WorkEntryType, WorkLog
+# mcp
+from attocode.integrations.mcp.client import MCPCallResult, MCPClient, MCPTool
+from attocode.integrations.skills.executor import SkillExecutor
+
+# skills
+from attocode.integrations.skills.loader import SkillLoader, _parse_skill_content
 from attocode.integrations.tasks.decomposer import (
     ComplexityTier,
     classify_complexity,
     decompose_simple,
 )
-from attocode.types.agent import PlanTask, TaskStatus
 
-# skills
-from attocode.integrations.skills.loader import SkillLoader, _parse_skill_content
-from attocode.integrations.skills.executor import SkillExecutor
+# tasks
+from attocode.integrations.tasks.task_manager import TaskManager
+from attocode.integrations.tasks.work_log import WorkEntryType, WorkLog
+from attocode.types.agent import TaskStatus
 
-# mcp
-from attocode.integrations.mcp.client import MCPCallResult, MCPClient, MCPTool
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestSharedBlackboard:
@@ -442,7 +445,7 @@ class TestTaskManager:
 
     def test_progress_partial(self, tm: TaskManager) -> None:
         t1 = tm.create_task("A")
-        t2 = tm.create_task("B")
+        tm.create_task("B")
         tm.start_task(t1)
         tm.complete_task(t1)
         assert tm.progress == pytest.approx(0.5)
@@ -470,7 +473,7 @@ class TestTaskManager:
     def test_pending_count(self, tm: TaskManager) -> None:
         c = tm.create_task("C")
         tm.create_task("A")
-        t2 = tm.create_task("B", dependencies=[c])
+        tm.create_task("B", dependencies=[c])
         assert tm.pending_count == 3
 
     def test_in_progress_count(self, tm: TaskManager) -> None:

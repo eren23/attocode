@@ -30,8 +30,8 @@ from attocode.core.tool_executor import (
     build_tool_result_messages,
     execute_tool_calls_concurrent,
 )
-from attocode.integrations.context.compaction import adjust_slice_for_tool_pairs, microcompact
 from attocode.errors import BudgetExhaustedError, CancellationError
+from attocode.integrations.context.compaction import adjust_slice_for_tool_pairs, microcompact
 from attocode.types.agent import AgentCompletionStatus, AgentResult, CompletionReason
 from attocode.types.events import EventType
 from attocode.types.messages import Message, Role, ToolResult

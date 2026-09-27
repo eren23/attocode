@@ -18,26 +18,23 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
-from attocode.code_intel.rules.registry import RuleRegistry
-from attocode.code_intel.rules.loader import load_builtin_rules, load_yaml_rules, load_user_rules
-from attocode.code_intel.rules.packs.pack_loader import list_example_packs, load_pack
 from attocode.code_intel.rules.executor import execute_rules
 from attocode.code_intel.rules.filters.pipeline import run_pipeline
-from attocode.code_intel.rules.model import RuleSource
+from attocode.code_intel.rules.loader import load_builtin_rules, load_user_rules
+from attocode.code_intel.rules.packs.pack_loader import list_example_packs, load_pack
+from attocode.code_intel.rules.registry import RuleRegistry
 
 # ---------------------------------------------------------------------------
 # Annotation parser — delegates to the shared testing module
 # ---------------------------------------------------------------------------
-
 from attocode.code_intel.rules.testing import (
     Expectation,
-    parse_annotations,
     _finding_matches_rule,
+    parse_annotations,
 )
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -20,6 +20,9 @@ from attocode.code_intel.rules.model import (
     RuleTier,
     UnifiedRule,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _structural_rule(
@@ -318,7 +321,8 @@ class TestStructuralFallback:
         rule fires on a hand-rolled positive fixture."""
         from attocode.code_intel.rules.executor import execute_rules
         from attocode.code_intel.rules.packs.pack_loader import (
-            list_example_packs, load_pack,
+            list_example_packs,
+            load_pack,
         )
 
         fixtures = {
@@ -391,7 +395,8 @@ class TestStructuralFallback:
         each rule fires on a hand-rolled positive fixture."""
         from attocode.code_intel.rules.executor import execute_rules
         from attocode.code_intel.rules.packs.pack_loader import (
-            list_example_packs, load_pack,
+            list_example_packs,
+            load_pack,
         )
 
         # (lang, file_extension, source) — content that triggers every
@@ -472,7 +477,8 @@ class TestStructuralFallback:
         from attocode.code_intel.rules.executor import execute_rules
         from attocode.code_intel.rules.filters.pipeline import run_pipeline
         from attocode.code_intel.rules.packs.pack_loader import (
-            list_example_packs, load_pack,
+            list_example_packs,
+            load_pack,
         )
 
         cli_fixtures = {

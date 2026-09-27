@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 from attocode.types.agent import (
-    AgentCompletionStatus,
-    AgentConfig,
     AgentMetrics,
     AgentPlan,
     AgentResult,
-    AgentState,
     AgentStatus,
     CompletionReason,
     OpenTaskSummary,
     PlanTask,
-    RecoveryInfo,
     TaskStatus,
 )
 from attocode.types.budget import (
@@ -31,6 +27,7 @@ from attocode.types.messages import (
     CacheControl,
     ChatOptions,
     ChatResponse,
+    DangerLevel,
     ImageContentBlock,
     ImageSource,
     Message,
@@ -44,7 +41,6 @@ from attocode.types.messages import (
     ToolCall,
     ToolDefinition,
     ToolResult,
-    DangerLevel,
 )
 
 

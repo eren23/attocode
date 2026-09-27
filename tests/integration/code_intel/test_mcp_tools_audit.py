@@ -12,16 +12,22 @@ from __future__ import annotations
 
 import os
 import subprocess
-import threading
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
 import pytest
+
+from attocode.integrations.context.codebase_ast import (
+    ClassDef,
+    FileAST,
+    FunctionDef,
+    ImportDef,
+    ParamDef,
+)
 
 # ---------------------------------------------------------------------------
 # Domain types used by the mock factory
 # ---------------------------------------------------------------------------
-
 from attocode.integrations.context.codebase_context import (
     DependencyGraph,
     FileInfo,
@@ -32,14 +38,6 @@ from attocode.integrations.context.cross_references import (
     SymbolLocation,
     SymbolRef,
 )
-from attocode.integrations.context.codebase_ast import (
-    FileAST,
-    FunctionDef,
-    ClassDef,
-    ImportDef,
-    ParamDef,
-)
-
 
 # ---------------------------------------------------------------------------
 # Mock factory
@@ -592,13 +590,13 @@ class TestADRTools:
         assert "ADR" in result or "adr" in result.lower() or "#" in result
 
     def test_list_adrs(self):
-        from attocode.code_intel.tools.adr_tools import record_adr, list_adrs
+        from attocode.code_intel.tools.adr_tools import list_adrs, record_adr
         record_adr(title="Test ADR", context="ctx", decision="dec")
         result = list_adrs()
         assert isinstance(result, str)
 
     def test_get_adr(self):
-        from attocode.code_intel.tools.adr_tools import record_adr, get_adr
+        from attocode.code_intel.tools.adr_tools import get_adr, record_adr
         record_adr(title="Test ADR", context="ctx", decision="dec")
         result = get_adr(number=1)
         assert isinstance(result, str)
@@ -634,19 +632,19 @@ class TestLearningTools:
         assert isinstance(result, str)
 
     def test_recall(self):
-        from attocode.code_intel.tools.learning_tools import record_learning, recall
+        from attocode.code_intel.tools.learning_tools import recall, record_learning
         record_learning(type="pattern", description="Use dataclasses")
         result = recall(query="dataclasses")
         assert isinstance(result, str)
 
     def test_learning_feedback(self):
-        from attocode.code_intel.tools.learning_tools import record_learning, learning_feedback
+        from attocode.code_intel.tools.learning_tools import learning_feedback, record_learning
         record_learning(type="pattern", description="Use dataclasses")
         result = learning_feedback(learning_id=1, helpful=True)
         assert isinstance(result, str)
 
     def test_list_learnings(self):
-        from attocode.code_intel.tools.learning_tools import record_learning, list_learnings
+        from attocode.code_intel.tools.learning_tools import list_learnings, record_learning
         record_learning(type="pattern", description="Use dataclasses")
         result = list_learnings()
         assert isinstance(result, str)

@@ -5,9 +5,8 @@ Uses mocks exclusively -- no real subprocesses are spawned.
 
 from __future__ import annotations
 
-import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -17,11 +16,8 @@ from attoswarm.adapters.base import (
     AgentHandle,
     AgentMessage,
     AgentProcessSpec,
-    AgentRuntimeStatus,
-    ProcessBackend,
     SubprocessBackend,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

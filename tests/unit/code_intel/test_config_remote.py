@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.code_intel.config import RemoteConfig, load_remote_config, save_remote_config
-
 
 # ---------------------------------------------------------------------------
 # RemoteConfig dataclass

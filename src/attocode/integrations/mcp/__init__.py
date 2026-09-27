@@ -19,12 +19,12 @@ from attocode.integrations.mcp.meta_tools import (
     MCPMetaTools,
     MCPServerStats,
 )
+from attocode.integrations.mcp.scaffolder import MCPScaffolder, MCPScaffolderError, MCPServerSpec
 from attocode.integrations.mcp.tool_search import (
     MCPToolMatch,
     MCPToolSearchIndex,
     create_mcp_tool_search_tool,
 )
-from attocode.integrations.mcp.scaffolder import MCPScaffolder, MCPScaffolderError, MCPServerSpec
 from attocode.integrations.mcp.tool_validator import MCPToolValidator
 
 __all__ = [

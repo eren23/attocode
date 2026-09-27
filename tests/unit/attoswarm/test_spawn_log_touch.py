@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from typing import TYPE_CHECKING
 
 from attoswarm.adapters.base import AgentProcessSpec, SubprocessAdapter
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_spawn_creates_log_file(tmp_path: Path) -> None:

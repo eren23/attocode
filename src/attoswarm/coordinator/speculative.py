@@ -203,7 +203,6 @@ class SpeculativeExecutor:
             return False
         target_set = set(target_files)
         for node in self._graph.nodes.values():
-            if node.status == "running" and node.target_files:
-                if target_set & set(node.target_files):
-                    return True
+            if node.status == "running" and node.target_files and target_set & set(node.target_files):
+                return True
         return False

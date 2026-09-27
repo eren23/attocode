@@ -68,9 +68,11 @@ class TestCreateProvider:
     def test_auto_detect_no_keys(self) -> None:
         from attocode.errors import ConfigurationError
 
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ConfigurationError, match="No LLM provider found"):
-                create_provider()
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            pytest.raises(ConfigurationError, match="No LLM provider found"),
+        ):
+            create_provider()
 
     def test_unknown_provider(self) -> None:
         from attocode.errors import ConfigurationError

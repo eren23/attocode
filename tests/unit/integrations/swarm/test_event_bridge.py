@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import os
 import time
-from io import StringIO
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 
@@ -17,7 +14,6 @@ from attocode.integrations.swarm.types import (
     SwarmPhase,
     SwarmStatus,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

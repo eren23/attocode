@@ -6,8 +6,8 @@ CodeIntelService handles requests through the HTTP layer.
 
 from __future__ import annotations
 
-import pytest
 import httpx
+import pytest
 
 from attocode.code_intel.api import deps
 from attocode.code_intel.api.app import create_app

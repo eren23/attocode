@@ -351,7 +351,7 @@ class TestDeadLetters:
         self, store_with_session: SessionStore
     ) -> None:
         store = store_with_session
-        lid = await store.add_dead_letter("s1", "op", '{"raw": true}', "err")
+        await store.add_dead_letter("s1", "op", '{"raw": true}', "err")
         letters = await store.drain_dead_letters("s1")
         assert letters[0].payload_json == '{"raw": true}'
 

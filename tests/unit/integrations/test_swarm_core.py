@@ -14,45 +14,17 @@ Covers the five core swarm modules with ~150 tests:
 
 from __future__ import annotations
 
-import asyncio
 import time
-from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# --- Types ---
-from attocode.integrations.swarm.types import (
-    AutoSplitConfig,
-    CompletionGuardConfig,
-    DependencyGraph,
-    FixupTask,
-    SmartDecompositionResult,
-    SmartSubtask,
-    SpawnResult,
-    SubtaskType,
-    SwarmConfig,
-    SwarmEvent,
-    SwarmExecutionStats,
-    SwarmPhase,
-    SwarmQueueStats,
-    SwarmStatus,
-    SwarmTask,
-    SwarmTaskResult,
-    SwarmTaskStatus,
-    SwarmWorkerStatus,
-    TaskFailureMode,
-    swarm_event,
-)
+# --- Event bridge ---
+from attocode.integrations.swarm.event_bridge import SwarmEventBridge
 
-# --- Orchestrator ---
-from attocode.integrations.swarm.orchestrator import (
-    OrchestratorInternals,
-    SwarmOrchestrator,
-    _SimpleBudgetPool,
-    create_swarm_orchestrator,
-)
+# --- Execution ---
+from attocode.integrations.swarm.execution import _classify_failure
 
 # --- Lifecycle ---
 from attocode.integrations.swarm.lifecycle import (
@@ -70,9 +42,16 @@ from attocode.integrations.swarm.lifecycle import (
     skip_remaining_tasks,
 )
 
+# --- Orchestrator ---
+from attocode.integrations.swarm.orchestrator import (
+    OrchestratorInternals,
+    SwarmOrchestrator,
+    _SimpleBudgetPool,
+    create_swarm_orchestrator,
+)
+
 # --- Recovery ---
 from attocode.integrations.swarm.recovery import (
-    CIRCUIT_BREAKER_PAUSE_MS,
     CIRCUIT_BREAKER_THRESHOLD,
     CIRCUIT_BREAKER_WINDOW_MS,
     SwarmRecoveryState,
@@ -85,12 +64,26 @@ from attocode.integrations.swarm.recovery import (
     should_auto_split,
 )
 
-# --- Event bridge ---
-from attocode.integrations.swarm.event_bridge import SwarmEventBridge
-
-# --- Execution ---
-from attocode.integrations.swarm.execution import _classify_failure
-
+# --- Types ---
+from attocode.integrations.swarm.types import (
+    AutoSplitConfig,
+    FixupTask,
+    SmartDecompositionResult,
+    SmartSubtask,
+    SpawnResult,
+    SubtaskType,
+    SwarmConfig,
+    SwarmEvent,
+    SwarmExecutionStats,
+    SwarmPhase,
+    SwarmStatus,
+    SwarmTask,
+    SwarmTaskResult,
+    SwarmTaskStatus,
+    SwarmWorkerStatus,
+    TaskFailureMode,
+    swarm_event,
+)
 
 # =============================================================================
 # Shared Fixtures / Helpers

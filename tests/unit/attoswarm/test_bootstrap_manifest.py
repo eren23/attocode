@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +12,9 @@ import pytest
 from attoswarm.config.schema import OrchestrationConfig, RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import HybridCoordinator
 from attoswarm.protocol.models import default_run_layout
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _make_config(**overrides: object) -> SwarmYamlConfig:

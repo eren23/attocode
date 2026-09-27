@@ -30,7 +30,6 @@ from attocode.integrations.recording.recorder import (
     RecordingSessionManager,
 )
 
-
 # ---------------------------------------------------------------------------
 # Mock event helper
 # ---------------------------------------------------------------------------
@@ -577,7 +576,7 @@ class TestGalleryExport:
             debounce_ms=0,
         )
         mgr = RecordingSessionManager(cfg)
-        session_dir = mgr.start("e2e-test")
+        mgr.start("e2e-test")
 
         mgr.handle_event(_tool_event("read_file", file_path="src/app.py"))
         mgr.handle_event(_tool_event("edit_file", file_path="src/app.py"))

@@ -7,24 +7,18 @@ the method directly.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-from attoswarm.protocol.models import PermissionRequest, PermissionResponse, RoleSpec
-
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Import the constants and method from the loop module.
 # We import them at module level so they are available as references.
 # ---------------------------------------------------------------------------
-
 from attoswarm.coordinator.loop import (
     _AUTO_APPROVE_TOOLS,
     _AUTO_DENY_TOOLS,
     HybridCoordinator,
 )
-
+from attoswarm.protocol.models import PermissionRequest, PermissionResponse, RoleSpec
 
 # ---------------------------------------------------------------------------
 # Helpers

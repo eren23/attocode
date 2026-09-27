@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from attocode.integrations.tool_deferral import (
     DEFAULT_DEFERRED,
     DeferredTool,

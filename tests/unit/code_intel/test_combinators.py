@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
-
 from attocode.code_intel.rules.combinators import (
     AllNode,
     CompositePattern,

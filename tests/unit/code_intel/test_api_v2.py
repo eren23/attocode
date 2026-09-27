@@ -18,7 +18,6 @@ from attocode.code_intel.api.app import create_app
 from attocode.code_intel.config import CodeIntelConfig
 from attocode.code_intel.service import CodeIntelService
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

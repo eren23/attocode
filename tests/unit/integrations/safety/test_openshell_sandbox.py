@@ -201,7 +201,7 @@ class TestOpenShellSession:
     @patch("attocode.integrations.safety.sandbox.openshell.asyncio.create_subprocess_exec")
     async def test_timeout_handling(self, mock_exec: MagicMock) -> None:
         mock_proc = AsyncMock()
-        mock_proc.communicate.side_effect = [asyncio.TimeoutError(), (b"", b"")]
+        mock_proc.communicate.side_effect = [TimeoutError(), (b"", b"")]
         mock_proc.kill = MagicMock()
         mock_exec.return_value = mock_proc
 
@@ -293,7 +293,7 @@ class TestSessionUpdateNetworkPolicy:
         )
         session._destroyed = True
         with pytest.raises(RuntimeError, match="already destroyed"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 session.update_network_policy({"allow": ["*.example.com"]})
             )
 
@@ -310,7 +310,7 @@ class TestSessionUpdateNetworkPolicy:
             options=OpenShellOptions(),
         )
         # Should not raise, just log warning
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             session.update_network_policy({"allow": ["*.example.com"]})
         )
 
@@ -331,7 +331,7 @@ class TestSessionUpdateNetworkPolicy:
         yaml_mod = sys.modules.get("yaml")
         sys.modules["yaml"] = None  # type: ignore
         try:
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 session.update_network_policy({"allow": ["*.example.com"]})
             )
         except (ImportError, TypeError):
@@ -362,7 +362,7 @@ class TestSessionOutputTruncation:
             working_dir="/sandbox",
             options=opts,
         )
-        output, code = asyncio.get_event_loop().run_until_complete(
+        output, code = asyncio.run(
             session.exec_command("echo lots")
         )
         assert len(output) < 200
@@ -385,10 +385,10 @@ class TestSessionDestroyIdempotent:
             working_dir="/sandbox",
             options=OpenShellOptions(),
         )
-        asyncio.get_event_loop().run_until_complete(session.destroy())
+        asyncio.run(session.destroy())
         assert session._destroyed
         # Second destroy should be a no-op
-        asyncio.get_event_loop().run_until_complete(session.destroy())
+        asyncio.run(session.destroy())
         # exec should have been called only once (first destroy)
         assert mock_exec.call_count == 1
 
@@ -405,6 +405,6 @@ class TestSessionCredentialInjection:
         )
         session._destroyed = True
         with pytest.raises(RuntimeError, match="already destroyed"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 session.inject_credentials({"API_KEY": "secret"})
             )

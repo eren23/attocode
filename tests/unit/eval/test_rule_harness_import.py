@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml
@@ -17,6 +17,9 @@ from eval.rule_harness.import_pack import (
     write_notice,
     write_porting_md,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestSources:
@@ -137,7 +140,7 @@ class TestScaffoldPack:
 
     def test_scaffolds_gosec(self, tmp_path: Path) -> None:
         output = tmp_path / "gosec-go"
-        summary = scaffold_pack(
+        scaffold_pack(
             source="gosec",
             output_dir=output,
             pack_name="gosec-go",

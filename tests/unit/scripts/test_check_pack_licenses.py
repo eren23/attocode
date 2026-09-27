@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
 # Path-import the script (it lives outside any package)
 import importlib.util
 import sys
+from pathlib import Path
 
 
 def _import_script() -> object:

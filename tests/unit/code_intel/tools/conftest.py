@@ -6,16 +6,13 @@ Provides standardized fixtures for testing individual MCP tools.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
 if TYPE_CHECKING:
-    from attocode.code_intel.service import CodeIntelService
-    from attocode.integrations.context.ast_service import ASTService
-
+    from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Test project creation
@@ -111,7 +108,7 @@ def mock_code_intel_service(tool_test_project: Path, mock_ast_service):
 @pytest.fixture
 def mock_context_manager(tool_test_project: Path):
     """Provide a mock CodebaseContextManager for tool tests."""
-    from attocode.integrations.context.codebase_context import FileInfo, RepoMap, DependencyGraph
+    from attocode.integrations.context.codebase_context import DependencyGraph, FileInfo, RepoMap
 
     files = [
         FileInfo(path=str(tool_test_project / "src/main.py"),

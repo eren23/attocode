@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
-
 
 def test_feature_init_gated_on_run_count():
     """Feature initialization only runs when run_count == 0."""
@@ -79,6 +77,7 @@ def test_sync_setup_cached_on_subsequent_runs():
 def test_effective_rules_prefers_config():
     """_effective_rules returns config rules when available."""
     from unittest.mock import MagicMock
+
     from attocode.agent.run_context_builder import _effective_rules
 
     agent = MagicMock()
@@ -92,6 +91,7 @@ def test_effective_rules_prefers_config():
 def test_effective_rules_falls_back_to_loaded():
     """_effective_rules falls back to ctx loaded rules when config is empty."""
     from unittest.mock import MagicMock
+
     from attocode.agent.run_context_builder import _effective_rules
 
     agent = MagicMock()
@@ -106,6 +106,7 @@ def test_effective_rules_falls_back_to_loaded():
 def test_effective_rules_filters_empty_strings():
     """_effective_rules filters out empty/whitespace-only rules."""
     from unittest.mock import MagicMock
+
     from attocode.agent.run_context_builder import _effective_rules
 
     agent = MagicMock()
@@ -119,6 +120,7 @@ def test_effective_rules_filters_empty_strings():
 def test_session_metadata_resolves_project_root():
     """_session_metadata resolves project_root from working_dir if needed."""
     from unittest.mock import MagicMock
+
     from attocode.agent.run_context_builder import _session_metadata
 
     agent = MagicMock()

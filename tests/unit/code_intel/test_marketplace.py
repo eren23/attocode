@@ -6,12 +6,9 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from attocode.code_intel.rules.marketplace import (
     RegistryEntry,
     format_registry_search,
-    prepare_pack_for_publish,
     validate_pack,
 )
 

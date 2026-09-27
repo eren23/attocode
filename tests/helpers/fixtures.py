@@ -5,11 +5,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attoswarm.protocol.io import append_jsonl, write_json_atomic
 from attoswarm.protocol.models import default_run_layout
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _ts(offset_s: float = 0.0) -> str:

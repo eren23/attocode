@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from attocode.integrations.mcp.config import (
     MCPServerConfig,
@@ -18,6 +17,8 @@ from attocode.integrations.mcp.config import (
     load_mcp_configs,
 )
 
+if TYPE_CHECKING:
+    import pytest
 
 # =====================================================================
 # MCPServerConfig dataclass

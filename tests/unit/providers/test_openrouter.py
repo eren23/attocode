@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import httpx
 import pytest
 
 from attocode.errors import ProviderError
 from attocode.providers.openrouter import OpenRouterPreferences, OpenRouterProvider
 from attocode.types.messages import (
-    ChatOptions,
-    ChatResponse,
     ImageContentBlock,
     ImageSource,
     ImageSourceType,
@@ -21,9 +18,7 @@ from attocode.types.messages import (
     Role,
     StopReason,
     TextContentBlock,
-    TokenUsage,
     ToolCall,
-    ToolDefinition,
 )
 
 
@@ -42,15 +37,19 @@ class TestOpenRouterProviderInit:
         assert provider.name == "openrouter"
 
     def test_missing_api_key_raises(self) -> None:
-        with patch.dict("os.environ", {"OPENROUTER_API_KEY": ""}, clear=False):
-            with pytest.raises(ProviderError, match="OPENROUTER_API_KEY"):
-                OpenRouterProvider(api_key="")
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": ""}, clear=False),
+            pytest.raises(ProviderError, match="OPENROUTER_API_KEY"),
+        ):
+            OpenRouterProvider(api_key="")
 
     def test_missing_api_key_no_env(self) -> None:
         env = {k: v for k, v in __import__("os").environ.items() if k != "OPENROUTER_API_KEY"}
-        with patch.dict("os.environ", env, clear=True):
-            with pytest.raises(ProviderError, match="OPENROUTER_API_KEY"):
-                OpenRouterProvider()
+        with (
+            patch.dict("os.environ", env, clear=True),
+            pytest.raises(ProviderError, match="OPENROUTER_API_KEY"),
+        ):
+            OpenRouterProvider()
 
 
 # ---------------------------------------------------------------------------

@@ -83,8 +83,10 @@ class TestSearchTools:
         st._security_scanner = None
         st._trigram_index = None
 
-    def test_semantic_search(self):
+    def test_semantic_search(self, monkeypatch):
         """Test semantic_search returns a string."""
+        # attocode.config loads a developer .env at import; this test assumes no model is set.
+        monkeypatch.delenv("ATTOCODE_EMBEDDING_MODEL", raising=False)
         from attocode.code_intel.tools.search_tools import semantic_search
 
         result = semantic_search(query="helper function", top_k=5)
@@ -197,7 +199,7 @@ class TestRegexSearch:
         result = regex_search(pattern="match_line_", max_results=5)
         assert "limited to 5 results" in result
         # Count the file:line: entries — should be exactly 5
-        match_lines = [l for l in result.splitlines() if "many_lines.py:" in l]
+        match_lines = [line for line in result.splitlines() if "many_lines.py:" in line]
         assert len(match_lines) == 5
 
     def test_regex_search_no_matches(self):

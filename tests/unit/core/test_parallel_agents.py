@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.core.parallel_agents import (
     ParallelAgentManager,
     ParallelConfig,

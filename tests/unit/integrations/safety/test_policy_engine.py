@@ -6,7 +6,6 @@ from attocode.integrations.safety.policy_engine import (
     DangerLevel,
     PolicyDecision,
     PolicyEngine,
-    PolicyResult,
     PolicyRule,
 )
 

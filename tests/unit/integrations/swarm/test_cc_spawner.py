@@ -23,9 +23,7 @@ from attocode.integrations.swarm.types import (
     SpawnResult,
     SwarmTask,
     SwarmWorkerSpec,
-    WorkerCapability,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

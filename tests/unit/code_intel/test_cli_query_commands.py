@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_cmd_query_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

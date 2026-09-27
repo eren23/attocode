@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from attocode.integrations.swarm.message_bus import (
-    FileLock,
     MessageType,
-    SwarmMessage,
     SwarmMessageBus,
 )
 

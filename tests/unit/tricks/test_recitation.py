@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from attocode.tricks.recitation import (
-    RecitationManager,
-    RecitationConfig,
-    RecitationState,
-    PlanTask,
     PlanState,
+    PlanTask,
+    RecitationConfig,
+    RecitationManager,
+    RecitationState,
     TodoItem,
 )
 

@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from attocode.integrations.mcp.tool_validator import MCPToolValidator, _GENERIC_NAMES
-
+from attocode.integrations.mcp.tool_validator import _GENERIC_NAMES, MCPToolValidator
 
 # =====================================================================
 # validate_tool -- schema quality scoring
@@ -330,7 +329,7 @@ class TestGenericNames:
     def test_contains_expected_names(self) -> None:
         expected = {"run", "do", "execute", "call", "invoke", "handle",
                     "process", "action", "task", "go", "start"}
-        assert _GENERIC_NAMES == expected
+        assert expected == _GENERIC_NAMES
 
     def test_not_modifiable(self) -> None:
         with pytest.raises(AttributeError):

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from eval.oss_demo.__main__ import cmd_prepare, cmd_summarize, cmd_validate_results
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_manifest(path: Path) -> None:

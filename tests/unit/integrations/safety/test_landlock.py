@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from attocode.integrations.safety.sandbox.landlock import (
+    _SYS_LANDLOCK_ADD_RULE,
+    _SYS_LANDLOCK_CREATE_RULESET,
+    _SYS_LANDLOCK_RESTRICT_SELF,
     ALL_ACCESS,
     LANDLOCK_ACCESS_FS_READ_DIR,
     LANDLOCK_ACCESS_FS_READ_FILE,
     LANDLOCK_ACCESS_FS_WRITE_FILE,
+    READ_ACCESS,
+    WRITE_ACCESS,
     LandlockOptions,
     LandlockResult,
     LandlockSandbox,
-    READ_ACCESS,
-    WRITE_ACCESS,
-    _SYS_LANDLOCK_ADD_RULE,
-    _SYS_LANDLOCK_CREATE_RULESET,
-    _SYS_LANDLOCK_RESTRICT_SELF,
     _build_landlock_helper,
 )
 
@@ -239,7 +238,7 @@ class TestLandlockExecute:
         mock_proc = AsyncMock()
         # First call (inside wait_for) raises; second (after kill) returns empty
         mock_proc.communicate.side_effect = [
-            asyncio.TimeoutError(),
+            TimeoutError(),
             (b"", b""),
         ]
         mock_proc.kill = MagicMock()

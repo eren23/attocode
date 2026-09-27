@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import RichLog
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class MessagesLog(Widget):
@@ -55,7 +57,7 @@ class MessagesLog(Widget):
         except Exception:
             return
 
-        _KIND_STYLES: dict[str, str] = {
+        kind_styles: dict[str, str] = {
             "task_assign": "cyan",
             "task_done": "green",
             "task_completed": "green",
@@ -86,7 +88,7 @@ class MessagesLog(Widget):
                 line.append(f"\u2190 {agent_id}", style="yellow bold")
 
             # Kind badge with color
-            kind_style = _KIND_STYLES.get(kind, "dim")
+            kind_style = kind_styles.get(kind, "dim")
             line.append(f" [{kind}]", style=kind_style)
             if task_id:
                 line.append(f" task:{task_id}", style="green dim")

@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +150,7 @@ class MCPScaffolder:
     def _generate_server_code(self, spec: MCPServerSpec) -> str:
         """Generate the Python MCP server code."""
         lines = [
-            '"""Auto-generated MCP server: {name}."""'.format(name=spec.name),
+            f'"""Auto-generated MCP server: {spec.name}."""',
             "",
             "from mcp.server.fastmcp import FastMCP",
             "",

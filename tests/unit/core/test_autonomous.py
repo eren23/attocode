@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from attocode.core.autonomous import (
     AutonomousPipeline,
     PipelineConfig,
     PipelinePhase,
-    PipelineResult,
     PipelineStatus,
 )
 

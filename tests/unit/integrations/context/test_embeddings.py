@@ -138,9 +138,8 @@ class TestCreateEmbeddingProvider:
         with patch(
             "attocode.integrations.context.embeddings.CodeEmbeddingProvider.__init__",
             side_effect=ImportError("No module named 'sentence_transformers'"),
-        ):
-            with pytest.raises(ImportError, match="sentence-transformers"):
-                create_embedding_provider("bge")
+        ), pytest.raises(ImportError, match="sentence-transformers"):
+            create_embedding_provider("bge")
 
     def test_auto_detect_tries_nomic_first(
         self, monkeypatch: pytest.MonkeyPatch,

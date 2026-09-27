@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from attocode.code_intel.rules.model import (
     EnrichedFinding,
     FewShotExample,
@@ -102,7 +100,7 @@ class TestFindingsToSarif:
         sarif = findings_to_sarif([_make_finding(file="src\\main\\app.py")])
         uri = sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
         assert "\\" not in uri
-        assert "src/main/app.py" == uri
+        assert uri == "src/main/app.py"
 
     def test_tool_version(self):
         sarif = findings_to_sarif([], tool_version="1.2.3")

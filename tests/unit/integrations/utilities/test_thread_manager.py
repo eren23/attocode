@@ -9,11 +9,9 @@ import pytest
 from attocode.integrations.utilities.thread_manager import (
     ThreadInfo,
     ThreadManager,
-    ThreadSnapshot,
     _serialize_msg,
 )
 from attocode.types.messages import Message, Role
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -306,7 +304,7 @@ class TestListThreads:
         mgr = ThreadManager()
         fork_a = mgr.create_fork(label="A")
         time.sleep(0.01)
-        fork_b = mgr.create_fork(label="B")
+        mgr.create_fork(label="B")
         time.sleep(0.01)
         # Touch A so it becomes most recent
         mgr.switch_thread(fork_a.thread_id)

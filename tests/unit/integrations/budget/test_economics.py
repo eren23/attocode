@@ -7,9 +7,7 @@ import time
 import pytest
 
 from attocode.integrations.budget.economics import (
-    BudgetCheck,
     ExecutionEconomicsManager,
-    UsageSnapshot,
 )
 from attocode.types.budget import BudgetEnforcementMode, BudgetStatus, ExecutionBudget
 

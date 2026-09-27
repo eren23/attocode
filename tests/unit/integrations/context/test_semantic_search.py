@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from attocode.integrations.context.semantic_search import (
     IndexProgress,
     SemanticSearchManager,
-    _KeywordDoc,
     _tokenize,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _bare_manager(root_dir: str, **overrides) -> SemanticSearchManager:
@@ -253,7 +254,11 @@ class TestBackgroundIndexer:
         progress = mgr.get_index_progress()
         assert progress.status == "idle"
 
-    def test_is_index_ready_false_when_no_store(self, tmp_path: Path) -> None:
+    def test_is_index_ready_false_when_no_store(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # attocode.config loads a developer .env at import; this test assumes no model is set.
+        monkeypatch.delenv("ATTOCODE_EMBEDDING_MODEL", raising=False)
         mgr = _bare_manager(str(tmp_path), _store=None, _keyword_fallback=True)
 
         assert mgr.is_index_ready() is False

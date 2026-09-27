@@ -332,7 +332,7 @@ class TestSlashCommandShortcuts:
         ctx.mode_manager = mode_mgr
         agent.context = ctx
 
-        result = await handle_command("/code", agent=agent)
+        await handle_command("/code", agent=agent)
         assert mode_mgr.mode == AgentMode.CODE
 
     @pytest.mark.asyncio
@@ -348,7 +348,7 @@ class TestSlashCommandShortcuts:
         ctx.mode_manager = mode_mgr
         agent.context = ctx
 
-        result = await handle_command("/architect", agent=agent)
+        await handle_command("/architect", agent=agent)
         assert mode_mgr.mode == AgentMode.ARCHITECT
 
     @pytest.mark.asyncio
@@ -364,7 +364,7 @@ class TestSlashCommandShortcuts:
         ctx.mode_manager = mode_mgr
         agent.context = ctx
 
-        result = await handle_command("/ask", agent=agent)
+        await handle_command("/ask", agent=agent)
         assert mode_mgr.mode == AgentMode.ASK
 
     @pytest.mark.asyncio
@@ -380,5 +380,5 @@ class TestSlashCommandShortcuts:
         ctx.mode_manager = mode_mgr
         agent.context = ctx
 
-        result = await handle_command("/orchestrate", agent=agent)
+        await handle_command("/orchestrate", agent=agent)
         assert mode_mgr.mode == AgentMode.ORCHESTRATE

@@ -99,7 +99,7 @@ def on_span_complete(listener: Callable[[SpanContext], Any]) -> None:
 
 def remove_span_listener(listener: Callable[[SpanContext], Any]) -> None:
     """Remove a previously registered span listener."""
-    _span_listeners[:] = [l for l in _span_listeners if l is not listener]
+    _span_listeners[:] = [fn for fn in _span_listeners if fn is not listener]
 
 
 @contextmanager

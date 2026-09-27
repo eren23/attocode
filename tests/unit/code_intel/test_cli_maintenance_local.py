@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import types
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
 
 from attocode.code_intel.config import CodeIntelConfig, RemoteConfig
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_cmd_gc_local_mode_clears_cache(

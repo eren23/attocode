@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import random
 import re
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -28,6 +28,9 @@ from attocode.code_intel.rules.model import (
     RuleTier,
     UnifiedRule,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _rule(
@@ -342,10 +345,18 @@ class TestEvolveLoop:
         )
         assert zero_count >= 1
 
-    def test_population_and_fitnesses_correspond_after_loop(self, fixture_corpus: Path):
+    def test_population_and_fitnesses_correspond_after_loop(
+        self, fixture_corpus: Path, monkeypatch,
+    ):
         """C1 — `EvolutionState.fitnesses[i]` must rank `population[i]`.
         Specifically: after a plateau exit, the returned population is
         the actually-evaluated last generation, NOT next_pop."""
+        from types import SimpleNamespace
+
+        import attocode.code_intel.rules.evolution as evo
+
+        # Fitness includes wall-clock speed; a fixed clock keeps re-evaluations equal.
+        monkeypatch.setattr(evo, "time", SimpleNamespace(monotonic=lambda: 0.0))
         seed = _rule("r1", pattern=r"\bdanger\b")
         state = evolve(
             [seed],
@@ -364,7 +375,7 @@ class TestEvolveLoop:
     ):
         """C2 — crossover children must not all share parent_a.id, so
         post-evolution populations have diverse identifiers."""
-        seed = _rule("r1", pattern=r"\bdanger\b")
+        _rule("r1", pattern=r"\bdanger\b")
         # Force-disable plateau by setting plateau_gens > max so we
         # actually hit max_generations and population evolves several
         # times. Composite-perfect seeds will plateau — use a less

@@ -466,7 +466,7 @@ class StreamableHTTPTransport(MCPTransport):
                 logger.warning("HTTP MCP error for %s: %s", method, result["error"])
                 return None
             return result.get("result")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending_requests.pop(req_id, None)
             return None
         except Exception as exc:

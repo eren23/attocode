@@ -14,6 +14,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+# Import shared danger levels (avoids duplicate enum definitions)
+from attocode.types.messages import DangerLevel
+
 
 class PolicyDecision(StrEnum):
     """The result of a policy evaluation."""
@@ -21,10 +24,6 @@ class PolicyDecision(StrEnum):
     ALLOW = "allow"
     PROMPT = "prompt"
     DENY = "deny"
-
-
-# Import shared danger levels (avoids duplicate enum definitions)
-from attocode.types.messages import DangerLevel
 
 
 @dataclass(slots=True)

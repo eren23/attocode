@@ -1864,6 +1864,7 @@ class TestInstaller:
 
     def test_install_hermes_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import yaml
+
         from attocode.code_intel.installer import install_hermes
 
         monkeypatch.setattr("shutil.which", lambda x: None)
@@ -1882,6 +1883,7 @@ class TestInstaller:
 
     def test_install_goose_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import yaml
+
         from attocode.code_intel.installer import install_goose
 
         monkeypatch.setattr("shutil.which", lambda x: None)
@@ -3821,6 +3823,7 @@ class TestNotifyCLI:
     def test_notify_stdin_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """--stdin should parse JSON with tool_input.file_path from Claude Code hooks."""
         import io
+
         from attocode.code_intel.cli import _cmd_notify
 
         monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
@@ -3837,6 +3840,7 @@ class TestNotifyCLI:
     def test_notify_stdin_plain_lines(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """--stdin should also accept plain file paths (one per line)."""
         import io
+
         from attocode.code_intel.cli import _cmd_notify
 
         monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
@@ -4110,7 +4114,10 @@ class TestCommunityDetection:
         """Three distinct clusters should be correctly found by Louvain."""
         try:
             import networkx as nx
-            from networkx.algorithms.community import louvain_communities, modularity
+            from networkx.algorithms.community import (
+                louvain_communities,
+                modularity,  # noqa: F401 - availability check
+            )
         except ImportError:
             pytest.skip("networkx not installed")
 
@@ -4164,15 +4171,15 @@ class TestCommunityDetection:
         weights[("b1.py", "c1.py")] = 1.0
 
         # Build networkx graph and run Louvain
-        G = nx.Graph()
-        G.add_nodes_from(all_files)
+        graph = nx.Graph()
+        graph.add_nodes_from(all_files)
         for src, neighbors in adj.items():
             for tgt in neighbors:
                 if src < tgt:
                     w = weights.get((src, tgt), weights.get((tgt, src), 1.0))
-                    G.add_edge(src, tgt, weight=w)
+                    graph.add_edge(src, tgt, weight=w)
 
-        communities = [set(c) for c in louvain_communities(G, weight="weight", seed=42)]
+        communities = [set(c) for c in louvain_communities(graph, weight="weight", seed=42)]
         assert len(communities) >= 3, f"Expected >=3 communities, got {len(communities)}"
 
     def test_fallback_without_networkx(self) -> None:
@@ -4238,16 +4245,16 @@ class TestCommunityDetection:
         adj["y1.py"].add("x1.py")
         weights[("x1.py", "y1.py")] = 1.0
 
-        G = nx.Graph()
-        G.add_nodes_from(all_files)
+        graph = nx.Graph()
+        graph.add_nodes_from(all_files)
         for src, neighbors in adj.items():
             for tgt in neighbors:
                 if src < tgt:
                     w = weights.get((src, tgt), weights.get((tgt, src), 1.0))
-                    G.add_edge(src, tgt, weight=w)
+                    graph.add_edge(src, tgt, weight=w)
 
-        communities = [set(c) for c in louvain_communities(G, weight="weight", seed=42)]
-        mod_score = modularity(G, communities, weight="weight")
+        communities = [set(c) for c in louvain_communities(graph, weight="weight", seed=42)]
+        mod_score = modularity(graph, communities, weight="weight")
         assert mod_score > 0, f"Expected positive modularity, got {mod_score}"
 
     def test_empty_graph_no_edges(self) -> None:

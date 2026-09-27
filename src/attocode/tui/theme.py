@@ -6,8 +6,11 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

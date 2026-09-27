@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from attocode.config import AttoConfig, FrozenAttoConfig
+from attocode.config import AttoConfig
 
 
 def test_freeze_creates_independent_copy() -> None:
