@@ -108,6 +108,38 @@ class TestDiscoverFiles:
         paths = [f.relative_path for f in files]
         assert not any("node_modules" in p for p in paths)
 
+    def test_reports_only_bounded_checkouts_inside_gitignored_directories(self, tmp_path: Path) -> None:
+        (tmp_path / ".gitignore").write_text("src/\n")
+        (tmp_path / "app.py").write_text("x = 1\n")
+        for index in range(6):
+            checkout = tmp_path / "src" / f"checkout-{index}"
+            checkout.mkdir(parents=True)
+            (checkout / ".git").write_text("gitdir: /elsewhere/worktree\n")
+            (checkout / "main.go").write_text("package main\n")
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        files = mgr.discover_files()
+        assert [file.relative_path for file in files] == ["app.py"]
+        assert len(mgr.excluded_checkout_roots) == 5
+        assert mgr.excluded_checkout_roots_truncated
+
+    def test_refreshes_checkout_guidance_within_existing_ignored_directory(self, tmp_path: Path) -> None:
+        (tmp_path / ".gitignore").write_text("src/\n")
+        (tmp_path / "src").mkdir()
+        (tmp_path / "app.py").write_text("x = 1\n")
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        mgr.discover_files()
+        assert mgr.excluded_checkout_roots == []
+
+        checkout = tmp_path / "src" / "added-later"
+        checkout.mkdir()
+        (checkout / ".git").mkdir()
+        mgr.refresh_excluded_checkout_roots()
+        assert mgr.excluded_checkout_roots == ["src/added-later"]
+
+        (checkout / ".git").rmdir()
+        mgr.refresh_excluded_checkout_roots()
+        assert mgr.excluded_checkout_roots == []
+
     def test_skips_hidden_files(self, tmp_path: Path) -> None:
         (tmp_path / ".env").write_text("SECRET=x")
         (tmp_path / "app.py").write_text("x = 1\n")

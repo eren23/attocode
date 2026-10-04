@@ -161,10 +161,10 @@ class ContextAssemblyConfig:
     large_repo_threshold: int = 5000
 
     # bootstrap() budget ratios (with task_hint)
-    summary_ratio: float = 0.38
-    structure_ratio: float = 0.38
-    conventions_ratio: float = 0.12
-    search_ratio: float = 0.12
+    summary_ratio: float = 0.20
+    structure_ratio: float = 0.20
+    conventions_ratio: float = 0.05
+    search_ratio: float = 0.50
 
     # bootstrap() budget ratios (without task_hint)
     summary_ratio_no_hint: float = 0.40
@@ -334,7 +334,9 @@ class SemanticSearchManager:
     def _load_importance_scores(self) -> None:
         """Load file importance from CodebaseContextManager if available."""
         try:
-            from attocode_intel._internal.integrations.context.codebase_context import CodebaseContextManager
+            from attocode_intel._internal.integrations.context.codebase_context import (
+                CodebaseContextManager,
+            )
             ctx = CodebaseContextManager(self.root_dir)
             ctx._ensure_fresh()
             for fi in ctx._files:
@@ -368,7 +370,9 @@ class SemanticSearchManager:
             return None
         if self._dep_graph is None:
             try:
-                from attocode_intel._internal.integrations.context.codebase_context import CodebaseContextManager
+                from attocode_intel._internal.integrations.context.codebase_context import (
+                    CodebaseContextManager,
+                )
                 ctx = CodebaseContextManager(self.root_dir)
                 ctx._ensure_fresh()
                 self._dep_graph = ctx.dependency_graph
@@ -1360,7 +1364,9 @@ class SemanticSearchManager:
         Uses disk cache to avoid re-parsing unchanged files.
         """
         from attocode_intel._internal.integrations.context.codebase_ast import parse_file
-        from attocode_intel._internal.integrations.context.codebase_context import CodebaseContextManager
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            CodebaseContextManager,
+        )
 
         ctx = CodebaseContextManager(root_dir=self.root_dir)
         ctx._ensure_fresh()
@@ -1958,7 +1964,9 @@ class SemanticSearchManager:
             if cached_total > 0:
                 total = cached_total
             else:
-                from attocode_intel._internal.integrations.context.codebase_context import CodebaseContextManager
+                from attocode_intel._internal.integrations.context.codebase_context import (
+                    CodebaseContextManager,
+                )
                 ctx = CodebaseContextManager(root_dir=self.root_dir)
                 ctx._ensure_fresh()
                 if not ctx._files:
@@ -2027,7 +2035,9 @@ class SemanticSearchManager:
         """Background indexer loop: process files in batches."""
         import time
 
-        from attocode_intel._internal.integrations.context.codebase_context import CodebaseContextManager
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            CodebaseContextManager,
+        )
         from attocode_intel._internal.integrations.context.vector_store import VectorEntry
 
         ctx = CodebaseContextManager(root_dir=self.root_dir)

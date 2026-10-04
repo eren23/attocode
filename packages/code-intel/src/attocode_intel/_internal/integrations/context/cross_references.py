@@ -436,10 +436,10 @@ class CrossRefIndex:
     # Search
     # ------------------------------------------------------------------
 
-    def get_definitions(self, symbol_name: str) -> list[SymbolLocation]:
+    def get_definitions(self, symbol_name: str, *, include_shadowed: bool = False) -> list[SymbolLocation]:
         """Look up definitions for a symbol (exact or suffix match)."""
         # Try exact qualified name first
-        if symbol_name in self.definitions:
+        if symbol_name in self.definitions and not include_shadowed:
             return self.definitions[symbol_name]
         # Try suffix match (e.g. "discover_files" matches "CodebaseContextManager.discover_files")
         results: list[SymbolLocation] = []

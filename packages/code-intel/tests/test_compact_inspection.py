@@ -98,6 +98,42 @@ async def test_long_definition_source_pages_keep_every_line_under_budget(reposit
         await gateway.close()
 
 
+async def test_scoped_bare_method_survives_exact_name_and_source_pagination(repository):
+    (repository / "function.py").write_text("def bootstrap():\n    return 'top-level'\n")
+    lines = ["class Runner:", "    def bootstrap(self):",
+             *(f"        value_{i} = {i}" for i in range(100)),
+             "        return value_99"]
+    (repository / "service.py").write_text("\n".join(lines) + "\n")
+    gateway = OperationGateway(str(repository), "daily", watch=False)
+    try:
+        unscoped = decode(await gateway.execute_mcp("inspect_symbol", {"symbol_name": "bootstrap"}))["data"]
+        assert unscoped["definition"]["file_path"] == "function.py"
+        selected = decode(await gateway.execute_mcp("inspect_symbol", {
+            "symbol_name": "bootstrap", "file_path": "service.py", "line": 2}))['data']
+        assert selected["definition"]["qualified_name"] == "Runner.bootstrap"
+        by_line = decode(await gateway.execute_mcp("inspect_symbol", {
+            "symbol_name": "bootstrap", "line": 2}))['data']
+        assert by_line["definition"]["qualified_name"] == "Runner.bootstrap"
+
+        args = {"symbol_name": "bootstrap", "file_path": "service.py", "line": 2,
+                "max_tokens": 900}
+        received = []
+        for _ in range(110):
+            result = await gateway.execute_mcp("inspect_symbol", args)
+            assert response_tokens(result) <= 900
+            data = decode(result)["data"]
+            received.extend(data["source"]["text"].splitlines())
+            continuation = data["follow_up"]["next_source"]
+            if continuation is None:
+                break
+            assert continuation["symbol_name"] == "Runner.bootstrap"
+            args = {key: value for key, value in continuation.items() if key != "tool"}
+            args["max_tokens"] = 900
+        assert received == lines[1:]
+    finally:
+        await gateway.close()
+
+
 async def test_paginated_references_have_no_gaps_under_a_small_budget(repository):
     (repository / "many.py").write_text("from helper import helper\n" + "helper()\n" * 100)
     gateway = OperationGateway(str(repository), "daily", watch=False)

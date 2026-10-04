@@ -177,6 +177,13 @@ def hydration_status() -> str:
         f"Embedding coverage: {status.get('embedding_coverage', 0):.0%}",
         f"Elapsed: {status.get('elapsed_ms', 0):.0f}ms",
     ]
+    excluded = status.get("excluded_checkout_roots", [])
+    if excluded or status.get("excluded_checkout_roots_truncated"):
+        lines.append("Git checkouts excluded by this workspace's ignore rules:")
+        lines.extend(f"  {path}" for path in excluded)
+        if status.get("excluded_checkout_roots_truncated"):
+            lines.append("  Scan incomplete; other ignored Git checkouts may exist.")
+        lines.append("Select a checkout with workspace=<path to checkout> to index its files.")
     return "\n".join(lines)
 
 

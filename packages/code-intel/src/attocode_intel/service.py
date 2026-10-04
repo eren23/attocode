@@ -2243,13 +2243,31 @@ class CodeIntelService:
         from attocode_intel._internal.integrations.context.semantic_search import (
             ContextAssemblyConfig,
         )
+        from attocode_intel._internal.integrations.utilities.token_estimate import count_tokens
         from attocode_intel.helpers import _analyze_conventions, _format_conventions
+        from attocode_intel.output import bounded_text
 
         cc = self._context_config or ContextAssemblyConfig()
 
         ctx = self._get_context_mgr()
+        ctx.refresh_excluded_checkout_roots()
         files = ctx._files
+        checkout_guidance = ""
+        if ctx.excluded_checkout_roots or ctx.excluded_checkout_roots_truncated:
+            paths = "\n".join(
+                f"  {relative} (workspace={Path(self._project_dir, relative)})"
+                for relative in ctx.excluded_checkout_roots
+            )
+            more = ("\n  Scan incomplete; other ignored Git checkouts may exist."
+                    if ctx.excluded_checkout_roots_truncated else "")
+            checkout_guidance = (
+                "## Git checkouts excluded from this workspace\n"
+                f"{paths}{more}\nSelect a checkout as workspace to index its files."
+            )
         if not files:
+            if checkout_guidance:
+                return bounded_text("## Overview\nNo files discovered in this project.\n\n"
+                                    + checkout_guidance, max_tokens)[0]
             return "No files discovered in this project."
 
         total_files = len(files)
@@ -2274,7 +2292,42 @@ class CodeIntelService:
             search_budget = 0
 
         sections: list[str] = []
+        if task_hint:
+            try:
+                mgr = self._get_semantic_search()
+                results = mgr._keyword_search(task_hint, top_k=cc.bootstrap_search_top_k, file_filter="")
+                if results:
+                    heading = f"## Relevant Code for: {task_hint}\n"
+                    selected = ""
+                    for count in range(1, len(results) + 1):
+                        candidate = mgr.format_results(results[:count])
+                        if count < len(results):
+                            candidate = candidate.replace(
+                                f"results ({count}):", f"results ({count} of {len(results)}):", 1)
+                        if count_tokens(heading + candidate) > search_budget:
+                            break
+                        selected = candidate
+                    if not selected:
+                        first = mgr.format_results(results[:1])
+                        selected = (first if count_tokens(heading + first) <= max_tokens else
+                                    "Top match exceeds max_tokens; narrow the task or increase the budget.")
+                    sections.append(heading + selected)
+                else:
+                    summary_budget += search_budget // 2
+                    structure_budget += search_budget - search_budget // 2
+                    sections.append(f"## Relevant Code for: {task_hint}\nNo matches in this workspace.")
+            except Exception as exc:
+                logger.warning("bootstrap semantic-search step failed", exc_info=True)
+                summary_budget += search_budget // 2
+                structure_budget += search_budget - search_budget // 2
+                sections.append(
+                    "## Relevant Code\n"
+                    f"Skipped due to search backend error: {type(exc).__name__}: {exc}"
+                )
+
         sections.append(self.project_summary(max_tokens=summary_budget))
+        if checkout_guidance:
+            sections.append(checkout_guidance)
 
         if size_tier == "small":
             map_text = self.repo_map(include_symbols=True, max_tokens=structure_budget)
@@ -2309,23 +2362,6 @@ class CodeIntelService:
                     conv_text = conv_text[:conv_chars] + "\n  ..."
                 sections.append(f"## Conventions\n{conv_text}")
 
-        if task_hint:
-            try:
-                mgr = self._get_semantic_search()
-                results = mgr._keyword_search(task_hint, top_k=cc.bootstrap_search_top_k, file_filter="")
-                if results:
-                    search_text = mgr.format_results(results)
-                    search_chars = search_budget * 4
-                    if len(search_text) > search_chars:
-                        search_text = search_text[:search_chars] + "\n  ..."
-                    sections.insert(1, f"## Relevant Code for: {task_hint}\n{search_text}")
-            except Exception as exc:
-                logger.warning("bootstrap semantic-search step failed", exc_info=True)
-                sections.append(
-                    "## Relevant Code\n"
-                    f"Skipped due to search backend error: {type(exc).__name__}: {exc}"
-                )
-
         if size_tier == "small":
             guidance = (
                 "## Navigation Guidance\n"
@@ -2349,7 +2385,6 @@ class CodeIntelService:
                 "Before modifying: `impact_analysis([files])` to check blast radius."
             )
         sections.append(guidance)
-        from attocode_intel.output import bounded_text
         return bounded_text("\n\n".join(sections), max_tokens)[0]
 
     def hotspots(self, top_n: int = 15) -> str:

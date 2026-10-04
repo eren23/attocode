@@ -38,6 +38,10 @@ def compact_metadata(metadata: dict) -> dict:
     if coverage:
         result["index"] = {key: coverage[key] for key in
                            ("phase", "parsed_files", "total_files", "discovery_truncated") if key in coverage}
+        if coverage.get("excluded_checkout_roots"):
+            result["index"]["excluded_checkout_roots_found"] = len(coverage["excluded_checkout_roots"])
+        if coverage.get("excluded_checkout_roots_truncated"):
+            result["index"]["excluded_checkout_roots_truncated"] = True
     if analysis:
         result["analysis"] = analysis.get("status", "partial")
         result["absence_proven"] = False
@@ -54,6 +58,35 @@ def compact_result(metadata: dict, data) -> types.CallToolResult:
 
 def response_tokens(result: types.CallToolResult) -> int:
     return count_tokens(result.model_dump_json(exclude_none=True))
+
+
+def bounded_bootstrap(metadata: dict, body: str, max_tokens: int) -> types.CallToolResult:
+    """Fit whole bootstrap sections into the serialized MCP budget."""
+    if not body.startswith("## "):
+        return bounded_compact(metadata, {"result": body}, max_tokens)
+    sections = ["## " + section for section in body.removeprefix("## ").split("\n\n## ")]
+    compact = compact_metadata(metadata)
+    probe_metadata = {**compact, "truncated": True}
+    selected: list[str] = []
+    omitted_search = False
+    for section in sections:
+        candidate = "\n\n".join([*selected, section])
+        if response_tokens(compact_result(probe_metadata, {"result": candidate})) <= max_tokens:
+            selected.append(section)
+        elif section.startswith("## Relevant Code"):
+            # Search hits are indivisible evidence. Never let the generic string
+            # shortener turn a ranked result into a plausible-looking fragment.
+            omission = "## Relevant Code\nTop match omitted; increase max_tokens."
+            candidate = "\n\n".join([*selected, omission])
+            if response_tokens(compact_result(probe_metadata, {"result": candidate})) <= max_tokens:
+                selected.append(omission)
+                omitted_search = True
+            else:
+                raise ValueError("max_tokens is too small to report omitted search evidence; increase it")
+    if not selected:
+        return bounded_compact(metadata, {"result": body}, max_tokens)
+    compact["truncated"] = compact.get("truncated", False) or omitted_search or len(selected) != len(sections)
+    return compact_result(compact, {"result": "\n\n".join(selected)})
 
 
 def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResult:
@@ -74,7 +107,7 @@ def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResu
             if source["end_line"] < source["start_line"]:
                 raise ValueError("max_tokens is too small to include a complete source line; increase it")
             data["follow_up"]["next_source"] = ({
-                "tool": "inspect_symbol", "symbol_name": definition["name"],
+                "tool": "inspect_symbol", "symbol_name": definition["qualified_name"],
                 "file_path": definition["file_path"], "line": definition["start_line"],
                 "source_start_line": source["end_line"] + 1,
             } if source["end_line"] < definition["end_line"] else None)
