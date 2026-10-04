@@ -185,17 +185,27 @@ class OperationGateway:
         timings["validation"] = round((time.monotonic() - before) * 1000, 2)
         if name == "cross_repo_search":
             results = []
+            warming_workspaces = []
             for target in args["workspaces"]:
-                response = await self.execute(
-                    "semantic_search",
-                    {
-                        "workspace": target,
-                        "query": args["query"],
-                        "top_k": args.get("top_k", 10),
-                        "mode": "keyword",
-                    },
-                )
+                request = {
+                    "workspace": target,
+                    "query": args["query"],
+                    "top_k": args.get("top_k", 10),
+                    "mode": "keyword",
+                }
+                # Tiny/new workspaces commonly finish indexing within this bound.
+                # Keep the outer search responsive on large checkouts, where the
+                # explicit warming signal is more honest than an empty match set.
+                deadline = time.monotonic() + 0.75
+                while True:
+                    response = await self.execute("semantic_search", request)
+                    index = response.structuredContent["metadata"].get("ranking", {}).get("index", {})
+                    if index.get("status") != "warming" or time.monotonic() >= deadline:
+                        break
+                    await asyncio.sleep(0.05)
                 structured = response.structuredContent
+                if index.get("status") == "warming":
+                    warming_workspaces.append(target)
                 for rank, match in enumerate(structured["data"]["results"], 1):
                     results.append(
                         {
@@ -211,10 +221,14 @@ class OperationGateway:
             results.sort(key=lambda row: row["fusion_score"], reverse=True)
             results = results[: args.get("top_k", 10)]
             budget = args.get("max_tokens", 8000)
-            text, truncated = bounded_text(json.dumps(results), budget)
+            body = ("Search index warming in: " + ", ".join(warming_workspaces)
+                    + ". Missing results do not prove absence."
+                    if not results and warming_workspaces else json.dumps(results))
+            text, truncated = bounded_text(body, budget)
             if compact:
                 return bounded_compact({"truncated": truncated, "ranking": "reciprocal_rank",
                                         "workspaces": args["workspaces"],
+                                        "warming_workspaces": warming_workspaces,
                                         "analysis": {"status": "partial", "absence_proven": False}}, results, budget)
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text=text)],
@@ -224,6 +238,7 @@ class OperationGateway:
                         "truncated": truncated,
                         "ranking": "reciprocal_rank",
                         "workspaces": args["workspaces"],
+                        "warming_workspaces": warming_workspaces,
                     },
                 },
             )
@@ -321,6 +336,7 @@ class OperationGateway:
         budget = int(args.get("max_tokens", 8000))
         knowledge = args.pop("_knowledge", None)
         precision_result = None
+        ranking = None
         operation_args = dict(args)
         with FileLock(str(lock_dir / "operations.lock"), timeout=30), bind_request(context):
             if compact and is_write(name):
@@ -406,21 +422,44 @@ class OperationGateway:
                     text = json.dumps(payload, default=str, indent=2)
                 elif name == "semantic_search":
                     mgr = service._get_semantic_search()
-                    results = (
-                        mgr._keyword_search(args["query"], args["top_k"], args["file_filter"])
+                    candidates = (
+                        mgr.search_candidates(args["query"], max(args["top_k"], 24), args["file_filter"])
                         if args.get("mode") == "keyword"
                         else mgr.search(
-                            args["query"], top_k=args["top_k"], file_filter=args["file_filter"]
+                            args["query"], top_k=max(args["top_k"], 24), file_filter=args["file_filter"]
                         )
                     )
+                    results, ranking = service._rank_search_results(args["query"], candidates, args["top_k"])
+                    ranking["candidate_pool_count"] = len(candidates)
+                    if hasattr(mgr, "candidate_diagnostics"):
+                        ranking["index"] = mgr.candidate_diagnostics()
+                    result_cap = max(1, budget // 120)
+                    omitted_results = max(0, len(results) - result_cap)
+                    results = results[:result_cap]
+                    ranking["delivered_count"] = len(results)
+                    if omitted_results:
+                        ranking["omitted_results_due_to_budget"] = omitted_results
+                    snippet_cap = max(32, min(320, budget // max(1, len(results))))
+                    hits = []
+                    for result in results:
+                        snippet = (result.text.split("\n", 1)[-1]
+                                   if result.start_line else result.text)
+                        hits.append({
+                            "file_path": result.file_path,
+                            "score": result.score,
+                            "snippet": snippet[:snippet_cap],
+                            "snippet_truncated": len(snippet) > snippet_cap,
+                            "line": result.start_line or None,
+                            "end_line": result.end_line or None,
+                        })
                     payload = {
                         "query": args["query"],
-                        "results": [
-                            {"file_path": r.file_path, "score": r.score, "snippet": r.text}
-                            for r in results
-                        ],
+                        "results": hits,
+                        "ranking": ranking,
                     }
                     text = mgr.format_results(results)
+                    if not results and ranking.get("index", {}).get("status") == "warming":
+                        text = "Search index warming; retry shortly. Missing results do not prove absence."
                 elif name == "inspect_symbol":
                     from attocode_intel.symbol_inspection import inspect_symbol_data
                     payload = inspect_symbol_data(service, args["symbol_name"], args.get("file_path"), args.get("line"),
@@ -506,9 +545,11 @@ class OperationGateway:
                 "coverage": coverage,
                 "analysis": analysis,
                 "freshness": "committed_snapshot" if context.source == "remote" else "working_tree",
-                "truncated": truncated,
+                "truncated": truncated or bool(ranking and ranking.get("omitted_results_due_to_budget")),
                 "duration_ms": round((time.monotonic() - start) * 1000, 2),
             }
+            if ranking is not None:
+                metadata["ranking"] = ranking
             if name == "inspect_symbol":
                 metadata["truncated"] |= bool(payload.get("source", {}).get("truncated")) or any(
                     payload.get("total_" + section, 0) > len(payload.get(section, []))

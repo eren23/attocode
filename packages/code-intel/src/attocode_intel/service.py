@@ -10,6 +10,7 @@ import logging
 import os
 import threading
 from collections import Counter, deque
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -62,9 +63,33 @@ class CodeIntelService:
         self._explorer: HierarchicalExplorer | None = None
         self._security_scanner: SecurityScanner | None = None
         self._semantic_search: SemanticSearchManager | None = None
+        self._local_reranker = None
+        self._local_reranker_status = "not_configured"
         self._memory_store: MemoryStore | None = None
         self._temporal_analyzer: TemporalCouplingAnalyzer | None = None
         self._lsp_auto_started: bool = False
+
+        # Both an absolute local directory and its pinned fingerprint are
+        # required. Prewarming happens off the request thread; search never
+        # fetches weights or waits for cold model loading.
+        reranker_path = (self._config.local_reranker_path
+                         or os.environ.get("ATTOCODE_INTEL_RERANKER_PATH", ""))
+        reranker_sha = (self._config.local_reranker_sha256
+                        or os.environ.get("ATTOCODE_INTEL_RERANKER_SHA256", ""))
+        if bool(reranker_path) != bool(reranker_sha):
+            self._local_reranker_status = "incomplete_config"
+            logger.warning("Local reranker requires both path and SHA-256; deterministic ranking remains active")
+        if reranker_path and reranker_sha:
+            try:
+                from attocode_intel._internal.integrations.context.reranker import (
+                    LocalCrossEncoderReranker,
+                )
+                self._local_reranker = LocalCrossEncoderReranker(reranker_path, reranker_sha)
+                self._local_reranker.start_prewarm()
+                self._local_reranker_status = "loading"
+            except ValueError:
+                logger.warning("Invalid local reranker configuration; deterministic ranking remains active")
+                self._local_reranker_status = "invalid_config"
 
     @classmethod
     def get_instance(cls, project_dir: str, config: CodeIntelConfig | None = None) -> CodeIntelService:
@@ -207,6 +232,90 @@ class CodeIntelService:
                         kwargs["scoring_config"] = self._scoring_config
                     self._semantic_search = SemanticSearchManager(**kwargs)
         return self._semantic_search
+
+    def _task_file_scores(self, task_hint: str, top_k: int = 80) -> dict[str, float]:
+        """Rank files by source-aware local candidates without requiring vectors.
+
+        These are presentation weights, never evidence that a graph edge or an
+        exact symbol definition does not exist.
+        """
+        if not task_hint:
+            return {}
+        try:
+            results = self._get_semantic_search().search_candidates(task_hint, top_k=top_k)
+        except Exception:
+            logger.debug("Task-aware file scoring unavailable", exc_info=True)
+            return {}
+        scores: dict[str, float] = {}
+        for rank, result in enumerate(results):
+            scores[result.file_path] = max(
+                scores.get(result.file_path, 0.0), 1.0 / (1.0 + rank / 10.0),
+            )
+        return scores
+
+    def _rerank_excerpt(self, result, query: str) -> str:
+        """Supply a bounded, current source span to an optional local model."""
+        header = f"{result.file_path} | {result.chunk_type} {result.name}\n"
+        root = Path(self._project_dir).resolve()
+        path = (root / result.file_path).resolve()
+        if not path.is_relative_to(root):
+            return header + result.text[:1800]
+        try:
+            before = path.stat()
+            if before.st_size > 2_000_000:
+                return header + result.text[:1800]
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            after = path.stat()
+            if (before.st_mtime_ns, before.st_ctime_ns, before.st_size) != (
+                after.st_mtime_ns, after.st_ctime_ns, after.st_size
+            ):
+                return header + result.text[:1800]
+        except OSError:
+            return header + result.text[:1800]
+        start = max(1, result.start_line)
+        if not result.start_line:
+            try:
+                symbols = self._get_ast_service().get_file_symbols(result.file_path)
+                matching = [item for item in symbols
+                            if item.name == result.name or item.qualified_name == result.name]
+                if matching:
+                    start = matching[0].start_line
+            except Exception:
+                pass
+        if start == 1 and result.chunk_type == "file":
+            from attocode_intel.focused_evidence import task_terms, terms
+            positive, _ = task_terms(query)
+            for index, line in enumerate(lines):
+                if positive & terms(line):
+                    start = max(1, index - 3)
+                    break
+        return header + "\n".join(lines[start - 1:start + 39])[:1800]
+
+    def _rank_search_results(self, query: str, results: list, top_k: int) -> tuple[list, dict]:
+        """Optional local model order with a complete deterministic fallback."""
+        limited = results[:top_k]
+        ranking = {"method": "source_aware_deterministic", "returned_count": len(limited),
+                   "model_status": self._local_reranker_status}
+        model = self._local_reranker
+        if model is None or not results:
+            return limited, ranking
+        ranking["model_status"] = model.status
+        if not model.is_available:
+            ranking["fallback_reason"] = model.status
+            return limited, ranking
+        candidates = [(str(index), self._rerank_excerpt(result, query), result.score)
+                      for index, result in enumerate(results[:model.max_candidates])]
+        outcome = model.rerank_result(query, candidates, top_k=min(top_k, len(candidates)))
+        if not outcome.reranked:
+            ranking["fallback_reason"] = outcome.fallback_reason
+            return limited, ranking
+        ranked = [replace(results[int(item_id)], score=score)
+                  for item_id, _excerpt, score in outcome.candidates]
+        if len(ranked) < top_k:
+            ranked.extend(results[len(candidates):top_k])
+        ranking.update({"method": "local_cross_encoder", "model_status": model.status,
+                        "reranked_count": len(candidates)})
+        return ranked[:top_k], ranking
 
     def set_scoring_config(self, config: SearchScoringConfig) -> None:
         """Set search scoring config for meta-harness optimization.
@@ -485,10 +594,20 @@ class CodeIntelService:
             for loc in sorted(locs, key=lambda s: s.start_line)
         ]
 
-    def search_symbols_data(self, name: str, limit: int = 30, kind: str = "") -> list[dict]:
+    def search_symbols_data(self, name: str, limit: int = 30, kind: str = "",
+                            task_hint: str = "") -> list[dict]:
         """Return raw symbol search results with scores."""
         svc = self._get_ast_service()
-        scored = svc.search_symbol(name, limit=limit, kind_filter=kind)
+        scored = svc.search_symbol(name, limit=max(limit * 4, 80) if task_hint else limit,
+                                   kind_filter=kind)
+        if task_hint:
+            task_scores = self._task_file_scores(task_hint)
+            # Exact/fuzzy match quality remains primary. Context only breaks
+            # equally matched definitions, never hides a valid definition.
+            scored = sorted(scored, key=lambda row: (
+                -row[1], -task_scores.get(row[0].file_path, 0.0),
+                row[0].file_path, row[0].start_line,
+            ))[:limit]
         return [
             {
                 "kind": loc.kind, "name": loc.name,
@@ -904,7 +1023,8 @@ class CodeIntelService:
             "truncated": len(results) >= executor.MAX_RESULTS,
         }
 
-    def find_related_data(self, file: str, top_k: int = 10) -> dict:
+    def find_related_data(self, file: str, top_k: int = 10,
+                          task_hint: str = "") -> dict:
         """Return structured related-files result."""
         svc = self._get_ast_service()
         rel = svc._to_rel(file)
@@ -935,13 +1055,22 @@ class CodeIntelService:
                         union = len(my_deps | other_deps_set)
                         neighbors[other_file] += round((overlap / union if union else 0) * 5)
 
-        top = neighbors.most_common(top_k)
+        if task_hint:
+            task_scores = self._task_file_scores(task_hint)
+            top = sorted(neighbors.items(), key=lambda row: (
+                -(row[1] + 3.0 * task_scores.get(row[0], 0.0)),
+                -row[1], row[0],
+            ))[:top_k]
+        else:
+            top = neighbors.most_common(top_k)
         return {
             "file": rel,
             "related": [
                 {
                     "path": path,
                     "score": score,
+                    **({"task_relevance": round(task_scores.get(path, 0.0), 3)}
+                       if task_hint else {}),
                     "relation_type": "direct" if path in all_direct else "transitive",
                 }
                 for path, score in top
@@ -1203,7 +1332,12 @@ class CodeIntelService:
                 local mode automatically scopes to working-directory files).
         """
         mgr = self._get_semantic_search()
-        results = mgr.search(query, top_k=top_k, file_filter=file_filter)
+        candidates = mgr.search(query, top_k=max(top_k, 24), file_filter=file_filter)
+        results, ranking = self._rank_search_results(query, candidates, top_k)
+        ranking["candidate_pool_count"] = len(candidates)
+        if hasattr(mgr, "candidate_diagnostics"):
+            ranking["index"] = mgr.candidate_diagnostics()
+        warming = ranking.get("index", {}).get("status") == "warming"
         return {
             "query": query,
             "results": [
@@ -1211,11 +1345,14 @@ class CodeIntelService:
                     "file_path": r.file_path,
                     "score": r.score,
                     "snippet": r.text,
-                    "line": None,
+                    "line": r.start_line or None,
+                    "end_line": r.end_line or None,
                 }
                 for r in results
             ],
             "total": len(results),
+            "status": "warming" if warming else "ready",
+            "ranking": ranking,
         }
 
     def code_evolution_data(
@@ -1805,9 +1942,17 @@ class CodeIntelService:
             lines.append(f"  {loc.kind} {loc.qualified_name}  (L{loc.start_line}-{loc.end_line})")
         return "\n".join(lines)
 
-    def search_symbols(self, name: str, limit: int = 30, kind: str = "") -> str:
+    def search_symbols(self, name: str, limit: int = 30, kind: str = "",
+                       task_hint: str = "") -> str:
         svc = self._get_ast_service()
-        scored = svc.search_symbol(name, limit=limit, kind_filter=kind)
+        scored = svc.search_symbol(name, limit=max(limit * 4, 80) if task_hint else limit,
+                                   kind_filter=kind)
+        if task_hint:
+            task_scores = self._task_file_scores(task_hint)
+            scored = sorted(scored, key=lambda row: (
+                -row[1], -task_scores.get(row[0].file_path, 0.0),
+                row[0].file_path, row[0].start_line,
+            ))[:limit]
         if not scored:
             return f"No definitions found for '{name}'"
         lines = [f"Definitions matching '{name}' ({len(scored)} results):"]
@@ -1970,7 +2115,8 @@ class CodeIntelService:
             lines.append(f"\n  (results truncated at {data['total']})")
         return "\n".join(lines)
 
-    def find_related(self, file: str, top_k: int = 10) -> str:
+    def find_related(self, file: str, top_k: int = 10,
+                     task_hint: str = "") -> str:
         svc = self._get_ast_service()
         rel = svc._to_rel(file)
         idx = svc._index
@@ -1978,7 +2124,7 @@ class CodeIntelService:
         if rel not in idx.file_symbols and rel not in idx.file_dependencies:
             return f"Error: file '{rel}' not found in the project index."
 
-        data = self.find_related_data(file, top_k)
+        data = self.find_related_data(file, top_k, task_hint=task_hint)
         lines = [f"Files related to {data['file']}:"]
         if not data["related"]:
             lines.append("  (no related files found)")
@@ -2046,6 +2192,7 @@ class CodeIntelService:
         depth: int = 1,
         max_tokens: int = 4000,
         include_symbols: bool = True,
+        task_hint: str = "",
     ) -> str:
         from attocode_intel._internal.integrations.context.semantic_search import (
             ContextAssemblyConfig,
@@ -2087,11 +2234,13 @@ class CodeIntelService:
                     visited[dep] = (d + 1, relationship)
                     queue.append((dep, d + 1, relationship))
 
+        task_scores = self._task_file_scores(task_hint) if task_hint else {}
+
         def _sort_key(item):
             rel, (dist, _) = item
             fi = all_files.get(rel)
             importance = fi.importance if fi else 0.0
-            return (dist, -importance)
+            return (dist, -task_scores.get(rel, 0.0), -importance, rel)
 
         sorted_files = sorted(visited.items(), key=_sort_key)
         sections: list[str] = []
@@ -2295,7 +2444,22 @@ class CodeIntelService:
         if task_hint:
             try:
                 mgr = self._get_semantic_search()
-                results = mgr._keyword_search(task_hint, top_k=cc.bootstrap_search_top_k, file_filter="")
+                candidates = mgr.search_candidates(
+                    task_hint, top_k=max(50, cc.bootstrap_search_top_k * 10), file_filter="",
+                )
+                if not candidates and mgr.candidate_diagnostics().get("status") == "warming":
+                    # A newly opened, small workspace usually indexes in a
+                    # fraction of a second. Give bootstrap one bounded chance
+                    # to return useful evidence on its first call; large
+                    # workspaces still report warming without a long stall.
+                    mgr.wait_for_body_index(timeout=0.75)
+                    candidates = mgr.search_candidates(
+                        task_hint, top_k=max(50, cc.bootstrap_search_top_k * 10),
+                        file_filter="",
+                    )
+                results, _ranking = self._rank_search_results(
+                    task_hint, candidates, cc.bootstrap_search_top_k,
+                )
                 if results:
                     heading = f"## Relevant Code for: {task_hint}\n"
                     selected = ""
@@ -2313,9 +2477,16 @@ class CodeIntelService:
                                     "Top match exceeds max_tokens; narrow the task or increase the budget.")
                     sections.append(heading + selected)
                 else:
-                    summary_budget += search_budget // 2
-                    structure_budget += search_budget - search_budget // 2
-                    sections.append(f"## Relevant Code for: {task_hint}\nNo matches in this workspace.")
+                    diagnostics = mgr.candidate_diagnostics()
+                    if diagnostics.get("status") == "warming":
+                        sections.append(
+                            f"## Relevant Code for: {task_hint}\n"
+                            "Search index warming; retry shortly. Missing results do not prove absence."
+                        )
+                    else:
+                        summary_budget += search_budget // 2
+                        structure_budget += search_budget - search_budget // 2
+                        sections.append(f"## Relevant Code for: {task_hint}\nNo matches in this workspace.")
             except Exception as exc:
                 logger.warning("bootstrap semantic-search step failed", exc_info=True)
                 summary_budget += search_budget // 2
@@ -2675,10 +2846,14 @@ class CodeIntelService:
         return "\n".join(lines)
 
     def explore_codebase(
-        self, path: str = "", max_items: int = 30, importance_threshold: float = 0.3,
+        self, path: str = "", max_items: int = 30,
+        importance_threshold: float = 0.3, task_hint: str = "",
     ) -> str:
         explorer = self._get_explorer()
-        result = explorer.explore(path, max_items=max_items, importance_threshold=importance_threshold)
+        task_scores = self._task_file_scores(task_hint) if task_hint else None
+        result = explorer.explore(path, max_items=max_items,
+                                  importance_threshold=importance_threshold,
+                                  task_scores=task_scores)
         return explorer.format_result(result)
 
     def security_scan(self, mode: str = "full", path: str = "") -> str:
@@ -2691,23 +2866,16 @@ class CodeIntelService:
         mgr = self._get_semantic_search()
 
         if mode == "keyword":
-            results = mgr._keyword_search(query, top_k, file_filter)
+            candidates = mgr.search_candidates(query, top_k=max(top_k, 24), file_filter=file_filter)
+            results, _ = self._rank_search_results(query, candidates, top_k)
+            if not results and mgr.candidate_diagnostics().get("status") == "warming":
+                return "Search index warming; retry shortly. Missing results do not prove absence."
             return mgr.format_results(results)
 
-        # Auto-start background embedding if hydration is far enough
-        ast_svc = self._ast_service  # don't trigger init, just check if available
-        if ast_svc is not None:
-            state = ast_svc._hydration_state
-            if (
-                state and state.parse_coverage >= 0.8 and not mgr.is_index_ready()
-                and mgr._bg_indexer is None
-            ):
-                try:
-                    mgr.start_background_indexing()
-                except Exception:
-                    pass
-
-        results = mgr.search(query, top_k=top_k, file_filter=file_filter)
+        candidates = mgr.search(query, top_k=max(top_k, 24), file_filter=file_filter)
+        results, _ = self._rank_search_results(query, candidates, top_k)
+        if not results and mgr.candidate_diagnostics().get("status") == "warming":
+            return "Search index warming; retry shortly. Missing results do not prove absence."
         return mgr.format_results(results)
 
     def semantic_search_status(self) -> str:

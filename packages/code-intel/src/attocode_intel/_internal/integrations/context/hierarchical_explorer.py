@@ -86,6 +86,7 @@ class HierarchicalExplorer:
         *,
         max_items: int = 30,
         importance_threshold: float = 0.3,
+        task_scores: dict[str, float] | None = None,
     ) -> ExplorerResult:
         """Explore one level of a directory.
 
@@ -97,8 +98,8 @@ class HierarchicalExplorer:
         Returns:
             ExplorerResult with dirs, files, and breadcrumbs.
         """
-        cache_key = f"{path}|{max_items}|{importance_threshold}"
-        if cache_key in self._cache:
+        cache_key = f"{path}|{max_items}|{importance_threshold}" if not task_scores else None
+        if cache_key is not None and cache_key in self._cache:
             self._cache.move_to_end(cache_key)
             return self._cache[cache_key]
 
@@ -160,11 +161,20 @@ class HierarchicalExplorer:
                 languages=dict(acc.languages),
                 subdirs=len(acc.seen_subdirs),
             ))
+        if task_scores:
+            directories.sort(key=lambda node: (
+                -max((score for file_path, score in task_scores.items()
+                      if file_path.startswith(node.path + "/")), default=0.0),
+                node.path,
+            ))
 
         # Build file nodes (filtered by importance threshold)
         file_nodes: list[FileNode] = []
-        for f in sorted(direct_files, key=lambda x: x.importance, reverse=True):
-            if f.importance < importance_threshold and len(file_nodes) >= 5:
+        for f in sorted(direct_files, key=lambda x: (
+            -(task_scores or {}).get(x.relative_path, 0.0), -x.importance, x.relative_path,
+        )):
+            if (f.importance < importance_threshold and len(file_nodes) >= 5
+                    and not (task_scores or {}).get(f.relative_path)):
                 break
             tags: list[str] = []
             if f.is_config:
@@ -226,9 +236,10 @@ class HierarchicalExplorer:
         )
 
         # Cache with LRU eviction
-        self._cache[cache_key] = result
-        if len(self._cache) > self._max_cache:
-            self._cache.popitem(last=False)
+        if cache_key is not None:
+            self._cache[cache_key] = result
+            if len(self._cache) > self._max_cache:
+                self._cache.popitem(last=False)
 
         return result
 

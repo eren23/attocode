@@ -54,6 +54,7 @@ PRECISION_K = 10
 RECALL_K = 20
 MRR_K = 10
 NDCG_K = 10
+SEARCH_READY_TIMEOUT_SECONDS = 60.0
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +88,7 @@ class RepoResult:
     avg_recall: float = 0.0
     total_queries: int = 0
     total_time_ms: float = 0.0
+    search_cold_start_ms: float = 0.0
     # Provenance / correctness (stamped when --reindex is used)
     model_name: str = ""
     body_budget: str = ""
@@ -104,6 +106,7 @@ class RepoResult:
             "avg_precision": round(self.avg_precision, 4),
             "avg_recall": round(self.avg_recall, 4),
             "total_time_ms": round(self.total_time_ms, 1),
+            "search_cold_start_ms": round(self.search_cold_start_ms, 1),
             "model_name": self.model_name,
             "body_budget": self.body_budget,
             "embedded_chunks": self.embedded_chunks,
@@ -136,7 +139,7 @@ def parse_search_results(output: str, max_results: int = TOP_K_RESULTS) -> list[
     paths: list[str] = []
 
     for match in _RESULT_LINE_RE.finditer(output):
-        raw_path = match.group(1).strip()
+        raw_path = re.sub(r":\d+-\d+$", "", match.group(1).strip())
         if raw_path and raw_path not in seen:
             seen.add(raw_path)
             paths.append(raw_path)
@@ -144,6 +147,49 @@ def parse_search_results(output: str, max_results: int = TOP_K_RESULTS) -> list[
                 break
 
     return paths
+
+
+def search_is_warming(service: CodeIntelService, output: str) -> bool:
+    """Treat both structured index state and legacy warming text as incomplete."""
+    diagnostics = getattr(service._get_semantic_search(), "candidate_diagnostics", None)
+    state = diagnostics() if callable(diagnostics) else {}
+    return state.get("status") == "warming" or output.startswith("Search index warming;")
+
+
+def wait_for_search_ready(
+    service: CodeIntelService,
+    seed_query: str,
+    *,
+    top_k: int = TOP_K_RESULTS,
+    timeout_seconds: float = SEARCH_READY_TIMEOUT_SECONDS,
+) -> float:
+    """Warm the search index before scoring and return cold-start milliseconds.
+
+    A warming response is incomplete retrieval, not a valid zero-hit result.
+    The warm-up query is discarded; timed evaluation starts only after the
+    candidate index reports ready. Timeout fails loudly rather than biasing
+    quality metrics downward.
+    """
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive")
+    started = time.perf_counter()
+    deadline = time.monotonic() + timeout_seconds
+    manager = service._get_semantic_search()
+    wait = getattr(manager, "wait_for_body_index", None)
+
+    while True:
+        output = service.semantic_search(seed_query, top_k=top_k)
+        if not search_is_warming(service, output):
+            return (time.perf_counter() - started) * 1000
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(
+                f"search index did not become ready within {timeout_seconds:g}s"
+            )
+        if callable(wait):
+            wait(timeout=min(remaining, 2.0))
+        else:
+            time.sleep(min(remaining, 0.05))
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +317,10 @@ def discover_repos_with_ground_truth() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def evaluate_repo(repo: str, reindex: bool = False) -> RepoResult:
+def evaluate_repo(
+    repo: str, reindex: bool = False,
+    search_ready_timeout_seconds: float = SEARCH_READY_TIMEOUT_SECONDS,
+) -> RepoResult:
     """Run search quality evaluation for a single repo.
 
     When ``reindex`` is True, force a full index rebuild (AST + embeddings)
@@ -313,6 +362,15 @@ def evaluate_repo(repo: str, reindex: bool = False) -> RepoResult:
         )
         return result
 
+    try:
+        result.search_cold_start_ms = wait_for_search_ready(
+            svc, queries[0]["query"], timeout_seconds=search_ready_timeout_seconds,
+        )
+    except TimeoutError as exc:
+        result.error = f"search_index_not_ready: {exc}"
+        print(f"[{repo}] GUARD_FAIL: {result.error}", file=sys.stderr)
+        return result
+
     for qi, entry in enumerate(queries, 1):
         query_text: str = entry["query"]
         relevant: list[str] = entry["relevant_files"]
@@ -320,8 +378,11 @@ def evaluate_repo(repo: str, reindex: bool = False) -> RepoResult:
 
         # Run semantic search
         t0 = time.perf_counter()
-        raw_output = svc.semantic_search(query_text)
+        raw_output = svc.semantic_search(query_text, top_k=TOP_K_RESULTS)
         elapsed_ms = (time.perf_counter() - t0) * 1000
+        if search_is_warming(svc, raw_output):
+            result.error = "search_index_not_ready_during_query"
+            return result
         print(
             f"[{repo}] QUERY {qi}/{len(queries)} {elapsed_ms:.0f}ms", file=sys.stderr,
         )
@@ -382,6 +443,9 @@ def format_text_report(results: list[RepoResult]) -> str:
         lines.append(f"Repository: {repo_result.repo}")
         lines.append(f"  Queries evaluated: {repo_result.total_queries}")
         lines.append(f"  Total search time: {repo_result.total_time_ms:.0f}ms")
+        lines.append(f"  Search cold-start (excluded above): {repo_result.search_cold_start_ms:.0f}ms")
+        if repo_result.error:
+            lines.append(f"  Error: {repo_result.error}")
         lines.append("")
         lines.append(f"  Aggregate Metrics:")
         lines.append(f"    MRR@{MRR_K}:          {repo_result.avg_mrr:.3f}")

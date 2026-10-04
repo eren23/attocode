@@ -530,11 +530,15 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
         logger.debug("Indirect test discovery incomplete: %s", exc)
 
     if symbol_name or task_hint:
-        from attocode_intel._shared import _get_ast_service
+        from attocode_intel._shared import _get_ast_service, _get_service
         from attocode_intel.test_ranking import rank_symbol_tests
+        service = _get_service()
+        task_scores = (service._task_file_scores(task_hint)
+                       if task_hint and hasattr(service, "_task_file_scores") else {})
         return {"files": files, "symbol_name": symbol_name, "task_hint": task_hint,
                 "candidates": rank_symbol_tests(_get_ast_service(), suggestions, files, symbol_name,
-                                                task_hint, distances, linked_reference_files),
+                                                task_hint, distances, linked_reference_files,
+                                                relevance_by_file=task_scores),
                 "ranking": "Selected-symbol links, reverse-import distance, then lexical test names; verify candidates",
                 "absence_proven": False}
 

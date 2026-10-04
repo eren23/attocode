@@ -31,7 +31,13 @@ from eval.metrics import (
     compute_precision_at_k,
     compute_recall_at_k,
 )
-from eval.search_quality import REPO_CONFIGS, load_ground_truth, parse_search_results
+from eval.search_quality import (
+    REPO_CONFIGS,
+    load_ground_truth,
+    parse_search_results,
+    search_is_warming,
+    wait_for_search_ready,
+)
 
 
 @dataclass
@@ -43,6 +49,7 @@ class RepoMetrics:
     precision: float
     recall: float
     avg_latency_ms: float
+    search_cold_start_ms: float = 0.0
 
 
 def evaluate_with_config(
@@ -80,13 +87,17 @@ def evaluate_with_config(
             mgr = svc._get_semantic_search()
             mgr.nl_mode = nl_mode_override
 
+        cold_start_ms = wait_for_search_ready(svc, queries[0]["query"], top_k=20)
+
         mrrs, ndcgs, precs, recs, latencies = [], [], [], [], []
         for entry in queries:
             q = entry["query"]
             relevant = set(entry["relevant_files"])
             t0 = time.perf_counter()
-            output = svc.semantic_search(q)
+            output = svc.semantic_search(q, top_k=20)
             elapsed_ms = (time.perf_counter() - t0) * 1000
+            if search_is_warming(svc, output):
+                raise RuntimeError(f"{repo}: search index became incomplete during evaluation")
             retrieved = parse_search_results(output, max_results=20)
 
             mrrs.append(compute_mrr(retrieved, relevant, k=10))
@@ -104,6 +115,7 @@ def evaluate_with_config(
             precision=sum(precs) / n if n else 0,
             recall=sum(recs) / n if n else 0,
             avg_latency_ms=sum(latencies) / n if n else 0,
+            search_cold_start_ms=cold_start_ms,
         ))
 
     return results
@@ -210,6 +222,15 @@ def format_comparison(
             f"  Recall@20: {ovr_b_rec:.3f} → {ovr_a_rec:.3f}",
         ])
 
+    lines.append("")
+    lines.append("Search cold-start (excluded from query latency):")
+    for repo in repos:
+        before_repo, after_repo = by_repo_b.get(repo), by_repo_a.get(repo)
+        if before_repo and after_repo:
+            lines.append(
+                f"  {repo}: {before_repo.search_cold_start_ms:.0f}ms before, "
+                f"{after_repo.search_cold_start_ms:.0f}ms after"
+            )
     lines.append("=" * 95)
     return "\n".join(lines)
 

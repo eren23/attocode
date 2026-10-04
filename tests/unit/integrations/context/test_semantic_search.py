@@ -236,6 +236,219 @@ class TestKeywordSearchContent:
         assert results == []
 
 
+class TestSourceBodyCandidates:
+    """Source retrieval complements names/docstrings without a model."""
+
+    def test_cold_request_reports_warming_without_blocking_or_loading_model(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import threading
+        import time
+
+        (tmp_path / "worker.py").write_text("def execute():\n    return 1\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        started = threading.Event()
+        release = threading.Event()
+
+        def slow_build(self: SemanticSearchManager) -> None:
+            started.set()
+            release.wait(timeout=5)
+            self._kw_index_built = True
+
+        monkeypatch.setattr(SemanticSearchManager, "_build_keyword_index", slow_build)
+        monkeypatch.setattr(SemanticSearchManager, "_sync_body_index", lambda self: None)
+        monkeypatch.setattr(
+            SemanticSearchManager, "_ensure_provider",
+            lambda self: pytest.fail("cold search must not load an embedding model"),
+        )
+        try:
+            begin = time.perf_counter()
+            assert mgr.search("execute", top_k=5) == []
+            assert time.perf_counter() - begin < 0.5
+            assert started.wait(timeout=1)
+            assert mgr.candidate_diagnostics()["status"] == "warming"
+        finally:
+            release.set()
+            mgr.wait_for_body_index(timeout=5)
+
+    def test_ready_lexical_search_still_does_not_load_model(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        (tmp_path / "worker.py").write_text("def execute(): return 1\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search("execute")
+        assert mgr.wait_for_body_index()
+        monkeypatch.setattr(
+            SemanticSearchManager, "_ensure_provider",
+            lambda self: pytest.fail("interactive search must not load an embedding model"),
+        )
+        assert mgr.search("execute")
+
+    def test_finds_body_only_implementation_with_line_span(self, tmp_path: Path) -> None:
+        source = tmp_path / "worker.py"
+        source.write_text(
+            "def execute(value):\n"
+            "    intermediate = value + 1\n"
+            "    sapphire_handshake = intermediate * 2\n"
+            "    return sapphire_handshake\n",
+            encoding="utf-8",
+        )
+        mgr = _bare_manager(str(tmp_path))
+        assert mgr._keyword_search("sapphire handshake", 10, "") == []
+
+        mgr.search_candidates("sapphire handshake", top_k=10)
+        assert mgr.wait_for_body_index()
+        results = mgr.search_candidates("sapphire handshake", top_k=10)
+
+        assert results
+        hit = next(r for r in results if r.file_path == "worker.py")
+        assert hit.chunk_type == "function"
+        assert hit.name == "execute"
+        assert hit.start_line <= 3 <= hit.end_line
+        assert "sapphire_handshake" in hit.text
+
+    def test_invalidation_updates_body_and_removes_deleted_file(self, tmp_path: Path) -> None:
+        source = tmp_path / "worker.py"
+        source.write_text("def execute():\n    return sapphire_handshake\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search_candidates("sapphire", 10)
+        assert mgr.wait_for_body_index()
+        assert mgr.search_candidates("sapphire", 10)
+
+        source.write_text("def execute():\n    return amber_handshake\n", encoding="utf-8")
+        mgr.invalidate_file(str(source))
+        mgr.search_candidates("amber", 10)
+        assert mgr.wait_for_body_index()
+        assert not mgr.search_candidates("sapphire", 10)
+        assert mgr.search_candidates("amber", 10)
+
+        # A fresh manager must also trust disk metadata rather than stale FTS rows.
+        fresh = _bare_manager(str(tmp_path))
+        fresh.search_candidates("amber", 10)
+        assert fresh.wait_for_body_index()
+        assert not fresh.search_candidates("sapphire", 10)
+        source.unlink()
+        fresh.invalidate_file(str(source))
+        fresh.search_candidates("amber", 10)
+        assert fresh.wait_for_body_index()
+        assert not fresh.search_candidates("amber", 10)
+
+    def test_direct_edit_does_not_return_stale_body_hit(self, tmp_path: Path) -> None:
+        source = tmp_path / "worker.py"
+        source.write_text("def execute():\n    return sapphire_handshake\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search_candidates("sapphire", 10)
+        assert mgr.wait_for_body_index()
+
+        source.write_text("def execute():\n    return amber_handshake\n", encoding="utf-8")
+        assert mgr.search_candidates("sapphire", 10) == []
+        assert mgr.candidate_diagnostics()["status"] == "warming"
+        assert mgr.wait_for_body_index()
+        assert not mgr.search_candidates("sapphire", 10)
+        assert mgr.search_candidates("amber", 10)
+
+    def test_body_hit_format_includes_exact_window(self, tmp_path: Path) -> None:
+        (tmp_path / "worker.py").write_text(
+            "def execute():\n    return sapphire_handshake\n", encoding="utf-8",
+        )
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search_candidates("sapphire", 10)
+        assert mgr.wait_for_body_index()
+        result = mgr.search_candidates("sapphire", 10)[0]
+        formatted = mgr.format_results([result])
+        assert f"worker.py:{result.start_line}-{result.end_line}" in formatted
+        assert "sapphire_handshake" in formatted
+
+    def test_query_escaping_and_soft_exclusion(self, tmp_path: Path) -> None:
+        (tmp_path / "attoswarm_worker.py").write_text(
+            "def execute():\n    return ranking_candidate\n", encoding="utf-8",
+        )
+        (tmp_path / "search_worker.py").write_text(
+            "def execute():\n    return ranking_candidate\n", encoding="utf-8",
+        )
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search_candidates("ranking candidate", top_k=20)
+        assert mgr.wait_for_body_index()
+        results = mgr.search_candidates(
+            'ranking candidate OR "evil"* without unrelated swarm modules', top_k=20,
+        )
+        paths = [r.file_path for r in results]
+        assert "search_worker.py" in paths
+        assert "attoswarm_worker.py" in paths  # soft penalty, not exclusion
+        assert paths.index("search_worker.py") < paths.index("attoswarm_worker.py")
+
+    def test_fallback_when_fts_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        (tmp_path / "budget.py").write_text(
+            "def budget_limit():\n    return 3\n", encoding="utf-8",
+        )
+        mgr = _bare_manager(str(tmp_path))
+        monkeypatch.setattr(SemanticSearchManager, "_open_body_db", lambda self: None)
+        assert mgr.search_candidates("budget limit", top_k=10) == []
+        assert mgr.candidate_diagnostics()["status"] == "warming"
+        mgr.wait_for_body_index()
+        assert mgr._kw_index_built
+        results = mgr.search_candidates("budget limit", top_k=10)
+        assert any(r.name == "budget_limit" for r in results)
+
+    def test_exclusion_penalty_applies_before_lexical_limit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from attocode.integrations.context.semantic_search import SemanticSearchResult
+
+        mgr = _bare_manager(str(tmp_path), _kw_index_built=True)
+        ranked = [
+            SemanticSearchResult(f"swarm_{i}.py", "function", "bootstrap", "bootstrap", 1.0)
+            for i in range(5)
+        ] + [SemanticSearchResult("service.py", "function", "bootstrap", "bootstrap", 0.9)]
+        monkeypatch.setattr(SemanticSearchManager, "_keyword_search", lambda *args: ranked)
+        monkeypatch.setattr(SemanticSearchManager, "_body_search", lambda *args: [])
+        results = mgr.search_candidates("bootstrap without swarm", top_k=5)
+        assert results[0].file_path == "service.py"
+
+    def test_source_body_index_does_not_follow_outside_symlink(self, tmp_path: Path) -> None:
+        root = tmp_path / "repo"
+        root.mkdir()
+        outside = tmp_path / "private.py"
+        outside.write_text("def secret(): return sapphire_handshake\n", encoding="utf-8")
+        (root / "linked.py").symlink_to(outside)
+        mgr = _bare_manager(str(root))
+        mgr.search_candidates("sapphire", top_k=10)
+        assert mgr.wait_for_body_index()
+        conn = mgr._open_body_db()
+        assert conn is not None
+        try:
+            assert not conn.execute(
+                "SELECT 1 FROM body_files WHERE file_path = 'linked.py'",
+            ).fetchone()
+        finally:
+            conn.close()
+
+    def test_body_filter_applies_before_rank_limit(self, tmp_path: Path) -> None:
+        for index in range(130):
+            (tmp_path / f"worker_{index}.py").write_text(
+                "def execute(): return sapphire_handshake\n", encoding="utf-8",
+            )
+        (tmp_path / "worker.go").write_text(
+            "func Execute() string { return sapphire_handshake }\n", encoding="utf-8",
+        )
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search_candidates("sapphire handshake", top_k=5)
+        assert mgr.wait_for_body_index()
+        results = mgr.search_candidates("sapphire handshake", top_k=5, file_filter="*.go")
+        assert any(result.file_path == "worker.go" for result in results)
+
+    def test_source_cache_is_private(self, tmp_path: Path) -> None:
+        mgr = _bare_manager(str(tmp_path))
+        conn = mgr._open_body_db()
+        assert conn is not None
+        conn.close()
+        db = tmp_path / ".attocode" / "index" / "kw_index.db"
+        assert db.stat().st_mode & 0o077 == 0
+        assert db.parent.stat().st_mode & 0o077 == 0
+
+
 # ============================================================
 # Background Indexer Tests
 # ============================================================

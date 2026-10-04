@@ -36,7 +36,10 @@ def structural_excerpts(source, definition, hint, preview_end):
     tree = parser.parse(raw)  # No awaits between parse and traversal of this local tree.
     if tree.root_node.has_error:
         return None
-    query = evidence_terms(hint)
+    from attocode_intel.focused_evidence import task_terms
+    positive, _ = task_terms(hint)
+    query = positive | {term for term in evidence_terms(hint)
+                        if term.startswith('--') or term.isdigit()}
     first, last = definition.start_line, min(definition.end_line, len(source))
 
     def bounds(node):

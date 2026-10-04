@@ -14,7 +14,9 @@ import os
 import queue
 import re
 import sqlite3
+import subprocess
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -275,6 +277,8 @@ class SemanticSearchResult:
     name: str
     text: str
     score: float
+    start_line: int = 0
+    end_line: int = 0
 
 
 @dataclass(slots=True)
@@ -305,6 +309,13 @@ class SemanticSearchManager:
     _kw_index_built: bool = field(default=False, repr=False)
     _kw_cache_db_path: str = field(default="", repr=False)
     _kw_cache_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _body_index_built: bool = field(default=False, repr=False)
+    _body_index_available: bool = field(default=True, repr=False)
+    _body_revision: str = field(default="", repr=False)
+    _body_generation: int = field(default=0, repr=False)
+    _body_failed_at: float = field(default=0.0, repr=False)
+    _body_thread: threading.Thread | None = field(default=None, repr=False)
+    _body_state_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _trigram_index: Any = field(default=None, repr=False)
     _bg_indexer: Any = field(default=None, repr=False)
     _bg_thread: Any = field(default=None, repr=False)
@@ -714,9 +725,19 @@ class SemanticSearchManager:
         # Apply query expansion for better recall
         expanded_query = _expand_query(query, _lang) if expand_query else query
 
+        # Search never initializes an optional embedding provider: doing so can
+        # load or download weights on an interactive request. Explicit indexing
+        # activates vectors; until then, lexical candidates remain available.
+        if self._provider is None:
+            return self.search_candidates(expanded_query, top_k, file_filter)
+
+        # An explicitly initialized vector path retains keyword fusion.
+        if not self._kw_index_built:
+            self._build_keyword_index()
+
         self._ensure_provider()
         if self._keyword_fallback:
-            return self._keyword_search(expanded_query, top_k, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter)
 
         # Refuse vectors produced by a different embedding model (manual-reindex
         # migration): serving them returns semantically garbage results.
@@ -728,17 +749,17 @@ class SemanticSearchManager:
                 "keyword results only. Run reindex to rebuild vectors.",
                 store_model, active_model,
             )
-            return self._keyword_search(expanded_query, top_k, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter)
 
         # Coverage-based switchover: use keyword fallback while indexing
         if not self._indexed and self._store:
             count = self._store.count()
             if count == 0 and self._bg_indexer is None:
                 # No embeddings and no background indexer — use keyword fallback
-                return self._keyword_search(expanded_query, top_k, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter)
             elif not self.is_index_ready() and self._bg_indexer is not None:
                 # Indexer running but coverage < 80% — use keyword fallback
-                return self._keyword_search(expanded_query, top_k, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter)
 
         # Embed query — use expanded query for better recall
         try:
@@ -746,13 +767,13 @@ class SemanticSearchManager:
             if not query_vectors or not query_vectors[0]:
                 self._index_progress.degraded_reason = "query_embedding_failed"
                 self._index_progress.last_error = "Query embedding returned no vector."
-                return self._keyword_search(expanded_query, top_k, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter)
             query_vec = query_vectors[0]
         except Exception as exc:
             logger.warning("Query embedding failed, falling back to keyword", exc_info=True)
             self._index_progress.degraded_reason = "query_embedding_failed"
             self._index_progress.last_error = f"Query embedding failed: {type(exc).__name__}: {exc}"
-            return self._keyword_search(expanded_query, top_k, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter)
 
         # Build set of files that exist on disk to filter out stale branch data.
         # In local mode the filesystem is the source of truth — vectors from
@@ -789,7 +810,7 @@ class SemanticSearchManager:
             ]
 
         # Stage 1b: Keyword search (complementary recall) — always run
-        keyword_results = self._keyword_search(expanded_query, top_k=wide_k, file_filter=file_filter)
+        keyword_results = self.search_candidates(expanded_query, top_k=wide_k, file_filter=file_filter)
 
         # If both pipelines returned nothing, bail out early
         if not raw_results and not keyword_results:
@@ -804,9 +825,15 @@ class SemanticSearchManager:
         vector_ranked = self._normalize_scores(
             [(r.id, r.score) for r in raw_results],
         )
+        def _result_id(result: SemanticSearchResult) -> str:
+            prefix = _type_prefix.get(result.chunk_type, result.chunk_type)
+            if result.chunk_type == "file":
+                return f"file:{result.file_path}"
+            return f"{prefix}:{result.file_path}:{result.name}"
+
         # Use composite IDs for keyword results matching vector key space
         keyword_ranked = self._normalize_scores([
-            (f"{_type_prefix.get(r.chunk_type, r.chunk_type)}:{r.file_path}:{r.name}", r.score)
+            (_result_id(r), r.score)
             for r in keyword_results
         ])
 
@@ -860,7 +887,7 @@ class SemanticSearchManager:
                 score=r.score,
             )
         for r in keyword_results:
-            kw_id = f"{_type_prefix.get(r.chunk_type, r.chunk_type)}:{r.file_path}:{r.name}"
+            kw_id = _result_id(r)
             if kw_id not in result_map:
                 result_map[kw_id] = r
 
@@ -913,6 +940,462 @@ class SemanticSearchManager:
                 merged.append(result)
 
         return merged
+
+    def search_candidates(
+        self, query: str, top_k: int = 50, file_filter: str = "",
+    ) -> list[SemanticSearchResult]:
+        """Return local lexical candidates without initializing an embedding model.
+
+        Name/path/docstring BM25 and source-body FTS5 each contribute a ranked
+        list. Explicit exclusions only down-rank matches; they never remove a
+        candidate. This is also the provider-free entry point for bootstrap.
+        """
+        if top_k <= 0:
+            return []
+        from attocode_intel.focused_evidence import task_terms
+
+        positive, negative = task_terms(query)
+        terms = sorted(positive) if positive else _tokenize(query)
+        if not terms:
+            return []
+        if not self._kw_index_built:
+            self._schedule_body_index()
+            return []
+        lexical_query = " ".join(terms)
+        wide_k = max(top_k * 3, 60)
+        keyword = self._keyword_search(lexical_query, wide_k, file_filter)
+        body = self._body_search(terms, wide_k, file_filter)
+        if not self._kw_index_built:
+            # A body hit failed freshness validation while keyword results
+            # were being scored. Do not expose potentially stale candidates.
+            self._schedule_body_index()
+            return []
+        if not body:
+            return self._penalize_exclusions(keyword, negative)[:top_k]
+
+        def key(result: SemanticSearchResult) -> tuple[str, str, str]:
+            return result.file_path, result.chunk_type, result.name
+
+        candidates: dict[tuple[str, str, str], SemanticSearchResult] = {}
+        scores: dict[tuple[str, str, str], float] = {}
+        for weight, ranked in ((1.0, keyword), (1.15, body)):
+            for rank, result in enumerate(ranked):
+                item = key(result)
+                scores[item] = scores.get(item, 0.0) + weight / (20 + rank + 1)
+                # Source evidence is more useful to consumers than a signature.
+                if item not in candidates or (ranked is body and result.start_line):
+                    candidates[item] = result
+
+        ordered = sorted(scores, key=lambda item: (-scores[item], item))
+        fused = [
+            SemanticSearchResult(
+                file_path=candidates[item].file_path,
+                chunk_type=candidates[item].chunk_type,
+                name=candidates[item].name,
+                text=candidates[item].text,
+                score=round(scores[item], 6),
+                start_line=candidates[item].start_line,
+                end_line=candidates[item].end_line,
+            )
+            for item in ordered
+        ]
+        return self._penalize_exclusions(fused, negative)[:top_k]
+
+    @staticmethod
+    def _penalize_exclusions(
+        results: list[SemanticSearchResult], negative: set[str],
+    ) -> list[SemanticSearchResult]:
+        if not negative:
+            return results
+        penalized: list[SemanticSearchResult] = []
+        for result in results:
+            identity = set(_tokenize(f"{result.file_path} {result.name}"))
+            source = set(_tokenize(result.text))
+            # Explicit negatives such as "without swarm" also cover compound
+            # path segments like ``attoswarm``; this is only a soft penalty.
+            identity_hits = sum(
+                any(term == token or (len(term) >= 4 and term in token) for token in identity)
+                for term in negative
+            )
+            source_hits = len(source & negative)
+            factor = 0.25 ** identity_hits * 0.8 ** source_hits
+            penalized.append(SemanticSearchResult(
+                file_path=result.file_path,
+                chunk_type=result.chunk_type,
+                name=result.name,
+                text=result.text,
+                score=round(result.score * factor, 6),
+                start_line=result.start_line,
+                end_line=result.end_line,
+            ))
+        return sorted(penalized, key=lambda result: -result.score)
+
+    def _source_revision(self) -> str:
+        """Detect checkouts across branches without trusting stale cached rows."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=self.root_dir,
+                capture_output=True, text=True, timeout=1, check=False,
+            )
+            return result.stdout.strip() if result.returncode == 0 else ""
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+
+    def _open_body_db(self) -> sqlite3.Connection | None:
+        """Open the optional FTS5 index; classic BM25 remains the fallback."""
+        if not self._body_index_available:
+            return None
+        conn = self._open_kw_cache_db()
+        if conn is None:
+            return None
+        try:
+            version_row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'body_schema_version'",
+            ).fetchone()
+            if version_row is None or version_row[0] != "2":
+                conn.execute("DROP TABLE IF EXISTS body_fts")
+                conn.execute("DROP TABLE IF EXISTS body_files")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS body_files (
+                    file_path TEXT PRIMARY KEY, mtime_ns INTEGER NOT NULL,
+                    size INTEGER NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS body_fts USING fts5(
+                    file_path UNINDEXED, chunk_type UNINDEXED, name UNINDEXED,
+                    start_line UNINDEXED, end_line UNINDEXED,
+                    body UNINDEXED, terms
+                )
+            """)
+            if version_row is None or version_row[0] != "2":
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) "
+                    "VALUES ('body_schema_version', '2')",
+                )
+                conn.commit()
+            return conn
+        except sqlite3.OperationalError:
+            logger.debug("FTS5 unavailable; using AST keyword search", exc_info=True)
+            self._body_index_available = False
+            conn.close()
+            return None
+
+    @staticmethod
+    def _body_chunks(rel_path: str, abs_path: str) -> list[tuple[str, str, int, int, str, str]]:
+        """Produce bounded, line-accurate source windows with enclosing symbols."""
+        from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+
+        try:
+            with open(abs_path, encoding="utf-8", errors="replace") as source:
+                lines = source.read().splitlines()
+        except OSError:
+            return []
+        if not lines:
+            return []
+
+        symbol_spans: list[tuple[int, int, str, str]] = []
+        class_spans: list[tuple[int, int, str, str]] = []
+        try:
+            ast = parse_file(abs_path)
+            symbol_spans.extend(
+                (f.start_line, f.end_line, "function", f.name) for f in ast.functions
+            )
+            for cls in ast.classes:
+                class_spans.append((cls.start_line, cls.end_line, "class", cls.name))
+                symbol_spans.extend(
+                    (m.start_line, m.end_line, "method", f"{cls.name}.{m.name}")
+                    for m in cls.methods
+                )
+        except Exception:
+            logger.debug("Source window AST parse failed for %s", rel_path, exc_info=True)
+
+        chunks: list[tuple[str, str, int, int, str, str]] = []
+
+        def emit(first: int, last: int, chunk_type: str, name: str) -> None:
+            """Emit windows within one owner span (1-based inclusive)."""
+            start = max(0, first - 1)
+            stop = min(len(lines), last)
+            while start < stop:
+                shown: list[str] = []
+                chars = 0
+                for line in lines[start:min(start + 32, stop)]:
+                    remaining = 2400 - chars
+                    if remaining <= 0:
+                        break
+                    shown.append(line[:remaining])
+                    chars += min(len(line), remaining) + 1
+                    if len(line) >= remaining:
+                        break
+                if not shown:
+                    break
+                end = start + len(shown)
+                body = "\n".join(shown)
+                terms = " ".join(_tokenize(body))
+                if terms:
+                    chunks.append((chunk_type, name, start + 1, end, body, terms))
+                # Four-line overlap catches matches near a window boundary.
+                start = max(start + 1, end - 4) if end < stop else end
+
+        covered = [False] * len(lines)
+        for first, last, chunk_type, name in symbol_spans:
+            if first <= 0 or last < first:
+                continue
+            emit(first, last, chunk_type, name)
+            for index in range(first - 1, min(last, len(lines))):
+                covered[index] = True
+
+        # Imports, constants, class attributes, and parser-unsupported files
+        # still have searchable source windows, but cannot impersonate methods.
+        cursor = 0
+        while cursor < len(lines):
+            if covered[cursor]:
+                cursor += 1
+                continue
+            first = cursor
+            while cursor < len(lines) and not covered[cursor]:
+                cursor += 1
+            middle = (first + cursor + 1) // 2
+            enclosing = [span for span in class_spans if span[0] <= middle <= span[1]]
+            if enclosing:
+                _first, _last, chunk_type, name = min(
+                    enclosing, key=lambda span: (span[1] - span[0], span[0]),
+                )
+            else:
+                chunk_type, name = "file", os.path.basename(rel_path)
+            emit(first + 1, cursor, chunk_type, name)
+        return chunks
+
+    def _sync_body_index(self) -> None:
+        """Refresh changed/deleted discovered files, including branch changes."""
+        generation = self._body_generation
+        revision = self._source_revision()
+        if self._body_index_built and revision == self._body_revision:
+            return
+        conn = self._open_body_db()
+        if conn is None:
+            return
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            CodebaseContextManager,
+        )
+
+        try:
+            ctx = CodebaseContextManager(root_dir=self.root_dir)
+            ctx._ensure_fresh()
+            if not ctx._files:
+                ctx.discover_files()
+            current: dict[str, tuple[str, int, int]] = {}
+            root_real = os.path.realpath(self.root_dir)
+            for file_info in ctx._files:
+                try:
+                    # Discovery can include symlinks. Never read or persist
+                    # source from outside the selected workspace.
+                    if os.path.commonpath((root_real, os.path.realpath(file_info.path))) != root_real:
+                        continue
+                    stat = os.stat(file_info.path)
+                except (OSError, ValueError):
+                    continue
+                # Avoid loading generated or giant files into the interactive index.
+                if stat.st_size <= 512 * 1024:
+                    current[file_info.relative_path] = (
+                        file_info.path, stat.st_mtime_ns, stat.st_size,
+                    )
+            with self._kw_cache_lock:
+                cached = {
+                    path: (mtime, size)
+                    for path, mtime, size in conn.execute(
+                        "SELECT file_path, mtime_ns, size FROM body_files",
+                    )
+                }
+                deleted = set(cached) - set(current)
+                stale = {
+                    path for path, (_abs, mtime, size) in current.items()
+                    if cached.get(path) != (mtime, size)
+                }
+                for path in sorted(deleted | stale):
+                    conn.execute("DELETE FROM body_fts WHERE file_path = ?", (path,))
+                    conn.execute("DELETE FROM body_files WHERE file_path = ?", (path,))
+                for path in sorted(stale):
+                    abs_path, mtime, size = current[path]
+                    for chunk_type, name, start, end, body, terms in self._body_chunks(path, abs_path):
+                        conn.execute(
+                            "INSERT INTO body_fts "
+                            "(file_path, chunk_type, name, start_line, end_line, body, terms) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (path, chunk_type, name, start, end, body, terms),
+                        )
+                    conn.execute(
+                        "INSERT INTO body_files (file_path, mtime_ns, size) VALUES (?, ?, ?)",
+                        (path, mtime, size),
+                    )
+                conn.commit()
+            self._body_index_built = generation == self._body_generation
+            self._body_revision = revision
+        except Exception:
+            logger.debug("Failed to refresh source-body index", exc_info=True)
+        finally:
+            conn.close()
+
+    def _schedule_body_index(self) -> None:
+        """Warm both lexical indexes once without delaying navigation."""
+        if self._kw_index_built and not self._body_index_available:
+            return
+        with self._body_state_lock:
+            if self._body_thread is not None and self._body_thread.is_alive():
+                return
+            if self._body_failed_at and time.monotonic() - self._body_failed_at < 5.0:
+                return
+            worker = threading.Thread(
+                target=self._warm_candidate_indexes, daemon=True,
+                name="lexical-candidate-indexer",
+            )
+            self._body_thread = worker
+            worker.start()
+
+    def _warm_candidate_indexes(self) -> None:
+        """Build AST and optional body indexes, honoring mid-build invalidation."""
+        generation = self._body_generation
+        try:
+            if not self._kw_index_built:
+                self._build_keyword_index()
+                if generation != self._body_generation:
+                    self._kw_index_built = False
+                    return
+            # Importance is used in first-query scoring; trigram mmap files
+            # remain lazy to avoid holding descriptors in idle workspaces.
+            self._load_importance_scores()
+            if self._body_index_available and not self._body_index_built:
+                self._sync_body_index()
+        except Exception:
+            logger.warning("Lexical candidate warm-up failed", exc_info=True)
+        finally:
+            if generation == self._body_generation and not (
+                self._kw_index_built
+                and (self._body_index_built or not self._body_index_available)
+            ):
+                self._body_failed_at = time.monotonic()
+
+    def wait_for_body_index(self, timeout: float = 30.0) -> bool:
+        """Wait for background warm-up in tests and explicit offline evaluations."""
+        worker = self._body_thread
+        if worker is not None:
+            worker.join(timeout=timeout)
+        return self._body_index_built
+
+    def _body_search(
+        self, query_terms: list[str], top_k: int, file_filter: str,
+    ) -> list[SemanticSearchResult]:
+        """Find body-only implementations; all MATCH terms are tokenizer-made."""
+        if top_k <= 0:
+            return []
+        if not self._body_index_built or self._source_revision() != self._body_revision:
+            self._body_index_built = False
+            self._schedule_body_index()
+            return []
+        conn = self._open_body_db()
+        if conn is None:
+            return []
+        import fnmatch
+
+        tokens = list(dict.fromkeys(t for term in query_terms for t in _tokenize(term)))[:20]
+        if not tokens:
+            conn.close()
+            return []
+        match_query = " OR ".join(f'"{token}"' for token in tokens)
+        try:
+            # Filter before the SQL limit. Applying a glob only to the fetched
+            # rows can hide all matches from a requested language or subtree.
+            where = "WHERE terms MATCH ?"
+            parameters: list[Any] = [match_query]
+            if file_filter:
+                where += " AND body_fts.file_path GLOB ?"
+                parameters.append(file_filter.replace("[!", "[^"))
+            parameters.append(max(top_k * 8, 120))
+            with self._kw_cache_lock:
+                rows = conn.execute(
+                    "SELECT body_fts.file_path, chunk_type, name, start_line, end_line, "
+                    "body, bm25(body_fts), body_files.mtime_ns, body_files.size "
+                    "FROM body_fts JOIN body_files "
+                    "ON body_fts.file_path = body_files.file_path "
+                    + where + " ORDER BY bm25(body_fts) LIMIT ?",
+                    parameters,
+                ).fetchall()
+        except sqlite3.Error:
+            logger.debug("Source-body query failed; using AST keyword results", exc_info=True)
+            return []
+        finally:
+            conn.close()
+
+        selected: dict[tuple[str, str, str], SemanticSearchResult] = {}
+        files: dict[str, int] = {}
+        valid_paths: dict[str, bool] = {}
+        stale_paths: set[str] = set()
+        for path, chunk_type, name, start, end, body, rank, mtime_ns, size in rows:
+            if file_filter and not fnmatch.fnmatch(path, file_filter):
+                continue
+            if path not in valid_paths:
+                try:
+                    stat = os.stat(os.path.join(self.root_dir, path))
+                    valid_paths[path] = (stat.st_mtime_ns, stat.st_size) == (mtime_ns, size)
+                except OSError:
+                    valid_paths[path] = False
+            if not valid_paths[path]:
+                stale_paths.add(path)
+                continue
+            key = (path, chunk_type, name)
+            if key in selected or files.get(path, 0) >= self.scoring_config.max_chunks_per_file:
+                continue
+            files[path] = files.get(path, 0) + 1
+            selected[key] = SemanticSearchResult(
+                file_path=path, chunk_type=chunk_type, name=name,
+                text=f"{path}:{start}-{end}\n{body}",
+                score=max(0.0, -float(rank)),
+                start_line=int(start), end_line=int(end),
+            )
+            if len(selected) >= top_k:
+                break
+        if stale_paths:
+            for path in stale_paths:
+                self.invalidate_file(os.path.join(self.root_dir, path))
+            return []
+        return list(selected.values())
+
+    def candidate_diagnostics(self) -> dict[str, int | float | bool | str]:
+        """Read-only coverage snapshot for compact search provenance."""
+        ready = self._kw_index_built and (
+            self._body_index_built or not self._body_index_available
+        )
+        snapshot: dict[str, int | float | bool | str] = {
+            "status": "ready" if ready else "warming",
+            "keyword_index_ready": self._kw_index_built,
+            "body_index_available": self._body_index_available,
+            "body_index_ready": self._body_index_built,
+            "body_indexed_files": 0,
+            "keyword_indexed_files": 0,
+            "body_index_coverage": 0.0,
+            "vector_status": self._index_progress.status,
+            "vector_coverage": self._index_progress.coverage,
+        }
+        if not self._body_index_built:
+            return snapshot
+        conn = self._open_body_db()
+        if conn is None:
+            snapshot["body_index_available"] = False
+            return snapshot
+        try:
+            body_count = int(conn.execute("SELECT count(*) FROM body_files").fetchone()[0])
+            keyword_count = int(conn.execute("SELECT count(*) FROM kw_files").fetchone()[0])
+            snapshot.update(
+                body_indexed_files=body_count,
+                keyword_indexed_files=keyword_count,
+                body_index_coverage=round(body_count / keyword_count, 3)
+                if keyword_count else 0.0,
+            )
+        except sqlite3.Error:
+            logger.debug("Failed to read candidate coverage", exc_info=True)
+        finally:
+            conn.close()
+        return snapshot
 
     def _normalize_scores(
         self,
@@ -1199,7 +1682,20 @@ class SemanticSearchManager:
     def _open_kw_cache_db(self) -> sqlite3.Connection | None:
         """Open the keyword index cache database. Returns None on failure."""
         try:
-            os.makedirs(os.path.dirname(self._kw_cache_db_path), exist_ok=True)
+            cache_dir = os.path.dirname(self._kw_cache_db_path)
+            root_real = os.path.realpath(self.root_dir)
+            if os.path.commonpath((root_real, os.path.realpath(os.path.dirname(cache_dir)))) != root_real:
+                return None
+            os.makedirs(cache_dir, mode=0o700, exist_ok=True)
+            if os.path.commonpath((root_real, os.path.realpath(cache_dir))) != root_real:
+                return None
+            os.chmod(cache_dir, 0o700)
+            flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(self._kw_cache_db_path, flags, 0o600)
+            try:
+                os.fchmod(fd, 0o600)
+            finally:
+                os.close(fd)
             conn = sqlite3.connect(self._kw_cache_db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
@@ -1848,6 +2344,11 @@ class SemanticSearchManager:
     def invalidate_file(self, file_path: str) -> None:
         """Remove embeddings for a changed file."""
         self._kw_index_built = False  # Force rebuild on next keyword search
+        self._body_index_built = False  # Recheck this file in the source-body index
+        self._body_generation += 1
+        self._body_failed_at = 0.0
+        if self._trigram_index is not None:
+            self._trigram_index.close()
         self._trigram_index = None  # Reload on next use
         try:
             rel = os.path.relpath(file_path, self.root_dir)
@@ -1862,6 +2363,13 @@ class SemanticSearchManager:
                         "UPDATE kw_files SET mtime = 0 WHERE file_path = ?",
                         (rel,),
                     )
+                    if conn.execute(
+                        "SELECT 1 FROM sqlite_master WHERE name = 'body_files'",
+                    ).fetchone():
+                        conn.execute(
+                            "UPDATE body_files SET mtime_ns = -1 WHERE file_path = ?",
+                            (rel,),
+                        )
                     conn.commit()
                 conn.close()
         except Exception:
@@ -2166,6 +2674,14 @@ class SemanticSearchManager:
                 logger.warning("Background indexer thread did not stop within 5s")
         if self._store:
             self._store.close()
+        if self._trigram_index is not None:
+            self._trigram_index.close()
+            self._trigram_index = None
+        body_thread = self._body_thread
+        if body_thread is not None:
+            body_thread.join(timeout=5.0)
+            if body_thread.is_alive():
+                logger.warning("Source-body indexer thread did not stop within 5s")
 
     def format_results(self, results: list[SemanticSearchResult]) -> str:
         """Format search results as human-readable text."""
@@ -2174,14 +2690,18 @@ class SemanticSearchManager:
 
         lines = [f"Semantic search results ({len(results)}):"]
         for i, r in enumerate(results, 1):
+            location = r.file_path
+            if r.start_line > 0:
+                location += f":{r.start_line}-{r.end_line or r.start_line}"
             lines.append(
-                f"  {i}. [{r.chunk_type}] {r.file_path}"
+                f"  {i}. [{r.chunk_type}] {location}"
                 f" — {r.name} (score: {r.score:.3f})"
             )
             if r.text:
                 # Show first 120 chars of text
-                preview = r.text[:120]
-                if len(r.text) > 120:
+                body = r.text.split("\n", 1)[-1] if r.start_line > 0 else r.text
+                preview = body[:120]
+                if len(body) > 120:
                     preview += "..."
                 lines.append(f"     {preview}")
         return "\n".join(lines)

@@ -96,6 +96,37 @@ async def test_cross_repo_results_have_rank_and_provenance(tmp_path):
         await gateway.close()
 
 
+async def test_compact_cross_repo_preserves_warming_workspace(tmp_path, monkeypatch):
+    from threading import Event
+
+    from attocode_intel._internal.integrations.context.semantic_search import (
+        SemanticSearchManager,
+    )
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "helper.py").write_text("def important_helper(): return 1\n")
+    release = Event()
+
+    def held_build(self):
+        release.wait(timeout=3)
+        self._kw_index_built = True
+
+    monkeypatch.setattr(SemanticSearchManager, "_build_keyword_index", held_build)
+    gateway = OperationGateway(profile="daily", watch=False)
+    try:
+        response = await gateway.execute_mcp("cross_repo_search", {
+            "query": "important_helper", "workspaces": [str(root)], "max_tokens": 700,
+        })
+        assert response.content[0].text.startswith("{"), response.content[0].text
+        envelope = json.loads(response.content[0].text)
+        assert envelope["data"] == []
+        assert envelope["metadata"]["warming_workspaces"] == [str(root)]
+    finally:
+        release.set()
+        await gateway.close()
+
+
 async def test_idle_workspace_eviction_preserves_durable_knowledge(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir()

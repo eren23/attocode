@@ -22,8 +22,6 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
-
 
 # Published baseline metrics from competitors (for comparison context)
 PUBLISHED_BASELINES = {
@@ -131,6 +129,7 @@ class RepoEvaluation:
     repo: str
     queries: list[QueryResult] = field(default_factory=list)
     total_time_ms: float = 0.0
+    search_cold_start_ms: float = 0.0
 
     @property
     def avg_latency_ms(self) -> float:
@@ -165,7 +164,7 @@ def parse_search_results(output: str) -> list[str]:
     for line in output.splitlines():
         m = re.match(r"\s*\d+\.\s+\[.*?\]\s+(.+?)\s+[—\-]", line)
         if m:
-            path = m.group(1).strip()
+            path = re.sub(r":\d+-\d+$", "", m.group(1).strip())
             if path and path not in paths:
                 paths.append(path)
     return paths[:20]
@@ -175,10 +174,13 @@ def evaluate_repo(repo: str, repo_path: str, queries: list[dict]) -> RepoEvaluat
     """Run all queries against a repo's CodeIntelService."""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
     from attocode.code_intel.service import CodeIntelService
+    from eval.search_quality import search_is_warming, wait_for_search_ready
 
     evaluation = RepoEvaluation(repo=repo)
 
     svc = CodeIntelService(repo_path)
+    if queries:
+        evaluation.search_cold_start_ms = wait_for_search_ready(svc, queries[0]["query"])
 
     for qdef in queries:
         query = qdef["query"]
@@ -186,6 +188,8 @@ def evaluate_repo(repo: str, repo_path: str, queries: list[dict]) -> RepoEvaluat
         try:
             output = svc.semantic_search(query)
             latency = (time.perf_counter() - t0) * 1000
+            if search_is_warming(svc, output):
+                raise RuntimeError("search_index_not_ready_during_query")
             top_results = parse_search_results(output)
 
             result = QueryResult(
@@ -244,6 +248,11 @@ def generate_report(evaluations: list[RepoEvaluation], output_path: str = "") ->
         grand_p50 = all_latencies[len(all_latencies) // 2]
         grand_p95 = all_latencies[int(len(all_latencies) * 0.95)]
         lines.append(f"| **Total** | **{len(all_queries)}** | **{grand_avg:.0f}** | **{grand_p50:.0f}** | **{grand_p95:.0f}** | — | **{sum(ev.total_time_ms for ev in evaluations):.0f}** |")
+
+    lines.append("")
+    lines.append("Index cold-start, excluded from query latency: " + ", ".join(
+        f"{ev.repo} {ev.search_cold_start_ms:.0f}ms" for ev in evaluations
+    ))
 
     lines.extend([
         "",

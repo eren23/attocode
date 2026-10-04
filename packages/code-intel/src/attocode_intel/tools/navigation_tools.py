@@ -47,7 +47,7 @@ def symbols(path: str) -> str:
 
 @mcp.tool()
 @pin_stamped
-def search_symbols(name: str, limit: int = 30, kind: str = "") -> str:
+def search_symbols(name: str, limit: int = 30, kind: str = "", task_hint: str = "") -> str:
     """Search for symbol definitions across the entire codebase.
 
     Multi-strategy search: exact match, prefix, substring, case-insensitive,
@@ -59,8 +59,13 @@ def search_symbols(name: str, limit: int = 30, kind: str = "") -> str:
         limit: Maximum results to return (default 30).
         kind: Filter by symbol kind: "function", "class", "method", "variable",
             "constant", "interface", "type". Empty = all kinds.
+        task_hint: Optional context for ordering equally matched definitions.
     """
-    return _get_service().search_symbols(name, limit=limit, kind=kind)
+    service = _get_service()
+    if task_hint and hasattr(service, "_task_file_scores"):
+        return service.search_symbols(name, limit=limit, kind=kind,
+                                      task_hint=task_hint)
+    return service.search_symbols(name, limit=limit, kind=kind)
 
 
 @mcp.tool()
@@ -90,6 +95,7 @@ def explore_codebase(
     path: str = "",
     max_items: int = 30,
     importance_threshold: float = 0.3,
+    task_hint: str = "",
 ) -> str:
     """Explore the codebase one directory level at a time.
 
@@ -101,12 +107,14 @@ def explore_codebase(
         path: Relative directory path ("" for root, e.g. "src/attocode/integrations").
         max_items: Maximum items (dirs + files) to return (default 30).
         importance_threshold: Minimum file importance to show (0.0-1.0, default 0.3).
+        task_hint: Optional task context for ordering files within the view.
     """
-    return _get_service().explore_codebase(
-        path=path,
-        max_items=max_items,
-        importance_threshold=importance_threshold,
-    )
+    service = _get_service()
+    kwargs = {"path": path, "max_items": max_items,
+              "importance_threshold": importance_threshold}
+    if task_hint and hasattr(service, "_task_file_scores"):
+        kwargs["task_hint"] = task_hint
+    return service.explore_codebase(**kwargs)
 
 
 @mcp.tool()
@@ -214,6 +222,7 @@ def relevant_context(
     depth: int = 1,
     max_tokens: int = 4000,
     include_symbols: bool = True,
+    task_hint: str = "",
 ) -> str:
     """Get a subgraph capsule -- a file and its neighbors with symbols.
 
@@ -227,13 +236,14 @@ def relevant_context(
         depth: How many hops to traverse (default 1, max 2).
         max_tokens: Token budget for the output (default 4000).
         include_symbols: Whether to include symbol lists (default True).
+        task_hint: Optional context for ordering neighbors within each hop.
     """
-    return _get_service().relevant_context(
-        files=files,
-        depth=depth,
-        max_tokens=max_tokens,
-        include_symbols=include_symbols,
-    )
+    service = _get_service()
+    kwargs = {"files": files, "depth": depth, "max_tokens": max_tokens,
+              "include_symbols": include_symbols}
+    if task_hint and hasattr(service, "_task_file_scores"):
+        kwargs["task_hint"] = task_hint
+    return service.relevant_context(**kwargs)
 
 
 @mcp.tool()

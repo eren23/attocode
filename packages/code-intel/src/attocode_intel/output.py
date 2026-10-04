@@ -31,7 +31,8 @@ def bounded_text(text: str, max_tokens: int) -> tuple[str, bool]:
 def compact_metadata(metadata: dict) -> dict:
     """Provenance is mandatory; detailed diagnostics live in capabilities."""
     result = {key: metadata[key] for key in
-              ("workspace", "workspaces", "source", "revision", "freshness", "truncated", "ranking")
+              ("workspace", "workspaces", "warming_workspaces", "source", "revision",
+               "freshness", "truncated", "ranking")
               if key in metadata}
     coverage = metadata.get("coverage", {})
     analysis = metadata.get("analysis", {})

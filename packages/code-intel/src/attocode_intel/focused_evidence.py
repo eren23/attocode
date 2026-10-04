@@ -7,6 +7,9 @@ import tokenize
 from collections import Counter
 
 STOP_WORDS = frozenset({"a", "an", "and", "are", "as", "at", "be", "by", "code", "def", "do", "does", "for", "from", "function", "get", "how", "in", "is", "it", "method", "of", "on", "or", "return", "self", "test", "tests", "the", "this", "to", "use", "value", "with"})
+_EXCLUSION = re.compile(r"\b(?:without|excluding|exclude|except|avoid)\b", re.IGNORECASE)
+_EXCLUSION_END = re.compile(r"[,;.!?]|\b(?:but|instead|rather|while)\b", re.IGNORECASE)
+_EXCLUSION_MODIFIERS = frozenset({"unrelated", "irrelevant", "unwanted", "other"})
 
 
 def terms(text):
@@ -14,6 +17,32 @@ def terms(text):
     words = re.findall(r"[a-zA-Z][a-zA-Z0-9]*", text.lower())
     return {word[:-1] if word.endswith("s") and not word.endswith("ss") and len(word) > 4 else word
             for word in words if len(word) > 2 and word not in STOP_WORDS}
+
+
+def task_terms(text: str) -> tuple[set[str], set[str]]:
+    """Separate explicit exclusions from positive task terms.
+
+    The negative set is a *ranking hint*, never a hard filter. Deliberately
+    recognize only explicit exclusion words: ordinary negation such as
+    ``not found`` often describes the bug rather than irrelevant code.
+    """
+    positive_parts: list[str] = []
+    negative_parts: list[str] = []
+    remaining = text
+    while match := _EXCLUSION.search(remaining):
+        positive_parts.append(remaining[:match.start()])
+        tail = remaining[match.end():]
+        end = _EXCLUSION_END.search(tail)
+        if end is None:
+            negative_parts.append(tail)
+            remaining = ""
+            break
+        negative_parts.append(tail[:end.start()])
+        remaining = tail[end.end():]
+    positive_parts.append(remaining)
+    positive = terms(" ".join(positive_parts)) - _EXCLUSION_MODIFIERS
+    negative = terms(" ".join(negative_parts)) - _EXCLUSION_MODIFIERS
+    return positive, negative
 
 
 def source_excerpts(source, definition, task_hint, *, preview_end=0):
@@ -26,7 +55,7 @@ def source_excerpts(source, definition, task_hint, *, preview_end=0):
     structured = structural_excerpts(source, definition, task_hint, preview_end)
     if structured is not None:
         return structured
-    query = terms(task_hint)
+    query, _ = task_terms(task_hint)
     if not query:
         return []
     first, last = definition.start_line, min(definition.end_line, len(source))
