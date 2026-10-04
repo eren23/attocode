@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import re
 import sys
 from pathlib import Path
 
 import pytest
 from attocode_intel.gateway import OperationGateway
 from attocode_intel.onboarding import configure_client
-from attocode_intel.output import bounded_text
+from attocode_intel.output import bounded_bootstrap, bounded_compact, bounded_text, response_tokens
 from attocode_intel.request_context import resolve_workspace
 
 
@@ -70,6 +72,161 @@ async def test_bootstrap_total_budget_and_no_agent_import(tmp_path):
     assert not any(
         name.startswith(("attocode.agent", "attocode.tui", "attoswarm")) for name in sys.modules
     )
+
+
+async def test_hinted_bootstrap_keeps_complete_relevant_result_under_mcp_budget(tmp_path):
+    root = project(tmp_path / "repo", "helper")
+    gateway = OperationGateway(str(root), "daily", watch=False)
+    try:
+        result = await gateway.execute_mcp("bootstrap", {"task_hint": "helper", "max_tokens": 1500})
+        assert response_tokens(result) <= 1500
+        body = json.loads(result.content[0].text)["data"]["result"]
+        assert body.startswith("## Relevant Code for: helper\n")
+        relevant = body.split("\n\n## ", 1)[0]
+        assert "helper.py" in relevant
+        assert re.search(r"^  1\. \[function\] helper\.py — helper \(score: [0-9.]+\)$",
+                         relevant, re.MULTILINE)
+        assert "[Truncated;" not in relevant
+        assert "## Overview" in body
+        no_hint = await gateway.execute_mcp("bootstrap", {"max_tokens": 1500})
+        assert json.loads(no_hint.content[0].text)["data"]["result"].startswith("## Overview\n")
+        no_match = await gateway.execute_mcp("bootstrap", {
+            "task_hint": "unfindable_quasar_identifier", "max_tokens": 1500})
+        no_match_body = json.loads(no_match.content[0].text)["data"]["result"]
+        assert "No matches in this workspace." in no_match_body
+        assert "## Overview" in no_match_body
+    finally:
+        await gateway.close()
+
+
+def test_bootstrap_omits_oversized_search_section_without_partial_hit():
+    metadata = {"workspace": "/repo", "source": "local", "revision": "working-tree",
+                "freshness": "fresh", "truncated": False}
+    hit = "## Relevant Code for: helper\nSemantic search results (1):\n" + "  1. [function] " + "x" * 1200
+    body = hit + "\n\n## Overview\nSmall project."
+    result = bounded_bootstrap(metadata, body, 210)
+    assert response_tokens(result) <= 210
+    payload = json.loads(result.content[0].text)
+    assert payload["metadata"]["truncated"]
+    assert payload["data"]["result"].startswith("## Relevant Code\nTop match omitted;")
+    assert "  1. [function]" not in payload["data"]["result"]
+    assert "## Overview" in payload["data"]["result"]
+
+
+def test_long_excluded_checkout_paths_do_not_overflow_unrelated_compact_responses():
+    metadata = {"workspace": "/repo", "source": "local", "revision": "working-tree",
+                "freshness": "fresh", "coverage": {
+                    "excluded_checkout_roots": ["src/" + "long-directory/" * 25 + str(i)
+                                                for i in range(5)]}}
+    result = bounded_compact(metadata, {"result": "ok"}, 200)
+    assert response_tokens(result) <= 200
+    payload = json.loads(result.content[0].text)
+    assert payload["metadata"]["index"]["excluded_checkout_roots_found"] == 5
+    assert "long-directory" not in result.content[0].text
+
+
+async def test_recalled_knowledge_does_not_displace_bootstrap_search(tmp_path, monkeypatch):
+    from attocode_intel import local_knowledge
+
+    root = project(tmp_path / "repo", "helper")
+    monkeypatch.setattr(local_knowledge, "execute_local_knowledge",
+                        lambda *_args, **_kwargs: [{"content": "background " * 300}])
+    gateway = OperationGateway(str(root), "daily", watch=False)
+    try:
+        result = await gateway.execute_mcp("bootstrap", {"task_hint": "helper", "max_tokens": 1500})
+        assert response_tokens(result) <= 1500
+        body = json.loads(result.content[0].text)["data"]["result"]
+        assert body.startswith("## Relevant Code for: helper\n")
+        assert "helper.py — helper (score:" in body.split("\n\n## ", 1)[0]
+    finally:
+        await gateway.close()
+
+
+async def test_ignored_git_checkout_is_reported_and_can_be_selected(tmp_path):
+    root = tmp_path / "outer"
+    checkout = root / "src" / "go-checkout"
+    checkout.mkdir(parents=True)
+    (root / ".gitignore").write_text("src/\n")
+    (root / "main.py").write_text("def outer(): return 1\n")
+    (checkout / ".git").mkdir()
+    (checkout / "go.mod").write_text("module example.test/go-checkout\n")
+    (checkout / "main.go").write_text("package main\nfunc Greet() string { return \"hello\" }\n")
+    gateway = OperationGateway(profile="daily", watch=False)
+    try:
+        outer = await gateway.execute_mcp("bootstrap", {"workspace": str(root), "max_tokens": 2000})
+        outer_data = json.loads(outer.content[0].text)
+        assert outer_data["metadata"]["index"]["excluded_checkout_roots_found"] == 1
+        assert "src/go-checkout" in outer_data["data"]["result"]
+        assert "workspace=" in outer_data["data"]["result"]
+        status = await gateway.execute_mcp("hydration_status", {"workspace": str(root)})
+        assert "src/go-checkout" in json.loads(status.content[0].text)["data"]["result"]
+        inner = await gateway.execute_mcp("search_symbols", {
+            "workspace": str(checkout), "name": "Greet"})
+        inner_data = json.loads(inner.content[0].text)
+        assert inner_data["metadata"]["workspace"] == str(checkout)
+        assert inner_data["data"][0]["file_path"] == "main.go"
+    finally:
+        await gateway.close()
+
+
+async def test_bootstrap_reports_checkout_when_no_files_are_included(tmp_path):
+    root = tmp_path / "outer"
+    checkout = root / "src" / "go-checkout"
+    checkout.mkdir(parents=True)
+    (root / ".gitignore").write_text("src/\n")
+    (checkout / ".git").mkdir()
+    (checkout / "main.go").write_text("package main\n")
+    gateway = OperationGateway(str(root), "daily", watch=False)
+    try:
+        result = await gateway.execute_mcp("bootstrap", {"max_tokens": 1500})
+        body = json.loads(result.content[0].text)["data"]["result"]
+        assert "No files discovered" in body
+        assert "src/go-checkout" in body
+        assert "Select a checkout as workspace" in body
+    finally:
+        await gateway.close()
+
+
+async def test_bootstrap_refreshes_checkout_guidance_without_reindex(tmp_path):
+    root = tmp_path / "outer"
+    (root / "src").mkdir(parents=True)
+    (root / ".gitignore").write_text("src/\n")
+    (root / "main.py").write_text("def outer(): return 1\n")
+    gateway = OperationGateway(str(root), "daily", watch=False)
+    try:
+        initial = await gateway.execute_mcp("bootstrap", {"max_tokens": 1500})
+        assert "src/go-checkout" not in initial.content[0].text
+
+        checkout = root / "src" / "go-checkout"
+        checkout.mkdir()
+        (checkout / ".git").mkdir()
+        added = await gateway.execute_mcp("bootstrap", {"max_tokens": 1500})
+        assert "src/go-checkout" in added.content[0].text
+        status = await gateway.execute_mcp("hydration_status", {})
+        assert "src/go-checkout" in status.content[0].text
+
+        (checkout / ".git").rmdir()
+        removed = await gateway.execute_mcp("bootstrap", {"max_tokens": 1500})
+        assert "src/go-checkout" not in removed.content[0].text
+    finally:
+        await gateway.close()
+
+
+async def test_bootstrap_reports_incomplete_checkout_scan_without_found_root(tmp_path):
+    root = tmp_path / "outer"
+    root.mkdir()
+    (root / ".gitignore").write_text("src/\n")
+    for index in range(129):
+        (root / "src" / f"directory-{index}").mkdir(parents=True)
+    gateway = OperationGateway(str(root), "daily", watch=False)
+    try:
+        result = await gateway.execute_mcp("bootstrap", {"max_tokens": 1500})
+        body = json.loads(result.content[0].text)["data"]["result"]
+        assert "Scan incomplete" in body
+        status = await gateway.execute_mcp("hydration_status", {})
+        assert "Scan incomplete" in json.loads(status.content[0].text)["data"]["result"]
+    finally:
+        await gateway.close()
 
 
 @pytest.mark.parametrize("budget", [1, 10, 128, 2000])

@@ -765,6 +765,8 @@ class CodebaseContextManager:
     max_context_tokens: int = 8000
     discovered_file_count: int = 0
     discovery_truncated: bool = False
+    excluded_checkout_roots: list[str] = field(default_factory=list)
+    excluded_checkout_roots_truncated: bool = False
     ignore_patterns: set[str] = field(default_factory=lambda: set(DEFAULT_IGNORES))
     _files: list[FileInfo] = field(default_factory=list, repr=False)
     _repo_map: RepoMap | None = field(default=None, repr=False)
@@ -774,6 +776,8 @@ class CodebaseContextManager:
     _ast_cache: dict[str, Any] = field(default_factory=dict, repr=False)
     _last_refresh_time: float = field(default=0.0, repr=False)
     _staleness_threshold: float = field(default=300.0, repr=False)  # 5 minutes
+    _ignored_checkout_dirs: list[str] = field(default_factory=list, repr=False)
+    _ignored_checkout_dirs_capped: bool = field(default=False, repr=False)
 
     @property
     def is_stale(self) -> bool:
@@ -786,6 +790,35 @@ class CodebaseContextManager:
         """Auto-refresh if the cache is stale."""
         if self.is_stale:
             self.discover_files()
+
+    def refresh_excluded_checkout_roots(self) -> None:
+        """Refresh bounded checkout guidance without rediscovering source files."""
+        root = Path(self.root_dir)
+        self.excluded_checkout_roots = []
+        self.excluded_checkout_roots_truncated = self._ignored_checkout_dirs_capped
+        for rel_path in self._ignored_checkout_dirs:
+            path = root / rel_path
+            if path.is_symlink() or not path.is_dir():
+                continue
+            candidates = [(path, rel_path)]
+            try:
+                with os.scandir(path) as entries:
+                    for offset, entry in enumerate(entries):
+                        if offset >= 128:
+                            self.excluded_checkout_roots_truncated = True
+                            break
+                        if entry.is_dir(follow_symlinks=False):
+                            candidates.append((Path(entry.path), f"{rel_path}/{entry.name}"))
+            except OSError:
+                self.excluded_checkout_roots_truncated = True
+                continue
+            for candidate, relative in candidates:
+                if (candidate / ".git").exists():
+                    if len(self.excluded_checkout_roots) < 5:
+                        self.excluded_checkout_roots.append(relative.replace(os.sep, "/"))
+                    else:
+                        self.excluded_checkout_roots_truncated = True
+        self.excluded_checkout_roots.sort()
 
     def discover_files(self) -> list[FileInfo]:
         """Discover all relevant files in the repository.
@@ -804,14 +837,26 @@ class CodebaseContextManager:
         ignore = IgnoreManager(root)
         files: list[FileInfo] = []
         _SAFETY_CEILING = 50_000  # noqa: N806  # OOM guard for massive repos
+        self._ignored_checkout_dirs = []
+        self._ignored_checkout_dirs_capped = False
 
         for dirpath, dirnames, filenames in os.walk(root):
             # Filter ignored directories (in-place to prevent os.walk descent)
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in self.ignore_patterns and not d.startswith(".")
-                and not ignore.is_ignored(os.path.relpath(os.path.join(dirpath, d), root) + "/")
-            ]
+            kept_dirs = []
+            for directory in dirnames:
+                if directory in self.ignore_patterns or directory.startswith("."):
+                    continue
+                path = Path(dirpath) / directory
+                rel_path = path.relative_to(root).as_posix()
+                if ignore.is_ignored(rel_path + "/"):
+                    if not path.is_symlink():
+                        if len(self._ignored_checkout_dirs) < 32:
+                            self._ignored_checkout_dirs.append(rel_path)
+                        else:
+                            self._ignored_checkout_dirs_capped = True
+                else:
+                    kept_dirs.append(directory)
+            dirnames[:] = kept_dirs
 
             for filename in filenames:
                 if filename.startswith("."):
@@ -901,6 +946,7 @@ class CodebaseContextManager:
             files = files[:cap]
 
         self._files = files
+        self.refresh_excluded_checkout_roots()
         self._last_refresh_time = time.monotonic()
         return files
 

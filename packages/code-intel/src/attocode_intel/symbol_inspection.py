@@ -17,9 +17,15 @@ def select_definitions(service, symbol_name, file_path=None, line=None):
     if (file_path is not None and file_path not in ast._ast_cache
             and any(fi.relative_path == file_path for fi in ast._context_mgr._files)):
         ast.ensure_file_parsed(file_path)
-    definitions = ast.find_symbol(symbol_name)
-    return [d for d in definitions if (file_path is None or d.file_path == file_path)
-            and (line is None or d.start_line == line)]
+    if file_path is not None:
+        # A top-level exact name elsewhere must not hide a method in this file.
+        definitions = ast.get_file_symbols(file_path)
+        definitions = [d for d in definitions if d.file_path == file_path
+                       and (d.qualified_name == symbol_name or d.name == symbol_name
+                            or d.qualified_name.endswith(f".{symbol_name}"))]
+    else:
+        definitions = ast.find_symbol(symbol_name, include_shadowed=line is not None)
+    return [d for d in definitions if line is None or d.start_line == line]
 
 
 def location(definition):
@@ -102,7 +108,8 @@ def inspect_symbol_data(service, symbol_name, file_path=None, line=None, source_
         raise ValueError("source_start_line must be inside the selected definition")
     focused_preview = task_hint and source_start_line is None and definition.end_line - definition.start_line >= 60
     end = min(len(source), definition.end_line, start + (11 if focused_preview else 59))
-    selection = {"symbol_name": symbol_name, "file_path": path, "line": definition.start_line}
+    selection = {"symbol_name": definition.qualified_name, "file_path": path,
+                 "line": definition.start_line}
     relationships = ([{"file_path": p, "kind": "imports"} for p in imports["imports"]]
                      + [{"file_path": p, "kind": "imported_by"} for p in imports["imported_by"]])
     result = {

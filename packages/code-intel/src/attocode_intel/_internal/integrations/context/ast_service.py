@@ -147,11 +147,14 @@ class ASTService:
         state, synthesize approximate metrics from the AST cache so MCP
         ``hydration_status`` is not stuck at unknown/0.
         """
+        self._context_mgr.refresh_excluded_checkout_roots()
         if self._hydration_state is not None:
             return {**self._hydration_state.to_dict(),
                     "snapshot_repair": self._last_snapshot_repair,
                     "discovered_files": self._context_mgr.discovered_file_count,
-                    "discovery_truncated": self._context_mgr.discovery_truncated}
+                    "discovery_truncated": self._context_mgr.discovery_truncated,
+                    "excluded_checkout_roots": self._context_mgr.excluded_checkout_roots,
+                    "excluded_checkout_roots_truncated": self._context_mgr.excluded_checkout_roots_truncated}
 
         base: dict = {
             "tier": "unknown",
@@ -187,7 +190,9 @@ class ASTService:
             reference_indexed_files=ref_n,
             phase=phase,
         )
-        return st.to_dict()
+        return {**st.to_dict(),
+                "excluded_checkout_roots": self._context_mgr.excluded_checkout_roots,
+                "excluded_checkout_roots_truncated": self._context_mgr.excluded_checkout_roots_truncated}
 
     def _ensure_initialized(self) -> None:
         """Auto-initialize if not yet done.  Called by all query methods."""
@@ -889,10 +894,10 @@ class ASTService:
             result.extend(self._index.definitions.get(qn, []))
         return result
 
-    def find_symbol(self, name: str) -> list[SymbolLocation]:
+    def find_symbol(self, name: str, *, include_shadowed: bool = False) -> list[SymbolLocation]:
         """Find definitions for *name* (exact or suffix match)."""
         self._ensure_initialized()
-        return self._index.get_definitions(name)
+        return self._index.get_definitions(name, include_shadowed=include_shadowed)
 
     def search_symbol(
         self,

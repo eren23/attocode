@@ -471,12 +471,14 @@ class OperationGateway:
                 knowledge = [entry for entry in knowledge or [] if not entry.get("stale")]
                 if knowledge:
                     knowledge_text = bounded_text(json.dumps(knowledge), max(1, budget // 4))[0]
-                    text = (
-                        "## Relevant project knowledge (verify entries marked stale)\n"
-                        + knowledge_text
-                        + "\n\n"
-                        + text
-                    )
+                    section = ("## Relevant project knowledge (verify entries marked stale)\n"
+                               + knowledge_text)
+                    if text.startswith("## Relevant Code"):
+                        boundary = text.find("\n\n## ")
+                        text = (text[:boundary] + "\n\n" + section + text[boundary:]
+                                if boundary >= 0 else text + "\n\n" + section)
+                    else:
+                        text = section + "\n\n" + text
             service = context.service
             ast_service = service._ast_service
             coverage = ast_service.hydration_snapshot() if ast_service else {"phase": "not_started"}
@@ -523,7 +525,11 @@ class OperationGateway:
                 text, _ = bounded_text(header + json.dumps(payload), budget)
                 structured = {"result": text, "metadata": metadata}
             if compact:
-                result = self._compact(name, metadata, payload if payload is not None else {"result": body}, budget)
+                if name == "bootstrap":
+                    from attocode_intel.output import bounded_bootstrap
+                    result = bounded_bootstrap(metadata, body, budget)
+                else:
+                    result = self._compact(name, metadata, payload if payload is not None else {"result": body}, budget)
                 timings["serialization"] = round((time.monotonic() - before) * 1000, 2)
                 return result
             if payload is not None:
