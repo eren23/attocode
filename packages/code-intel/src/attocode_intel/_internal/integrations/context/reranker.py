@@ -15,7 +15,7 @@ import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +185,25 @@ class LocalRerankOutcome:
     candidates: list[tuple[str, str, float]]
     reranked: bool
     fallback_reason: str | None = None
+
+
+RankingOutcome = LocalRerankOutcome
+
+
+class RankingProvider(Protocol):
+    """Shared shortlist contract for local and SystemOne-compatible adapters."""
+
+    max_candidates: int
+
+    @property
+    def status(self) -> str: ...
+
+    @property
+    def is_available(self) -> bool: ...
+
+    def rerank_result(
+        self, query: str, candidates: list[tuple[str, str, float]], top_k: int = 10,
+    ) -> RankingOutcome: ...
 
 
 class LocalCrossEncoderReranker:

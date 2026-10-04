@@ -1,0 +1,89 @@
+# Twenty two-concept navigation questions, judged from the existing source-bound
+# repository ground truth before running this case pack. These are direct
+# implementation targets, not exhaustive relevance judgments.
+repos:
+  attocode:
+    - query: token enforcement
+      relevant_files:
+        - src/attocode/types/budget.py
+        - src/attocode/integrations/budget/economics.py
+    - query: task decomposition
+      relevant_files:
+        - src/attocode/integrations/tasks/decomposer.py
+        - src/attocode/integrations/tasks/task_splitter.py
+    - query: session checkpoints
+      relevant_files:
+        - src/attocode/agent/checkpoint_api.py
+        - src/attocode/agent/session_api.py
+    - query: worker spawning
+      relevant_files:
+        - src/attocode/integrations/swarm/worker_pool.py
+        - src/attocode/core/subagent_spawner.py
+  fastapi:
+    - query: response serialization
+      relevant_files:
+        - fastapi/routing.py
+        - fastapi/encoders.py
+    - query: dependency resolution
+      relevant_files:
+        - fastapi/dependencies/utils.py
+        - fastapi/dependencies/models.py
+    - query: websocket connection
+      relevant_files:
+        - fastapi/websockets.py
+        - fastapi/routing.py
+    - query: middleware stack
+      relevant_files:
+        - fastapi/applications.py
+        - fastapi/middleware/asyncexitstack.py
+  pandas:
+    - query: missing values
+      relevant_files:
+        - pandas/core/missing.py
+        - pandas/core/dtypes/missing.py
+    - query: csv parsing
+      relevant_files:
+        - pandas/io/parsers/readers.py
+        - pandas/io/parsers/python_parser.py
+    - query: groupby aggregation
+      relevant_files:
+        - pandas/core/groupby/groupby.py
+        - pandas/core/groupby/generic.py
+    - query: datetime arithmetic
+      relevant_files:
+        - pandas/core/arrays/datetimes.py
+        - pandas/core/arrays/datetimelike.py
+  redis:
+    - query: memory eviction
+      relevant_files:
+        - src/evict.c
+        - src/lazyfree.c
+    - query: rdb persistence
+      relevant_files:
+        - src/rdb.c
+        - src/rio.c
+    - query: cluster discovery
+      relevant_files:
+        - src/cluster.c
+        - src/cluster_legacy.c
+    - query: event loop
+      relevant_files:
+        - src/ae.c
+        - src/ae.h
+  gh-cli:
+    - query: issue filtering
+      relevant_files:
+        - pkg/cmd/issue/list/list.go
+        - pkg/cmd/issue/list/http.go
+    - query: repository forking
+      relevant_files:
+        - pkg/cmd/repo/fork/fork.go
+        - pkg/cmd/repo/create/create.go
+    - query: pull review
+      relevant_files:
+        - pkg/cmd/pr/review/review.go
+        - pkg/cmd/pr/shared/finder.go
+    - query: api authentication
+      relevant_files:
+        - api/client.go
+        - internal/authflow/flow.go

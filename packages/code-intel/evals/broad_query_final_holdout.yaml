@@ -1,0 +1,78 @@
+# Final post-tuning validation pack: five repositories not used in either
+# development case pack. Direct implementation targets fixed before searching.
+repos:
+  faker:
+    - query: street address
+      relevant_files:
+        - lib/faker/default/address.rb
+    - query: internet email
+      relevant_files:
+        - lib/faker/default/internet.rb
+    - query: random names
+      relevant_files:
+        - lib/faker/default/name.rb
+    - query: date generation
+      relevant_files:
+        - lib/faker/default/date.rb
+  starship:
+    - query: git status
+      relevant_files:
+        - src/modules/git_status.rs
+        - src/configs/git_status.rs
+    - query: prompt formatting
+      relevant_files:
+        - src/formatter/string_formatter.rs
+        - src/module.rs
+    - query: config loading
+      relevant_files:
+        - src/config.rs
+    - query: memory display
+      relevant_files:
+        - src/modules/memory_usage.rs
+        - src/configs/memory_usage.rs
+  spdlog:
+    - query: async logging
+      relevant_files:
+        - include/spdlog/async_logger.h
+        - include/spdlog/async.h
+    - query: pattern formatting
+      relevant_files:
+        - include/spdlog/pattern_formatter.h
+        - include/spdlog/pattern_formatter-inl.h
+    - query: rotating sink
+      relevant_files:
+        - include/spdlog/sinks/rotating_file_sink.h
+        - include/spdlog/sinks/rotating_file_sink-inl.h
+    - query: thread pool
+      relevant_files:
+        - include/spdlog/details/thread_pool.h
+        - include/spdlog/details/thread_pool-inl.h
+  protobuf:
+    - query: descriptor parsing
+      relevant_files:
+        - src/google/protobuf/descriptor.cc
+        - src/google/protobuf/compiler/parser.cc
+    - query: json serialization
+      relevant_files:
+        - src/google/protobuf/json/json.cc
+        - src/google/protobuf/json/internal/unparser.cc
+    - query: wire encoding
+      relevant_files:
+        - src/google/protobuf/wire_format.cc
+    - query: field descriptors
+      relevant_files:
+        - src/google/protobuf/descriptor.cc
+  prisma:
+    - query: client generation
+      relevant_files:
+        - packages/client-generator-js/src/TSClient/TSClient.ts
+        - packages/client-generator-ts/src/TSClient/TSClient.ts
+    - query: query serialization
+      relevant_files:
+        - packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.ts
+    - query: interactive transactions
+      relevant_files:
+        - packages/client/src/runtime/getPrismaClient.ts
+    - query: schema configuration
+      relevant_files:
+        - packages/internals/src/engine-commands/getConfig.ts

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Experimental code-intel ranking and evaluation
+
+- Broad-query search now reports matched query terms and ambiguity, uses stable
+  lexical ties, and gives small unscoped result pages distinct files in their
+  original first-hit order. A more aggressive lexical reranker is opt-in only;
+  its final held-out evaluation regressed despite development-set gains.
+- An opt-in SystemOne-compatible `choice` adapter can rank bounded source-file
+  shortlists via a configured local endpoint or an explicitly approved remote
+  workspace. Invalid or slow model responses fall back to deterministic order.
+  No model is downloaded or enabled by default.
+- Frozen-candidate evaluation tools and trial reports document mixed local
+  Bosun 0.6B results. They do not establish a generally better ranking model.
+
 ## [0.2.27] - 2026-09-27
 
 ### Fixed — Code intelligence no longer crashes with tree-sitter 0.26

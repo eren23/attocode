@@ -119,7 +119,10 @@ def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResu
 
         def visit(value, parent=None, key=None, path="data", choices=choices):
             if isinstance(value, list) and value:
-                choices.append((len(json.dumps(value)), parent, key, value, path))
+                # A partial match explanation would falsely imply that omitted
+                # query terms did not match. Drop whole hits before splitting it.
+                if key not in {"matched_terms", "match_fields"}:
+                    choices.append((len(json.dumps(value)), parent, key, value, path))
             elif isinstance(value, str) and (key in {"text", "snippet", "result", "details", "description"}):
                 if len(value) > 32:
                     choices.append((len(value), parent, key, value, path))

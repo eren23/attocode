@@ -20,6 +20,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from attocode_intel.query_ranking import hit_evidence, rerank_broad_candidates
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -971,7 +973,9 @@ class SemanticSearchManager:
             self._schedule_body_index()
             return []
         if not body:
-            return self._penalize_exclusions(keyword, negative)[:top_k]
+            return rerank_broad_candidates(
+                query, self._penalize_exclusions(keyword, negative), top_k, file_filter,
+            )
 
         def key(result: SemanticSearchResult) -> tuple[str, str, str]:
             return result.file_path, result.chunk_type, result.name
@@ -999,7 +1003,9 @@ class SemanticSearchManager:
             )
             for item in ordered
         ]
-        return self._penalize_exclusions(fused, negative)[:top_k]
+        return rerank_broad_candidates(
+            query, self._penalize_exclusions(fused, negative), top_k, file_filter,
+        )
 
     @staticmethod
     def _penalize_exclusions(
@@ -1317,7 +1323,8 @@ class SemanticSearchManager:
                     "body, bm25(body_fts), body_files.mtime_ns, body_files.size "
                     "FROM body_fts JOIN body_files "
                     "ON body_fts.file_path = body_files.file_path "
-                    + where + " ORDER BY bm25(body_fts) LIMIT ?",
+                    + where + " ORDER BY bm25(body_fts), body_fts.file_path, "
+                    "body_fts.start_line, body_fts.name LIMIT ?",
                     parameters,
                 ).fetchall()
         except sqlite3.Error:
@@ -1649,7 +1656,9 @@ class SemanticSearchManager:
         if not scored:
             return []
 
-        scored.sort(key=lambda x: x[0], reverse=True)
+        # Equal BM25 scores must not inherit filesystem/discovery insertion
+        # order. Otherwise a cold rebuild can change ranks without code edits.
+        scored.sort(key=lambda x: (-x[0], x[1].file_path, x[1].id))
 
         # Normalize to 0-1
         max_score = scored[0][0] if scored else 1.0
@@ -2683,7 +2692,7 @@ class SemanticSearchManager:
             if body_thread.is_alive():
                 logger.warning("Source-body indexer thread did not stop within 5s")
 
-    def format_results(self, results: list[SemanticSearchResult]) -> str:
+    def format_results(self, results: list[SemanticSearchResult], query: str = "") -> str:
         """Format search results as human-readable text."""
         if not results:
             return "No results found."
@@ -2697,6 +2706,13 @@ class SemanticSearchManager:
                 f"  {i}. [{r.chunk_type}] {location}"
                 f" — {r.name} (score: {r.score:.3f})"
             )
+            if query:
+                evidence = hit_evidence(query, r)
+                if evidence["matched_terms"]:
+                    lines.append(
+                        "     matches: " + ", ".join(evidence["matched_terms"])
+                        + " (" + ", ".join(evidence["match_fields"]) + ")"
+                    )
             if r.text:
                 # Show first 120 chars of text
                 body = r.text.split("\n", 1)[-1] if r.start_line > 0 else r.text

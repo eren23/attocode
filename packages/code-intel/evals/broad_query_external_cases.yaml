@@ -1,0 +1,79 @@
+# Secondary two-concept validation pack. Direct implementation targets were
+# selected from source in five repositories not used to tune the ranking rule.
+repos:
+  express:
+    - query: json serialization
+      relevant_files:
+        - lib/response.js
+    - query: request protocol
+      relevant_files:
+        - lib/request.js
+    - query: template rendering
+      relevant_files:
+        - lib/application.js
+        - lib/view.js
+    - query: cookie clearing
+      relevant_files:
+        - lib/response.js
+  requests:
+    - query: certificate verification
+      relevant_files:
+        - src/requests/adapters.py
+        - src/requests/sessions.py
+    - query: cookie merging
+      relevant_files:
+        - src/requests/cookies.py
+    - query: redirect resolution
+      relevant_files:
+        - src/requests/sessions.py
+    - query: response decoding
+      relevant_files:
+        - src/requests/models.py
+  vapor:
+    - query: route registration
+      relevant_files:
+        - Sources/Vapor/Routing/RoutesBuilder.swift
+        - Sources/Vapor/Routing/RoutesBuilder+Method.swift
+    - query: middleware pipeline
+      relevant_files:
+        - Sources/Vapor/Middleware/Middleware.swift
+        - Sources/Vapor/Middleware/Application+Middleware.swift
+    - query: request body
+      relevant_files:
+        - Sources/Vapor/Request/Request+Body.swift
+        - Sources/Vapor/Request/Request.swift
+    - query: websocket routes
+      relevant_files:
+        - Sources/Vapor/Routing/RoutesBuilder+WebSocket.swift
+        - Sources/Vapor/Routing/Request+WebSocket.swift
+  phoenix:
+    - query: channel server
+      relevant_files:
+        - lib/phoenix/channel.ex
+        - lib/phoenix/channel/server.ex
+    - query: route matching
+      relevant_files:
+        - lib/phoenix/router.ex
+        - lib/phoenix/router/route.ex
+    - query: socket serialization
+      relevant_files:
+        - lib/phoenix/socket/serializer.ex
+        - lib/phoenix/socket/serializers/v2_json_serializer.ex
+    - query: endpoint supervision
+      relevant_files:
+        - lib/phoenix/endpoint/supervisor.ex
+  ripgrep:
+    - query: parallel traversal
+      relevant_files:
+        - crates/ignore/src/walk.rs
+    - query: glob matching
+      relevant_files:
+        - crates/globset/src/lib.rs
+        - crates/globset/src/glob.rs
+    - query: regex matcher
+      relevant_files:
+        - crates/regex/src/matcher.rs
+    - query: search output
+      relevant_files:
+        - crates/printer/src/standard.rs
+        - crates/core/messages.rs
