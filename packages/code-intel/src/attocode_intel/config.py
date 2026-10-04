@@ -42,6 +42,17 @@ class CodeIntelConfig:
     local_reranker_path: str = ""
     local_reranker_sha256: str = ""
 
+    # Optional shortlist ranking. Empty provider keeps the legacy local
+    # cross-encoder opt-in; "off" disables every model-based ranker.
+    ranking_provider: str = ""
+    ranking_endpoint: str = ""
+    ranking_model: str = ""
+    ranking_auth_env: str = ""
+    ranking_allow_remote: bool = False
+    ranking_remote_workspace: str = ""
+    ranking_timeout_ms: int = 0  # auto: 5s loopback, 800ms remote
+    ranking_max_candidates: int = 12
+
     # Remote connection (CLI → server bridge)
     remote_url: str = ""  # e.g. "https://code.example.com"
     remote_token: str = ""  # JWT or API key for remote server
@@ -96,6 +107,15 @@ class CodeIntelConfig:
             embedding_nl_mode=os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none"),
             local_reranker_path=os.environ.get("ATTOCODE_INTEL_RERANKER_PATH", ""),
             local_reranker_sha256=os.environ.get("ATTOCODE_INTEL_RERANKER_SHA256", ""),
+            ranking_provider=os.environ.get("ATTOCODE_INTEL_RANKING_PROVIDER", ""),
+            ranking_endpoint=os.environ.get("ATTOCODE_INTEL_RANKING_ENDPOINT", ""),
+            ranking_model=os.environ.get("ATTOCODE_INTEL_RANKING_MODEL", ""),
+            ranking_auth_env=os.environ.get("ATTOCODE_INTEL_RANKING_AUTH_ENV", ""),
+            ranking_allow_remote=os.environ.get("ATTOCODE_INTEL_RANKING_ALLOW_REMOTE", "").lower()
+            in {"1", "true", "yes", "on"},
+            ranking_remote_workspace=os.environ.get("ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE", ""),
+            ranking_timeout_ms=int(os.environ.get("ATTOCODE_INTEL_RANKING_TIMEOUT_MS", "0")),
+            ranking_max_candidates=int(os.environ.get("ATTOCODE_INTEL_RANKING_MAX_CANDIDATES", "12")),
             gc_merged_branch_retention_days=int(os.environ.get("GC_MERGED_BRANCH_RETENTION_DAYS", "7")),
             gc_inactive_branch_retention_days=int(os.environ.get("GC_INACTIVE_BRANCH_RETENTION_DAYS", "30")),
             gc_content_min_age_minutes=int(os.environ.get("GC_CONTENT_MIN_AGE_MINUTES", "60")),

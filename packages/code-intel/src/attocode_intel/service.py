@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from collections import Counter, deque
 from dataclasses import replace
 from pathlib import Path
@@ -16,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from attocode_intel._internal.integrations.utilities.token_estimate import estimate_tokens
 from attocode_intel.config import CodeIntelConfig
+from attocode_intel.query_ranking import broad_rank_enabled, hit_evidence, query_diagnostics
 
 if TYPE_CHECKING:
     from attocode_intel._internal.integrations.context.ast_service import ASTService
@@ -27,10 +29,14 @@ if TYPE_CHECKING:
         HierarchicalExplorer,
     )
     from attocode_intel._internal.integrations.context.memory_store import MemoryStore
+    from attocode_intel._internal.integrations.context.reranker import RankingProvider
     from attocode_intel._internal.integrations.context.semantic_search import (
         ContextAssemblyConfig,
         SearchScoringConfig,
         SemanticSearchManager,
+    )
+    from attocode_intel._internal.integrations.context.systemone_ranker import (
+        SystemOneChoiceReranker,
     )
     from attocode_intel._internal.integrations.context.temporal_coupling import (
         TemporalCouplingAnalyzer,
@@ -63,8 +69,13 @@ class CodeIntelService:
         self._explorer: HierarchicalExplorer | None = None
         self._security_scanner: SecurityScanner | None = None
         self._semantic_search: SemanticSearchManager | None = None
-        self._local_reranker = None
+        self._local_reranker: RankingProvider | None = None
         self._local_reranker_status = "not_configured"
+        self._systemone_ranker: SystemOneChoiceReranker | None = None
+        self._ranking_provider = (self._config.ranking_provider
+                                  if config is not None else
+                                  os.environ.get("ATTOCODE_INTEL_RANKING_PROVIDER", "")) or "auto"
+        self._systemone_status = "not_configured"
         self._memory_store: MemoryStore | None = None
         self._temporal_analyzer: TemporalCouplingAnalyzer | None = None
         self._lsp_auto_started: bool = False
@@ -76,20 +87,53 @@ class CodeIntelService:
                          or os.environ.get("ATTOCODE_INTEL_RERANKER_PATH", ""))
         reranker_sha = (self._config.local_reranker_sha256
                         or os.environ.get("ATTOCODE_INTEL_RERANKER_SHA256", ""))
-        if bool(reranker_path) != bool(reranker_sha):
-            self._local_reranker_status = "incomplete_config"
-            logger.warning("Local reranker requires both path and SHA-256; deterministic ranking remains active")
-        if reranker_path and reranker_sha:
+        if self._ranking_provider not in {"auto", "off", "local_cross_encoder", "systemone"}:
+            self._systemone_status = "invalid_config"
+            logger.warning("Unknown ranking provider; deterministic ranking remains active")
+        elif self._ranking_provider == "systemone":
             try:
-                from attocode_intel._internal.integrations.context.reranker import (
-                    LocalCrossEncoderReranker,
+                from attocode_intel._internal.integrations.context.systemone_ranker import (
+                    SystemOneChoiceReranker,
                 )
-                self._local_reranker = LocalCrossEncoderReranker(reranker_path, reranker_sha)
-                self._local_reranker.start_prewarm()
-                self._local_reranker_status = "loading"
-            except ValueError:
-                logger.warning("Invalid local reranker configuration; deterministic ranking remains active")
-                self._local_reranker_status = "invalid_config"
+
+                environment = os.environ if config is None else {}
+                remote_opt_in = (self._config.ranking_allow_remote if config is not None else
+                                 environment.get("ATTOCODE_INTEL_RANKING_ALLOW_REMOTE", "").lower()
+                                 in {"1", "true", "yes", "on"})
+                remote_workspace = (self._config.ranking_remote_workspace or
+                                    environment.get("ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE", ""))
+                timeout_ms = (self._config.ranking_timeout_ms if config is not None else
+                              int(environment.get("ATTOCODE_INTEL_RANKING_TIMEOUT_MS", "0")))
+                self._systemone_ranker = SystemOneChoiceReranker(
+                    self._config.ranking_endpoint or environment.get("ATTOCODE_INTEL_RANKING_ENDPOINT", ""),
+                    model=self._config.ranking_model or environment.get("ATTOCODE_INTEL_RANKING_MODEL", ""),
+                    auth_env=self._config.ranking_auth_env or environment.get("ATTOCODE_INTEL_RANKING_AUTH_ENV", ""),
+                    allow_remote=(remote_opt_in and os.path.isabs(remote_workspace) and
+                                  os.path.realpath(remote_workspace) == self._project_dir),
+                    service_mode=self._config.is_service_mode,
+                    timeout_seconds=None if timeout_ms == 0 else timeout_ms / 1000,
+                    max_candidates=(self._config.ranking_max_candidates if config is not None else
+                                    int(environment.get("ATTOCODE_INTEL_RANKING_MAX_CANDIDATES", "12"))),
+                )
+                self._systemone_status = "configured"
+            except (ValueError, OverflowError):
+                self._systemone_status = "invalid_config"
+                logger.warning("Invalid SystemOne ranking configuration; deterministic ranking remains active")
+        if self._ranking_provider in {"auto", "local_cross_encoder"}:
+            if bool(reranker_path) != bool(reranker_sha):
+                self._local_reranker_status = "incomplete_config"
+                logger.warning("Local reranker requires both path and SHA-256; deterministic ranking remains active")
+            if reranker_path and reranker_sha:
+                try:
+                    from attocode_intel._internal.integrations.context.reranker import (
+                        LocalCrossEncoderReranker,
+                    )
+                    self._local_reranker = LocalCrossEncoderReranker(reranker_path, reranker_sha)
+                    self._local_reranker.start_prewarm()
+                    self._local_reranker_status = "loading"
+                except ValueError:
+                    logger.warning("Invalid local reranker configuration; deterministic ranking remains active")
+                    self._local_reranker_status = "invalid_config"
 
     @classmethod
     def get_instance(cls, project_dir: str, config: CodeIntelConfig | None = None) -> CodeIntelService:
@@ -291,11 +335,117 @@ class CodeIntelService:
                     break
         return header + "\n".join(lines[start - 1:start + 39])[:1800]
 
-    def _rank_search_results(self, query: str, results: list, top_k: int) -> tuple[list, dict]:
+    def _rerank_file_excerpt(self, result, query: str) -> str | None:
+        """Current, query-focused file evidence for a shortlist decision."""
+        from attocode_intel.focused_evidence import task_terms, terms
+
+        root = Path(self._project_dir).resolve()
+        path = (root / result.file_path).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            return None
+        try:
+            before = path.stat()
+            if before.st_size > 2_000_000:
+                return None
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            after = path.stat()
+            if (before.st_mtime_ns, before.st_ctime_ns, before.st_size) != (
+                after.st_mtime_ns, after.st_ctime_ns, after.st_size
+            ):
+                return None
+        except OSError:
+            return None
+        if not lines:
+            return f"File: {result.file_path}\n(empty file)"
+        positive, _ = task_terms(query)
+        centers: list[int] = []
+        scored = sorted(((len(terms(line) & positive), -index, index)
+                         for index, line in enumerate(lines)), reverse=True)
+        for overlap, _order, index in scored:
+            if overlap == 0 and centers:
+                break
+            if all(abs(index - old) > 24 for old in centers):
+                centers.append(index)
+            if len(centers) == 2:
+                break
+        windows = []
+        for center in sorted(centers or [0]):
+            start, end = max(0, center - 8), min(len(lines), center + 9)
+            windows.append("\n".join(f"{number + 1}: {lines[number]}"
+                                     for number in range(start, end)))
+        return (f"File: {result.file_path}\n" + "\n...\n".join(windows))[:1350]
+
+    def _rank_systemone_results(self, query: str, results: list, top_k: int,
+                                ranking: dict) -> tuple[list, dict]:
+        """Rank distinct files while keeping each file's best source hit."""
+        fallback = results[:top_k]
+        model = self._systemone_ranker
+        if model is None:
+            ranking["fallback_reason"] = self._systemone_status
+            return fallback, ranking
+        ranking["model_status"] = model.status
+        ranking["model"] = model.model
+        ranking["remote"] = model.remote
+        if not results or top_k <= 0:
+            return fallback, ranking
+        representatives = {}
+        for result in results:
+            representatives.setdefault(result.file_path, result)
+            if len(representatives) == model.max_candidates:
+                break
+        if len(representatives) < 2:
+            ranking["fallback_reason"] = "single_candidate"
+            return fallback, ranking
+        candidates = []
+        for index, result in enumerate(representatives.values()):
+            excerpt = self._rerank_file_excerpt(result, query)
+            if excerpt is None:
+                ranking["fallback_reason"] = "evidence_unavailable"
+                return fallback, ranking
+            candidates.append((str(index), excerpt, result.score))
+        started = time.monotonic()
+        outcome = model.rerank_result(query, candidates, top_k=len(candidates))
+        ranking["rerank_elapsed_ms"] = round((time.monotonic() - started) * 1000, 2)
+        if not outcome.reranked:
+            ranking["fallback_reason"] = outcome.fallback_reason
+            return fallback, ranking
+        source_rows = list(representatives.values())
+        ordered = [source_rows[int(candidate_id)] for candidate_id, _excerpt, _score
+                   in outcome.candidates]
+        seen_files = set(representatives)
+        duplicates = []
+        for row in results:
+            if row is representatives.get(row.file_path):
+                continue
+            if row.file_path in seen_files:
+                duplicates.append(row)
+            else:
+                ordered.append(row)
+                seen_files.add(row.file_path)
+        ordered.extend(duplicates)
+        # File-level probabilities determine order, not result score. Keep the
+        # original retrieval scores rather than presenting choice probabilities
+        # as calibrated per-result confidence.
+        ranking.update({"method": "systemone_choice", "reranked_count": len(candidates),
+                        "score_semantics": "retrieval_score_preserved"})
+        return ordered[:top_k], ranking
+
+    def _rank_search_results(self, query: str, results: list, top_k: int,
+                             file_filter: str = "") -> tuple[list, dict]:
         """Optional local model order with a complete deterministic fallback."""
         limited = results[:top_k]
         ranking = {"method": "source_aware_deterministic", "returned_count": len(limited),
-                   "model_status": self._local_reranker_status}
+                   "model_status": self._local_reranker_status,
+                   "broad_ranker": "experimental_on" if broad_rank_enabled() else "off",
+                   "query": query_diagnostics(query, results, file_filter)}
+        if self._ranking_provider == "systemone":
+            ranking["provider"] = "systemone"
+            return self._rank_systemone_results(query, results, top_k, ranking)
+        if self._ranking_provider not in {"auto", "local_cross_encoder"}:
+            ranking["provider"] = self._ranking_provider
+            ranking["model_status"] = ("off" if self._ranking_provider == "off"
+                                       else self._systemone_status)
+            return limited, ranking
         model = self._local_reranker
         if model is None or not results:
             return limited, ranking
@@ -1333,7 +1483,7 @@ class CodeIntelService:
         """
         mgr = self._get_semantic_search()
         candidates = mgr.search(query, top_k=max(top_k, 24), file_filter=file_filter)
-        results, ranking = self._rank_search_results(query, candidates, top_k)
+        results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
         ranking["candidate_pool_count"] = len(candidates)
         if hasattr(mgr, "candidate_diagnostics"):
             ranking["index"] = mgr.candidate_diagnostics()
@@ -1347,6 +1497,7 @@ class CodeIntelService:
                     "snippet": r.text,
                     "line": r.start_line or None,
                     "end_line": r.end_line or None,
+                    **hit_evidence(query, r),
                 }
                 for r in results
             ],
@@ -2462,9 +2613,13 @@ class CodeIntelService:
                 )
                 if results:
                     heading = f"## Relevant Code for: {task_hint}\n"
+                    advisory = (
+                        "Broad query matches multiple components; add a component or path hint.\n"
+                        if _ranking["query"]["ambiguous"] else ""
+                    )
                     selected = ""
                     for count in range(1, len(results) + 1):
-                        candidate = mgr.format_results(results[:count])
+                        candidate = advisory + mgr.format_results(results[:count], query=task_hint)
                         if count < len(results):
                             candidate = candidate.replace(
                                 f"results ({count}):", f"results ({count} of {len(results)}):", 1)
@@ -2472,7 +2627,7 @@ class CodeIntelService:
                             break
                         selected = candidate
                     if not selected:
-                        first = mgr.format_results(results[:1])
+                        first = advisory + mgr.format_results(results[:1], query=task_hint)
                         selected = (first if count_tokens(heading + first) <= max_tokens else
                                     "Top match exceeds max_tokens; narrow the task or increase the budget.")
                     sections.append(heading + selected)
@@ -2867,16 +3022,18 @@ class CodeIntelService:
 
         if mode == "keyword":
             candidates = mgr.search_candidates(query, top_k=max(top_k, 24), file_filter=file_filter)
-            results, _ = self._rank_search_results(query, candidates, top_k)
+            results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
             if not results and mgr.candidate_diagnostics().get("status") == "warming":
                 return "Search index warming; retry shortly. Missing results do not prove absence."
-            return mgr.format_results(results)
+            note = "Broad query matches multiple components; narrow with file_filter or a component name.\n" if ranking["query"]["ambiguous"] else ""
+            return note + mgr.format_results(results, query=query)
 
         candidates = mgr.search(query, top_k=max(top_k, 24), file_filter=file_filter)
-        results, _ = self._rank_search_results(query, candidates, top_k)
+        results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
         if not results and mgr.candidate_diagnostics().get("status") == "warming":
             return "Search index warming; retry shortly. Missing results do not prove absence."
-        return mgr.format_results(results)
+        note = "Broad query matches multiple components; narrow with file_filter or a component name.\n" if ranking["query"]["ambiguous"] else ""
+        return note + mgr.format_results(results, query=query)
 
     def semantic_search_status(self) -> str:
         progress = self.indexing_status()

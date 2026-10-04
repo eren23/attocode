@@ -24,6 +24,7 @@ from attocode_intel.catalog import (
     tool_catalog,
 )
 from attocode_intel.output import bounded_compact, bounded_text, response_tokens
+from attocode_intel.query_ranking import hit_evidence
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
 
 
@@ -429,7 +430,9 @@ class OperationGateway:
                             args["query"], top_k=max(args["top_k"], 24), file_filter=args["file_filter"]
                         )
                     )
-                    results, ranking = service._rank_search_results(args["query"], candidates, args["top_k"])
+                    results, ranking = service._rank_search_results(
+                        args["query"], candidates, args["top_k"], args["file_filter"],
+                    )
                     ranking["candidate_pool_count"] = len(candidates)
                     if hasattr(mgr, "candidate_diagnostics"):
                         ranking["index"] = mgr.candidate_diagnostics()
@@ -451,13 +454,18 @@ class OperationGateway:
                             "snippet_truncated": len(snippet) > snippet_cap,
                             "line": result.start_line or None,
                             "end_line": result.end_line or None,
+                            **hit_evidence(args["query"], result),
                         })
                     payload = {
                         "query": args["query"],
                         "results": hits,
                         "ranking": ranking,
                     }
-                    text = mgr.format_results(results)
+                    note = (
+                        "Broad query matches multiple components; narrow with file_filter or a component name.\n"
+                        if ranking["query"]["ambiguous"] else ""
+                    )
+                    text = note + mgr.format_results(results, query=args["query"])
                     if not results and ranking.get("index", {}).get("status") == "warming":
                         text = "Search index warming; retry shortly. Missing results do not prove absence."
                 elif name == "inspect_symbol":
