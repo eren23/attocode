@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING
 
 from eval.harness import InstanceStatus, RunResult
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 # =============================================================================
@@ -383,3 +386,29 @@ def compute_recall_at_k(results: list[str], relevant: set[str], k: int = 20) -> 
         return 0.0
     hits = sum(1 for r in results[:k] if r in relevant)
     return hits / len(relevant)
+
+
+def compute_graded_ndcg(
+    results: list[str], grades: Mapping[str, int], k: int = 5,
+) -> float:
+    """NDCG for judged results on a 0–3 relevance scale.
+
+    The ideal ranking uses *all* judged documents, not only retrieved ones.
+    Callers must reject unjudged results before scoring: absence from the
+    judgment pool must never silently mean irrelevant.
+    """
+    if k <= 0:
+        return 0.0
+    if any(path not in grades for path in results[:k]):
+        raise ValueError("graded NDCG requires judgments for every scored result")
+    if any(not isinstance(grade, int) or isinstance(grade, bool) or grade not in range(4)
+           for grade in grades.values()):
+        raise ValueError("relevance grades must be integers from 0 to 3")
+
+    def _gain(grade: int, position: int) -> float:
+        return (2**grade - 1) / math.log2(position + 2)
+
+    dcg = sum(_gain(grades[path], i) for i, path in enumerate(results[:k]))
+    ideal = sorted(grades.values(), reverse=True)[:k]
+    idcg = sum(_gain(grade, i) for i, grade in enumerate(ideal))
+    return dcg / idcg if idcg else 0.0

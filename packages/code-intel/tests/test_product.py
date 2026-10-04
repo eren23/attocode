@@ -59,6 +59,10 @@ async def test_concurrent_workspaces_and_freshness(tmp_path):
 
 @pytest.mark.asyncio
 async def test_bootstrap_total_budget_and_no_agent_import(tmp_path):
+    agent_modules_before = {
+        name for name in sys.modules
+        if name.startswith(("attocode.agent", "attocode.tui", "attoswarm"))
+    }
     root = project(tmp_path / "repo", "helper")
     gateway = OperationGateway(str(root), "daily")
     try:
@@ -69,9 +73,11 @@ async def test_bootstrap_total_budget_and_no_agent_import(tmp_path):
         assert result.structuredContent["metadata"]["workspace"] == str(root.resolve())
     finally:
         await gateway.close()
-    assert not any(
-        name.startswith(("attocode.agent", "attocode.tui", "attoswarm")) for name in sys.modules
-    )
+    unexpected = [
+        name for name in sys.modules
+        if name.startswith(("attocode.agent", "attocode.tui", "attoswarm"))
+    ]
+    assert not set(unexpected) - agent_modules_before, set(unexpected) - agent_modules_before
 
 
 async def test_hinted_bootstrap_keeps_complete_relevant_result_under_mcp_budget(tmp_path):
@@ -84,7 +90,7 @@ async def test_hinted_bootstrap_keeps_complete_relevant_result_under_mcp_budget(
         assert body.startswith("## Relevant Code for: helper\n")
         relevant = body.split("\n\n## ", 1)[0]
         assert "helper.py" in relevant
-        assert re.search(r"^  1\. \[function\] helper\.py — helper \(score: [0-9.]+\)$",
+        assert re.search(r"^  1\. \[function\] helper\.py(?::\d+-\d+)? — helper \(score: [0-9.]+\)$",
                          relevant, re.MULTILINE)
         assert "[Truncated;" not in relevant
         assert "## Overview" in body
@@ -137,7 +143,36 @@ async def test_recalled_knowledge_does_not_displace_bootstrap_search(tmp_path, m
         assert response_tokens(result) <= 1500
         body = json.loads(result.content[0].text)["data"]["result"]
         assert body.startswith("## Relevant Code for: helper\n")
-        assert "helper.py — helper (score:" in body.split("\n\n## ", 1)[0]
+        assert re.search(
+            r"helper\.py(?::\d+-\d+)? — helper \(score:",
+            body.split("\n\n## ", 1)[0],
+        )
+    finally:
+        await gateway.close()
+
+
+async def test_semantic_search_structured_hits_respect_small_budget(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    body = "needle " + "source " * 100
+    for index in range(5):
+        (root / f"worker_{index}.py").write_text(
+            f"def needle_{index}():\n    return {body!r}\n",
+        )
+    gateway = OperationGateway(str(root), "daily", watch=False)
+    try:
+        for _ in range(20):
+            response = await gateway.execute("semantic_search", {
+                "query": "needle", "mode": "keyword", "top_k": 10, "max_tokens": 240,
+            })
+            if response.structuredContent["metadata"]["ranking"]["index"]["status"] == "ready":
+                break
+            await asyncio.sleep(0.05)
+        data = response.structuredContent["data"]
+        assert len(data["results"]) <= 2
+        assert all(len(hit["snippet"]) <= 120 for hit in data["results"])
+        assert response.structuredContent["metadata"]["truncated"]
+        assert data["ranking"]["omitted_results_due_to_budget"] > 0
     finally:
         await gateway.close()
 

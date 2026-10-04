@@ -99,6 +99,14 @@ class CodeIntelBenchEvaluator:
 
         elapsed = time.monotonic() - t0
 
+        if "search_index_not_ready" in str(search_result.get("error", "")):
+            return EvalResult(
+                metric_value=0.0,
+                error=search_result["error"],
+                success=False,
+                metadata={"search_quality": search_result, "mcp_bench": bench_result},
+            )
+
         # Compute composite
         search_score = search_result.get("composite", 0.0)
         bench_score = bench_result.get("composite", 0.0)
@@ -147,6 +155,8 @@ class CodeIntelBenchEvaluator:
                 discover_repos_with_ground_truth,
                 load_ground_truth,
                 parse_search_results,
+                search_is_warming,
+                wait_for_search_ready,
             )
             from eval.metrics import (
                 compute_mrr,
@@ -183,6 +193,11 @@ class CodeIntelBenchEvaluator:
                 svc = CodeIntelService(repo_path)
                 self._svc_cache[repo_path] = svc
             config.apply_to_service(svc)
+            try:
+                cold_start_ms = wait_for_search_ready(svc, queries[0]["query"], top_k=20)
+            except TimeoutError as exc:
+                return {"error": f"{repo}: search_index_not_ready: {exc}",
+                        "composite": None, "per_repo": per_repo}
 
             repo_mrr: list[float] = []
             repo_ndcg: list[float] = []
@@ -195,7 +210,10 @@ class CodeIntelBenchEvaluator:
                 relevant: list[str] = entry["relevant_files"]
                 relevant_set = set(relevant)
 
-                raw_output = svc.semantic_search(query_text)
+                raw_output = svc.semantic_search(query_text, top_k=20)
+                if search_is_warming(svc, raw_output):
+                    return {"error": f"{repo}: search_index_not_ready_during_query",
+                            "composite": None, "per_repo": per_repo}
                 retrieved = parse_search_results(raw_output, max_results=20)
 
                 mrr = compute_mrr(retrieved, relevant_set, k=10)
@@ -233,6 +251,7 @@ class CodeIntelBenchEvaluator:
                     "precision_at_10": round(avg_prec, 4),
                     "recall_at_20": round(avg_rec, 4),
                     "queries": n,
+                    "search_cold_start_ms": round(cold_start_ms, 1),
                     "query_details": query_details,
                 }
 

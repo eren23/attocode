@@ -234,7 +234,7 @@ def graph_dsl(query: str) -> str:
 
 
 @mcp.tool()
-def find_related(file: str, top_k: int = 10) -> str:
+def find_related(file: str, top_k: int = 10, task_hint: str = "") -> str:
     """Find structurally related files by import-graph proximity.
 
     Combines 2-hop import neighbors with co-importer overlap
@@ -243,8 +243,12 @@ def find_related(file: str, top_k: int = 10) -> str:
     Args:
         file: File path (relative to project root or absolute).
         top_k: Number of results to return (default 10).
+        task_hint: Optional context for ordering the structurally related files.
     """
-    return _get_service().find_related(file=file, top_k=top_k)
+    service = _get_service()
+    if task_hint and hasattr(service, "_task_file_scores"):
+        return service.find_related(file=file, top_k=top_k, task_hint=task_hint)
+    return service.find_related(file=file, top_k=top_k)
 
 
 def _louvain_communities(
@@ -348,6 +352,8 @@ def repo_map_ranked(
         token_budget=token_budget,
         symbols_by_file=symbols_by_file,
         exclude_tests=exclude_tests,
+        relevance_by_file=(_get_service()._task_file_scores(task_context)
+                           if task_context else None),
     )
     return format_repo_map(result)
 

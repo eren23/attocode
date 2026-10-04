@@ -37,6 +37,11 @@ class CodeIntelConfig:
     embedding_dimension: int = 0  # 0 = auto from model
     embedding_nl_mode: str = "none"  # "none" = embed raw code, "heuristic" = code-to-NL before embedding
 
+    # Optional local-only reranker. Both values must be supplied; a model is
+    # never downloaded or loaded synchronously by a search request.
+    local_reranker_path: str = ""
+    local_reranker_sha256: str = ""
+
     # Remote connection (CLI → server bridge)
     remote_url: str = ""  # e.g. "https://code.example.com"
     remote_token: str = ""  # JWT or API key for remote server
@@ -89,6 +94,8 @@ class CodeIntelConfig:
             embedding_model=os.environ.get("ATTOCODE_EMBEDDING_MODEL", ""),
             embedding_dimension=int(os.environ.get("ATTOCODE_EMBEDDING_DIMENSION", "0")),
             embedding_nl_mode=os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none"),
+            local_reranker_path=os.environ.get("ATTOCODE_INTEL_RERANKER_PATH", ""),
+            local_reranker_sha256=os.environ.get("ATTOCODE_INTEL_RERANKER_SHA256", ""),
             gc_merged_branch_retention_days=int(os.environ.get("GC_MERGED_BRANCH_RETENTION_DAYS", "7")),
             gc_inactive_branch_retention_days=int(os.environ.get("GC_INACTIVE_BRANCH_RETENTION_DAYS", "30")),
             gc_content_min_age_minutes=int(os.environ.get("GC_CONTENT_MIN_AGE_MINUTES", "60")),

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from attocode_intel.focused_evidence import task_terms
+
 
 @dataclass(slots=True)
 class RankedEntry:
@@ -98,15 +100,17 @@ def pagerank(
     return {node_list[i]: scores[i] for i in range(n)}
 
 
-def _task_relevance(path: str, task_keywords: list[str]) -> float:
+def _task_relevance(path: str, task_keywords: set[str], excluded_keywords: set[str]) -> float:
     """Compute task relevance score for a file path."""
     if not task_keywords:
         return 1.0
     path_lower = path.lower()
     matches = sum(1 for kw in task_keywords if kw.lower() in path_lower)
-    if matches == 0:
-        return 0.1
-    return min(1.0, 0.3 + 0.7 * (matches / len(task_keywords)))
+    relevance = (0.1 if matches == 0
+                 else min(1.0, 0.3 + 0.7 * (matches / len(task_keywords))))
+    if any(kw in path_lower for kw in excluded_keywords):
+        relevance *= 0.2  # An explicit exclusion is a hint, not a hard filter.
+    return relevance
 
 
 def _estimate_entry_tokens(entry: RankedEntry) -> int:
@@ -141,6 +145,7 @@ def rank_repo_files(
     symbols_by_file: dict[str, list[str]] | None = None,
     line_counts: dict[str, int] | None = None,
     exclude_tests: bool = True,
+    relevance_by_file: dict[str, float] | None = None,
 ) -> RepoMapResult:
     """Rank repository files by graph importance and task relevance.
 
@@ -165,16 +170,24 @@ def rank_repo_files(
     # Compute PageRank
     pr_scores = pagerank(adjacency)
 
-    # Extract task keywords
-    task_keywords = [w for w in task_context.split() if len(w) > 2] if task_context else []
+    # Query-conditioned source evidence is stronger than path words, but graph
+    # importance still supplies a useful fallback for files outside the pool.
+    task_keywords, excluded_keywords = task_terms(task_context)
+    relevance_by_file = relevance_by_file or {}
+    max_pr = max(pr_scores.values(), default=1.0) or 1.0
+    max_relevance = max(relevance_by_file.values(), default=1.0) or 1.0
 
     # Score each file
     scored: list[tuple[str, float]] = []
     for path, pr_score in pr_scores.items():
         if exclude_tests and _categorize_path(path) == "test":
             continue
-        relevance = _task_relevance(path, task_keywords)
-        combined = pr_score * relevance
+        relevance = _task_relevance(path, task_keywords, excluded_keywords)
+        if task_context and relevance_by_file:
+            source_relevance = relevance_by_file.get(path, 0.0) / max_relevance
+            combined = 0.70 * source_relevance + 0.30 * (pr_score / max_pr) * relevance
+        else:
+            combined = pr_score * relevance
         scored.append((path, combined))
 
     # Sort by combined score descending
