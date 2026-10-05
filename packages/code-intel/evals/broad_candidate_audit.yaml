@@ -1,0 +1,59 @@
+# Frozen before the first source-alternative trial. Two-concept queries and
+# source-bound, multi-relevant labels come from existing ground-truth files;
+# labels are not exhaustive semantic relevance judgments.
+repos:
+  attocode:
+    - query: message routing
+      relevant_files:
+        - src/attocode/types/messages.py
+        - src/attocode/core/tool_executor.py
+        - src/attocode/core/response_handler.py
+    - query: safety guardrails
+      relevant_files:
+        - src/attocode/integrations/safety/policy_engine.py
+        - src/attocode/integrations/safety/bash_policy.py
+        - src/attocode/integrations/safety/edit_validator.py
+  fastapi:
+    - query: openapi schema
+      relevant_files:
+        - fastapi/openapi/utils.py
+        - fastapi/openapi/models.py
+        - fastapi/openapi/constants.py
+    - query: request validation
+      relevant_files:
+        - fastapi/dependencies/utils.py
+        - fastapi/routing.py
+        - fastapi/params.py
+  pandas:
+    - query: label indexing
+      relevant_files:
+        - pandas/core/indexing.py
+        - pandas/core/frame.py
+        - pandas/core/indexes/base.py
+    - query: timedelta operations
+      relevant_files:
+        - pandas/core/arrays/timedeltas.py
+        - pandas/core/arrays/datetimelike.py
+        - pandas/core/tools/datetimes.py
+  redis:
+    - query: command handling
+      relevant_files:
+        - src/server.c
+        - src/networking.c
+        - src/commands.c
+    - query: sorted sets
+      relevant_files:
+        - src/t_zset.c
+        - src/listpack.c
+        - src/dict.c
+  gh-cli:
+    - query: command factory
+      relevant_files:
+        - internal/ghcmd/cmd.go
+        - pkg/cmd/root/root.go
+        - pkg/cmd/factory/default.go
+        - pkg/cmdutil/factory.go
+    - query: repository cloning
+      relevant_files:
+        - pkg/cmd/repo/clone/clone.go
+        - git/client.go

@@ -99,7 +99,24 @@ def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResu
     metadata = compact_metadata(metadata)
     data = deepcopy(data)
     omitted = {}
+    match data:
+        case {"results": list() as result_rows,
+              "ranking": {"candidate_pool_count": _, **ranking}}:
+            search_result_count = len(result_rows)
+            initial_search_omissions = ranking.get("omitted_results_due_to_budget", 0)
+        case _:
+            search_result_count = None
+            initial_search_omissions = 0
     while True:
+        if search_result_count is not None:
+            delivered = len(data["results"])
+            if delivered < search_result_count:
+                data["ranking"]["delivered_count"] = delivered
+                data["ranking"]["omitted_results_due_to_budget"] = (
+                    initial_search_omissions + search_result_count - delivered
+                )
+                metadata["ranking"] = deepcopy(data["ranking"])
+                metadata["truncated"] = True
         # Budget trimming can shorten a source page after inspection constructed its
         # continuation. Compute the next offset from the excerpt actually delivered.
         if (isinstance(data, dict) and isinstance(data.get("follow_up"), dict) and "next_source" in data["follow_up"]

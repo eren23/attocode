@@ -24,7 +24,7 @@ from attocode_intel.catalog import (
     tool_catalog,
 )
 from attocode_intel.output import bounded_compact, bounded_text, response_tokens
-from attocode_intel.query_ranking import hit_evidence
+from attocode_intel.query_ranking import hit_evidence, next_search_top_k
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
 
 
@@ -461,10 +461,36 @@ class OperationGateway:
                         "results": hits,
                         "ranking": ranking,
                     }
+                    if ranking.get("index", {}).get("status") == "ready":
+                        next_k = next_search_top_k(
+                            len(candidates), args["top_k"], len(results),
+                        )
+                        if next_k is not None:
+                            request = {
+                                "query": args["query"], "top_k": next_k,
+                                "file_filter": args["file_filter"],
+                                "mode": args.get("mode", "auto"),
+                                "workspace": context.workspace,
+                                "max_tokens": min(32000, max(budget * 2, next_k * 160 + 512)),
+                            }
+                            if args.get("branch"):
+                                request["branch"] = args["branch"]
+                            if args.get("revision"):
+                                request["revision"] = args["revision"]
+                            payload["follow_up"] = {
+                                "tool": "semantic_search", "arguments": request,
+                                "reruns_current_index": True,
+                            }
                     note = (
                         "Broad query matches multiple components; narrow with file_filter or a component name.\n"
                         if ranking["query"]["ambiguous"] else ""
                     )
+                    if payload.get("follow_up"):
+                        note += (
+                            "More retrieved candidates: rerun with "
+                            f"top_k={payload['follow_up']['arguments']['top_k']} "
+                            "(current index).\n"
+                        )
                     text = note + mgr.format_results(results, query=args["query"])
                     if not results and ranking.get("index", {}).get("status") == "warming":
                         text = "Search index warming; retry shortly. Missing results do not prove absence."

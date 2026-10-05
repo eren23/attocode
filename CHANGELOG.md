@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Code-intel search navigation
+
+- Small semantic-search pages now offer a follow-up request for deeper
+  candidates already retrieved. It reruns the current index without changing
+  ranking, and compact responses report the number of results actually
+  delivered after output-budget trimming.
+- Cross-repository candidate audits document why the follow-up helps and why
+  the tested source-only view remains disabled.
+
 ### Added — Experimental code-intel ranking and evaluation
 
 - Broad-query search now reports matched query terms and ambiguity, uses stable

@@ -173,6 +173,34 @@ async def test_semantic_search_structured_hits_respect_small_budget(tmp_path):
         assert all(len(hit["snippet"]) <= 120 for hit in data["results"])
         assert response.structuredContent["metadata"]["truncated"]
         assert data["ranking"]["omitted_results_due_to_budget"] > 0
+        follow_up = data["follow_up"]
+        assert follow_up["tool"] == "semantic_search"
+        assert follow_up["reruns_current_index"] is True
+        assert follow_up["arguments"]["top_k"] == 10
+        assert follow_up["arguments"]["max_tokens"] > 240
+        expanded = await gateway.execute("semantic_search", follow_up["arguments"])
+        expanded_data = expanded.structuredContent["data"]
+        assert len(expanded_data["results"]) > len(data["results"])
+        assert [hit["file_path"] for hit in expanded_data["results"][:len(data["results"])]] == [
+            hit["file_path"] for hit in data["results"]
+        ]
+        assert expanded_data.get("follow_up") is None
+        compact = await gateway.execute_mcp("semantic_search", {
+            "query": "needle", "mode": "keyword", "top_k": 2, "max_tokens": 1000,
+        })
+        compact_data = json.loads(compact.content[0].text)["data"]
+        assert compact_data["follow_up"]["arguments"]["top_k"] >= 5
+        assert compact_data["follow_up"]["reruns_current_index"] is True
+        tightly_bounded = await gateway.execute_mcp("semantic_search", {
+            "query": "needle", "mode": "keyword", "top_k": 5, "max_tokens": 600,
+        })
+        bounded = json.loads(tightly_bounded.content[0].text)
+        assert len(bounded["data"]["results"]) < 5
+        assert bounded["data"]["ranking"]["delivered_count"] == len(bounded["data"]["results"])
+        assert bounded["data"]["ranking"]["omitted_results_due_to_budget"] == (
+            5 - len(bounded["data"]["results"])
+        )
+        assert bounded["metadata"]["ranking"]["delivered_count"] == len(bounded["data"]["results"])
     finally:
         await gateway.close()
 
