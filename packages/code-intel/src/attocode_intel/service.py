@@ -17,7 +17,12 @@ from typing import TYPE_CHECKING
 
 from attocode_intel._internal.integrations.utilities.token_estimate import estimate_tokens
 from attocode_intel.config import CodeIntelConfig
-from attocode_intel.query_ranking import broad_rank_enabled, hit_evidence, query_diagnostics
+from attocode_intel.query_ranking import (
+    broad_rank_enabled,
+    hit_evidence,
+    next_search_top_k,
+    query_diagnostics,
+)
 
 if TYPE_CHECKING:
     from attocode_intel._internal.integrations.context.ast_service import ASTService
@@ -1487,8 +1492,11 @@ class CodeIntelService:
         ranking["candidate_pool_count"] = len(candidates)
         if hasattr(mgr, "candidate_diagnostics"):
             ranking["index"] = mgr.candidate_diagnostics()
-        warming = ranking.get("index", {}).get("status") == "warming"
-        return {
+        index_status = ranking.get("index", {}).get("status")
+        warming = index_status == "warming"
+        follow_up = (next_search_top_k(len(candidates), top_k, len(results))
+                     if index_status == "ready" else None)
+        response = {
             "query": query,
             "results": [
                 {
@@ -1505,6 +1513,15 @@ class CodeIntelService:
             "status": "warming" if warming else "ready",
             "ranking": ranking,
         }
+        if follow_up is not None:
+            arguments = {"query": query, "top_k": follow_up, "file_filter": file_filter}
+            if branch:
+                arguments["branch"] = branch
+            response["follow_up"] = {
+                "tool": "semantic_search", "arguments": arguments,
+                "reruns_current_index": True,
+            }
+        return response
 
     def code_evolution_data(
         self,
@@ -3026,6 +3043,9 @@ class CodeIntelService:
             if not results and mgr.candidate_diagnostics().get("status") == "warming":
                 return "Search index warming; retry shortly. Missing results do not prove absence."
             note = "Broad query matches multiple components; narrow with file_filter or a component name.\n" if ranking["query"]["ambiguous"] else ""
+            next_k = next_search_top_k(len(candidates), top_k, len(results))
+            if next_k and mgr.candidate_diagnostics().get("status") == "ready":
+                note += f"More retrieved candidates: rerun with top_k={next_k} (current index).\n"
             return note + mgr.format_results(results, query=query)
 
         candidates = mgr.search(query, top_k=max(top_k, 24), file_filter=file_filter)
@@ -3033,6 +3053,9 @@ class CodeIntelService:
         if not results and mgr.candidate_diagnostics().get("status") == "warming":
             return "Search index warming; retry shortly. Missing results do not prove absence."
         note = "Broad query matches multiple components; narrow with file_filter or a component name.\n" if ranking["query"]["ambiguous"] else ""
+        next_k = next_search_top_k(len(candidates), top_k, len(results))
+        if next_k and mgr.candidate_diagnostics().get("status") == "ready":
+            note += f"More retrieved candidates: rerun with top_k={next_k} (current index).\n"
         return note + mgr.format_results(results, query=query)
 
     def semantic_search_status(self) -> str:

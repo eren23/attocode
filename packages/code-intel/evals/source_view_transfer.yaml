@@ -1,0 +1,58 @@
+# Frozen before evaluating a source-only facet. Queries are fresh navigation
+# phrasings of source-changing commits from eval/ground_truth/*_git.yaml.
+# Labels are known changed implementation files, not exhaustive relevance.
+# Two explicit test-intent controls must not be redirected to source files.
+repos:
+  attocode:
+    - query: rule filter pipeline
+      relevant_files:
+        - src/attocode/code_intel/rules/filters/pipeline.py
+        - src/attocode/code_intel/rules/loader.py
+        - src/attocode/code_intel/rules/registry.py
+    - query: deterministic pin identifiers
+      relevant_files:
+        - src/attocode/code_intel/tools/pin_store.py
+        - src/attocode/code_intel/tools/pin_tools.py
+    - query: repository snapshot routes
+      relevant_files:
+        - src/attocode/code_intel/api/routes/snapshots.py
+        - src/attocode/code_intel/db/models.py
+    - query: embedding rotation maintenance
+      relevant_files:
+        - src/attocode/code_intel/tools/maintenance_tools.py
+        - src/attocode/integrations/context/embedding_rotation.py
+  express:
+    - query: application render options
+      relevant_files:
+        - lib/application.js
+    - query: redirect response html
+      relevant_files:
+        - lib/response.js
+    - query: request charset negotiation
+      relevant_files:
+        - lib/request.js
+    - query: request socket protocol
+      relevant_files:
+        - lib/request.js
+    - query: buffer response utilities
+      relevant_files:
+        - lib/response.js
+        - lib/utils.js
+    - query: redirect response tests
+      intent: tests
+      relevant_files:
+        - test/res.redirect.js
+  fastapi:
+    - query: openapi swagger escaping
+      relevant_files:
+        - fastapi/applications.py
+        - fastapi/openapi/docs.py
+    - query: strict JSON content type
+      relevant_files:
+        - fastapi/applications.py
+        - fastapi/routing.py
+    - query: strict content type tests
+      intent: tests
+      relevant_files:
+        - tests/test_strict_content_type_app_level.py
+        - tests/test_strict_content_type_router_level.py

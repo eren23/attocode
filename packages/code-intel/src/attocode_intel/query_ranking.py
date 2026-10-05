@@ -216,3 +216,14 @@ def query_diagnostics(
         "ambiguous": ambiguous,
         "matching_components": components[:3] if ambiguous else [],
     }
+
+
+def next_search_top_k(candidate_count: int, requested: int, delivered: int) -> int | None:
+    """Suggest a larger page only for candidates already in this search pool.
+
+    This is a fresh search request, not a stable cursor or a relevance claim.
+    A caller may have delivered fewer than requested due to its output budget.
+    """
+    if candidate_count <= delivered or requested <= 0:
+        return None
+    return max(requested, min(candidate_count, max(24, requested * 2)))

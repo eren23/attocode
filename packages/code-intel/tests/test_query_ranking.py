@@ -13,6 +13,7 @@ from attocode_intel._internal.integrations.context.semantic_search import (
 from attocode_intel.output import bounded_compact
 from attocode_intel.query_ranking import (
     hit_evidence,
+    next_search_top_k,
     query_concepts,
     query_diagnostics,
     rerank_broad_candidates,
@@ -82,6 +83,13 @@ def test_scoped_query_does_not_claim_cross_component_ambiguity():
     scoped = query_diagnostics("cache generation", rows, "packages/code-intel/src/*")
     assert scoped["ambiguous"] is False
     assert scoped["scope"] == "packages/code-intel/src/*"
+
+
+def test_next_search_page_reuses_pool_and_handles_budget_omissions():
+    assert next_search_top_k(24, 5, 5) == 24
+    assert next_search_top_k(5, 10, 2) == 10
+    assert next_search_top_k(5, 10, 5) is None
+    assert next_search_top_k(0, 5, 0) is None
 
 
 def test_explicit_exclusion_is_not_reversed_by_full_match_bonus():
@@ -157,6 +165,12 @@ def test_structured_search_exposes_match_evidence_and_ambiguity(tmp_path):
         "cache generation", top_k=2, file_filter="packages/code-intel/*",
     )
     assert scoped["ranking"]["query"]["ambiguous"] is False
+    expanded = service.semantic_search_data("cache generation", top_k=1)
+    assert expanded["follow_up"] == {
+        "tool": "semantic_search",
+        "arguments": {"query": "cache generation", "top_k": 2, "file_filter": ""},
+        "reruns_current_index": True,
+    }
 
 
 def test_compact_budget_keeps_each_delivered_match_explanation_complete():
