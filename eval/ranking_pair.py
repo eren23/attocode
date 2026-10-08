@@ -40,6 +40,7 @@ REPO_PATHS = {
     **{name: str(_BENCHMARK_ROOT / name) for name in (
         "express", "requests", "vapor", "phoenix", "ripgrep",
         "faker", "starship", "spdlog", "protobuf", "prisma",
+        "okhttp", "sqlite", "ggplot2", "postgrest", "rails", "crystal",
     )},
 }
 
@@ -50,6 +51,13 @@ def _prior_order(_query, candidates, top_k, _file_filter=""):
 
 def _unique_files(results, limit=20):
     return list(dict.fromkeys(row.file_path for row in results))[:limit]
+
+
+def _labels(case: dict) -> tuple[list[str], dict[str, int]]:
+    """Binary packs list files; graded packs map file -> 0..3 (0 = judged irrelevant)."""
+    judged = case["relevant_files"]
+    grades = dict(judged) if isinstance(judged, dict) else dict.fromkeys(judged, 1)
+    return [path for path, grade in grades.items() if grade > 0], grades
 
 
 def _score(files, gold):
@@ -91,7 +99,8 @@ def _copy_external(source: Path, destination: Path) -> None:
 
 def evaluate_repo(repo: str, *, scratch: Path, timeout: float,
                   short_variant: bool = False, cases: list[dict] | None = None,
-                  top_k: int = 80, treatment: str = "experimental") -> dict:
+                  top_k: int = 80, treatment: str = "experimental",
+                  pool_files: int = 20) -> dict:
     source = Path(REPO_PATHS[repo]).resolve()
     if not source.is_dir():
         raise FileNotFoundError(source)
@@ -106,7 +115,7 @@ def evaluate_repo(repo: str, *, scratch: Path, timeout: float,
     else:
         queries = cases
     for case in queries:
-        missing = [path for path in case["relevant_files"] if not (root / path).is_file()]
+        missing = [path for path in _labels(case)[1] if not (root / path).is_file()]
         if missing:
             raise ValueError(f"Missing labeled files in {repo}: {missing}")
 
@@ -124,7 +133,7 @@ def evaluate_repo(repo: str, *, scratch: Path, timeout: float,
 
     rows = []
     for case in queries:
-        original, gold = case["query"], case["relevant_files"]
+        original, (gold, grades) = case["query"], _labels(case)
         query = _short_query(original) if short_variant else original
         for _attempt in range(3):
             arms = {}
@@ -141,7 +150,7 @@ def evaluate_repo(repo: str, *, scratch: Path, timeout: float,
                 elapsed = (time.perf_counter() - started) * 1000
                 if manager.candidate_diagnostics().get("status") != "ready":
                     break  # Discard both arms; incomplete retrieval is not a zero-hit score.
-                files = _unique_files(found)
+                files = _unique_files(found, pool_files)
                 arms[arm] = {**_score(files, gold), "files": files, "ms": round(elapsed, 1)}
             if len(arms) == 2:
                 break
@@ -149,7 +158,8 @@ def evaluate_repo(repo: str, *, scratch: Path, timeout: float,
                 raise TimeoutError(f"{repo}: index did not recover during {query!r}")
         else:
             raise RuntimeError(f"{repo}: index repeatedly invalidated during {query!r}")
-        rows.append({"query": query, "original_query": original, "gold": gold, "arms": arms})
+        rows.append({"query": query, "original_query": original, "gold": gold,
+                     "grades": grades, "intent": case.get("intent"), "arms": arms})
 
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=source, capture_output=True,
@@ -190,7 +200,8 @@ def summary(repos: list[dict]) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--repos", nargs="+", choices=tuple(REPO_PATHS), required=True)
+    parser.add_argument("--repos", nargs="+", required=True,
+                        help="Known repository names, or name=/path for a pinned checkout")
     parser.add_argument("--timeout", type=float, default=240)
     parser.add_argument("--short-variant", action="store_true",
                         help="Use the first two query concepts as a systematic broad-query proxy")
@@ -200,8 +211,17 @@ def main() -> None:
                         help="Chunk result count, 5 for a typical navigation page")
     parser.add_argument("--treatment", choices=("experimental", "default"),
                         default="experimental")
+    parser.add_argument("--pool-files", type=int, default=20,
+                        help="Distinct files kept per arm; the frozen pool depth for rerank trials")
     parser.add_argument("--json", type=Path)
     args = parser.parse_args()
+    for index, item in enumerate(args.repos):
+        name, _, path = item.partition("=")
+        if path:
+            REPO_PATHS[name] = path
+            args.repos[index] = name
+        elif name not in REPO_PATHS:
+            parser.error(f"unknown repository {name!r}; pass name=/path")
     case_pack = None
     if args.case_pack:
         case_pack = yaml.safe_load(args.case_pack.read_text())["repos"]
@@ -214,7 +234,8 @@ def main() -> None:
             result = evaluate_repo(repo, scratch=Path(temp), timeout=args.timeout,
                                    short_variant=args.short_variant,
                                    cases=case_pack[repo] if case_pack else None,
-                                   top_k=args.top_k, treatment=args.treatment)
+                                   top_k=args.top_k, treatment=args.treatment,
+                                   pool_files=args.pool_files)
             reports.append(result)
             print(json.dumps({"repo": repo, "summary": summary([result])}), flush=True)
     output = {"comparison": "pre-broad-query-order vs current",

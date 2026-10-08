@@ -24,7 +24,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from attocode_intel.focused_evidence import terms
+from attocode_intel.focused_evidence import task_terms, terms
 
 from eval.metrics import compute_mrr, compute_ndcg, compute_recall_at_k
 
@@ -66,7 +66,7 @@ def _excerpt(root: Path, relative: str, query: str, *, limit: int = 1350) -> str
     lines = target.read_text(errors="replace").splitlines()
     if not lines:
         return f"File: {relative}\n(empty file)"
-    query_terms = terms(query)
+    query_terms, _ = task_terms(query)  # the product drops "without X" terms too
     scores = []
     for number, line in enumerate(lines):
         overlap = len(terms(line) & query_terms)
@@ -232,6 +232,8 @@ def _systemone_http_scores(ranker, query: str, paths: list[str],
     """Exercise the production adapter against the same frozen evidence."""
     candidates = [(str(index), excerpt, float(len(paths) - index))
                   for index, excerpt in enumerate(evidence)]
+    with ranker._inflight:  # wait out an earlier timed-out call; trials run one query at a time
+        pass
     outcome = ranker.rerank_result(query, candidates, top_k=len(candidates))
     if not outcome.reranked:
         return [0.5] * len(paths), len(paths), outcome.fallback_reason

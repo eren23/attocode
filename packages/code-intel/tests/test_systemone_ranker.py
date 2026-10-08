@@ -288,3 +288,51 @@ def test_unavailable_source_and_bad_configuration_do_not_call_model(tmp_path):
     off = CodeIntelService(str(tmp_path), CodeIntelConfig(ranking_provider="off"))
     result, metadata = off._rank_search_results("query", [row], 1)
     assert result == [row] and metadata["model_status"] == "off"
+
+
+def test_model_ranking_retrieves_enough_chunks_for_its_candidate_files(tmp_path):
+    cfg = CodeIntelConfig(ranking_provider="systemone",
+                          ranking_endpoint="http://127.0.0.1:8000/v1/systemone",
+                          ranking_max_candidates=24)
+    assert CodeIntelService(str(tmp_path), cfg)._retrieval_depth(10) == 192
+    assert CodeIntelService(str(tmp_path), CodeIntelConfig(ranking_provider="off"))._retrieval_depth(10) == 24
+
+
+def test_task_file_scores_follow_the_model_order(tmp_path, monkeypatch):
+    for name in ("a.py", "b.py"):
+        (tmp_path / name).write_text("def f():\n    return 'cache generation'\n")
+    rows = [SemanticSearchResult("a.py", "function", "f", "cache generation", 0.9, 1, 2),
+            SemanticSearchResult("b.py", "function", "f", "cache generation", 0.8, 1, 2)]
+    cfg = CodeIntelConfig(ranking_provider="systemone",
+                          ranking_endpoint="http://127.0.0.1:8000/v1/systemone")
+    service = CodeIntelService(str(tmp_path), cfg)
+    service._systemone_ranker._transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, json=_answer([0.1, 0.9])))
+    manager = type("Manager", (), {"search_candidates": lambda self, query, top_k: rows})()
+    monkeypatch.setattr(service, "_get_semantic_search", lambda: manager)
+    scores = service._task_file_scores("cache generation")
+    assert scores["b.py"] > scores["a.py"]
+
+
+def test_workers_ai_result_envelope_is_unwrapped():
+    ranker = SystemOneChoiceReranker(
+        "http://127.0.0.1:8000/ai/run/@cf/cloudflare/clef",
+        transport=httpx.MockTransport(lambda request: httpx.Response(
+            200, json={"result": _answer([0.2, 0.8]), "success": True, "errors": []})),
+    )
+    ranked = ranker.rerank_result("cache generation", _candidates(), top_k=2)
+    assert ranked.reranked
+    assert [row[0] for row in ranked.candidates] == ["b", "a"]
+
+
+@pytest.mark.parametrize("envelope", [{"success": False, "errors": []},
+                                      {"success": True, "errors": [{"code": 3040}]}, {}])
+def test_failed_workers_ai_envelope_keeps_deterministic_order(envelope):
+    ranker = SystemOneChoiceReranker(
+        "http://127.0.0.1:8000/ai/run/@cf/cloudflare/clef",
+        transport=httpx.MockTransport(lambda request: httpx.Response(
+            200, json={"result": _answer([0.2, 0.8]), **envelope})),
+    )
+    ranked = ranker.rerank_result("cache generation", _candidates(), top_k=2)
+    assert not ranked.reranked
+    assert [row[0] for row in ranked.candidates] == ["a", "b"]

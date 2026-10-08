@@ -1,0 +1,755 @@
+# Blind graded pack, authored 2026-10-08 before any search arm ran on these repositories.
+# Labels come from reading source only (no attocode tools). Grades: 3 primary, 2 directly involved,
+# 1 context, 0 judged irrelevant (added by pooled judging). Revisions:
+#   okhttp: e2061bdd146ae3ce5f097b78fa7a731dc7638510
+#   sqlite: 5700f8c471be2bbf0ca29c7d7f36a6ebea4e7a62
+#   ggplot2: 6f1d98842de0489222c04bff64b3596b796d492d
+#   postgrest: 58368513abdc104e377c4f358f476f49bc1dd2ba
+#   rails: e72eb4c20b6bb5bdc7f63a4477992209585a1fa9
+#   crystal: 066c322f53676e4e59d5e495cc3fa7331c376e8a
+# Pooled judgments (round 1: baseline, Jev 12/24/48, Bosun 12) merged 2026-10-08.
+# Pooled judgments (round 2: CodeRankEmbed dense, RRF fused, Jev on fused; 4 repos) merged 2026-10-08.
+# Pooled judgments (round 3: Bosun 1.7B, Clef-flash 4-bit MLX; 6 repos) merged 2026-10-08.
+repos:
+  okhttp:
+  - query: follow HTTP redirects
+    intent: source
+    relevant_files:
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RetryAndFollowUpInterceptor.kt: 3
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/HttpMethod.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/OkHttpClient.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RealInterceptorChain.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/Interceptor.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/EventListener.kt: 1
+      mockwebserver-deprecated/src/test/java/okhttp3/mockwebserver/MockWebServerTest.kt: 0
+      mockwebserver/src/test/java/mockwebserver3/MockWebServerTest.kt: 0
+      okhttp-testing-support/src/main/kotlin/okhttp3/EventListenerAdapter.kt: 1
+      samples/slack/src/main/java/okhttp3/slack/OAuthSessionFactory.java: 0
+      docs/changelogs/changelog_2x.md: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/HttpStatusCodes.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/HttpOverHttp2Test.kt: 1
+      okhttp-testing-support/src/main/kotlin/okhttp3/ClientRuleEventListener.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/CallTest.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/URLConnectionTest.kt: 1
+    note: followUpRequest/buildRedirectRequest handle 3xx + Location; HttpMethod decides body/GET rewrite;
+      client/chain expose followRedirects flags; EventListener.followUpDecision
+  - query: close idle pooled connections
+    intent: source
+    relevant_files:
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnectionPool.kt: 3
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/ConnectionPool.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnection.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/concurrent/TaskQueue.kt: 1
+      okcurl/src/main/kotlin/okhttp3/curl/Main.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/NativeImageTestsAccessors.kt: 0
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealRoutePlanner.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/EventListenerTest.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/URLConnectionTest.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/connection/ConnectionPoolTest.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/HttpOverHttp2Test.kt: 0
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Connection.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Stream.kt: 0
+      okhttp-testing-support/src/main/kotlin/okhttp3/TestValueFactory.kt: 1
+    note: closeConnections() evicts by keepAlive/maxIdle via cleanup task; public ConnectionPool config;
+      RealConnection.idleAtNs; RealCall marks connection idle via connectionBecameIdle
+  - query: parse cookies from response headers
+    intent: source
+    relevant_files:
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/Cookie.kt: 3
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/HttpHeaders.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/BridgeInterceptor.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/CookieJar.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/publicsuffix/PublicSuffixDatabase.kt: 1
+      okhttp-java-net-cookiejar/src/main/kotlin/okhttp3/java/net/cookiejar/JavaNetCookieJar.kt: 1
+      mockwebserver-deprecated/src/test/java/okhttp3/mockwebserver/MockWebServerTest.kt: 0
+      mockwebserver/src/test/java/mockwebserver3/MockWebServerTest.kt: 0
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/internal.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/CookieTest.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/CookiesTest.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/Response.kt: 1
+      samples/guide/src/main/java/okhttp3/recipes/kt/ParseResponseWithMoshi.kt: 0
+    note: Cookie.parse/parseAll parse Set-Cookie; CookieJar.receiveHeaders calls parseAll, invoked from
+      BridgeInterceptor; public-suffix check for domain attr; JavaNetCookieJar alt decoding
+  - query: throttle simultaneous outbound traffic
+    intent: vocab_mismatch
+    relevant_files:
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt: 3
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/OkHttpClient.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/EventListener.kt: 1
+      docs/changelogs/changelog_2x.md: 1
+      mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/DeprecationBridge.kt: 0
+      mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/MockResponse.kt: 0
+      mockwebserver/src/main/kotlin/mockwebserver3/MockResponse.kt: 0
+      mockwebserver/src/main/kotlin/mockwebserver3/MockWebServer.kt: 0
+      mockwebserver/src/test/java/mockwebserver3/MockWebServerTest.kt: 0
+      okhttp-testing-support/src/main/kotlin/okhttp3/DelegatingSSLSocket.kt: 0
+      okhttp/src/androidMain/kotlin/okhttp3/internal/platform/Android10Platform.kt: 0
+      okhttp/src/androidMain/kotlin/okhttp3/internal/platform/AndroidPlatform.kt: 0
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Platform.kt: 0
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketWriter.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/MockHttp2Peer.kt: 0
+      mockwebserver-deprecated/src/test/java/okhttp3/mockwebserver/MockWebServerTest.kt: 0
+      mockwebserver/src/main/kotlin/mockwebserver3/internal/ThrottledSink.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/DuplexTest.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/RouteFailureTest.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/Http2ConnectionTest.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/HttpOverHttp2Test.kt: 0
+      samples/guide/src/main/java/okhttp3/recipes/kt/WiresharkExample.kt: 0
+    note: Dispatcher maxRequests/maxRequestsPerHost + promoteAndExecute; AsyncCall.callsPerHost counter;
+      client wiring; dispatcherQueueStart/End events. throttle/simultaneous/outbound/traffic absent from
+      Dispatcher.kt
+  - query: HTTP/2 flow control window
+    intent: multi_file
+    relevant_files:
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Connection.kt: 3
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Stream.kt: 3
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/flowcontrol/WindowCounter.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Writer.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Reader.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Settings.kt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/FlowControlListener.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnection.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/Http2ConnectionTest.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/HttpOverHttp2Test.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/ws/WebSocketHttpTest.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/FrameLogTest.kt: 0
+    note: connection-level and stream-level read/write windows, WINDOW_UPDATE frame encode/decode, INITIAL_WINDOW_SIZE
+      setting, WindowCounter bookkeeping, listener wiring
+  - query: tests for URL parsing
+    intent: test
+    relevant_files:
+      okhttp/src/jvmTest/kotlin/okhttp3/HttpUrlTest.kt: 3
+      okhttp/src/jvmTest/kotlin/okhttp3/HttpUrlJvmTest.kt: 3
+      okhttp/src/jvmTest/kotlin/okhttp3/WebPlatformUrlTest.kt: 3
+      okhttp/src/jvmTest/kotlin/okhttp3/WebPlatformUrlTestData.kt: 2
+      okhttp/src/jvmTest/kotlin/okhttp3/UrlComponentEncodingTester.kt: 2
+      okhttp/src/jvmTest/resources/web-platform-test-urltestdata.txt: 2
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/HttpUrl.kt: 1
+      okhttp-dnsoverhttps/src/main/kotlin/okhttp3/dnsoverhttps/DnsOverHttps.kt: 0
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/Request.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/CallTest.kt: 1
+      okhttp/src/jvmTest/kotlin/okhttp3/HeadersJvmTest.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/CookieTest.kt: 0
+      okhttp/src/jvmTest/kotlin/okhttp3/URLConnectionTest.kt: 1
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/Address.kt: 0
+      okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/-HostnamesCommon.kt: 1
+    note: HttpUrl unit tests + web-platform URL conformance suite and its data/encoding helpers; HttpUrl.kt
+      is the implementation
+  sqlite:
+  - query: LIKE and GLOB wildcard matching
+    intent: source
+    relevant_files:
+      src/func.c: 3
+      src/whereexpr.c: 2
+      src/wherecode.c: 1
+      src/pragma.c: 1
+      src/parse.y: 1
+      ext/icu/icu.c: 1
+      ext/fts5/fts5_tokenize.c: 1
+      ext/jni/src/c/sqlite3-jni.c: 1
+      ext/jni/src/org/sqlite/jni/capi/SQLTester.java: 0
+      test/like.test: 1
+      mptest/mptest.c: 0
+      test/e_expr.test: 1
+      test/like2.test: 1
+      ext/jni/src/org/sqlite/jni/capi/CApi.java: 1
+    note: patternCompare/likeFunc/sqlite3_strglob in func.c; LIKE optimization via isLikeOrGlob; case_sensitive_like
+      pragma re-registers; LIKE_KW grammar; ICU LIKE variant
+  - query: evict least recently used pages
+    intent: source
+    relevant_files:
+      src/pcache1.c: 3
+      src/pcache.c: 2
+      src/pager.c: 2
+      src/pcache.h: 1
+      ext/recover/sqlite3recover.c: 0
+      src/btreeInt.h: 0
+      src/dbstat.c: 0
+      src/json.c: 0
+      src/malloc.c: 2
+      src/test1.c: 1
+      test/malloc5.test: 1
+      src/test_pcache.c: 1
+      test/autovacuum.test: 0
+      tool/showdb.c: 0
+      ext/fts3/fts3_write.c: 0
+      src/wal.c: 0
+    note: pcache1 LRU list, pcache1EnforceMaxPage and recycling in FetchStage2; pcache.c FetchStress spills
+      dirty pages via pager's pagerStress; pcache.h interface
+  - query: external merge sort for large results
+    intent: source
+    relevant_files:
+      src/vdbesort.c: 3
+      src/vdbe.c: 2
+      src/select.c: 2
+      src/build.c: 2
+      src/vdbeInt.h: 1
+      src/threads.c: 1
+      ext/misc/spellfix.c: 0
+      src/os_unix.c: 0
+      src/pager.c: 0
+      src/pcache.c: 0
+      src/rowset.c: 0
+      src/test1.c: 1
+      ext/fts3/fts3.c: 0
+      ext/fts5/fts5_hash.c: 0
+      test/sort.test: 1
+      test/sort2.test: 1
+      test/sort3.test: 1
+      test/sort5.test: 1
+      ext/misc/eval.c: 0
+    note: VdbeSorter multi-threaded external merge sort; OP_Sorter* opcodes; ORDER BY and CREATE INDEX
+      emit sorter ops; sorter decls; worker threads
+  - query: defragment and shrink after bulk removal
+    intent: vocab_mismatch
+    relevant_files:
+      src/vacuum.c: 3
+      src/backup.c: 2
+      src/vdbe.c: 2
+      src/btree.c: 2
+      src/pragma.c: 1
+      src/parse.y: 1
+      ext/misc/pcachetrace.c: 0
+      ext/wasm/tester1.c-pp.js: 0
+      src/btreeInt.h: 1
+      src/pager.c: 2
+      src/pcache.c: 0
+      src/pcache1.c: 0
+      test/corruptD.test: 0
+      test/e_vacuum.test: 1
+      test/incrvacuum.test: 1
+      test/shrink.test: 0
+      test/speedtest1.c: 0
+      src/test_multiplex.c: 0
+      test/fts4growth.test: 0
+      test/show_speedtest1_rtree.tcl: 0
+      test/syscall.test: 0
+    note: VACUUM rebuilds db (sqlite3RunVacuum) using sqlite3BtreeCopyFile; OP_Vacuum/OP_IncrVacuum; auto/incremental
+      vacuum in btree.c; pragmas + grammar. defragment/shrink/bulk/removal absent from vacuum.c
+  - query: enforce foreign key constraints
+    intent: multi_file
+    relevant_files:
+      src/fkey.c: 3
+      src/insert.c: 2
+      src/update.c: 2
+      src/delete.c: 2
+      src/build.c: 2
+      src/vdbe.c: 2
+      src/vdbeaux.c: 2
+      src/pragma.c: 1
+      ext/session/session9.test: 1
+      src/dbpage.c: 0
+      src/sqliteInt.h: 2
+      src/where.c: 0
+      test/e_fkey.test: 1
+      test/fkey2.test: 1
+      test/fkey3.test: 1
+      test/fkey6.test: 1
+      test/fkey8.test: 1
+      ext/session/sqlite3session.h: 1
+      src/alter.c: 1
+    note: fkey.c checks/actions called from insert/update/delete codegen; build.c parses REFERENCES; OP_FkCounter/OP_FkIfZero;
+      commit-time deferred check in vdbeaux; foreign_key_check pragma
+  - query: tests for date and time functions
+    intent: test
+    relevant_files:
+      test/date.test: 3
+      test/date2.test: 3
+      test/date3.test: 3
+      test/date4.test: 3
+      test/date5.test: 3
+      test/timediff1.test: 3
+      test/tkt-bd484a090c.test: 2
+      src/date.c: 1
+      ext/misc/vfslog.c: 0
+      ext/wasm/api/sqlite3-vfs-kvvfs.c-pp.js: 0
+      ext/wasm/tests/opfs/concurrency/test.js: 0
+      src/func.c: 0
+      src/memdb.c: 0
+      src/os.c: 0
+      src/os_unix.c: 1
+      src/os_win.c: 1
+      src/test1.c: 2
+      src/test_osinst.c: 0
+      test/table.test: 1
+      ext/misc/fileio.c: 0
+      ext/misc/zipfile.c: 0
+    note: date*.test and timediff1.test target date/time SQL functions; ticket test covers localtime failure;
+      date.c is the implementation
+  ggplot2:
+  - query: save plot to image file
+    intent: source
+    relevant_files:
+      R/save.R: 3
+      R/plot-last.R: 2
+      R/plot.R: 1
+      R/plot-build.R: 1
+      R/plot-construction.R: 0
+      R/plot-render.R: 1
+      man/ggsave.Rd: 2
+      man/set_last_plot.Rd: 1
+      tests/testthat/_snaps/save.md: 1
+      tests/testthat/test-save.R: 2
+      R/quick-plot.R: 0
+    note: ggsave() picks the device, sizes and draws in save.R; default plot comes from get_last_plot();
+      grid.draw delegates to the print method in plot.R
+  - query: random jitter to avoid overplotting
+    intent: source
+    relevant_files:
+      R/position-jitter.R: 3
+      R/geom-jitter.R: 2
+      R/position-jitterdodge.R: 1
+      R/position-.R: 1
+      man/geom_jitter.Rd: 2
+      man/position_jitter.Rd: 2
+      tests/testthat/_snaps/geom-jitter.md: 1
+      tests/testthat/test-geom-jitter.R: 1
+      R/coord-.R: 0
+      tests/testthat/test-position-jitter.R: 1
+    note: PositionJitter/compute_jitter add the noise; geom_jitter wraps it; jitterdodge reuses compute_jitter;
+      transform_position lives in position-.R
+  - query: choose histogram bin breaks
+    intent: source
+    relevant_files:
+      R/bin.R: 3
+      R/stat-bin.R: 2
+      R/geom-histogram.R: 1
+      DESCRIPTION: 0
+      R/stat-summary-bin.R: 1
+      R/utilities-break.R: 1
+      man/geom_histogram.Rd: 2
+      tests/testthat/test-bin.R: 2
+      tests/testthat/test-stat-bin.R: 2
+      R/guide-bins.R: 0
+      tests/testthat/_snaps/bin.md: 1
+      man/geom_bin_2d.Rd: 1
+    note: compute_bins/bin_breaks_width/bin_breaks_bins compute breaks in bin.R; StatBin calls them; geom_histogram
+      uses stat = 'bin'
+  - query: turn chart sideways
+    intent: vocab_mismatch
+    relevant_files:
+      R/coord-flip.R: 3
+      R/coord-cartesian-.R: 2
+      R/utilities.R: 1
+      R/layout.R: 1
+      R/coord-radial.R: 0
+      R/geom-bar.R: 1
+      R/geom-ribbon.R: 1
+      R/theme.R: 0
+      man/coord_radial.Rd: 0
+      man/geom_bar.Rd: 1
+      man/geom_ribbon.Rd: 1
+      man/theme.Rd: 0
+      vignettes/articles/faq-axes.qmd: 1
+      vignettes/articles/faq-bars.qmd: 0
+      R/geom-curve.R: 1
+      R/guide-axis.R: 0
+      man/coord_flip.Rd: 1
+      vignettes/articles/faq-customising.qmd: 0
+      vignettes/extending-ggplot2.qmd: 1
+    note: coord_flip swaps x/y (no 'turn', 'chart', 'sideways' in file); inherits CoordCartesian; orientation
+      alternative via flip_data/has_flipped_aes in utilities.R; layout calls coord$modify_scales
+  - query: facet strip label text
+    intent: multi_file
+    relevant_files:
+      R/facet-labeller.R: 3
+      R/facet-.R: 2
+      R/facet-grid-.R: 2
+      R/facet-wrap.R: 2
+      R/theme-elements.R: 1
+      R/geom-text.R: 0
+      R/margins.R: 1
+      man/Facet.Rd: 1
+      man/facet_wrap.Rd: 1
+      man/get_strip_labels.Rd: 2
+      tests/testthat/test-facet-.R: 1
+      man/labellers.Rd: 1
+      tests/testthat/test-facet-labeller.R: 1
+      R/geom-label.R: 0
+    note: labellers + build_strip/assemble_strips in facet-labeller.R; render_strips and base format_strip_labels
+      in facet-.R; grid/wrap attach_strips; strip.text theme elements
+  - query: tests for boxplot statistics
+    intent: test
+    relevant_files:
+      tests/testthat/test-stat-boxplot.R: 3
+      tests/testthat/test-geom-boxplot.R: 3
+      R/stat-boxplot.R: 1
+      R/geom-boxplot.R: 1
+      R/stat-identity.R: 0
+      man/geom_boxplot.Rd: 1
+      tests/testthat/_snaps/stat-boxplot.md: 2
+      tests/testthat/test-stat-bin.R: 0
+      R/layer.R: 0
+      R/stat-.R: 1
+      tests/testthat/test-layer.R: 0
+    note: test-stat-boxplot covers stat_boxplot missing/aes errors; test-geom-boxplot has stat_boxplot
+      quantile.type hinge and outlier range tests; impl is StatBoxplot
+  postgrest:
+  - query: CORS allowed origins policy
+    intent: source
+    relevant_files:
+      src/PostgREST/Cors.hs: 3
+      src/PostgREST/App.hs: 2
+      src/PostgREST/Config.hs: 2
+      src/PostgREST/Config/Database.hs: 1
+      docs/references/api/cors.rst: 2
+      test/io/configs/expected/aliases.config: 0
+      test/io/configs/expected/no-defaults-with-db.config: 1
+      test/io/test_io.py: 1
+      test/spec/Feature/CorsSpec.hs: 2
+      test/spec/Feature/Query/AggregateFunctionsSpec.hs: 0
+      docs/references/configuration.rst: 1
+      CONTRIBUTING.md: 0
+      test/spec/Feature/RollbackSpec.hs: 0
+      test/spec/Main.hs: 0
+    note: corsPolicy middleware in Cors.hs; App.hs wraps the app with Cors.middleware; server-cors-allowed-origins
+      parsed in Config.hs and listed as in-db config
+  - query: Range header pagination
+    intent: source
+    relevant_files:
+      src/PostgREST/RangeQuery.hs: 3
+      src/PostgREST/ApiRequest.hs: 2
+      src/PostgREST/Response.hs: 2
+      src/PostgREST/Query/SqlFragment.hs: 2
+      src/PostgREST/ApiRequest/QueryParams.hs: 1
+      src/PostgREST/Plan.hs: 1
+      docs/references/api/pagination_count.rst: 2
+      src/PostgREST/ApiRequest/Preferences.hs: 1
+      src/PostgREST/Response/OpenAPI.hs: 1
+      test/spec/Feature/Query/RangeSpec.hs: 1
+      test/spec/Feature/Query/RpcSpec.hs: 1
+      test/spec/SpecHelper.hs: 1
+    note: rangeParse/rangeRequested/contentRangeH in RangeQuery.hs; getRanges merges header and limit/offset;
+      Response sets Content-Range/206/416; limitOffsetF emits LIMIT/OFFSET; Plan applies max-rows
+  - query: parse filter operators from query string
+    intent: source
+    relevant_files:
+      src/PostgREST/ApiRequest/QueryParams.hs: 3
+      src/PostgREST/ApiRequest/Types.hs: 2
+      src/PostgREST/ApiRequest.hs: 2
+      src/PostgREST/Plan.hs: 1
+      src/PostgREST/Query/SqlFragment.hs: 1
+      src/PostgREST/Config.hs: 0
+      src/PostgREST/Config/JSPath.hs: 0
+      src/PostgREST/Error.hs: 1
+      src/PostgREST/Response/GucHeader.hs: 0
+      src/PostgREST/Response/OpenAPI.hs: 0
+      test/spec/Feature/Query/AndOrParamsSpec.hs: 1
+      test/spec/Feature/Query/JsonOperatorSpec.hs: 1
+      test/spec/Feature/Query/SpreadQueriesSpec.hs: 0
+      test/spec/SpecHelper.hs: 0
+      src/PostgREST/Query/QueryBuilder.hs: 1
+    note: pRequestFilter/pOpExpr/simpleOperator parsers; operator ADTs in Types.hs; ApiRequest calls QueryParams.parse;
+      Plan resolves filters; pgFmtFilter renders SQL
+  - query: health probe endpoint
+    intent: vocab_mismatch
+    relevant_files:
+      src/PostgREST/Admin.hs: 3
+      src/PostgREST/AppState.hs: 2
+      src/PostgREST/Client.hs: 2
+      src/PostgREST/CLI.hs: 1
+      src/PostgREST/App.hs: 1
+      src/PostgREST/Config.hs: 1
+      CHANGELOG.md: 1
+      docs/how-tos/create-soap-endpoint.rst: 0
+      docs/references/admin_server.rst: 2
+      docs/references/cli.rst: 1
+      docs/references/observability.rst: 0
+      test/io/test_io.py: 1
+      test/spec/Feature/OpenApi/DisabledOpenApiSpec.hs: 0
+      README.md: 0
+      src/PostgREST/ApiRequest.hs: 0
+      src/PostgREST/Error.hs: 0
+      src/PostgREST/Response.hs: 0
+      docs/explanations/nginx.rst: 0
+    note: admin server /live and /ready routes (no 'health', 'probe', 'endpoint' in Admin.hs); readiness
+      from isLoaded/isPending; --ready client; runAdmin wiring; admin-server-port config
+  - query: embed related resources via foreign keys
+    intent: multi_file
+    relevant_files:
+      src/PostgREST/Plan.hs: 3
+      src/PostgREST/SchemaCache.hs: 2
+      src/PostgREST/SchemaCache/Relationship.hs: 2
+      src/PostgREST/Query/QueryBuilder.hs: 2
+      src/PostgREST/ApiRequest/QueryParams.hs: 2
+      src/PostgREST/Plan/ReadPlan.hs: 1
+      docs/references/api/resource_embedding.rst: 2
+      docs/references/api/resource_representation.rst: 0
+      src/PostgREST/ApiRequest.hs: 1
+      src/PostgREST/SchemaCache/Table.hs: 1
+      test/io/test_io.py: 1
+      test/spec/Feature/Query/EmbedDisambiguationSpec.hs: 1
+      test/spec/Feature/Query/EmbedInnerJoinSpec.hs: 1
+      test/spec/Feature/Query/RelatedQueriesSpec.hs: 1
+      test/spec/Feature/Query/RpcSpec.hs: 1
+      docs/references/api.rst: 0
+    note: addRels/findRel/getJoinConditions in Plan; FK relationship discovery in SchemaCache; Relationship/Cardinality
+      types; getJoins lateral joins; pRelationSelect parses embeds; ReadPlan JoinCondition
+  - query: tests for upsert conflict resolution
+    intent: test
+    relevant_files:
+      test/spec/Feature/Query/UpsertSpec.hs: 3
+      test/spec/Feature/Query/PlanSpec.hs: 2
+      test/spec/fixtures/schema.sql: 1
+      src/PostgREST/Query/QueryBuilder.hs: 1
+      src/PostgREST/ApiRequest/Preferences.hs: 1
+      docs/explanations/architecture.rst: 0
+      docs/references/api.rst: 0
+      docs/references/api/tables_views.rst: 1
+      src/PostgREST/ApiRequest/QueryParams.hs: 1
+      src/PostgREST/Plan.hs: 1
+      src/PostgREST/Plan/MutatePlan.hs: 1
+      src/PostgREST/Query/Statements.hs: 1
+      src/PostgREST/Response.hs: 1
+      test/spec/Feature/Query/InsertSpec.hs: 1
+      test/spec/Feature/RollbackSpec.hs: 0
+      src/PostgREST/Response/OpenAPI.hs: 0
+    note: UpsertSpec covers merge/ignore-duplicates and on_conflict; PlanSpec has upsert plan cases; fixtures
+      define upsert tables; impl ON CONFLICT in QueryBuilder and resolution prefs
+  rails:
+  - query: signed and encrypted cookies
+    intent: source
+    relevant_files:
+      actionpack/lib/action_dispatch/middleware/cookies.rb: 3
+      activesupport/lib/active_support/message_verifier.rb: 2
+      activesupport/lib/active_support/message_encryptor.rb: 2
+      actionpack/lib/action_dispatch/railtie.rb: 2
+      railties/lib/rails/application.rb: 1
+      activesupport/lib/active_support/key_generator.rb: 1
+      actioncable/lib/action_cable/connection/test_case.rb: 1
+      actionpack/lib/action_dispatch/middleware/session/cookie_store.rb: 2
+      actionpack/test/dispatch/cookies_test.rb: 1
+      actionpack/test/dispatch/routing_test.rb: 0
+      activerecord/lib/active_record/signed_id.rb: 0
+      activesupport/lib/active_support/messages/rotation_configuration.rb: 2
+      guides/source/action_controller_overview.md: 1
+      guides/source/configuring.md: 1
+      guides/source/upgrading_ruby_on_rails.md: 1
+    note: Signed/Encrypted KeyRotatingCookieJar live in cookies.rb and wrap MessageVerifier/MessageEncryptor;
+      salts and rotations are configured in the action_dispatch railtie and passed through Rails.application
+      env_config/key_generator.
+  - query: retry failed jobs with backoff
+    intent: source
+    relevant_files:
+      activejob/lib/active_job/exceptions.rb: 3
+      activejob/lib/active_job/execution.rb: 2
+      activejob/lib/active_job/enqueuing.rb: 2
+      activejob/lib/active_job/core.rb: 2
+      activejob/lib/active_job/log_subscriber.rb: 1
+      railties/lib/rails/application/configuration.rb: 1
+      actioncable/app/assets/javascripts/actioncable.esm.js: 0
+      actioncable/app/javascript/action_cable/subscription_guarantor.js: 0
+      activejob/test/cases/exceptions_test.rb: 1
+      activejob/test/cases/logging_test.rb: 1
+      activejob/test/jobs/retry_job.rb: 1
+      activerecord/lib/active_record/connection_adapters/abstract_adapter.rb: 0
+      activerecord/test/cases/adapter_test.rb: 0
+      guides/source/active_job_basics.md: 1
+      railties/lib/rails/generators/rails/app/templates/app/jobs/application_job.rb.tt: 1
+    note: retry_on/retry_job/determine_delay (polynomially_longer, jitter) are in exceptions.rb; perform_now
+      counts executions and calls rescue_with_handler; retry re-enqueues with wait via enqueuing/core;
+      log subscriber reports retries; retry_jitter default set in load_defaults.
+  - query: irregular plural inflection rules
+    intent: source
+    relevant_files:
+      activesupport/lib/active_support/inflector/inflections.rb: 3
+      activesupport/lib/active_support/inflections.rb: 2
+      activesupport/lib/active_support/inflector/methods.rb: 2
+      activesupport/lib/active_support/core_ext/string/inflections.rb: 1
+      actionmailbox/test/dummy/config/initializers/inflections.rb: 1
+      actiontext/test/dummy/config/initializers/inflections.rb: 1
+      actionview/test/activerecord/polymorphic_routes_test.rb: 0
+      activerecord/test/cases/reflection_test.rb: 0
+      activestorage/test/dummy/config/initializers/inflections.rb: 1
+      railties/lib/rails/generators/model_helpers.rb: 1
+      railties/test/generators/model_generator_test.rb: 0
+      actionpack/lib/action_dispatch/routing/mapper.rb: 0
+    note: Inflections#plural/singular/irregular/uncountable store rules; inflections.rb holds the default
+      English rule set; Inflector.pluralize/apply_inflections applies them; String#pluralize delegates.
+  - query: hide sensitive data from logs
+    intent: vocab_mismatch
+    relevant_files:
+      activesupport/lib/active_support/parameter_filter.rb: 3
+      actionpack/lib/action_dispatch/http/filter_parameters.rb: 2
+      actionpack/lib/action_controller/metal/instrumentation.rb: 2
+      railties/lib/rails/application.rb: 1
+      railties/lib/rails/generators/rails/app/templates/config/initializers/filter_parameter_logging.rb.tt: 1
+      activerecord/lib/active_record/core.rb: 1
+      actionpack/test/controller/log_subscriber_test.rb: 1
+      activerecord/lib/active_record/filter_attribute_handler.rb: 2
+      activerecord/lib/active_record/query_logs.rb: 0
+      activerecord/lib/active_record/query_logs_formatter.rb: 0
+      activerecord/lib/arel/predications.rb: 0
+      activerecord/lib/arel/visitors/to_sql.rb: 0
+      guides/source/active_record_encryption.md: 1
+      railties/lib/rails/command/base.rb: 0
+      railties/lib/rails/configuration.rb: 0
+      railties/lib/rails/generators.rb: 0
+      railties/test/generators/named_base_test.rb: 0
+    note: ParameterFilter replaces matching values with [FILTERED] (no 'hide/sensitive/data/log' in file);
+      request.filtered_parameters uses it and controller instrumentation logs the filtered params; app
+      wiring via config.filter_parameters; AR filter_attributes reuses it for inspect.
+  - query: association counter cache updates
+    intent: multi_file
+    relevant_files:
+      activerecord/lib/active_record/counter_cache.rb: 3
+      activerecord/lib/active_record/associations/belongs_to_association.rb: 3
+      activerecord/lib/active_record/associations/builder/belongs_to.rb: 2
+      activerecord/lib/active_record/associations/has_many_association.rb: 2
+      activerecord/lib/active_record/reflection.rb: 2
+      activerecord/lib/active_record/relation.rb: 1
+      activerecord/lib/active_record/associations/has_many_through_association.rb: 1
+      activerecord/lib/active_record/autosave_association.rb: 1
+      activerecord/test/cases/associations/belongs_to_associations_test.rb: 1
+      activerecord/test/cases/associations/has_many_associations_test.rb: 1
+      activerecord/lib/active_record/associations.rb: 1
+      activerecord/test/cases/associations/has_many_through_associations_test.rb: 1
+    note: Counter cache spans CounterCache (create/destroy hooks, update_counters), BelongsToAssociation#increment/decrement_counters,
+      belongs_to builder callbacks on foreign-key change, has_many in-memory counter updates, reflection
+      counter_cache_column, Relation#update_counters SQL.
+  - query: tests for password hashing
+    intent: test
+    relevant_files:
+      activemodel/test/cases/secure_password_test.rb: 3
+      activerecord/test/cases/secure_password_test.rb: 2
+      activemodel/test/models/user.rb: 2
+      activemodel/test/models/argonaut.rb: 1
+      activemodel/test/cases/railtie_test.rb: 1
+      activemodel/lib/active_model/secure_password.rb: 1
+      actionmailbox/test/test_helper.rb: 0
+      activemodel/lib/active_model/secure_password/argon2_password.rb: 1
+      activemodel/lib/active_model/secure_password/bcrypt_password.rb: 1
+      activerecord/test/cases/base_test.rb: 0
+      railties/lib/rails/generators/rails/app/templates/config/databases/mysql.yml.tt: 0
+      railties/lib/rails/generators/generated_attribute.rb: 0
+    note: ActiveModel secure_password_test covers bcrypt/argon2/custom algorithm hashing and authenticate;
+      AR test covers authenticate_by; test models declare has_secure_password; railtie_test checks min_cost;
+      implementation as context.
+  crystal:
+  - query: chunked transfer encoding body
+    intent: source
+    relevant_files:
+      src/http/content.cr: 3
+      src/http/common.cr: 2
+      src/http/server/response.cr: 2
+      src/http/client/response.cr: 1
+      src/http/server/request_processor.cr: 1
+      spec/std/http/chunked_content_spec.cr: 1
+      spec/std/http/client/response_spec.cr: 1
+      spec/std/http/request_spec.cr: 1
+      src/compiler/crystal/tools/doc/html/css/style.css: 0
+      src/compiler/crystal/tools/playground/public/application.css: 0
+      src/io/encoding.cr: 0
+      src/io/encoding_stubs.cr: 0
+      spec/std/http/server/response_spec.cr: 1
+      spec/std/http/web_socket_spec.cr: 0
+    note: ChunkedContent decodes chunk sizes/trailers in content.cr; common.cr picks it from Transfer-Encoding
+      and serializes chunked request bodies; server Response::Output writes chunks and the 0-terminator;
+      client supports_chunked? and request processor draining are context.
+  - query: overload ordering by restriction strictness
+    intent: source
+    relevant_files:
+      src/compiler/crystal/semantic/restrictions.cr: 3
+      src/compiler/crystal/types.cr: 2
+      src/compiler/crystal/semantic/method_lookup.cr: 2
+      src/compiler/crystal/semantic/match.cr: 1
+      spec/compiler/semantic/def_overload_spec.cr: 1
+      spec/compiler/semantic/double_splat_spec.cr: 0
+      spec/compiler/semantic/macro_overload_spec.cr: 0
+      spec/compiler/semantic/restrictions_spec.cr: 1
+      src/compiler/crystal/codegen/primitives.cr: 0
+      src/compiler/crystal/semantic/type_to_restriction.cr: 0
+      src/string.cr: 0
+      spec/compiler/semantic/splat_spec.cr: 1
+      src/atomic.cr: 0
+      src/compiler/crystal/semantic/call_error.cr: 1
+    note: compare_strictness/restriction_of? decide overload order in restrictions.cr; ModuleType#add_def
+      inserts defs by strictness; lookup_matches walks defs in that order; Match/MatchContext types are
+      context.
+  - query: load time zone database files
+    intent: source
+    relevant_files:
+      src/time/location/loader.cr: 3
+      src/time/location.cr: 2
+      src/crystal/system/unix/time.cr: 2
+      src/crystal/system/win32/time.cr: 1
+      src/crystal/system/time.cr: 1
+      src/time/tz.cr: 1
+      scripts/generate_windows_zone_names.cr: 1
+      scripts/windows_zone_names.ecr: 0
+      src/crystal/system/win32/zone_names.cr: 1
+      src/time.cr: 1
+      spec/std/time/location_spec.cr: 1
+    note: Loader finds and parses zoneinfo/tzdata/zip files; Location.load?/load_local dispatch to it
+      using TZDIR and system ZONE_SOURCES//etc/localtime; win32 and system interface provide sources;
+      tz.cr parses POSIX TZ strings.
+  - query: hints for misspelled identifiers
+    intent: vocab_mismatch
+    relevant_files:
+      src/compiler/crystal/semantic/suggestions.cr: 3
+      src/compiler/crystal/semantic/call_error.cr: 2
+      src/levenshtein.cr: 2
+      src/compiler/crystal/semantic/main_visitor.cr: 1
+      src/compiler/crystal/semantic/exception.cr: 1
+      src/compiler/crystal/types.cr: 1
+      _typos.toml: 0
+      etc/gdb/crystal_formatters.py: 0
+      src/compiler/crystal/compiler.cr: 0
+      src/compiler/crystal/syntax/ast.cr: 0
+      src/compiler/crystal/syntax/lexer.cr: 0
+      src/compiler/crystal/syntax/parser.cr: 0
+      src/crystal/system/process.cr: 0
+      src/intrinsics.cr: 0
+      src/lib_c/x86_64-windows-msvc/c/winnt.cr: 0
+      src/llvm/enums.cr: 0
+      src/system/user.cr: 0
+      src/xml/html_parser_options.cr: 0
+      src/xml/parser_options.cr: 0
+      src/crystal/event_loop/kqueue.cr: 0
+      src/lib_c/x86_64-windows-msvc/c/wincrypt.cr: 0
+    note: lookup_similar_path/def/instance_var (no 'hint/misspelled/identifier' in file) use Levenshtein.find;
+      call_error.cr formats 'Did you mean' for undefined methods/constants; main_visitor and exception.cr
+      handle var/ivar/cvar suggestions.
+  - query: sleeping fiber timer wakeup
+    intent: multi_file
+    relevant_files:
+      src/crystal/event_loop/polling.cr: 3
+      src/crystal/event_loop/timers.cr: 3
+      src/crystal/event_loop/polling/event.cr: 2
+      src/concurrent.cr: 2
+      src/crystal/event_loop.cr: 2
+      src/crystal/event_loop/epoll.cr: 2
+      src/crystal/event_loop/kqueue.cr: 2
+      src/crystal/pointer_pairing_heap.cr: 1
+      spec/support/wait_for.cr: 0
+      src/crystal/event_loop/iocp/fiber_event.cr: 1
+      src/crystal/event_loop/iocp/timer.cr: 2
+      src/crystal/event_loop/polling/fiber_event.cr: 1
+      src/crystal/scheduler.cr: 1
+      src/crystal/system/win32/waitable_timer.cr: 2
+      src/fiber.cr: 1
+      src/fiber/execution_context/parallel.cr: 1
+      src/fiber/execution_context/parallel/scheduler.cr: 1
+    note: ::sleep calls EventLoop#sleep; Polling#sleep adds a timer Event (wake_at) to the Timers heap,
+      suspends the fiber, and process_timers resumes it; epoll/kqueue implement system_set_timer; heap
+      backs Timers.
+  - query: tests for json object field mapping
+    intent: test
+    relevant_files:
+      spec/std/json/serializable_spec.cr: 3
+      spec/std/json/serialization_spec.cr: 2
+      spec/compiler/interpreter/integration_spec.cr: 1
+      src/json/serialization.cr: 1
+      spec/std/json/builder_spec.cr: 1
+      src/compiler/crystal/tools/doc/to_json.cr: 0
+      src/json.cr: 0
+      src/json/builder.cr: 1
+      src/json/from_json.cr: 1
+      src/json/to_json.cr: 1
+      src/object.cr: 0
+      src/log/json.cr: 0
+    note: serializable_spec tests JSON::Serializable and JSON::Field options; serialization_spec tests
+      from_json/to_json of std types; interpreter integration spec has one Serializable case; implementation
+      is context.

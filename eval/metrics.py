@@ -388,6 +388,13 @@ def compute_recall_at_k(results: list[str], relevant: set[str], k: int = 20) -> 
     return hits / len(relevant)
 
 
+def compute_acc_at_k(results: list[str], relevant: set[str], k: int = 5) -> float:
+    """Loc-Bench file Acc@k as LocAgent scores it: the top-k holds min(|gold|, k) gold files."""
+    if not relevant:
+        return 0.0
+    return float(len(set(results[:k]) & relevant) >= min(len(relevant), k))
+
+
 def compute_graded_ndcg(
     results: list[str], grades: Mapping[str, int], k: int = 5,
 ) -> float:

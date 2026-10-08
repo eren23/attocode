@@ -118,7 +118,7 @@ class CodeIntelService:
                     service_mode=self._config.is_service_mode,
                     timeout_seconds=None if timeout_ms == 0 else timeout_ms / 1000,
                     max_candidates=(self._config.ranking_max_candidates if config is not None else
-                                    int(environment.get("ATTOCODE_INTEL_RANKING_MAX_CANDIDATES", "12"))),
+                                    int(environment.get("ATTOCODE_INTEL_RANKING_MAX_CANDIDATES", "24"))),
                 )
                 self._systemone_status = "configured"
             except (ValueError, OverflowError):
@@ -291,7 +291,10 @@ class CodeIntelService:
         if not task_hint:
             return {}
         try:
-            results = self._get_semantic_search().search_candidates(task_hint, top_k=top_k)
+            results = self._get_semantic_search().search_candidates(
+                task_hint, top_k=self._retrieval_depth(top_k))
+            if self._ranking_provider == "systemone":
+                results, _ranking = self._rank_search_results(task_hint, results, len(results))
         except Exception:
             logger.debug("Task-aware file scoring unavailable", exc_info=True)
             return {}
@@ -434,6 +437,14 @@ class CodeIntelService:
         ranking.update({"method": "systemone_choice", "reranked_count": len(candidates),
                         "score_semantics": "retrieval_score_preserved"})
         return ordered[:top_k], ranking
+
+    def _retrieval_depth(self, top_k: int) -> int:
+        """Chunks to retrieve before ranking; a model ranker needs enough distinct files."""
+        if self._ranking_provider != "systemone" or self._systemone_ranker is None:
+            return max(top_k, 24)
+        # ponytail: ~8 chunks per distinct file on the 2026-10-08 blind pools
+        # (400 chunks -> median 48 files); lexical retrieval stayed under 150 ms.
+        return max(top_k, 24, 8 * self._systemone_ranker.max_candidates)
 
     def _rank_search_results(self, query: str, results: list, top_k: int,
                              file_filter: str = "") -> tuple[list, dict]:
@@ -1487,7 +1498,7 @@ class CodeIntelService:
                 local mode automatically scopes to working-directory files).
         """
         mgr = self._get_semantic_search()
-        candidates = mgr.search(query, top_k=max(top_k, 24), file_filter=file_filter)
+        candidates = mgr.search(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter)
         results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
         ranking["candidate_pool_count"] = len(candidates)
         if hasattr(mgr, "candidate_diagnostics"):
@@ -2613,7 +2624,7 @@ class CodeIntelService:
             try:
                 mgr = self._get_semantic_search()
                 candidates = mgr.search_candidates(
-                    task_hint, top_k=max(50, cc.bootstrap_search_top_k * 10), file_filter="",
+                    task_hint, top_k=max(50, cc.bootstrap_search_top_k * 10, self._retrieval_depth(0)), file_filter="",
                 )
                 if not candidates and mgr.candidate_diagnostics().get("status") == "warming":
                     # A newly opened, small workspace usually indexes in a
@@ -2622,7 +2633,7 @@ class CodeIntelService:
                     # workspaces still report warming without a long stall.
                     mgr.wait_for_body_index(timeout=0.75)
                     candidates = mgr.search_candidates(
-                        task_hint, top_k=max(50, cc.bootstrap_search_top_k * 10),
+                        task_hint, top_k=max(50, cc.bootstrap_search_top_k * 10, self._retrieval_depth(0)),
                         file_filter="",
                     )
                 results, _ranking = self._rank_search_results(
@@ -3038,7 +3049,7 @@ class CodeIntelService:
         mgr = self._get_semantic_search()
 
         if mode == "keyword":
-            candidates = mgr.search_candidates(query, top_k=max(top_k, 24), file_filter=file_filter)
+            candidates = mgr.search_candidates(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter)
             results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
             if not results and mgr.candidate_diagnostics().get("status") == "warming":
                 return "Search index warming; retry shortly. Missing results do not prove absence."
@@ -3048,7 +3059,7 @@ class CodeIntelService:
                 note += f"More retrieved candidates: rerun with top_k={next_k} (current index).\n"
             return note + mgr.format_results(results, query=query)
 
-        candidates = mgr.search(query, top_k=max(top_k, 24), file_filter=file_filter)
+        candidates = mgr.search(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter)
         results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
         if not results and mgr.candidate_diagnostics().get("status") == "warming":
             return "Search index warming; retry shortly. Missing results do not prove absence."
