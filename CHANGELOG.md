@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Evaluation
+
+- The Loc-Bench V1 report adds a file-level BM25 arm. Jev over a fused
+  lexical and BM25 candidate pool reached file Acc@5 0.757 with the full
+  issue, inside the published range (0.743 to 0.870).
+- Correction to 0.2.28: the report gave 0.671 for Jev over the lexical pool.
+  In that run, 135 of 1,670 Jev requests failed and kept the lexical order,
+  and the trial did not mark them. A second run gives 0.698. The trial now
+  marks a failed `jev-choice` request as `request_failed`.
+
 ## [0.2.28] - 2026-10-08
 
 ### Added — Code-intel search navigation

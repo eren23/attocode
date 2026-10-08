@@ -3,6 +3,11 @@
 A clone or base-commit failure (a "miss" marker) scores 0 in every arm. An instance
 with no marker was not run and also scores 0, so score only after the shards finish.
 A Jev answer that fell back keeps the lexical order, as the product does.
+
+Arms: lexical (the product order), lexpy (lexical, Python files only), bm25 and fused
+(first_stage.py), jev24/jev48 (Jev on lexical, old excerpt rule), lex24/lex48 and
+fus24/fus48 (Jev on lexical and on fused, product excerpt rule). ceil24/ceil48 is the
+share of instances with every gold file in the first 24/48 files.
 """
 import json
 import os
@@ -20,6 +25,10 @@ sys.path.insert(0, str(REPO))
 from eval.metrics import compute_acc_at_k, compute_mrr, compute_recall_at_k  # noqa: E402
 
 # The 42 instances of the earlier title-pack check.
+TRIALS = ("jev24", "jev48", "lex24", "lex48", "fus24", "fus48")
+PAIRS = [("jev24-full", "lexical-full"), ("jev48-full", "lexical-full"), ("jev24-title", "lexical-title"),
+         ("bm25-full", "lexical-full"), ("fused-full", "lexical-full"), ("fused-title", "lexical-title"),
+         ("fus24-full", "lex24-full"), ("fus48-full", "lex48-full"), ("fus24-title", "lex24-title")]
 DEV = set(yaml.safe_load((REPO / "packages/code-intel/evals/locbench_title_pack.yaml").read_text())["repos"])
 
 
@@ -27,7 +36,8 @@ def metrics(files: list[str], gold: set[str]) -> dict:
     return {"acc1": compute_acc_at_k(files, gold, 1), "acc5": compute_acc_at_k(files, gold, 5),
             "acc10": compute_acc_at_k(files, gold, 10), "strict5": float(gold <= set(files[:5])),
             "r5": compute_recall_at_k(files, gold, 5), "mrr5": compute_mrr(files, gold, 5),
-            "pool24": compute_recall_at_k(files, gold, 24), "pool48": compute_recall_at_k(files, gold, 48)}
+            "pool24": compute_recall_at_k(files, gold, 24), "pool48": compute_recall_at_k(files, gold, 48),
+            "ceil24": float(gold <= set(files[:24])), "ceil48": float(gold <= set(files[:48]))}
 
 
 def ci(values: list[float], draws: int = 10000) -> list[float]:
@@ -60,18 +70,23 @@ def load() -> tuple[dict, Counter, dict]:
         cases = {}
         if "miss" not in marker and pool.exists():
             for q in json.loads(pool.read_text())["repos"][0]["queries"]:
-                cases[q["intent"]] = {"lexical": q["arms"]["prior"]["files"]}
-            for name in ("jev24", "jev48"):
+                lexical = q["arms"]["prior"]["files"]
+                cases[q["intent"]] = {"lexical": lexical, "lexpy": [f for f in lexical if f.endswith(".py")]}
+            fused = ROOT / "pools2" / f"{iid}.json"
+            for q in json.loads(fused.read_text())["repos"][0]["queries"] if fused.exists() else []:
+                cases[q["intent"]] |= {"bm25": q["arms"]["bm25"]["files"], "fused": q["arms"]["prior"]["files"]}
+            for name in TRIALS:
                 trial = ROOT / "trials" / f"{iid}-{name}.json"
                 for c in json.loads(trial.read_text())["cases"] if trial.exists() else []:
                     intent = "full" if c["query"] == r["problem_statement"] else "title"
                     cases.setdefault(intent, {})[name] = c["ranked_files"]
-                    status[f"{name}:{c['fallback_reason'] or 'ok'}"] += 1
+                    # Old trials left fallback_reason empty when the one choice request failed.
+                    status[f"{name}:{'request_failed' if c['failures'] else c['fallback_reason'] or 'ok'}"] += 1
                     latency[name].append(c["inference_ms"])
         cases.setdefault("title", cases.get("full", {}))  # 10 one-line issues: the title is the issue
         for intent in ("full", "title"):
-            for arm in ("lexical", "jev24", "jev48"):
-                if intent == "title" and arm == "jev48":
+            for arm in ("lexical", "lexpy", "bm25", "fused", *TRIALS):
+                if intent == "title" and arm.endswith("48"):
                     continue
                 files = cases.get(intent, {}).get(arm, [])
                 per[f"{arm}-{intent}"][iid] = {**metrics(files, gold), "category": r["category"], "dev": iid in DEV,
@@ -84,7 +99,7 @@ def summary(per: dict, keep=lambda m: True) -> dict:
     for arm, items in per.items():
         rows = [m for m in items.values() if keep(m)]
         out[arm] = {"n": len(rows)} | {k: round(statistics.mean(m[k] for m in rows), 4)
-                                       for k in ("acc1", "acc5", "acc10", "strict5", "r5", "mrr5", "pool24", "pool48")}
+                                       for k in ("acc1", "acc5", "acc10", "strict5", "r5", "mrr5", "pool24", "pool48", "ceil24", "ceil48")}
         out[arm]["acc5_ci"] = ci([m["acc5"] for m in rows])
     return out
 
@@ -97,8 +112,7 @@ if __name__ == "__main__":
               "by_category": {c: summary(per, lambda m, c=c: m["category"] == c)
                               for c in sorted({m["category"] for m in per["lexical-full"].values()})}}
     paired = {}
-    for arm in ("jev24-full", "jev48-full", "jev24-title"):
-        base = "lexical-" + arm.split("-")[1]
+    for arm, base in PAIRS:
         deltas = [per[arm][i]["acc5"] - per[base][i]["acc5"] for i in per[arm]]
         by_repo = defaultdict(list)
         for i, d in zip(per[arm], deltas, strict=True):

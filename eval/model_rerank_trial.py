@@ -324,6 +324,8 @@ def run(pool_path: Path, *, model_name: str, selections: set[str],
         elif model_name in {"decision2-choice", "jev-choice"}:
             scores, failures = _choice_scores(model, case["query"], files, evidence,
                                               remote=model_name == "jev-choice")
+            if failures:  # every candidate scored 0.5, so the case keeps the lexical order
+                fallback_reason = "request_failed"
         else:
             query_text = (INSTRUCTION + "\nQuery: " + case["query"]
                           if model_name == "qwen3" else case["query"])
