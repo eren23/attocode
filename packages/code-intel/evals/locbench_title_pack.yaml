@@ -1,0 +1,300 @@
+# Loc-Bench V1 (czlll/Loc-Bench_V1) issue titles as queries; gold = .py files in edit_functions.
+# Selection, fixed before any run: repos yt-dlp, dask, sqlglot, prefect, mypy, sentence-transformers;
+# first 7 instances by instance_id with a 3-12 word title (leading [tag] removed) and >=1 gold .py file.
+# Labels are binary and narrow (the files the fix edited). Each key is one instance at its base_commit.
+repos:
+  yt-dlp__yt-dlp-11438:
+  - query: Bug in Native AES code causes chrome cookie extraction to fail
+    intent: Bug Report
+    relevant_files:
+    - yt_dlp/aes.py
+    base_commit: a6783a3b9905e547f6c1d4df9d7c7999feda8afa
+    source_repo: yt-dlp/yt-dlp
+  yt-dlp__yt-dlp-11466:
+  - query: 'ERROR: [GoPlay] Unable to extract video_data'
+    intent: Bug Report
+    relevant_files:
+    - yt_dlp/extractor/goplay.py
+    base_commit: 282e19db827f0951c783ac946429f662bcf2200c
+    source_repo: yt-dlp/yt-dlp
+  yt-dlp__yt-dlp-11472:
+  - query: '/[adobepass] ERROR: ''NoneType'' object is not iterable'
+    intent: Bug Report
+    relevant_files:
+    - yt_dlp/extractor/adobepass.py
+    base_commit: 282e19db827f0951c783ac946429f662bcf2200c
+    source_repo: yt-dlp/yt-dlp
+  yt-dlp__yt-dlp-11478:
+  - query: CloudFlareStream "No video formats found!"
+    intent: Bug Report
+    relevant_files:
+    - yt_dlp/extractor/cloudflarestream.py
+    base_commit: be3579aaf0c3b71a0a3195e1955415d5e4d6b3d8
+    source_repo: yt-dlp/yt-dlp
+  yt-dlp__yt-dlp-11513:
+  - query: 'ERROR: No video formats found (on >= 2024.11.04)'
+    intent: Bug Report
+    relevant_files:
+    - yt_dlp/extractor/facebook.py
+    base_commit: a9f85670d03ab993dc589f21a9ffffcad61392d5
+    source_repo: yt-dlp/yt-dlp
+  yt-dlp__yt-dlp-11530:
+  - query: 'Patreon: --write-comments is broken'
+    intent: Bug Report
+    relevant_files:
+    - yt_dlp/extractor/patreon.py
+    base_commit: f2a4983df7a64c4e93b56f79dbd16a781bd90206
+    source_repo: yt-dlp/yt-dlp
+  yt-dlp__yt-dlp-11534:
+  - query: Does not find video on page
+    intent: Bug Report
+    relevant_files:
+    - yt_dlp/extractor/ctvnews.py
+    base_commit: f9d98509a898737c12977b2e2117277bada2c196
+    source_repo: yt-dlp/yt-dlp
+  dask__dask-10750:
+  - query: Deprecate ``npartitions="auto"`` for set_index and sort_values
+    intent: Feature Request
+    relevant_files:
+    - dask/dataframe/shuffle.py
+    base_commit: 6d5b994cb58f295c27bd888de0f67c83ed568d3d
+    source_repo: dask/dask
+  dask__dask-10785:
+  - query: Deprecate inplace keywords for dask-expr
+    intent: Feature Request
+    relevant_files:
+    - dask/dataframe/core.py
+    base_commit: 1f764e7a11c51601033fc23d91c5a5177b0f2f4e
+    source_repo: dask/dask
+  dask__dask-10796:
+  - query: Deprecate axis in GroupBy cumulative transformers
+    intent: Feature Request
+    relevant_files:
+    - dask/dataframe/groupby.py
+    base_commit: 3e9ae492934e133547e5eaec5020186fad39898a
+    source_repo: dask/dask
+  dask__dask-10963:
+  - query: Support bag.to_dataframe when query planning is enabled
+    intent: Feature Request
+    relevant_files:
+    - dask/bag/core.py
+    base_commit: fa2d072c4b494b95a4352b17217fde4a301ed76b
+    source_repo: dask/dask
+  dask__dask-11183:
+  - query: Add official mechanism to check if query-planning is enabled in ``dask.dataframe``
+    intent: Feature Request
+    relevant_files:
+    - dask/dataframe/__init__.py
+    base_commit: 1755a718125ef2ea18e9c079ecf1509b7b6be730
+    source_repo: dask/dask
+  dask__dask-11303:
+  - query: 'order: dask order returns suboptimal ordering for xr.rechunk().groupby().reduce("cohorts")'
+    intent: Performance Issue
+    relevant_files:
+    - dask/order.py
+    base_commit: 67b2852d5f48d46527e3ac9c78122b483aef4057
+    source_repo: dask/dask
+  dask__dask-11354:
+  - query: Improve how normalize_chunks selects chunk sizes if auto is given
+    intent: Feature Request
+    relevant_files:
+    - dask/array/core.py
+    base_commit: 31d57d34c1c72c551200355a738bf6cf1b1aed78
+    source_repo: dask/dask
+  tobymao__sqlglot-3167:
+  - query: 'feat(snowflake): Adding support for DATE, TO_DATE, TRY_TO_DATE functions'
+    intent: Feature Request
+    relevant_files:
+    - sqlglot/dialects/snowflake.py
+    base_commit: df4ce17f24bbb16a64172e351f4e27ac74de668a
+    source_repo: tobymao/sqlglot
+  tobymao__sqlglot-3417:
+  - query: SET TAG identifier containing dots is parsed as Command
+    intent: Feature Request
+    relevant_files:
+    - sqlglot/parser.py
+    base_commit: e1b6483d5e26d556f6a3dd82c6d35f475c189c2b
+    source_repo: tobymao/sqlglot
+  tobymao__sqlglot-3436:
+  - query: Allow comma-separated values for `CREATE SEQUENCE` properties (Snowflake)
+    intent: Feature Request
+    relevant_files:
+    - sqlglot/parser.py
+    base_commit: 30f9d30d8ab3727a43b1e6f363f28631cbfa7f92
+    source_repo: tobymao/sqlglot
+  tobymao__sqlglot-3901:
+  - query: Parsing APPLY doubles execution time per APPLY statement
+    intent: Performance Issue
+    relevant_files:
+    - sqlglot/parser.py
+    base_commit: e0cd7e20298f84dc245676ecded6f174cf1c9c3e
+    source_repo: tobymao/sqlglot
+  tobymao__sqlglot-4366:
+  - query: 'BUG(duckdb): Compiling STRUCTs throws away field name info, which is sometimes needed'
+    intent: Bug Report
+    relevant_files:
+    - sqlglot/dialects/duckdb.py
+    base_commit: 79c675a49fb44a6a7a97ea0de79822d8571724be
+    source_repo: tobymao/sqlglot
+  tobymao__sqlglot-4369:
+  - query: Excessive Recursion in Query Optimization with Multiple OR Clauses
+    intent: Bug Report
+    relevant_files:
+    - sqlglot/expressions.py
+    base_commit: a665030323b200f3bed241bb928993b9807c4100
+    source_repo: tobymao/sqlglot
+  tobymao__sqlglot-4390:
+  - query: Simple query, wrong tables list
+    intent: Bug Report
+    relevant_files:
+    - sqlglot/parser.py
+    base_commit: e7b67e0c280179188ce1bca650735978b758dca1
+    source_repo: tobymao/sqlglot
+  PrefectHQ__prefect-12019:
+  - query: Task input persisted leading to memory not being released (same for output).
+    intent: Performance Issue
+    relevant_files:
+    - src/prefect/_internal/concurrency/calls.py
+    - src/prefect/_internal/concurrency/cancellation.py
+    base_commit: 276da8438e84fb7daf05255d1f9d87379d2d647b
+    source_repo: PrefectHQ/prefect
+  PrefectHQ__prefect-12410:
+  - query: 'CLI: Update `prefect deploy` options to support a `--jv/job-variable` option'
+    intent: Feature Request
+    relevant_files:
+    - src/prefect/cli/deploy.py
+    base_commit: b2f209a88888f56406c2806f45dc901b12fe3fa3
+    source_repo: PrefectHQ/prefect
+  PrefectHQ__prefect-13259:
+  - query: '`client/orchestration.py/update_deployment_schedule` should be update with `active` and `schedule` at once'
+    intent: Feature Request
+    relevant_files:
+    - src/prefect/client/orchestration.py
+    base_commit: dbf132b346df079c4565abbe2cb31f61117b1b13
+    source_repo: PrefectHQ/prefect
+  PrefectHQ__prefect-13366:
+  - query: Remove `prefect deployment build` CLI from the `main` branch
+    intent: Feature Request
+    relevant_files:
+    - src/prefect/cli/deployment.py
+    base_commit: 77d752294bd90a3b8d1be1600d16b9a2509eebe2
+    source_repo: PrefectHQ/prefect
+  PrefectHQ__prefect-13367:
+  - query: Remove `prefect deployment apply` CLI from the `main` branch
+    intent: Feature Request
+    relevant_files:
+    - src/prefect/cli/deployment.py
+    base_commit: a0630c10580b78e6d7d41fe1b469cb5cb1a0bca2
+    source_repo: PrefectHQ/prefect
+  PrefectHQ__prefect-14259:
+  - query: return `CursorResult` from prefect_sqlalchemy execute/execute_many methods
+    intent: Feature Request
+    relevant_files:
+    - src/integrations/prefect-sqlalchemy/prefect_sqlalchemy/database.py
+    base_commit: af200f20b9ba72609f404b5eb92da3ed30682695
+    source_repo: PrefectHQ/prefect
+  PrefectHQ__prefect-14608:
+  - query: Add `wait` utility for `PrefectFuture`s
+    intent: Feature Request
+    relevant_files:
+    - src/prefect/futures.py
+    base_commit: ad8e126b6a07fd6f8e08c9d50c22dabc247f765b
+    source_repo: PrefectHQ/prefect
+  python__mypy-18102:
+  - query: Problems with "expected overloaded function" when method hinted via Callback Protocol (⇝`numpy`)
+    intent: Bug Report
+    relevant_files:
+    - mypy/subtypes.py
+    base_commit: 1f200dde451493a070b9464011998dd837df4bc2
+    source_repo: python/mypy
+  python__mypy-18119:
+  - query: Structural Pattern Matching Exhaustiveness check when using OR
+    intent: Bug Report
+    relevant_files:
+    - mypy/checkpattern.py
+    base_commit: 3b00002acdf098e7241df8f2e1843f8b8260b168
+    source_repo: python/mypy
+  python__mypy-18141:
+  - query: Positional subpattern of a built-in type subclass with __match_args__ causes type confusion
+    intent: Bug Report
+    relevant_files:
+    - mypy/checkpattern.py
+    base_commit: 3b00002acdf098e7241df8f2e1843f8b8260b168
+    source_repo: python/mypy
+  python__mypy-18163:
+  - query: '`==`-based narrowing of `Optional`'
+    intent: Feature Request
+    relevant_files:
+    - mypy/checker.py
+    base_commit: 8ef21976cfd190d0b1974f438a7d30e8eaea5272
+    source_repo: python/mypy
+  python__mypy-18164:
+  - query: '`arg-type` error duck typing a `TypedDict` with `NotRequired` field'
+    intent: Bug Report
+    relevant_files:
+    - mypy/subtypes.py
+    base_commit: 8ef21976cfd190d0b1974f438a7d30e8eaea5272
+    source_repo: python/mypy
+  python__mypy-18197:
+  - query: Generic type aliases with TypeVar defaults infer to an incorrect type
+    intent: Bug Report
+    relevant_files:
+    - mypy/typeanal.py
+    base_commit: 499adaed8adbded1a180e30d071438fef81779ec
+    source_repo: python/mypy
+  python__mypy-18290:
+  - query: (🐞) Wrong column number for "Invalid location for ParamSpec"
+    intent: Bug Report
+    relevant_files:
+    - mypy/semanal_typeargs.py
+    base_commit: 46c7ec7ed25de55452783ee7d45718c01018c764
+    source_repo: python/mypy
+  UKPLab__sentence-transformers-3035:
+  - query: '`eval_dataset` or `evaluator`?'
+    intent: Bug Report
+    relevant_files:
+    - sentence_transformers/trainer.py
+    base_commit: b9316f90cdd8dc9e0c5c6d99353f89c4621c8828
+    source_repo: UKPLab/sentence-transformers
+  UKPLab__sentence-transformers-3073:
+  - query: Same order of training samples with `NoDuplicatesBatchSampler`
+    intent: Bug Report
+    relevant_files:
+    - sentence_transformers/sampler.py
+    base_commit: 043445051d60dc2dcf62d7d5afbc4da27a5a8dbd
+    source_repo: UKPLab/sentence-transformers
+  UKPLab__sentence-transformers-3076:
+  - query: BinaryClassificationEvaluator returns np.float32() and np.float64()
+    intent: Bug Report
+    relevant_files:
+    - sentence_transformers/evaluation/BinaryClassificationEvaluator.py
+    base_commit: 348190d46b0c010c7a4693f198f0ddf70c6ceb35
+    source_repo: UKPLab/sentence-transformers
+  UKPLab__sentence-transformers-3096:
+  - query: NanoBeirEvaluator returns a mix of floats and numpy.float64 in the results.
+    intent: Bug Report
+    relevant_files:
+    - sentence_transformers/evaluation/SentenceEvaluator.py
+    base_commit: a542b0a6249dfbff65663780514b4418b96bd8d1
+    source_repo: UKPLab/sentence-transformers
+  UKPLab__sentence-transformers-3110:
+  - query: Breaking change for module loading in PyLate
+    intent: Bug Report
+    relevant_files:
+    - sentence_transformers/SentenceTransformer.py
+    base_commit: ba8cb2ef1d7a5ad6b9169eddee469e900456532c
+    source_repo: UKPLab/sentence-transformers
+  UKPLab__sentence-transformers-3122:
+  - query: NanoBeirEvaluator takes in empty dataset
+    intent: Bug Report
+    relevant_files:
+    - sentence_transformers/evaluation/NanoBEIREvaluator.py
+    base_commit: 679ab5d38e4cf9cd73d4dcf1cda25ba2ef1ad837
+    source_repo: UKPLab/sentence-transformers
+  UKPLab__sentence-transformers-3126:
+  - query: CrossEncoder .rank condition error in CrossEncoder.py
+    intent: Bug Report
+    relevant_files:
+    - sentence_transformers/cross_encoder/CrossEncoder.py
+    base_commit: 58d68ac7c6153112b4abe925ba7be1a9dad640be
+    source_repo: UKPLab/sentence-transformers

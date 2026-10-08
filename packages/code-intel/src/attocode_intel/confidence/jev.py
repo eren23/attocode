@@ -17,13 +17,16 @@ constant.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import math
+import os
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from attocode_intel.confidence import settings
 from attocode_intel.confidence.redact import redact
@@ -101,6 +104,27 @@ def available() -> bool:
         or (_HAS_JEV and not settings.project_dir()))
 
 
+def _loopback(url: str) -> bool:
+    # IP literals only, as in the SystemOne ranker: a hostname can re-resolve.
+    try:
+        return ipaddress.ip_address(urlsplit(url).hostname or "").is_loopback
+    except ValueError:
+        return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None  # urllib would resend the key to the new URL; the 3xx becomes an error
+
+
+def _open(request: urllib.request.Request, timeout: float) -> Any:
+    """Send without redirects, and without an ambient proxy for a loopback server."""
+    handlers: list[urllib.request.BaseHandler] = [_NoRedirect()]
+    if _loopback(request.full_url):
+        handlers.append(urllib.request.ProxyHandler({}))
+    return urllib.request.build_opener(*handlers).open(request, timeout=timeout)
+
+
 def _decide(site: str, state: dict[str, Any], questions: dict[str, Any],
             incumbent: str, chosen: str) -> dict[str, Any]:
     """One decision. Uses the jev CLI when present, else a direct POST."""
@@ -115,6 +139,11 @@ def _decide(site: str, state: dict[str, Any], questions: dict[str, Any],
     if url is None:
         # 127.0.0.1, not localhost: localhost resolves to ::1 first.
         base = env.get("JEV_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+        if not _loopback(base) and (
+            "JEV_BASE_URL" not in os.environ  # a repository .env may not pick the host
+            or env.get("ATTOCODE_LOCAL_ONLY", "").lower() in {"1", "true", "yes", "on"}
+        ):
+            raise ValueError("a local Jev server must use a loopback IP address")
         url = base + "/v1/systemone"
     headers = {"Content-Type": "application/json"}
     key = env.get(keyvar)
@@ -125,7 +154,7 @@ def _decide(site: str, state: dict[str, Any], questions: dict[str, Any],
     ).encode()
     request = urllib.request.Request(url, data=body, headers=headers)  # noqa: S310
     timeout = float(env.get("JEV_TIMEOUT", "20"))
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+    with _open(request, timeout) as response:
         parsed: dict[str, Any] = json.loads(response.read())
     return {"answers": parsed.get("answers"), "error": None}
 

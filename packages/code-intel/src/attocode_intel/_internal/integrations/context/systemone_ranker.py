@@ -40,7 +40,7 @@ class SystemOneChoiceReranker:
         auth_env: str = "",
         allow_remote: bool = False,
         service_mode: bool = False,
-        max_candidates: int = 12,
+        max_candidates: int = 24,
         timeout_seconds: float | None = None,
         max_query_chars: int = 512,
         max_excerpt_chars: int = 1350,
@@ -128,6 +128,12 @@ class SystemOneChoiceReranker:
         result = json.loads(b"".join(chunks))
         if not isinstance(result, dict):
             raise ValueError("invalid ranking response")
+        # Workers AI wraps every answer as {"result": {...}, "success": true, "errors": []}.
+        inner = result.get("result")
+        if "answers" not in result and isinstance(inner, dict):
+            if result.get("success") is not True or result.get("errors"):
+                raise ValueError("ranking provider reported a failure")
+            result = {"model": result["model"], **inner} if "model" in result else inner
         return result
 
     @staticmethod

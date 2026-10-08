@@ -400,4 +400,11 @@ def bug_scan(base_branch: str = "main", min_confidence: float = 0.5) -> str:
         return f"No diff found between {base_branch} and HEAD."
 
     report = scan_diff(diff_text)
-    return report.format_report(min_confidence=min_confidence)
+    # Same second opinion as the rule pipeline; a no-op unless ATTOCODE_FLAG_CONFIDENCE is set.
+    from attocode_intel import confidence
+    from attocode_intel.confidence.settings import workspace
+
+    with workspace(project_dir):
+        confidence.score(report.findings, min_confidence=min_confidence)
+        text = report.format_report(min_confidence=min_confidence)
+        return text + ("\n\n" + confidence.summary() if confidence.summary() else "")

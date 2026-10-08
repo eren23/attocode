@@ -232,6 +232,8 @@ def _systemone_http_scores(ranker, query: str, paths: list[str],
     """Exercise the production adapter against the same frozen evidence."""
     candidates = [(str(index), excerpt, float(len(paths) - index))
                   for index, excerpt in enumerate(evidence)]
+    with ranker._inflight:  # wait out an earlier timed-out call; trials run one query at a time
+        pass
     outcome = ranker.rerank_result(query, candidates, top_k=len(candidates))
     if not outcome.reranked:
         return [0.5] * len(paths), len(paths), outcome.fallback_reason

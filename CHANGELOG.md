@@ -28,6 +28,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   No model is downloaded or enabled by default.
 - Frozen-candidate evaluation tools and trial reports document mixed local
   Bosun 0.6B results. They do not establish a generally better ranking model.
+- The SystemOne adapter now ranks up to 24 files by default (was 12). With the
+  provider on, search retrieves enough chunks to fill that shortlist, and
+  `task_hint` file weights use the same ranking. A blind graded trial on six
+  new repositories and a Loc-Bench issue-title check support the change.
+- `bug_scan` findings go through the opt-in confidence scorer, as rule
+  findings do.
+- The SystemOne adapter accepts the Workers AI `{"result": ...}` response
+  envelope, so it can call Cloudflare Clef models directly.
+
+### Security — Jev scorer endpoint
+
+- The Jev scorer's local backend accepts a non-loopback `JEV_BASE_URL` only
+  from the process environment, and never in local-only mode. A repository
+  `.env` can no longer send the machine's `OPENJEV_API_KEY` to another host.
+- The Jev scorer does not follow redirects, so a redirect cannot carry the key
+  to another URL. It also ignores an ambient proxy when the server is on
+  loopback.
+- The SystemOne adapter rejects a Workers AI envelope that reports a failure
+  (`success` is not true, or `errors` is not empty).
 
 ## [0.2.27] - 2026-09-27
 
