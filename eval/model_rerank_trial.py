@@ -24,7 +24,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from attocode_intel.focused_evidence import terms
+from attocode_intel.focused_evidence import task_terms, terms
 
 from eval.metrics import compute_mrr, compute_ndcg, compute_recall_at_k
 
@@ -66,7 +66,7 @@ def _excerpt(root: Path, relative: str, query: str, *, limit: int = 1350) -> str
     lines = target.read_text(errors="replace").splitlines()
     if not lines:
         return f"File: {relative}\n(empty file)"
-    query_terms = terms(query)
+    query_terms, _ = task_terms(query)  # the product drops "without X" terms too
     scores = []
     for number, line in enumerate(lines):
         overlap = len(terms(line) & query_terms)

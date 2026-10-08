@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider on, search retrieves enough chunks to fill that shortlist, and
   `task_hint` file weights use the same ranking. A blind graded trial on six
   new repositories and a Loc-Bench issue-title check support the change.
+- `eval/locbench560/` runs all 560 Loc-Bench V1 instances. With the full
+  issue, Jev over 48 files raised file Acc@5 from 0.377 to 0.671. That is
+  below published systems (0.743 to 0.870), and the lexical candidate pool
+  sets most of the gap. The frozen-candidate trial now selects excerpt
+  lines with the product's term rule.
 - `bug_scan` findings go through the opt-in confidence scorer, as rule
   findings do.
 - The SystemOne adapter accepts the Workers AI `{"result": ...}` response

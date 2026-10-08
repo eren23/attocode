@@ -101,6 +101,9 @@ Gold-file recall in the first 5, 12, 24, and 48 pool files is 0.571, 0.762,
 instances. These labels are narrow: most instances have one gold file. Jev
 could have seen these public issues in training.
 
+The [full 560-instance run](2026-10-08-locbench-560.md) found that these
+42 instances are easier than the full set.
+
 ## Pool depth
 
 Share of the known grade 2–3 files in the first *k* pool files (graded pack).
