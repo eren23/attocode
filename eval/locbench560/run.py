@@ -84,21 +84,39 @@ def cases(path: Path) -> int:
         return 0
 
 
-def miss(iid: str, reason: str) -> None:
-    (ROOT / "done" / f"{iid}.json").write_text(json.dumps({"instance_id": iid, "miss": reason}))
+def miss(iid: str, reason: str, done: str = "done") -> None:
+    (ROOT / done / f"{iid}.json").write_text(json.dumps({"instance_id": iid, "miss": reason}))
+
+
+def checkout(clone: Path, r: dict, log: Path) -> Path | None:
+    """A worktree at the instance's base_commit, or None when the commit cannot be fetched."""
+    wt, git = ROOT / "wt" / r["instance_id"], ["git", "-C", str(clone)]
+    if not wt.exists() and not run([*git, "worktree", "add", "-q", "--detach", str(wt), r["base_commit"]], log, 1800):
+        run([*git, "fetch", "-q", "origin", r["base_commit"]], log, 1800)
+        if not run([*git, "worktree", "add", "-q", "--detach", str(wt), r["base_commit"]], log, 1800):
+            return None
+    run(["git", "-C", str(wt), "status", "--porcelain"], log, 600)  # first touch is slow in a blobless clone
+    return wt
+
+
+def jev(pool: Path, r: dict, prefix: str, log: Path) -> bool:
+    """Jev over the first 24 files for every query and the first 48 for the full issue."""
+    trial = [PY, "-m", "eval.model_rerank_trial", "--pool", str(pool), "--model", "jev-choice", "--allow-remote"]
+    t24, t48 = ROOT / "trials" / f"{prefix}24.json", ROOT / "trials" / f"{prefix}48.json"
+    ok = (run([*trial, "--max-candidates", "24", "--output", str(t24)], log, 3600)
+          and cases(t24) == len(json.loads(pool.read_text())["repos"][0]["queries"]))
+    return ok and (run([*trial, "--max-candidates", "48", "--select", f"{r['instance_id']}::{r['problem_statement']}",
+                        "--output", str(t48)], log, 3600) and cases(t48) == 1)
 
 
 def instance(clone: Path, r: dict) -> None:
     iid, log = r["instance_id"], ROOT / "logs" / f"{r['instance_id']}.log"
     if (ROOT / "done" / f"{iid}.json").exists():
         return
-    started, wt = time.time(), ROOT / "wt" / iid
-    git = ["git", "-C", str(clone)]
-    if not wt.exists() and not run([*git, "worktree", "add", "-q", "--detach", str(wt), r["base_commit"]], log, 1800):
-        run([*git, "fetch", "-q", "origin", r["base_commit"]], log, 1800)
-        if not run([*git, "worktree", "add", "-q", "--detach", str(wt), r["base_commit"]], log, 1800):
-            return miss(iid, "base_commit not available")
-    run(["git", "-C", str(wt), "status", "--porcelain"], log, 600)  # first touch is slow in a blobless clone
+    started, git = time.time(), ["git", "-C", str(clone)]
+    wt = checkout(clone, r, log)
+    if wt is None:
+        return miss(iid, "base_commit not available")
     pool = ROOT / "pools" / f"{iid}.json"
     ok = run([PY, "-m", "eval.ranking_pair", "--repos", f"{iid}={wt}", "--case-pack", str(ROOT / "pack.yaml"),
               "--top-k", "400", "--pool-files", "48", "--treatment", "default", "--timeout", "1200",
@@ -106,12 +124,7 @@ def instance(clone: Path, r: dict) -> None:
     if not ok or not pool.exists():
         run([*git, "worktree", "remove", "--force", str(wt)], log, 600)
         return miss(iid, "pool failed")
-    trial = [PY, "-m", "eval.model_rerank_trial", "--pool", str(pool), "--model", "jev-choice", "--allow-remote"]
-    t24, t48 = ROOT / "trials" / f"{iid}-jev24.json", ROOT / "trials" / f"{iid}-jev48.json"
-    ok = (run([*trial, "--max-candidates", "24", "--output", str(t24)], log, 3600)
-          and cases(t24) == len(json.loads(pool.read_text())["repos"][0]["queries"]))
-    ok = ok and (run([*trial, "--max-candidates", "48", "--select", f"{iid}::{r['problem_statement']}",
-                      "--output", str(t48)], log, 3600) and cases(t48) == 1)
+    ok = jev(pool, r, f"{iid}-jev", log)
     run([*git, "worktree", "remove", "--force", str(wt)], log, 600)
     if not ok:  # no done marker: the next run retries this instance
         with log.open("a") as out:
@@ -120,12 +133,12 @@ def instance(clone: Path, r: dict) -> None:
     (ROOT / "done" / f"{iid}.json").write_text(json.dumps({"instance_id": iid, "seconds": round(time.time() - started)}))
 
 
-def process(selected: list[dict]) -> None:
+def process(selected: list[dict], step=instance, done: str = "done") -> None:
     by_repo = defaultdict(list)
     for r in selected:
         by_repo[r["repo"]].append(r)
     for repo, items in sorted(by_repo.items()):
-        todo = [r for r in items if not (ROOT / "done" / f"{r['instance_id']}.json").exists()]
+        todo = [r for r in items if not (ROOT / done / f"{r['instance_id']}.json").exists()]
         if not todo:
             continue
         clone = ROOT / "repos" / repo.replace("/", "__")
@@ -133,14 +146,14 @@ def process(selected: list[dict]) -> None:
         if not clone.exists() and not run(["git", "clone", "-q", "--filter=blob:none", "--no-checkout",
                                           f"https://github.com/{repo}.git", str(clone)], log, 3600, ROOT):
             for r in todo:
-                miss(r["instance_id"], "clone failed")
+                miss(r["instance_id"], "clone failed", done)
             shutil.rmtree(clone, ignore_errors=True)
             continue
         for r in todo:
-            instance(clone, r)
-            marker = ROOT / "done" / f"{r['instance_id']}.json"
+            step(clone, r)
+            marker = ROOT / done / f"{r['instance_id']}.json"
             print(r["instance_id"], marker.read_text() if marker.exists() else "trial failed, will retry", flush=True)
-        if all((ROOT / "done" / f"{r['instance_id']}.json").exists() for r in items):
+        if all((ROOT / done / f"{r['instance_id']}.json").exists() for r in items):
             shutil.rmtree(clone, ignore_errors=True)  # ponytail: one clone at a time keeps disk under ~5 GB
 
 
