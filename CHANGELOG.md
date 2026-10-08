@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.28] - 2026-10-08
+
 ### Added — Code-intel search navigation
 
 - Small semantic-search pages now offer a follow-up request for deeper
