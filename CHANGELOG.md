@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Code-intel search
+
+- Source-body search keeps the 20 query words that the fewest source chunks
+  contain. Before, a query with more than 20 words sent the first 20 in
+  alphabetical order. On 560 Loc-Bench issues, the share of issues with every
+  gold file in the first 48 candidates rose from 0.759 to 0.784. Queries with
+  20 words or fewer do not change.
+
 ### Changed — Evaluation
 
 - The Loc-Bench V1 report adds a file-level BM25 arm. Jev over a fused

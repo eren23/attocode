@@ -307,6 +307,23 @@ class TestSourceBodyCandidates:
         assert hit.start_line <= 3 <= hit.end_line
         assert "sapphire_handshake" in hit.text
 
+    def test_long_query_keeps_its_rarest_body_terms(self, tmp_path: Path) -> None:
+        # Body search sends at most 20 words. They must be the rare ones, not the
+        # 20 that sort first: "zephyr" sorts after all of the common words.
+        common = ["acorn", "anchor", "apex", "arbor", "aspen", "atlas", "aurora", "avenue",
+                  "axle", "badge", "bamboo", "banner", "basin", "beacon", "birch", "blaze",
+                  "bolt", "breeze", "brick", "brook"]
+        for n in range(5):
+            (tmp_path / f"filler{n}.py").write_text(
+                "def fill():\n" + "".join(f"    {word} = 1\n" for word in common), encoding="utf-8")
+        (tmp_path / "target.py").write_text("def run_task():\n    zephyr = 2\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        query = " ".join(common) + " zephyr"
+        mgr.search_candidates(query, top_k=10)
+        assert mgr.wait_for_body_index()
+
+        assert "target.py" in {r.file_path for r in mgr.search_candidates(query, top_k=10)}
+
     def test_invalidation_updates_body_and_removes_deleted_file(self, tmp_path: Path) -> None:
         source = tmp_path / "worker.py"
         source.write_text("def execute():\n    return sapphire_handshake\n", encoding="utf-8")

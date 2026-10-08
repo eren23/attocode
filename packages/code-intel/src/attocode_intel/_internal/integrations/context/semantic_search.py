@@ -1303,21 +1303,25 @@ class SemanticSearchManager:
             return []
         import fnmatch
 
-        tokens = list(dict.fromkeys(t for term in query_terms for t in _tokenize(term)))[:20]
+        tokens = list(dict.fromkeys(t for term in query_terms for t in _tokenize(term)))
         if not tokens:
             conn.close()
             return []
-        match_query = " OR ".join(f'"{token}"' for token in tokens)
         try:
             # Filter before the SQL limit. Applying a glob only to the fetched
             # rows can hide all matches from a requested language or subtree.
             where = "WHERE terms MATCH ?"
-            parameters: list[Any] = [match_query]
+            parameters: list[Any] = []
             if file_filter:
                 where += " AND body_fts.file_path GLOB ?"
                 parameters.append(file_filter.replace("[!", "[^"))
             parameters.append(max(top_k * 8, 120))
             with self._kw_cache_lock:
+                if len(tokens) > 20:
+                    tokens = self._rarest_body_tokens(conn, tokens, 20)
+                if not tokens:
+                    return []
+                parameters.insert(0, " OR ".join(f'"{token}"' for token in tokens))
                 rows = conn.execute(
                     "SELECT body_fts.file_path, chunk_type, name, start_line, end_line, "
                     "body, bm25(body_fts), body_files.mtime_ns, body_files.size "
@@ -1366,6 +1370,26 @@ class SemanticSearchManager:
                 self.invalidate_file(os.path.join(self.root_dir, path))
             return []
         return list(selected.values())
+
+    @staticmethod
+    def _rarest_body_tokens(conn: sqlite3.Connection, tokens: list[str], limit: int) -> list[str]:
+        """Keep the words of a long task that the fewest source chunks contain.
+
+        The MATCH stays bounded. Without document counts, a long issue sent the
+        words that came first, and those were often common ones.
+        """
+        try:
+            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS temp.body_vocab "
+                         "USING fts5vocab(main, body_fts, row)")
+            marks = ",".join("?" * len(tokens))
+            counts = dict(conn.execute(
+                f"SELECT term, doc FROM temp.body_vocab WHERE term IN ({marks})", tokens,
+            ).fetchall())
+        except sqlite3.Error:
+            logger.debug("Source-body term counts unavailable", exc_info=True)
+            return tokens[:limit]
+        # A word that no chunk holds cannot match. Ties keep the query order.
+        return sorted((t for t in tokens if t in counts), key=counts.__getitem__)[:limit]
 
     def candidate_diagnostics(self) -> dict[str, int | float | bool | str]:
         """Read-only coverage snapshot for compact search provenance."""
