@@ -1,10 +1,11 @@
 """Eval-only dense retrieval arm: CodeRankEmbed files, fused with a frozen lexical pool.
 
-Reads an ``eval.ranking_pair`` pool JSON, embeds each repository's tracked text
-files in fixed line windows at the pool's pinned revision, and writes:
+Reads a frozen pool JSON (the format of the deleted ``eval.ranking_pair``), embeds
+each repository's tracked text files in fixed line windows at the pool's pinned
+revision, and writes:
 
 - ``<out>-dense.json``: a trial-shaped result whose ranking is dense-only;
-- ``<out>-fused.json``: a ranking_pair-shaped pool whose ``prior`` order is the
+- ``<out>-fused.json``: a pool in the same format whose ``prior`` order is the
   reciprocal-rank fusion of lexical and dense file orders, so
   ``eval.model_rerank_trial`` can rerank it unchanged.
 

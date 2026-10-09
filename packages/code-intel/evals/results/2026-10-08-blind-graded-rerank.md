@@ -33,7 +33,9 @@ Two packs were new to every arm.
   its own `base_commit` in a separate worktree.
 
 `eval.ranking_pair --top-k 400 --pool-files 48` froze one lexical candidate
-pool per query. Every arm reranks the first 12, 24, or 48 files of that same
+pool per query. Commit `5b67651` is the last commit with this script. The eval
+matrix cell `product_noimp` now gives the same file order (36 of 36 blind
+queries). Every arm reranks the first 12, 24, or 48 files of that same
 pool, with the same 1,350-character query-focused excerpts.
 
 **Pooled judging.** Graded NDCG refuses to score unjudged files. After the
@@ -236,6 +238,10 @@ that updates in the background before it can be a default.
 
 ## Reproduce
 
+The first command needs `eval/ranking_pair.py`. Run it in a checkout of commit
+`5b67651`, or start from the frozen `pool.json`. The other commands run on
+the current code.
+
 ```sh
 PYTHONPATH=packages/code-intel/src .venv/bin/python -m eval.ranking_pair \
   --repos okhttp sqlite ggplot2 postgrest rails crystal \
@@ -253,6 +259,16 @@ The import reads every pool and trial output in the folder. `pool.json` gives
 the cell `lexical`, and each other file gives a cell with its file name. A
 cell that covers only some queries, such as the four-repository dense arm,
 needs an `--ids` file with the ids of those queries.
+
+To make the lexical pool again with the current code, run the matrix stages
+after the import. The snapshot stage reads the repositories at their HEAD:
+
+```sh
+.venv/bin/python -m eval.matrix.run run scores --stage snapshot --arms product_noimp
+.venv/bin/python -m eval.matrix.run run scores --stage retrieve --arms product_noimp
+.venv/bin/python -m eval.matrix.run run scores --stage rows --arms product_noimp
+.venv/bin/python -m eval.matrix.run report scores --cells lexical,product_noimp --baseline lexical
+```
 
 For a local model, start its server on loopback and point the trial at it.
 Do not pass `--model-id`:

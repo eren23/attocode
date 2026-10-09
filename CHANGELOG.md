@@ -101,6 +101,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same tasks. The primary comparisons are ΔAcc@5 and the cost ratio, with the
   repository bootstrap range. With `--matrix`, the report compares the offline
   rank of the first gold file with the agent Acc@5 of each task.
+- `run.py run` makes the first-stage cells of the matrix in three stages. The
+  snapshot stage saves the files of each repository commit in a shared cache.
+  The retrieve stage builds one index per snapshot and runs each arm once per
+  query: the product search (`product`, `product_noimp`, `product_auto`), its
+  stage lists (`kw`, `body`, `filebm25`, `chunkrrf`), `grep`, and `repomap`.
+  The rows stage writes the results to `results.jsonl`.
+- A second run uses the cached results, and a stopped shard continues from
+  its last result. `run.py status` shows the coverage of each cell.
+- The matrix replaces `eval/ranking_pair.py`, `eval/locbench560/first_stage.py`,
+  and the pool step of `eval/locbench560/run.py`. The cell `product_noimp`
+  gives the same file order as their frozen pools on all 84 queries of the 42
+  Loc-Bench dev instances and on all 36 blind-pack queries.
 
 ## [0.2.29] - 2026-10-09
 

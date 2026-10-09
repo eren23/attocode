@@ -109,7 +109,8 @@ isolated lexical test does not measure end-to-end developer task success. A
 stronger candidate reranker needs independent judgments and real user-query
 replay before an overall-quality or release claim.
 
-Reproduce with:
+Reproduce with the commands below. Commit `5b67651` is the last commit with
+`eval/ranking_pair.py`. Run the commands in a checkout of that commit:
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=packages/code-intel/src .venv/bin/python -m eval.ranking_pair \

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import statistics
 import subprocess
 import tempfile
@@ -19,8 +20,28 @@ from pathlib import Path
 import yaml
 from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
 
-from eval.ranking_pair import REPO_PATHS, _copy_external
+from eval.search_quality import REPO_CONFIGS
 from eval.source_view_trial import source_view_candidates
+
+_BENCHMARK_ROOT = Path(REPO_CONFIGS["fastapi"]).parent
+REPO_PATHS = {
+    **REPO_CONFIGS,
+    **{name: str(_BENCHMARK_ROOT / name) for name in (
+        "express", "requests", "vapor", "phoenix", "ripgrep",
+        "faker", "starship", "spdlog", "protobuf", "prisma",
+        "okhttp", "sqlite", "ggplot2", "postgrest", "rails", "crystal",
+    )},
+}
+
+
+def _copy_external(source: Path, destination: Path) -> None:
+    shutil.copytree(
+        source, destination, symlinks=True,
+        ignore=shutil.ignore_patterns(
+            ".git", ".attocode", ".venv", "node_modules", "__pycache__",
+            ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
+        ),
+    )
 
 
 def score_pool(files: list[str], gold: list[str]) -> dict:

@@ -1,7 +1,7 @@
 """Offline-first, paired reranker trial on frozen code-navigation candidate pools.
 
-The input is a JSON result from ``eval.ranking_pair``. Its ``prior`` file order
-is the candidate pool for every arm; this script never reindexes or writes to
+The input is a frozen pool JSON (the format of the deleted ``eval.ranking_pair``).
+Its ``prior`` file order is the candidate pool for every arm; this script never reindexes or writes to
 the benchmark repositories. Gold files are narrow target judgments, not an
 exhaustive list of relevant files.
 
