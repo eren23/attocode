@@ -1,44 +1,50 @@
 """Eval matrix command line. Run it from the repository root.
 
-  python -m eval.matrix.run import-legacy OUT [--locbench [PREFIX=]DIR ...] [--pack NAME=DIR ...]
+  python -m eval.matrix.run import-legacy OUT [--locbench [PREFIX=]DIR ...] [--pack NAME=DIR ...] [--cache DIR]
       Convert the pools and trials of earlier runs into OUT/instances.jsonl and
-      OUT/results.jsonl, with one row per (instance, query variant, cell).
+      OUT/results.jsonl, with one row per (instance, query variant, cell). Load the old Jev
+      answers into the rerank cache, so that the rerank stage replays them at no cost.
   python -m eval.matrix.run ingest [OUT] [--config FILE]
       Read every dataset of the registry (default eval/matrix/configs/full.yaml), draw the
       core mix, and write OUT/instances.jsonl and OUT/ingest.md. Parquet files need pyarrow.
   python -m eval.matrix.run report OUT [--cells A,B] [--baseline CELL] [--pair CELL:BASELINE ...]
-      [--metric NAME ...] [--ids FILE] [--partial] [--unjudged FILE] [--output FILE]
+      [--metric NAME ...] [--ids FILE] [--partial] [--unjudged FILE] [--output FILE] [--cache DIR]
       Score OUT/results.jsonl against OUT/instances.jsonl and write OUT/report.md.
-  python -m eval.matrix.run run OUT --stage snapshot|retrieve|rows [--arms A,B] [--ids FILE]
+  python -m eval.matrix.run run OUT --stage snapshot|retrieve|rows|rerank [--arms A,B] [--ids FILE]
       [--dataset NAME] [--shard I/N] [--cache DIR] [--retry-failed]
+      [--config FILE] [--budget-usd USD] [--allow-remote-code]
       For the instances in OUT/instances.jsonl: save the files of each (repository, commit),
-      run the first-stage arms on them, or write their rows to OUT/results.jsonl.
+      run the first-stage arms on them, write their rows to OUT/results.jsonl, or rerank
+      the pool rows with the rerank entries of the config (eval/matrix/rerank.py).
   python -m eval.matrix.run status OUT [--arms A,B] [--ids FILE] [--dataset NAME] [--cache DIR]
       Show the snapshot and retrieve coverage per dataset and cell.
   python -m eval.matrix.run ci [--cache DIR] [--write-baseline]
       Run the CI ranking gate of configs/ci.yaml, or write its baseline (eval/matrix/ci.py).
 
-A Loc-Bench folder is a run of eval/locbench560: all.json, pools/ (cell lexical, and cell
-lexpy for its Python files), pools2/ (cells fused and bm25), trials/ (one cell per trial
-name, such as jev24) and trials-q512/ (cells such as jev24_q512). PREFIX names the run in
-its cells, as in body.jev24.
+A Loc-Bench folder is a run of the deleted eval/locbench560 driver: all.json, pools/ (cell
+lexical, and cell lexpy for its Python files), pools2/ (cells fused and bm25), trials/ (one
+cell per trial name, such as jev24) and trials-q512/ (cells such as jev24_q512). PREFIX names
+the run in its cells, as in body.jev24.
 
 A case-pack folder holds frozen pools in the format of the deleted eval.ranking_pair
-(pool.json is the lexical pool) and eval.model_rerank_trial outputs. The cell is the file
-name.
+(pool.json is the lexical pool) and outputs of the deleted eval.model_rerank_trial. The cell
+is the file name.
 
 The stages share a cache (default ~/Documents/AI/attocode-evals/matrix): trees/ lists the
-files of each (repository, commit), blobs/ holds their contents by git blob id, and ret/
-holds one result per (tree, arm family, family config, query). A file that exists is a
-finished step, so a stopped shard continues where it stopped.
+files of each (repository, commit), blobs/ holds their contents by git blob id, ret/ holds
+one result per (tree, arm family, family config, query), and cache.db holds the rerank
+outputs and the ledger of paid calls. A result that exists is a finished step, so a stopped
+shard continues where it stopped.
 """
 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
+import posixpath
 import shutil
 import subprocess
 import tempfile
@@ -50,12 +56,13 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from eval.matrix import arms, datasets, stats
+from eval.matrix import arms, datasets, rerank, stats
 from eval.matrix.datasets import Instance
 from eval.meta_harness.splits import assign_split
 
 REPO = Path(__file__).resolve().parents[2]
 CORE_IDS = Path(__file__).resolve().parent / "core_ids.txt"
+REGISTRY = Path(__file__).resolve().parent / "configs/full.yaml"  # the datasets, and which of them are public
 CACHE = Path.home() / "Documents/AI/attocode-evals/matrix"
 # Read-only clone sources: case-pack repositories, then the Loc-Bench dev clones.
 SOURCES = (Path.home() / "Documents/ai/benchmark-repos", Path.home() / "Documents/AI/attocode-evals/locbench/repos")
@@ -172,7 +179,7 @@ def _pack(name: str, root: Path) -> tuple[list[Instance], list[dict]]:
     return instances, list(rows.values())
 
 
-def import_legacy(out: Path, locbench: list[str], packs: list[str]) -> None:
+def import_legacy(out: Path, locbench: list[str], packs: list[str], cache: Path | None = None) -> None:
     loaded = []
     for item in locbench:
         prefix, _, path = item.rpartition("=")
@@ -197,6 +204,19 @@ def import_legacy(out: Path, locbench: list[str], packs: list[str]) -> None:
     for (dataset, cell, variant, status), n in sorted(counts.items()):
         print(f"{dataset}\t{cell}@{variant}\t{status}\t{n}")
     print(f"{len(instances)} instances and {len(rows)} rows in {out}")
+    if cache is not None:  # the old Jev answers, keyed as the rerank stage asks for them
+        db, added = rerank.Cache(cache / "cache.db"), 0
+        files = [path for item in locbench for path in sorted(Path(item.rpartition("=")[2]).expanduser()
+                                                              .glob("trials*/*.json"))]
+        files += [path for item in packs for path in sorted(Path(item.partition("=")[2]).expanduser().glob("*.json"))]
+        for path in files:
+            data = json.loads(path.read_text())
+            # Two runs can send the same request. Keep the first answer, but an ok answer replaces a failure.
+            for key, output in rerank.legacy_outputs(data) if isinstance(data, dict) else []:
+                old = db.get(key)
+                if old is None or (old["status"] != "ok" and output["status"] == "ok"):
+                    added += db.put(key, "jev-choice", output)
+        print(f"{added} old Jev answers added to {cache / 'cache.db'}")
 
 
 def _sha256(path: Path) -> str:
@@ -237,6 +257,8 @@ def report(args: argparse.Namespace) -> None:
     cells = set(args.cells.split(",")) if args.cells else {r["cell"] for r in rows}
     if args.baseline:
         pairs = [(cell, args.baseline) for cell in sorted(cells - {args.baseline})] + pairs
+    # Each rerank cell is also compared with the pool cell that it reordered.
+    pairs += sorted({(r["cell"], r["pool_cell"]) for r in rows if "pool_cell" in r and r["cell"] in cells} - set(pairs))
     cells |= {cell for pair in pairs for cell in pair}
     absent = cells - {r["cell"] for r in rows}
     if absent:
@@ -254,6 +276,13 @@ def report(args: argparse.Namespace) -> None:
               f"Scored: {len(rows)} rows on {len(instances)} instances"
               + (f" from {args.ids}" if args.ids else "") + ".",
               f"Bootstrap and sign flips: {args.draws:,} draws each, seed {args.seed}."]
+    db = args.cache / "cache.db"
+    if db.exists():
+        spend = rerank.ledger(db, str(args.out.resolve()))
+        header.append(f"Spend: ${sum(cost for _n, cost in spend.values()):.4f} in "
+                      f"{sum(n for n, _cost in spend.values())} paid calls"
+                      + "".join(f"; {arm} ${cost:.4f} in {n}" for arm, (n, cost) in sorted(spend.items()))
+                      + f" (the ledger in {db}).")
     output = args.output or args.out / "report.md"
     output.write_text(stats.render(summary, header))
     print(f"wrote {output}")
@@ -628,13 +657,129 @@ def write_rows(out: Path, cache: Path, instances: list[Instance], cells: list[st
                 "files": result["lists"].get(arms.CELLS[cell][1], []), "status": result["status"],
                 "fallback_reason": result.get("error"), "latency_ms": result["ms"],
                 "pool_sha256": key, "evidence_sha256": None}
+    _merge_rows(out, list(new.values()))
+    print(f"wrote {len(new)} rows to {out / 'results.jsonl'}" + "".join(f"; {cell}: {n} without a result"
+                                                                        for cell, n in sorted(missing.items())))
+
+
+def _merge_rows(out: Path, new: list[dict]) -> None:
+    """Replace the rows with the same (instance, variant, cell) in OUT/results.jsonl. The lock keeps
+    parallel shards from losing the rows of each other."""
     results = out / "results.jsonl"
-    old = [json.loads(line) for line in results.read_text().splitlines()] if results.exists() else []
-    rows = [r for r in old if (r["instance_id"], r["variant"], r["cell"]) not in new] + list(new.values())
-    rows.sort(key=lambda r: (r["instance_id"], r["variant"], r["cell"]))
-    _write(results, "".join(json.dumps(r) + "\n" for r in rows).encode())
-    print(f"wrote {len(new)} rows to {results}" + "".join(f"; {cell}: {n} without a result"
-                                                          for cell, n in sorted(missing.items())))
+    with (out / ".results.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        old = [json.loads(line) for line in results.read_text().splitlines()] if results.exists() else []
+        keys = {(r["instance_id"], r["variant"], r["cell"]) for r in new}
+        rows = [r for r in old if (r["instance_id"], r["variant"], r["cell"]) not in keys] + new
+        rows.sort(key=lambda r: (r["instance_id"], r["variant"], r["cell"]))
+        _write(results, "".join(json.dumps(r) + "\n" for r in rows).encode())
+
+
+def _reader(cache: Path, tree: dict):
+    """The text lines of a file of the tree, by path. A link resolves inside the tree, as the old trial
+    resolved it in a checkout. A file that the snapshot did not store raises FileNotFoundError."""
+    entries = {entry[0]: entry for entry in tree["entries"]}
+
+    def lines(path: str) -> list[str]:
+        for _link in range(40):
+            entry = entries.get(path)
+            if entry is None or not _stored(entry):
+                raise FileNotFoundError(f"{path} is not a stored file of the snapshot")
+            data = zlib.decompress(_blob_file(cache, entry[2]).read_bytes())
+            if entry[1] != "120000":
+                return data.decode(errors="replace").splitlines()  # as read_text().splitlines() in a checkout
+            path = posixpath.normpath(posixpath.join(posixpath.dirname(path), os.fsdecode(data)))
+            if path == ".." or path.startswith(("../", "/")):
+                raise FileNotFoundError(f"{entry[0]} links outside the repository")
+        raise FileNotFoundError(f"{path}: too many links")
+    return lines
+
+
+def _failed(status: str, error: str) -> dict:
+    return {"status": status, "order": None, "error": error, "ms": 0.0, "cost_usd": 0.0}
+
+
+def _evidence(cache: Path, jobs: list[rerank.Job]) -> None:
+    """The page, the query sent, the excerpts and the cache key of each job of one instance."""
+    from attocode_intel.focused_evidence import file_excerpt
+
+    inst = jobs[0].inst
+    path = _tree_file(cache, inst.repo, inst.base_commit)
+    if not path.exists():
+        raise SystemExit(f"no snapshot of {inst.repo}@{inst.base_commit or 'HEAD'}: run --stage snapshot first")
+    tree = json.loads(path.read_text())
+    lines, made = None if "error" in tree else _reader(cache, tree), {}
+    for job in jobs:
+        query = inst.queries[job.variant]
+        job.paths, job.query = job.pool["files"][:job.page], query[:job.chars] if job.chars else query
+        if job.pool["status"] != "ok":
+            job.output = _failed("pool_failed", f"the {job.pool_cell} row has status {job.pool['status']}")
+            continue
+        if rerank.ARMS[job.arm]["kind"] == "none":
+            continue
+        if lines is None:
+            job.output = _failed("snapshot_failed", tree["error"])
+            continue
+        try:
+            for file in job.paths:
+                if (file, query) not in made:
+                    made[file, query] = file_excerpt(lines(file), file, query)
+        except FileNotFoundError as error:
+            job.output = _failed("missing_file", str(error))
+            continue
+        job.excerpts = [made[file, query] for file in job.paths]
+        job.evidence = rerank.evidence_hash(job.excerpts)
+        job.key = rerank.listwise_key(job.arm, rerank.revision(job.arm, job.entry),
+                                      rerank.ARMS[job.arm].get("prompt", 1), job.query, job.evidence, job.repeat)
+
+
+def _rerank_row(job: rerank.Job) -> dict:
+    """A rerank row: the arm's order of the page, or the pool order with a failure status. The pool tail follows."""
+    output = job.output
+    order = output["order"] if output["status"] == "ok" else range(len(job.paths))
+    return {"instance_id": job.inst.id, "variant": job.variant, "cell": job.cell,
+            "files": [job.paths[i] for i in order] + job.pool["files"][len(job.paths):],
+            "status": output["status"], "fallback_reason": output.get("error"), "latency_ms": output.get("ms"),
+            "pool_sha256": job.pool["pool_sha256"], "evidence_sha256": job.evidence, "pool_cell": job.pool_cell,
+            "page": job.page, "arm": job.arm, "cost_usd": output.get("cost_usd"), "cache_hit": job.cache_hit}
+
+
+def rerank_pools(out: Path, cache: Path, instances: list[Instance], config: Path, *, only: set[str] | None = None,
+                 budget_usd: float | None = None, retry_failed: bool = False,
+                 allow_remote_code: bool = False) -> None:
+    """Rerank the pool rows in OUT/results.jsonl with the rerank entries of the config, and write the rows.
+
+    The pool rows come from the rows stage or from import-legacy. The excerpts come from the
+    snapshot of each instance. The cap is --budget-usd, else run.budget_usd of the config, else 0.
+    """
+    cfg = yaml.safe_load(config.read_text())
+    if only is not None:
+        cfg["rerank"] = [entry for entry in cfg.get("rerank") or [] if entry["arm"] in only]
+    results = out / "results.jsonl"
+    rows = [json.loads(line) for line in results.read_text().splitlines()] if results.exists() else []
+    jobs, missing = rerank.plan(cfg, instances, {(r["instance_id"], r["variant"], r["cell"]): r for r in rows})
+    if missing:
+        print(f"{missing} pools have no row: run the rows stage or import-legacy for the pool cells first")
+    public = {name for name, entry in yaml.safe_load(REGISTRY.read_text())["datasets"].items() if entry.get("public")}
+    private = sorted({(job.arm, job.inst.dataset) for job in jobs
+                      if rerank.remote(job.arm, job.entry) and job.inst.dataset not in public})
+    if private:
+        raise SystemExit("refused: " + ", ".join(f"{arm} on {dataset}" for arm, dataset in private)
+                         + ". A remote arm sends excerpts out of this machine, so it runs only on the "
+                         f"datasets with public: true in {REGISTRY}.")
+    by_instance: dict[str, list[rerank.Job]] = defaultdict(list)
+    for job in jobs:
+        by_instance[job.inst.id].append(job)
+    for group in by_instance.values():
+        _evidence(cache, group)
+    db = rerank.Cache(cache / "cache.db")
+    cap = budget_usd if budget_usd is not None else (cfg.get("run") or {}).get("budget_usd", 0)
+    budget = rerank.Budget(db, str(out.resolve()), cap)
+    counts = rerank.execute(db, budget, jobs, retry_failed=retry_failed, allow_remote_code=allow_remote_code)
+    _merge_rows(out, [_rerank_row(job) for job in jobs if job.output is not None])
+    spend = sum(cost for _n, cost in rerank.ledger(cache / "cache.db", budget.run).values())
+    print(f"rerank: {len(jobs)} jobs: " + ", ".join(f"{n} {status}" for status, n in sorted(counts.items()))
+          + f"; {sum(job.cache_hit for job in jobs)} from the cache. Run spend ${spend:.4f} of ${cap:.4f}.")
 
 
 def status(cache: Path, instances: list[Instance], cells: list[str]) -> None:
@@ -674,14 +819,25 @@ def stage(args: argparse.Namespace) -> None:
     instances = _select_ids(_instances(args.out), args.ids)
     if args.dataset:
         instances = [inst for inst in instances if inst.dataset == args.dataset]
+    reranking = args.command == "run" and args.stage == "rerank"
     if getattr(args, "shard", None):
         index, count = map(int, args.shard.split("/"))
-        repos = sorted({inst.repo for inst in instances})[index::count]
-        instances = [inst for inst in instances if inst.repo in repos]
-    cells = args.arms.split(",")
-    unknown = [cell for cell in cells if cell not in arms.CELLS]
+        if reranking:  # by instance: a rerank job reads one snapshot and no index
+            instances = sorted(instances, key=lambda inst: inst.id)[index::count]
+        else:
+            repos = sorted({inst.repo for inst in instances})[index::count]
+            instances = [inst for inst in instances if inst.repo in repos]
+    names = args.arms.split(",") if args.arms else None
+    known = rerank.ARMS if reranking else arms.CELLS
+    unknown = [name for name in names or () if name not in known]
     if unknown:
-        raise SystemExit(f"unknown arms {unknown}. Known arms: {', '.join(arms.CELLS)}")
+        raise SystemExit(f"unknown arms {unknown}. Known arms: {', '.join(known)}")
+    if reranking:
+        rerank_pools(args.out, args.cache, instances, args.config, only=set(names) if names else None,
+                     budget_usd=args.budget_usd, retry_failed=args.retry_failed,
+                     allow_remote_code=args.allow_remote_code)
+        return
+    cells = names or list(arms.CELLS)
     if args.command == "status":
         status(args.cache, instances, cells)
     elif args.stage == "snapshot":
@@ -702,6 +858,8 @@ def main() -> None:
     legacy.add_argument("--locbench", action="append", default=[], metavar="[PREFIX=]DIR")
     legacy.add_argument("--pack", action="append", default=[], metavar="NAME=DIR",
                         help=f"NAME is one of {', '.join(datasets.PACKS)}")
+    legacy.add_argument("--cache", type=Path, default=CACHE, help=f"load the old Jev answers into "
+                                                                  f"CACHE/cache.db (default: {CACHE})")
     scoring = commands.add_parser("report", aliases=["score"], help="score the rows and write report.md")
     scoring.add_argument("out", type=Path)
     scoring.add_argument("--cells", help="comma-separated cells (default: all)")
@@ -716,20 +874,30 @@ def main() -> None:
     scoring.add_argument("--output", type=Path, help="default: OUT/report.md")
     scoring.add_argument("--draws", type=int, default=10_000)
     scoring.add_argument("--seed", type=int, default=0)
+    scoring.add_argument("--cache", type=Path, default=CACHE, help=f"the spend comes from CACHE/cache.db "
+                                                                   f"(default: {CACHE})")
     ingesting = commands.add_parser("ingest", help="read the registry datasets and write instances.jsonl")
     ingesting.add_argument("out", type=Path, nargs="?", default=Path.home() / "Documents/AI/attocode-evals/matrix")
-    ingesting.add_argument("--config", type=Path, default=Path(__file__).resolve().parent / "configs/full.yaml")
-    stages = commands.add_parser("run", help="snapshot repositories, run first-stage arms, or write their rows")
+    ingesting.add_argument("--config", type=Path, default=REGISTRY)
+    stages = commands.add_parser("run", help="snapshot repositories, run first-stage arms, write their rows, "
+                                             "or rerank the pools")
     coverage = commands.add_parser("status", help="show the snapshot and retrieve coverage")
     for sub in (stages, coverage):
         sub.add_argument("out", type=Path, help="the run folder, with instances.jsonl")
-        sub.add_argument("--arms", default=",".join(arms.CELLS), help="comma-separated cells (default: all)")
+        sub.add_argument("--arms", help="comma-separated cells (default: all). For the rerank stage: rerank arms "
+                                        "(default: all in the config)")
         sub.add_argument("--ids", type=Path, help="only the instance ids in this file, one per line")
         sub.add_argument("--dataset", help="only the instances of this dataset")
         sub.add_argument("--cache", type=Path, default=CACHE, help=f"default: {CACHE}")
-    stages.add_argument("--stage", required=True, choices=("snapshot", "retrieve", "rows"))
-    stages.add_argument("--shard", default="0/1", help="I/N: repositories I, I+N, I+2N, ... in name order")
+    stages.add_argument("--stage", required=True, choices=("snapshot", "retrieve", "rows", "rerank"))
+    stages.add_argument("--shard", default="0/1", help="I/N: repositories I, I+N, I+2N, ... in name order. "
+                                                       "For the rerank stage: instances in id order")
     stages.add_argument("--retry-failed", action="store_true", help="make failed snapshots and results again")
+    stages.add_argument("--config", type=Path, default=REGISTRY, help="the rerank entries (default: the registry)")
+    stages.add_argument("--budget-usd", type=float, help="the cap of paid calls for this run folder, "
+                                                         "over all invocations (default: run.budget_usd)")
+    stages.add_argument("--allow-remote-code", action="store_true",
+                        help="let a local rerank model run code from its Hugging Face repository")
     gate = commands.add_parser("ci", help="run the CI ranking gate, or write its baseline")
     gate.add_argument("--cache", type=Path, default=CACHE, help=f"default: {CACHE}")
     gate.add_argument("--write-baseline", action="store_true", help="write eval/matrix/ci_baseline.json")
@@ -738,7 +906,7 @@ def main() -> None:
         unknown = [item for item in args.pack if item.partition("=")[0] not in datasets.PACKS]
         if unknown:
             parser.error(f"unknown pack in {unknown}. Known packs: {', '.join(datasets.PACKS)}")
-        import_legacy(args.out, args.locbench, args.pack)
+        import_legacy(args.out, args.locbench, args.pack, args.cache)
     elif args.command == "ingest":
         ingest(args.out, args.config)
     elif args.command in ("run", "status"):
