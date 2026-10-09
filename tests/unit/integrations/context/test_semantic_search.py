@@ -324,6 +324,52 @@ class TestSourceBodyCandidates:
 
         assert "target.py" in {r.file_path for r in mgr.search_candidates(query, top_k=10)}
 
+    def test_whole_file_bm25_sees_matches_spread_over_a_file(self, tmp_path: Path) -> None:
+        # distractor.py has three query words in one function. target.py has all
+        # six words, one per function, so none of its chunks matches as well.
+        words = ["quartz", "lantern", "meadow", "harbor", "falcon", "ember"]
+        (tmp_path / "distractor.py").write_text(
+            "def mixed():\n    quartz = lantern = meadow = 1\n    return quartz\n", encoding="utf-8")
+        (tmp_path / "target.py").write_text("".join(
+            f"def step{n}():\n    {word} = {n}\n    return {word}\n\n"
+            for n, word in enumerate(words)), encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search_candidates(" ".join(words), top_k=10)
+        assert mgr.wait_for_body_index()
+        # Whole-file BM25 is only for long queries, such as a pasted issue.
+        issue_words = ["report", "crash", "startup", "config", "parser", "window", "theme", "plugin",
+                       "cache", "network", "retry", "timeout", "logger", "version", "python"]
+
+        assert mgr._file_search(words + issue_words, 10, "")[0] == "target.py"
+        assert mgr._file_search(words, 10, "") == []
+        assert mgr.search_candidates(" ".join(words), top_k=10)[0].file_path == "distractor.py"
+
+    def test_file_fusion_is_equal_weight_rrf_of_file_orders(self, tmp_path: Path) -> None:
+        from attocode.integrations.context.semantic_search import SemanticSearchResult
+
+        (tmp_path / "d.py").write_text("D = 1\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        rows = [SemanticSearchResult(file_path=path, chunk_type="function", name=name, text="", score=score)
+                for path, name, score in (("a.py", "one", .3), ("b.py", "two", .2), ("a.py", "three", .15),
+                                          ("c.py", "four", .1))]
+
+        fused = mgr._fuse_file_order(rows, ["c.py", "d.py"])
+        # c.py: 1/63 + 1/61; a.py: 1/61; b.py and d.py tie at 1/62, so the path decides.
+        assert [(r.file_path, r.name) for r in fused] == [
+            ("c.py", "four"), ("a.py", "one"), ("b.py", "two"), ("d.py", "d.py"), ("a.py", "three")]
+        assert [r.score for r in fused] == sorted((r.score for r in fused), reverse=True)
+
+    def test_whole_file_search_skips_docs(self, tmp_path: Path) -> None:
+        # A long prose issue matches docs well. Whole-file BM25 ranks code only.
+        words = [f"word{chr(97 + n)}zed" for n in range(22)]
+        (tmp_path / "notes.md").write_text(" ".join(words) + "\n", encoding="utf-8")
+        (tmp_path / "code.py").write_text(f"TEXT = '{' '.join(words)}'\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search_candidates(" ".join(words), top_k=10)
+        assert mgr.wait_for_body_index()
+
+        assert mgr._file_search(words, 10, "") == ["code.py"]
+
     def test_invalidation_updates_body_and_removes_deleted_file(self, tmp_path: Path) -> None:
         source = tmp_path / "worker.py"
         source.write_text("def execute():\n    return sapphire_handshake\n", encoding="utf-8")

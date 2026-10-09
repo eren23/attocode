@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gold file in the first 48 candidates rose from 0.759 to 0.784. Queries with
   20 words or fewer do not change.
 
+### Changed — Code-intel search
+
+- A query of more than 20 words, such as a pasted issue, now also ranks
+  whole source files with BM25. Search fuses that file order with the lexical
+  file order (equal-weight RRF, k 60, 48 files each). Docs and data files stay
+  out of the whole-file index. The source-body index schema goes to version 4,
+  so the next search builds the index again.
+- On 560 Loc-Bench issues, lexical file Acc@5 rose from 0.388 to 0.529.
+  Jev over 48 files rose from 0.721 to 0.752, but over all 560 issues that
+  gain is not clear. Queries with 20 words or fewer do not change.
+
 ### Changed — Evaluation
 
 - The Loc-Bench V1 report adds a file-level BM25 arm. Jev over a fused
