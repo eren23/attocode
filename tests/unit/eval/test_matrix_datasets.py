@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 import yaml
@@ -11,6 +12,7 @@ import yaml
 from eval.matrix.datasets import (
     PACKS,
     Instance,
+    _is_test,
     case_pack,
     core_mix,
     lca,
@@ -158,16 +160,27 @@ def test_lca_rows():
             "diff --git a/app/Fresh.kt b/app/Fresh.kt\nnew file mode 100644\n--- /dev/null\n+++ b/app/Fresh.kt\n"
             "diff --git a/test/ATest.kt b/test/ATest.kt\n--- a/test/ATest.kt\n+++ b/test/ATest.kt\n@@ -1 +1 @@\n-a\n+b\n"
             "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-a\n+b\n")
-    [inst] = lca([{"_file": "kt/test-00000-of-00001.parquet", "text_id": "square/okhttp/1254/1158", "base_sha": "c",
-                   "pull_create_at": datetime(1970, 1, 1, 0, 23, 39), "issue_title": "Cache 307",
-                   "issue_body": "Details", "diff": diff,
-                   "changed_files": "['app/A.kt', 'app/New.kt', 'app/Fresh.kt', 'test/ATest.kt']"}])
+    row = {"_file": "kt/test-00000-of-00001.parquet", "text_id": "square/okhttp/1254/1158", "base_sha": "c",
+           "pull_create_at": datetime(1970, 1, 1, 0, 23, 39), "issue_title": "Cache 307", "issue_body": "Details",
+           "diff": diff, "changed_files": "['app/A.kt', 'app/New.kt', 'app/Fresh.kt', 'test/ATest.kt']"}
+    inst, only_tests = lca([row, {**row, "text_id": "square/okhttp/1/2", "changed_files": "['test/ATest.kt']"}])
     assert (inst.id, inst.repo, inst.base_commit, inst.language) == ("lca/square__okhttp-1254-1158", "square/okhttp",
                                                                      "c", "kotlin")
-    # A changed test file counts, a new file does not, and README.md is not in changed_files.
-    assert inst.gold == ["app/A.kt", "app/Old.kt", "test/ATest.kt"]
+    # The test file and the new file are not gold, and README.md is not in changed_files.
+    assert inst.gold == ["app/A.kt", "app/Old.kt"] and only_tests.gold == []
     assert inst.created_at == "2014-12-19T14:40:00Z"  # 1,419,000,000 s, stored as 1,419,000 ms
     assert inst.queries == {"full": "Cache 307\nDetails", "title": "Cache 307"}
+
+
+def test_is_test_is_a_frozen_path_rule():
+    tests = ["pkg/test/a.py", "tests/a.py", "web/__tests__/a.js", "okhttp/src/jvmTest/kotlin/A.kt",
+             "app/src/androidTest/java/B.java", "lib/src/commonTest/C.kt", "svc/src/integrationTest/D.java",
+             "pkg/test_util.py", "pkg/util_test.py", "pkg/conftest.py", "src/main/java/FooTest.java",
+             "src/main/java/FooTests.java", "src/main/kotlin/BarTest.kt", "src/main/kotlin/BarTests.kt"]
+    sources = ["numpy/testing/utils.py", "src/testing/x.py", "src/main/java/Foo.java", "app/TestUtils.java",
+               "pkg/contest.py", "pkg/testdata/a.py", "core/src/latest/A.kt", "lib/jvmTest/A.kt"]
+    assert [path for path in tests if not _is_test(path)] == []
+    assert [path for path in sources if _is_test(path)] == []
 
 
 def test_search_coverage_follows_product_discovery():
@@ -201,8 +214,9 @@ def test_core_mix_ignores_hash_seed_and_input_order():
     runs = []
     for hash_seed, order in (("1", "forward"), ("2", "reverse")):
         env = {**os.environ, "PYTHONHASHSEED": hash_seed, "PYTHONPATH": os.pathsep.join(sys.path)}
+        # python -c puts the working folder first on sys.path, so run it from this checkout.
         done = subprocess.run([sys.executable, "-c", CORE_SCRIPT, order], env=env, capture_output=True, text=True,
-                              check=True)
+                              check=True, cwd=Path(__file__).resolve().parents[3])
         runs.append(json.loads(done.stdout))
     assert runs[0] == runs[1] == sorted(runs[0]) and len(runs[0]) == 40 + 60 + 90  # graded_blind: every instance
 

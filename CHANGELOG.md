@@ -59,10 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Verified (382), and SWE-bench-Live MultiLang (1,077). It also pins one commit
   per repository for the case packs.
 - Gold comes from `edit_functions` when a dataset has them. Otherwise, gold is
-  the set of files that the patch changes and that exist in the base tree. A
-  renamed file counts by its old path. A new file does not count, because no
-  search can return it. Two Live instances change only new files, so ingest
-  excludes them.
+  the set of non-test files that the patch changes and that exist in the base
+  tree. A renamed file counts by its old path. A new file does not count,
+  because no search can return it. Two Live instances change only new files,
+  so ingest excludes them.
+- LCA lists changed test files as changed files. A frozen path rule in
+  `eval/matrix/datasets.py` removes 127 of them, so LCA gold has 375 files.
+  The rule does not use the product test classifier, so gold does not change
+  when the product changes.
 - `eval/matrix/core_ids.txt` holds the core mix for the paid arms: 396 ids. It
   takes 80 Loc-Bench, 40 Lite, 60 LCA, 60 PolyBench and 60 Live instances in
   proportion to their language and category, plus all 96 case-pack queries. A

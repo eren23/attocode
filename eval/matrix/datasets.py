@@ -25,6 +25,7 @@ import urllib.request
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from pathlib import Path
 
 import yaml
@@ -113,11 +114,36 @@ def lite(rows: list[dict]) -> list[Instance]:
                       r["problem_statement"], _edit_files(r)) for r in rows]
 
 
+def _is_test(path: str) -> bool:
+    """A test file, by a frozen path rule. It is not the product rule, so gold does not move with the product.
+
+    A test file is in a test, tests or __tests__ folder, or in a folder directly under src/ that ends in
+    Test (androidTest, jvmTest, commonTest, integrationTest). Or its name is test_*.py, *_test.py,
+    conftest.py, *Test.java, *Tests.java, *Test.kt or *Tests.kt. A testing/ folder is source (numpy.testing).
+    """
+    *folders, name = path.split("/")
+    return (any(part in ("test", "tests", "__tests__") for part in folders)
+            or any(parent == "src" and part.endswith("Test") for parent, part in pairwise(folders))
+            or re.fullmatch(r"test_.*\.py|.*_test\.py|conftest\.py|.*Tests?\.(?:java|kt)", name) is not None)
+
+
+def lca_gold(row: dict) -> tuple[list[str], list[str]]:
+    """The gold files and the dropped test files of an LCA row.
+
+    LCA lists changed test files in changed_files. Gold keeps the changed files that the diff has in the
+    base tree (a renamed file by its old path), without test files. So LCA gold has the same meaning as
+    the non-test patch of the other datasets.
+    """
+    changed = set(_literal(row["changed_files"]))
+    files = list(dict.fromkeys(old for old, new in patch_files(row["diff"]) if old and (old in changed or new in changed)))
+    return [path for path in files if not _is_test(path)], [path for path in files if _is_test(path)]
+
+
 def lca(rows: list[dict]) -> list[Instance]:
     """Long Code Arena bug localization, one test file per language. The native id is owner__name-pull-issue.
 
-    Gold: the changed_files of the row that exist in the base tree (a renamed file by its old path).
-    LCA counts changed test files as gold, so this dataset keeps them.
+    Gold: ``lca_gold``, the changed non-test files of the base tree. An instance that changes only test
+    files has no gold, so ingest excludes it.
     """
     out = []
     for r in rows:
@@ -126,11 +152,9 @@ def lca(rows: list[dict]) -> list[Instance]:
         # holds epoch seconds / 1000. So 1970-01-01 00:23:39 is 1,419,000,000 s, 2014-12-19 (the pull
         # request is from 2014-12-29). A date can be up to 11.6 days early.
         seconds = (r["pull_create_at"] - datetime(1970, 1, 1)) // timedelta(microseconds=1)
-        changed = set(_literal(r["changed_files"]))
-        gold = [old for old, new in patch_files(r["diff"]) if old and (old in changed or new in changed)]
         out.append(_instance("lca", f"{owner}__{name}-{pull}-{issue}", f"{owner}/{name}", r["base_sha"],
                              LANGUAGES[r["_file"].split("/")[0]], "", datetime.fromtimestamp(seconds, UTC),
-                             f"{r['issue_title']}\n{r['issue_body'] or ''}".strip(), list(dict.fromkeys(gold))))
+                             f"{r['issue_title']}\n{r['issue_body'] or ''}".strip(), lca_gold(r)[0]))
     return out
 
 
@@ -293,6 +317,17 @@ def _download(url: str, path: Path) -> None:
     part.replace(path)
 
 
+def read(name: str, entry: dict, store: Path) -> list[dict]:
+    """The rows of a Hugging Face registry dataset, each with its file in ``_file``. A missing file is downloaded."""
+    folder, rows = store / f"{name}@{entry['revision']}", []
+    for file in entry["files"]:
+        path = folder / file
+        if not path.exists():
+            _download(f"https://huggingface.co/datasets/{entry['hf']}/resolve/{entry['revision']}/{file}", path)
+        rows += [{**row, "_file": file} for row in read_rows(path, _FIELDS[name])]
+    return rows
+
+
 def load(name: str, entry: dict, store: Path) -> list[Instance]:
     """The instances of one registry dataset. A missing Hugging Face file is downloaded to store first."""
     if name in PACKS:
@@ -301,13 +336,7 @@ def load(name: str, entry: dict, store: Path) -> list[Instance]:
             inst.base_commit = inst.base_commit or entry["commits"][inst.repo]
             inst.language = entry["languages"][inst.repo]
         return out
-    folder, rows = store / f"{name}@{entry['revision']}", []
-    for file in entry["files"]:
-        path = folder / file
-        if not path.exists():
-            _download(f"https://huggingface.co/datasets/{entry['hf']}/resolve/{entry['revision']}/{file}", path)
-        rows += [{**row, "_file": file} for row in read_rows(path, _FIELDS[name])]
-    return ADAPTERS[name](rows)
+    return ADAPTERS[name](read(name, entry, store))
 
 
 def _rank(seed: int, salt: str, iid: str) -> str:

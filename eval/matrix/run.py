@@ -259,14 +259,16 @@ def ingest(out: Path, config: Path, core_file: Path = CORE_IDS) -> None:
     for inst in instances:
         inst.split = "holdout" if assign_split(inst.id, run["holdout"]) == "eval" else "dev"
         inst.tags = [tag for tag, ids in tags.items() if inst.id in ids]
+    lca = cfg["datasets"].get("lca")
+    lca_tests = sum(len(datasets.lca_gold(row)[1]) for row in datasets.read("lca", lca, store)) if lca else None
     out.mkdir(parents=True, exist_ok=True)
     (out / "instances.jsonl").write_text("".join(json.dumps(asdict(inst)) + "\n" for inst in instances))
-    (out / "ingest.md").write_text(_ingest_report(config, cfg, store, found, instances))
+    (out / "ingest.md").write_text(_ingest_report(config, cfg, store, found, instances, lca_tests))
     print(f"{len(instances)} instances, {len(core)} in the core mix: wrote {out / 'instances.jsonl'} and ingest.md")
 
 
 def _ingest_report(config: Path, cfg: dict, store: Path, found: dict[str, list[Instance]],
-                   instances: list[Instance]) -> str:
+                   instances: list[Instance], lca_tests: int | None) -> str:
     kept: dict[str, list[Instance]] = defaultdict(list)
     for inst in instances:
         kept[inst.dataset].append(inst)
@@ -284,9 +286,11 @@ def _ingest_report(config: Path, cfg: dict, store: Path, found: dict[str, list[I
                      f"| {sum(i.split == 'holdout' for i in insts)} | {sum('core' in i.tags for i in insts)} | {langs} |")
     lines += ["", "## Exclusions", "",
               "An instance is excluded when no gold file is in its base tree, for example when its patch "
-              "only adds files.", ""]
+              "only adds files. An LCA instance is also excluded when it changes only test files.", ""]
     lines += [f"- {name}: {', '.join(sorted(i.id for i in insts if not i.gold))}"
               for name, insts in found.items() if any(not i.gold for i in insts)] or ["- None."]
+    if lca_tests is not None:
+        lines += ["", f"LCA gold leaves out {lca_tests} changed test files (the frozen rule `datasets._is_test`)."]
     lines += ["", "## Gold files that search does not parse", "",
               "The path rules of the product file discovery (`codebase_context.py`). Skipped: search never "
               "reads the file. Text only: the product has no parser for the extension. Search then sees the "
