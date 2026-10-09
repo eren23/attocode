@@ -27,6 +27,7 @@ METRICS = {"acc1": "Acc@1", "acc5": "Acc@5", "acc10": "Acc@10", "r5": "R@5", "mr
 MIN_REPOS = 10  # fewer source repositories: descriptive output only
 Z = NormalDist().inv_cdf(0.975) + NormalDist().inv_cdf(0.8)  # two-sided 5% test, 80% power
 EPS = 1e-9
+POOL_ORDER = 0.95  # a rerank cell that keeps the pool order on this share of its rows is a harness failure
 
 
 def row_metrics(files: list[str], gold: list[str],
@@ -54,6 +55,12 @@ def row_metrics(files: list[str], gold: list[str],
         "ceil24": float(relevant <= set(files[:24])),
         "ceil48": float(relevant <= set(files[:48])),
     }
+
+
+def _ceiling(page: list[str], gold: list[str]) -> float:
+    """The best Acc@5 of an order of the page: the order with the gold files first."""
+    relevant = set(gold)
+    return compute_acc_at_k(sorted(page, key=lambda path: path not in relevant), relevant, 5)
 
 
 def interval(groups: dict[str, list[float]], draws: int = 10_000,
@@ -140,6 +147,27 @@ def primary_metric(instances: list[Instance]) -> str:
     return "gndcg5" if any(inst.grades is not None for inst in instances) else "acc5"
 
 
+def check_reranks(rows: list[dict]) -> dict[str, float]:
+    """Refuse a rerank row that does not reorder the first page of its pool row, with the same pool
+    hash. Return the rerank cells that keep the pool order on at least POOL_ORDER of their rows,
+    with that share. The arm none keeps the pool order by design."""
+    pools = {(r["instance_id"], r["variant"], r["cell"]): r for r in rows}
+    same, total = Counter(), Counter()
+    for row in rows:
+        if "pool_cell" not in row:
+            continue
+        pool, page, files = pools.get((row["instance_id"], row["variant"], row["pool_cell"])), row["page"], row["files"]
+        if (pool is None or pool["pool_sha256"] != row["pool_sha256"] or files[page:] != pool["files"][page:]
+                or sorted(files[:page]) != sorted(pool["files"][:page])):
+            raise ValueError(f"{row['instance_id']}: the {row['cell']}@{row['variant']} row does not reorder the "
+                             f"first {page} files of its {row['pool_cell']} row with the same pool hash. "
+                             "Run the rerank stage again.")
+        if row["arm"] != "none":
+            total[row["cell"]] += 1
+            same[row["cell"]] += files == pool["files"]
+    return {cell: same[cell] / n for cell, n in total.items() if same[cell] >= POOL_ORDER * n}
+
+
 def score(instances: list[Instance], rows: list[dict], pairs: list[tuple[str, str]] = (), *,
           metrics: list[str] = (), partial: bool = False, draws: int = 10_000, seed: int = 0) -> dict:
     """Score the rows and compare each (cell, baseline) pair per dataset and query variant.
@@ -150,8 +178,9 @@ def score(instances: list[Instance], rows: list[dict], pairs: list[tuple[str, st
     comparison also gives the result without them.
 
     ``metrics`` replaces the primary metric of each dataset (gNDCG@5 for a graded dataset,
-    else Acc@5) in the comparisons.
+    else Acc@5) in the comparisons. A rerank row also needs its pool row (``check_reranks``).
     """
+    harness = check_reranks(rows)
     by_id = {inst.id: inst for inst in instances}
     per_dataset = defaultdict(list)
     for inst in instances:
@@ -175,13 +204,22 @@ def score(instances: list[Instance], rows: list[dict], pairs: list[tuple[str, st
     if missing and not partial:
         raise ValueError(". ".join(missing) + ". Pass --partial to score only the rows that exist.")
 
-    summary: dict = {"partial": partial, "missing": missing, "cells": [], "comparisons": []}
+    summary: dict = {"partial": partial, "missing": missing, "harness": harness, "cells": [], "comparisons": []}
     for (cell, variant, dataset), got in sorted(table.items()):
         primary = primary_metric(per_dataset[dataset])
         entry = {"cell": cell, "variant": variant, "dataset": dataset, "n": len(got), "primary": primary}
         for name in METRICS:
             values = [m[name] for _row, m in got.values() if m[name] is not None]
             entry[name] = statistics.fmean(values) if values else None
+        reranked = [row for row, _m in got.values() if "pool_cell" in row]
+        if reranked:
+            page = reranked[0]["page"]
+            costs = [r["cost_usd"] for r in reranked if r.get("cost_usd") is not None]
+            entry |= {"pool": reranked[0]["pool_cell"], "page": page,
+                      "ceiling": statistics.fmean(_ceiling(r["files"][:page], by_id[r["instance_id"]].gold)
+                                                  for r in reranked),
+                      "cost_1k": 1000 * statistics.fmean(costs) if costs else None,
+                      "cached": statistics.fmean(bool(r.get("cache_hit")) for r in reranked)}
         groups = defaultdict(list)
         for iid, (_row, m) in got.items():
             if m[primary] is not None:
@@ -229,11 +267,21 @@ def _native(iid: str) -> str:
     return iid.split("/", 1)[1]
 
 
+def _failed(c: dict) -> str:
+    return ", ".join(f"{k} {s}" for s, k in sorted(c["status"].items()) if s != "ok") or "0"
+
+
+def _latency(c: dict) -> str:
+    return "—" if c["p50_ms"] is None else f"{c['p50_ms']:.0f} / {c['p95_ms']:.0f}"
+
+
 def render(summary: dict, header: list[str]) -> str:
     """The markdown report of a ``score`` summary. ``header`` lines describe the inputs."""
     stamp = " (PARTIAL)" if summary["partial"] else ""
     lines = [f"# Matrix report{stamp}", "", *(f"- {line}" for line in header)]
     lines += [f"- Missing rows: {line}." for line in summary["missing"]]
+    lines += [f"- Harness failure: {cell} keeps the pool order on {share:.0%} of its rows."
+              for cell, share in sorted(summary["harness"].items())]
     cells, datasets = summary["cells"], sorted({c["dataset"] for c in summary["cells"]})
     primary = {c["dataset"]: c["primary"] for c in cells}
 
@@ -259,12 +307,31 @@ def render(summary: dict, header: list[str]) -> str:
                   + (" | Unjudged" if graded else "") + " | Failed | p50 / p95 ms |",
                   "|---|" + "---:|" * (len(names) + 3 + graded)]
         for c in group:
-            failed = ", ".join(f"{k} {s}" for s, k in sorted(c["status"].items()) if s != "ok") or "0"
-            latency = "—" if c["p50_ms"] is None else f"{c['p50_ms']:.0f} / {c['p95_ms']:.0f}"
             lines.append(f"| {c['cell']} | {c['n']} | " + " | ".join(_num(c[m]) for m in names)
-                         + (f" | {c['unjudged']}" if graded else "") + f" | {failed} | {latency} |")
+                         + (f" | {c['unjudged']}" if graded else "") + f" | {_failed(c)} | {_latency(c)} |")
 
     comparisons = summary["comparisons"]
+    reranked = [c for c in cells if "pool" in c]
+    if reranked:
+        against = {(c["cell"], c["baseline"], c["variant"], c["dataset"], c["metric"]): c for c in comparisons}
+        lines += ["", f"## Rerank cells{stamp}", "",
+                  "A rerank cell reorders the first files (the page) of its pool cell. Ceiling: the best Acc@5 "
+                  "of an order of the page. Efficiency: Acc@5 divided by the ceiling. Δ: the "
+                  "primary metric of the cell minus that of the pool, with the MDE of that comparison. Cost: the "
+                  "mean cost of the call that made each row, per 1,000 rows. Cached: the share of rows that the "
+                  "last run took from cache.db.", "",
+                  "| Cell | Dataset | n | Ceiling | Acc@5 | Efficiency | Δ vs pool | MDE | Failed | p50 / p95 ms "
+                  "| $ / 1k rows | Cached |",
+                  "|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|"]
+        for c in reranked:
+            pair = against.get((c["cell"], c["pool"], c["variant"], c["dataset"], c["primary"]))
+            efficiency = c["acc5"] / c["ceiling"] if c["acc5"] is not None and c["ceiling"] else None
+            delta = "—" if pair is None else f"{pair['delta']:+.4f}"
+            mde_text = ("—" if pair is None else "descriptive" if pair["repos"] < MIN_REPOS else _num(pair["mde"]))
+            cost = "—" if c["cost_1k"] is None else f"{c['cost_1k']:.2f}"
+            lines.append(f"| {c['cell']}@{c['variant']} | {c['dataset']} | {c['n']} | {c['ceiling']:.4f} "
+                         f"| {_num(c['acc5'])} | {_num(efficiency)} | {delta} | {mde_text} | {_failed(c)} "
+                         f"| {_latency(c)} | {cost} | {c['cached']:.0%} |")
     if comparisons:
         lines += ["", f"## Comparisons{stamp}", "",
                   "Δ is the cell minus the baseline on the same instances. The range of Δ is the "

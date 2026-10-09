@@ -225,3 +225,30 @@ To change the ranking on purpose:
 5. Commit the file in the same pull request.
 
 CI writes the committed baseline on Linux. To run the gate on your computer, use `python -m eval.matrix.run ci`. Add `--write-baseline` to write a baseline from your code. On macOS, the `kw` cell of one query (`broad_dev/gh-cli::api authentication`) puts two files with the same score in the opposite order. A local run lists that query as changed, but the gate passes.
+
+## Matrix rerank stage
+
+`python -m eval.matrix.run run OUT --stage rerank` reorders the first files (the page) of the pool rows in `OUT/results.jsonl`. The pool rows come from the rows stage or from `import-legacy`. The `rerank` entries of the config (default `eval/matrix/configs/full.yaml`) select the work. Each entry names an `arm` and gives `pools`, `pages`, `on` (`core`, `noise50`, a dataset name or `all`), `variants` and `query_chars` (0 or 512). The cell name is `POOL>ARM.PAGE`, with `.q512` for a cut query and `~rN` for repeat N. `configs/legacy.yaml` runs the trials of earlier result docs again.
+
+The arms are in `eval/matrix/rerank.py`:
+
+- `none`: the pool order, as a control.
+- Local cross-encoders at pinned Hugging Face revisions: `qwen3-rr-0.6b`, `bge-rr-v2-m3`, `jina-rr-v2`, `gte-modernbert-rr` and `mxbai-rr-base-v2`. The stage loads one model at a time. `jina-rr-v2` runs model code from Hugging Face, so it needs `--allow-remote-code`. `mxbai-rr-base-v2` needs sentence-transformers 5.4.
+- `systemone-http`: the product SystemOne adapter, with the endpoint of the entry.
+- `jev-choice` and `haiku45-listwise`: paid arms through OpenRouter. The key is `OPENROUTER_API_KEY` from the environment or `~/.jev/env`.
+
+The excerpts come from `focused_evidence.file_excerpt` over the snapshot in the matrix cache. The stage does not clone or check out a repository. `cache.db` in the matrix cache keeps each answer. A listwise key holds the model, its revision, the prompt version, the query sent, the hash of the ordered excerpts and the repeat index. A cross-encoder keeps one score for each query and excerpt. A request in the cache costs nothing, and `import-legacy` loads the Jev answers of old trials.
+
+A remote arm sends excerpts out of this machine. Jev, Haiku and a SystemOne endpoint that is not a loopback IP address are remote. The stage refuses a remote arm on a dataset without `public: true` in the registry.
+
+The cap of paid calls is `--budget-usd`, else `run.budget_usd` of the config, else 0. It applies to the spend of the run folder in the ledger table of `cache.db`. Before the calls start, the stage estimates each paid arm. Jev costs about $0.0006 a call. Haiku gets its estimate from the cost of earlier calls, or from 5 probe calls. The stage refuses to start when the spend and the estimates pass the cap.
+
+Each call reserves its estimate, and an arm stops when the spend and the reservations reach the cap. The ledger records the cost that OpenRouter reports for each call. Every 200 calls and at the end, the stage compares the ledger with the OpenRouter usage counter. The counter can be late by a minute. Other use of the same key also moves it.
+
+A failure is a status, never a silent pool order. A failed request is `request_failed`. An answer that is not a valid order is `invalid_output`. An example is a Haiku answer that is not a JSON list of all candidate numbers. The row keeps the pool order with that status. To send the failed requests again, add `--retry-failed`.
+
+`repeats` in the config, for example `{arms: [jev-choice], n: 3, on: noise50}`, gives each repeat its own cache key.
+
+The report refuses a rerank row when its pool hash or its page does not match its pool row. It marks a cell that keeps the pool order on 95% or more of its rows as a harness failure. The rerank table gives the ceiling (the best Acc@5 of an order of the page) and Acc@5. It also gives the efficiency (Acc@5 divided by the ceiling) and Δ against the pool cell with its MDE. The other columns are failures, latency, the cost of 1,000 rows and the cache share. The header gives the spend of the run folder.
+
+On 2026-10-09, a replay of the Loc-Bench 560 trials took all Jev answers from the cache. Jev over 48 files gave the published Acc@5 of 0.7518, at a cost of $0. A paid check on 10 Loc-Bench rows cost $0.2245 in the ledger, and the OpenRouter usage counter moved by $0.2263.

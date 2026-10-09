@@ -132,7 +132,7 @@ queries.
 
 ## Reproduce
 
-`$LOCBENCH_DIR/all.json` comes from `run.py fetch`
+`$LOCBENCH_DIR/all.json` is the Loc-Bench V1 test split
 ([first run](2026-10-08-locbench-560.md#reproduce)). The stages keep their
 results in `~/Documents/AI/attocode-evals/matrix/`.
 

@@ -1,0 +1,15 @@
+# Rerank entries that run the trials of earlier result docs again on imported pools. Run
+# `run.py import-legacy` first: it also loads the old Jev answers into cache.db, so the Jev cells
+# replay at no cost. A cache miss is a paid call, so the cap is 0 unless --budget-usd is given.
+rerank:
+  # 2026-10-08-locbench-560.md: Jev over 24 files for each query and over 48 for the full issue,
+  # also with the query cut to 512 characters.
+  - {arm: jev-choice, on: locbench, pools: [lexical], pages: [24]}
+  - {arm: jev-choice, on: locbench, pools: [lexical], pages: [48], variants: [full]}
+  - {arm: jev-choice, on: locbench, pools: [lexical], pages: [24, 48], variants: [full], query_chars: [512]}
+  # 2026-10-08-blind-graded-rerank.md: Jev over 24 files on the blind pack and on the Loc-Bench
+  # title pack, and a SystemOne server on loopback over 12.
+  - {arm: jev-choice, on: graded_blind, pools: [lexical], pages: [24]}
+  - {arm: jev-choice, on: locbench_title, pools: [lexical], pages: [24]}
+  - {arm: systemone-http, on: graded_blind, pools: [lexical], pages: [12],
+     endpoint: "http://127.0.0.1:8765/v1/systemone", timeout_ms: 30000}

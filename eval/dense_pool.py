@@ -6,8 +6,8 @@ revision, and writes:
 
 - ``<out>-dense.json``: a trial-shaped result whose ranking is dense-only;
 - ``<out>-fused.json``: a pool in the same format whose ``prior`` order is the
-  reciprocal-rank fusion of lexical and dense file orders, so
-  ``eval.model_rerank_trial`` can rerank it unchanged.
+  reciprocal-rank fusion of lexical and dense file orders. ``eval.matrix.run
+  import-legacy --pack`` reads it as a pool cell, and the rerank stage can rerank it.
 
 Nothing is written into the repositories. Embeddings are cached per revision.
 

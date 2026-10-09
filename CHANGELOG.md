@@ -131,6 +131,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   0.532 on the full issue and 0.498 on the title, against 0.529 and 0.495.
   The default `auto` mode of `semantic_search` also expands the query and
   gives 0.509 and 0.489. A new results doc gives all first-stage arms.
+- `run.py run --stage rerank` reorders the pool rows of the matrix with the
+  rerank entries of a config. The arms are `none`, five local
+  cross-encoders, `systemone-http`, `jev-choice` and `haiku45-listwise`
+  (Haiku 4.5 through OpenRouter). `cache.db` in the matrix cache keeps each
+  answer, and its ledger records each paid call. The stage refuses to start
+  over the cap, and it refuses a remote arm on a dataset that is not public.
+  A failed request or an invalid answer is a status, not the pool order. The
+  report adds a rerank table with the ceiling, efficiency, MDE, cost and
+  cache share.
+- The rerank stage replaces `eval/model_rerank_trial.py` and the rest of
+  `eval/locbench560/`. `import-legacy` loads the old Jev answers into
+  `cache.db`. A replay of the Loc-Bench 560 trials gave Jev over 48 files the
+  published Acc@5 of 0.7518, at a cost of $0.
 
 ## [0.2.29] - 2026-10-09
 

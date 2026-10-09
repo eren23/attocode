@@ -89,3 +89,16 @@ datasets:
       spdlog: 0f7562a0f9273cfc71fddc6ae52ebff7a490fa04
       starship: 6d0a1263fcc74381791805cee57fc466f6e6359c
     languages: {faker: ruby, prisma: typescript, protobuf: cpp, spdlog: cpp, starship: rust}
+# Rerank cells (`run.py run OUT --stage rerank`). The paid arms stop at the cap in this order.
+# An entry reorders the first `pages` files of each pool cell. `on` is a tag (core, noise50), a
+# dataset or all. `variants` limits the query variants. `query_chars: [512]` cuts the query that
+# the arm gets, as the product does. The excerpts always use the whole query. Haiku over 48 files
+# runs after these when the cap leaves room. jina-rr-v2 needs --allow-remote-code, and
+# mxbai-rr-base-v2 needs sentence-transformers 5.4.
+rerank:
+  - {arm: jev-choice, pools: [product], pages: [24, 48], on: core, variants: [full]}
+  - {arm: haiku45-listwise, pools: [product], pages: [24], on: core, variants: [full]}
+  - {arm: qwen3-rr-0.6b, pools: [product], pages: [24, 48], on: core}
+  - {arm: bge-rr-v2-m3, pools: [product], pages: [24, 48], on: core}
+  - {arm: gte-modernbert-rr, pools: [product], pages: [24, 48], on: core}
+repeats: {arms: [jev-choice, haiku45-listwise], n: 3, on: noise50}  # repeats 1 and 2 on noise50

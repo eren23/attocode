@@ -7,8 +7,9 @@ packs. The local models tested here did not generalize as well on this CPU.
 
 ## What was compared
 
-The [trial harness](../../../../eval/model_rerank_trial.py) reuses the frozen
-candidate orders and source-bound judgments from `eval.ranking_pair` (removed
+The trial harness was `eval/model_rerank_trial.py`. Commit `1386961` is the
+last commit with it, and the rerank stage of the eval matrix replaces it. The
+harness reuses the frozen candidate orders and source-bound judgments from `eval.ranking_pair` (removed
 after commit `5b67651`). It checks
 each repository's HEAD and tracked-file cleanliness, reads source without
 reindexing or writing to the benchmark repositories, and gives every arm the

@@ -239,53 +239,74 @@ that updates in the background before it can be a default.
 ## Reproduce
 
 The first command needs `eval/ranking_pair.py`. Run it in a checkout of commit
-`5b67651`, or start from the frozen `pool.json`. The other commands run on
-the current code.
+`5b67651`, or start from the frozen `pool.json`. The trials of this run came
+from `eval/model_rerank_trial.py`, and commit `1386961` is the last commit
+with that script. Now the rerank stage of the eval matrix runs them. The other
+commands run on the current code.
 
 ```sh
 PYTHONPATH=packages/code-intel/src .venv/bin/python -m eval.ranking_pair \
   --repos okhttp sqlite ggplot2 postgrest rails crystal \
   --case-pack packages/code-intel/evals/graded_blind_pack.yaml \
   --top-k 400 --pool-files 48 --treatment default --json pool.json
-PYTHONPATH=packages/code-intel/src .venv/bin/python -m eval.model_rerank_trial \
-  --pool pool.json --model jev-choice --allow-remote --max-candidates 24 --output jev24.json
 .venv/bin/python -m eval.dense_pool --pool pool.json --out coderank --cache embcache
 .venv/bin/python -m eval.matrix.run import-legacy scores --pack graded_blind=.
-.venv/bin/python -m eval.matrix.run report scores --cells lexical,jev24 --baseline lexical \
-  --unjudged unjudged.yaml
+.venv/bin/python -m eval.matrix.run run scores --stage snapshot
+.venv/bin/python -m eval.matrix.run run scores --stage rerank --config eval/matrix/configs/legacy.yaml \
+  --dataset graded_blind --arms jev-choice --budget-usd 0.10
+.venv/bin/python -m eval.matrix.run report scores --cells 'lexical,lexical>jev-choice.24' \
+  --baseline lexical --unjudged unjudged.yaml
 ```
 
 The import reads every pool and trial output in the folder. `pool.json` gives
-the cell `lexical`, and each other file gives a cell with its file name. A
-cell that covers only some queries, such as the four-repository dense arm,
-needs an `--ids` file with the ids of those queries.
+the cell `lexical`, and each other file gives a cell with its file name, such
+as `jev24`. A cell that covers only some queries, such as the four-repository
+dense arm, needs an `--ids` file with the ids of those queries.
+
+The import also loads the Jev answers of the trials into `cache.db` in the
+matrix cache. The rerank stage makes the cell `lexical>jev-choice.24`, and a
+request that is in the cache costs nothing. The stage reads the excerpts from
+the snapshot, which is the HEAD of each repository.
+
+On 2026-10-09, 35 of the 36 requests came from the cache. The trial scored
+the excerpt lines with all query terms. The current excerpt drops a negated
+term, as the product does.
+Thus `random jitter to avoid overplotting` got a new excerpt and one new call
+($0.0006). The cell gave the same gNDCG@5 as `jev24` (0.701), with no wins
+and no losses.
 
 To make the lexical pool again with the current code, run the matrix stages
-after the import. The snapshot stage reads the repositories at their HEAD:
+after the import:
 
 ```sh
-.venv/bin/python -m eval.matrix.run run scores --stage snapshot --arms product_noimp
 .venv/bin/python -m eval.matrix.run run scores --stage retrieve --arms product_noimp
 .venv/bin/python -m eval.matrix.run run scores --stage rows --arms product_noimp
 .venv/bin/python -m eval.matrix.run report scores --cells lexical,product_noimp --baseline lexical
 ```
 
-For a local model, start its server on loopback and point the trial at it.
-Do not pass `--model-id`:
+For a local model, start its server on loopback. The `systemone-http` entry
+of `legacy.yaml` sends 12 files to port 8765, with a 30-second limit and no
+model ID:
 
 ```sh
 python clef_mlx.py serve --port 8765   # in the clef-flash-4bit snapshot, mlx-vlm>=0.7.4,<0.8
-PYTHONPATH=packages/code-intel/src .venv/bin/python -m eval.model_rerank_trial \
-  --pool pool.json --model systemone-http --endpoint http://127.0.0.1:8765/v1/systemone \
-  --timeout-ms 30000 --max-candidates 12 --output clef-flash.json
+.venv/bin/python -m eval.matrix.run run scores --stage rerank --config eval/matrix/configs/legacy.yaml \
+  --dataset graded_blind --arms systemone-http
 ```
 
-Send one warmup query first. A first call that times out holds the
-adapter's single request slot, and the next queries fall back as `busy`.
+The stage sends one query at a time. When a call times out, the stage waits
+for the call to end before it sends the next query. A first call can time out
+while the server loads the model. To send the failed queries again, run the
+stage again with `--retry-failed`.
 
 For Loc-Bench, pass each instance as `name=/path/to/worktree` to
-`--repos`, and import the folder with `--pack locbench_title=DIR`. The
-title-pack table compares MRR@5, so add `--metric mrr5` to the report.
+`--repos`, and import the folder with `--pack locbench_title=DIR`. Then run
+the rerank stage with `--dataset locbench_title`. The title-pack table
+compares MRR@5, so add `--metric mrr5` to the report. On 2026-10-09, all 42
+requests came from the cache. The Loc-Bench 560 run sent 27 of the same
+requests again, and the cache keeps the answer that it loaded first. With the
+560 answers loaded first, MRR@5 was 0.729, against 0.735 for `jev24`.
+
 Raw outputs are outside `/private/tmp`, under
 `~/Documents/AI/attocode-evals/2026-10-08-blind/` and
 `~/Documents/AI/attocode-evals/locbench/`.
