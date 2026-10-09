@@ -1,12 +1,13 @@
-"""Loc-Bench V1 (czlll/Loc-Bench_V1 @ c44cf3b7, all 560) through attocode search and Jev.
+"""Loc-Bench V1 (czlll/Loc-Bench_V1 @ c44cf3b7, all 560): Jev on the frozen lexical pools.
 
 Work files (clones, pools, trials) go to $LOCBENCH_DIR (default ~/locbench560).
-One repository clone and one snapshot on disk at a time. Resumable: an instance
-with a done marker is skipped. Jev sends source excerpts of these public
-repositories to OpenRouter. Commands:
+pools/ holds the frozen lexical pools. The eval matrix retrieve stage makes the same
+file order (cell product_noimp, python -m eval.matrix.run). The matrix rerank stage
+will replace this driver. One repository clone and one snapshot on disk at a time.
+Resumable: an instance with a done marker is skipped. Jev sends source excerpts of
+these public repositories to OpenRouter. Commands:
   run.py fetch              write all.json (needs `uv run --with datasets`)
-  run.py prepare            write pack.yaml (full issue + title per instance)
-  run.py shard I N          process repositories I, I+N, I+2N, ... (sorted by name)
+  run.py shard I N          Jev on the pools of repositories I, I+N, I+2N, ... (sorted by name)
   run.py only ID [ID ...]   process the given instances
   run.py credits            print OpenRouter total usage (USD), for the cost delta
   run.py q512 I N           shard I of N: Jev with the query cut to 512 characters (long issues only)
@@ -21,15 +22,11 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(os.environ.get("LOCBENCH_DIR", Path.home() / "locbench560")).resolve()
 REPO = Path(__file__).resolve().parents[2]
 PY = sys.executable
 DATASET, REVISION = "czlll/Loc-Bench_V1", "c44cf3b74e07ca642cec841b471a9939907c12a7"
 ENV = {**os.environ, "PYTHONPATH": "packages/code-intel/src"}
-sys.path.insert(0, str(REPO))
-from eval.matrix.datasets import title  # noqa: E402  (same rule as the 42-instance title pack)
 
 
 def rows() -> list[dict]:
@@ -42,23 +39,6 @@ def fetch() -> None:
     data = load_dataset(DATASET, split="test", revision=REVISION)
     (ROOT / "all.json").write_text(json.dumps(list(data)))
     print(len(data), "instances")
-
-
-def prepare() -> None:
-    pack = {}
-    for r in rows():
-        gold = sorted({f.split(":")[0] for f in r["edit_functions"]})
-        base = {"relevant_files": gold, "base_commit": r["base_commit"], "source_repo": r["repo"],
-                "category": r["category"]}
-        cases = [{"query": r["problem_statement"], "intent": "full", **base}]
-        if title(r["problem_statement"]) != r["problem_statement"].strip():
-            cases.append({"query": title(r["problem_statement"]), "intent": "title", **base})
-        pack[r["instance_id"]] = cases
-    (ROOT / "pack.yaml").write_text(
-        "# Loc-Bench V1 @ c44cf3b7, all 560. Query: problem_statement verbatim (full) and its first line (title).\n"
-        "# Gold: unique edit_functions files, as in LocAgent eval_metric.cal_metrics_w_dataset.\n"
-        + yaml.safe_dump({"repos": pack}, sort_keys=False, allow_unicode=True, width=10**6))
-    print(len(pack), "instances")
 
 
 def run(cmd: list[str], log: Path, timeout: float, cwd: Path = REPO) -> bool:
@@ -108,19 +88,15 @@ def jev(pool: Path, r: dict, prefix: str, log: Path) -> bool:
 
 def instance(clone: Path, r: dict) -> None:
     iid, log = r["instance_id"], ROOT / "logs" / f"{r['instance_id']}.log"
+    pool = ROOT / "pools" / f"{iid}.json"
     if (ROOT / "done" / f"{iid}.json").exists():
         return
+    if not pool.exists():
+        return miss(iid, "no frozen pool")
     started, git = time.time(), ["git", "-C", str(clone)]
-    wt = checkout(clone, r, log)
+    wt = checkout(clone, r, log)  # the trial reads its excerpts from this checkout
     if wt is None:
         return miss(iid, "base_commit not available")
-    pool = ROOT / "pools" / f"{iid}.json"
-    ok = run([PY, "-m", "eval.ranking_pair", "--repos", f"{iid}={wt}", "--case-pack", str(ROOT / "pack.yaml"),
-              "--top-k", "400", "--pool-files", "48", "--treatment", "default", "--timeout", "1200",
-              "--json", str(pool)], log, 3600)
-    if not ok or not pool.exists():
-        run([*git, "worktree", "remove", "--force", str(wt)], log, 600)
-        return miss(iid, "pool failed")
     ok = jev(pool, r, f"{iid}-jev", log)
     run([*git, "worktree", "remove", "--force", str(wt)], log, 600)
     if not ok:  # no done marker: the next run retries this instance
@@ -209,8 +185,6 @@ if __name__ == "__main__":
         (ROOT / name).mkdir(parents=True, exist_ok=True)
     if command == "fetch":
         fetch()
-    elif command == "prepare":
-        prepare()
     elif command == "credits":
         usage()
     elif command == "only":
