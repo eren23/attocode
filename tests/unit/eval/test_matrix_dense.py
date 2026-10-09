@@ -35,7 +35,7 @@ def test_windows_follow_the_dense_pool_rule(tmp_path):
     assert dense.windows("x.bin", b"\0\1") == [] and dense.windows("empty.py", b"") == ["File: empty.py\n"]
     assert len(dense.windows("long.py", b"x" * 100 + b"\n")[0]) == len("File: long.py\n") + 100
     assert len(dense.windows("wide.py", (b"x" * 100 + b"\n") * 40)[0]) == dense.MAX_CHARS
-    assert len(dense.windows("big.py", b"a\n" * 2000)) == dense.MAX_WINDOWS
+    assert len(dense.windows("big.py", b"a\n" * 20_000)) == dense.MAX_WINDOWS == 400  # the first 16,000 lines
     (tmp_path / "f").write_bytes(text)
     assert dense.git_oid(text) == _git(tmp_path, "hash-object", "f")
 
@@ -78,8 +78,10 @@ def test_a_file_scores_its_best_window(tmp_path):
     store = dense.Store(tmp_path / "emb")
     keys = [dense.file_key(p, dense.git_oid((tmp_path / p).read_bytes())) for p in ("a.py", "b.py")]
     store.add(keys, [2, 1], np.array([[0, 1, 0], [1, 0, 0], [0.8, 0.6, 0]], np.float32))  # a.py has two windows
-    names, starts, vectors = dense.vectors(store, tmp_path, ["a.py", "b.py", "img.bin"])
-    assert names == ["a.py", "b.py"] and starts.tolist() == [0, 2]  # a binary file has no windows
+    (tmp_path / "notes.md").write_text("no parser, no vectors\n")
+    names, starts, vectors = dense.vectors(store, tmp_path, ["a.py", "b.py", "img.bin", "notes.md"])
+    assert names == ["a.py", "b.py"] and starts.tolist() == [0, 2]  # the arm ranks parsed files only
+    assert dense.ranked("src/a.kt") and not dense.ranked("README.md") and not dense.ranked("node_modules/x/a.js")
     assert dense.rank(names, starts, vectors, np.array([1, 0, 0]), 10) == ["a.py", "b.py"]  # 1.0 (2nd window), 0.8
     assert dense.rank(names, starts, vectors, np.array([0.6, 0.8, 0]), 10) == ["b.py", "a.py"]  # 0.96, 0.8
     assert dense.rank(names, starts, vectors, np.array([0, 0, 1]), 1) == ["a.py"]  # a tie goes by path
@@ -135,7 +137,7 @@ def test_dense_cells_through_the_stages(tmp_path, monkeypatch, capsys):
 
     matrix.write_rows(out, cache, [inst], cells)
     got = {(r["variant"], r["cell"]): r for r in map(json.loads, (out / "results.jsonl").read_text().splitlines())}
-    assert got["full", "dense"]["files"] == ["pkg/config.py", "README.md", "pkg/parse.py"]  # no png
-    # README.md: 1/61 + 1/62, pkg/parse.py: 1/62 + 1/63, pkg/config.py: 1/61 (dense only)
-    assert got["full", "rrf(product+dense)"]["files"] == ["README.md", "pkg/parse.py", "pkg/config.py"]
+    assert got["full", "dense"]["files"] == ["pkg/config.py", "pkg/parse.py"]  # no README.md, no png
+    # pkg/parse.py: 1/62 + 1/62, README.md: 1/61 (product only), pkg/config.py: 1/61 (dense only); a tie by path
+    assert got["full", "rrf(product+dense)"]["files"] == ["pkg/parse.py", "README.md", "pkg/config.py"]
     assert {r["status"] for r in got.values()} == {"ok"} and len(got) == 4

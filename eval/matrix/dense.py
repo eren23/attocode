@@ -1,5 +1,6 @@
 """Dense first-stage arm of the eval matrix: CodeRankEmbed over the 40-line windows of each file.
 
+The arm embeds and ranks the source files of product search (``ranked``): no docs and no data.
 A file scores the best cosine of its windows with the query. A GPU pod embeds the files and
 the queries once. The vectors go into the matrix cache under ``emb/<TAG>/``, keyed by
 (path, blob oid) and by query, so the retrieve stage scores on any computer without a model.
@@ -7,9 +8,10 @@ the queries once. The vectors go into the matrix cache under ``emb/<TAG>/``, key
   python -m eval.matrix.dense plan OUT --job JOB.json [--ids FILE] [--dataset NAME]
       Write the snapshots (with a GitHub name) and the queries of OUT/instances.jsonl.
       Only datasets with `public: true` in configs/full.yaml can go to the pod.
-  python -m eval.matrix.dense job JOB.json --work DIR [--workers N] [--limit N]
+  python -m eval.matrix.dense job JOB.json --work DIR [--workers N] [--limit N] [--sdpa]
       On the pod: snapshot the repositories with the eval.matrix.run code, then embed. --limit
-      stops after about N windows, to measure the throughput.
+      stops after about N windows, to measure the throughput. --sdpa uses the fused attention
+      of PyTorch in the model (check the parity with `parity` first).
   python -m eval.matrix.dense import DIR [--cache DIR]
       Compare the trees of the pod with the local trees, then add the vectors to the cache (a hard
       link on the same disk). An import can run again after each copy of new parts from the pod.
@@ -33,14 +35,24 @@ from types import SimpleNamespace
 import numpy as np
 import yaml
 
-from eval.matrix import run
+from eval.matrix import datasets, run
 
 MODEL = "nomic-ai/CodeRankEmbed"
 MODEL_REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"  # pins the remote modeling code too
 QUERY_PREFIX = "Represent this query for searching relevant code: "  # from the model card
-WINDOW, MAX_WINDOWS, MAX_CHARS, MAX_SEQ = 40, 40, 1500, 512  # the rule of eval.dense_pool
-TAG = f"coderankembed-{MODEL_REVISION[:12]}-w{WINDOW}x{MAX_WINDOWS}-c{MAX_CHARS}-s{MAX_SEQ}-v1"
+WINDOW, MAX_WINDOWS, MAX_CHARS = 40, 400, 1500  # 400 windows: the first 16,000 lines of a file
+QUERY_SEQ, WINDOW_SEQ = 2048, 512  # token limits; the model trained on 2,048 positions
+TAG = f"coderankembed-{MODEL_REVISION[:12]}-w{WINDOW}x{MAX_WINDOWS}-c{MAX_CHARS}-q{QUERY_SEQ}-s{WINDOW_SEQ}-v2"
 PART_WINDOWS = 200_000  # windows per stored part: about 300 MB of fp16 vectors
+
+
+def ranked(path: str) -> bool:
+    """A file that the arm embeds and ranks: a source file by the rule of the product's whole-file BM25.
+
+    Product search parses the file, and it is not prose or data (markdown, YAML, JSON and so on).
+    """
+    from attocode_intel._internal.integrations.context.semantic_search import _NON_CODE_EXTS
+    return datasets.search_coverage(path) == "parsed" and os.path.splitext(path)[1].lower() not in _NON_CODE_EXTS
 
 
 def windows(path: str, data: bytes) -> list[str]:
@@ -125,7 +137,7 @@ class MissingVectorsError(LookupError):
 def vectors(vecs: Store, root: Path, paths: list[str]) -> tuple[list[str], np.ndarray, np.ndarray]:
     """The files with windows, the first row of each file, and the window vectors (float32)."""
     names, starts, rows, at = [], [], [], 0
-    for path in paths:
+    for path in filter(ranked, paths):
         data = (root / path).read_bytes()
         found = vecs.get(file_key(path, git_oid(data)))
         if found is None:
@@ -190,7 +202,45 @@ def digest(tree: dict) -> str:
     return hashlib.sha256("\n".join(rows).encode()).hexdigest()
 
 
-def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: int) -> None:
+def _sdpa_forward(self, hidden_states, attention_mask=None, *_args, **_kwargs):
+    """NomicBertAttention.forward of the model code, with the fused attention of PyTorch.
+
+    The same steps as the model code for an encoder in eval mode: no cache and no dropout.
+    """
+    import torch.nn.functional as F  # noqa: N812
+    from einops import rearrange
+
+    qkv = rearrange(self.Wqkv(hidden_states), "... (three h d) -> ... three h d", three=3, d=self.head_dim)
+    if self.rotary_emb_dim > 0:
+        if self.rotary_head_dim:
+            qkv = rearrange(qkv, "b s three h d -> b h three s d")
+        qkv = self.rotary_emb(qkv, seqlen_offset=0)
+        if self.rotary_head_dim:
+            qkv = rearrange(qkv, "b h three s d -> b s three h d")
+    query, key, value = (qkv[:, :, part].permute(0, 2, 1, 3) for part in range(3))
+    out = F.scaled_dot_product_attention(query, key, value, attn_mask=attention_mask)  # scale 1/sqrt(head_dim)
+    return self.out_proj(rearrange(out.permute(0, 2, 1, 3), "... h d -> ... (h d)"))
+
+
+def encode(model, texts: list[str], *, seq: int, batch: int) -> np.ndarray:
+    model.max_seq_length = seq
+    return model.encode(texts, batch_size=batch, normalize_embeddings=True, convert_to_numpy=True)
+
+
+def use_sdpa(model, samples: list[tuple[list[str], int]], batch: int) -> float:
+    """Switch the model to fused attention when the vectors stay the same: lowest cosine 0.9999 or more."""
+    before = [encode(model, texts, seq=seq, batch=batch) for texts, seq in samples]
+    attention = next(type(module) for module in model.modules() if type(module).__name__ == "NomicBertAttention")
+    original, attention.forward = attention.forward, _sdpa_forward
+    after = [encode(model, texts, seq=seq, batch=batch) for texts, seq in samples]
+    low = min(float(np.min(np.sum(a.astype(np.float32) * b.astype(np.float32), axis=1)))
+              for a, b in zip(before, after, strict=True))
+    if low < 0.9999:
+        attention.forward = original
+    return low
+
+
+def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: int, sdpa: bool = False) -> None:
     spec = json.loads(spec_path.read_text())
     if spec["tag"] != TAG:
         raise SystemExit(f"the job is for {spec['tag']}, this code embeds {TAG}")
@@ -208,7 +258,7 @@ def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: 
         manifest.append({**item, "tree": tree.get("tree"), "error": tree.get("error"),
                          "stored": None if "error" in tree else digest(tree)})
         for path, mode, oid, size in tree.get("entries", []):
-            if mode != "120000" and run._stored([path, mode, oid, size]):
+            if mode != "120000" and run._stored([path, mode, oid, size]) and ranked(path):
                 files.setdefault(file_key(path, oid), (path, oid))
     run._write(work / "manifest.json", json.dumps({"tag": TAG, "snapshots": manifest}, indent=1).encode())
     print(f"snapshots: {len(manifest)} ({sum(bool(m['error']) for m in manifest)} failed), {len(files)} files, "
@@ -217,15 +267,20 @@ def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: 
     from sentence_transformers import SentenceTransformer
     model = SentenceTransformer(MODEL, revision=MODEL_REVISION, trust_remote_code=True, device="cuda")
     model.half()
-    model.max_seq_length = MAX_SEQ
     vecs = Store(work / "emb" / TAG)
     queries = [query for query in spec["queries"] if vecs.get(query_key(query)) is None]
-    if queries:
-        found = model.encode([QUERY_PREFIX + query for query in queries], batch_size=batch,
-                             normalize_embeddings=True, convert_to_numpy=True)
-        vecs.add([query_key(query) for query in queries], [1] * len(queries), found)
+    prefixed = [QUERY_PREFIX + query for query in queries]
     # In the order of the job, so that the first snapshots of a job that stops early are complete
     todo = [(key, path, oid) for key, (path, oid) in files.items() if vecs.get(key) is None]
+    if sdpa:
+        sample = [text for _key, path, oid in todo[:200]
+                  for text in windows(path, zlib.decompress(run._blob_file(matrix, oid).read_bytes()))][:512]
+        low = use_sdpa(model, [(sample, WINDOW_SEQ), (prefixed[:32], QUERY_SEQ)], batch=max(batch // 8, 1))
+        print(f"sdpa: lowest cosine {low:.6f} on {len(sample)} windows and {len(prefixed[:32])} queries, "
+              f"{'used' if low >= 0.9999 else 'not used'}", flush=True)
+    if queries:  # a query is up to 4 times as long as a window, so the batch is smaller
+        found = encode(model, prefixed, seq=QUERY_SEQ, batch=max(batch // 8, 1))
+        vecs.add([query_key(query) for query in queries], [1] * len(queries), found)
     total, embedded, started = len(todo), 0, time.time()
     keys, counts, texts = [], [], []
     for number, (key, path, oid) in enumerate(todo, 1):
@@ -235,7 +290,7 @@ def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: 
             counts.append(len(found))
             texts += found
         if texts and (len(texts) >= PART_WINDOWS or number == total or (limit and len(texts) >= limit)):
-            out = model.encode(texts, batch_size=batch, normalize_embeddings=True, convert_to_numpy=True)
+            out = encode(model, texts, seq=WINDOW_SEQ, batch=batch)
             part = vecs.add(keys, counts, out)
             embedded += len(texts)
             rate = embedded / (time.time() - started)
@@ -291,6 +346,7 @@ def main() -> None:
     working.add_argument("--workers", type=int, default=16)
     working.add_argument("--limit", type=int, help="stop after about this many windows")
     working.add_argument("--batch", type=int, default=128)
+    working.add_argument("--sdpa", action="store_true", help="fused attention, when a sample keeps the vectors")
     importing = commands.add_parser("import", help="check the pod trees and add the vectors to the cache")
     importing.add_argument("work", type=Path)
     importing.add_argument("--cache", type=Path, default=run.CACHE)
@@ -298,7 +354,7 @@ def main() -> None:
     if args.command == "plan":
         plan(args.out, args.job, args.ids, args.dataset)
     elif args.command == "job":
-        job(args.spec, args.work, workers=args.workers, limit=args.limit, batch=args.batch)
+        job(args.spec, args.work, workers=args.workers, limit=args.limit, batch=args.batch, sdpa=args.sdpa)
     else:
         import_(args.work, args.cache)
 
