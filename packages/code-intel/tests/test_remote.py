@@ -229,9 +229,18 @@ async def test_empty_key_scopes_and_invitation_are_not_access(team):
 
 
 async def test_remote_catalog_reports_only_supported_operations(team):
+    from attocode_intel.remote import remote_profile
+
     names = {tool.name for tool in team.gateway.catalog()}
     assert {"record_learning", "security_scan", "snapshot_list", "pin_resolve"} <= names
     assert not {"snapshot_restore", "notify_file_changed", "clear_all"} & names
+    token = remote_profile.set("daily")
+    try:
+        daily = {tool.name: tool for tool in team.gateway.catalog(mcp=True)}
+    finally:
+        remote_profile.reset(token)
+    assert {"recall", "record_learning", "update_learning"} <= set(daily)  # team knowledge stays
+    assert "revision" in daily["semantic_search"].inputSchema["properties"]
 
 
 async def test_compact_remote_inspection_and_cursor_authorization(team):

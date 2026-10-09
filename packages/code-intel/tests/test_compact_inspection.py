@@ -227,18 +227,17 @@ async def test_single_computation_full_compatibility_and_private_timings(reposit
         await gateway.close()
 
 
-async def test_compact_cross_repo_and_knowledge(repository):
+async def test_compact_cross_repo_and_local_daily_catalog(repository):
     gateway = OperationGateway(str(repository), "daily", watch=False)
     try:
+        catalog = gateway.catalog(mcp=True)
+        names = {tool.name for tool in catalog}
+        assert "semantic_search" in names and not names & {"recall", "record_learning", "update_learning"}
+        assert not any("revision" in tool.inputSchema["properties"] for tool in catalog)
+        with pytest.raises(ValueError, match="not available"):
+            await gateway.execute_mcp("record_learning", {"type": "gotcha", "description": "local daily"})
         with pytest.raises(ValueError, match="acknowledged"):
-            await gateway.execute_mcp("record_learning", {
-                "type": "gotcha", "description": "must not be saved", "max_tokens": 1})
-        assert decode(await gateway.execute_mcp("list_learnings", {}))["data"] == []
-        saved = decode(await gateway.execute_mcp("record_learning", {
-            "type": "gotcha", "description": "helper returns one", "scope": "helper.py"}))
-        assert saved["data"]["id"]
-        recalled = decode(await gateway.execute_mcp("recall", {"query": "helper"}))
-        assert recalled["data"][0]["description"] == "helper returns one"
+            await gateway.execute_mcp("notify_file_changed", {"files": ["helper.py"], "max_tokens": 1})
         result = await gateway.execute_mcp("cross_repo_search", {"query": "helper", "workspaces": [str(repository)]})
         assert response_tokens(result) <= 2000
         assert all(row["workspace"] == str(repository) for row in decode(result)["data"])

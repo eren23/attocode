@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Code-intel server
+
+- The local daily profile is smaller. It no longer lists the five learning
+  tools (`recall`, `record_learning`, `list_learnings`, `learning_feedback`,
+  `update_learning`). The remote daily profile keeps them for team knowledge.
+  Use `--profile full` for learnings in a local session.
+- Local tools no longer list the `revision` argument. A local server always
+  reads the working tree, and a revision gave an error.
+- The tool list of the local daily profile has 19 tools and 21,072
+  characters, against 24 tools and 29,147 characters. In an agent pilot,
+  each model request carried the full tool list, but the agent called these
+  tools in only 4 of 58 runs.
+
 ### Fixed — Code-intel server
 
 - The server no longer selects the home directory as its project. Before, a

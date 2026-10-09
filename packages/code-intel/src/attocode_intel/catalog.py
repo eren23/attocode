@@ -48,6 +48,9 @@ DAILY = frozenset(
         "learning_feedback",
     }
 )
+# Remote daily keeps the learnings for team knowledge. A local daily session leaves them out:
+# their schemas cost about 1,600 tokens in every model request.
+LEARNING = frozenset({"recall", "record_learning", "list_learnings", "learning_feedback", "update_learning"})
 WRITES = frozenset(
     [
         "notify_file_changed",
@@ -217,4 +220,7 @@ def tool_catalog(profile: str = "full", *, remote: bool = False) -> list[Tool]:
             "type": "integer", "minimum": 1, "maximum": 32000, "default": 8000,
             "description": "Readable response budget; daily MCP budgets the entire serialized result.",
         })
-    return result
+        if not remote:  # local analysis always reads the working tree
+            tool.inputSchema["properties"].pop("revision", None)
+    local_daily = profile == "daily" and not remote
+    return [tool for tool in result if not (local_daily and tool.name in LEARNING)]
