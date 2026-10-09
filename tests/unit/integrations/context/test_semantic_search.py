@@ -31,6 +31,26 @@ def _bare_manager(root_dir: str, **overrides) -> SemanticSearchManager:
     return mgr
 
 
+# distractor.py has three query words in one function. target.py has all six
+# words, one per function, so none of its chunks matches as well.
+_SPREAD_WORDS = ["quartz", "lantern", "meadow", "harbor", "falcon", "ember"]
+# Whole-file BM25 is only for long queries, such as a pasted issue.
+_ISSUE_WORDS = ["report", "crash", "startup", "config", "parser", "window", "theme", "plugin",
+                "cache", "network", "retry", "timeout", "logger", "version", "python"]
+
+
+def _spread_repo(root: Path) -> SemanticSearchManager:
+    (root / "distractor.py").write_text(
+        "def mixed():\n    quartz = lantern = meadow = 1\n    return quartz\n", encoding="utf-8")
+    (root / "target.py").write_text("".join(
+        f"def step{n}():\n    {word} = {n}\n    return {word}\n\n"
+        for n, word in enumerate(_SPREAD_WORDS)), encoding="utf-8")
+    mgr = _bare_manager(str(root))
+    mgr.search_candidates(" ".join(_SPREAD_WORDS), top_k=10)
+    assert mgr.wait_for_body_index()
+    return mgr
+
+
 class TestQueueReindex:
     def test_queue_reindex_deduplicates_same_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -325,24 +345,53 @@ class TestSourceBodyCandidates:
         assert "target.py" in {r.file_path for r in mgr.search_candidates(query, top_k=10)}
 
     def test_whole_file_bm25_sees_matches_spread_over_a_file(self, tmp_path: Path) -> None:
-        # distractor.py has three query words in one function. target.py has all
-        # six words, one per function, so none of its chunks matches as well.
-        words = ["quartz", "lantern", "meadow", "harbor", "falcon", "ember"]
-        (tmp_path / "distractor.py").write_text(
-            "def mixed():\n    quartz = lantern = meadow = 1\n    return quartz\n", encoding="utf-8")
-        (tmp_path / "target.py").write_text("".join(
-            f"def step{n}():\n    {word} = {n}\n    return {word}\n\n"
-            for n, word in enumerate(words)), encoding="utf-8")
-        mgr = _bare_manager(str(tmp_path))
-        mgr.search_candidates(" ".join(words), top_k=10)
-        assert mgr.wait_for_body_index()
-        # Whole-file BM25 is only for long queries, such as a pasted issue.
-        issue_words = ["report", "crash", "startup", "config", "parser", "window", "theme", "plugin",
-                       "cache", "network", "retry", "timeout", "logger", "version", "python"]
+        mgr = _spread_repo(tmp_path)
+        words = _SPREAD_WORDS
 
-        assert mgr._file_search(words + issue_words, 10, "")[0] == "target.py"
+        assert mgr._file_search(words + _ISSUE_WORDS, 10, "")[0] == "target.py"
         assert mgr._file_search(words, 10, "") == []
         assert mgr.search_candidates(" ".join(words), top_k=10)[0].file_path == "distractor.py"
+
+    def test_lexical_fusion_fields_change_candidates(self, tmp_path: Path) -> None:
+        from attocode.integrations.context.semantic_search import SearchScoringConfig
+
+        cfg = SearchScoringConfig()
+        assert (cfg.chunk_rrf_k, cfg.body_weight, cfg.body_max_tokens, cfg.file_bm25_min_tokens,
+                cfg.file_rrf_k, cfg.file_fusion_depth) == (20, 1.15, 20, 20, 60, 48)
+        mgr = _spread_repo(tmp_path)
+        short, issue = " ".join(_SPREAD_WORDS), " ".join(_SPREAD_WORDS + _ISSUE_WORDS)
+        default = {query: mgr.search_candidates(query, top_k=10) for query in (short, issue)}
+        for field, value, query in (
+            ("chunk_rrf_k", 0, short), ("body_weight", 2.0, short), ("body_max_tokens", 1, short),
+            ("file_bm25_min_tokens", 100, issue), ("file_rrf_k", 0, issue),
+            ("file_fusion_depth", 1, issue),
+        ):
+            mgr.scoring_config = SearchScoringConfig(**{field: value})
+            assert mgr.search_candidates(query, top_k=10) != default[query], field
+
+    def test_trace_records_the_file_order_of_each_stage(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from attocode.integrations.context.semantic_search import SemanticSearchResult
+
+        (tmp_path / "d.py").write_text("D = 1\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path), _kw_index_built=True)
+        keyword = [SemanticSearchResult(path, "function", name, "", score)
+                   for path, name, score in (("a.py", "one", 1.0), ("b.py", "two", .5),
+                                             ("a.py", "three", .2))]
+        body = [SemanticSearchResult("c.py", "function", "four", "", 3.0, 1, 2)]
+        monkeypatch.setattr(SemanticSearchManager, "_keyword_search", lambda *args: keyword)
+        monkeypatch.setattr(SemanticSearchManager, "_body_search", lambda *args: body)
+        monkeypatch.setattr(SemanticSearchManager, "_file_search", lambda *args: ["d.py", "b.py"])
+
+        trace: dict[str, list[str]] = {}
+        results = mgr.search_candidates("cache generation", top_k=10, trace=trace)
+        # The body hit leads the chunk RRF. b.py leads the file RRF: both lists hold it.
+        assert trace == {
+            "keyword": ["a.py", "b.py"], "body": ["c.py"], "file_bm25": ["d.py", "b.py"],
+            "chunk_fused": ["c.py", "a.py", "b.py"], "fused": ["b.py", "c.py", "d.py", "a.py"],
+        }
+        assert results == mgr.search_candidates("cache generation", top_k=10)
 
     def test_file_fusion_is_equal_weight_rrf_of_file_orders(self, tmp_path: Path) -> None:
         from attocode.integrations.context.semantic_search import SemanticSearchResult

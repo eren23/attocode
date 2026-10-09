@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from attocode_intel._internal.integrations.context.reranker import LocalRerankOutcome
 from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchResult
-from attocode_intel.focused_evidence import task_terms
+from attocode_intel.focused_evidence import file_excerpt, task_terms
 from attocode_intel.repo_ranker import rank_repo_files
 from attocode_intel.service import CodeIntelService
 from attocode_intel.test_ranking import rank_symbol_tests
@@ -18,6 +18,15 @@ def test_task_terms_treat_explicit_exclusion_as_soft_negative():
     assert "swarm" not in positive
     assert "swarm" in negative
     assert "unrelated" not in negative
+
+
+def test_file_excerpt_ignores_excluded_terms():
+    # Line 1 matches only the excluded term. Line 60 matches the task.
+    lines = ["cache = {}"] + [f"x{n} = {n}" for n in range(58)] + ["def parse_header(): pass"]
+    excerpt = file_excerpt(lines, "a.py", "parse header without cache")
+    assert excerpt.startswith("File: a.py\n")
+    assert "60: def parse_header(): pass" in excerpt
+    assert "1: cache" not in excerpt
 
 
 def test_test_candidates_with_excluded_words_rank_after_task_matches():

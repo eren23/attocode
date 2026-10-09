@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The agent no longer uses the home directory as the project root because
   of `~/.attocode`.
 
+### Internal — Code-intel search
+
+- `SearchScoringConfig` now holds the fusion constants of
+  `search_candidates`: `chunk_rrf_k`, `body_weight`, `body_max_tokens`,
+  `file_bm25_min_tokens`, `file_rrf_k` and `file_fusion_depth`. The defaults
+  are the old constants, so search results do not change.
+- `search_candidates(trace=...)` records the file order of each stage.
+- The SystemOne reranker and the eval trials get file excerpts from one
+  function, `focused_evidence.file_excerpt()`.
+
 ## [0.2.29] - 2026-10-09
 
 ### Fixed — Code-intel search
