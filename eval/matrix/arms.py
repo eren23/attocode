@@ -13,6 +13,11 @@ A family is one call per (snapshot, query). It fills one or more cells:
 - ``grep``: an agentic-grep stand-in. It greps the code-like terms of the query and
   ranks files by summed idf. Files that the query names by path come first.
 - ``repomap``: the order of the repo_map_ranked tool (PageRank and task relevance).
+- ``dense``: CodeRankEmbed over the 40-line windows of each file (``eval.matrix.dense``). It
+  reads vectors that a GPU pod made, so it needs no model.
+
+A fused cell (``FUSED``) is the reciprocal-rank fusion of two cells. It has no result of its
+own: the stages fuse the cached results of its parts.
 
 A product cell is the file order of the fused candidates before the broad-query rerank.
 The default rerank keeps that order, so the page that the product returns is a prefix.
@@ -20,7 +25,9 @@ The default rerank keeps that order, so the page that the product returns is a p
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 import math
 import re
 import subprocess
@@ -45,7 +52,11 @@ CELLS = {  # cell -> (family, list)
     "product_auto": ("product_auto", "fused"),
     "grep": ("grep", "files"),
     "repomap": ("repomap", "files"),
+    "dense": ("dense", "files"),
+    "rrf(product+dense)": ("rrf", "rrf"),
 }
+FUSED = {"rrf(product+dense)": ("product", "dense")}  # fused cell -> its two cells
+RRF_K, RRF_DEPTH = 60, 48  # each part list is cut to 48 files, as in the product fusion
 SEARCH = {  # product family -> (SearchScoringConfig overrides, query expansion)
     "product": ({}, False),
     "product_noimp": ({"importance_weight": 0, "frecency_weight": 0}, False),
@@ -55,6 +66,10 @@ SEARCH = {  # product family -> (SearchScoringConfig overrides, query expansion)
 
 class IndexFailedError(RuntimeError):
     """The lexical index did not become ready."""
+
+
+class NotReadyError(RuntimeError):
+    """An input of the family is not there yet, for example the vectors of a file. No result is saved."""
 
 
 @cache
@@ -72,7 +87,37 @@ def config(family: str) -> dict:
         return {"engine": engine(), "top_k": TOP_K, "scoring": overrides, "expand": expand, "depth": DEPTH}
     if family == "repomap":
         return {"engine": engine(), "relevance_top_k": RELEVANCE_TOP_K, "depth": DEPTH}
+    if family == "dense":
+        from eval.matrix import dense
+        return {"model": dense.TAG, "depth": DEPTH}
     return {"version": GREP_VERSION, "depth": DEPTH}
+
+
+def families(cells: list[str]) -> list[str]:
+    """The families that make the results of the cells. A fused cell needs the families of its parts."""
+    return sorted({CELLS[part][0] for cell in cells for part in FUSED.get(cell, (cell,))})
+
+
+def rrf(orders: list[list[str]]) -> list[str]:
+    scores: dict[str, float] = {}
+    for order in orders:
+        for rank, path in enumerate(order[:RRF_DEPTH]):
+            scores[path] = scores.get(path, 0.0) + 1.0 / (RRF_K + rank + 1)
+    return sorted(scores, key=lambda path: (-scores[path], path))
+
+
+def fuse(cell: str, parts: list[tuple[str, dict | None]]) -> tuple[str, dict | None]:
+    """The key and result of a fused cell from (key, result) of its parts. A missing part gives None."""
+    key = hashlib.sha256(json.dumps([cell, [k for k, _r in parts], RRF_K, RRF_DEPTH]).encode()).hexdigest()
+    results = [result for _key, result in parts]
+    if any(result is None for result in results):
+        return key, None
+    failed = [result for result in results if result["status"] != "ok"]
+    if failed:
+        return key, {**failed[0], "lists": {}}
+    orders = [result["lists"].get(CELLS[part][1], []) for part, result in zip(FUSED[cell], results, strict=True)]
+    return key, {"status": "ok", "lists": {"rrf": rrf(orders)}, "page": None,
+                 "ms": round(sum(result["ms"] or 0.0 for result in results), 1)}
 
 
 def lists(family: str) -> list[str]:
@@ -164,8 +209,9 @@ def _git_grep(root: Path, term: str) -> list[str]:
 class Snapshot:
     """A materialized tree. A family builds the product index or the repo graph on first use."""
 
-    def __init__(self, root: Path, paths: list[str], timeout: float = 1800):
-        self.root, self.paths, self.timeout = root, paths, timeout
+    def __init__(self, root: Path, paths: list[str], timeout: float = 1800, cache: Path | None = None):
+        self.root, self.paths, self.timeout, self.cache = root, paths, timeout, cache
+        self._dense = None
         self.index_s = 0.0
         self._manager = None
         self._failed = ""
@@ -203,6 +249,25 @@ class Snapshot:
             self._graph = {info.relative_path: list(imports.get_imports(info.relative_path)) if imports else []
                            for info in context._files}
         return self._graph
+
+    def dense_vectors(self):
+        """The window vectors of the snapshot, from the cache. Raises NotReadyError when one is missing."""
+        from eval.matrix import dense
+        if self._dense is None:
+            try:
+                self._dense = dense.vectors(dense.store(self.cache), self.root, self.paths)
+            except dense.MissingVectorsError as error:
+                self._dense = error
+        if isinstance(self._dense, Exception):
+            raise NotReadyError(str(self._dense))
+        return self._dense
+
+    def dense(self, query: str) -> list[str]:
+        from eval.matrix import dense
+        found = dense.store(self.cache).get(dense.query_key(query))
+        if found is None:
+            raise NotReadyError(f"no vector for the query {query[:80]!r}")
+        return dense.rank(*self.dense_vectors(), found[0], DEPTH)
 
     def close(self) -> None:
         if self._manager is not None:
@@ -262,6 +327,10 @@ def run(family: str, snapshot: Snapshot, query: str) -> dict:
         snapshot.graph()
         started = time.perf_counter()
         out = {"files": snapshot.repomap(query)}
+    elif family == "dense":
+        snapshot.dense_vectors()
+        started = time.perf_counter()
+        out = {"files": snapshot.dense(query)}
     else:
         started = time.perf_counter()
         out = {"files": snapshot.grep(query)}

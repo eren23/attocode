@@ -252,3 +252,18 @@ A failure is a status, never a silent pool order. A failed request is `request_f
 The report refuses a rerank row when its pool hash or its page does not match its pool row. It marks a cell that keeps the pool order on 95% or more of its rows as a harness failure. The rerank table gives the ceiling (the best Acc@5 of an order of the page) and Acc@5. It also gives the efficiency (Acc@5 divided by the ceiling) and Δ against the pool cell with its MDE. The other columns are failures, latency, the cost of 1,000 rows and the cache share. The header gives the spend of the run folder.
 
 On 2026-10-09, a replay of the Loc-Bench 560 trials took all Jev answers from the cache. Jev over 48 files gave the published Acc@5 of 0.7518, at a cost of $0. A paid check on 10 Loc-Bench rows cost $0.2245 in the ledger, and the OpenRouter usage counter moved by $0.2263.
+
+## Matrix dense arm
+
+The cell `dense` ranks files with CodeRankEmbed at a pinned revision. The model embeds the 40-line windows of each file (at most 40 windows) and the query. A file scores the best cosine of its windows. The cell `rrf(product+dense)` fuses the first 48 files of `product` and `dense` (reciprocal rank, k 60). It has no result of its own: the stages fuse the cached results of its parts.
+
+A GPU pod makes the vectors, and the retrieve stage needs no model:
+
+1. `python -m eval.matrix.dense plan OUT --job JOB.json` writes the snapshots and queries of `OUT/instances.jsonl`. It refuses a dataset without `public: true`.
+2. On the pod, `python -m eval.matrix.dense job JOB.json --work DIR` makes the snapshots with the matrix code, then embeds the files and the queries.
+3. `python -m eval.matrix.dense import DIR` compares the pod trees with the local trees and adds the vectors to `emb/` in the matrix cache.
+4. `python -m eval.matrix.run run OUT --stage retrieve --arms dense` ranks the files. A query without vectors is "not ready", and the stage saves no result for it.
+
+On 2026-10-09, one RTX 4090 pod embedded the Loc-Bench 560 snapshots for about $1.7. That is 1.99 million windows at about 410 windows each second. The pod also ran the retrieve stage, and only the `ret/` results came back. On the full issue, `rrf(product+dense)` gave Acc@5 0.664 against 0.532 for `product`. `dense` alone gave 0.541.
+
+SweRank reports 74.29 for CodeRankEmbed alone on this set. This arm differs from that setup. It ranks all files, and it embeds at most 1,600 lines of a file. It also cuts the query at 512 tokens. With only the Python files in the ranking, `dense` gives 0.609.
