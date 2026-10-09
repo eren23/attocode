@@ -142,7 +142,8 @@ child = os.fork()
 print('{"type":"system"}', flush=True)
 while True: time.sleep(.1)
 '''
-    result = events.capture([sys.executable, "-u", "-c", script], tmp_path, tmp_path, .2, os.environ, kill_grace=.1)
+    # 1 s, not 0.2 s: a slow CI runner can need more than 0.2 s to start Python.
+    result = events.capture([sys.executable, "-u", "-c", script], tmp_path, tmp_path, 1, os.environ, kill_grace=.1)
     assert result["timed_out"] and result["exit_code"] != 0 and result["seconds"] < 2
     assert (tmp_path / "events.jsonl").read_text()
 
