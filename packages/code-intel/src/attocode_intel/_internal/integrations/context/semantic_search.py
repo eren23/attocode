@@ -1347,6 +1347,11 @@ class SemanticSearchManager:
             self._body_thread = worker
             worker.start()
 
+    def warm(self) -> None:
+        """Start the lexical warm-up in the background, unless both indexes are ready."""
+        if not (self._kw_index_built and (self._body_index_built or not self._body_index_available)):
+            self._schedule_body_index()
+
     def _warm_candidate_indexes(self) -> None:
         """Build AST and optional body indexes, honoring mid-build invalidation."""
         generation = self._body_generation

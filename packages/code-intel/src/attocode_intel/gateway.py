@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import json
 import time
@@ -132,6 +133,11 @@ class OperationGateway:
                 resource.close()
 
     @staticmethod
+    def _warm_search(context):
+        with bind_request(context):
+            context.service._get_semantic_search().warm()
+
+    @staticmethod
     def _refresh_sync(context):
         from attocode_intel.freshness import FreshnessTracker
 
@@ -185,40 +191,47 @@ class OperationGateway:
             raise ValueError("Write operations require max_tokens >= 512 so their outcome can be acknowledged")
         timings["validation"] = round((time.monotonic() - before) * 1000, 2)
         if name == "cross_repo_search":
+            from attocode_intel.service import SEARCH_WARMUP_WAIT
+
             results = []
             warming_workspaces = []
-            for target in args["workspaces"]:
-                request = {
-                    "workspace": target,
-                    "query": args["query"],
-                    "top_k": args.get("top_k", 10),
-                    "mode": "keyword",
-                }
-                # Tiny/new workspaces commonly finish indexing within this bound.
-                # Keep the outer search responsive on large checkouts, where the
-                # explicit warming signal is more honest than an empty match set.
-                deadline = time.monotonic() + 0.75
-                while True:
-                    response = await self.execute("semantic_search", request)
-                    index = response.structuredContent["metadata"].get("ranking", {}).get("index", {})
-                    if index.get("status") != "warming" or time.monotonic() >= deadline:
-                        break
-                    await asyncio.sleep(0.05)
-                structured = response.structuredContent
-                if index.get("status") == "warming":
-                    warming_workspaces.append(target)
-                for rank, match in enumerate(structured["data"]["results"], 1):
-                    results.append(
-                        {
-                            **match,
-                            "workspace": structured["metadata"]["workspace"],
-                            "revision": structured["metadata"]["revision"],
-                            "source": structured["metadata"]["source"],
-                            "freshness": structured["metadata"]["freshness"],
-                            "index": structured["metadata"]["coverage"].get("phase", "unknown"),
-                            "fusion_score": 1 / (60 + rank),
-                        }
-                    )
+            # Each workspace gets the short wait of the loop below, not the full first-search wait.
+            wait = SEARCH_WARMUP_WAIT.set(0.75)
+            try:
+                for target in args["workspaces"]:
+                    request = {
+                        "workspace": target,
+                        "query": args["query"],
+                        "top_k": args.get("top_k", 10),
+                        "mode": "keyword",
+                    }
+                    # Tiny/new workspaces commonly finish indexing within this bound.
+                    # Keep the outer search responsive on large checkouts, where the
+                    # explicit warming signal is more honest than an empty match set.
+                    deadline = time.monotonic() + 0.75
+                    while True:
+                        response = await self.execute("semantic_search", request)
+                        index = response.structuredContent["metadata"].get("ranking", {}).get("index", {})
+                        if index.get("status") != "warming" or time.monotonic() >= deadline:
+                            break
+                        await asyncio.sleep(0.05)
+                    structured = response.structuredContent
+                    if index.get("status") == "warming":
+                        warming_workspaces.append(target)
+                    for rank, match in enumerate(structured["data"]["results"], 1):
+                        results.append(
+                            {
+                                **match,
+                                "workspace": structured["metadata"]["workspace"],
+                                "revision": structured["metadata"]["revision"],
+                                "source": structured["metadata"]["source"],
+                                "freshness": structured["metadata"]["freshness"],
+                                "index": structured["metadata"]["coverage"].get("phase", "unknown"),
+                                "fusion_score": 1 / (60 + rank),
+                            }
+                        )
+            finally:
+                SEARCH_WARMUP_WAIT.reset(wait)
             results.sort(key=lambda row: row["fusion_score"], reverse=True)
             results = results[: args.get("top_k", 10)]
             budget = args.get("max_tokens", 8000)
@@ -311,6 +324,11 @@ class OperationGateway:
         finally:
             if key in self._active:
                 self._active[key] -= 1
+            if context.source == "local" and not self._closed and key in self._workers:
+                # Each call starts the search warm-up after its own work, so that this call
+                # is not slower and a later search finds ready indexes.
+                with contextlib.suppress(RuntimeError):
+                    self._workers[key].submit(self._warm_search, context)
 
     @staticmethod
     def _check_write_budget(context, budget):

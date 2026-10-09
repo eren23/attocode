@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   discovered the files and built the dependency graph again. On repositories
   with 1,144 to 3,425 files, the time to a ready index fell from 10 to 36 s to
   3 to 9 s. Search results do not change.
+- Any tool call of a server now starts the search index build in the
+  background, after the call itself. A later search then finds a ready index.
+  A search that comes before the index is ready now waits up to 15 s, not
+  0.75 s. On repositories with 1,144 to 3,425 files, the first search returned
+  10 results in 2.4 to 7.4 s, instead of "warming" with no results.
+  `cross_repo_search` keeps the 0.75 s wait for each workspace. The server
+  does not build the index at process start, so a session that never calls
+  the server does no indexing.
 
 ### Fixed — Agent
 
