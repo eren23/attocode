@@ -11,7 +11,7 @@ the queries once. The vectors go into the matrix cache under ``emb/<TAG>/``, key
   python -m eval.matrix.dense job JOB.json --work DIR [--workers N] [--limit N] [--sdpa]
       On the pod: snapshot the repositories with the eval.matrix.run code, then embed. --limit
       stops after about N windows, to measure the throughput. --sdpa uses the fused attention
-      of PyTorch in the model (check the parity with `parity` first).
+      of PyTorch in the model when a sample of windows and queries keeps a cosine of 0.9999.
   python -m eval.matrix.dense import DIR [--cache DIR]
       Compare the trees of the pod with the local trees, then add the vectors to the cache (a hard
       link on the same disk). An import can run again after each copy of new parts from the pod.
