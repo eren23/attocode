@@ -79,7 +79,10 @@ def toml_literal(value):
     return json.dumps(value)
 
 
-def command(client, model, root, directory, servers, prompt, *, answer_schema=None, project_guidance=False, plain_text=False, runtime_socket=None):
+def command(client, model, root, directory, servers, prompt, *, answer_schema=None, project_guidance=False, plain_text=False, runtime_socket=None,
+            tools=None, sandbox="workspace-write"):
+    """Return the client argv. Only Claude uses tools (None gives NATIVE, [] gives no tools).
+    Only Codex uses sandbox, for example "read-only"."""
     directory.mkdir(parents=True, exist_ok=True)
     config = directory / "mcp.json"
     config.write_text(json.dumps({"mcpServers": servers}))
@@ -91,9 +94,10 @@ def command(client, model, root, directory, servers, prompt, *, answer_schema=No
         if project_guidance:
             from onboarding_study import claude_exclusions
             settings["claudeMdExcludes"] = claude_exclusions(root)
+        tools = NATIVE if tools is None else list(tools)
         return ["claude", "-p", "--model", model, "--strict-mcp-config", "--mcp-config", str(config),
                 "--setting-sources", "project" if project_guidance else "", "--settings", json.dumps(settings),
-                "--tools", ",".join(NATIVE), "--allowedTools", ",".join(NATIVE + ["mcp__" + name + "__*" for name in servers]),
+                "--tools", ",".join(tools), "--allowedTools", ",".join(tools + ["mcp__" + name + "__*" for name in servers]),
                 "--permission-mode", "dontAsk", "--no-session-persistence", "--disable-slash-commands",
                 "--output-format", "stream-json", "--verbose",
                 *([] if plain_text else ["--json-schema", json.dumps(response_schema)]), prompt]
@@ -101,10 +105,12 @@ def command(client, model, root, directory, servers, prompt, *, answer_schema=No
         if project_guidance:
             from onboarding_study import check_codex_guidance
             check_codex_guidance()
-        permission_args = ["--sandbox", "workspace-write"]
+        permission_args = ["--sandbox", sandbox]
         if runtime_socket:
             if not Path(runtime_socket).is_absolute():
                 raise ValueError("Runtime socket must be an absolute local path")
+            if sandbox != "workspace-write":
+                raise ValueError("A runtime socket replaces the sandbox. Keep the default workspace-write sandbox.")
             profile = {"extends": ":workspace", "network": {"enabled": True, "mode": "limited", "domains": {},
                        "unix_sockets": {runtime_socket: "allow"}}}
             permission_args = ["-c", 'default_permissions="external_benchmark"',
@@ -126,9 +132,11 @@ def command(client, model, root, directory, servers, prompt, *, answer_schema=No
             "--sandbox", "enabled", "--force", "--trust", "--approve-mcps", "--workspace", str(root), prompt]
 
 
-def invoke(client, model, root, directory, servers, prompt, timeout, env, *, answer_schema=None, project_guidance=False, plain_text=False, runtime_socket=None):
+def invoke(client, model, root, directory, servers, prompt, timeout, env, *, answer_schema=None, project_guidance=False, plain_text=False, runtime_socket=None,
+           tools=None, sandbox="workspace-write"):
     argv = command(client, model, root, directory, servers, prompt, answer_schema=answer_schema,
-                   project_guidance=project_guidance, plain_text=plain_text, runtime_socket=runtime_socket)
+                   project_guidance=project_guidance, plain_text=plain_text, runtime_socket=runtime_socket,
+                   tools=tools, sandbox=sandbox)
     execution = capture(argv, root, directory, timeout, env)
     result = parse_events(client, (directory / "events.jsonl").read_text(), directory / "answer.json")
     if plain_text:
