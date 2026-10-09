@@ -101,7 +101,8 @@ def capture(argv, root, directory, timeout, env, *, kill_grace=10):
 def parse_events(client, stdout, answer_path=None):
     """Accept raw CLI JSONL or timestamped capture records, deduplicating by call ID."""
     calls, outputs, models, usage, answer, denials = {}, {}, set(), {}, {}, []
-    first_event = None
+    # Only the Claude result event reports cost and turns. Codex reports token usage only.
+    first_event = cost = turns = None
     terminal_error = False
     records = []
     for line in stdout.splitlines():
@@ -152,6 +153,8 @@ def parse_events(client, stdout, answer_path=None):
         if event.get("type") == "result":
             answer = event.get("structured_output") or answer
             usage = event.get("usage") or usage
+            cost = event.get("total_cost_usd", cost)
+            turns = event.get("num_turns", turns)
             models.update((event.get("modelUsage") or {}).keys())
             denials.extend(event.get("permission_denials", []))
             terminal_error |= bool(event.get("is_error"))
@@ -201,7 +204,7 @@ def parse_events(client, stdout, answer_path=None):
                                    for row in calls.values())
     return {"output": answer if isinstance(answer, dict) else {}, "tool_calls": list(calls.values()),
             "tool_results": list(outputs.values()), "resolved_models": sorted(models), "usage": usage,
-            "permission_denials": denials, "terminal_error": terminal_error,
+            "cost_usd": cost, "turns": turns, "permission_denials": denials, "terminal_error": terminal_error,
             "first_event_seconds": first_event, "event_count": len(records),
             "tool_result_tokens": sum(count_tokens(json.dumps(row["content"])) for row in present) if complete else None,
             "observed_tool_result_tokens": sum(count_tokens(json.dumps(row["content"])) for row in present) if present else None,

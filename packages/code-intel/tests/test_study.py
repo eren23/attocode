@@ -81,6 +81,15 @@ def test_release_rejects_invalid_or_losing_studies(modules, change):
     assert not gate.evaluate(report, "engine")["passed"]
 
 
+def test_interval_bootstraps_the_requested_statistic(modules):
+    gate = modules[3]
+    # Most gains are zero, so the median interval is [0, 0]. The mean is 20, so its interval must contain 20.
+    gains = {repo: [0, 0, 0, 0, 100] for repo in ("a", "b", "c")}
+    assert gate.interval(gains) == gate.interval(gains, stat="median") == [0, 0]
+    low, high = gate.interval(gains, stat="mean")
+    assert low < 20 < high
+
+
 def test_subscription_boundary_does_not_accept_login_alone(modules, monkeypatch):
     clients = modules[1]
     monkeypatch.setenv("OPENAI_API_KEY", "do-not-use")
@@ -108,6 +117,56 @@ def test_parses_actual_tool_result_shapes_without_double_counting(modules):
         for state in ("started", "completed")]
     parsed = clients.parse_events("cursor", "\n".join(map(json.dumps, cursor)))
     assert len(parsed["tool_calls"]) == len(parsed["tool_results"]) == 1
+
+
+def test_read_only_options_change_only_their_own_client_flags(modules, tmp_path):
+    clients = modules[1]
+    servers = {"attocode-code-intel": {"command": "attocode-code-intel"}}
+    def argv(client, **options):
+        return clients.command(client, "fixed", tmp_path, tmp_path / client, servers, "task", **options)
+    def flag(values, name):
+        return values[values.index(name) + 1]
+    claude, codex = argv("claude"), argv("codex")
+    assert flag(claude, "--tools") == "Read,Grep,Glob,ToolSearch,Edit,Write,Bash"
+    assert flag(claude, "--allowedTools") == "Read,Grep,Glob,ToolSearch,Edit,Write,Bash,mcp__attocode-code-intel__*"
+    assert flag(codex, "--sandbox") == "workspace-write"
+    read_only = argv("claude", tools=["Read", "Grep", "Glob", "ToolSearch"])
+    assert flag(read_only, "--tools") == "Read,Grep,Glob,ToolSearch"
+    assert flag(read_only, "--allowedTools") == "Read,Grep,Glob,ToolSearch,mcp__attocode-code-intel__*"
+    assert flag(argv("claude", tools=[]), "--tools") == ""
+    assert flag(argv("codex", sandbox="read-only"), "--sandbox") == "read-only"
+    assert argv("claude", sandbox="read-only") == claude and argv("codex", tools=[]) == codex
+    with pytest.raises(ValueError, match="sandbox"):
+        argv("codex", sandbox="read-only", runtime_socket="/tmp/docker.sock")
+
+
+@pytest.mark.parametrize("client", ["claude", "codex"])
+def test_run_result_keeps_options_cost_turns_and_usage(modules, monkeypatch, tmp_path, client):
+    clients = modules[1]
+    # Recorded result shapes: Claude stream-json gives cost and turns, Codex gives token usage only.
+    events = ([{"type": "system", "subtype": "init", "model": "fixed"},
+               {"type": "result", "subtype": "success", "is_error": False, "duration_ms": 9000, "num_turns": 7,
+                "total_cost_usd": 0.0421, "usage": {"input_tokens": 12, "cache_read_input_tokens": 300, "output_tokens": 45},
+                "modelUsage": {"fixed": {"costUSD": 0.0421}}, "structured_output": {"files": ["a.py"]}}]
+              if client == "claude" else
+              [{"type": "thread.started", "thread_id": "t"}, {"type": "turn.started"},
+               {"type": "turn.completed", "usage": {"input_tokens": 12, "cached_input_tokens": 300, "output_tokens": 45}}])
+    seen = []
+    def capture(argv, root, directory, timeout, env):
+        seen.append(argv)
+        (directory / "events.jsonl").write_text("".join(json.dumps({"received_seconds": 1, "event": e}) + "\n" for e in events))
+        (directory / "trace.jsonl").write_text("")
+        return {"exit_code": 0, "seconds": 1, "quota_exhausted": False}
+    monkeypatch.setattr(clients, "capture", capture)
+    result = clients.invoke(client, "fixed", tmp_path, tmp_path / "run", {}, "task", 10, {},
+                            tools=["Read", "Grep", "Glob"], sandbox="read-only")
+    assert result["usage"]["output_tokens"] == 45
+    if client == "claude":
+        assert seen[0][seen[0].index("--tools") + 1] == "Read,Grep,Glob"
+        assert (result["cost_usd"], result["turns"], result["output"]) == (0.0421, 7, {"files": ["a.py"]})
+    else:
+        assert seen[0][seen[0].index("--sandbox") + 1] == "read-only"
+        assert result["cost_usd"] is None and result["turns"] is None
 
 
 def test_source_quotes_are_checked_and_repository_escape_rejected(modules, tmp_path):

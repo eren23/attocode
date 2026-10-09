@@ -25,8 +25,11 @@ def engine_hash(project):
     return digest.hexdigest()
 
 
-def interval(gains, seed=7329):
-    """Hierarchical paired bootstrap: repositories first, repetitions second."""
+def interval(gains, seed=7329, stat="median"):
+    """Hierarchical paired bootstrap: repositories first, repetitions second.
+
+    stat sets the estimate for each draw: "median" (the release gate) or "mean"."""
+    estimate = {"median": statistics.median, "mean": statistics.fmean}[stat]
     rng = random.Random(seed)
     repos = sorted(gains)
     estimates = []
@@ -34,7 +37,7 @@ def interval(gains, seed=7329):
         sample = []
         for repo in rng.choices(repos, k=len(repos)):
             sample.extend(rng.choices(gains[repo], k=len(gains[repo])))
-        estimates.append(statistics.median(sample))
+        estimates.append(estimate(sample))
     estimates.sort()
     return [estimates[49], estimates[1949]]
 
