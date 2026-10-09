@@ -51,15 +51,21 @@ def scoped_store(name, factory):
 
 
 def resolve_workspace(workspace: str = "", default: str = "") -> str:
-    """Explicit roots win; discovery recognizes .git files in worktrees."""
+    """Explicit roots win; discovery recognizes .git files in worktrees.
+
+    Discovery never selects the home directory. ``~/.attocode`` holds
+    user-wide settings, and a server that took it as a project marker
+    indexed all of home. Use ``--project ~`` to select home on purpose.
+    """
     if workspace or default:
         path = Path(workspace or default).expanduser().resolve()
         if not path.is_dir():
             raise ValueError(f"Workspace directory does not exist: {path}")
         return str(path)
     cwd = Path.cwd().resolve()
+    home = Path.home().resolve()
     for path in (cwd, *cwd.parents):
-        if any(
+        if path != home and any(
             (path / marker).exists()
             for marker in (
                 ".git",

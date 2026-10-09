@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Code-intel server
 
-- The server no longer treats `~/.attocode`, the user settings folder, as a
-  project marker. Before, a server started in a folder without `.git` or
-  `.attocode` used the whole home directory as its project. It then indexed
-  and watched every file in the home directory. One such server ran for
-  3.6 days at full CPU and built a 3.3 GB index.
+- The server no longer selects the home directory as its project. Before, a
+  server started in a folder without project markers found `~/.attocode`,
+  the user settings folder, and used the whole home directory. It then
+  indexed and watched every file in the home directory. One such server ran
+  for 3.6 days at full CPU and built a 3.3 GB index. The server also ignores
+  a client root that is the home directory. Without a project, tools return
+  "No repository selected". Use `--project ~` to select the home directory.
 - At startup, a `.git` file (as in a git worktree) now also marks the project
   root. The server and the tools now use the same root rule.
 - A stdio server now exits when the client process that started it exits.

@@ -7,6 +7,27 @@ import asyncio
 import json
 import os
 import sys
+import threading
+import time
+
+
+def exit_when_client_exits(interval: float = 5.0) -> None:
+    """Stop a stdio server when the client process that started it is gone.
+
+    At end of input the MCP SDK still waits for running tool calls. A call
+    that never ended kept an orphaned server alive, at full CPU, for days.
+    SQLite indexes stay consistent after an abrupt exit. The watchdog does not
+    write a message: stderr usually goes to the closed client, and a write
+    error would stop the thread before the exit.
+    """
+    parent = os.getppid()
+
+    def watch() -> None:
+        while os.getppid() == parent:
+            time.sleep(interval)
+        os._exit(0)
+
+    threading.Thread(target=watch, name="client-watchdog", daemon=True).start()
 
 
 def main(argv=None):
@@ -118,6 +139,7 @@ async def _stdio(opts):
         opts.project, opts.profile, watch=not opts.no_watch, watch_debounce=opts.watch_debounce
     )
     server = create_mcp_server(gateway)
+    exit_when_client_exits()
     try:
         async with stdio_server() as (read, write):
             await server.run(read, write, server.create_initialization_options())

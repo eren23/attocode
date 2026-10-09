@@ -59,16 +59,16 @@ def find_project_root(start: str) -> str:
     """Return the nearest directory at or above ``start`` with a project marker.
 
     The markers are ``.git`` (a directory, or a file in a worktree) and
-    ``.attocode``. ``~/.attocode`` holds user-wide settings and caches, so it
-    does not make the home directory a project. Before this rule, a server
-    started in a folder without markers indexed the whole home directory.
-    Without a marker, ``start`` is the root.
+    ``.attocode``. The search skips the home directory: ``~/.attocode`` holds
+    user-wide settings and caches, so it does not make home a project. Before
+    this rule, a server started in a folder without markers indexed the whole
+    home directory. Without a marker, ``start`` is the root.
     """
     home = os.path.realpath(os.path.expanduser("~"))
     for dir_path in [start, *_walk_up(start)]:
+        if os.path.realpath(dir_path) == home:
+            continue
         for marker in (".git", ".attocode"):
-            if marker == ".attocode" and os.path.realpath(dir_path) == home:
-                continue
             if os.path.exists(os.path.join(dir_path, marker)):
                 logger.debug(
                     "Auto-discovered project root: %s (marker: %s)",

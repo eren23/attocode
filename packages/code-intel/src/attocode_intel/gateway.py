@@ -637,6 +637,10 @@ def create_mcp_server(gateway: OperationGateway) -> Server:
                 ]
             except Exception:
                 paths = []
+            # A client started in the home folder advertises home as its root.
+            # Indexing all of home is not a useful default; --project ~ still selects it.
+            home = Path.home().resolve()
+            paths = [path for path in paths if Path(path).resolve() != home]
             if len(paths) == 1:
                 arguments = {**arguments, "workspace": paths[0]}
             elif len(paths) > 1:
