@@ -185,6 +185,8 @@ def report(args: argparse.Namespace) -> None:
         raise SystemExit(f"{len(unknown)} result instances are not in instances.jsonl, such as {min(unknown)}")
     if args.ids:  # full ids, or native ids as in the old Loc-Bench id files
         keep = {line.strip() for line in args.ids.read_text().splitlines() if line.strip()}
+        if not keep:
+            raise SystemExit(f"{args.ids} has no instance ids")
         unmatched = keep - {name for inst in instances for name in (inst.id, inst.id.split("/", 1)[1])}
         if unmatched:
             raise SystemExit(f"{len(unmatched)} ids in {args.ids} match no instance, such as {min(unmatched)}")

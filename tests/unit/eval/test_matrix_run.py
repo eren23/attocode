@@ -68,6 +68,9 @@ def test_report_cli(tmp_path, monkeypatch):
     ids.write_text("o__r-1\no__x-9\n")
     with pytest.raises(SystemExit, match="1 ids in .* match no instance, such as o__x-9"):
         main()
+    ids.write_text("\n")
+    with pytest.raises(SystemExit, match="has no instance ids"):
+        main()
     monkeypatch.setattr(sys, "argv", argv)
     results = tmp_path / "out" / "results.jsonl"
     results.write_text("".join(line + "\n" for line in results.read_text().splitlines()
