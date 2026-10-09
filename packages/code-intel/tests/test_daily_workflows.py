@@ -108,7 +108,7 @@ async def test_compact_cross_repo_preserves_warming_workspace(tmp_path, monkeypa
     (root / "helper.py").write_text("def important_helper(): return 1\n")
     release = Event()
 
-    def held_build(self):
+    def held_build(self, *_args):
         release.wait(timeout=3)
         self._kw_index_built = True
 
