@@ -203,3 +203,25 @@ After `summary`, `python -m eval.matrix.agents STUDY --instances /private/path/i
 The primary comparisons are ΔAcc@5 and the geometric mean cost ratio. The report also gives Δseconds and Δturns. The bootstrap range and the sign-flip p-value resample repositories, and the Holm correction applies over setups. With fewer than 10 repositories, a comparison is descriptive. A sample size table gives the tasks for a ΔAcc@5 of 0.10 and of 0.05 at 80% power.
 
 With `--matrix OUT`, the report reads the rows of one offline cell (`--offline-cell`, default `product`) at variant `full` in `OUT/results.jsonl`. For each setup, it correlates the offline reciprocal rank of the first gold file with the agent Acc@5 (Spearman). It also gives a 2×2 table of offline hit@5 and agent hit. An agent hit is a task mean Acc@5 of 0.5 or more. The report counts the tasks without an offline row and does not score them.
+
+## Ranking gate
+
+`python -m eval.matrix.run ci` is a regression gate for search ranking. The Ranking gate workflow runs it when a pull request changes `packages/code-intel/src/`, `eval/matrix/` or `uv.lock`. The engine hash of the matrix covers all of `packages/code-intel/src/`, so a change in any of these files can move the ranking.
+
+The gate reads `eval/matrix/configs/ci.yaml`. It runs the free first-stage cells `product`, `kw`, `body`, `filebm25` and `grep` on 68 queries. `eval/matrix/configs/ci_instances.jsonl` holds them: the 20 queries of the broad dev pack, 13 mcp_bench search tasks and 20 small Loc-Bench instances. Search is deterministic, so the gate compares the first five files of each query with `eval/matrix/ci_baseline.json`. The gate fails when one cell crosses a limit:
+
+- The queries that lose Acc@5 (or R@5) are 2 or more above the queries that gain.
+- The mean MRR@5 drops by more than 0.01.
+- A query has no result, or the query set is not the same as in the baseline.
+
+The gate always lists the queries whose first five files changed. CI keeps the repository snapshots in a cache. It makes all search results again with the code of the pull request.
+
+To change the ranking on purpose:
+
+1. Push the change. The gate fails and lists the changed queries.
+2. Read the list, and make sure that each change is one that you want.
+3. Download the `ranking-baseline` artifact of the failed run.
+4. Replace `eval/matrix/ci_baseline.json` with the file from the artifact.
+5. Commit the file in the same pull request.
+
+CI writes the committed baseline on Linux. To run the gate on your computer, use `python -m eval.matrix.run ci`. Add `--write-baseline` to write a baseline from your code. On macOS, the `kw` cell of one query (`broad_dev/gh-cli::api authentication`) puts two files with the same score in the opposite order. A local run lists that query as changed, but the gate passes.

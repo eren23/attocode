@@ -114,6 +114,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gives the same file order as their frozen pools on 1,118 of 1,120
   Loc-Bench queries and on all 36 blind-pack queries. The two other queries
   come from a repository with Git LFS files.
+- New CI ranking gate, `python -m eval.matrix.run ci`. The Ranking gate
+  workflow runs it when a pull request changes `packages/code-intel/src/`,
+  `eval/matrix/` or `uv.lock`. It runs the cells `product`, `kw`, `body`, `filebm25` and
+  `grep` on 68 fixed queries in 25 repository snapshots. Then it compares the
+  first five files of each query with `eval/matrix/ci_baseline.json`. In one
+  cell, the gate fails at a net loss of 2 queries on Acc@5 or R@5, or at a
+  mean MRR@5 drop of more than 0.01. It always lists the changed queries.
+- `eval/mcp_bench/repos.yaml` pins each repository to a commit. Before, each
+  repository was at `HEAD`. Three repositories use an older release, because
+  newer code moved the gold files of their semantic and symbol tasks:
+  requests 2.31.0, Express 4.22.3 and Spring Boot 3.5.16.
 - The Loc-Bench lexical numbers of 0.2.29 (0.388 to 0.529) ran with the
   importance and frecency weights at zero. The product default sets the
   importance weight to 0.5. With the default weights, lexical file Acc@5 is

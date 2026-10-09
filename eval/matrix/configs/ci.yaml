@@ -1,0 +1,18 @@
+# CI ranking gate: `python -m eval.matrix.run ci`. The Ranking gate workflow runs it when a pull
+# request changes packages/code-intel/src, eval/matrix or uv.lock. The gate runs the free first-stage cells on the
+# queries of ci_instances.jsonl, and compares the first five files of each query with
+# eval/matrix/ci_baseline.json.
+#
+# ci_instances.jsonl is frozen and holds only public text:
+# - broad_dev: the 20 queries of the broad dev pack (attocode, fastapi, gh-cli, pandas, redis) at
+#   the commits of full.yaml. The external and holdout packs stay out of CI, so that they do not
+#   become tuning targets.
+# - mcp_bench: the 13 semantic_search and symbol_search tasks of these repositories with a file as
+#   gold, at the commits of eval/mcp_bench/repos.yaml. The query of a symbol task is the symbol
+#   name. Two tasks with a folder as gold stay out.
+# - locbench: the 20 Loc-Bench V1 instances whose snapshot has the fewest stored files, with the
+#   full issue and the title as queries. A title that equals the issue is one query.
+cells: [product, kw, body, filebm25, grep]
+fail:  # the gate fails when one cell crosses a limit
+  net_loss: 2  # queries that lose Acc@5 (or R@5) minus queries that gain
+  mrr5_drop: 0.01  # drop of the mean MRR@5

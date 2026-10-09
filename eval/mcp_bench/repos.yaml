@@ -1,139 +1,141 @@
 # code-intel-bench repository manifest
-# Each repo is pinned at a specific commit for reproducibility.
+# Each repo is pinned at a specific commit for reproducibility: the HEAD of each clone in
+# ~/Documents/ai/benchmark-repos on 2026-10-09, or the newest release where every gold file of
+# the semantic_search and symbol_search tasks exists. attocode is this repository at 5b67651.
 # Run `setup.sh` to clone repos, or set BENCHMARK_REPOS_DIR.
 
 repos:
   # Python
   - name: fastapi
     url: https://github.com/tiangolo/fastapi
-    commit: HEAD
+    commit: 11614be9021aa4ac078d4d0693a8b5250a1010d8
     language: python
     size_mb: 15
 
   - name: pandas
     url: https://github.com/pandas-dev/pandas
-    commit: HEAD
+    commit: 0039f168fe057b945e8ec2a65c9d1e973c7c1fe9
     language: python
     size_mb: 120
 
   - name: requests
     url: https://github.com/psf/requests
-    commit: HEAD
+    commit: 147c8511ddbfa5e8f71bbf5c18ede0c4ceb3bba4  # v2.31.0: later releases moved the package to src/
     language: python
     size_mb: 5
 
   # Go
   - name: gh-cli
     url: https://github.com/cli/cli
-    commit: HEAD
+    commit: 6e49747f49f31c9c0a68cfa344df7262a684e723
     language: go
     size_mb: 30
 
   - name: cockroach
     url: https://github.com/cockroachdb/cockroach
-    commit: HEAD
+    commit: 53aadff3cedde4d810c72b69ddd96e6a735d93e7
     language: go
     size_mb: 500
 
   # Rust
   - name: ripgrep
     url: https://github.com/BurntSushi/ripgrep
-    commit: HEAD
+    commit: 4519153e5e461527f4bca45b042fff45c4ec6fb9
     language: rust
     size_mb: 8
 
   - name: starship
     url: https://github.com/starship/starship
-    commit: HEAD
+    commit: 6d0a1263fcc74381791805cee57fc466f6e6359c
     language: rust
     size_mb: 15
 
   - name: deno
     url: https://github.com/denoland/deno
-    commit: HEAD
+    commit: 574272ded08b82c7dec64da2120be8442a1f7636
     language: rust
     size_mb: 80
 
   # C
   - name: redis
     url: https://github.com/redis/redis
-    commit: HEAD
+    commit: 20f163eb3dcc1311cfe6c0dda5a3beef08ab1a5d
     language: c
     size_mb: 30
 
   # C++
   - name: spdlog
     url: https://github.com/gabime/spdlog
-    commit: HEAD
+    commit: 0f7562a0f9273cfc71fddc6ae52ebff7a490fa04
     language: cpp
     size_mb: 5
 
   # Java
   - name: spring-boot
     url: https://github.com/spring-projects/spring-boot
-    commit: HEAD
+    commit: 0566f6933049aca6bc5ffc6d559fffade9cd2e0c  # v3.5.16: 4.0 moved the modules
     language: java
     size_mb: 60
 
   # JavaScript
   - name: express
     url: https://github.com/expressjs/express
-    commit: HEAD
+    commit: 899b52494e74327905c16164decdc6e51f803af8  # v4.22.3: 5.0 moved the router to a package
     language: javascript
     size_mb: 3
 
   # TypeScript
   - name: prisma
     url: https://github.com/prisma/prisma
-    commit: HEAD
+    commit: 33667c373c0ae84ad37c7aed2497b99452da589c
     language: typescript
     size_mb: 40
 
   # Ruby
   - name: rails
     url: https://github.com/rails/rails
-    commit: HEAD
+    commit: e72eb4c20b6bb5bdc7f63a4477992209585a1fa9
     language: ruby
     size_mb: 80
 
   - name: faker
     url: https://github.com/faker-ruby/faker
-    commit: HEAD
+    commit: 5c35fd11e7c8c122c35cc024762dac9465cc78d8
     language: ruby
     size_mb: 10
 
   # Swift
   - name: vapor
     url: https://github.com/vapor/vapor
-    commit: HEAD
+    commit: ff88583e10f02aa47be49e632d5179f89e855e03
     language: swift
     size_mb: 10
 
   # Elixir
   - name: phoenix
     url: https://github.com/phoenixframework/phoenix
-    commit: HEAD
+    commit: 850162d618cf4e31be82fb53ad6e259095fa6126
     language: elixir
     size_mb: 8
 
   # Scala
   - name: spark
     url: https://github.com/apache/spark
-    commit: HEAD
+    commit: a5a758846c97c564b4d58c40b013ad8dbed5f9ff
     language: scala
     size_mb: 200
 
   # PHP
   - name: wordpress
     url: https://github.com/WordPress/WordPress
-    commit: HEAD
+    commit: 1d1a1ae9e247a8fc213919da320d280b2db5215b
     language: php
     size_mb: 60
 
   # Internal
   - name: attocode
     url: local
-    commit: HEAD
+    commit: 5b67651850a572670d357fb7636ae8974752b01b
     language: python
     size_mb: 20
 

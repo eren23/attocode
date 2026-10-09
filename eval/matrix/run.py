@@ -15,6 +15,8 @@
       run the first-stage arms on them, or write their rows to OUT/results.jsonl.
   python -m eval.matrix.run status OUT [--arms A,B] [--ids FILE] [--dataset NAME] [--cache DIR]
       Show the snapshot and retrieve coverage per dataset and cell.
+  python -m eval.matrix.run ci [--cache DIR] [--write-baseline]
+      Run the CI ranking gate of configs/ci.yaml, or write its baseline (eval/matrix/ci.py).
 
 A Loc-Bench folder is a run of eval/locbench560: all.json, pools/ (cell lexical, and cell
 lexpy for its Python files), pools2/ (cells fused and bm25), trials/ (one cell per trial
@@ -728,6 +730,9 @@ def main() -> None:
     stages.add_argument("--stage", required=True, choices=("snapshot", "retrieve", "rows"))
     stages.add_argument("--shard", default="0/1", help="I/N: repositories I, I+N, I+2N, ... in name order")
     stages.add_argument("--retry-failed", action="store_true", help="make failed snapshots and results again")
+    gate = commands.add_parser("ci", help="run the CI ranking gate, or write its baseline")
+    gate.add_argument("--cache", type=Path, default=CACHE, help=f"default: {CACHE}")
+    gate.add_argument("--write-baseline", action="store_true", help="write eval/matrix/ci_baseline.json")
     args = parser.parse_args()
     if args.command == "import-legacy":
         unknown = [item for item in args.pack if item.partition("=")[0] not in datasets.PACKS]
@@ -738,6 +743,9 @@ def main() -> None:
         ingest(args.out, args.config)
     elif args.command in ("run", "status"):
         stage(args)
+    elif args.command == "ci":
+        from eval.matrix import ci
+        raise SystemExit(ci.gate(args.cache, write=args.write_baseline))
     else:
         report(args)
 
