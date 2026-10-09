@@ -657,6 +657,17 @@ def status(cache: Path, instances: list[Instance], cells: list[str]) -> None:
             print(f"  {cell}: {count[cell, 'done']}/{count[cell, 'total']} ({count[cell, 'failed']} failed)")
 
 
+def _clean_stale(tmp: Path | None = None) -> None:
+    """Delete the temporary clones and indexes of stopped shards. A live process keeps its folder."""
+    for path in Path(tmp or tempfile.gettempdir()).glob("attocode-matrix-*-*"):
+        try:
+            os.kill(int(path.name.split("-")[2]), 0)
+        except ProcessLookupError:
+            shutil.rmtree(path, ignore_errors=True)
+        except (ValueError, PermissionError):
+            continue
+
+
 def stage(args: argparse.Namespace) -> None:
     instances = _select_ids(_instances(args.out), args.ids)
     if args.dataset:
@@ -672,8 +683,10 @@ def stage(args: argparse.Namespace) -> None:
     if args.command == "status":
         status(args.cache, instances, cells)
     elif args.stage == "snapshot":
+        _clean_stale()
         snapshot(args.cache, instances, retry_failed=args.retry_failed)
     elif args.stage == "retrieve":
+        _clean_stale()
         retrieve(args.cache, instances, cells, retry_failed=args.retry_failed)
     else:
         write_rows(args.out, args.cache, instances, cells)

@@ -169,3 +169,13 @@ def test_product_families_on_a_small_tree(tmp_path):
         assert arms.run("repomap", snap, "load_config")["lists"]["files"][0] == "pkg/config.py"
     finally:
         snap.close()
+
+
+def test_clean_stale_keeps_live_folders(tmp_path):
+    finished = subprocess.Popen(["true"])
+    finished.wait()
+    stale, live = tmp_path / f"attocode-matrix-{finished.pid}-x", tmp_path / f"attocode-matrix-{os.getpid()}-y"
+    stale.mkdir()
+    live.mkdir()
+    matrix._clean_stale(tmp_path)
+    assert not stale.exists() and live.exists()
