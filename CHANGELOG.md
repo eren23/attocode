@@ -76,6 +76,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   discovery skips 108 of 3,669 Live gold files, for example under
   `node_modules/` or `output/` folders. In the graded blind pack, the product
   has no parser for 149 of 371 judged files, such as Crystal and R sources.
+- New `study.py --mode localize`: Claude Code names the files that a fix for
+  an issue must edit. It reads matrix instances and compares four setups:
+  native tools, the attocode MCP server, the server with a first
+  `semantic_search`, and the issue only. `summary` writes `runs.jsonl` with
+  the matrix id as `instance_id`, and Acc@k, cost and turns for each run.
 
 ## [0.2.29] - 2026-10-09
 

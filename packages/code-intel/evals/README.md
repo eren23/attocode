@@ -167,9 +167,11 @@ After exporting a report, copy `operator-review-template.json` to `operator-revi
 
 ## Agent localization study
 
-`study.py freeze --mode localize --instances /private/path/instances.jsonl --ids /private/path/ids.txt --model <explicit model ID> --study /private/path/study` freezes a file localization study for Claude Code. Each line of `instances.jsonl` has `dataset`, `instance_id`, `repo_url`, `base_commit`, `issue`, `title`, `gold_files` and `language`. The ids file has one `instance_id` or `dataset.instance_id` on each line. Use `--trials` (default 2), `--setups` (default: all four) and `--config-id` (default `product`). Then use the frozen harness with `PYTHONPATH=STUDY/engine` for `prepare`, `wiring --quota QUOTA`, `run --quota QUOTA` and `summary`. The subscription quota check is the same as in the other modes.
+`study.py freeze --mode localize --instances /private/path/instances.jsonl --ids /private/path/ids.txt --model <explicit model ID> --study /private/path/study` freezes a file localization study for Claude Code. The input is a matrix `instances.jsonl` from `python -m eval.matrix.run ingest`. Each line is one `eval.matrix.datasets.Instance` as JSON. The ids file has one matrix id (`dataset/native`) on each line. The matrix id is the `instance_id` join key in the study output. Use `--trials` (default 2), `--setups` (default: all four) and `--config-id` (default `product`). Then use the frozen harness with `PYTHONPATH=STUDY/engine` for `prepare`, `wiring --quota QUOTA`, `run --quota QUOTA` and `summary`.
 
-The frozen prompt `PROMPT_V1` gives the issue text without changes. It asks for at most 10 repository-relative paths, most likely first, as `{"files": [...]}`. Claude gets this schema with `--json-schema`. The manifest contains each rendered prompt, so a change to the prompt gives a new study id. The setups are:
+`QUOTA` is the quota file of the repeated client study. The operator writes it only after a check of the account settings: remaining subscription allowance and disabled extra usage. The harness and agents never write this file.
+
+The issue is `queries["full"]` of the instance, and the gold files are `gold`. The frozen prompt `PROMPT_V1` gives the issue text without changes. It asks for at most 10 repository-relative paths, most likely first, as `{"files": [...]}`. Claude gets this schema with `--json-schema`. The manifest contains each rendered prompt, so a change to the prompt gives a new study id. The setups are:
 
 - `native`: `Read`, `Grep` and `Glob`.
 - `intel`: the native tools, the attocode MCP server (daily profile, frozen engine) and its installed project guidance.
@@ -178,7 +180,9 @@ The frozen prompt `PROMPT_V1` gives the issue text without changes. It asks for 
 
 No setup gets `ToolSearch`. The wiring check shows that Claude can call the MCP tools without it.
 
-`prepare` fetches each base commit and makes a snapshot with one commit and no history. It excludes an instance when the snapshot has agent guidance or configuration, for example `CLAUDE.md`, `AGENTS.md`, `.claude/` or `.mcp.json`. It also excludes an instance when no gold file is in the tree. It builds the index of each snapshot before the timed runs.
+`prepare` fetches each base commit. When `repo` has a `/`, it fetches from `https://github.com/{repo}.git`. Otherwise the instance is from a case pack, and `prepare` fetches from the local clone `~/Documents/ai/benchmark-repos/{repo}`. It only reads that clone.
+
+From each base commit, `prepare` makes a snapshot with one commit and no history. It excludes an instance when the snapshot has agent guidance or configuration, for example `CLAUDE.md`, `AGENTS.md`, `.claude/` or `.mcp.json`. It also excludes an instance when no gold file is in the tree. It builds the index of each snapshot before the timed runs.
 
 Each trial starts in a fresh copy. An intel trial copies the index and repairs it before the timer starts, because the copy changes the file times. The MCP server runs with `ATTOCODE_LOCAL_ONLY=1` and `HF_HUB_OFFLINE=1`. Each trial has a 600-second limit. A trial that changes `git status` is a `protocol_violation`.
 

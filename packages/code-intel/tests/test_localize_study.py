@@ -68,20 +68,15 @@ def git(root, *args):
     return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def frozen(localize, tmp_path, name="study", setups=("native", "intel")):
-    source = tmp_path / "upstream"
-    if not source.exists():
-        (source / "pkg").mkdir(parents=True)
-        (source / "pkg/a.py").write_text("def helper():\n    return 1\n")
-        (source / "pkg/b.py").write_text("def target():\n    return helper()\n")
-        git(source, "init", "-q")
-        git(source, "add", ".")
-        git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
-    instance = {"dataset": "fixture", "instance_id": "fix-1", "repo_url": source.as_uri(),
-                "base_commit": git(source, "rev-parse", "HEAD"), "issue": "Fix {target} in b.\nIt fails.",
-                "title": "Fix target", "gold_files": ["pkg/b.py"], "language": "python"}
-    (tmp_path / "instances.jsonl").write_text(json.dumps(instance) + "\n")
-    (tmp_path / "ids.txt").write_text("fix-1\n")
+def matrix(name, repo, base_commit, queries, gold):
+    """One line of a matrix instances.jsonl: asdict(eval.matrix.datasets.Instance)."""
+    return {"id": name, "repo": repo, "base_commit": base_commit, "language": "python", "category": "",
+            "created_at": "", "queries": queries, "gold": gold, "grades": None, "split": "dev", "tags": []}
+
+
+def freeze(localize, tmp_path, name, instances, ids, setups):
+    (tmp_path / "instances.jsonl").write_text("".join(json.dumps(instance) + "\n" for instance in instances))
+    (tmp_path / "ids.txt").write_text("".join(f"{name}\n" for name in ids))
     study = tmp_path / name
     localize.freeze(SimpleNamespace(project=PROJECT, study=study, instances=tmp_path / "instances.jsonl",
                                     ids=tmp_path / "ids.txt", model="stub-model-1", trials=1, setups=list(setups),
@@ -89,13 +84,39 @@ def frozen(localize, tmp_path, name="study", setups=("native", "intel")):
     return study
 
 
+def case_repo():
+    """A case-pack clone under the (test) home folder. Its last commit is the fix, after the base commit."""
+    source = Path.home() / "Documents/ai/benchmark-repos/fixture-repo"
+    if not source.exists():
+        (source / "pkg").mkdir(parents=True)
+        (source / "pkg/a.py").write_text("def helper():\n    return 1\n")
+        (source / "pkg/b.py").write_text("def target():\n    return helper()\n")
+        git(source, "init", "-q")
+        git(source, "add", ".")
+        git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+        (source / "pkg/b.py").write_text("def target():\n    return helper() + 1\n")
+        git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "fix")
+    return source, git(source, "rev-parse", "HEAD~1")
+
+
+def frozen(localize, tmp_path, name="study", setups=("native", "intel")):
+    _, base = case_repo()
+    instance = matrix("fixture/fix-1", "fixture-repo", base, {"full": "Fix {target} in b.\nIt fails.",
+                                                             "title": "Fix target"}, ["pkg/b.py"])
+    return freeze(localize, tmp_path, name, [instance], ["fixture/fix-1"], setups)
+
+
 def test_one_row_end_to_end_with_resume_and_no_orphans(localize, stub, tmp_path, monkeypatch):
     study = frozen(localize, tmp_path)
+    source, _ = case_repo()
+    before = {path: path.stat().st_mtime_ns for path in source.rglob("*")}
     localize.prepare(SimpleNamespace(study=study))
-    prepared = json.loads((study / "preparation.json").read_text())["tasks"]["fixture.fix-1"]
+    assert {path: path.stat().st_mtime_ns for path in source.rglob("*")} == before, "prepare wrote to the clone"
+    prepared = json.loads((study / "preparation.json").read_text())["tasks"]["fixture_fix-1"]
     assert prepared["status"] == "ready" and prepared["index"]["ready"]
-    # The snapshot has one commit, so the history cannot show a fix.
-    assert git(study / "sources/fixture.fix-1", "log", "--all", "--oneline").count("\n") == 0
+    # The snapshot has one commit (the base, not the fix), so the history cannot show the fix.
+    assert git(study / "sources/fixture_fix-1", "log", "--all", "--oneline").count("\n") == 0
+    assert "+ 1" not in (study / "sources/fixture_fix-1/pkg/b.py").read_text()
     quota = tmp_path / "quota.json"
     quota.write_text(json.dumps({"claude": {"subscription_only": True, "extra_usage_disabled": True,
                                             "remaining": True, "checked_at": time.time()}}))
@@ -120,7 +141,7 @@ def test_one_row_end_to_end_with_resume_and_no_orphans(localize, stub, tmp_path,
     assert (native["acc1"], native["acc5"], native["recall10"], native["mrr5"]) == (1.0, 1.0, 1.0, 1.0)
     assert (native["cost_usd"], native["turns"], native["tokens"]["cache_read_input_tokens"]) == (0.0123, 3, 100)
     assert native["tool_calls"] == {"Grep": 1} and native["gold_seen_s"] > 0
-    assert (native["dataset"], native["instance_id"], native["config_id"]) == ("fixture", "fix-1", "product")
+    assert (native["dataset"], native["instance_id"], native["config_id"]) == ("fixture", "fixture/fix-1", "product")
     assert intel["index_reused"] is True and native["index_reused"] is False
     assert "| native | 1 | 1 | 1.00 |" in (study / "summary.md").read_text()
     assert "Five random runs" in (study / "review.md").read_text()
@@ -152,8 +173,8 @@ def test_grading_uses_shared_metrics_and_scores_failures_as_zero(localize, tmp_p
     monkeypatch.syspath_prepend(str(PROJECT))
     from eval import metrics
     manifest = {"config_id": "product", "model": "m", "timeout": 600}
-    task = {"id": "d.x", "dataset": "d", "instance_id": "x", "gold_files": ["src/a.py", "src/b.py"]}
-    record = {"id": "d.x:claude:0:native", "lane": "native", "repeat": 0, "workspace": "/ws", "status": "completed",
+    task = {"id": "d_x", "dataset": "d", "instance_id": "d/x", "gold": ["src/a.py", "src/b.py"]}
+    record = {"id": "d_x:claude:0:native", "lane": "native", "repeat": 0, "workspace": "/ws", "status": "completed",
               "stage": {"output": {"files": ["docs/x.md", "src/a.py", "/ws/src/b.py:4"]}, "seconds": 42.0,
                         "cost_usd": 0.5, "turns": 5}}
     good = localize.grade(tmp_path, manifest, task, record, metrics, {"src/a.py", "src/b.py"})
@@ -176,3 +197,22 @@ def test_prompt_text_is_part_of_the_study_id(localize, stub, tmp_path, monkeypat
     prompts = manifests[0]["tasks"][0]["prompts"]
     assert prompts["native"].startswith("Fix {target} in b.\nIt fails.\n\nFind the files")
     assert prompts["intel_first"] == prompts["native"] + localize.FIRST
+
+
+def test_matrix_instances_become_tasks(localize, stub, tmp_path):
+    commit = "a" * 40
+    github = matrix("locbench/o__r-1", "o/r", commit, {"full": "Crash in x\nDetails", "title": "Crash in x"}, ["x.py"])
+    pack = matrix("graded_blind/okhttp::follow redirects", "okhttp", commit, {"full": "follow redirects"}, ["a.kt"])
+    with pytest.raises(ValueError, match="exactly one instance"):
+        freeze(localize, tmp_path, "unknown", [github], ["o__r-1"], ["native"])
+    study = freeze(localize, tmp_path, "study", [github, pack, {**pack, "id": "graded_blind/other"}],
+                   [github["id"], pack["id"]], ["native"])
+    tasks = {task["instance_id"]: task for task in json.loads((study / "manifest.json").read_text())["tasks"]}
+    assert set(tasks) == {github["id"], pack["id"]}
+    assert tasks[github["id"]]["id"] == "locbench_o__r-1" and tasks[github["id"]]["dataset"] == "locbench"
+    assert tasks[github["id"]]["source"] == "https://github.com/o/r.git"
+    assert (tasks[github["id"]]["issue"], tasks[github["id"]]["title"]) == ("Crash in x\nDetails", "Crash in x")
+    assert tasks[pack["id"]]["id"] == "graded_blind_okhttp_follow_redirects"
+    assert tasks[pack["id"]]["source"] == str(Path.home() / "Documents/ai/benchmark-repos/okhttp")
+    assert tasks[pack["id"]]["title"] == tasks[pack["id"]]["issue"] == "follow redirects"
+    assert tasks[pack["id"]]["gold"] == ["a.kt"]

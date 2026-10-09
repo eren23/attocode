@@ -4,6 +4,10 @@ Setups: `native` (Read, Grep, Glob), `intel` (the native tools, the attocode MCP
 its installed guidance), `intel_first` (intel, and the prompt asks for semantic_search
 first), and `issue_only` (no tools, an empty workspace and one trial: the contamination
 control). `run` records what the client did. Only `summary` grades, with code.
+
+The input is a matrix `instances.jsonl`: one `asdict(eval.matrix.datasets.Instance)` on each
+line, as `python -m eval.matrix.run ingest` writes it. The harness reads it as JSON and does
+not import `eval.matrix`.
 """
 from __future__ import annotations
 
@@ -55,7 +59,6 @@ TOOLS = {"native": NATIVE, "intel": NATIVE, "intel_first": NATIVE, "issue_only":
 # A config_id names extra MCP server environment. "product" is the shipped default.
 CONFIGS = {"product": {}}
 LOCAL_ENV = {"ATTOCODE_LOCAL_ONLY": "1", "HF_HUB_OFFLINE": "1"}
-FIELDS = ("dataset", "instance_id", "repo_url", "base_commit", "issue", "title", "gold_files", "language")
 FOLDERS = ("runs", "sources", "wiring", "clones", "prepare")
 TOKENS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 TIMEOUT, WARM_TIMEOUT, SEED = 600, 1800, 7331
@@ -69,7 +72,21 @@ WIRING_PROMPT = ("Excluded wiring check, not a scored trial. Do not edit files. 
 
 
 def task_id(instance):
-    return re.sub(r"[^A-Za-z0-9._-]+", "_", f"{instance['dataset']}.{instance['instance_id']}")
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", instance["id"])
+
+
+def source(repo):
+    """Where prepare fetches from: GitHub for owner/name, else the read-only local clone of a case pack."""
+    return f"https://github.com/{repo}.git" if "/" in repo else str(Path.home() / "Documents/ai/benchmark-repos" / repo)
+
+
+def as_task(instance):
+    """A study task from one matrix instance. The matrix id is the instance_id join key."""
+    queries = instance["queries"]
+    return {"id": task_id(instance), "instance_id": instance["id"], "dataset": instance["id"].split("/", 1)[0],
+            "repo": instance["repo"], "source": source(instance["repo"]), "base_commit": instance["base_commit"],
+            "language": instance.get("language", ""), "issue": queries["full"],
+            "title": queries.get("title") or queries["full"], "gold": instance["gold"]}
 
 
 def prompt(task, setup):
@@ -89,12 +106,13 @@ def run_dir(study, row):
 
 
 def check(instance):
-    gold = instance.get("gold_files")
-    if (set(FIELDS) - set(instance) or not str(instance["issue"]).strip()
-            or not re.fullmatch(r"[0-9a-f]{40}", str(instance["base_commit"]))
-            or not isinstance(gold, list) or not gold or not all(isinstance(p, str) and p for p in gold)):
-        raise ValueError(f"Instance {instance.get('instance_id')} needs {', '.join(FIELDS)}, "
-                         "a full base_commit, an issue and gold_files")
+    queries, gold = instance.get("queries"), instance.get("gold")
+    if not ("/" in str(instance.get("id")) and instance.get("repo")
+            and re.fullmatch(r"[0-9a-f]{40}", str(instance.get("base_commit")))
+            and isinstance(queries, dict) and str(queries.get("full") or "").strip()
+            and isinstance(gold, list) and gold and all(isinstance(p, str) and p for p in gold)):
+        raise ValueError(f"Instance {instance.get('id')} needs a dataset/native id, a repo, a full base_commit, "
+                         "queries.full and gold")
 
 
 def freeze(args):
@@ -114,16 +132,13 @@ def freeze(args):
         raise ValueError(f"Use --trials of 1 or more and a config id from {sorted(CONFIGS)}")
     wanted = {line.strip() for line in args.ids.read_text().splitlines() if line.strip() and not line.startswith("#")}
     instances = [json.loads(line) for line in args.instances.read_text().splitlines() if line.strip()]
-
-    def keys(instance):
-        return {instance.get("instance_id"), f"{instance.get('dataset')}.{instance.get('instance_id')}"} & wanted
-    selected = [instance for instance in instances if keys(instance)]
-    found = Counter(key for instance in selected for key in keys(instance))
-    if set(found) != wanted or max(found.values(), default=0) > 1:
-        raise ValueError("Each id must match exactly one instance; use dataset.instance_id when ids repeat")
+    found = Counter(instance.get("id") for instance in instances)
+    if missing := sorted(name for name in wanted if found[name] != 1):
+        raise ValueError(f"Each id must match the id of exactly one instance (dataset/native): {missing[:5]}")
+    selected = [instance for instance in instances if instance.get("id") in wanted]
     for instance in selected:
         check(instance)
-    tasks = [{"id": task_id(instance), **{key: instance[key] for key in FIELDS}} for instance in selected]
+    tasks = [as_task(instance) for instance in selected]
     if len({task["id"] for task in tasks}) != len(tasks):
         raise ValueError("Two instances have the same path-safe task id")
     for task in tasks:
@@ -263,13 +278,14 @@ def prepare_task(study, manifest, clone, task):
     root = study / "sources" / task["id"]
     shutil.rmtree(root, ignore_errors=True)
     root.mkdir(parents=True)
-    git(clone, "fetch", "-q", "--depth", "1", task["repo_url"], task["base_commit"], timeout=1800)
+    # A fetch only reads the source, so a local case-pack clone stays unchanged.
+    git(clone, "fetch", "-q", "--depth", "1", task["source"], task["base_commit"], timeout=1800)
     snapshot(clone, root, revision=task["base_commit"])
     reason = conflict(manifest, study, root)
     if not reason:
         commit(root)
         tracked = set(git(root, "ls-files", "-z").split("\0")) - {""}
-        if not tracked & set(task["gold_files"]):
+        if not tracked & set(task["gold"]):
             reason = "No gold file exists in the base tree"
     if reason:
         shutil.rmtree(root)
@@ -279,7 +295,7 @@ def prepare_task(study, manifest, clone, task):
     return {"status": "ready" if index["ready"] else "excluded",
             "reason": None if index["ready"] else "The index did not become ready",
             "tree_sha256": tree_hash(root), "files": len(tracked),
-            "gold_in_tree": len(tracked & set(task["gold_files"])), "index": index}
+            "gold_in_tree": len(tracked & set(task["gold"])), "index": index}
 
 
 def prepare(args):
@@ -292,14 +308,14 @@ def prepare(args):
     groups = {}
     for task in manifest["tasks"]:
         if task["id"] not in prepared:
-            groups.setdefault(task["repo_url"], []).append(task)
-    for url in sorted(groups):
+            groups.setdefault(task["source"], []).append(task)
+    for origin in sorted(groups):
         clone = study / "clones" / "current"
         shutil.rmtree(clone, ignore_errors=True)
         clone.mkdir(parents=True)
         try:
             git(clone, "init", "-q")
-            for task in groups[url]:
+            for task in groups[origin]:
                 prepared[task["id"]] = prepare_task(study, manifest, clone, task)
                 write_json(path, {"study_id": manifest["study_id"], "tasks": prepared})
                 print(json.dumps({"task": task["id"], "status": prepared[task["id"]]["status"],
@@ -514,7 +530,7 @@ def grade(study, manifest, task, record, metrics, tracked):
     answer = stage.get("output", {}).get("files")
     parsed = isinstance(answer, list) and all(isinstance(path, str) for path in answer)
     files = clean_paths(answer if parsed else [], record.get("workspace", ""))
-    ranked, gold = [] if failed else files, set(task["gold_files"])
+    ranked, gold = [] if failed else files, set(task["gold"])
     events = run_dir(study, record) / "stage-0/events.jsonl"
     trace = parse_events("claude", events.read_text()) if events.exists() else {"tool_calls": [], "tool_results": []}
     mcp = {call["id"] for call in trace["tool_calls"] if call["name"].startswith("mcp__")}
