@@ -9,6 +9,7 @@ repositories to OpenRouter. Commands:
   run.py shard I N          process repositories I, I+N, I+2N, ... (sorted by name)
   run.py only ID [ID ...]   process the given instances
   run.py credits            print OpenRouter total usage (USD), for the cost delta
+  run.py q512 I N           shard I of N: Jev with the query cut to 512 characters (long issues only)
 """
 import json
 import os
@@ -133,6 +134,46 @@ def instance(clone: Path, r: dict) -> None:
     (ROOT / "done" / f"{iid}.json").write_text(json.dumps({"instance_id": iid, "seconds": round(time.time() - started)}))
 
 
+def q512(clone: Path, r: dict) -> None:
+    """Jev on the frozen pool with the query cut to 512 characters, as the product ranker sends it.
+
+    Rebuilds the 48 candidate files at base_commit and checks that the excerpts hash
+    the same as in the original trial, so only the query differs.
+    """
+    iid, log = r["instance_id"], ROOT / "logs" / f"{r['instance_id']}-q512.log"
+    old = json.loads((ROOT / "trials" / f"{iid}-jev48.json").read_text())["cases"][0]
+    pool = ROOT / "pools" / f"{iid}.json"
+    wt = Path(json.loads(pool.read_text())["repos"][0]["source"])
+    git = ["git", "-C", str(clone)]
+    add = [*git, "worktree", "add", "-q", "--no-checkout", "--detach", str(wt), r["base_commit"]]
+    if not wt.exists() and not run(add, log, 1800):
+        run([*git, "fetch", "-q", "origin", r["base_commit"]], log, 1800)
+        run(add, log, 1800)
+    # Sparse checkout writes only the candidates and keeps `git status` clean for the trial.
+    def patterns(paths):
+        return ["/" + re.sub(r"([*?\[\\])", r"\\\1", path) for path in paths]
+
+    run(["git", "-C", str(wt), "sparse-checkout", "set", "--no-cone", *patterns(old["baseline_files"])], log, 600)
+    run(["git", "-C", str(wt), "read-tree", "-mu", "HEAD"], log, 1800)
+    # A symlinked candidate also needs its target in the checkout.
+    links = [os.path.relpath(os.path.realpath(wt / f), wt) for f in old["baseline_files"] if (wt / f).is_symlink()]
+    if links:
+        run(["git", "-C", str(wt), "sparse-checkout", "add", *patterns(links)], log, 1800)
+    trial = [PY, "-m", "eval.model_rerank_trial", "--pool", str(pool), "--model", "jev-choice", "--allow-remote",
+             "--select", f"{iid}::{r['problem_statement']}", "--max-query-chars", "512"]
+    same = {}
+    for n in (24, 48):
+        out = ROOT / "trials-q512" / f"{iid}-jev{n}.json"
+        if not (run([*trial, "--max-candidates", str(n), "--output", str(out)], log, 3600) and cases(out) == 1):
+            run([*git, "worktree", "remove", "--force", str(wt)], log, 600)
+            return
+        before = old if n == 48 else next(c for c in json.loads((ROOT / "trials" / f"{iid}-jev24.json").read_text())["cases"]
+                                          if c["query"] == old["query"])
+        same[n] = json.loads(out.read_text())["cases"][0]["evidence_sha256"] == before["evidence_sha256"]
+    run([*git, "worktree", "remove", "--force", str(wt)], log, 600)
+    (ROOT / "done-q512" / f"{iid}.json").write_text(json.dumps({"instance_id": iid, "same_evidence": same}))
+
+
 def process(selected: list[dict], step=instance, done: str = "done") -> None:
     by_repo = defaultdict(list)
     for r in selected:
@@ -168,7 +209,7 @@ def usage() -> None:
 
 if __name__ == "__main__":
     command, args = sys.argv[1], sys.argv[2:]
-    for name in ("pools", "trials", "logs", "done", "repos", "wt"):
+    for name in ("pools", "trials", "logs", "done", "repos", "wt", "trials-q512", "done-q512"):
         (ROOT / name).mkdir(parents=True, exist_ok=True)
     if command == "fetch":
         fetch()
@@ -182,3 +223,8 @@ if __name__ == "__main__":
         index, count = int(args[0]), int(args[1])
         repos = sorted({r["repo"] for r in rows()})[index::count]
         process([r for r in rows() if r["repo"] in repos])
+    elif command == "q512":
+        index, count = int(args[0]), int(args[1])
+        long = [r for r in rows() if len(r["problem_statement"]) > 512]
+        repos = sorted({r["repo"] for r in long})[index::count]
+        process([r for r in long if r["repo"] in repos], step=q512, done="done-q512")
