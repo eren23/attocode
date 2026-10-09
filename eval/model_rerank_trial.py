@@ -263,7 +263,7 @@ def _select(pool: dict, selections: set[str], repo_names: set[str] | None = None
 def run(pool_path: Path, *, model_name: str, selections: set[str],
         max_candidates: int, allow_remote: bool = False,
         repo_names: set[str] | None = None, endpoint: str = "", model_id: str = "",
-        auth_env: str = "", timeout_ms: int = 0) -> dict:
+        auth_env: str = "", timeout_ms: int = 0, max_query_chars: int = 0) -> dict:
     if max_candidates < 2:
         raise ValueError("max_candidates must be at least 2")
     pool_bytes = pool_path.read_bytes()
@@ -303,7 +303,7 @@ def run(pool_path: Path, *, model_name: str, selections: set[str],
     output = {
         "model": model_name, "model_path": model_path, "model_load_ms": load_ms,
         "pool": str(pool_path), "pool_sha256": hashlib.sha256(pool_bytes).hexdigest(),
-        "max_candidates": max_candidates, "instruction": INSTRUCTION if model_name == "qwen3" else None,
+        "max_candidates": max_candidates, "max_query_chars": max_query_chars or None, "instruction": INSTRUCTION if model_name == "qwen3" else None,
         "adapter": "systemone-choice-v1" if model_name == "systemone-http" else None,
         "endpoint_sha256": hashlib.sha256(endpoint.encode()).hexdigest()
         if model_name == "systemone-http" else None,
@@ -322,7 +322,9 @@ def run(pool_path: Path, *, model_name: str, selections: set[str],
         elif model_name == "decision2":
             scores, failures = _decision_scores(model, case["query"], files, evidence)
         elif model_name in {"decision2-choice", "jev-choice"}:
-            scores, failures = _choice_scores(model, case["query"], files, evidence,
+            # The product sends query[:512] to its ranker; excerpts still use the whole query.
+            query = case["query"][:max_query_chars] if max_query_chars else case["query"]
+            scores, failures = _choice_scores(model, query, files, evidence,
                                               remote=model_name == "jev-choice")
             if failures:  # every candidate scored 0.5, so the case keeps the lexical order
                 fallback_reason = "request_failed"
@@ -391,12 +393,15 @@ def main() -> None:
     parser.add_argument("--auth-env", default="", help="Environment variable holding a bearer token")
     parser.add_argument("--timeout-ms", type=int, default=0,
                         help="Whole-call limit; 0 uses 5s loopback or 800ms remote")
+    parser.add_argument("--max-query-chars", type=int, default=0,
+                        help="Cut the query sent to a choice model to this many characters; 0 sends all")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     result = run(args.pool, model_name=args.model, selections=set(args.select),
                  max_candidates=args.max_candidates, allow_remote=args.allow_remote,
                  repo_names=set(args.repo), endpoint=args.endpoint, model_id=args.model_id,
-                 auth_env=args.auth_env, timeout_ms=args.timeout_ms)
+                 auth_env=args.auth_env, timeout_ms=args.timeout_ms,
+                 max_query_chars=args.max_query_chars)
     args.output.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"summary": result["summary"]}), flush=True)
 
