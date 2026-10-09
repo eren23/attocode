@@ -224,4 +224,4 @@ To change the ranking on purpose:
 4. Replace `eval/matrix/ci_baseline.json` with the file from the artifact.
 5. Commit the file in the same pull request.
 
-CI writes the committed baseline on Linux. To run the gate on your computer, use `python -m eval.matrix.run ci`. Add `--write-baseline` to write a baseline from your code.
+CI writes the committed baseline on Linux. To run the gate on your computer, use `python -m eval.matrix.run ci`. Add `--write-baseline` to write a baseline from your code. On macOS, the `kw` cell of one query (`broad_dev/gh-cli::api authentication`) puts two files with the same score in the opposite order. A local run lists that query as changed, but the gate passes.
