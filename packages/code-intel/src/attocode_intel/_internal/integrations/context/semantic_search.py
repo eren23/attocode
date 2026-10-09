@@ -280,7 +280,7 @@ class SearchScoringConfig:
     chunk_rrf_k: int = 20
     body_weight: float = 1.15          # the keyword list has weight 1.0
     body_max_tokens: int = 20          # rarest query words that body search sends
-    file_bm25_min_tokens: int = 1000   # whole-file BM25 needs more unique words than this
+    file_bm25_min_tokens: int = 20     # whole-file BM25 needs more unique words than this
     file_rrf_k: int = 60
     file_fusion_depth: int = 48        # files per list in whole-file fusion
 
