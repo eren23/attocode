@@ -1,0 +1,396 @@
+broad_dev/attocode::session checkpoints
+broad_dev/attocode::task decomposition
+broad_dev/attocode::token enforcement
+broad_dev/attocode::worker spawning
+broad_dev/fastapi::dependency resolution
+broad_dev/fastapi::middleware stack
+broad_dev/fastapi::response serialization
+broad_dev/fastapi::websocket connection
+broad_dev/gh-cli::api authentication
+broad_dev/gh-cli::issue filtering
+broad_dev/gh-cli::pull review
+broad_dev/gh-cli::repository forking
+broad_dev/pandas::csv parsing
+broad_dev/pandas::datetime arithmetic
+broad_dev/pandas::groupby aggregation
+broad_dev/pandas::missing values
+broad_dev/redis::cluster discovery
+broad_dev/redis::event loop
+broad_dev/redis::memory eviction
+broad_dev/redis::rdb persistence
+broad_external/express::cookie clearing
+broad_external/express::json serialization
+broad_external/express::request protocol
+broad_external/express::template rendering
+broad_external/phoenix::channel server
+broad_external/phoenix::endpoint supervision
+broad_external/phoenix::route matching
+broad_external/phoenix::socket serialization
+broad_external/requests::certificate verification
+broad_external/requests::cookie merging
+broad_external/requests::redirect resolution
+broad_external/requests::response decoding
+broad_external/ripgrep::glob matching
+broad_external/ripgrep::parallel traversal
+broad_external/ripgrep::regex matcher
+broad_external/ripgrep::search output
+broad_external/vapor::middleware pipeline
+broad_external/vapor::request body
+broad_external/vapor::route registration
+broad_external/vapor::websocket routes
+broad_holdout/faker::date generation
+broad_holdout/faker::internet email
+broad_holdout/faker::random names
+broad_holdout/faker::street address
+broad_holdout/prisma::client generation
+broad_holdout/prisma::interactive transactions
+broad_holdout/prisma::query serialization
+broad_holdout/prisma::schema configuration
+broad_holdout/protobuf::descriptor parsing
+broad_holdout/protobuf::field descriptors
+broad_holdout/protobuf::json serialization
+broad_holdout/protobuf::wire encoding
+broad_holdout/spdlog::async logging
+broad_holdout/spdlog::pattern formatting
+broad_holdout/spdlog::rotating sink
+broad_holdout/spdlog::thread pool
+broad_holdout/starship::config loading
+broad_holdout/starship::git status
+broad_holdout/starship::memory display
+broad_holdout/starship::prompt formatting
+graded_blind/crystal::chunked transfer encoding body
+graded_blind/crystal::hints for misspelled identifiers
+graded_blind/crystal::load time zone database files
+graded_blind/crystal::overload ordering by restriction strictness
+graded_blind/crystal::sleeping fiber timer wakeup
+graded_blind/crystal::tests for json object field mapping
+graded_blind/ggplot2::choose histogram bin breaks
+graded_blind/ggplot2::facet strip label text
+graded_blind/ggplot2::random jitter to avoid overplotting
+graded_blind/ggplot2::save plot to image file
+graded_blind/ggplot2::tests for boxplot statistics
+graded_blind/ggplot2::turn chart sideways
+graded_blind/okhttp::HTTP/2 flow control window
+graded_blind/okhttp::close idle pooled connections
+graded_blind/okhttp::follow HTTP redirects
+graded_blind/okhttp::parse cookies from response headers
+graded_blind/okhttp::tests for URL parsing
+graded_blind/okhttp::throttle simultaneous outbound traffic
+graded_blind/postgrest::CORS allowed origins policy
+graded_blind/postgrest::Range header pagination
+graded_blind/postgrest::embed related resources via foreign keys
+graded_blind/postgrest::health probe endpoint
+graded_blind/postgrest::parse filter operators from query string
+graded_blind/postgrest::tests for upsert conflict resolution
+graded_blind/rails::association counter cache updates
+graded_blind/rails::hide sensitive data from logs
+graded_blind/rails::irregular plural inflection rules
+graded_blind/rails::retry failed jobs with backoff
+graded_blind/rails::signed and encrypted cookies
+graded_blind/rails::tests for password hashing
+graded_blind/sqlite::LIKE and GLOB wildcard matching
+graded_blind/sqlite::defragment and shrink after bulk removal
+graded_blind/sqlite::enforce foreign key constraints
+graded_blind/sqlite::evict least recently used pages
+graded_blind/sqlite::external merge sort for large results
+graded_blind/sqlite::tests for date and time functions
+lca/alibaba__spring-cloud-alibaba-46-42
+lca/android__compose-samples-1045-1023
+lca/apache__eventmesh-3432-3431
+lca/apache__shardingsphere-1987-1985
+lca/apicurio__apicurio-studio-1604-1533
+lca/appium__appium-1145-1140
+lca/archivebox__archivebox-822-821
+lca/beetbox__beets-3238-2790
+lca/bumble-tech__appyx-17-16
+lca/carlosesco__neko-104-67
+lca/cashapp__sqldelight-2516-2382
+lca/chia-network__chia-blockchain-16110-16039
+lca/dagger__dagger-3814-3813
+lca/detekt__detekt-483-466
+lca/edgedb__edgedb-5785-5725
+lca/gchq__gaffer-2884-2881
+lca/gocd__gocd-10676-10036
+lca/google__android-fhir-301-296
+lca/google__conscrypt-785-781
+lca/google__jax-1039-1033
+lca/googlecloudplatform__dataflowtemplates-469-464
+lca/hannah-sten__texify-idea-1603-1602
+lca/hannah-sten__texify-idea-2532-2530
+lca/hpcaitech__colossalai-3621-3620
+lca/intellij-rust__intellij-rust-9545-9543
+lca/jwstegemann__fritz2-679-671
+lca/kordlib__kord-96-94
+lca/kotlin__kotlinx.coroutines-3584-3578
+lca/kotlin__kotlinx.coroutines-3801-3789
+lca/libgdx__libgdx-856-798
+lca/mikubill__sd-webui-controlnet-321-307
+lca/mitmproxy__mitmproxy-4298-3994
+lca/netbox-community__netbox-10187-9895
+lca/netflix__dgs-framework-268-262
+lca/objectionary__eo-1263-1256
+lca/openbb-finance__openbbterminal-410-409
+lca/opengamma__strata-1313-1312
+lca/openmined__pysyft-1908-1896
+lca/paddlepaddle__paddlespeech-1432-1426
+lca/pinterest__ktlint-389-367
+lca/plotly__plotly.py-2208-2167
+lca/pypa__pip-12140-12138
+lca/sanic-org__sanic-1327-1323
+lca/serverless__serverless-5500-5499
+lca/spring-cloud__spring-cloud-stream-402-403
+lca/spring-projects__spring-session-450-445
+lca/square__anvil-577-574
+lca/square__leakcanary-458-449
+lca/square__wire-1472-1446
+lca/square__workflow-kotlin-644-642
+lca/stevenblack__hosts-112-107
+lca/synthetichealth__synthea-410-395
+lca/textualize__rich-2212-2197
+lca/theopenconversationkit__tock-1040-1039
+lca/thundernest__k-9-5687-5661
+lca/tootallnate__java-websocket-570-564
+lca/trinodb__trino-17804-17803
+lca/tweepy__tweepy-1262-1261
+lca/vert-x3__vertx-web-1779-1778
+lca/zaproxy__zaproxy-7494-7484
+lite/astropy__astropy-14365
+lite/astropy__astropy-6938
+lite/django__django-11815
+lite/django__django-12113
+lite/django__django-12125
+lite/django__django-12856
+lite/django__django-14534
+lite/django__django-14999
+lite/django__django-15781
+lite/matplotlib__matplotlib-23314
+lite/matplotlib__matplotlib-23476
+lite/matplotlib__matplotlib-23563
+lite/matplotlib__matplotlib-23987
+lite/matplotlib__matplotlib-24970
+lite/matplotlib__matplotlib-25311
+lite/matplotlib__matplotlib-25498
+lite/pallets__flask-5063
+lite/psf__requests-1963
+lite/pydata__xarray-4248
+lite/pylint-dev__pylint-5859
+lite/pylint-dev__pylint-7080
+lite/pylint-dev__pylint-7114
+lite/pylint-dev__pylint-7228
+lite/pytest-dev__pytest-11148
+lite/scikit-learn__scikit-learn-10297
+lite/scikit-learn__scikit-learn-10508
+lite/scikit-learn__scikit-learn-25570
+lite/scikit-learn__scikit-learn-25638
+lite/sphinx-doc__sphinx-10325
+lite/sphinx-doc__sphinx-8506
+lite/sphinx-doc__sphinx-8627
+lite/sphinx-doc__sphinx-8713
+lite/sphinx-doc__sphinx-8801
+lite/sympy__sympy-12481
+lite/sympy__sympy-13437
+lite/sympy__sympy-14308
+lite/sympy__sympy-17630
+lite/sympy__sympy-18087
+lite/sympy__sympy-20154
+lite/sympy__sympy-23262
+live/BYVoid__OpenCC-1289
+live/CleverRaven__Cataclysm-DDA-86364
+live/ErikEJ__EFCorePowerTools-3417
+live/GitoxideLabs__gitoxide-2476
+live/Kareadita__Kavita-4552
+live/MudBlazor__MudBlazor-12918
+live/NVIDIA__OpenShell-810
+live/OSGeo__gdal-14631
+live/SubtitleEdit__subtitleedit-11957
+live/TanStack__form-1664
+live/TeamNewPipe__NewPipeExtractor-1302
+live/WasmEdge__WasmEdge-4772
+live/agentscope-ai__agentscope-java-2343
+live/akuity__kargo-4687
+live/angularsen__UnitsNet-1699
+live/apache__datafusion-16726
+live/biomejs__biome-9995
+live/c-ares__c-ares-1189
+live/charmbracelet__crush-766
+live/colbymchenry__codegraph-1313
+live/colbymchenry__codegraph-461
+live/decaporg__decap-cms-7495
+live/dotnet__efcore-36355
+live/dotnet__runtime-126719
+live/duckdb__duckdb-23280
+live/duckdb__ducklake-1224
+live/ember-cli__ember-cli-10776
+live/excalidraw__excalidraw-9760
+live/facebook__stylex-1192
+live/floci-io__floci-1931
+live/fluent__fluent-bit-11677
+live/gastownhall__beads-2992
+live/grommet__grommet-7719
+live/gwtproject__gwt-10153
+live/highcharts__highcharts-23356
+live/javaparser__javaparser-4792
+live/langchain4j__langchain4j-5817
+live/mnfst__manifest-1635
+live/modelcontextprotocol__rust-sdk-996
+live/musescore__MuseScore-28647
+live/nats-io__nats-server-7089
+live/nearai__ironclaw-6724
+live/notionnext-org__NotionNext-4253
+live/notionnext-org__NotionNext-4290
+live/open-telemetry__opentelemetry-operator-4245
+live/pelletier__go-toml-996
+live/recharts__recharts-6124
+live/riok__mapperly-2207
+live/rqlite__rqlite-2197
+live/rust-lang__rust-bindgen-3390
+live/shader-slang__slang-10029
+live/smithy-lang__smithy-3038
+live/sofastack__sofa-jraft-1249
+live/spring-projects__spring-boot-50119
+live/stripe__stripe-cli-1352
+live/unplugin__unplugin-vue-components-858
+live/uutils__coreutils-8149
+live/xroche__httrack-482
+live/xroche__httrack-584
+live/yvgude__lean-ctx-632
+locbench/BerriAI__litellm-6563
+locbench/CWorthy-ocean__roms-tools-227
+locbench/Chainlit__chainlit-1534
+locbench/DS4SD__docling-442
+locbench/Ouranosinc__xclim-477
+locbench/PrefectHQ__prefect-14693
+locbench/Qiskit__qiskit-12214
+locbench/Qiskit__qiskit-13141
+locbench/TransformerLensOrg__TransformerLens-333
+locbench/UKPLab__sentence-transformers-3104
+locbench/UKPLab__sentence-transformers-3126
+locbench/aio-libs__aiohttp-9762
+locbench/airbnb__knowledge-repo-558
+locbench/celery__django-celery-beat-835
+locbench/certbot__certbot-10043
+locbench/ctc-oss__fapolicy-analyzer-809
+locbench/dask__dask-10796
+locbench/dask__dask-11539
+locbench/django__django-18654
+locbench/django__django-18752
+locbench/dmlc__dgl-5240
+locbench/flet-dev__flet-4388
+locbench/flet-dev__flet-4554
+locbench/fractal-analytics-platform__fractal-tasks-core-889
+locbench/getmoto__moto-8315
+locbench/home-assistant__core-15182
+locbench/huggingface__diffusers-10176
+locbench/huggingface__diffusers-9579
+locbench/huggingface__transformers-22496
+locbench/huggingface__transformers-22498
+locbench/huggingface__trl-2398
+locbench/huggingface__trl-2417
+locbench/hyeneung__tech-blog-hub-site-49
+locbench/jax-ml__jax-19710
+locbench/jax-ml__jax-22897
+locbench/jazzband__django-two-factor-auth-390
+locbench/jobatabs__textec-53
+locbench/keras-team__keras-20550
+locbench/kiasambrook__tfl-live-tracker-7
+locbench/langchain-ai__langgraph-2724
+locbench/matplotlib__matplotlib-29133
+locbench/matplotlib__matplotlib-29254
+locbench/matrix-org__synapse-8744
+locbench/mesonbuild__meson-13881
+locbench/modin-project__modin-6836
+locbench/modin-project__modin-7059
+locbench/networkx__networkx-7721
+locbench/numpy__numpy-27595
+locbench/pandas-dev__pandas-60310
+locbench/pandas-dev__pandas-60512
+locbench/prowler-cloud__prowler-6108
+locbench/prowler-cloud__prowler-6119
+locbench/py-pdf__pypdf-2934
+locbench/pydantic__pydantic-10210
+locbench/pydantic__pydantic-10601
+locbench/python__mypy-18102
+locbench/python__mypy-18163
+locbench/rapidsai__dask-cuda-98
+locbench/ray-project__ray-48782
+locbench/ray-project__ray-49221
+locbench/roboflow__supervision-1698
+locbench/roboflow__supervision-1739
+locbench/scikit-learn__scikit-learn-23197
+locbench/scikit-learn__scikit-learn-6116
+locbench/scipy__scipy-21918
+locbench/sktime__sktime-7221
+locbench/sqlfluff__sqlfluff-6399
+locbench/tarantool__ansible-cartridge-172
+locbench/tobymao__sqlglot-4369
+locbench/tobymao__sqlglot-4390
+locbench/traceloop__openllmetry-2577
+locbench/ultralytics__ultralytics-17728
+locbench/ultralytics__ultralytics-18212
+locbench/una-auxme__paf-565
+locbench/vitalik__django-ninja-1349
+locbench/vllm-project__vllm-10012
+locbench/vllm-project__vllm-10778
+locbench/wandb__wandb-8931
+locbench/yt-dlp__yt-dlp-11683
+locbench/yt-dlp__yt-dlp-11751
+polybench/Significant-Gravitas__AutoGPT-4652
+polybench/apache__dubbo-3317
+polybench/apache__dubbo-4567
+polybench/apache__dubbo-4678
+polybench/apache__dubbo-6498
+polybench/apache__rocketmq-4122
+polybench/apache__rocketmq-5037
+polybench/apache__rocketmq-7712
+polybench/coder__code-server-4923
+polybench/google__gson-2134
+polybench/google__gson-2158
+polybench/google__gson-2345
+polybench/huggingface__transformers-16661
+polybench/huggingface__transformers-17082
+polybench/huggingface__transformers-21969
+polybench/huggingface__transformers-22158
+polybench/huggingface__transformers-30934
+polybench/huggingface__transformers-31646
+polybench/keras-team__keras-19190
+polybench/keras-team__keras-19636
+polybench/keras-team__keras-19937
+polybench/langchain-ai__langchain-19331
+polybench/langchain-ai__langchain-4579
+polybench/langchain-ai__langchain-5450
+polybench/langchain-ai__langchain-5584
+polybench/microsoft__vscode-110094
+polybench/microsoft__vscode-113837
+polybench/microsoft__vscode-127071
+polybench/microsoft__vscode-135805
+polybench/microsoft__vscode-153857
+polybench/microsoft__vscode-157682
+polybench/mrdoob__three.js-18648
+polybench/mrdoob__three.js-24461
+polybench/mui__material-ui-11451
+polybench/mui__material-ui-14364
+polybench/mui__material-ui-15359
+polybench/mui__material-ui-20356
+polybench/mui__material-ui-20377
+polybench/mui__material-ui-38247
+polybench/prettier__prettier-12930
+polybench/prettier__prettier-14400
+polybench/prettier__prettier-8777
+polybench/serverless__serverless-1910
+polybench/serverless__serverless-2842
+polybench/serverless__serverless-3804
+polybench/serverless__serverless-5775
+polybench/serverless__serverless-7102
+polybench/sveltejs__svelte-1231
+polybench/sveltejs__svelte-3394
+polybench/sveltejs__svelte-3749
+polybench/sveltejs__svelte-3949
+polybench/sveltejs__svelte-5875
+polybench/sveltejs__svelte-6414
+polybench/tailwindlabs__tailwindcss-116
+polybench/tailwindlabs__tailwindcss-853
+polybench/trinodb__trino-2575
+polybench/trinodb__trino-3603
+polybench/yt-dlp__yt-dlp-5195
+polybench/yt-dlp__yt-dlp-5933
+polybench/yt-dlp__yt-dlp-9862

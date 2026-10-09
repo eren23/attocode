@@ -1,0 +1,91 @@
+# Eval matrix registry: run settings and datasets. `python -m eval.matrix.run ingest` reads it.
+# A Hugging Face dataset is pinned to a commit (revision) and a file list. A case pack pins one
+# commit and one language per repository. `public: true` lets remote arms (Jev, Haiku, the GPU
+# pod) send excerpts of the dataset. `primary` is the metric of record. The scorer uses gndcg5 for
+# a graded dataset and acc5 for the others, and ingest stops when the two do not agree.
+run:
+  budget_usd: 10
+  seed: 7
+  holdout: 0.3
+datasets:
+  locbench:  # split test
+    hf: czlll/Loc-Bench_V1
+    revision: c44cf3b74e07ca642cec841b471a9939907c12a7
+    files: [data/test-00000-of-00001.parquet]
+    primary: acc5
+    public: true
+  lite:  # SWE-bench Lite in the LocAgent copy, with edit_functions. Split test.
+    hf: czlll/SWE-bench_Lite
+    revision: 97f9af8814fe7eb15dcd9b2abaa9010e1eadda63
+    files: [data/test-00000-of-00001.parquet]
+    primary: acc5
+    public: true
+  lca:  # configs py, java and kt. Split test.
+    hf: JetBrains-Research/lca-bug-localization
+    revision: f2bb26a1c3320ccc1d7b02d2630077ff327a80f6
+    files: [py/test-00000-of-00001.parquet, java/test-00000-of-00001.parquet, kt/test-00000-of-00001.parquet]
+    primary: acc5
+    public: true
+  polybench:  # SWE-PolyBench Verified. Split test.
+    hf: AmazonScience/SWE-PolyBench_Verified
+    revision: b3fca77b637379f0c01ad86d18753a7ac1998b53
+    files: [test.csv]
+    primary: acc5
+    public: true
+  live:  # SWE-bench-Live MultiLang. One split per language.
+    hf: SWE-bench-Live/MultiLang
+    revision: 3638632e8153a10ca422c1022bed79023084b5c9
+    files: [data/c-00000-of-00001.parquet, data/cpp-00000-of-00001.parquet, data/cs-00000-of-00001.parquet,
+            data/go-00000-of-00001.parquet, data/java-00000-of-00001.parquet, data/js-00000-of-00001.parquet,
+            data/rust-00000-of-00001.parquet, data/ts-00000-of-00001.parquet]
+    primary: acc5
+    public: true
+  graded_blind:  # commits from the pack header (the revisions that the judges read)
+    primary: gndcg5
+    public: true
+    commits:
+      crystal: 066c322f53676e4e59d5e495cc3fa7331c376e8a
+      ggplot2: 6f1d98842de0489222c04bff64b3596b796d492d
+      okhttp: e2061bdd146ae3ce5f097b78fa7a731dc7638510
+      postgrest: 58368513abdc104e377c4f358f476f49bc1dd2ba
+      rails: e72eb4c20b6bb5bdc7f63a4477992209585a1fa9
+      sqlite: 5700f8c471be2bbf0ca29c7d7f36a6ebea4e7a62
+    languages: {crystal: crystal, ggplot2: r, okhttp: kotlin, postgrest: haskell, rails: ruby, sqlite: c}
+  locbench_title:  # 42 Loc-Bench instances. Each case has its own base_commit.
+    primary: acc5
+    public: true
+    languages: {PrefectHQ/prefect: python, UKPLab/sentence-transformers: python, dask/dask: python,
+                python/mypy: python, tobymao/sqlglot: python, yt-dlp/yt-dlp: python}
+  # The broad packs have no recorded revision. These commits are the HEAD of each clone in
+  # ~/Documents/ai/benchmark-repos on 2026-10-09, where every labeled file exists. The attocode
+  # key is this repository (public), at main 5b67651.
+  broad_dev:
+    primary: acc5
+    public: true
+    commits:
+      attocode: 5b67651850a572670d357fb7636ae8974752b01b
+      fastapi: 11614be9021aa4ac078d4d0693a8b5250a1010d8
+      gh-cli: 6e49747f49f31c9c0a68cfa344df7262a684e723
+      pandas: 0039f168fe057b945e8ec2a65c9d1e973c7c1fe9
+      redis: 20f163eb3dcc1311cfe6c0dda5a3beef08ab1a5d
+    languages: {attocode: python, fastapi: python, gh-cli: go, pandas: python, redis: c}
+  broad_external:
+    primary: acc5
+    public: true
+    commits:
+      express: 6c4249feec8ab40631817c8e7001baf2ed022224
+      phoenix: 850162d618cf4e31be82fb53ad6e259095fa6126
+      requests: ebf71906798ec82f34e07d3168f8b8aecaf8a3be
+      ripgrep: 4519153e5e461527f4bca45b042fff45c4ec6fb9
+      vapor: ff88583e10f02aa47be49e632d5179f89e855e03
+    languages: {express: javascript, phoenix: elixir, requests: python, ripgrep: rust, vapor: swift}
+  broad_holdout:
+    primary: acc5
+    public: true
+    commits:
+      faker: 5c35fd11e7c8c122c35cc024762dac9465cc78d8
+      prisma: 33667c373c0ae84ad37c7aed2497b99452da589c
+      protobuf: 68bd6bed7923ddade82a57a6fb8274024a3cd5d8
+      spdlog: 0f7562a0f9273cfc71fddc6ae52ebff7a490fa04
+      starship: 6d0a1263fcc74381791805cee57fc466f6e6359c
+    languages: {faker: ruby, prisma: typescript, protobuf: cpp, spdlog: cpp, starship: rust}
