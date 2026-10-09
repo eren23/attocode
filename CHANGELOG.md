@@ -96,6 +96,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   native tools, the attocode MCP server, the server with a first
   `semantic_search`, and the issue only. `summary` writes `runs.jsonl` with
   the matrix id as `instance_id`, and Acc@k, cost and turns for each run.
+- New `python -m eval.matrix.agents`: the report of a localize study. It
+  averages the trials of each task, then pairs each setup with `native` on the
+  same tasks. The primary comparisons are ΔAcc@5 and the cost ratio, with the
+  repository bootstrap range. With `--matrix`, the report compares the offline
+  rank of the first gold file with the agent Acc@5 of each task.
 
 ## [0.2.29] - 2026-10-09
 
