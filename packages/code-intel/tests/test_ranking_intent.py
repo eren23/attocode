@@ -6,7 +6,7 @@ from attocode_intel._internal.integrations.context.reranker import LocalRerankOu
 from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchResult
 from attocode_intel.focused_evidence import file_excerpt, task_terms
 from attocode_intel.repo_ranker import rank_repo_files
-from attocode_intel.service import CodeIntelService
+from attocode_intel.service import SEARCH_WARMUP_WAIT, CodeIntelService
 from attocode_intel.test_ranking import rank_symbol_tests
 
 
@@ -163,4 +163,12 @@ def test_first_search_waits_once_for_a_warming_index():
 
     assert CodeIntelService._search_after_warmup(manager, run) == ["hit"]
     assert CodeIntelService._search_after_warmup(manager, run) == ["hit"]
-    assert state["waits"] == [0.75]  # only the cold search waits
+    assert state["waits"] == [15.0]  # only the cold search waits
+
+    state["ready"] = False
+    token = SEARCH_WARMUP_WAIT.set(0.75)  # cross_repo_search sets a short wait for each workspace
+    try:
+        assert CodeIntelService._search_after_warmup(manager, run) == ["hit"]
+    finally:
+        SEARCH_WARMUP_WAIT.reset(token)
+    assert state["waits"] == [15.0, 0.75]

@@ -11,6 +11,7 @@ import os
 import threading
 import time
 from collections import Counter, deque
+from contextvars import ContextVar
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -23,6 +24,10 @@ from attocode_intel.query_ranking import (
     next_search_top_k,
     query_diagnostics,
 )
+
+# Seconds that a search waits for warming indexes before it reports "warming". A search over
+# many workspaces sets a short wait, so that one large workspace cannot stall the others.
+SEARCH_WARMUP_WAIT: ContextVar[float] = ContextVar("search_warmup_wait", default=15.0)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -1475,14 +1480,14 @@ class CodeIntelService:
     def _search_after_warmup(mgr: SemanticSearchManager, run: Callable[[], list]) -> list:
         """Run a search. When the lexical indexes are still warming, wait once and run it again.
 
-        A new server builds its search indexes on the first search. A small
-        workspace builds them in a fraction of a second, so its first search
-        returns results. Large workspaces still report warming without a long stall.
+        The first tool call of a server starts the warm-up. If the first search
+        comes before the indexes are ready, it waits up to SEARCH_WARMUP_WAIT
+        (15 seconds by default). Most workspaces are ready in under 10 seconds.
         """
         candidates = run()
         diagnostics = getattr(mgr, "candidate_diagnostics", None)
         if not candidates and diagnostics is not None and diagnostics().get("status") == "warming":
-            mgr.wait_for_body_index(timeout=0.75)
+            mgr.wait_for_body_index(timeout=SEARCH_WARMUP_WAIT.get())
             candidates = run()
         return candidates
 

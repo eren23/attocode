@@ -127,6 +127,20 @@ async def test_compact_cross_repo_preserves_warming_workspace(tmp_path, monkeypa
         await gateway.close()
 
 
+async def test_any_tool_call_starts_the_search_warmup(tmp_path):
+    (tmp_path / "helper.py").write_text("def important_helper(): return 1\n")
+    gateway = OperationGateway(str(tmp_path), watch=False)
+    try:
+        await gateway.execute("capabilities", {})
+        key = next(iter(gateway._workers))
+        gateway._workers[key].submit(lambda: None).result(timeout=10)  # runs after the warm-up job
+        manager = gateway._stores[key]["service"]._semantic_search
+        manager.wait_for_body_index(timeout=10)
+        assert manager.candidate_diagnostics()["status"] == "ready"
+    finally:
+        await gateway.close()
+
+
 async def test_idle_workspace_eviction_preserves_durable_knowledge(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir()
