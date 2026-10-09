@@ -36,6 +36,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The SystemOne reranker and the eval trials get file excerpts from one
   function, `focused_evidence.file_excerpt()`.
 
+### Changed — Evaluation
+
+- One scorer, `eval/matrix/`, replaces `eval/graded_score.py`,
+  `eval/ranking_quality.py`, `eval/locbench560/score.py`, and
+  `eval/locbench560/compare.py`. `run.py import-legacy` converts earlier pools
+  and trials into one `results.jsonl`. `run.py report` writes one Markdown
+  report. It gives the same means as the published Loc-Bench and blind-pack
+  results.
+- The scorer stops when a cell has no row for an instance, unless you give
+  `--partial`. The old Loc-Bench scorer gave 0 to an arm without input files.
+- A failed or fallback request keeps the pool order, as in the product. The
+  report counts these rows and also gives each comparison without them.
+- The bootstrap resamples the source repository of each instance. The old
+  graded scorer used the pool `repo` field, which is the instance id in a
+  Loc-Bench pack. With 10 or more repositories, a comparison also gets a
+  sign-flip p-value with the Holm correction, and a minimum detectable effect.
+
 ## [0.2.29] - 2026-10-09
 
 ### Fixed — Code-intel search

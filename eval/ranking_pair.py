@@ -31,6 +31,7 @@ from attocode_intel._internal.integrations.context.semantic_search import Semant
 from attocode_intel.focused_evidence import terms
 from attocode_intel.query_ranking import query_concepts
 
+from eval.matrix.datasets import labels
 from eval.metrics import compute_mrr, compute_ndcg, compute_recall_at_k
 from eval.search_quality import GROUND_TRUTH_DIR, REPO_CONFIGS
 
@@ -55,9 +56,8 @@ def _unique_files(results, limit=20):
 
 def _labels(case: dict) -> tuple[list[str], dict[str, int]]:
     """Binary packs list files; graded packs map file -> 0..3 (0 = judged irrelevant)."""
-    judged = case["relevant_files"]
-    grades = dict(judged) if isinstance(judged, dict) else dict.fromkeys(judged, 1)
-    return [path for path, grade in grades.items() if grade > 0], grades
+    gold, grades = labels(case["relevant_files"])
+    return gold, grades or dict.fromkeys(gold, 1)
 
 
 def _score(files, gold):

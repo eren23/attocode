@@ -37,10 +37,11 @@ pool per query. Every arm reranks the first 12, 24, or 48 files of that same
 pool, with the same 1,350-character query-focused excerpts.
 
 **Pooled judging.** Graded NDCG refuses to score unjudged files. After the
-arms ran, `eval.graded_score --unjudged` listed 234 unjudged files from the
-first five of any arm. Three judges graded them on the same scale. The
-judges did not know which arm returned a file. They found no new grade-3
-file and 23 new grade-2 files. A third round graded 46 files from the two
+arms ran, the scorer listed 234 unjudged files from the first five of any
+arm (now `eval.matrix.run report --unjudged`). Three judges graded them on
+the same scale. The judges did not know which arm returned a file. They
+found no new grade-3 file and 23 new grade-2 files. A third round graded 46
+files from the two
 local models (Bosun 1.7B and Clef-flash): 24 got 0, 22 got 1, and none got 2
 or 3. Every first-five file of every arm below is judged.
 
@@ -243,9 +244,15 @@ PYTHONPATH=packages/code-intel/src .venv/bin/python -m eval.ranking_pair \
 PYTHONPATH=packages/code-intel/src .venv/bin/python -m eval.model_rerank_trial \
   --pool pool.json --model jev-choice --allow-remote --max-candidates 24 --output jev24.json
 .venv/bin/python -m eval.dense_pool --pool pool.json --out coderank --cache embcache
-.venv/bin/python -m eval.graded_score --pack packages/code-intel/evals/graded_blind_pack.yaml \
-  --pool pool.json --trial jev24=jev24.json --unjudged unjudged.yaml
+.venv/bin/python -m eval.matrix.run import-legacy scores --pack graded_blind=.
+.venv/bin/python -m eval.matrix.run report scores --cells lexical,jev24 --baseline lexical \
+  --unjudged unjudged.yaml
 ```
+
+The import reads every pool and trial output in the folder. `pool.json` gives
+the cell `lexical`, and each other file gives a cell with its file name. A
+cell that covers only some queries, such as the four-repository dense arm,
+needs an `--ids` file with the ids of those queries.
 
 For a local model, start its server on loopback and point the trial at it.
 Do not pass `--model-id`:
@@ -261,6 +268,8 @@ Send one warmup query first. A first call that times out holds the
 adapter's single request slot, and the next queries fall back as `busy`.
 
 For Loc-Bench, pass each instance as `name=/path/to/worktree` to
-`--repos`. Raw outputs are outside `/private/tmp`, under
+`--repos`, and import the folder with `--pack locbench_title=DIR`. The
+title-pack table compares MRR@5, so add `--metric mrr5` to the report.
+Raw outputs are outside `/private/tmp`, under
 `~/Documents/AI/attocode-evals/2026-10-08-blind/` and
 `~/Documents/AI/attocode-evals/locbench/`.

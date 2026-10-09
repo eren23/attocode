@@ -28,12 +28,8 @@ REPO = Path(__file__).resolve().parents[2]
 PY = sys.executable
 DATASET, REVISION = "czlll/Loc-Bench_V1", "c44cf3b74e07ca642cec841b471a9939907c12a7"
 ENV = {**os.environ, "PYTHONPATH": "packages/code-intel/src"}
-
-
-def title(statement: str) -> str:
-    # Same rule as the 42-instance title pack.
-    first = statement.strip().splitlines()[0].strip().strip("#").strip()
-    return re.sub(r"^\[[^\]]+\]\s*", "", first)
+sys.path.insert(0, str(REPO))
+from eval.matrix.datasets import title  # noqa: E402  (same rule as the 42-instance title pack)
 
 
 def rows() -> list[dict]:
