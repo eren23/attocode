@@ -125,6 +125,12 @@ See [Meta-Harness Optimization](meta-harness-optimization.md) for the full param
 | Cross-encoder rerank | `rerank_confidence_threshold` | 0.0 (off) | **−1.4%** | Disabled by default; `ms-marco-MiniLM` was trained on web/QA, not code |
 | Dependency proximity | `dep_proximity_weight` | 0.3 | ~0% | Boosts imports/importers of top-N seeds |
 
+We compared the default importance weight (0.5) with 0 on all 560 Loc-Bench
+V1 instances. Lexical file Acc@5 changed from 0.529 to 0.532 on the full issue,
+and from 0.495 to 0.498 on the title. Neither change is clear. The published
+Loc-Bench lexical numbers use the weight 0. See the
+[first-stage arms](../../packages/code-intel/evals/results/2026-10-09-locbench-560-first-stage.md).
+
 Run ablations yourself: `python -m eval.meta_harness.ablation --signals importance,frecency,rerank,dep_proximity`.
 
 ## Adaptive Fusion

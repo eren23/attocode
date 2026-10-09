@@ -111,8 +111,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its last result. `run.py status` shows the coverage of each cell.
 - The matrix replaces `eval/ranking_pair.py`, `eval/locbench560/first_stage.py`,
   and the pool step of `eval/locbench560/run.py`. The cell `product_noimp`
-  gives the same file order as their frozen pools on all 84 queries of the 42
-  Loc-Bench dev instances and on all 36 blind-pack queries.
+  gives the same file order as their frozen pools on 1,118 of 1,120
+  Loc-Bench queries and on all 36 blind-pack queries. The two other queries
+  come from a repository with Git LFS files.
+- The Loc-Bench lexical numbers of 0.2.29 (0.388 to 0.529) ran with the
+  importance and frecency weights at zero. The product default sets the
+  importance weight to 0.5. With the default weights, lexical file Acc@5 is
+  0.532 on the full issue and 0.498 on the title, against 0.529 and 0.495.
+  The default `auto` mode of `semantic_search` also expands the query and
+  gives 0.509 and 0.489. A new results doc gives all first-stage arms.
 
 ## [0.2.29] - 2026-10-09
 
@@ -131,7 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file order (equal-weight RRF, k 60, 48 files each). Docs and data files stay
   out of the whole-file index. The source-body index schema goes to version 4,
   so the next search builds the index again.
-- On 560 Loc-Bench issues, lexical file Acc@5 rose from 0.388 to 0.529.
+- On 560 Loc-Bench issues, lexical file Acc@5 rose from 0.388 to 0.529, with
+  the importance and frecency weights at zero (see Unreleased).
   Jev over 48 files rose from 0.721 to 0.752, but over all 560 issues that
   gain is not clear. Queries with 20 words or fewer do not change.
 
