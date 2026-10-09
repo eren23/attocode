@@ -1,0 +1,36 @@
+name: Ranking gate
+on:
+  pull_request:
+    # The engine hash of the matrix covers all of packages/code-intel/src, so any change there can move the ranking.
+    paths: ['packages/code-intel/src/**', 'eval/matrix/**', 'uv.lock', '.github/workflows/ranking-gate.yml']
+  workflow_dispatch:
+
+jobs:
+  ranking-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MATRIX_CACHE: ${{ github.workspace }}/.matrix-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel
+      - uses: actions/cache@v4
+        with:
+          # Snapshots only. The gate makes every search result again with the code of this run.
+          path: |
+            ${{ env.MATRIX_CACHE }}/trees
+            ${{ env.MATRIX_CACHE }}/blobs
+          key: ranking-gate-${{ hashFiles('eval/matrix/configs/ci_instances.jsonl', 'eval/matrix/run.py') }}
+      - name: Ranking gate
+        run: uv run --no-sync python -m eval.matrix.run ci --cache "$MATRIX_CACHE"
+      - name: Write the baseline of this code
+        if: failure()
+        run: uv run --no-sync python -m eval.matrix.run ci --cache "$MATRIX_CACHE" --write-baseline
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: ranking-baseline
+          path: eval/matrix/ci_baseline.json
