@@ -582,7 +582,7 @@ def retrieve(cache: Path, instances: list[Instance], cells: list[str], *, retry_
              repo: Path = REPO, timeout: float = 1800) -> None:
     """Run the first-stage families of the cells. One product index per snapshot serves all queries."""
     commit = _refuse_dirty(repo)
-    families = sorted({arms.CELLS[cell][0] for cell in cells})
+    families = arms.families(cells)
     groups: dict[tuple[str, str], list[Instance]] = defaultdict(list)
     for inst in instances:
         groups[inst.repo, inst.base_commit].append(inst)
@@ -612,12 +612,19 @@ def retrieve(cache: Path, instances: list[Instance], cells: list[str], *, retry_
             continue
         _check_free(cache)
         root = Path(tempfile.mkdtemp(prefix=f"attocode-matrix-{os.getpid()}-"))
-        snap = None
+        snap, unready = None, set()
         try:
-            snap = arms.Snapshot(root, _materialize(cache, tree, root), timeout)
+            snap = arms.Snapshot(root, _materialize(cache, tree, root), timeout, cache=cache)
             for key, (family, query) in sorted(jobs.items(), key=lambda item: (item[1][0], item[1][1])):
                 try:
                     result = {"status": "ok", **arms.run(family, snap, query)}
+                except arms.NotReadyError as error:
+                    count["made"] -= 1
+                    count["not ready"] += 1
+                    if family not in unready:
+                        unready.add(family)
+                        print(f"{name}@{base[:12] or 'HEAD'} {family}: not ready, {error}", flush=True)
+                    continue
                 except arms.IndexFailedError as error:
                     result = {"status": "index_failed", "error": str(error), "lists": {}, "page": None, "ms": None}
                 _write(_ret_file(cache, key), json.dumps(
@@ -628,7 +635,8 @@ def retrieve(cache: Path, instances: list[Instance], cells: list[str], *, retry_
             shutil.rmtree(root, ignore_errors=True)
         print(f"{name}@{base[:12] or 'HEAD'}: {len(jobs)} results, index {snap.index_s:.0f} s, "
               f"total {time.time() - started:.0f} s", flush=True)
-    print(f"retrieve: {count['made']} results made, {count['cached']} from the cache")
+    print(f"retrieve: {count['made']} results made, {count['cached']} from the cache"
+          + (f", {count['not ready']} not ready" if count["not ready"] else ""))
 
 
 def _entries(cache: Path, inst: Instance, cells: list[str]):
@@ -638,10 +646,17 @@ def _entries(cache: Path, inst: Instance, cells: list[str]):
         return
     tree = json.loads(path.read_text())
     for variant, query in inst.queries.items():
+        found: dict[str, tuple[str, dict | None]] = {}
         for cell in cells:
-            key = _key(tree, arms.CELLS[cell][0], query)
-            done = _ret_file(cache, key)
-            yield variant, cell, key, json.loads(done.read_text()) if done.exists() else None
+            for part in arms.FUSED.get(cell, (cell,)):
+                if part not in found:
+                    key = _key(tree, arms.CELLS[part][0], query)
+                    done = _ret_file(cache, key)
+                    found[part] = key, json.loads(done.read_text()) if done.exists() else None
+            if cell in arms.FUSED:
+                yield variant, cell, *arms.fuse(cell, [found[part] for part in arms.FUSED[cell]])
+            else:
+                yield variant, cell, *found[cell]
 
 
 def write_rows(out: Path, cache: Path, instances: list[Instance], cells: list[str]) -> None:
