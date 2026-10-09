@@ -3,6 +3,9 @@
   python -m eval.matrix.run import-legacy OUT [--locbench [PREFIX=]DIR ...] [--pack NAME=DIR ...]
       Convert the pools and trials of earlier runs into OUT/instances.jsonl and
       OUT/results.jsonl, with one row per (instance, query variant, cell).
+  python -m eval.matrix.run ingest [OUT] [--config FILE]
+      Read every dataset of the registry (default eval/matrix/configs/full.yaml), draw the
+      core mix, and write OUT/instances.jsonl and OUT/ingest.md. Parquet files need pyarrow.
   python -m eval.matrix.run report OUT [--cells A,B] [--baseline CELL] [--pair CELL:BASELINE ...]
       [--metric NAME ...] [--ids FILE] [--partial] [--unjudged FILE] [--output FILE]
       Score OUT/results.jsonl against OUT/instances.jsonl and write OUT/report.md.
@@ -30,8 +33,10 @@ import yaml
 
 from eval.matrix import datasets, stats
 from eval.matrix.datasets import Instance
+from eval.meta_harness.splits import assign_split
 
 REPO = Path(__file__).resolve().parents[2]
+CORE_IDS = Path(__file__).resolve().parent / "core_ids.txt"
 
 
 def _pool_row(arm: dict, pool_sha256: str) -> dict:
@@ -225,6 +230,88 @@ def report(args: argparse.Namespace) -> None:
         print(f"wrote {args.unjudged}: {sum(map(len, todo.values()))} unjudged files")
 
 
+def ingest(out: Path, config: Path, core_file: Path = CORE_IDS) -> None:
+    """Read each registry dataset, draw the core mix, and write OUT/instances.jsonl and OUT/ingest.md.
+
+    Downloads go to OUT/datasets. The first run writes core_file. A later run stops when its core
+    mix differs from that file, because paid results are only comparable on the same core ids.
+    """
+    cfg = yaml.safe_load(config.read_text())
+    run, store = cfg["run"], out / "datasets"
+    found: dict[str, list[Instance]] = {}
+    for name, entry in cfg["datasets"].items():
+        found[name] = datasets.load(name, entry, store)
+        kept = [inst for inst in found[name] if inst.gold]
+        if kept and stats.primary_metric(kept) != entry["primary"]:
+            raise SystemExit(f"{name}: the scorer uses {stats.primary_metric(kept)}, but the config says "
+                             f"{entry['primary']}")
+    instances = sorted((inst for insts in found.values() for inst in insts if inst.gold), key=lambda inst: inst.id)
+    twice = [iid for iid, n in Counter(inst.id for inst in instances).items() if n > 1]
+    if twice:
+        raise SystemExit(f"{len(twice)} instance ids occur twice, such as {min(twice)}")
+    core = datasets.core_mix(instances, seed=run["seed"])
+    if not core_file.exists():
+        core_file.write_text("".join(f"{iid}\n" for iid in core))
+    elif core_file.read_text().splitlines() != core:
+        raise SystemExit(f"The core mix differs from {core_file}, because a dataset or the sampler changed. "
+                         "To draw a new core mix, delete the file. Then commit the new file.")
+    tags = {"core": set(core), "noise50": set(datasets.noise50(core, seed=run["seed"]))}
+    for inst in instances:
+        inst.split = "holdout" if assign_split(inst.id, run["holdout"]) == "eval" else "dev"
+        inst.tags = [tag for tag, ids in tags.items() if inst.id in ids]
+    lca = cfg["datasets"].get("lca")
+    lca_tests = sum(len(datasets.lca_gold(row)[1]) for row in datasets.read("lca", lca, store)) if lca else None
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "instances.jsonl").write_text("".join(json.dumps(asdict(inst)) + "\n" for inst in instances))
+    (out / "ingest.md").write_text(_ingest_report(config, cfg, store, found, instances, lca_tests))
+    print(f"{len(instances)} instances, {len(core)} in the core mix: wrote {out / 'instances.jsonl'} and ingest.md")
+
+
+def _ingest_report(config: Path, cfg: dict, store: Path, found: dict[str, list[Instance]],
+                   instances: list[Instance], lca_tests: int | None) -> str:
+    kept: dict[str, list[Instance]] = defaultdict(list)
+    for inst in instances:
+        kept[inst.dataset].append(inst)
+    lines = ["# Eval matrix instances", "",
+             f"Config: {config.name} (sha256 {_sha256(config)[:12]}). Commit: {_commit()}.",
+             f"{len(instances):,} instances. Core mix: {sum('core' in i.tags for i in instances)} ids. "
+             f"noise50: {sum('noise50' in i.tags for i in instances)} ids.", "",
+             "| Dataset | Revision | Rows | Excluded | Instances | Repos | Holdout | Core | Languages |",
+             "|---|---|---:|---:|---:|---:|---:|---:|---|"]
+    for name, entry in cfg["datasets"].items():
+        insts = kept[name]
+        langs = ", ".join(f"{lang} {n}" for lang, n in sorted(Counter(i.language for i in insts).items()))
+        lines.append(f"| {name} | {entry.get('revision', '')[:8] or 'pack'} | {len(found[name])} "
+                     f"| {len(found[name]) - len(insts)} | {len(insts)} | {len({i.repo for i in insts})} "
+                     f"| {sum(i.split == 'holdout' for i in insts)} | {sum('core' in i.tags for i in insts)} | {langs} |")
+    lines += ["", "## Exclusions", "",
+              "An instance is excluded when no gold file is in its base tree, for example when its patch "
+              "only adds files. An LCA instance is also excluded when it changes only test files.", ""]
+    lines += [f"- {name}: {', '.join(sorted(i.id for i in insts if not i.gold))}"
+              for name, insts in found.items() if any(not i.gold for i in insts)] or ["- None."]
+    if lca_tests is not None:
+        lines += ["", f"LCA gold leaves out {lca_tests} changed test files (the frozen rule `datasets._is_test`)."]
+    lines += ["", "## Gold files that search does not parse", "",
+              "The path rules of the product file discovery (`codebase_context.py`). Skipped: search never "
+              "reads the file. Text only: the product has no parser for the extension. Search then sees the "
+              "path and text windows only, with no symbols and no whole-file BM25.", "",
+              "| Dataset | Gold files | Skipped | Text only | Extensions |", "|---|---:|---:|---:|---|"]
+    for name in cfg["datasets"]:
+        cover, exts = Counter(), Counter()
+        for path in (path for inst in kept[name] for path in inst.gold):
+            kind = datasets.search_coverage(path)
+            cover[kind] += 1
+            if kind != "parsed":
+                exts[f"{Path(path).suffix or Path(path).name} ({kind.replace('_', ' ')})"] += 1
+        lines.append(f"| {name} | {sum(cover.values())} | {cover['skipped']} | {cover['text_only']} "
+                     f"| {', '.join(f'{ext} {n}' for ext, n in exts.most_common())} |")
+    lines += ["", "## Files", "", "| Dataset | File | sha256 |", "|---|---|---|"]
+    for name, entry in cfg["datasets"].items():
+        folder = store / f"{name}@{entry.get('revision')}"
+        lines += [f"| {name} | {file} | {_sha256(folder / file)} |" for file in entry.get("files", [])]
+    return "\n".join(lines) + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -247,12 +334,17 @@ def main() -> None:
     scoring.add_argument("--output", type=Path, help="default: OUT/report.md")
     scoring.add_argument("--draws", type=int, default=10_000)
     scoring.add_argument("--seed", type=int, default=0)
+    ingesting = commands.add_parser("ingest", help="read the registry datasets and write instances.jsonl")
+    ingesting.add_argument("out", type=Path, nargs="?", default=Path.home() / "Documents/AI/attocode-evals/matrix")
+    ingesting.add_argument("--config", type=Path, default=Path(__file__).resolve().parent / "configs/full.yaml")
     args = parser.parse_args()
     if args.command == "import-legacy":
         unknown = [item for item in args.pack if item.partition("=")[0] not in datasets.PACKS]
         if unknown:
             parser.error(f"unknown pack in {unknown}. Known packs: {', '.join(datasets.PACKS)}")
         import_legacy(args.out, args.locbench, args.pack)
+    elif args.command == "ingest":
+        ingest(args.out, args.config)
     else:
         report(args)
 
