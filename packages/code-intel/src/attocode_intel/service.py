@@ -345,7 +345,7 @@ class CodeIntelService:
 
     def _rerank_file_excerpt(self, result, query: str) -> str | None:
         """Current, query-focused file evidence for a shortlist decision."""
-        from attocode_intel.focused_evidence import task_terms, terms
+        from attocode_intel.focused_evidence import file_excerpt
 
         root = Path(self._project_dir).resolve()
         path = (root / result.file_path).resolve()
@@ -363,25 +363,7 @@ class CodeIntelService:
                 return None
         except OSError:
             return None
-        if not lines:
-            return f"File: {result.file_path}\n(empty file)"
-        positive, _ = task_terms(query)
-        centers: list[int] = []
-        scored = sorted(((len(terms(line) & positive), -index, index)
-                         for index, line in enumerate(lines)), reverse=True)
-        for overlap, _order, index in scored:
-            if overlap == 0 and centers:
-                break
-            if all(abs(index - old) > 24 for old in centers):
-                centers.append(index)
-            if len(centers) == 2:
-                break
-        windows = []
-        for center in sorted(centers or [0]):
-            start, end = max(0, center - 8), min(len(lines), center + 9)
-            windows.append("\n".join(f"{number + 1}: {lines[number]}"
-                                     for number in range(start, end)))
-        return (f"File: {result.file_path}\n" + "\n...\n".join(windows))[:1350]
+        return file_excerpt(lines, result.file_path, query)
 
     def _rank_systemone_results(self, query: str, results: list, top_k: int,
                                 ranking: dict) -> tuple[list, dict]:

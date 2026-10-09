@@ -42,9 +42,6 @@ _NON_CODE_EXTS = frozenset({
     ".md", ".txt", ".rst", ".cfg", ".ini", ".yml", ".yaml", ".json", ".toml", ".xml", ".csv",
 })
 
-# Files per list in whole-file fusion, as in the Loc-Bench eval arm.
-_FILE_FUSION_DEPTH = 48
-
 _CAMEL_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 
 # Mapping from common query terms to code construct types for query expansion
@@ -278,6 +275,15 @@ class SearchScoringConfig:
     rrf_k_keyword_high_conf: int = 10          # sharp k_keyword when keyword is confident
     rrf_k_vector_low_conf: int = 250           # smooth k_vector when keyword is confident (downweight)
 
+    # Lexical candidates (search_candidates): RRF of keyword and body chunks.
+    # A long query then also fuses the file order with whole-file BM25.
+    chunk_rrf_k: int = 20
+    body_weight: float = 1.15          # the keyword list has weight 1.0
+    body_max_tokens: int = 20          # rarest query words that body search sends
+    file_bm25_min_tokens: int = 20     # whole-file BM25 needs more unique words than this
+    file_rrf_k: int = 60
+    file_fusion_depth: int = 48        # files per list in whole-file fusion
+
 
 @dataclass(slots=True)
 class SemanticSearchResult:
@@ -290,6 +296,11 @@ class SemanticSearchResult:
     score: float
     start_line: int = 0
     end_line: int = 0
+
+
+def _file_order(results: list[SemanticSearchResult]) -> list[str]:
+    """Each file path once, in the order of its first result."""
+    return list(dict.fromkeys(result.file_path for result in results))
 
 
 @dataclass(slots=True)
@@ -954,12 +965,17 @@ class SemanticSearchManager:
 
     def search_candidates(
         self, query: str, top_k: int = 50, file_filter: str = "",
+        trace: dict[str, list[str]] | None = None,
     ) -> list[SemanticSearchResult]:
         """Return local lexical candidates without initializing an embedding model.
 
         Name/path/docstring BM25 and source-body FTS5 each contribute a ranked
         list. Explicit exclusions only down-rank matches; they never remove a
         candidate. This is also the provider-free entry point for bootstrap.
+
+        A ``trace`` dict receives the file order of each stage. The keys are
+        ``keyword``, ``body``, ``file_bm25``, ``chunk_fused`` (before whole-file
+        fusion) and ``fused`` (before the broad-query rerank).
         """
         if top_k <= 0:
             return []
@@ -972,30 +988,34 @@ class SemanticSearchManager:
         if not self._kw_index_built:
             self._schedule_body_index()
             return []
+        cfg = self.scoring_config
         lexical_query = " ".join(terms)
         wide_k = max(top_k * 3, 60)
         keyword = self._keyword_search(lexical_query, wide_k, file_filter)
         body = self._body_search(terms, wide_k, file_filter)
-        files = self._file_search(terms, _FILE_FUSION_DEPTH, file_filter)
+        files = self._file_search(terms, cfg.file_fusion_depth, file_filter)
         if not self._kw_index_built:
             # A body hit failed freshness validation while keyword results
             # were being scored. Do not expose potentially stale candidates.
             self._schedule_body_index()
             return []
+        if trace is not None:
+            trace.update(keyword=_file_order(keyword), body=_file_order(body), file_bm25=files)
         if not body and not files:
-            return rerank_broad_candidates(
-                query, self._penalize_exclusions(keyword, negative), top_k, file_filter,
-            )
+            keyword = self._penalize_exclusions(keyword, negative)
+            if trace is not None:
+                trace["chunk_fused"] = trace["fused"] = _file_order(keyword)
+            return rerank_broad_candidates(query, keyword, top_k, file_filter)
 
         def key(result: SemanticSearchResult) -> tuple[str, str, str]:
             return result.file_path, result.chunk_type, result.name
 
         candidates: dict[tuple[str, str, str], SemanticSearchResult] = {}
         scores: dict[tuple[str, str, str], float] = {}
-        for weight, ranked in ((1.0, keyword), (1.15, body)):
+        for weight, ranked in ((1.0, keyword), (cfg.body_weight, body)):
             for rank, result in enumerate(ranked):
                 item = key(result)
-                scores[item] = scores.get(item, 0.0) + weight / (20 + rank + 1)
+                scores[item] = scores.get(item, 0.0) + weight / (cfg.chunk_rrf_k + rank + 1)
                 # Source evidence is more useful to consumers than a signature.
                 if item not in candidates or (ranked is body and result.start_line):
                     candidates[item] = result
@@ -1014,8 +1034,12 @@ class SemanticSearchManager:
             for item in ordered
         ]
         fused = self._penalize_exclusions(fused, negative)
+        if trace is not None:
+            trace["chunk_fused"] = _file_order(fused)
         if files:
             fused = self._fuse_file_order(fused, files)
+        if trace is not None:
+            trace["fused"] = _file_order(fused)
         return rerank_broad_candidates(query, fused, top_k, file_filter)
 
     def _fuse_file_order(
@@ -1028,13 +1052,14 @@ class SemanticSearchManager:
         to the front in fused order, and a file that only BM25 found gets an
         entry. The other entries follow in their old order, scored no higher.
         """
+        cfg = self.scoring_config
         first: dict[str, SemanticSearchResult] = {}
         for result in results:
             first.setdefault(result.file_path, result)
         fused: dict[str, float] = {}
-        for order in (list(first)[:_FILE_FUSION_DEPTH], files[:_FILE_FUSION_DEPTH]):
+        for order in (list(first)[:cfg.file_fusion_depth], files[:cfg.file_fusion_depth]):
             for rank, path in enumerate(order):
-                fused[path] = fused.get(path, 0.0) + 1.0 / (60 + rank + 1)
+                fused[path] = fused.get(path, 0.0) + 1.0 / (cfg.file_rrf_k + rank + 1)
         heads = []
         for path in sorted(fused, key=lambda p: (-fused[p], p)):
             head = first.get(path) or self._file_entry(path)
@@ -1380,9 +1405,10 @@ class SemanticSearchManager:
                 where += " AND body_fts.file_path GLOB ?"
                 parameters.append(file_filter.replace("[!", "[^"))
             parameters.append(max(top_k * 8, 120))
+            limit = self.scoring_config.body_max_tokens
             with self._kw_cache_lock:
-                if len(tokens) > 20:
-                    tokens = self._rarest_body_tokens(conn, tokens, 20)
+                if len(tokens) > limit:
+                    tokens = self._rarest_body_tokens(conn, tokens, limit)
                 if not tokens:
                     return []
                 parameters.insert(0, " OR ".join(f'"{token}"' for token in tokens))
@@ -1443,7 +1469,8 @@ class SemanticSearchManager:
         prefers tiny files that mention a name over the file that defines it.
         """
         tokens = list(dict.fromkeys(t for term in query_terms for t in _tokenize(term)))
-        if top_k <= 0 or len(tokens) <= 20 or not self._body_index_built:
+        if (top_k <= 0 or len(tokens) <= self.scoring_config.file_bm25_min_tokens
+                or not self._body_index_built):
             return []
         if self._source_revision() != self._body_revision:
             # As in body search: report the index as stale, not a full result.

@@ -114,6 +114,7 @@ See [Meta-Harness Optimization](meta-harness-optimization.md) for the full param
 | Penalty | `non_code_penalty`, `config_penalty`, `test_penalty` | 0.3, 0.15, 0.6 | Down-rank non-source files |
 | Phrase | `exact_phrase_bonus` | 3.0 | Query as substring of doc text |
 | Retrieval | `wide_k_multiplier`, `wide_k_min`, `rrf_k`, `max_chunks_per_file` | 12, 150, 60, 8 | Two-stage candidate width + fusion + dedup |
+| Lexical candidates | `chunk_rrf_k`, `body_weight`, `body_max_tokens`, `file_bm25_min_tokens`, `file_rrf_k`, `file_fusion_depth` | 20, 1.15, 20, 20, 60, 48 | `search_candidates`: RRF of keyword and body chunks, then whole-file BM25 for a long query |
 
 ### Algorithmic Signals
 

@@ -24,7 +24,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from attocode_intel.focused_evidence import task_terms, terms
+from attocode_intel.focused_evidence import file_excerpt
 
 from eval.metrics import compute_mrr, compute_ndcg, compute_recall_at_k
 
@@ -58,34 +58,12 @@ def _revision(root: Path) -> str:
     return result.stdout.strip()
 
 
-def _excerpt(root: Path, relative: str, query: str, *, limit: int = 1350) -> str:
+def _excerpt(root: Path, relative: str, query: str) -> str:
     """Select the same bounded, query-focused file evidence for every model."""
     target = (root / relative).resolve()
     if not target.is_relative_to(root.resolve()) or not target.is_file():
         raise ValueError(f"Candidate is missing or outside repository: {relative}")
-    lines = target.read_text(errors="replace").splitlines()
-    if not lines:
-        return f"File: {relative}\n(empty file)"
-    query_terms, _ = task_terms(query)  # the product drops "without X" terms too
-    scores = []
-    for number, line in enumerate(lines):
-        overlap = len(terms(line) & query_terms)
-        scores.append((overlap, -number, number))
-    centers = []
-    for overlap, _order, number in sorted(scores, reverse=True):
-        if overlap == 0 and centers:
-            break
-        if all(abs(number - old) > 24 for old in centers):
-            centers.append(number)
-        if len(centers) == 2:
-            break
-    if not centers:
-        centers = [0]
-    windows = []
-    for center in sorted(centers):
-        start, end = max(0, center - 8), min(len(lines), center + 9)
-        windows.append("\n".join(f"{n + 1}: {lines[n]}" for n in range(start, end)))
-    return (f"File: {relative}\n" + "\n...\n".join(windows))[:limit]
+    return file_excerpt(target.read_text(errors="replace").splitlines(), relative, query)
 
 
 def _metrics(files: list[str], gold: list[str]) -> dict:

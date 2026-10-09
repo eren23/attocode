@@ -45,6 +45,33 @@ def task_terms(text: str) -> tuple[set[str], set[str]]:
     return positive, negative
 
 
+def file_excerpt(lines: list[str], path: str, query: str) -> str:
+    """Query-focused file evidence for a shortlist decision.
+
+    The product reranker and the eval trials show a model this same text. It
+    has up to two numbered windows around the lines with the most task terms.
+    """
+    if not lines:
+        return f"File: {path}\n(empty file)"
+    positive, _ = task_terms(query)
+    centers: list[int] = []
+    scored = sorted(((len(terms(line) & positive), -index, index)
+                     for index, line in enumerate(lines)), reverse=True)
+    for overlap, _order, index in scored:
+        if overlap == 0 and centers:
+            break
+        if all(abs(index - old) > 24 for old in centers):
+            centers.append(index)
+        if len(centers) == 2:
+            break
+    windows = []
+    for center in sorted(centers or [0]):
+        start, end = max(0, center - 8), min(len(lines), center + 9)
+        windows.append("\n".join(f"{number + 1}: {lines[number]}"
+                                 for number in range(start, end)))
+    return (f"File: {path}\n" + "\n...\n".join(windows))[:1350]
+
+
 def source_excerpts(source, definition, task_hint, *, preview_end=0):
     """Rank code identifiers, favor branches/assignments, and return disjoint ranges.
 
