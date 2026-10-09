@@ -63,6 +63,15 @@ class TestFindProjectRoot:
         # May or may not be None depending on system, but should not crash
         assert result is None or isinstance(result, Path)
 
+    def test_home_config_folder_is_not_a_project(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        home = tmp_path / "home"
+        (home / ".attocode").mkdir(parents=True)
+        workdir = home / "site"
+        workdir.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+
+        assert resolve_project_root(workdir).path is None
+
     def test_prefers_nearest_attocode_over_parent_git(self, tmp_path: Path) -> None:
         repo_root = tmp_path / "repo"
         nested_project = repo_root / "nested" / "child"

@@ -653,16 +653,9 @@ def main() -> None:
         return
 
     # No subcommand -- start MCP server
-    # Walk up from CWD to find project root (marker = .git or .attocode)
-    _cwd = os.path.abspath(".")
-    _project_root = _cwd
-    for _candidate in [_cwd] + list(_walk_up(_cwd)):
-        if os.path.isdir(os.path.join(_candidate, ".git")) or os.path.isdir(
-            os.path.join(_candidate, ".attocode")
-        ):
-            _project_root = _candidate
-            break
-    project_dir = _project_root
+    from attocode_intel.project_dir import find_project_root
+
+    project_dir = find_project_root(os.path.abspath("."))
 
     transport = "stdio"
     host = "127.0.0.1"
@@ -731,6 +724,9 @@ def main() -> None:
         elif transport == "sse":
             mcp.run(transport="sse", host=host, port=port)
         else:
+            from attocode_intel.entrypoint import exit_when_client_exits
+
+            exit_when_client_exits()
             mcp.run(transport="stdio")
     finally:
         _stop_file_watcher()
