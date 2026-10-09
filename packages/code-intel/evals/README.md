@@ -164,3 +164,36 @@ The private pack contains `pack.json`, prepared source snapshots, pinned runtime
 QA uses its required answer file and operator rubric review, with anonymous review exports. Feature patches are committed before evaluation in fresh environments. Reports retain failed/interrupted attempts, missing answers, usage, setup/runtime/evaluation timing, and review status. The 20-minute QA and 60-minute implementation limits, local runtime, and operator grading make this an adapted diagnostic, not an upstream leaderboard reproduction. Quota checks and disabled extra usage remain mandatory. External reports cannot satisfy the release gate.
 
 After exporting a report, copy `operator-review-template.json` to `operator-review.json` in the private study directory. Keep its study and attempt identities. For each QA criterion, replace `null` with whether the criterion applies: `true` on a negative criterion records an error, not a success. A partially reviewed answer remains pending. Set each attempt's `protocol` to `pass` or `violation` after reviewing its trace, and record supporting observations in `notes`. Regenerate the report to compare positive criteria met, negative criteria triggered, executable feature acceptance, and elapsed time. These raw criterion counts are operator judgments, not an independent or upstream leaderboard score. Report generation preserves the submitted review file.
+
+## Agent localization study
+
+`study.py freeze --mode localize --instances /private/path/instances.jsonl --ids /private/path/ids.txt --model <explicit model ID> --study /private/path/study` freezes a file localization study for Claude Code. The input is a matrix `instances.jsonl` from `python -m eval.matrix.run ingest`. Each line is one `eval.matrix.datasets.Instance` as JSON. The ids file has one matrix id (`dataset/native`) on each line. The matrix id is the `instance_id` join key in the study output. Use `--trials` (default 2), `--setups` (default: all four) and `--config-id` (default `product`). Then use the frozen harness with `PYTHONPATH=STUDY/engine` for `prepare`, `wiring --quota QUOTA`, `run --quota QUOTA` and `summary`.
+
+`QUOTA` is the quota file of the repeated client study. The operator writes it only after a check of the account settings: remaining subscription allowance and disabled extra usage. The harness and agents never write this file.
+
+The issue is `queries["full"]` of the instance, and the gold files are `gold`. The frozen prompt `PROMPT_V1` gives the issue text without changes. It asks for at most 10 repository-relative paths, most likely first, as `{"files": [...]}`. Claude gets this schema with `--json-schema`. The manifest contains each rendered prompt, so a change to the prompt gives a new study id. The setups are:
+
+- `native`: `Read`, `Grep` and `Glob`.
+- `intel`: the native tools, the attocode MCP server (daily profile, frozen engine) and its installed project guidance.
+- `intel_first`: the `intel` setup, and the prompt asks for `semantic_search` with the issue title first.
+- `issue_only`: no tools, an empty workspace and one trial. This is the contamination control.
+
+No setup gets `ToolSearch`. The wiring check shows that Claude can call the MCP tools without it.
+
+`prepare` fetches each base commit. When `repo` has a `/`, it fetches from `https://github.com/{repo}.git`. Otherwise the instance is from a case pack, and `prepare` fetches from the local clone `~/Documents/ai/benchmark-repos/{repo}`. It only reads that clone.
+
+From each base commit, `prepare` makes a snapshot with one commit and no history. It excludes an instance when the snapshot has agent guidance or configuration, for example `CLAUDE.md`, `AGENTS.md`, `.claude/` or `.mcp.json`. It also excludes an instance when no gold file is in the tree. It builds the index of each snapshot before the timed runs.
+
+Each trial starts in a fresh copy. An intel trial copies the index and repairs it before the timer starts, because the copy changes the file times. The MCP server runs with `ATTOCODE_LOCAL_ONLY=1` and `HF_HUB_OFFLINE=1`. Each trial has a 600-second limit. A trial that changes `git status` is a `protocol_violation`.
+
+`run` can continue after a stop. It does not run a trial again when the trial has a `result.json`. A started trial without a result becomes `interrupted` and does not run again.
+
+Use `--jobs 2` for two parallel trials and `--max-runs` for a batch. After `--deadline-minutes` (default 100), no new trial starts. The quota check runs before each trial. The harness kills each process whose command line names a study folder. It does this at the start and end of each command and after each trial. It stops with an error when a process stays alive.
+
+`summary` grades with `eval/metrics.py` and records the hash of that file. It writes `runs.jsonl`, `summary.md` and `review.md`. Each row of `runs.jsonl` is one run, with the join keys `dataset`, `instance_id` and `config_id`.
+
+The grader removes the workspace root, `./` and `:line` from answer paths. It removes duplicates and keeps the first 10 paths. The `invalid_paths` field counts paths that are not in the snapshot. A failed run scores 0 and counts the full time limit.
+
+Each row also has turns, tokens by type, `cost_usd`, tool calls by name and MCP calls. It counts the MCP results that report a warming index. The `gold_seen_s` field gives the client seconds at the first tool result that names a gold file. The `review.md` file lists the runs where a setup and `native` have different Acc@5. It also lists the failures and five random runs with their event files.
+
+Each trial starts a new MCP server, and `semantic_search` builds its keyword index in that process. Thus the first search in a trial can return a warming status and no results. The `mcp_warming_results` field counts these results. Prompt caching can continue from one trial to the next, so compare tokens by type as well as cost. This study is a development diagnostic. It does not satisfy the release gate.

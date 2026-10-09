@@ -232,13 +232,14 @@ async def worker(root):
 
 
 class Worker:
-    def __init__(self, study, root, directory, number, timeout):
+    def __init__(self, study, root, directory, number, timeout, *, script=None, env=None):
+        """SCRIPT is this file in another study layout. ENV adds server variables."""
         self.timeout = timeout
         self.errors = (directory / f"worker-{number}.stderr").open("w")
-        env = dict(os.environ, PYTHONPATH=str(study / "engine"), ATTOCODE_INTEL_PRECISION="off",
-                   ATTOCODE_INTEL_TRACE=str(directory / f"worker-{number}.telemetry.jsonl"),
-                   PYTHONDONTWRITEBYTECODE="1")
-        self.process = subprocess.Popen([sys.executable, str(study / "warm_cache.py"), "worker", "--root", str(root)],
+        env = {**os.environ, "PYTHONPATH": str(study / "engine"), "ATTOCODE_INTEL_PRECISION": "off",
+               "ATTOCODE_INTEL_TRACE": str(directory / f"worker-{number}.telemetry.jsonl"),
+               "PYTHONDONTWRITEBYTECODE": "1", **(env or {})}
+        self.process = subprocess.Popen([sys.executable, str(script or study / "warm_cache.py"), "worker", "--root", str(root)],
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.errors, env=env,
                                         start_new_session=True, bufsize=0)
         self.pending = b""

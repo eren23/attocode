@@ -428,29 +428,44 @@ if __name__ == "__main__":
     commands = parser.add_subparsers(dest="command", required=True)
     freezing = commands.add_parser("freeze")
     freezing.add_argument("--project", type=Path, default=Path(__file__).resolve().parents[3])
-    freezing.add_argument("--repo-dir", type=Path, required=True)
-    freezing.add_argument("--models", type=Path, required=True)
+    freezing.add_argument("--repo-dir", type=Path, help="Required except in localize mode")
+    freezing.add_argument("--models", type=Path, help="Required except in localize mode")
     freezing.add_argument("--serena-launcher", type=Path)
-    freezing.add_argument("--mode", choices=("release", "pilot", "quality", "onboarding", "understanding", "external"), default="release")
+    freezing.add_argument("--mode", choices=("release", "pilot", "quality", "onboarding", "understanding", "external",
+                                             "localize"), default="release")
     freezing.add_argument("--baseline-src", type=Path)
     freezing.add_argument("--case-pack", type=Path, help="Private understanding case-pack directory")
     freezing.add_argument("--benchmark-pack", type=Path, help="Prepared external benchmark pack, outside the repository")
-    for name in ("prepare", "run", "report", "wiring"):
+    freezing.add_argument("--instances", type=Path, help="Localize: matrix instances.jsonl (eval.matrix.run ingest)")
+    freezing.add_argument("--ids", type=Path, help="Localize: file with one matrix id (dataset/native) per line")
+    freezing.add_argument("--model", help="Localize: explicit Claude model ID")
+    freezing.add_argument("--trials", type=int, default=2, help="Localize: trials per task and setup")
+    freezing.add_argument("--setups", nargs="+", help="Localize: setups to schedule (default: all)")
+    freezing.add_argument("--config-id", default="product", help="Localize: search configuration")
+    for name in ("prepare", "run", "report", "wiring", "summary"):
         sub = commands.add_parser(name)
         if name in {"run", "wiring"}:
             sub.add_argument("--quota", type=Path)
             sub.add_argument("--clients", nargs="+", choices=CLIENTS)
         if name == "run":
-            sub.add_argument("--max-runs", type=int, help="Batch limit (pilot/quality: 6; release: 12)")
+            sub.add_argument("--max-runs", type=int, help="Batch limit (pilot/quality: 6; release: 12; localize: all)")
             sub.add_argument("--tasks", nargs="+")
+            sub.add_argument("--jobs", type=int, default=1, help="Localize: parallel trials, 1 or 2")
+            sub.add_argument("--deadline-minutes", type=float, default=100,
+                             help="Localize: start no trial after this many minutes")
     for sub in commands.choices.values():
         sub.add_argument("--study", type=Path, required=True)
     args = parser.parse_args()
+    if args.command == "freeze" and args.mode != "localize" and not (args.repo_dir and args.models):
+        parser.error("--repo-dir and --models are required in this mode")
     args.study = args.study.resolve()
     mode = args.mode if args.command == "freeze" else json.loads((args.study / "manifest.json").read_text()).get("mode")
-    if mode in {"understanding", "external"}:
+    if args.command in {"summary", "report"} and (args.command == "summary") != (mode == "localize"):
+        parser.error("Localize studies use summary; other modes use report")
+    if mode in {"understanding", "external", "localize"}:
         import importlib
-        runner = importlib.import_module("external_study" if mode == "external" else "understanding_study")
+        runner = importlib.import_module({"external": "external_study", "understanding": "understanding_study",
+                                          "localize": "localize_study"}[mode])
         getattr(runner, args.command)(args)
         sys.exit(0)
     if args.command == "wiring":
