@@ -184,9 +184,11 @@ def resolve_project_root(start: Path | None = None) -> ProjectRootResolution:
     same directory, prefer ``.attocode``.
     """
     current = (start or Path.cwd()).resolve()
+    # ~/.attocode is the user config folder (USER_DIR_NAME), not a project marker.
+    home = Path.home().resolve()
 
     for parent in [current, *current.parents]:
-        if (parent / PROJECT_DIR).exists():
+        if parent != home and (parent / PROJECT_DIR).exists():
             return ProjectRootResolution(path=parent, source=".attocode")
         if (parent / ".git").exists():
             return ProjectRootResolution(path=parent, source=".git")

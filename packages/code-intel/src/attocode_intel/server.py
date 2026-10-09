@@ -45,6 +45,7 @@ import logging
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 import attocode_intel._shared as _shared  # noqa: F401
@@ -473,6 +474,24 @@ def _stop_file_watcher() -> None:
     _queue_thread = None
 
 
+def _exit_when_client_exits(interval: float = 5.0) -> None:
+    """Stop a stdio server when the client process that started it is gone.
+
+    At end of input the MCP SDK still waits for running tool calls. A call
+    that never ended kept an orphaned server alive, at full CPU, for days.
+    SQLite indexes stay consistent after an abrupt exit.
+    """
+    parent = os.getppid()
+
+    def watch() -> None:
+        while os.getppid() == parent:
+            time.sleep(interval)
+        logger.info("Client process %d exited; stopping the stdio server", parent)
+        os._exit(0)
+
+    threading.Thread(target=watch, name="client-watchdog", daemon=True).start()
+
+
 # ---------------------------------------------------------------------------
 # Tool instrumentation — wraps MCP tool functions with metrics recording
 # ---------------------------------------------------------------------------
@@ -653,16 +672,9 @@ def main() -> None:
         return
 
     # No subcommand -- start MCP server
-    # Walk up from CWD to find project root (marker = .git or .attocode)
-    _cwd = os.path.abspath(".")
-    _project_root = _cwd
-    for _candidate in [_cwd] + list(_walk_up(_cwd)):
-        if os.path.isdir(os.path.join(_candidate, ".git")) or os.path.isdir(
-            os.path.join(_candidate, ".attocode")
-        ):
-            _project_root = _candidate
-            break
-    project_dir = _project_root
+    from attocode_intel.project_dir import find_project_root
+
+    project_dir = find_project_root(os.path.abspath("."))
 
     transport = "stdio"
     host = "127.0.0.1"
@@ -731,6 +743,7 @@ def main() -> None:
         elif transport == "sse":
             mcp.run(transport="sse", host=host, port=port)
         else:
+            _exit_when_client_exits()
             mcp.run(transport="stdio")
     finally:
         _stop_file_watcher()

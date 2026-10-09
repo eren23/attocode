@@ -52,11 +52,23 @@ def _get_project_dir() -> str:
     project_dir = os.environ.get("ATTOCODE_PROJECT_DIR", "")
     if project_dir:
         return os.path.abspath(project_dir)
+    return find_project_root(os.getcwd())
 
-    cwd = os.getcwd()
-    markers = (".git", ".attocode")
-    for dir_path in [cwd] + list(_walk_up(cwd)):
-        for marker in markers:
+
+def find_project_root(start: str) -> str:
+    """Return the nearest directory at or above ``start`` with a project marker.
+
+    The markers are ``.git`` (a directory, or a file in a worktree) and
+    ``.attocode``. ``~/.attocode`` holds user-wide settings and caches, so it
+    does not make the home directory a project. Before this rule, a server
+    started in a folder without markers indexed the whole home directory.
+    Without a marker, ``start`` is the root.
+    """
+    home = os.path.realpath(os.path.expanduser("~"))
+    for dir_path in [start, *_walk_up(start)]:
+        for marker in (".git", ".attocode"):
+            if marker == ".attocode" and os.path.realpath(dir_path) == home:
+                continue
             if os.path.exists(os.path.join(dir_path, marker)):
                 logger.debug(
                     "Auto-discovered project root: %s (marker: %s)",
@@ -64,5 +76,5 @@ def _get_project_dir() -> str:
                 )
                 return dir_path
 
-    logger.debug("No project marker found, falling back to CWD: %s", cwd)
-    return cwd
+    logger.debug("No project marker found, falling back to %s", start)
+    return start
