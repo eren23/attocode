@@ -21,6 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A stdio server now exits when the client process that started it exits.
   Before, a tool call that did not end kept an orphaned server running.
 
+### Fixed — Code-intel search
+
+- The first `semantic_search` of a new server can now return results. A new
+  server builds its search indexes in memory on the first search, and before
+  this fix that search answered "warming" with no results. Now it waits up to
+  0.75 s for the index and then searches again, as `bootstrap` already did.
+  In a test on two repositories with 93 and 390 files, the first search
+  returned 10 results instead of none. Larger repositories still answer
+  "warming" on the first search.
+- The index build after a server start now discovers the files once, not
+  three times. Before, each of the keyword, importance and body steps
+  discovered the files and built the dependency graph again. On repositories
+  with 1,144 to 3,425 files, the time to a ready index fell from 10 to 36 s to
+  3 to 9 s. Search results do not change.
+
 ### Fixed — Agent
 
 - The agent no longer uses the home directory as the project root because

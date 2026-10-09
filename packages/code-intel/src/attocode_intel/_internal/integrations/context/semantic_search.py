@@ -364,13 +364,13 @@ class SemanticSearchManager:
             self._load_importance_scores()
         return self._importance_scores.get(file_path, 0.0)
 
-    def _load_importance_scores(self) -> None:
+    def _load_importance_scores(self, context_manager: Any = None) -> None:
         """Load file importance from CodebaseContextManager if available."""
         try:
             from attocode_intel._internal.integrations.context.codebase_context import (
                 CodebaseContextManager,
             )
-            ctx = CodebaseContextManager(self.root_dir)
+            ctx = context_manager or CodebaseContextManager(self.root_dir)
             ctx._ensure_fresh()
             for fi in ctx._files:
                 self._importance_scores[fi.relative_path] = fi.importance
@@ -1245,7 +1245,7 @@ class SemanticSearchManager:
             emit(first + 1, cursor, chunk_type, name)
         return chunks
 
-    def _sync_body_index(self) -> None:
+    def _sync_body_index(self, context_manager: Any = None) -> None:
         """Refresh changed/deleted discovered files, including branch changes."""
         generation = self._body_generation
         revision = self._source_revision()
@@ -1260,7 +1260,7 @@ class SemanticSearchManager:
         )
 
         try:
-            ctx = CodebaseContextManager(root_dir=self.root_dir)
+            ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
             ctx._ensure_fresh()
             if not ctx._files:
                 ctx.discover_files()
@@ -1351,16 +1351,23 @@ class SemanticSearchManager:
         """Build AST and optional body indexes, honoring mid-build invalidation."""
         generation = self._body_generation
         try:
+            from attocode_intel._internal.integrations.context.codebase_context import (
+                CodebaseContextManager,
+            )
+
+            # One file discovery serves all three steps. A new context per step
+            # discovered the files and built the dependency graph three times.
+            ctx = CodebaseContextManager(root_dir=self.root_dir)
             if not self._kw_index_built:
-                self._build_keyword_index()
+                self._build_keyword_index(ctx)
                 if generation != self._body_generation:
                     self._kw_index_built = False
                     return
             # Importance is used in first-query scoring; trigram mmap files
             # remain lazy to avoid holding descriptors in idle workspaces.
-            self._load_importance_scores()
+            self._load_importance_scores(ctx)
             if self._body_index_available and not self._body_index_built:
-                self._sync_body_index()
+                self._sync_body_index(ctx)
         except Exception:
             logger.warning("Lexical candidate warm-up failed", exc_info=True)
         finally:
@@ -2048,7 +2055,7 @@ class SemanticSearchManager:
     # BM25 keyword index builder (incremental with cache)
     # ------------------------------------------------------------------
 
-    def _build_keyword_index(self) -> None:
+    def _build_keyword_index(self, context_manager: Any = None) -> None:
         """Build BM25 inverted index from AST-extracted data.
 
         Uses disk cache to avoid re-parsing unchanged files.
@@ -2058,7 +2065,7 @@ class SemanticSearchManager:
             CodebaseContextManager,
         )
 
-        ctx = CodebaseContextManager(root_dir=self.root_dir)
+        ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
         ctx._ensure_fresh()
         if not ctx._files:
             ctx.discover_files()

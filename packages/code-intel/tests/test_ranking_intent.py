@@ -115,6 +115,7 @@ def test_semantic_search_warming_is_not_reported_as_no_match(tmp_path):
     manager = SimpleNamespace(
         search_candidates=lambda *_args, **_kwargs: [],
         candidate_diagnostics=lambda: {"status": "warming"},
+        wait_for_body_index=lambda timeout: False,
         format_results=lambda _rows: "No results found.",
     )
     svc._get_semantic_search = lambda: manager
@@ -148,3 +149,18 @@ def test_ready_local_reranker_reorders_bounded_source_candidates(tmp_path):
     ranked, provenance = svc._rank_search_results("ranking", rows, 2)
     assert [row.file_path for row in ranked] == ["b.py", "a.py"]
     assert provenance["method"] == "local_cross_encoder"
+
+
+def test_first_search_waits_once_for_a_warming_index():
+    state = {"ready": False, "waits": []}
+    manager = SimpleNamespace(
+        candidate_diagnostics=lambda: {"status": "ready" if state["ready"] else "warming"},
+        wait_for_body_index=lambda timeout: state["waits"].append(timeout) or state.update(ready=True),
+    )
+
+    def run():
+        return ["hit"] if state["ready"] else []
+
+    assert CodeIntelService._search_after_warmup(manager, run) == ["hit"]
+    assert CodeIntelService._search_after_warmup(manager, run) == ["hit"]
+    assert state["waits"] == [0.75]  # only the cold search waits

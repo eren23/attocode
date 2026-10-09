@@ -25,6 +25,8 @@ from attocode_intel.query_ranking import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from attocode_intel._internal.integrations.context.ast_service import ASTService
     from attocode_intel._internal.integrations.context.code_analyzer import CodeAnalyzer
     from attocode_intel._internal.integrations.context.codebase_context import (
@@ -1469,6 +1471,21 @@ class CodeIntelService:
             "estimated_tokens": estimate_tokens(text) if text else 0,
         }
 
+    @staticmethod
+    def _search_after_warmup(mgr: SemanticSearchManager, run: Callable[[], list]) -> list:
+        """Run a search. When the lexical indexes are still warming, wait once and run it again.
+
+        A new server builds its search indexes on the first search. A small
+        workspace builds them in a fraction of a second, so its first search
+        returns results. Large workspaces still report warming without a long stall.
+        """
+        candidates = run()
+        diagnostics = getattr(mgr, "candidate_diagnostics", None)
+        if not candidates and diagnostics is not None and diagnostics().get("status") == "warming":
+            mgr.wait_for_body_index(timeout=0.75)
+            candidates = run()
+        return candidates
+
     def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "", branch: str = "") -> dict:
         """Return structured semantic search results.
 
@@ -1480,7 +1497,8 @@ class CodeIntelService:
                 local mode automatically scopes to working-directory files).
         """
         mgr = self._get_semantic_search()
-        candidates = mgr.search(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter)
+        candidates = self._search_after_warmup(
+            mgr, lambda: mgr.search(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter))
         results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
         ranking["candidate_pool_count"] = len(candidates)
         if hasattr(mgr, "candidate_diagnostics"):
@@ -2605,19 +2623,9 @@ class CodeIntelService:
         if task_hint:
             try:
                 mgr = self._get_semantic_search()
-                candidates = mgr.search_candidates(
+                candidates = self._search_after_warmup(mgr, lambda: mgr.search_candidates(
                     task_hint, top_k=max(50, cc.bootstrap_search_top_k * 10, self._retrieval_depth(0)), file_filter="",
-                )
-                if not candidates and mgr.candidate_diagnostics().get("status") == "warming":
-                    # A newly opened, small workspace usually indexes in a
-                    # fraction of a second. Give bootstrap one bounded chance
-                    # to return useful evidence on its first call; large
-                    # workspaces still report warming without a long stall.
-                    mgr.wait_for_body_index(timeout=0.75)
-                    candidates = mgr.search_candidates(
-                        task_hint, top_k=max(50, cc.bootstrap_search_top_k * 10, self._retrieval_depth(0)),
-                        file_filter="",
-                    )
+                ))
                 results, _ranking = self._rank_search_results(
                     task_hint, candidates, cc.bootstrap_search_top_k,
                 )
@@ -3031,7 +3039,8 @@ class CodeIntelService:
         mgr = self._get_semantic_search()
 
         if mode == "keyword":
-            candidates = mgr.search_candidates(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter)
+            candidates = self._search_after_warmup(
+                mgr, lambda: mgr.search_candidates(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter))
             results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
             if not results and mgr.candidate_diagnostics().get("status") == "warming":
                 return "Search index warming; retry shortly. Missing results do not prove absence."
@@ -3041,7 +3050,8 @@ class CodeIntelService:
                 note += f"More retrieved candidates: rerun with top_k={next_k} (current index).\n"
             return note + mgr.format_results(results, query=query)
 
-        candidates = mgr.search(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter)
+        candidates = self._search_after_warmup(
+            mgr, lambda: mgr.search(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter))
         results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
         if not results and mgr.candidate_diagnostics().get("status") == "warming":
             return "Search index warming; retry shortly. Missing results do not prove absence."

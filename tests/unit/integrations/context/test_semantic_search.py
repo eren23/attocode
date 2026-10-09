@@ -270,13 +270,13 @@ class TestSourceBodyCandidates:
         started = threading.Event()
         release = threading.Event()
 
-        def slow_build(self: SemanticSearchManager) -> None:
+        def slow_build(self: SemanticSearchManager, *_args: object) -> None:
             started.set()
             release.wait(timeout=5)
             self._kw_index_built = True
 
         monkeypatch.setattr(SemanticSearchManager, "_build_keyword_index", slow_build)
-        monkeypatch.setattr(SemanticSearchManager, "_sync_body_index", lambda self: None)
+        monkeypatch.setattr(SemanticSearchManager, "_sync_body_index", lambda self, *_: None)
         monkeypatch.setattr(
             SemanticSearchManager, "_ensure_provider",
             lambda self: pytest.fail("cold search must not load an embedding model"),
@@ -290,6 +290,24 @@ class TestSourceBodyCandidates:
         finally:
             release.set()
             mgr.wait_for_body_index(timeout=5)
+
+    def test_warmup_discovers_files_once(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            CodebaseContextManager,
+        )
+
+        (tmp_path / "worker.py").write_text("def execute():\n    return 1\n", encoding="utf-8")
+        discover, calls = CodebaseContextManager.discover_files, []
+        monkeypatch.setattr(
+            CodebaseContextManager, "discover_files", lambda self: calls.append(1) or discover(self),
+        )
+        mgr = _bare_manager(str(tmp_path))
+        mgr._warm_candidate_indexes()
+        assert mgr._kw_index_built
+        # The keyword, importance and body steps share one discovery.
+        assert len(calls) == 1
 
     def test_ready_lexical_search_still_does_not_load_model(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
