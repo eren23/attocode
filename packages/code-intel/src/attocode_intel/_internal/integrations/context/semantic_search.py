@@ -17,7 +17,7 @@ import sqlite3
 import subprocess
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from attocode_intel.query_ranking import hit_evidence, rerank_broad_candidates
@@ -35,6 +35,15 @@ _STOP_WORDS = frozenset({
     "none", "true", "false", "pass", "str", "int", "float", "bool", "list",
     "dict", "set", "tuple", "any", "type", "optional",
 })
+
+# Prose and data formats: down-ranked in keyword search, and kept out of
+# whole-file BM25, where a long prose issue would match docs before code.
+_NON_CODE_EXTS = frozenset({
+    ".md", ".txt", ".rst", ".cfg", ".ini", ".yml", ".yaml", ".json", ".toml", ".xml", ".csv",
+})
+
+# Files per list in whole-file fusion, as in the Loc-Bench eval arm.
+_FILE_FUSION_DEPTH = 48
 
 _CAMEL_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 
@@ -967,12 +976,13 @@ class SemanticSearchManager:
         wide_k = max(top_k * 3, 60)
         keyword = self._keyword_search(lexical_query, wide_k, file_filter)
         body = self._body_search(terms, wide_k, file_filter)
+        files = self._file_search(terms, _FILE_FUSION_DEPTH, file_filter)
         if not self._kw_index_built:
             # A body hit failed freshness validation while keyword results
             # were being scored. Do not expose potentially stale candidates.
             self._schedule_body_index()
             return []
-        if not body:
+        if not body and not files:
             return rerank_broad_candidates(
                 query, self._penalize_exclusions(keyword, negative), top_k, file_filter,
             )
@@ -1003,9 +1013,39 @@ class SemanticSearchManager:
             )
             for item in ordered
         ]
-        return rerank_broad_candidates(
-            query, self._penalize_exclusions(fused, negative), top_k, file_filter,
-        )
+        fused = self._penalize_exclusions(fused, negative)
+        if files:
+            fused = self._fuse_file_order(fused, files)
+        return rerank_broad_candidates(query, fused, top_k, file_filter)
+
+    def _fuse_file_order(
+        self, results: list[SemanticSearchResult], files: list[str],
+    ) -> list[SemanticSearchResult]:
+        """Fuse the file order of ``results`` with whole-file BM25.
+
+        This is the Loc-Bench eval arm: equal-weight RRF (k=60) of the two
+        file orders, each cut to 48 files. Each fused file's first entry moves
+        to the front in fused order, and a file that only BM25 found gets an
+        entry. The other entries follow in their old order, scored no higher.
+        """
+        first: dict[str, SemanticSearchResult] = {}
+        for result in results:
+            first.setdefault(result.file_path, result)
+        fused: dict[str, float] = {}
+        for order in (list(first)[:_FILE_FUSION_DEPTH], files[:_FILE_FUSION_DEPTH]):
+            for rank, path in enumerate(order):
+                fused[path] = fused.get(path, 0.0) + 1.0 / (60 + rank + 1)
+        heads = []
+        for path in sorted(fused, key=lambda p: (-fused[p], p)):
+            head = first.get(path) or self._file_entry(path)
+            if head is not None:
+                heads.append(replace(head, score=round(fused[path], 6)))
+        moved = {id(first[path]) for path in fused if path in first}
+        floor = heads[-1].score if heads else 0.0
+        return heads + [
+            replace(result, score=min(result.score, floor))
+            for result in results if id(result) not in moved
+        ]
 
     @staticmethod
     def _penalize_exclusions(
@@ -1058,8 +1098,9 @@ class SemanticSearchManager:
             version_row = conn.execute(
                 "SELECT value FROM metadata WHERE key = 'body_schema_version'",
             ).fetchone()
-            if version_row is None or version_row[0] != "2":
+            if version_row is None or version_row[0] != "4":
                 conn.execute("DROP TABLE IF EXISTS body_fts")
+                conn.execute("DROP TABLE IF EXISTS body_file_fts")
                 conn.execute("DROP TABLE IF EXISTS body_files")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS body_files (
@@ -1074,10 +1115,17 @@ class SemanticSearchManager:
                     body UNINDEXED, terms
                 )
             """)
-            if version_row is None or version_row[0] != "2":
+            # One row per file: BM25 over a whole file counts matches that
+            # are spread over many chunks.
+            conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS body_file_fts USING fts5(
+                    file_path UNINDEXED, terms
+                )
+            """)
+            if version_row is None or version_row[0] != "4":
                 conn.execute(
                     "INSERT OR REPLACE INTO metadata (key, value) "
-                    "VALUES ('body_schema_version', '2')",
+                    "VALUES ('body_schema_version', '4')",
                 )
                 conn.commit()
             return conn
@@ -1182,6 +1230,7 @@ class SemanticSearchManager:
         if conn is None:
             return
         from attocode_intel._internal.integrations.context.codebase_context import (
+            EXTENSION_LANGUAGES,
             CodebaseContextManager,
         )
 
@@ -1220,6 +1269,7 @@ class SemanticSearchManager:
                 }
                 for path in sorted(deleted | stale):
                     conn.execute("DELETE FROM body_fts WHERE file_path = ?", (path,))
+                    conn.execute("DELETE FROM body_file_fts WHERE file_path = ?", (path,))
                     conn.execute("DELETE FROM body_files WHERE file_path = ?", (path,))
                 for path in sorted(stale):
                     abs_path, mtime, size = current[path]
@@ -1229,6 +1279,20 @@ class SemanticSearchManager:
                             "(file_path, chunk_type, name, start_line, end_line, body, terms) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
                             (path, chunk_type, name, start, end, body, terms),
+                        )
+                    # Source files only: docs and data stay in the chunk search.
+                    ext = os.path.splitext(path)[1].lower()
+                    file_terms = ""
+                    if ext in EXTENSION_LANGUAGES and ext not in _NON_CODE_EXTS:
+                        try:
+                            with open(abs_path, encoding="utf-8", errors="replace") as source:
+                                file_terms = " ".join(_tokenize(source.read()))
+                        except OSError:
+                            pass
+                    if file_terms:
+                        conn.execute(
+                            "INSERT INTO body_file_fts (file_path, terms) VALUES (?, ?)",
+                            (path, file_terms),
                         )
                     conn.execute(
                         "INSERT INTO body_files (file_path, mtime_ns, size) VALUES (?, ?, ?)",
@@ -1370,6 +1434,77 @@ class SemanticSearchManager:
                 self.invalidate_file(os.path.join(self.root_dir, path))
             return []
         return list(selected.values())
+
+    def _file_search(self, query_terms: list[str], top_k: int, file_filter: str) -> list[str]:
+        """Rank whole source files by BM25 over their terms; fresh files only.
+
+        Only for a query of more than 20 words, where the chunk search keeps
+        only part of the query. On a short query, BM25 length normalization
+        prefers tiny files that mention a name over the file that defines it.
+        """
+        tokens = list(dict.fromkeys(t for term in query_terms for t in _tokenize(term)))
+        if top_k <= 0 or len(tokens) <= 20 or not self._body_index_built:
+            return []
+        if self._source_revision() != self._body_revision:
+            # As in body search: report the index as stale, not a full result.
+            self._body_index_built = False
+            self._schedule_body_index()
+            return []
+        conn = self._open_body_db()
+        if conn is None:
+            return []
+        import fnmatch
+
+        try:
+            where = "WHERE terms MATCH ?"
+            parameters: list[Any] = []
+            if file_filter:
+                where += " AND body_file_fts.file_path GLOB ?"
+                parameters.append(file_filter.replace("[!", "[^"))
+            parameters.append(top_k)
+            with self._kw_cache_lock:
+                if len(tokens) > 64:
+                    tokens = self._rarest_body_tokens(conn, tokens, 64)
+                if not tokens:
+                    return []
+                parameters.insert(0, " OR ".join(f'"{token}"' for token in tokens))
+                rows = conn.execute(
+                    "SELECT body_file_fts.file_path, body_files.mtime_ns, body_files.size "
+                    "FROM body_file_fts JOIN body_files "
+                    "ON body_file_fts.file_path = body_files.file_path "
+                    + where + " ORDER BY bm25(body_file_fts), body_file_fts.file_path LIMIT ?",
+                    parameters,
+                ).fetchall()
+        except sqlite3.Error:
+            logger.debug("Whole-file query failed; using chunk results", exc_info=True)
+            return []
+        finally:
+            conn.close()
+        files = []
+        for path, mtime_ns, size in rows:
+            if file_filter and not fnmatch.fnmatch(path, file_filter):
+                continue
+            try:
+                stat = os.stat(os.path.join(self.root_dir, path))
+            except OSError:
+                continue
+            # A changed file is skipped here; the body search schedules its refresh.
+            if (stat.st_mtime_ns, stat.st_size) == (mtime_ns, size):
+                files.append(path)
+        return files
+
+    def _file_entry(self, path: str) -> SemanticSearchResult | None:
+        """A result for a file that only whole-file BM25 found: its first lines."""
+        try:
+            with open(os.path.join(self.root_dir, path), encoding="utf-8", errors="replace") as source:
+                lines = [line.rstrip("\n") for _, line in zip(range(30), source, strict=False)]
+        except OSError:
+            return None
+        return SemanticSearchResult(
+            file_path=path, chunk_type="file", name=os.path.basename(path),
+            text=f"{path}:1-{len(lines)}\n" + "\n".join(lines), score=0.0,
+            start_line=1, end_line=max(len(lines), 1),
+        )
 
     @staticmethod
     def _rarest_body_tokens(conn: sqlite3.Connection, tokens: list[str], limit: int) -> list[str]:
@@ -1653,7 +1788,6 @@ class SemanticSearchManager:
                     score *= cfg.multi_term_med_bonus
 
             # Non-code file penalty (markdown, text, config formats)
-            _NON_CODE_EXTS = {".md", ".txt", ".rst", ".cfg", ".ini", ".yml", ".yaml", ".json", ".toml", ".xml", ".csv"}  # noqa: N806
             _ext = os.path.splitext(doc.file_path)[1].lower()
             if _ext in _NON_CODE_EXTS:
                 score *= cfg.non_code_penalty
