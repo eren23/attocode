@@ -371,7 +371,8 @@ def wiring(args):
     configured = intel_setup(manifest, study, root, directory / "stage")
     token = secrets.token_hex(16)
     guidance = root / GUIDANCE["claude"]
-    guidance.write_text(guidance.read_text() + f"\nReadiness token: {token}\n")
+    # Claude gets no installed guidance file, so the token file only checks the project loader.
+    guidance.write_text((guidance.read_text() if guidance.exists() else "") + f"\nReadiness token: {token}\n")
     try:
         result = invoke("claude", manifest["model"], root, directory / "stage", configured["servers"], WIRING_PROMPT, 300,
                         subscription_env(), answer_schema=WIRING_SCHEMA, project_guidance=True,

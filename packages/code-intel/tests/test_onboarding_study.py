@@ -32,7 +32,8 @@ def test_frozen_installer_lanes_differ_only_in_guidance(onboarding, tmp_path, cl
         audit = onboarding.configure_setup(manifest, study, root, lane, study / lane / "stage", client)
         assert (root / "source.py").read_text() == "def helper(): pass\n"
         guidance = root / onboarding.GUIDANCE[client]
-        assert guidance.exists() == (lane == "intel_installed")
+        # Claude gets no guidance file: Claude Code shows the server instructions.
+        assert guidance.exists() == (lane == "intel_installed" and client != "claude")
         if guidance.exists():
             assert INSTRUCTIONS in guidance.read_text()
         if lane == "native":

@@ -155,9 +155,10 @@ def configure_client(
         state[entry_name] = {"previous": previous, "installed": entry}
         servers[entry_name] = entry
     output = tomlkit.dumps(document) if is_toml else json.dumps(document, indent=2) + "\n"
-    instruction = _instruction_text(
-        guidance, client, remove=remove and not any(name in servers for name in (NAME, REMOTE_NAME))
-    )
+    # Claude Code shows the server instructions to the model, so a CLAUDE.md copy is a duplicate
+    # in every request. Claude gets no managed block, and an old block is removed.
+    drop = client == "claude" or (remove and not any(name in servers for name in (NAME, REMOTE_NAME)))
+    instruction = _instruction_text(guidance, client, remove=drop)
     # Prepare everything before writing either file; previews contain no credential values.
     if dry_run:
         return {
@@ -168,7 +169,7 @@ def configure_client(
             "instructions": instruction,
         }
     atomic_write(config, output)
-    if not remove or guidance.exists():
+    if guidance.exists() or not (remove or drop):
         atomic_write(guidance, instruction)
     atomic_write(state_path, json.dumps(state, indent=2) + "\n")
     return {"client": client, "config": str(config), "guidance": str(guidance), "removed": remove}

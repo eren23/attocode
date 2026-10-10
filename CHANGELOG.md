@@ -41,6 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   server instructions 571, against 1,051. In the enriched agent study, the
   server added about 9,100 tokens to each model request. By the
   characters, this change removes about 4,100 of them.
+- The local daily tool list leaves out `hydration_status` and
+  `cross_repo_search`, and `notify_file_changed` while the server watches
+  the project. A local agent does not need these tools, and they stay
+  callable. The list has 16 tools, against 19. This removes about 1,400
+  characters (about 550 tokens) from each model request.
+- `init --client claude` writes no instructions to `CLAUDE.md`, and it
+  removes a block that an older version wrote there. Claude Code shows the
+  server instructions to the model, so that copy added about 250 tokens to
+  each request. Codex and Cursor still get their instruction files.
 
 ### Fixed — Code-intel server
 

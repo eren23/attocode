@@ -17,6 +17,8 @@ attocode-code-intel doctor --client codex
 
 Use `--client claude` or `--client cursor` to configure one client. `init` installs the MCP connection and managed agent instructions, preserving unrelated configuration. Restart your agent after installation. Project-level Codex configuration requires a trusted project; Claude Code may ask you to enable the project MCP server.
 
+Claude Code shows the server instructions to the model, so `init` writes no instructions to `CLAUDE.md`. It removes a block that an older version wrote there.
+
 For an installation shared across repositories:
 
 ```sh
@@ -65,6 +67,8 @@ Local file watchers and per-operation filesystem checks pick up edits, new files
 Bootstrap excludes knowledge whose source anchors have changed; explicit `recall` still returns those entries with their stale flag.
 
 New installations use the compact **daily** tool profile. `init --profile full` exposes the complete local catalog, including rules and security analysis, history, architecture, retrieval pins, snapshots, overlays, and cache maintenance. Direct server invocations default to `full` for compatibility. `capabilities` reports the actual catalog and optional enhancements. The local daily profile leaves out the repository learning tools and the remote-only `revision` argument. Use `--profile full` for learnings in a local session.
+
+The local daily tool list also leaves out `hydration_status` and `cross_repo_search`, and `notify_file_changed` while the server watches the project. These tools stay callable.
 
 ## Teams and remote agents
 

@@ -235,9 +235,13 @@ async def test_compact_cross_repo_and_local_daily_catalog(repository):
         names = {tool.name for tool in catalog}
         assert "semantic_search" in names and not names & {"recall", "record_learning", "update_learning"}
         assert not any("revision" in tool.inputSchema["properties"] for tool in catalog)
+        # A local agent does not need these. notify_file_changed is listed only when the server does not watch.
+        assert not names & {"hydration_status", "cross_repo_search"} and "notify_file_changed" in names
+        watching = {tool.name for tool in OperationGateway(str(repository), "daily").catalog(mcp=True)}
+        assert watching == names - {"notify_file_changed"}
         # Every model request carries this list: keep it short and free of pydantic titles and null branches.
         published = json.dumps([[tool.description, tool.inputSchema] for tool in catalog])
-        assert len(published) < 11500 and '"title"' not in published and '"null"' not in published
+        assert len(published) < 10000 and '"title"' not in published and '"null"' not in published
         assert compact_schema({"properties": {"title": {"title": "Title", "type": "string"}}}) == {
             "properties": {"title": {"type": "string"}}}
         # Validation keeps the full schema, so an explicit null is still valid.

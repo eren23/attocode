@@ -202,7 +202,7 @@ def wiring(args):
             (root / 'test_utility.py').write_text('from utility import total\ndef test_total():\n    assert total(2, 3) == 5\n')
             configured = setup(args.study, manifest, root, lane, directory / 'transport', client)
             guidance = root / GUIDANCE[client]
-            original, token = guidance.read_text(), secrets.token_hex(16)
+            original, token = guidance.read_text() if guidance.exists() else '', secrets.token_hex(16)
             guidance.write_text(original + '\nReadiness token: ' + token + '\n')
             try:
                 loaded = invoke(client, manifest['models'][client], root, directory / 'guidance', configured['servers'],
