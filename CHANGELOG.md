@@ -206,6 +206,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   server did not change the file Acc@5 of Claude Code (0.655 to 0.690 with
   Read, Grep and Glob). It made each run 1.8 to 2.1 times as expensive and
   2 to 8 seconds slower.
+- The Ranking gate workflow has a `write_baseline` option for a run by hand.
+  With it, the workflow uploads the `ranking-baseline` artifact also when the
+  gate passes. Before, only a failed gate gave the artifact, so a ranking
+  gain left the baseline old.
 
 ## [0.2.29] - 2026-10-09
 

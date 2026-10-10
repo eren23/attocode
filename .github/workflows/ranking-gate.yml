@@ -4,6 +4,11 @@ on:
     # The engine hash of the matrix covers all of packages/code-intel/src, so any change there can move the ranking.
     paths: ['packages/code-intel/src/**', 'eval/matrix/**', 'uv.lock', '.github/workflows/ranking-gate.yml']
   workflow_dispatch:
+    inputs:
+      write_baseline:
+        description: Upload the baseline of this code, also when the gate passes
+        type: boolean
+        default: false
 
 jobs:
   ranking-gate:
@@ -27,10 +32,10 @@ jobs:
       - name: Ranking gate
         run: uv run --no-sync python -m eval.matrix.run ci --cache "$MATRIX_CACHE"
       - name: Write the baseline of this code
-        if: failure()
+        if: failure() || inputs.write_baseline
         run: uv run --no-sync python -m eval.matrix.run ci --cache "$MATRIX_CACHE" --write-baseline
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: failure() || inputs.write_baseline
         with:
           name: ranking-baseline
           path: eval/matrix/ci_baseline.json
