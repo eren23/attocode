@@ -207,6 +207,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search of a timed run then built them. In 9 of 29 R2b runs, it found no
   index after its 15 s wait. On the crystal snapshot, the first search of a
   new server now answers in 0.8 s with results.
+- The R2 results doc (`2026-10-10-agent-pilot.md`) has an enriched study:
+  29 tasks where offline `product` has an Acc@10 hit and the `grep` arm does
+  not. With the code-intel MCP server and its first search, Claude Code gave
+  the same file Acc@5 as without it (0.793). Each run cost 1.84 times as
+  much. No first search lacked an index.
 - New results doc `packages/code-intel/evals/results/2026-10-10-agent-pilot.md`:
   the agent pilot R2 on 29 file-localization tasks. The code-intel MCP
   server did not change the file Acc@5 of Claude Code (0.655 to 0.690 with
