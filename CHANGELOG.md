@@ -229,6 +229,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `prepare` of the agent study harness builds the search index only when the
   study has an intel setup. A study with only `native` does not read the
   index, so its preparation is faster.
+- The study harnesses hash a symlink in a snapshot by its target path. Before,
+  a symlink into a git submodule that is not checked out stopped `prepare`.
 - The R2 results doc (`2026-10-10-agent-pilot.md`) has an enriched study:
   29 tasks where offline `product` has an Acc@10 hit and the `grep` arm does
   not. With the code-intel MCP server and its first search, Claude Code gave

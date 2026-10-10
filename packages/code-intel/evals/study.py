@@ -195,7 +195,10 @@ def tree_hash(root):
         for name in sorted(files):
             if not name.endswith(".pyc"):
                 path = Path(directory) / name
-                hashes[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+                # A symlink counts by its target path. Its target can be missing, for example in a git
+                # submodule that is not checked out, or outside the tree.
+                data = os.readlink(path).encode() if path.is_symlink() else path.read_bytes()
+                hashes[str(path.relative_to(root))] = hashlib.sha256(data).hexdigest()
     return digest(hashes)
 
 

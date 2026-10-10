@@ -169,6 +169,18 @@ def test_run_result_keeps_options_cost_turns_and_usage(modules, monkeypatch, tmp
         assert result["cost_usd"] is None and result["turns"] is None
 
 
+def test_tree_hash_counts_a_symlink_by_its_target_path(modules, tmp_path):
+    study = modules[0]
+    (tmp_path / "real.py").write_text("x = 1\n")
+    (tmp_path / "link.py").symlink_to("real.py")
+    # A symlink into a git submodule that is not checked out has no target.
+    (tmp_path / "vendor.py").symlink_to("vendor/missing.py")
+    first = study.tree_hash(tmp_path)
+    (tmp_path / "vendor.py").unlink()
+    (tmp_path / "vendor.py").symlink_to("vendor/other.py")
+    assert study.tree_hash(tmp_path) != first
+
+
 def test_source_quotes_are_checked_and_repository_escape_rejected(modules, tmp_path):
     tasks = modules[2]
     root = tmp_path / "repo"
