@@ -262,13 +262,13 @@ The model embeds the 40-line windows of each file and the query. A file keeps at
 A GPU pod makes the vectors, and the retrieve stage needs no model:
 
 1. `python -m eval.matrix.dense plan OUT --job JOB.json` writes the snapshots and queries of `OUT/instances.jsonl`. It refuses a dataset without `public: true`.
-2. On the pod, `python -m eval.matrix.dense job JOB.json --work DIR` makes the snapshots with the matrix code, then embeds the files and the queries. With `--sdpa`, the job can use the fused attention of PyTorch. It does so only when a sample keeps a cosine of 0.9999 or more with the model attention.
+2. On the pod, `python -m eval.matrix.dense job JOB.json --work DIR` makes the snapshots with the matrix code, then embeds the files and the queries.
 3. `python -m eval.matrix.dense import DIR` compares the pod trees with the local trees and adds the vectors to `emb/` in the matrix cache.
 4. `python -m eval.matrix.run run OUT --stage retrieve --arms dense` ranks the files. A query without vectors is "not ready", and the stage saves no result for it.
 
 On 2026-10-09, one RTX 4090 pod embedded the 767 snapshots of the core mix and Loc-Bench 560. That is 3.78 million windows of 549,067 source files at about 413 windows each second. The pod cost about $2.9, with the setup. 88 files have more than 16,000 lines, and the arm does not embed their last 14,607 windows.
 
-The fused attention (`--sdpa`) gave 1.37 times the speed, but its lowest cosine was 0.9993. Thus the run used the attention of the model code. The pod also ran the retrieve stage, and only the `ret/` results came back. The vectors did not come back.
+A trial of the fused attention of PyTorch gave 1.37 times the speed, but its lowest cosine with the model attention was 0.9993. Thus the job keeps the attention of the model code. The pod also ran the retrieve stage, and only the `ret/` results came back. The vectors did not come back.
 
 On the full issue of Loc-Bench 560, `dense` gave Acc@5 0.602 against 0.532 for `product` (Δ +0.070, Holm p 0.009). `rrf(product+dense)` gave 0.679 (Δ +0.146, Holm p 0.0004). With only the Python files in each list, `dense` gives Acc@5 0.614 and Acc@10 0.713. SweRank reports 74.29 (Acc@10 80.36) for CodeRankEmbed alone on this set. Thus this harness is still about 13 points lower, and the cause is not clear.
 
