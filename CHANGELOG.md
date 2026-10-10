@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Code-intel search
 
+- A plural word in a query can again match the same word in code. The
+  query terms cut a final "s" from words of five or more letters, but the
+  keyword, body and whole-file BM25 searches match whole words, and their
+  indexes keep the plural. Thus "settings" or "kwargs" in an issue did not
+  match `settings` or `kwargs`. These searches now also get each word as
+  written. The R1 harness research found this.
 - Search no longer depends on the order in which the file system lists a
   folder. File discovery and the trigram index now walk folders in name
   order. Before, files of equal importance kept the `os.scandir` order, so

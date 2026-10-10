@@ -345,6 +345,15 @@ class TestSourceBodyCandidates:
         assert hit.start_line <= 3 <= hit.end_line
         assert "sapphire_handshake" in hit.text
 
+    def test_plural_query_word_matches_the_same_plural_in_code(self, tmp_path: Path) -> None:
+        # The query terms fold "sapphires" to "sapphire", but the index keeps "sapphires".
+        (tmp_path / "worker.py").write_text(
+            "def execute(value):\n    sapphires = value + 1\n    return sapphires\n", encoding="utf-8")
+        mgr = _bare_manager(str(tmp_path))
+        mgr.search_candidates("sapphires", top_k=10)
+        assert mgr.wait_for_body_index()
+        assert {r.file_path for r in mgr.search_candidates("sapphires", top_k=10)} == {"worker.py"}
+
     def test_long_query_keeps_its_rarest_body_terms(self, tmp_path: Path) -> None:
         # Body search sends at most 20 words. They must be the rare ones, not the
         # 20 that sort first: "zephyr" sorts after all of the common words.

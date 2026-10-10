@@ -982,6 +982,8 @@ class SemanticSearchManager:
         from attocode_intel.focused_evidence import task_terms
 
         positive, negative = task_terms(query)
+        # The indexes keep plurals and match whole words: send "settings" as written too.
+        positive |= task_terms(query, fold=False)[0]
         terms = sorted(positive) if positive else _tokenize(query)
         if not terms:
             return []
