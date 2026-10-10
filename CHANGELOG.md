@@ -231,6 +231,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   index, so its preparation is faster.
 - The study harnesses hash a symlink in a snapshot by its target path. Before,
   a symlink into a git submodule that is not checked out stopped `prepare`.
+- `prepare` excludes a task when the safe extraction refuses its snapshot, for
+  example a link to an absolute path. Before, the error stopped `prepare`.
 - The R2 results doc (`2026-10-10-agent-pilot.md`) has an enriched study:
   29 tasks where offline `product` has an Acc@10 hit and the `grep` arm does
   not. With the code-intel MCP server and its first search, Claude Code gave

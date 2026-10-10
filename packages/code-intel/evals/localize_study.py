@@ -22,6 +22,7 @@ import signal
 import statistics
 import subprocess
 import sys
+import tarfile
 import threading
 import time
 from collections import Counter
@@ -294,8 +295,12 @@ def prepare_task(study, manifest, clone, task):
     root.mkdir(parents=True)
     # A fetch only reads the source, so a local case-pack clone stays unchanged.
     git(clone, "fetch", "-q", "--depth", "1", task["source"], task["base_commit"], timeout=1800)
-    snapshot(clone, root, revision=task["base_commit"])
-    reason = conflict(manifest, study, root)
+    try:
+        snapshot(clone, root, revision=task["base_commit"])
+        reason = conflict(manifest, study, root)
+    except tarfile.FilterError as exc:
+        # The safe extraction refuses the archive, for example a link to an absolute path.
+        reason = f"Unsafe snapshot: {exc}"
     if not reason:
         commit(root)
         tracked = set(git(root, "ls-files", "-z").split("\0")) - {""}

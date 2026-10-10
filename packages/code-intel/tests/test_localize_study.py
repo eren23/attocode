@@ -157,6 +157,28 @@ def test_native_only_study_prepares_without_an_index(localize, stub, tmp_path, m
     assert not (study / "sources/fixture_fix-1/.attocode").exists()
 
 
+def test_unsafe_snapshot_excludes_its_task_and_prepare_goes_on(localize, stub, tmp_path):
+    _, base = case_repo()
+    # This repository sorts first, so prepare must go on to the next one.
+    unsafe = Path.home() / "Documents/ai/benchmark-repos/absolute-link-repo"
+    (unsafe / "pkg").mkdir(parents=True)
+    (unsafe / "pkg/b.py").write_text("def target():\n    return 1\n")
+    (unsafe / "pkg/link.py").symlink_to("/etc/hosts")
+    git(unsafe, "init", "-q")
+    git(unsafe, "add", ".")
+    git(unsafe, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+    queries = {"full": "Fix {target} in b.\nIt fails.", "title": "Fix target"}
+    instances = [matrix("fixture/fix-1", "fixture-repo", base, queries, ["pkg/b.py"]),
+                 matrix("fixture/unsafe-1", "absolute-link-repo", git(unsafe, "rev-parse", "HEAD"), queries, ["pkg/b.py"])]
+    study = freeze(localize, tmp_path, "study", instances, ["fixture/fix-1", "fixture/unsafe-1"], ("native",))
+    localize.prepare(SimpleNamespace(study=study))
+    prepared = json.loads((study / "preparation.json").read_text())["tasks"]
+    assert prepared["fixture_unsafe-1"]["status"] == "excluded"
+    assert prepared["fixture_unsafe-1"]["reason"].startswith("Unsafe snapshot")
+    assert prepared["fixture_fix-1"]["status"] == "ready"
+    assert not (study / "sources/fixture_unsafe-1").exists()
+
+
 def test_warm_waits_until_search_has_its_indexes(localize, monkeypatch, tmp_path):
     import warm_cache
     requests = []
