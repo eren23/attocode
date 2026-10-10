@@ -121,15 +121,16 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     app.router.routes.append(Route("/mcp", endpoint=transport, methods=["GET", "POST", "DELETE"]))
     app.router.routes.append(Mount("/mcp", app=transport))
 
-    # Middleware — credentials=True is invalid with origins=["*"] per CORS spec
-    allow_creds = "*" not in config.cors_origins
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=config.cors_origins,
-        allow_credentials=allow_creds,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # Without configured origins, no other web origin can call the API, so no CORS headers.
+    # credentials=True is invalid with origins=["*"] per the CORS spec.
+    if config.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=config.cors_origins,
+            allow_credentials="*" not in config.cors_origins,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     from attocode_intel.api.access import RepositoryAccessMiddleware
 
     app.add_middleware(RepositoryAccessMiddleware)

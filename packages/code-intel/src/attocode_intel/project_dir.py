@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -78,3 +79,19 @@ def find_project_root(start: str) -> str:
 
     logger.debug("No project marker found, falling back to %s", start)
     return start
+
+
+def cache_folder(project_dir: str | os.PathLike) -> Path:
+    """Return ``<project>/.attocode``, and make it if it does not exist.
+
+    A folder that this function makes gets a ``.gitignore`` with ``*``, so the
+    index stays out of commits. A folder that exists keeps its own rules: some
+    projects commit settings in it.
+    """
+    folder = Path(project_dir) / ".attocode"
+    try:
+        folder.mkdir()
+    except FileExistsError:
+        return folder
+    (folder / ".gitignore").write_text("# Local index data of attocode-code-intel\n*\n", encoding="utf-8")
+    return folder

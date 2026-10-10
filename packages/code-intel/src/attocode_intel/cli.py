@@ -346,19 +346,30 @@ def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
 
 def _serve_http(project_dir: str, *, host: str, port: int, debug: bool) -> None:
     """Start the FastAPI HTTP server."""
+    from attocode_intel.config import CodeIntelConfig, is_loopback
+
+    config = CodeIntelConfig.from_env()
+    # Service mode signs in its users. Local mode checks only ATTOCODE_API_KEY, and without it
+    # any computer that reaches the port can read the code index.
+    if not (is_loopback(host) or config.api_key or config.database_url):
+        print(
+            f"Error: --host {host} lets other computers read this code index. "
+            "Set ATTOCODE_API_KEY, or use --host 127.0.0.1.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     try:
         import uvicorn
     except ImportError:
         print(
-            "Error: uvicorn not installed. Install with: pip install 'attocode[code-intel]'",
+            "Error: the HTTP server needs the http extra. "
+            "Install it with: uv tool install 'attocode-code-intel[http]'",
             file=sys.stderr,
         )
         sys.exit(1)
 
     from attocode_intel.api.app import create_app
-    from attocode_intel.config import CodeIntelConfig
 
-    config = CodeIntelConfig.from_env()
     config.project_dir = project_dir
     config.host = host
     config.port = port
