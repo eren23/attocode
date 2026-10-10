@@ -135,17 +135,13 @@ os.write(1,value[:-2]); time.sleep(.08); os.write(1,value[-2:])
 
 def test_capture_timeout_kills_parent_and_child_and_keeps_partial_trace(modules, tmp_path):
     events = modules[2]
-    script = r'''
-import os, signal, time
-signal.signal(signal.SIGTERM, signal.SIG_IGN)
-child = os.fork()
-print('{"type":"system"}', flush=True)
-while True: time.sleep(.1)
-'''
-    # A busy CI runner needed more than 1 s to start Python, so the trace was empty at the timeout.
-    # -S skips the site-packages setup, and 3 s gives the cold start room.
-    result = events.capture([sys.executable, "-S", "-u", "-c", script], tmp_path, tmp_path, 3, os.environ,
-                            kill_grace=.1)
+    # A shell, not Python: a busy CI runner needed more than 3 s to start Python, so the
+    # trace was empty at the timeout. The group ignores SIGTERM, so only SIGKILL stops it.
+    script = '''trap "" TERM
+(trap "" TERM; while :; do sleep .1; done) &
+echo '{"type":"system"}'
+while :; do sleep .1; done'''
+    result = events.capture(["sh", "-c", script], tmp_path, tmp_path, 3, os.environ, kill_grace=.1)
     assert result["timed_out"] and result["exit_code"] != 0 and result["seconds"] < 4
     assert (tmp_path / "events.jsonl").read_text()
 
