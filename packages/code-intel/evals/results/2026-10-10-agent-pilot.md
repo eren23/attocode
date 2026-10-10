@@ -221,7 +221,9 @@ the agent used 0.6 fewer turns (p 0.13).
 5. Choose tasks from agent misses, not from misses of the `grep` arm. For
    example, use the tasks that `native` missed in these studies, or issues
    without code identifiers. Search can add accuracy only where the agent
-   with grep fails.
+   with grep fails. Done: see [R3](2026-10-10-agent-r3.md). A screen of 93
+   tasks found 4 misses. On 10 tasks that the agent had missed, the forced
+   first search gave no Acc@5 gain.
 
 ## Reproduce
 
