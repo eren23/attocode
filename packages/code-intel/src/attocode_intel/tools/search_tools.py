@@ -138,21 +138,13 @@ def semantic_search(
     branch: str = "",
     mode: str = "auto",
 ) -> str:
-    """Search the codebase using natural language queries.
-
-    Finds relevant files, functions, and classes by meaning -- not just
-    keyword matching. Uses embeddings when available (sentence-transformers
-    or OpenAI), falls back to keyword matching otherwise.
+    """Search the code by meaning with a natural-language query. Returns files, functions and classes, best first.
 
     Args:
-        query: Natural language search query (e.g. "authentication middleware").
-        top_k: Number of results to return (default 10).
-        file_filter: Optional glob pattern to filter files (e.g. "*.py").
-        branch: Optional branch name for scoping results (service mode).
-            In local mode, results are automatically scoped to files
-            present in the working directory.
-        mode: Search mode. "auto" uses vector if available. "keyword" forces
-            keyword search. "vector" waits for embeddings then uses vector.
+        query: For example "authentication middleware".
+        file_filter: Optional glob, for example "*.py".
+        branch: Remote service only. Local search reads the working tree.
+        mode: "auto" (default), "keyword", or "vector" (waits for embeddings).
     """
     return _get_service().semantic_search(
         query=query,
@@ -309,23 +301,13 @@ def fast_search(
     selectivity_threshold: float = 0.10,
     explain: bool = False,
 ) -> str:
-    """Fast regex search using trigram index pre-filtering.
-
-    Uses a trigram inverted index to identify candidate files before
-    running the full regex, typically 10-100x faster than brute-force grep
-    on large codebases. Falls back to standard grep when:
-      - No trigram index has been built (run ``reindex`` first)
-      - The pattern yields no extractable trigrams (e.g., ``.*``)
-      - The trigram filter is not selective enough (> *selectivity_threshold*)
+    """Search file contents with a regular expression. A trigram index selects the candidate files first.
 
     Args:
-        pattern: Regex pattern to search for (e.g. "def process_.*event").
-        path: Subdirectory to search (relative to project root, empty for all).
-        max_results: Maximum number of matching lines to return (default 50).
-        case_insensitive: Whether to match case-insensitively.
-        selectivity_threshold: Skip the trigram index when the fraction of
-            matching files exceeds this value (0.0-1.0, default 0.10).
-        explain: When True, append a search diagnostics section to the output.
+        pattern: A regular expression, for example "def process_.*event".
+        path: Optional subdirectory relative to the project root.
+        selectivity_threshold: Skip the index when more than this share of files can match (default 0.10).
+        explain: Add search diagnostics to the output.
     """
     remote = _get_remote_service()
     if remote is not None:

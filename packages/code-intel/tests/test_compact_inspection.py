@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from attocode_intel.catalog import compact_schema
 from attocode_intel.gateway import OperationGateway
 from attocode_intel.output import bounded_compact, response_tokens
 
@@ -234,6 +235,13 @@ async def test_compact_cross_repo_and_local_daily_catalog(repository):
         names = {tool.name for tool in catalog}
         assert "semantic_search" in names and not names & {"recall", "record_learning", "update_learning"}
         assert not any("revision" in tool.inputSchema["properties"] for tool in catalog)
+        # Every model request carries this list: keep it short and free of pydantic titles and null branches.
+        published = json.dumps([[tool.description, tool.inputSchema] for tool in catalog])
+        assert len(published) < 11500 and '"title"' not in published and '"null"' not in published
+        assert compact_schema({"properties": {"title": {"title": "Title", "type": "string"}}}) == {
+            "properties": {"title": {"type": "string"}}}
+        # Validation keeps the full schema, so an explicit null is still valid.
+        assert not (await gateway.execute_mcp("inspect_symbol", {"symbol_name": "helper", "file_path": None})).isError
         with pytest.raises(ValueError, match="not available"):
             await gateway.execute_mcp("record_learning", {"type": "gotcha", "description": "local daily"})
         with pytest.raises(ValueError, match="acknowledged"):

@@ -196,14 +196,12 @@ def learnings_resource() -> str:
 
 @mcp.tool()
 def notify_file_changed(files: list[str]) -> str:
-    """Notify the server that files have been modified externally.
+    """Tell the server which files changed, so that the index and search read the new content.
 
-    Call this after editing files to immediately update the AST index
-    and invalidate stale semantic search embeddings. Useful when the
-    file watcher is unavailable or for batch updates.
+    A server that watches the project finds edits without this call.
 
     Args:
-        files: List of file paths (relative or absolute) that changed.
+        files: Changed file paths, relative or absolute.
     """
     if not files:
         return "No files specified."

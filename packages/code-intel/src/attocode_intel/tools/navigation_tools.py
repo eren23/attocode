@@ -37,29 +37,19 @@ def repo_map(
 @mcp.tool()
 @pin_stamped
 def symbols(path: str) -> str:
-    """List all symbols (functions, classes, methods) defined in a file.
-
-    Args:
-        path: File path (relative to project root or absolute).
-    """
+    """List the functions, classes and methods that a file defines."""
     return _get_service().symbols(path)
 
 
 @mcp.tool()
 @pin_stamped
 def search_symbols(name: str, limit: int = 30, kind: str = "", task_hint: str = "") -> str:
-    """Search for symbol definitions across the entire codebase.
-
-    Multi-strategy search: exact match, prefix, substring, case-insensitive,
-    and camelCase/snake_case token matching.  Results ranked by match quality
-    and symbol importance.
+    """Find symbol definitions by name, best match first: exact, prefix, substring, case-insensitive and camelCase or snake_case parts.
 
     Args:
-        name: Symbol name or pattern (e.g. "parse_file", "Router", "exitCode").
-        limit: Maximum results to return (default 30).
-        kind: Filter by symbol kind: "function", "class", "method", "variable",
-            "constant", "interface", "type". Empty = all kinds.
-        task_hint: Optional context for ordering equally matched definitions.
+        name: A name or part of one, for example "parse_file" or "Router".
+        kind: Optional filter: function, class, method, variable, constant, interface or type.
+        task_hint: Optional task text that orders equal matches.
     """
     service = _get_service()
     if task_hint and hasattr(service, "_task_file_scores"):
@@ -71,17 +61,12 @@ def search_symbols(name: str, limit: int = 30, kind: str = "", task_hint: str = 
 @mcp.tool()
 def inspect_symbol(symbol_name: str, file_path: str | None = None, line: int | None = None,
                    source_start_line: int | None = None, task_hint: str | None = None) -> str:
-    """Understand a symbol in one call: definition, source, references, imports and candidate tests.
+    """Get a symbol in one call: definition, source excerpt, references, imports and candidate tests.
 
-    Use for codebase questions, tracing behavior across files, or gathering evidence before a change.
-    The file path is optional: supply a symbol name to locate its implementation. An ambiguous name returns
-    choices; supply a repository-relative file_path and definition start line to select one.
-    Supply task_hint to prioritize relevant code excerpts and symbol-specific tests. Excerpts include exact
-    file/line ranges and enclosing branch context for Python and JavaScript/TypeScript. Keep each context_ranges
-    group with its excerpt. Syntax-local matches do not establish complete behavior or data-flow coverage.
-    For long definitions, follow next_source or set source_start_line to read another excerpt.
-    Each call reads current source; inspect again from the beginning if the file changes between pages.
-    Missing relationships do not prove absence. Follow the returned queries for more evidence.
+    A name is enough. For an ambiguous name, the result lists choices: give the repository-relative file_path
+    and the definition start line to select one. Add task_hint to order the excerpts and tests for your task.
+    For a long definition, follow next_source or set source_start_line. Keep each context_ranges group with
+    its excerpt. Missing relationships do not prove absence.
     """
     import json
 
@@ -97,17 +82,12 @@ def explore_codebase(
     importance_threshold: float = 0.3,
     task_hint: str = "",
 ) -> str:
-    """Explore the codebase one directory level at a time.
-
-    Returns directories with file counts and languages, and files with
-    importance scores and top symbols. Use for drill-down navigation
-    on large codebases instead of the full repo map.
+    """List one directory level: subdirectories with file counts and languages, and files with importance and top symbols.
 
     Args:
-        path: Relative directory path ("" for root, e.g. "src/attocode/integrations").
-        max_items: Maximum items (dirs + files) to return (default 30).
-        importance_threshold: Minimum file importance to show (0.0-1.0, default 0.3).
-        task_hint: Optional task context for ordering files within the view.
+        path: Directory relative to the project root ("" for the root).
+        importance_threshold: Minimum file importance, 0.0 to 1.0.
+        task_hint: Optional task text that orders the files.
     """
     service = _get_service()
     kwargs = {"path": path, "max_items": max_items,
@@ -119,16 +99,7 @@ def explore_codebase(
 
 @mcp.tool()
 def project_summary(max_tokens: int = 4000) -> str:
-    """Get a high-level project summary suitable for bootstrapping understanding.
-
-    Produces a structured overview including project identity, stats,
-    entry points, core architecture, directory layout, dependency layers,
-    tech stack, test structure, and build system. Ideal as a first tool
-    call when approaching an unknown codebase.
-
-    Args:
-        max_tokens: Token budget for the output (default 4000).
-    """
+    """Summarize the project: purpose, size, entry points, architecture, layout, dependency layers, tech stack, tests and build."""
     return _get_service().project_summary(max_tokens=max_tokens)
 
 
@@ -138,26 +109,13 @@ def bootstrap(
     max_tokens: int = 8000,
     indexing_depth: str = "auto",
 ) -> str:
-    """Find where a behavior is implemented in an unfamiliar codebase using task_hint.
+    """Find where a behavior is implemented in an unfamiliar repository.
 
-    Detects codebase size and returns an optimized bundle:
-    - Project summary (identity, stats, entry points, architecture)
-    - Repository map OR hierarchical exploration (size-dependent)
-    - Coding conventions (25-file sample)
-    - Relevant search results (if task_hint provided)
-    - Navigation guidance tailored to codebase size
-
-    Replaces 2-4 sequential calls (project_summary + repo_map + conventions
-    + semantic_search) with a single call. Inspired by Stripe's pre-hydration
-    pattern.
+    With task_hint, the result has the code that matches the task, a project summary, a map and the conventions.
 
     Args:
-        task_hint: Optional description of what you're trying to do.
-            When provided, includes semantic search results for relevant code.
-        max_tokens: Token budget for the entire output (default 8000).
-        indexing_depth: Indexing strategy. "auto" picks based on repo size.
-            "eager" forces full sync indexing. "lazy" does minimal skeleton.
-            "minimal" skips parsing entirely.
+        task_hint: What you want to find or change.
+        indexing_depth: "auto" (default), "eager", "lazy" or "minimal".
     """
     return _get_service().bootstrap(
         task_hint=task_hint,
@@ -168,12 +126,7 @@ def bootstrap(
 
 @mcp.tool()
 def hydration_status() -> str:
-    """Check progressive indexing status.
-
-    Returns the current hydration tier, phase, parse coverage,
-    reference coverage, and embedding status. Use this to decide
-    whether to wait for full indexing or proceed with partial results.
-    """
+    """Report the index progress: tier, phase, parse and reference coverage, and embedding status."""
     svc = _get_service()
     status = svc.hydration_status()
     lines = [
@@ -224,19 +177,12 @@ def relevant_context(
     include_symbols: bool = True,
     task_hint: str = "",
 ) -> str:
-    """Get a subgraph capsule -- a file and its neighbors with symbols.
-
-    BFS from center file(s) in both directions (imports and importers) up to
-    `depth` hops. For each file shows: language, line count, importance,
-    relationship to center, and top symbols. Replaces N+1 sequential calls
-    (dependency_graph + symbols on each neighbor).
+    """Show the files around the given files: what they import and what imports them, with their top symbols.
 
     Args:
-        files: Center file paths (relative to project root or absolute).
-        depth: How many hops to traverse (default 1, max 2).
-        max_tokens: Token budget for the output (default 4000).
-        include_symbols: Whether to include symbol lists (default True).
-        task_hint: Optional context for ordering neighbors within each hop.
+        files: Center file paths.
+        depth: Number of hops, 1 or 2 (default 1).
+        task_hint: Optional task text that orders the files.
     """
     service = _get_service()
     kwargs = {"files": files, "depth": depth, "max_tokens": max_tokens,
