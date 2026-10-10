@@ -237,6 +237,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a symlink into a git submodule that is not checked out stopped `prepare`.
 - `prepare` excludes a task when the safe extraction refuses its snapshot, for
   example a link to an absolute path. Before, the error stopped `prepare`.
+- New results doc `packages/code-intel/evals/results/2026-10-10-agent-r3.md`:
+  agent study R3 on 10 tasks that Claude Code with Read, Grep and Glob had
+  missed. A forced first code-intel search gave file Acc@5 0.200, against
+  0.333 without it (range of Δ -0.300 to +0.033). Each run cost 1.40 times
+  as much. By the rule that we wrote before the study, agent localization
+  studies stop here.
 - The R2 results doc (`2026-10-10-agent-pilot.md`) has an enriched study:
   29 tasks where offline `product` has an Acc@10 hit and the `grep` arm does
   not. With the code-intel MCP server and its first search, Claude Code gave
