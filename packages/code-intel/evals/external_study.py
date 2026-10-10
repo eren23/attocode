@@ -161,7 +161,7 @@ def wiring(args):
             start_runtime(task, root, name)
             configured = configure_setup(manifest, args.study, root, 'intel_installed', directory / 'transport', client)
             guidance = root / GUIDANCE[client]
-            original = guidance.read_text()
+            original = guidance.read_text() if guidance.exists() else ''
             token = secrets.token_hex(16)
             guidance.write_text(original + f'\nReadiness token: {token}\n')
             schema = {'type': 'object', 'properties': {'readiness_token': {'type': 'string'}},

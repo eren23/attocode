@@ -81,12 +81,14 @@ def configure_setup(manifest, study, root, lane, stage_dir, client):
                      "ATTOCODE_INTEL_TRACE": str(stage_dir / "engine.jsonl")}}
     audit["servers"] = {NAME: entry}
     guidance = Path(paths["guidance"])
-    audit["installed_guidance_sha256"] = hashlib.sha256(guidance.read_bytes()).hexdigest()
+    # The installer writes no guidance file for Claude: Claude Code shows the server instructions.
+    audit["installed_guidance_sha256"] = (hashlib.sha256(guidance.read_bytes()).hexdigest()
+                                          if guidance.exists() else None)
     audit["installed_config_sha256"] = hashlib.sha256(config.read_bytes()).hexdigest()
     if lane == "intel_available":
-        guidance.unlink()
+        guidance.unlink(missing_ok=True)
     else:
-        audit["guidance_present"] = True
+        audit["guidance_present"] = guidance.exists()
         audit["guidance_sha256"] = audit["installed_guidance_sha256"]
     return audit
 
@@ -138,11 +140,11 @@ def wiring(args):
         subprocess.run(["git", "init", "-q", str(root)], check=True)
         setup = configure_setup(manifest, args.study, root, "intel_installed", directory / "transport", client)
         guidance = root / GUIDANCE[client]
-        original = guidance.read_bytes()
+        original = guidance.read_bytes() if guidance.exists() else b""
         token = secrets.token_hex(16)
         # Canary is ONLY in this excluded project file, never the task prompt,
         # environment, MCP server or any scored repository.
-        guidance.write_text(guidance.read_text() + f"\nReadiness token: {token}\n")
+        guidance.write_bytes(original + f"\nReadiness token: {token}\n".encode())
         prompt = ("Excluded readiness check: return the readiness token already supplied in your project instructions. "
                   "Do not call tools, read files, delegate or edit anything. If no token is loaded, return 'missing'.")
         try:

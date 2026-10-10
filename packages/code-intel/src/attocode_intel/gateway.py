@@ -72,6 +72,10 @@ class OperationGateway:
         catalog = deepcopy(self._catalog()[0])
         if not mcp:
             return catalog
+        if not self.resolver and self.effective_profile() == "daily":
+            # A local agent does not need these. They stay callable, for harnesses and diagnostics.
+            hidden = {"hydration_status", "cross_repo_search"} | ({"notify_file_changed"} if self.watch else set())
+            catalog = [tool for tool in catalog if tool.name not in hidden]
         # A model reads this list in every request, so it gets no docstring indent and no pydantic noise.
         for tool in catalog:
             tool.description = inspect.cleandoc(tool.description or "")
