@@ -224,7 +224,13 @@ To change the ranking on purpose:
 4. Replace `eval/matrix/ci_baseline.json` with the file from the artifact.
 5. Commit the file in the same pull request.
 
-CI writes the committed baseline on Linux. To run the gate on your computer, use `python -m eval.matrix.run ci`. Add `--write-baseline` to write a baseline from your code. On macOS, the `kw` cell of one query (`broad_dev/gh-cli::api authentication`) puts two files with the same score in the opposite order. A local run lists that query as changed, but the gate passes.
+A change that only gains passes the gate. The gate then writes no artifact, and the baseline becomes old. To write a new baseline when the gate passes:
+
+1. Start the Ranking gate workflow by hand on your branch, with `write_baseline` set: `gh workflow run ranking-gate.yml --ref BRANCH -f write_baseline=true`.
+2. Download the `ranking-baseline` artifact of that run.
+3. Do steps 4 and 5 above.
+
+CI writes the committed baseline on Linux. To run the gate on your computer, use `python -m eval.matrix.run ci`. Add `--write-baseline` to write a baseline from your code. On 2026-10-10, a run on macOS gave the same first five files as the Linux baseline for all 340 rows.
 
 ## Matrix rerank stage
 
