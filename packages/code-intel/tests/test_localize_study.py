@@ -114,6 +114,7 @@ def test_one_row_end_to_end_with_resume_and_no_orphans(localize, stub, tmp_path,
     assert {path: path.stat().st_mtime_ns for path in source.rglob("*")} == before, "prepare wrote to the clone"
     prepared = json.loads((study / "preparation.json").read_text())["tasks"]["fixture_fix-1"]
     assert prepared["status"] == "ready" and prepared["index"]["ready"]
+    assert prepared["index"]["search"]["status"] == "ready"
     # The snapshot has one commit (the base, not the fix), so the history cannot show the fix.
     assert git(study / "sources/fixture_fix-1", "log", "--all", "--oneline").count("\n") == 0
     assert "+ 1" not in (study / "sources/fixture_fix-1/pkg/b.py").read_text()
@@ -145,6 +146,30 @@ def test_one_row_end_to_end_with_resume_and_no_orphans(localize, stub, tmp_path,
     assert intel["index_reused"] is True and native["index_reused"] is False
     assert "| native | 1 | 1 | 1.00 |" in (study / "summary.md").read_text()
     assert "Five random runs" in (study / "review.md").read_text()
+
+
+def test_warm_waits_until_search_has_its_indexes(localize, monkeypatch, tmp_path):
+    import warm_cache
+    requests = []
+
+    class Worker:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def request(self, task):
+            requests.append(task["operation"])
+            if task["operation"] == "bootstrap":
+                return {"ready_coverage": {"phase": "ready"}}
+            status = "warming" if len(requests) < 4 else "ready"
+            return {"payload": {"metadata": {"ranking": {"index": {"status": status}}}}}
+
+        def close(self, force=False):
+            pass
+
+    monkeypatch.setattr(warm_cache, "Worker", Worker)
+    monkeypatch.setattr(localize.time, "sleep", lambda seconds: None)
+    result = localize.warm(tmp_path, tmp_path, tmp_path / "warm", {"server_env": {}})
+    assert result["ready"] and requests == ["bootstrap"] + 3 * ["semantic_search"]
 
 
 def test_started_trial_without_result_is_kept_as_interrupted(localize, monkeypatch, tmp_path):

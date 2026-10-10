@@ -70,8 +70,14 @@ All cost ratios and time differences have p 0.0002 or lower.
 
 - **Index build.** In batch 1, the first search of `intel_first` found no
   index in 55 of 58 runs. Thus batch 1 did not measure search results. In
-  R2b, this occurred in 9 of 29 runs. For the larger repositories, such as
-  matplotlib, meson, sqlite, gwt and prettier, 15 s was not sufficient.
+  R2b, this occurred in 9 of 29 runs, for example on matplotlib, meson,
+  sqlite, gwt and prettier.
+- **Cause of the missing index.** The cause was the harness, not only the
+  size of the repository. Its warm-up waited for the symbol index and saved
+  no keyword or body index of search. Thus the first search of each run
+  built these indexes, and in 9 runs the build took more than the 15 s
+  wait. On the crystal snapshot (2,558 files), the fixed warm-up takes 45 s.
+  A later harness fix saves these indexes (follow-up 3).
 - **The two R2b gains are not clear search gains.** On gocd (LCA), the
   search had no index, and it gave no results. On rocketmq (PolyBench), the
   search had results. But `native` found the files of each task in 1 of
@@ -148,8 +154,10 @@ that its installer writes.
 2. Product: the daily profile on main still adds about 8,900 tokens to
    each call. Make the input schemas and the largest descriptions shorter,
    or remove tools that the agents do not use.
-3. Harness: copy a ready index into each trial copy. Then `intel_first`
-   measures search, not the index build.
+3. Harness: save the search indexes in the warm-up. Done after this note:
+   the warm-up now waits until a search reports ready indexes. On the
+   crystal snapshot, the first search of a new server then answered in
+   0.8 s with results, against 15 s with no results in R2b.
 4. A study of tasks where search should help. In 76 tasks of the R1 core
    mix, `product` has an Acc@10 hit and the `grep` arm does not. 42 of
    these tasks are issues from 37 repositories. Run 30 of them with one

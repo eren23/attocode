@@ -184,7 +184,7 @@ No setup gets `ToolSearch`. The wiring check shows that Claude can call the MCP 
 
 From each base commit, `prepare` makes a snapshot with one commit and no history. It excludes an instance when the snapshot has agent guidance or configuration, for example `CLAUDE.md`, `AGENTS.md`, `.claude/` or `.mcp.json`. It also excludes an instance when no gold file is in the tree. It builds the index of each snapshot before the timed runs.
 
-Each trial starts in a fresh copy. An intel trial copies the index and repairs it before the timer starts, because the copy changes the file times. The MCP server runs with `ATTOCODE_LOCAL_ONLY=1` and `HF_HUB_OFFLINE=1`. Each trial has a 600-second limit. A trial that changes `git status` is a `protocol_violation`.
+Each trial starts in a fresh copy. An intel trial copies the index and repairs it before the timer starts, because the copy changes the file times. The warm-up waits for the symbol index and for the keyword and body indexes of search. All of them persist in `.attocode`. The MCP server runs with `ATTOCODE_LOCAL_ONLY=1` and `HF_HUB_OFFLINE=1`. Each trial has a 600-second limit. A trial that changes `git status` is a `protocol_violation`.
 
 `run` can continue after a stop. It does not run a trial again when the trial has a `result.json`. A started trial without a result becomes `interrupted` and does not run again.
 
@@ -196,7 +196,7 @@ The grader removes the workspace root, `./` and `:line` from answer paths. It re
 
 Each row also has turns, tokens by type, `cost_usd`, tool calls by name and MCP calls. It counts the MCP results that report a warming index. The `gold_seen_s` field gives the client seconds at the first tool result that names a gold file. The `review.md` file lists the runs where a setup and `native` have different Acc@5. It also lists the failures and five random runs with their event files.
 
-Each trial starts a new MCP server, and `semantic_search` builds its keyword index in that process. Thus the first search in a trial can return a warming status and no results. The `mcp_warming_results` field counts these results. Prompt caching can continue from one trial to the next, so compare tokens by type as well as cost. This study is a development diagnostic. It does not satisfy the release gate.
+Each trial starts a new MCP server. Its first search loads the saved search indexes: on a snapshot of 2,558 files, it answered in 0.8 s. Before 2026-10-10, the warm-up waited for the symbol index only. Then the first search of a trial built the search indexes, and on medium repositories it often returned a warming status and no results. The `mcp_warming_results` field counts these results. Prompt caching can continue from one trial to the next, so compare tokens by type as well as cost. This study is a development diagnostic. It does not satisfy the release gate.
 
 After `summary`, `python -m eval.matrix.agents STUDY --instances /private/path/instances.jsonl` writes `STUDY/agent_report.md`. The task is the unit: the report averages the trials of each task. Then it pairs each setup with `native` on the same tasks. It gives the Acc@5 of `issue_only`, but it does not pair this setup.
 
