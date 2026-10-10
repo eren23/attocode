@@ -362,7 +362,8 @@ def _serve_http(project_dir: str, *, host: str, port: int, debug: bool) -> None:
         import uvicorn
     except ImportError:
         print(
-            "Error: uvicorn not installed. Install with: pip install 'attocode[code-intel]'",
+            "Error: the HTTP server needs the http extra. "
+            "Install it with: uv tool install 'attocode-code-intel[http]'",
             file=sys.stderr,
         )
         sys.exit(1)
