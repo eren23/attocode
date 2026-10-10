@@ -3,8 +3,12 @@
 from types import SimpleNamespace
 
 from attocode_intel._internal.integrations.context.reranker import LocalRerankOutcome
-from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchResult
-from attocode_intel.focused_evidence import file_excerpt, task_terms
+from attocode_intel._internal.integrations.context.semantic_search import (
+    SemanticSearchManager,
+    SemanticSearchResult,
+)
+from attocode_intel.focused_evidence import file_excerpt, task_terms, terms
+from attocode_intel.query_ranking import demote_tests
 from attocode_intel.repo_ranker import rank_repo_files
 from attocode_intel.service import SEARCH_WARMUP_WAIT, CodeIntelService
 from attocode_intel.test_ranking import rank_symbol_tests
@@ -90,6 +94,33 @@ def test_explicit_test_intent_preserves_strong_test_hit(tmp_path):
     ]
     ranked, _ = svc._rank_search_results("find the test for bootstrap", rows, 2)
     assert ranked == rows
+
+
+def test_issue_search_puts_test_files_after_source_files():
+    rows = [SemanticSearchResult(path, "function", "parse", "", 0.9 - rank / 10) for rank, path in enumerate(
+        ("tests/test_parser.py", "src/parser.py", "src/test_helpers.py", "src/lexer.py"))]
+    issue = ("The parser raises IndexError when a config file has nested brackets inside quoted strings. "
+             "Steps: create settings with two levels, call load, and the stack trace points at the lexer. "
+             "My test reproduces it with pytest.")
+    assert len(terms(issue)) > 20  # a long issue says "test" about its reproduction
+    assert [row.file_path for row in demote_tests(issue, rows)] == [
+        "src/parser.py", "src/lexer.py", "tests/test_parser.py", "src/test_helpers.py"]
+    assert demote_tests("parser tests", rows) == rows
+
+
+def test_search_puts_tests_last_but_task_scores_keep_them(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src/widget.py").write_text("def widget_render(layout):\n    return layout\n", encoding="utf-8")
+    (tmp_path / "tests/test_widget.py").write_text(
+        "def test_widget_render_layout():\n    widget_layout = make_widget_layout()\n"
+        "    assert widget_render(widget_layout) == widget_layout\n", encoding="utf-8")
+    mgr = SemanticSearchManager(root_dir=str(tmp_path))
+    mgr.search_candidates("widget render layout", top_k=10)
+    assert mgr.wait_for_body_index()
+    kept = [row.file_path for row in mgr.search_candidates("widget render layout", top_k=10, tests_last=False)]
+    assert kept[0] == "tests/test_widget.py"
+    assert [row.file_path for row in mgr.search_candidates("widget render layout", top_k=10)][0] == "src/widget.py"
 
 
 def test_related_files_use_task_context_only_to_order_graph_candidates(tmp_path):

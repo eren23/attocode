@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Code-intel search
+
+- Search puts test files after the other files, unless a short query asks
+  for tests (the word "test" or "tests" in at most 20 distinct words). A long
+  issue often says "test" about its reproduction, so it does not count. The
+  order in each group stays the same. Test suggestions and the repo map
+  still get the order before this step. On the saved lists of the R1 eval
+  matrix, file Acc@5 gained on every benchmark and lost on none: SWE-bench
+  Lite +0.059, Loc-Bench +0.020, LCA +0.027, SWE-bench-Live +0.013 and
+  SWE-PolyBench +0.013. On the graded pack, where some tests are relevant,
+  gNDCG@5 gained 0.031 (11 queries better, 2 worse).
+
 ### Changed — Code-intel server
 
 - The local daily profile is smaller. It no longer lists the five learning
