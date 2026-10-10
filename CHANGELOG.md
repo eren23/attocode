@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Code-intel search
 
+- Search no longer depends on the order in which the file system lists a
+  folder. File discovery and the trigram index now walk folders in name
+  order. Before, files of equal importance kept the `os.scandir` order, so
+  macOS and Linux could rank the same tree differently, and a large
+  repository could keep other files at the file cap.
 - The first `semantic_search` of a new server can now return results. A new
   server builds its search indexes in memory on the first search, and before
   this fix that search answered "warming" with no results. Now it waits up to
