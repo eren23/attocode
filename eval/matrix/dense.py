@@ -1,5 +1,6 @@
-"""Dense first-stage arm of the eval matrix: CodeRankEmbed over the 40-line windows of each file.
+"""Dense first-stage arm of the eval matrix: CodeRankEmbed over the 40-line windows of each source file.
 
+The arm embeds and ranks the source files of product search (``ranked``): no docs and no data.
 A file scores the best cosine of its windows with the query. A GPU pod embeds the files and
 the queries once. The vectors go into the matrix cache under ``emb/<TAG>/``, keyed by
 (path, blob oid) and by query, so the retrieve stage scores on any computer without a model.
@@ -33,14 +34,24 @@ from types import SimpleNamespace
 import numpy as np
 import yaml
 
-from eval.matrix import run
+from eval.matrix import datasets, run
 
 MODEL = "nomic-ai/CodeRankEmbed"
 MODEL_REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"  # pins the remote modeling code too
 QUERY_PREFIX = "Represent this query for searching relevant code: "  # from the model card
-WINDOW, MAX_WINDOWS, MAX_CHARS, MAX_SEQ = 40, 40, 1500, 512  # the rule of eval.dense_pool
-TAG = f"coderankembed-{MODEL_REVISION[:12]}-w{WINDOW}x{MAX_WINDOWS}-c{MAX_CHARS}-s{MAX_SEQ}-v1"
+WINDOW, MAX_WINDOWS, MAX_CHARS = 40, 400, 1500  # 400 windows: the first 16,000 lines of a file
+QUERY_SEQ, WINDOW_SEQ = 2048, 512  # token limits; the model trained on 2,048 positions
+TAG = f"coderankembed-{MODEL_REVISION[:12]}-w{WINDOW}x{MAX_WINDOWS}-c{MAX_CHARS}-q{QUERY_SEQ}-s{WINDOW_SEQ}-v2"
 PART_WINDOWS = 200_000  # windows per stored part: about 300 MB of fp16 vectors
+
+
+def ranked(path: str) -> bool:
+    """A file that the arm embeds and ranks: a source file by the rule of the product's whole-file BM25.
+
+    Product search parses the file, and it is not prose or data (markdown, YAML, JSON and so on).
+    """
+    from attocode_intel._internal.integrations.context.semantic_search import _NON_CODE_EXTS
+    return datasets.search_coverage(path) == "parsed" and os.path.splitext(path)[1].lower() not in _NON_CODE_EXTS
 
 
 def windows(path: str, data: bytes) -> list[str]:
@@ -125,7 +136,7 @@ class MissingVectorsError(LookupError):
 def vectors(vecs: Store, root: Path, paths: list[str]) -> tuple[list[str], np.ndarray, np.ndarray]:
     """The files with windows, the first row of each file, and the window vectors (float32)."""
     names, starts, rows, at = [], [], [], 0
-    for path in paths:
+    for path in filter(ranked, paths):
         data = (root / path).read_bytes()
         found = vecs.get(file_key(path, git_oid(data)))
         if found is None:
@@ -190,6 +201,11 @@ def digest(tree: dict) -> str:
     return hashlib.sha256("\n".join(rows).encode()).hexdigest()
 
 
+def encode(model, texts: list[str], *, seq: int, batch: int) -> np.ndarray:
+    model.max_seq_length = seq
+    return model.encode(texts, batch_size=batch, normalize_embeddings=True, convert_to_numpy=True)
+
+
 def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: int) -> None:
     spec = json.loads(spec_path.read_text())
     if spec["tag"] != TAG:
@@ -208,7 +224,7 @@ def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: 
         manifest.append({**item, "tree": tree.get("tree"), "error": tree.get("error"),
                          "stored": None if "error" in tree else digest(tree)})
         for path, mode, oid, size in tree.get("entries", []):
-            if mode != "120000" and run._stored([path, mode, oid, size]):
+            if mode != "120000" and run._stored([path, mode, oid, size]) and ranked(path):
                 files.setdefault(file_key(path, oid), (path, oid))
     run._write(work / "manifest.json", json.dumps({"tag": TAG, "snapshots": manifest}, indent=1).encode())
     print(f"snapshots: {len(manifest)} ({sum(bool(m['error']) for m in manifest)} failed), {len(files)} files, "
@@ -217,15 +233,14 @@ def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: 
     from sentence_transformers import SentenceTransformer
     model = SentenceTransformer(MODEL, revision=MODEL_REVISION, trust_remote_code=True, device="cuda")
     model.half()
-    model.max_seq_length = MAX_SEQ
     vecs = Store(work / "emb" / TAG)
     queries = [query for query in spec["queries"] if vecs.get(query_key(query)) is None]
-    if queries:
-        found = model.encode([QUERY_PREFIX + query for query in queries], batch_size=batch,
-                             normalize_embeddings=True, convert_to_numpy=True)
-        vecs.add([query_key(query) for query in queries], [1] * len(queries), found)
+    prefixed = [QUERY_PREFIX + query for query in queries]
     # In the order of the job, so that the first snapshots of a job that stops early are complete
     todo = [(key, path, oid) for key, (path, oid) in files.items() if vecs.get(key) is None]
+    if queries:  # a query is up to 4 times as long as a window, so the batch is smaller
+        found = encode(model, prefixed, seq=QUERY_SEQ, batch=max(batch // 8, 1))
+        vecs.add([query_key(query) for query in queries], [1] * len(queries), found)
     total, embedded, started = len(todo), 0, time.time()
     keys, counts, texts = [], [], []
     for number, (key, path, oid) in enumerate(todo, 1):
@@ -235,7 +250,7 @@ def job(spec_path: Path, work: Path, *, workers: int, limit: int | None, batch: 
             counts.append(len(found))
             texts += found
         if texts and (len(texts) >= PART_WINDOWS or number == total or (limit and len(texts) >= limit)):
-            out = model.encode(texts, batch_size=batch, normalize_embeddings=True, convert_to_numpy=True)
+            out = encode(model, texts, seq=WINDOW_SEQ, batch=batch)
             part = vecs.add(keys, counts, out)
             embedded += len(texts)
             rate = embedded / (time.time() - started)

@@ -255,7 +255,9 @@ On 2026-10-09, a replay of the Loc-Bench 560 trials took all Jev answers from th
 
 ## Matrix dense arm
 
-The cell `dense` ranks files with CodeRankEmbed at a pinned revision. The model embeds the 40-line windows of each file (at most 40 windows) and the query. A file scores the best cosine of its windows. The cell `rrf(product+dense)` fuses the first 48 files of `product` and `dense` (reciprocal rank, k 60). It has no result of its own: the stages fuse the cached results of its parts.
+The cell `dense` ranks files with CodeRankEmbed at a pinned revision. It ranks only the source files of product search (`dense.ranked`). These are the files that the product parses, but not prose or data files such as Markdown, YAML and JSON. This is the source-file rule of the whole-file BM25 of the product.
+
+The model embeds the 40-line windows of each file and the query. A file keeps at most 400 windows (16,000 lines). A query can have 2,048 tokens, and a window can have 512 tokens. A file scores the best cosine of its windows. The cell `rrf(product+dense)` fuses the first 48 files of `product` and `dense` (reciprocal rank, k 60). It has no result of its own: the stages fuse the cached results of its parts.
 
 A GPU pod makes the vectors, and the retrieve stage needs no model:
 
@@ -264,6 +266,26 @@ A GPU pod makes the vectors, and the retrieve stage needs no model:
 3. `python -m eval.matrix.dense import DIR` compares the pod trees with the local trees and adds the vectors to `emb/` in the matrix cache.
 4. `python -m eval.matrix.run run OUT --stage retrieve --arms dense` ranks the files. A query without vectors is "not ready", and the stage saves no result for it.
 
-On 2026-10-09, one RTX 4090 pod embedded the Loc-Bench 560 snapshots for about $1.7. That is 1.99 million windows at about 410 windows each second. The pod also ran the retrieve stage, and only the `ret/` results came back. On the full issue, `rrf(product+dense)` gave Acc@5 0.664 against 0.532 for `product`. `dense` alone gave 0.541.
+On 2026-10-09, one RTX 4090 pod embedded the 767 snapshots of the core mix and Loc-Bench 560. That is 3.78 million windows of 549,067 source files at about 413 windows each second. The pod cost about $2.9, with the setup. 88 files have more than 16,000 lines, and the arm does not embed their last 14,607 windows.
 
-SweRank reports 74.29 for CodeRankEmbed alone on this set. This arm differs from that setup. It ranks all files, and it embeds at most 1,600 lines of a file. It also cuts the query at 512 tokens. With only the Python files in the ranking, `dense` gives 0.609.
+A trial of the fused attention of PyTorch gave 1.37 times the speed, but its lowest cosine with the model attention was 0.9993. Thus the job keeps the attention of the model code. The pod also ran the retrieve stage, and only the `ret/` results came back. The vectors did not come back.
+
+On the full issue of Loc-Bench 560, `dense` gave Acc@5 0.602 against 0.532 for `product` (Δ +0.070, Holm p 0.009). `rrf(product+dense)` gave 0.679 (Δ +0.146, Holm p 0.0004). With only the Python files in each list, `dense` gives Acc@5 0.614 and Acc@10 0.713. SweRank reports 74.29 (Acc@10 80.36) for CodeRankEmbed alone on this set. Thus this harness is still about 13 points lower, and the cause is not clear.
+
+The table gives the core mix on the full query. The metric is Acc@5, but gNDCG@5 on the judged rows of `graded_blind`.
+
+| Dataset | n | `product` | `dense` | `rrf(product+dense)` |
+|---|---:|---:|---:|---:|
+| broad_dev | 20 | 0.100 | 0.200 | 0.150 |
+| broad_external | 20 | 0.700 | 0.850 | 0.750 |
+| broad_holdout | 20 | 0.500 | 0.650 | 0.700 |
+| graded_blind | 36 | 0.488 | 0.373 | 0.658 |
+| lca | 60 | 0.317 | 0.383 | 0.433 |
+| lite | 40 | 0.600 | 0.625 | 0.650 |
+| live | 60 | 0.283 | 0.300 | 0.350 |
+| locbench | 80 | 0.625 | 0.650 | 0.725 |
+| polybench | 60 | 0.283 | 0.233 | 0.333 |
+
+No difference on the core mix passes the Holm test. The datasets are small.
+
+The earlier result (v1, also on 2026-10-09) ranked all stored files. It embedded at most 40 windows (1,600 lines) of a file and cut the query at 512 tokens. Markdown, reStructuredText, YAML and text files were about a fifth of the first ten files of `dense`. On the full issue of Loc-Bench 560, `dense` gave Acc@5 0.541 and `rrf(product+dense)` 0.664, against 0.532 for `product`. With only the Python files, `dense` gave 0.609. That pod embedded 1.99 million windows for about $1.7.
