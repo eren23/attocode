@@ -256,22 +256,36 @@ def conflict(manifest, study, root):
 
 
 def warm(study, root, directory, manifest):
-    """Index ROOT outside the timed run: one neutral bootstrap, then wait until the index is ready."""
+    """Index ROOT outside the timed run: one neutral bootstrap, then wait until the indexes are ready.
+
+    The bootstrap barrier waits for the symbol index only. The keyword and body indexes of search
+    build in the background and persist in .attocode, so a search waits for them here too. Before,
+    the worker stopped first, and on a medium repository the first search of the timed run built
+    them and found no index.
+    """
     from warm_cache import Worker
     directory.mkdir(parents=True, exist_ok=True)
-    started, worker = time.monotonic(), None
+    started, worker, search = time.monotonic(), None, {}
     try:
         worker = Worker(study, root, directory, 0, WARM_TIMEOUT, script=HERE / "warm_cache.py", env=manifest["server_env"])
         reply = worker.request({"operation": "bootstrap", "arguments": {"task_hint": "", "max_tokens": 1000},
                                 "wait_until_ready": True})
+        while not reply.get("is_error") and search.get("status", "warming") == "warming":
+            if time.monotonic() - started > WARM_TIMEOUT:
+                raise TimeoutError("The search indexes did not become ready")
+            found = worker.request({"operation": "semantic_search", "arguments": {"query": "index", "top_k": 1}})
+            if found.get("is_error"):
+                raise RuntimeError(found.get("error") or "The warm-up search failed")
+            search = found["payload"]["metadata"]["ranking"]["index"]
+            time.sleep(1 if search.get("status") == "warming" else 0)
         worker.close()
     except Exception as exc:
         reply = {"is_error": True, "error": f"{type(exc).__name__}: {exc}"}
         if worker:
             worker.close(force=True)
     coverage = reply.get("ready_coverage") or {}
-    return {"ready": not reply.get("is_error") and coverage.get("phase") == "ready",
-            "seconds": time.monotonic() - started, "coverage": coverage, "error": reply.get("error")}
+    return {"ready": not reply.get("is_error") and coverage.get("phase") == "ready" and search.get("status") == "ready",
+            "seconds": time.monotonic() - started, "coverage": coverage, "search": search, "error": reply.get("error")}
 
 
 def prepare_task(study, manifest, clone, task):

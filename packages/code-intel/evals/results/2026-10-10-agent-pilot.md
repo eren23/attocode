@@ -7,7 +7,10 @@ times as expensive and 2 to 8 seconds slower. When the agent could choose,
 it called the server in 4 of 58 runs. Thus, for this task, the server adds
 cost and gives no measured gain.** Our offline search has an Acc@5 hit on 9
 of the 29 tasks. The agent with grep has one on about 20 tasks. The agent
-also has a hit on every task where our search has an Acc@10 hit.
+also has a hit on every task where our search has an Acc@10 hit. An
+enriched study then used 29 tasks where our search finds the files and the
+`grep` arm does not. The server again gave no Acc@5 gain (0.793 in both
+setups), and each run cost 1.84 times as much.
 
 ## What we ran
 
@@ -70,8 +73,14 @@ All cost ratios and time differences have p 0.0002 or lower.
 
 - **Index build.** In batch 1, the first search of `intel_first` found no
   index in 55 of 58 runs. Thus batch 1 did not measure search results. In
-  R2b, this occurred in 9 of 29 runs. For the larger repositories, such as
-  matplotlib, meson, sqlite, gwt and prettier, 15 s was not sufficient.
+  R2b, this occurred in 9 of 29 runs, for example on matplotlib, meson,
+  sqlite, gwt and prettier.
+- **Cause of the missing index.** The cause was the harness, not only the
+  size of the repository. Its warm-up waited for the symbol index and saved
+  no keyword or body index of search. Thus the first search of each run
+  built these indexes, and in 9 runs the build took more than the 15 s
+  wait. On the crystal snapshot (2,558 files), the fixed warm-up takes 45 s.
+  A later harness fix saves these indexes (follow-up 3).
 - **The two R2b gains are not clear search gains.** On gocd (LCA), the
   search had no index, and it gave no results. On rocketmq (PolyBench), the
   search had results. But `native` found the files of each task in 1 of
@@ -129,6 +138,46 @@ that its installer writes.
   The five largest tools are `inspect_symbol`, `fast_search`, `bootstrap`,
   `semantic_search` and `cross_references`: 41% of the tool list.
 
+## Enriched study
+
+In the pilot, offline `product` had an Acc@5 hit on 9 of the 29 tasks, so
+our search had few chances to help. The enriched study (`r2-enriched`,
+2026-10-10) used tasks where our search should help.
+
+- **Tasks.** The R1 core mix has 42 issues where `product` has an Acc@10
+  hit and the `grep` arm does not. The study took at most one issue from
+  each repository: all 13 issues that are not in Python, and 17 Python
+  issues in hash order. The harness excluded the fluent-bit snapshot,
+  because it holds client guidance files. 29 tasks in six languages
+  remain: Loc-Bench 12, SWE-bench-Live 5, LCA 4, SWE-bench Lite 4 and
+  PolyBench 4. Two of them are also pilot tasks.
+- **Setups.** `native` and `intel_first`, one trial each. The product
+  source is main `d126521`, with #135, #141 and #143. The harness has the
+  warm-up fix of follow-up 3.
+
+| Setup | Acc@1 | Acc@5 | R@10 | Runs with MCP calls | First search had no index | Median s | Median cost (USD) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `native` | 0.897 | 0.793 | 0.885 | 0 / 29 | | 5.3 | 0.0156 |
+| `intel_first` | 0.897 | 0.793 | 0.879 | 28 / 29 | 0 / 28 | 6.5 | 0.0285 |
+
+Paired with `native`, `intel_first` gave ΔAcc@5 +0.000: 1 task higher and
+1 lower, range -0.103 to +0.103, MDE 0.137. The cost ratio was ×1.84
+(×1.57 to ×2.14, p 0.0001). The time difference was +1.2 s (p 0.11), and
+the agent used 0.6 fewer turns (p 0.13).
+
+- **The warm-up fix works.** No search reply reported a warming index,
+  against 9 of 29 runs in R2b.
+- **The search found the files, but the agent found them without it.** The
+  first search had all gold files in its first five results on 18 of 29
+  tasks, and one or more gold files on 26. Both setups had an Acc@5 hit on
+  23 tasks. The `grep` arm runs one search for each term of the issue. The
+  agent reads the issue and searches again after each result. Thus a miss
+  of the arm does not show a miss of the agent.
+- **Offline scores do not predict the agents.** The Spearman correlation of
+  the offline reciprocal rank (R1 rows) and agent Acc@5 was -0.03 for
+  `native` and -0.20 for `intel_first`.
+- One `intel_first` run (pydantic) did not call the server.
+
 ## What this does not show
 
 - With 29 tasks, the MDE of ΔAcc@5 is 0.05 to 0.14. A smaller effect can
@@ -137,9 +186,10 @@ that its installer writes.
   longer task, such as a fix or a review, can use the server differently.
   In a longer task, the fixed cost of the tool list is a smaller part of
   the total.
-- Neither study has #135 (the smaller tool list), #141 (plural words) or
-  #143 (test files last). For #135, see "Size of the tool list".
-- R2b ran one trial for each task and setup.
+- Batch 1 and R2b do not have #135 (the smaller tool list), #141 (plural
+  words) or #143 (test files last). The enriched study has all three.
+- R2b and the enriched study ran one trial for each task and setup. The
+  enriched study has no `issue_only` control.
 
 ## Follow-ups
 
@@ -148,12 +198,18 @@ that its installer writes.
 2. Product: the daily profile on main still adds about 8,900 tokens to
    each call. Make the input schemas and the largest descriptions shorter,
    or remove tools that the agents do not use.
-3. Harness: copy a ready index into each trial copy. Then `intel_first`
-   measures search, not the index build.
+3. Harness: save the search indexes in the warm-up. Done after this note:
+   the warm-up now waits until a search reports ready indexes. On the
+   crystal snapshot, the first search of a new server then answered in
+   0.8 s with results, against 15 s with no results in R2b.
 4. A study of tasks where search should help. In 76 tasks of the R1 core
    mix, `product` has an Acc@10 hit and the `grep` arm does not. 42 of
-   these tasks are issues from 37 repositories. Run 30 of them with one
-   trial, after #141 and #143.
+   these tasks are issues from 37 repositories. Done: see "Enriched
+   study". The server gave no Acc@5 gain on these tasks either.
+5. Choose tasks from agent misses, not from misses of the `grep` arm. For
+   example, use the tasks that `native` missed in these studies, or issues
+   without code identifiers. Search can add accuracy only where the agent
+   with grep fails.
 
 ## Reproduce
 
@@ -183,3 +239,17 @@ R2b used a wrapper. The wrapper replaced the schedule with its rows of
 repeat 0, after `load()` checked the hashes of the manifest and the harness.
 Batch 1 used the default setups (all four) and the product source of
 `1386961`.
+
+For the enriched study:
+
+```bash
+ST=$M/studies/r2-enriched
+PYTHONPATH=. python $M/studies/pick_enriched.py  # writes studies/enriched_ids.txt
+python packages/code-intel/evals/study.py freeze --mode localize --project CHECKOUT_WITH_THE_WARM_UP_FIX \
+  --instances $M/runs/r1/instances.jsonl --ids $M/studies/enriched_ids.txt --model claude-sonnet-5-5 \
+  --trials 1 --setups native intel_first --study $ST
+python packages/code-intel/evals/study.py prepare --study $ST
+bash $ST/start.sh  # the wiring check, then all runs in the background with nohup
+```
+
+Then write `summary` and `agents-report.md` as for R2b.
