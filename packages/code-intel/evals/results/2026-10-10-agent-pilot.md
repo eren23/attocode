@@ -12,6 +12,9 @@ enriched study then used 29 tasks where our search finds the files and the
 `grep` arm does not. The server again gave no Acc@5 gain (0.793 in both
 setups), and each run cost 1.84 times as much.
 
+After this note, #148 and #149 cut the tokens that the server adds to each
+model request from 9,126 to 4,381.
+
 ## What we ran
 
 - **Task.** `PROMPT_V1` of `localize_study.py`. The agent gets the issue
@@ -130,11 +133,18 @@ that its installer writes.
 | Product source | Tools | Descriptions | Input schemas | Instructions | Guidance | Tokens |
 |---|---:|---:|---:|---:|---:|---:|
 | `1386961` and `72872ed` (both studies) | 24 | 11,361 | 16,006 | 1,051 | 1,122 | 12,100, measured |
-| `92b9d87` (main, after #135) | 19 | 9,462 | 10,185 | 1,051 | 1,122 | about 8,900 |
+| `92b9d87` to `0e63006` (main, after #135) | 19 | 9,462 | 10,185 | 1,051 | 1,122 | 9,126, measured |
+| `97c703b` (main, after #148 and #149) | 16 | 3,741 | 5,343 | 571 | 0 | 4,381, measured |
 
-- The estimate for main uses the characters per token of the measured row
-  (2.44). A run with the main engine gives the exact value.
-- On main, the input schemas are 52% of the characters of the tool list.
+- The two studies give the median first call of their runs. For the rows of
+  `0e63006` and `97c703b`, `token_overhead.py` sends one short request
+  from a new project with each setup. It subtracts the prompt size of the
+  request without the server.
+- #148 made the descriptions, the input schemas and the server instructions
+  shorter. #149 removed three tools from the local list and the copy of the
+  instructions in `CLAUDE.md`. Together, they cut 4,745 tokens (52%) from
+  each model request.
+- On `0e63006`, the input schemas are 52% of the characters of the tool list.
   The five largest tools are `inspect_symbol`, `fast_search`, `bootstrap`,
   `semantic_search` and `cross_references`: 41% of the tool list.
 
@@ -197,7 +207,9 @@ the agent used 0.6 fewer turns (p 0.13).
    While the index builds, tell the agent to use grep.
 2. Product: the daily profile on main still adds about 8,900 tokens to
    each call. Make the input schemas and the largest descriptions shorter,
-   or remove tools that the agents do not use.
+   or remove tools that the agents do not use. Done after this note: #148
+   and #149 cut the tokens that the server adds to each request from 9,126
+   to 4,381. Before more tools go, get evidence from edit or review tasks.
 3. Harness: save the search indexes in the warm-up. Done after this note:
    the warm-up now waits until a search reports ready indexes. On the
    crystal snapshot, the first search of a new server then answered in
@@ -253,3 +265,11 @@ bash $ST/start.sh  # the wiring check, then all runs in the background with nohu
 ```
 
 Then write `summary` and `agents-report.md` as for R2b.
+
+For the size of the tool list:
+
+```bash
+python packages/code-intel/evals/token_overhead.py before=0e63006 after=97c703b
+```
+
+The script sends its requests with the Claude subscription, so the user starts it.

@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removes a block that an older version wrote there. Claude Code shows the
   server instructions to the model, so that copy added about 250 tokens to
   each request. Codex and Cursor still get their instruction files.
+- A live check measured the tokens that the server adds to the first model
+  request of Claude Code: 9,126 before the two changes above, and 4,381
+  after them (52% fewer). The check sends one short request for each setup
+  (`packages/code-intel/evals/token_overhead.py`).
 
 ### Fixed — Code-intel server
 
