@@ -109,6 +109,26 @@ trials.
 - The offline reciprocal rank and the agent Acc@5 correlate weakly:
   Spearman 0.24 to 0.34 for the tool setups.
 
+## Size of the tool list
+
+The first model call of a run shows the size of the prompt. In both
+studies, the median first call had 16,958 to 16,976 tokens with the server
+and 4,881 to 4,883 tokens without it. Thus the server added about 12,100
+tokens to each call. The table counts the characters of what the server
+sends: its tool definitions, its instructions, and the project guidance
+that its installer writes.
+
+| Product source | Tools | Descriptions | Input schemas | Instructions | Guidance | Tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| `1386961` and `72872ed` (both studies) | 24 | 11,361 | 16,006 | 1,051 | 1,122 | 12,100, measured |
+| `92b9d87` (main, after #135) | 19 | 9,462 | 10,185 | 1,051 | 1,122 | about 8,900 |
+
+- The estimate for main uses the characters per token of the measured row
+  (2.44). A run with the main engine gives the exact value.
+- On main, the input schemas are 52% of the characters of the tool list.
+  The five largest tools are `inspect_symbol`, `fast_search`, `bootstrap`,
+  `semantic_search` and `cross_references`: 41% of the tool list.
+
 ## What this does not show
 
 - With 29 tasks, the MDE of ΔAcc@5 is 0.05 to 0.14. A smaller effect can
@@ -118,15 +138,16 @@ trials.
   In a longer task, the fixed cost of the tool list is a smaller part of
   the total.
 - Neither study has #135 (the smaller tool list), #141 (plural words) or
-  #143 (test files last).
+  #143 (test files last). For #135, see "Size of the tool list".
 - R2b ran one trial for each task and setup.
 
 ## Follow-ups
 
 1. Product: make the first search ready sooner on medium repositories.
    While the index builds, tell the agent to use grep.
-2. Product: after #135, measure the tokens that the daily profile adds
-   with its tool list and guidance. Then make them fewer.
+2. Product: the daily profile on main still adds about 8,900 tokens to
+   each call. Make the input schemas and the largest descriptions shorter,
+   or remove tools that the agents do not use.
 3. Harness: copy a ready index into each trial copy. Then `intel_first`
    measures search, not the index build.
 4. A study of tasks where search should help. In 76 tasks of the R1 core
