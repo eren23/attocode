@@ -72,7 +72,7 @@ class OperationGateway:
         if mcp and self.effective_profile() == "daily":
             for tool in catalog:
                 budget = tool.inputSchema["properties"]["max_tokens"]
-                budget.update(default=2000, description="Estimated token budget for the complete serialized MCP result, including provenance.")
+                budget.update(default=2000, description="Token budget for the whole result, provenance included.")
                 if is_write(tool.name):
                     budget["minimum"] = 512
         return catalog

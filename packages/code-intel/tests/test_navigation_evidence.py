@@ -7,12 +7,12 @@ from attocode_intel._internal.integrations.context.syntax_evidence import symbol
 from attocode_intel.gateway import OperationGateway
 
 
-def project(root, files):
+def project(root, files, profile="daily"):
     for name, content in files.items():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
-    return OperationGateway(str(root), profile="daily", watch=False)
+    return OperationGateway(str(root), profile=profile, watch=False)
 
 
 async def query(gateway, operation, **args):
@@ -117,11 +117,12 @@ async def test_comments_strings_and_definitions_are_not_calls(tmp_path):
 
 
 async def test_indirect_tests_and_stale_bootstrap(tmp_path):
+    # A local daily session has no learning tools, so this test uses the full profile.
     gateway = project(tmp_path, {
         "serialize.py": "def serialize_response(value):\n    return value\n",
         "routing.py": "from serialize import serialize_response\ndef request(v):\n    return serialize_response(v)\n",
         "tests/test_response.py": "from routing import request\ndef test_response():\n    assert request(1) == 1\n",
-    })
+    }, profile="full")
     try:
         tests = await query(gateway, "suggest_tests", files=["serialize.py"])
         assert "tests/test_response.py" in tests["result"]
@@ -130,7 +131,7 @@ async def test_indirect_tests_and_stale_bootstrap(tmp_path):
     finally:
         await gateway.close()
     (tmp_path / "serialize.py").write_text("def serialize_response(value):\n    return str(value)\n")
-    gateway = OperationGateway(str(tmp_path), profile="daily", watch=False)
+    gateway = OperationGateway(str(tmp_path), profile="full", watch=False)
     try:
         recall = await query(gateway, "recall", query="serialize_response")
         assert recall["data"][0]["stale"] is True
