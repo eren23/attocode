@@ -183,6 +183,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the core mix, a Jev rerank of the first 48 product files gave file Acc@5
   0.594 against 0.425 for `product`. Neither harness check gave its
   published number.
+- New results doc `packages/code-intel/evals/results/2026-10-10-agent-pilot.md`:
+  the agent pilot R2 on 29 file-localization tasks. The code-intel MCP
+  server did not change the file Acc@5 of Claude Code (0.655 to 0.690 with
+  Read, Grep and Glob). It made each run 1.8 to 2.1 times as expensive and
+  2 to 8 seconds slower.
 
 ## [0.2.29] - 2026-10-09
 
