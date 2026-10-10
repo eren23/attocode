@@ -22,6 +22,7 @@ import signal
 import statistics
 import subprocess
 import sys
+import tarfile
 import threading
 import time
 from collections import Counter
@@ -294,8 +295,12 @@ def prepare_task(study, manifest, clone, task):
     root.mkdir(parents=True)
     # A fetch only reads the source, so a local case-pack clone stays unchanged.
     git(clone, "fetch", "-q", "--depth", "1", task["source"], task["base_commit"], timeout=1800)
-    snapshot(clone, root, revision=task["base_commit"])
-    reason = conflict(manifest, study, root)
+    try:
+        snapshot(clone, root, revision=task["base_commit"])
+        reason = conflict(manifest, study, root)
+    except tarfile.FilterError as exc:
+        # The safe extraction refuses the archive, for example a link to an absolute path.
+        reason = f"Unsafe snapshot: {exc}"
     if not reason:
         commit(root)
         tracked = set(git(root, "ls-files", "-z").split("\0")) - {""}
@@ -304,16 +309,18 @@ def prepare_task(study, manifest, clone, task):
     if reason:
         shutil.rmtree(root)
         return {"status": "excluded", "reason": reason}
-    index = warm(study, root, study / "prepare" / task["id"], manifest)
+    # Only the intel setups read the index, so a study without them does not build it.
+    index = warm(study, root, study / "prepare" / task["id"], manifest) if set(INTEL) & set(manifest["setups"]) else None
     sweep(f"{study}/sources/")
-    return {"status": "ready" if index["ready"] else "excluded",
-            "reason": None if index["ready"] else "The index did not become ready",
+    ready = index is None or index["ready"]
+    return {"status": "ready" if ready else "excluded",
+            "reason": None if ready else "The index did not become ready",
             "tree_sha256": tree_hash(root), "files": len(tracked),
             "gold_in_tree": len(tracked & set(task["gold"])), "index": index}
 
 
 def prepare(args):
-    """Snapshot every instance (one clone at a time) and build its index. Resumable."""
+    """Snapshot every instance (one clone at a time) and, for the intel setups, build its index. Resumable."""
     study = args.study
     manifest = load(study)
     path = study / "preparation.json"

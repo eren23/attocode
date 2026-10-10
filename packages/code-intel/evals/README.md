@@ -182,7 +182,7 @@ No setup gets `ToolSearch`. The wiring check shows that Claude can call the MCP 
 
 `prepare` fetches each base commit. When `repo` has a `/`, it fetches from `https://github.com/{repo}.git`. Otherwise the instance is from a case pack, and `prepare` fetches from the local clone `~/Documents/ai/benchmark-repos/{repo}`. It only reads that clone.
 
-From each base commit, `prepare` makes a snapshot with one commit and no history. It excludes an instance when the snapshot has agent guidance or configuration, for example `CLAUDE.md`, `AGENTS.md`, `.claude/` or `.mcp.json`. It also excludes an instance when no gold file is in the tree. It builds the index of each snapshot before the timed runs.
+From each base commit, `prepare` makes a snapshot with one commit and no history. It excludes an instance when the snapshot has agent guidance or configuration, for example `CLAUDE.md`, `AGENTS.md`, `.claude/` or `.mcp.json`. It also excludes an instance when no gold file is in the tree. When the study has an intel setup, it builds the index of each snapshot before the timed runs.
 
 Each trial starts in a fresh copy. An intel trial copies the index and repairs it before the timer starts, because the copy changes the file times. The warm-up waits for the symbol index and for the keyword and body indexes of search. All of them persist in `.attocode`. The MCP server runs with `ATTOCODE_LOCAL_ONLY=1` and `HF_HUB_OFFLINE=1`. Each trial has a 600-second limit. A trial that changes `git status` is a `protocol_violation`.
 
