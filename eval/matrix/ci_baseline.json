@@ -6,31 +6,31 @@
   "filebm25",
   "grep"
  ],
- "commit": "89cb8cc2697ada7d0b833fad4143124534d5ae11",
- "engine": "0b5913440d0b9299006fd70686e612a7c28cbc86e71e1cd47f1690866739ed00",
+ "commit": "ecd82203f3d84ea044a50de3534adb2ff275b4e4",
+ "engine": "8718a8f3fcadcb8b12010a62c199e4e9612523a8d83798af5906c909d4ba973e",
  "rows": {
   "broad_dev/attocode::session checkpoints|full|body": [
-   "legacy/src/tui/app.tsx",
-   "legacy/src/integrations/persistence/persistence.ts",
-   "src/attocode/agent/checkpoint_api.py",
-   "legacy/tests/modernization.test.ts",
-   "legacy/src/commands/handler.ts"
+   "legacy/src/integrations/quality/auto-checkpoint.ts",
+   "legacy/tests/auto-checkpoint.test.ts",
+   "src/attocode/integrations/persistence/store.py",
+   "legacy/docs-site/docs/features/sessions.md",
+   "tests/unit/integrations/persistence/test_store.py"
   ],
   "broad_dev/attocode::session checkpoints|full|filebm25": [],
   "broad_dev/attocode::session checkpoints|full|grep": [],
   "broad_dev/attocode::session checkpoints|full|kw": [
    "src/attocode/integrations/persistence/store.py",
    "src/attocode/integrations/quality/auto_checkpoint.py",
-   "src/attocode/agent/session_api.py",
-   "src/attocode/integrations/swarm/swarm_state_store.py",
-   "legacy/src/integrations/quality/auto-checkpoint.ts"
+   "legacy/src/integrations/quality/auto-checkpoint.ts",
+   "src/attocode/commands.py",
+   "src/attocode/agent/session_api.py"
   ],
   "broad_dev/attocode::session checkpoints|full|product": [
+   "legacy/src/integrations/quality/auto-checkpoint.ts",
    "src/attocode/integrations/persistence/store.py",
-   "src/attocode/agent/checkpoint_api.py",
-   "legacy/src/integrations/persistence/persistence.ts",
-   "src/attocode/integrations/swarm/swarm_state_store.py",
-   "legacy/src/integrations/quality/auto-checkpoint.ts"
+   "src/attocode/integrations/quality/auto_checkpoint.py",
+   "legacy/src/integrations/persistence/session-store.ts",
+   "lessons/24-advanced-patterns/checkpoint-store.ts"
   ],
   "broad_dev/attocode::task decomposition|full|body": [
    "tests/unit/integrations/test_swarm_infra.py",
@@ -73,10 +73,10 @@
   ],
   "broad_dev/attocode::token enforcement|full|product": [
    "src/attocode/integrations/budget/economics.py",
-   "legacy/tests/economics-enforcement.test.ts",
    "src/attocode/types/budget.py",
    "src/attocode/core/subagent_spawner.py",
-   "src/attocode/integrations/budget/cancellation.py"
+   "src/attocode/integrations/budget/cancellation.py",
+   "src/attocode/types/messages.py"
   ],
   "broad_dev/attocode::worker spawning|full|body": [
    "src/attocode/integrations/swarm/swarm_budget.py",
@@ -119,10 +119,10 @@
   ],
   "broad_dev/fastapi::dependency resolution|full|product": [
    "fastapi/dependencies/utils.py",
-   "tests/test_dependency_contextmanager.py",
-   "tests/test_dependency_class.py",
    "docs_src/dependency_testing/tutorial001_an_py310.py",
-   "tests/test_dependency_partial.py"
+   "docs_src/dependency_testing/tutorial001_py310.py",
+   "docs_src/dependencies/tutorial008_an_py310.py",
+   "docs_src/dependencies/tutorial008_py310.py"
   ],
   "broad_dev/fastapi::middleware stack|full|body": [
    "fastapi/applications.py",
@@ -188,10 +188,10 @@
   ],
   "broad_dev/fastapi::websocket connection|full|product": [
    "docs_src/app_testing/tutorial002_py310.py",
-   "tests/test_tutorial/test_websockets/test_tutorial003.py",
    "docs_src/websockets_/tutorial001_py310.py",
    "docs_src/websockets_/tutorial003_py310.py",
-   "tests/test_http_connection_injection.py"
+   "docs_src/websockets_/tutorial002_an_py310.py",
+   "docs_src/websockets_/tutorial002_py310.py"
   ],
   "broad_dev/gh-cli::api authentication|full|body": [
    "internal/codespaces/api/api_test.go",
@@ -205,8 +205,8 @@
   "broad_dev/gh-cli::api authentication|full|kw": [
    "internal/gh/mock/config.go",
    "internal/run/stub.go",
-   "internal/config/config.go",
    "internal/gh/gh.go",
+   "internal/config/config.go",
    "internal/codespaces/api/api.go"
   ],
   "broad_dev/gh-cli::api authentication|full|product": [
@@ -233,11 +233,11 @@
    "api/queries_issue.go"
   ],
   "broad_dev/gh-cli::issue filtering|full|product": [
-   "pkg/cmd/pr/list/list_test.go",
    "pkg/cmd/project/shared/queries/queries.go",
    "pkg/cmd/issue/shared/lookup.go",
-   "pkg/cmd/codespace/codespace_selector_test.go",
-   "pkg/cmd/issue/close/close.go"
+   "pkg/cmd/issue/close/close.go",
+   "pkg/cmd/issue/pin/pin.go",
+   "pkg/cmd/issue/list/list.go"
   ],
   "broad_dev/gh-cli::pull review|full|body": [
    "api/queries_pr_review.go",
@@ -283,7 +283,7 @@
    "pkg/cmd/codespace/mock_api.go",
    "pkg/cmd/repo/create/http.go",
    "pkg/cmd/repo/edit/edit.go",
-   "pkg/cmd/repo/edit/edit_test.go"
+   "internal/codespaces/api/api.go"
   ],
   "broad_dev/pandas::csv parsing|full|body": [
    "doc/source/whatsnew/v0.19.0.rst",
@@ -305,8 +305,8 @@
    "pandas/io/parsers/readers.py",
    "pandas/_testing/contexts.py",
    "pandas/core/generic.py",
-   "pandas/tests/io/parser/test_c_parser_only.py",
-   "doc/source/whatsnew/v0.19.0.rst"
+   "doc/source/whatsnew/v0.19.0.rst",
+   "pandas/errors/__init__.py"
   ],
   "broad_dev/pandas::datetime arithmetic|full|body": [
    "pandas/tests/arithmetic/test_numeric.py",
@@ -326,10 +326,10 @@
   ],
   "broad_dev/pandas::datetime arithmetic|full|product": [
    "asv_bench/benchmarks/tslibs/offsets.py",
-   "pandas/tests/arithmetic/test_datetime64.py",
    "pandas/core/arrays/base.py",
-   "pandas/tests/indexes/datetimes/test_arithmetic.py",
-   "asv_bench/benchmarks/sparse.py"
+   "asv_bench/benchmarks/sparse.py",
+   "pandas/conftest.py",
+   "asv_bench/benchmarks/arithmetic.py"
   ],
   "broad_dev/pandas::groupby aggregation|full|body": [
    "pandas/core/groupby/generic.py",
@@ -348,18 +348,18 @@
    "pandas/core/apply.py"
   ],
   "broad_dev/pandas::groupby aggregation|full|product": [
-   "pandas/tests/groupby/aggregate/test_aggregate.py",
-   "pandas/tests/groupby/test_groupby.py",
-   "pandas/tests/resample/test_resample_api.py",
-   "pandas/tests/groupby/test_categorical.py",
-   "pandas/tests/groupby/conftest.py"
+   "pandas/core/groupby/generic.py",
+   "doc/source/user_guide/groupby.rst",
+   "doc/source/whatsnew/v0.25.0.rst",
+   "pandas/core/apply.py",
+   "asv_bench/benchmarks/rolling.py"
   ],
   "broad_dev/pandas::missing values|full|body": [
-   "pandas/tests/frame/constructors/test_from_records.py",
-   "pandas/tests/extension/test_sparse.py",
    "pandas/io/stata.py",
-   "pandas/tests/extension/base/missing.py",
-   "pandas/tests/extension/base/getitem.py"
+   "doc/source/reference/missing_value.rst",
+   "pandas/_libs/hashtable_class_helper.pxi.in",
+   "doc/source/getting_started/comparison/comparison_with_stata.rst",
+   "pandas/core/nanops.py"
   ],
   "broad_dev/pandas::missing values|full|filebm25": [],
   "broad_dev/pandas::missing values|full|grep": [],
@@ -367,15 +367,15 @@
    "pandas/io/stata.py",
    "pandas/conftest.py",
    "pandas/core/missing.py",
-   "pandas/core/indexing.py",
-   "asv_bench/benchmarks/io/stata.py"
+   "pandas/tests/arrays/categorical/test_missing.py",
+   "pandas/core/nanops.py"
   ],
   "broad_dev/pandas::missing values|full|product": [
    "pandas/io/stata.py",
-   "pandas/tests/frame/constructors/test_from_records.py",
-   "pandas/tests/extension/base/getitem.py",
-   "pandas/tests/extension/test_sparse.py",
-   "pandas/tests/extension/base/missing.py"
+   "pandas/conftest.py",
+   "doc/source/reference/missing_value.rst",
+   "pandas/_libs/hashtable_class_helper.pxi.in",
+   "doc/source/getting_started/comparison/comparison_with_stata.rst"
   ],
   "broad_dev/redis::cluster discovery|full|body": [
    "tests/cluster/tests/includes/init-tests.tcl",
@@ -397,8 +397,8 @@
    "src/cluster_legacy.c",
    "src/redis-benchmark.c",
    "src/server.h",
-   "tests/cluster/tests/includes/init-tests.tcl",
-   "src/cluster_legacy.h"
+   "src/cluster_legacy.h",
+   "src/cluster.h"
   ],
   "broad_dev/redis::event loop|full|body": [
    "src/ae.c",
@@ -464,22 +464,22 @@
   ],
   "broad_dev/redis::rdb persistence|full|product": [
    "src/server.c",
-   "tests/modules/hooks.c",
-   "tests/integration/rdb.tcl",
    "src/rdb.c",
-   "src/redis-check-rdb.c"
+   "src/redis-check-rdb.c",
+   "src/replication.c",
+   "src/redismodule.h"
   ],
   "locbench/AzureAD__microsoft-authentication-library-for-python-407|full|body": [
    "msal/individual_cache.py",
    "contributing.md",
-   "tests/test_application.py",
-   "tests/test_throttled_http_client.py",
-   "msal/oauth2cli/assertion.py"
+   "msal/oauth2cli/assertion.py",
+   "msal/oauth2cli/oauth2.py",
+   "tests/test_e2e.py"
   ],
   "locbench/AzureAD__microsoft-authentication-library-for-python-407|full|filebm25": [
    "msal/authority.py",
-   "msal/application.py",
    "tests/test_authority.py",
+   "msal/application.py",
    "msal/oauth2cli/oauth2.py",
    "tests/test_throttled_http_client.py"
   ],
@@ -501,8 +501,8 @@
    "msal/authority.py",
    "msal/oauth2cli/oauth2.py",
    "msal/individual_cache.py",
-   "tests/test_throttled_http_client.py",
-   "msal/application.py"
+   "msal/application.py",
+   "docs/conf.py"
   ],
   "locbench/AzureAD__microsoft-authentication-library-for-python-407|title|body": [
    "msal/region.py",
@@ -521,21 +521,21 @@
   "locbench/AzureAD__microsoft-authentication-library-for-python-407|title|product": [
    "msal/application.py",
    "msal/authority.py",
-   "tests/test_authority.py",
    "msal/region.py",
-   "msal/token_cache.py"
+   "msal/token_cache.py",
+   "msal/oauth2cli/oauth2.py"
   ],
   "locbench/AzureAD__microsoft-authentication-library-for-python-454|full|body": [
-   "docs/index.rst",
    "contributing.md",
-   "README.md",
+   "docs/index.rst",
    "sample/migrate_rt.py",
-   "sample/confidential_client_secret_sample.py"
+   "msal/application.py",
+   "sample/device_flow_sample.py"
   ],
   "locbench/AzureAD__microsoft-authentication-library-for-python-454|full|filebm25": [
    "msal/application.py",
-   "sample/interactive_sample.py",
    "msal/oauth2cli/authcode.py",
+   "sample/interactive_sample.py",
    "sample/confidential_client_secret_sample.py",
    "sample/username_password_sample.py"
   ],
@@ -555,10 +555,10 @@
   ],
   "locbench/AzureAD__microsoft-authentication-library-for-python-454|full|product": [
    "msal/oauth2cli/authcode.py",
+   "msal/region.py",
    "sample/vault_jwt_sample.py",
    "sample/confidential_client_secret_sample.py",
-   "msal/application.py",
-   "sample/confidential_client_certificate_sample.py"
+   "msal/application.py"
   ],
   "locbench/AzureAD__microsoft-authentication-library-for-python-454|title|body": [
    "msal/oauth2cli/oauth2.py",
@@ -586,22 +586,22 @@
    "msal/application.py",
    "sample/vault_jwt_sample.py",
    "msal/oauth2cli/oauth2.py",
-   "tests/test_assertion.py",
-   "msal/oauth2cli/assertion.py"
+   "msal/oauth2cli/assertion.py",
+   "msal/exceptions.py"
   ],
   "locbench/Happy-Algorithms-League__hal-cgp-180|full|body": [
    "test/test_population.py",
+   "cgp/genome.py",
    "LICENSE",
    "docs/api_reference/hl_api.rst",
-   "cgp/utils.py",
    "cgp/node.py"
   ],
   "locbench/Happy-Algorithms-League__hal-cgp-180|full|filebm25": [
    "test/test_utils.py",
    "examples/example_caching.py",
+   "cgp/genome.py",
    "cgp/ea/mu_plus_lambda.py",
-   "test/test_population.py",
-   "cgp/hl_api.py"
+   "test/test_population.py"
   ],
   "locbench/Happy-Algorithms-League__hal-cgp-180|full|grep": [
    "cgp/genome.py",
@@ -611,18 +611,18 @@
    "cgp/population.py"
   ],
   "locbench/Happy-Algorithms-League__hal-cgp-180|full|kw": [
+   "test/test_genome.py",
    "cgp/genome.py",
    "cgp/individual.py",
-   "test/test_genome.py",
    "examples/example_mountain_car.py",
    "setup.py"
   ],
   "locbench/Happy-Algorithms-League__hal-cgp-180|full|product": [
-   "test/test_population.py",
    "cgp/genome.py",
-   "cgp/utils.py",
-   "setup.py",
-   "cgp/ea/mu_plus_lambda.py"
+   "cgp/population.py",
+   "cgp/ea/mu_plus_lambda.py",
+   "cgp/primitives.py",
+   "cgp/individual.py"
   ],
   "locbench/Happy-Algorithms-League__hal-cgp-180|title|body": [
    "cgp/individual.py",
@@ -650,8 +650,8 @@
    "cgp/individual.py",
    "cgp/genome.py",
    "cgp/population.py",
-   "test/test_population.py",
-   "test/conftest.py"
+   "setup.py",
+   "docs/api_reference/hl_api.rst"
   ],
   "locbench/Innopoints__backend-124|full|body": [
    "innopoints/extensions.py"
@@ -674,24 +674,24 @@
   "locbench/JackPlowman__repo_standards_validator-137|full|kw": [],
   "locbench/JackPlowman__repo_standards_validator-137|full|product": [
    "validator/repository_checks.py",
-   "tests/schema_validation/repositories_schema.json",
    "validator/custom_types.py",
-   "validator/tests/test_custom_types.py",
-   "docs/SECURITY.md"
+   "docs/SECURITY.md",
+   "Justfile",
+   "docs/CONVENTIONAL_COMMITS.md"
   ],
   "locbench/SYSTRAN__faster-whisper-1141|full|body": [
-   "README.md",
    "setup.py",
    "faster_whisper/audio.py",
    "tests/test_transcribe.py",
-   "CONTRIBUTING.md"
+   "CONTRIBUTING.md",
+   "README.md"
   ],
   "locbench/SYSTRAN__faster-whisper-1141|full|filebm25": [
    "faster_whisper/transcribe.py",
-   "tests/test_transcribe.py",
    "faster_whisper/vad.py",
-   "setup.py",
-   "faster_whisper/audio.py"
+   "tests/test_transcribe.py",
+   "faster_whisper/utils.py",
+   "setup.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1141|full|grep": [
    "faster_whisper/transcribe.py",
@@ -704,15 +704,15 @@
    "faster_whisper/transcribe.py",
    "setup.py",
    "benchmark/utils.py",
-   "faster_whisper/vad.py",
-   "faster_whisper/audio.py"
+   "faster_whisper/utils.py",
+   "faster_whisper/vad.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1141|full|product": [
    "faster_whisper/transcribe.py",
    "setup.py",
-   "faster_whisper/audio.py",
    "faster_whisper/vad.py",
-   "tests/test_transcribe.py"
+   "faster_whisper/utils.py",
+   "faster_whisper/audio.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1141|title|body": [
    "faster_whisper/transcribe.py",
@@ -734,10 +734,10 @@
    "benchmark/utils.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1157|full|body": [
+   "setup.py",
    "faster_whisper/transcribe.py",
    "README.md",
-   "faster_whisper/utils.py",
-   "faster_whisper/vad.py",
+   "tests/test_transcribe.py",
    "tests/conftest.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1157|full|filebm25": [
@@ -756,24 +756,24 @@
   ],
   "locbench/SYSTRAN__faster-whisper-1157|full|kw": [
    "faster_whisper/transcribe.py",
-   "faster_whisper/utils.py",
-   "faster_whisper/audio.py",
    "faster_whisper/tokenizer.py",
-   "benchmark/utils.py"
+   "faster_whisper/utils.py",
+   "faster_whisper/vad.py",
+   "faster_whisper/audio.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1157|full|product": [
    "faster_whisper/transcribe.py",
-   "faster_whisper/vad.py",
-   "faster_whisper/utils.py",
    "faster_whisper/audio.py",
-   "tests/test_transcribe.py"
+   "setup.py",
+   "faster_whisper/tokenizer.py",
+   "benchmark/evaluate_yt_commons.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1157|title|body": [
    "faster_whisper/tokenizer.py",
-   "benchmark/memory_benchmark.py",
    "faster_whisper/transcribe.py",
-   "faster_whisper/vad.py",
-   "README.md"
+   "benchmark/memory_benchmark.py",
+   "README.md",
+   "faster_whisper/vad.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1157|title|filebm25": [],
   "locbench/SYSTRAN__faster-whisper-1157|title|grep": [
@@ -781,20 +781,21 @@
   ],
   "locbench/SYSTRAN__faster-whisper-1157|title|kw": [
    "faster_whisper/transcribe.py",
-   "faster_whisper/utils.py",
-   "faster_whisper/tokenizer.py",
-   "faster_whisper/vad.py"
-  ],
-  "locbench/SYSTRAN__faster-whisper-1157|title|product": [
-   "faster_whisper/transcribe.py",
    "faster_whisper/vad.py",
    "faster_whisper/utils.py",
    "faster_whisper/tokenizer.py",
+   "tests/test_transcribe.py"
+  ],
+  "locbench/SYSTRAN__faster-whisper-1157|title|product": [
+   "faster_whisper/transcribe.py",
+   "faster_whisper/tokenizer.py",
+   "faster_whisper/vad.py",
+   "faster_whisper/utils.py",
    "benchmark/memory_benchmark.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1198|full|body": [
    "README.md",
-   "requirements.conversion.txt",
+   "faster_whisper/utils.py",
    "faster_whisper/transcribe.py",
    "benchmark/memory_benchmark.py",
    "docker/Dockerfile"
@@ -802,9 +803,9 @@
   "locbench/SYSTRAN__faster-whisper-1198|full|filebm25": [
    "faster_whisper/transcribe.py",
    "setup.py",
+   "faster_whisper/audio.py",
    "faster_whisper/vad.py",
-   "benchmark/memory_benchmark.py",
-   "faster_whisper/audio.py"
+   "faster_whisper/utils.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1198|full|grep": [],
   "locbench/SYSTRAN__faster-whisper-1198|full|kw": [
@@ -815,11 +816,11 @@
    "faster_whisper/transcribe.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1198|full|product": [
-   "benchmark/memory_benchmark.py",
    "faster_whisper/transcribe.py",
    "faster_whisper/vad.py",
    "faster_whisper/audio.py",
-   "setup.py"
+   "benchmark/memory_benchmark.py",
+   "faster_whisper/utils.py"
   ],
   "locbench/SYSTRAN__faster-whisper-1198|title|body": [
    "faster_whisper/transcribe.py",
@@ -838,9 +839,9 @@
   "locbench/SYSTRAN__faster-whisper-1198|title|product": [
    "faster_whisper/vad.py",
    "faster_whisper/transcribe.py",
-   "tests/test_transcribe.py",
    "README.md",
-   "CONTRIBUTING.md"
+   "CONTRIBUTING.md",
+   "tests/test_transcribe.py"
   ],
   "locbench/Standard-Labs__real-intent-102|full|body": [],
   "locbench/Standard-Labs__real-intent-102|full|filebm25": [],
@@ -854,12 +855,18 @@
   "locbench/Standard-Labs__real-intent-102|title|product": [],
   "locbench/Standard-Labs__real-intent-27|full|body": [
    "bigdbm/validate/email.py",
+   "bigdbm/schemas.py",
+   "bigdbm/validate/simple.py",
+   "bigdbm/validate/phone.py",
+   "bigdbm/client.py"
+  ],
+  "locbench/Standard-Labs__real-intent-27|full|filebm25": [
+   "bigdbm/validate/email.py",
    "bigdbm/validate/phone.py",
    "bigdbm/schemas.py",
-   "bigdbm/format/csv.py",
-   "bigdbm/process/fill.py"
+   "bigdbm/client.py",
+   "bigdbm/validate/simple.py"
   ],
-  "locbench/Standard-Labs__real-intent-27|full|filebm25": [],
   "locbench/Standard-Labs__real-intent-27|full|grep": [
    "bigdbm/validate/email.py"
   ],
@@ -874,8 +881,8 @@
    "bigdbm/validate/email.py",
    "bigdbm/validate/phone.py",
    "bigdbm/client.py",
-   "bigdbm/process/fill.py",
-   "bigdbm/process/base.py"
+   "bigdbm/schemas.py",
+   "bigdbm/process/fill.py"
   ],
   "locbench/Standard-Labs__real-intent-27|title|body": [
    "bigdbm/validate/email.py",
@@ -907,8 +914,8 @@
    "src/main.py",
    "src/scripts/setup.sh",
    "src/alexapi/device_platforms/magicmirrorplatform.py",
-   "src/alexapi/tunein.py",
-   "src/auth_web.py"
+   "src/auth_web.py",
+   "src/alexapi/tunein.py"
   ],
   "locbench/alexa-pi__AlexaPi-188|full|grep": [
    ".github/ISSUE_TEMPLATE.md",
@@ -1006,9 +1013,9 @@
   "locbench/jobatabs__textec-53|full|body": [
    "README.md",
    "pyproject.toml",
+   "src/static/bootstrap.min.css",
    "src/templates/index.html",
-   "src/templates/edit.html",
-   "src/templates/new.html"
+   "src/templates/edit.html"
   ],
   "locbench/jobatabs__textec-53|full|filebm25": [],
   "locbench/jobatabs__textec-53|full|grep": [],
@@ -1022,7 +1029,7 @@
    "run_robot_tests.sh",
    "README.md",
    "pyproject.toml",
-   "src/templates/edit.html"
+   "src/static/bootstrap.min.css"
   ],
   "locbench/jobatabs__textec-53|title|body": [
    "src/templates/index.html",
@@ -1068,10 +1075,10 @@
   ],
   "locbench/kiasambrook__tfl-live-tracker-7|full|product": [
    "app/api/tfl_api.py",
-   "tests/test_tfl_api.py",
    "app/main.py",
    "app/ui/cli_ui.py",
-   "app/ui/main_window.py"
+   "app/ui/main_window.py",
+   "app/config.py"
   ],
   "locbench/kiasambrook__tfl-live-tracker-7|title|body": [
    "app/ui/cli_ui.py",
@@ -1088,16 +1095,16 @@
   ],
   "locbench/latchset__jwcrypto-195|full|body": [
    "setup.py",
-   "LICENSE",
    "README.md",
-   "jwcrypto/jwk.py",
-   "jwcrypto/jwa.py"
+   "LICENSE",
+   "jwcrypto/jwa.py",
+   "jwcrypto/tests.py"
   ],
   "locbench/latchset__jwcrypto-195|full|filebm25": [
    "jwcrypto/jwk.py",
    "setup.py",
-   "jwcrypto/jwa.py",
    "jwcrypto/tests.py",
+   "jwcrypto/jwa.py",
    "docs/source/conf.py"
   ],
   "locbench/latchset__jwcrypto-195|full|grep": [],
@@ -1110,10 +1117,10 @@
   ],
   "locbench/latchset__jwcrypto-195|full|product": [
    "jwcrypto/tests.py",
-   "jwcrypto/jwa.py",
    "setup.py",
    "jwcrypto/common.py",
-   "jwcrypto/jwk.py"
+   "jwcrypto/jwk.py",
+   "jwcrypto/jwe.py"
   ],
   "locbench/latchset__jwcrypto-195|title|body": [
    "jwcrypto/jwk.py",
@@ -1146,8 +1153,8 @@
   "locbench/okta__okta-jwt-verifier-python-59|full|filebm25": [
    "okta_jwt_verifier/jwt_utils.py",
    "okta_jwt_verifier/jwt_verifier.py",
-   "setup.py",
    "okta_jwt_verifier/request_executor.py",
+   "setup.py",
    "okta_jwt_verifier/error_messages.py"
   ],
   "locbench/okta__okta-jwt-verifier-python-59|full|grep": [
@@ -1159,8 +1166,8 @@
   ],
   "locbench/okta__okta-jwt-verifier-python-59|full|kw": [
    "okta_jwt_verifier/jwt_utils.py",
-   "okta_jwt_verifier/request_executor.py",
    "okta_jwt_verifier/jwt_verifier.py",
+   "okta_jwt_verifier/request_executor.py",
    "okta_jwt_verifier/exceptions.py",
    "tests/integration/test_jwt_verifier.py"
   ],
@@ -1169,7 +1176,7 @@
    "okta_jwt_verifier/jwt_verifier.py",
    "okta_jwt_verifier/request_executor.py",
    "setup.py",
-   "tests/unit/test_jwt_verifier.py"
+   "okta_jwt_verifier/error_messages.py"
   ],
   "locbench/okta__okta-jwt-verifier-python-59|title|body": [
    "setup.py",
@@ -1186,10 +1193,10 @@
   ],
   "locbench/okta__okta-jwt-verifier-python-59|title|product": [
    "okta_jwt_verifier/jwt_utils.py",
-   "tests/unit/test_jwt_verifier.py",
    "setup.py",
    "requirements.txt",
-   "README.md"
+   "README.md",
+   "CONTRIBUTING.md"
   ],
   "locbench/pyca__pyopenssl-578|full|body": [
    "examples/sni/server.py",
@@ -1223,15 +1230,15 @@
    "src/OpenSSL/SSL.py",
    "src/OpenSSL/crypto.py",
    "examples/sni/server.py",
-   "tests/test_ssl.py",
-   "tests/test_crypto.py"
+   "leakcheck/context-passphrase-callback.py",
+   "src/OpenSSL/_util.py"
   ],
   "locbench/pyca__pyopenssl-578|title|body": [
    "src/OpenSSL/SSL.py",
    "tests/test_ssl.py",
    "doc/api/ssl.rst",
    "tests/test_crypto.py",
-   "examples/simple/client.py"
+   "tests/test_rand.py"
   ],
   "locbench/pyca__pyopenssl-578|title|filebm25": [],
   "locbench/pyca__pyopenssl-578|title|grep": [
@@ -1250,10 +1257,10 @@
   ],
   "locbench/pyca__pyopenssl-578|title|product": [
    "src/OpenSSL/SSL.py",
-   "tests/test_ssl.py",
-   "tests/test_crypto.py",
    "leakcheck/thread-crash.py",
-   "src/OpenSSL/tsafe.py"
+   "src/OpenSSL/tsafe.py",
+   "src/OpenSSL/crypto.py",
+   "doc/api/ssl.rst"
   ],
   "locbench/rapidsai__dask-cuda-98|full|body": [
    "dask_cuda/device_host_file.py",
@@ -1286,9 +1293,9 @@
   "locbench/rapidsai__dask-cuda-98|full|product": [
    "dask_cuda/device_host_file.py",
    "versioneer.py",
-   "dask_cuda/tests/test_spill.py",
    "dask_cuda/dgx.py",
-   "dask_cuda/dask_cuda_worker.py"
+   "dask_cuda/dask_cuda_worker.py",
+   "dask_cuda/_version.py"
   ],
   "locbench/rapidsai__dask-cuda-98|title|body": [
    "dask_cuda/tests/test_spill.py",
@@ -1307,11 +1314,11 @@
    "dask_cuda/utils.py"
   ],
   "locbench/rapidsai__dask-cuda-98|title|product": [
-   "dask_cuda/tests/test_spill.py",
    "dask_cuda/device_host_file.py",
-   "dask_cuda/tests/test_device_host_file.py",
    "dask_cuda/local_cuda_cluster.py",
-   "dask_cuda/dask_cuda_worker.py"
+   "dask_cuda/dask_cuda_worker.py",
+   "dask_cuda/is_device_object.py",
+   "dask_cuda/utils.py"
   ],
   "locbench/sancus-tee__sancus-compiler-36|full|body": [
    "src/sancus_support/sm_support.h",
@@ -1324,13 +1331,19 @@
   "locbench/sancus-tee__sancus-compiler-36|full|grep": [
    "src/sancus_support/sm_support.h"
   ],
-  "locbench/sancus-tee__sancus-compiler-36|full|kw": [],
+  "locbench/sancus-tee__sancus-compiler-36|full|kw": [
+   "src/sancus_support/sm_support.h",
+   "src/llvm/SancusModuleInfo.h",
+   "src/llvm/SancusModuleCreator.cpp",
+   "src/crypto/crypto.cpp",
+   "src/sancus_support/sm_support.c"
+  ],
   "locbench/sancus-tee__sancus-compiler-36|full|product": [
    "src/sancus_support/sm_support.h",
-   "src/stubs/sm_input.c",
-   "src/drivers/common.py",
-   "src/drivers/sancus/crypto.py",
-   "src/drivers/linker.py"
+   "src/llvm/SancusModuleCreator.cpp",
+   "src/drivers/linker.py",
+   "src/sancus_support/sm_support.c",
+   "src/llvm/SancusModuleInfo.h"
   ],
   "mcp_bench/semantic_search-fastapi-001|full|body": [
    "fastapi/applications.py",
@@ -1381,9 +1394,9 @@
   "mcp_bench/semantic_search-pandas-002|full|body": [
    "pandas/tests/extension/test_categorical.py",
    "pandas/_libs/tslibs/nattype.pyx",
-   "doc/source/user_guide/visualization.rst",
+   "pandas/core/arrays/base.py",
    "pandas/core/base.py",
-   "pandas/tests/frame/constructors/test_from_records.py"
+   "doc/source/user_guide/visualization.rst"
   ],
   "mcp_bench/semantic_search-pandas-002|full|filebm25": [],
   "mcp_bench/semantic_search-pandas-002|full|grep": [
@@ -1398,14 +1411,14 @@
    "pandas/tests/series/test_missing.py",
    "pandas/conftest.py",
    "pandas/core/missing.py",
-   "pandas/core/indexing.py"
+   "pandas/tests/arrays/categorical/test_missing.py"
   ],
   "mcp_bench/semantic_search-pandas-002|full|product": [
    "pandas/io/stata.py",
-   "pandas/tests/frame/constructors/test_from_records.py",
-   "pandas/tests/extension/base/getitem.py",
-   "pandas/tests/extension/test_categorical.py",
-   "pandas/_libs/tslibs/nattype.pyx"
+   "pandas/_libs/tslibs/nattype.pyx",
+   "pandas/core/arrays/base.py",
+   "pandas/core/base.py",
+   "pandas/conftest.py"
   ],
   "mcp_bench/semantic_search-redis-003|full|body": [
    "src/commands/ttl.json",
@@ -1450,8 +1463,8 @@
    "src/pubsub.c",
    "src/sentinel.c",
    "src/cluster_slot_stats.c",
-   "tests/unit/pubsub.tcl",
-   "tests/modules/getchannels.c"
+   "src/cluster_legacy.c",
+   "deps/hiredis/async.c"
   ],
   "mcp_bench/symbol_search-fastapi-001|full|body": [
    "docs/zh/docs/benchmarks.md",
@@ -1508,22 +1521,26 @@
    "docs/en/docs/reference/apirouter.md"
   ],
   "mcp_bench/symbol_search-fastapi-018|full|body": [
-   "docs/pt/docs/tutorial/dependencies/index.md",
+   "tests/test_depends_hashable.py",
    "docs/pt/docs/tutorial/dependencies/sub-dependencies.md",
-   "docs/pt/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+   "docs/pt/docs/advanced/advanced-dependencies.md",
    "docs/pt/docs/tutorial/dependencies/dependencies-with-yield.md",
-   "docs/pt/docs/advanced/testing-dependencies.md"
+   "docs/pt/docs/tutorial/dependencies/index.md"
   ],
   "mcp_bench/symbol_search-fastapi-018|full|filebm25": [],
   "mcp_bench/symbol_search-fastapi-018|full|grep": [],
   "mcp_bench/symbol_search-fastapi-018|full|kw": [
-   "tests/test_ws_router.py"
+   "fastapi/params.py",
+   "fastapi/param_functions.py",
+   "tests/test_ws_router.py",
+   "tests/test_dependency_overrides.py",
+   "tests/test_generic_parameterless_depends.py"
   ],
   "mcp_bench/symbol_search-fastapi-018|full|product": [
-   "tests/test_ws_router.py",
-   "docs/pt/docs/tutorial/dependencies/index.md",
+   "fastapi/params.py",
    "docs/pt/docs/tutorial/dependencies/sub-dependencies.md",
-   "docs/pt/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+   "fastapi/param_functions.py",
+   "docs/pt/docs/advanced/advanced-dependencies.md",
    "docs/pt/docs/tutorial/dependencies/dependencies-with-yield.md"
   ],
   "mcp_bench/symbol_search-gh-cli-005|full|body": [
@@ -1550,10 +1567,10 @@
   ],
   "mcp_bench/symbol_search-gh-cli-005|full|product": [
    "pkg/cmd/attestation/trustedroot/trustedroot.go",
-   "pkg/cmd/attestation/trustedroot/trustedroot_test.go",
    "pkg/cmd/root/root.go",
    "pkg/cmd/attestation/verification/sigstore.go",
-   "pkg/cmd/root/help.go"
+   "pkg/cmd/root/help.go",
+   "pkg/cmd/codespace/root.go"
   ],
   "mcp_bench/symbol_search-pandas-002|full|body": [
    "doc/source/reference/frame.rst",
@@ -1582,25 +1599,37 @@
    "doc/source/reference/frame.rst",
    "pandas/_testing/__init__.py",
    "doc/source/reference/groupby.rst",
-   "pandas/tests/frame/test_constructors.py"
+   "pandas/io/formats/format.py"
   ],
   "mcp_bench/symbol_search-pandas-009|full|body": [
    "pandas/tests/series/test_reductions.py",
-   "web/pandas/pdeps/0005-no-default-index-mode.md"
+   "web/pandas/pdeps/0005-no-default-index-mode.md",
+   "doc/source/reference/series.rst",
+   "doc/source/reference/groupby.rst",
+   "pandas/tests/arithmetic/test_timedelta64.py"
   ],
   "mcp_bench/symbol_search-pandas-009|full|filebm25": [],
   "mcp_bench/symbol_search-pandas-009|full|grep": [],
-  "mcp_bench/symbol_search-pandas-009|full|kw": [],
+  "mcp_bench/symbol_search-pandas-009|full|kw": [
+   "pandas/_testing/__init__.py",
+   "asv_bench/benchmarks/frame_ctor.py",
+   "asv_bench/benchmarks/ctors.py",
+   "asv_bench/benchmarks/plotting.py",
+   "asv_bench/benchmarks/series_methods.py"
+  ],
   "mcp_bench/symbol_search-pandas-009|full|product": [
-   "pandas/tests/series/test_reductions.py",
-   "web/pandas/pdeps/0005-no-default-index-mode.md"
+   "web/pandas/pdeps/0005-no-default-index-mode.md",
+   "doc/source/reference/series.rst",
+   "pandas/_testing/__init__.py",
+   "doc/source/reference/groupby.rst",
+   "pandas/core/_numba/extensions.py"
   ],
   "mcp_bench/symbol_search-redis-003|full|body": [
    "src/redismodule.h",
    "src/server.c",
-   "src/config.c",
-   "src/replication.c",
-   "src/aof.c"
+   "src/Makefile",
+   "src/redis-cli.c",
+   "tests/modules/hooks.c"
   ],
   "mcp_bench/symbol_search-redis-003|full|filebm25": [],
   "mcp_bench/symbol_search-redis-003|full|grep": [
@@ -1617,17 +1646,17 @@
   ],
   "mcp_bench/symbol_search-redis-003|full|product": [
    "src/server.h",
-   "src/config.c",
+   "src/acl.c",
    "src/module.c",
-   "src/server.c",
+   "src/redis-cli.c",
    "src/redismodule.h"
   ],
   "mcp_bench/symbol_search-redis-010|full|body": [
    "src/redismodule.h",
-   "src/server.h",
-   "utils/generate-command-code.py",
-   "src/commands.def",
-   "src/server.c"
+   "src/modules/helloworld.c",
+   "tests/modules/blockonbackground.c",
+   "tests/modules/configaccess.c",
+   "src/modules/helloacl.c"
   ],
   "mcp_bench/symbol_search-redis-010|full|filebm25": [],
   "mcp_bench/symbol_search-redis-010|full|grep": [
@@ -1645,11 +1674,11 @@
    "src/cluster_asm.h"
   ],
   "mcp_bench/symbol_search-redis-010|full|product": [
-   "src/acl.c",
    "src/server.h",
+   "src/acl.c",
    "src/server.c",
    "src/module.c",
-   "src/redismodule.h"
+   "src/latency.c"
   ]
  }
 }
