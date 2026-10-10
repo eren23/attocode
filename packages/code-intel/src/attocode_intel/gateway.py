@@ -20,6 +20,7 @@ from mcp.server.lowlevel import Server
 from attocode_intel.catalog import (
     INSTRUCTIONS,
     INSTRUCTIONS_NO_WATCH,
+    compact_schema,
     is_write,
     registered_tools,
     tool_catalog,
@@ -69,12 +70,18 @@ class OperationGateway:
 
     def catalog(self, *, mcp=False):
         catalog = deepcopy(self._catalog()[0])
-        if mcp and self.effective_profile() == "daily":
-            for tool in catalog:
-                budget = tool.inputSchema["properties"]["max_tokens"]
-                budget.update(default=2000, description="Token budget for the whole result, provenance included.")
-                if is_write(tool.name):
-                    budget["minimum"] = 512
+        if not mcp:
+            return catalog
+        # A model reads this list in every request, so it gets no docstring indent and no pydantic noise.
+        for tool in catalog:
+            tool.description = inspect.cleandoc(tool.description or "")
+            tool.inputSchema = compact_schema(tool.inputSchema)
+            properties = tool.inputSchema["properties"]
+            if not self.resolver and "workspace" in properties:
+                properties["workspace"] = {"type": "string", "description": "Project path (default: this project)"}
+            if self.effective_profile() == "daily":
+                budget = {"type": "integer", "maximum": 32000, "default": 2000}
+                properties["max_tokens"] = {**budget, "minimum": 512} if is_write(tool.name) else budget
         return catalog
 
     async def close(self):

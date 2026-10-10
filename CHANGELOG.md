@@ -31,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   characters, against 24 tools and 29,147 characters. In an agent pilot,
   each model request carried the full tool list, but the agent called these
   tools in only 4 of 58 runs.
+- The MCP tool list is about half as long. The descriptions of the daily
+  tools say what each tool does and when to use it, without implementation
+  details. The published input schemas leave out pydantic titles and the
+  null branch of optional arguments. Validation still accepts an explicit
+  null. The local daily list gives `max_tokens` and `workspace` without long
+  descriptions, and the server instructions are shorter.
+- The local daily tool list has 11,554 characters, against 21,053, and the
+  server instructions 571, against 1,051. In the enriched agent study, the
+  server added about 9,100 tokens to each model request. By the
+  characters, this change removes about 4,100 of them.
 
 ### Fixed — Code-intel server
 

@@ -133,17 +133,11 @@ def review_change(
     files: list[str] | None = None,
     mode: str = "full",
 ) -> str:
-    """Comprehensive change review combining security, rule analysis, and convention checks.
-
-    Runs multiple analysis passes on changed files and produces a unified
-    report. Much more efficient than calling each tool individually.
+    """Review changed files for security issues, rule violations and convention problems in one report.
 
     Args:
-        files: List of file paths to review (default: git-modified files).
-        mode: Review depth -- 'quick' (security only), 'full' (security + rules + conventions).
-
-    Returns:
-        Unified review report with categorized findings.
+        files: Files to review (default: the files that git reports as changed).
+        mode: "quick" (security only) or "full".
     """
     project_dir = _get_project_dir()
 

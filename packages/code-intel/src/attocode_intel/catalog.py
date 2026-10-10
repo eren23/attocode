@@ -7,17 +7,11 @@ from copy import deepcopy
 from mcp.types import Tool, ToolAnnotations
 
 INSTRUCTIONS = (
-    "If connected intelligence tools are deferred (for example in Claude), discover them through ToolSearch "
-    "using a query such as 'attocode-code-intel inspect_symbol' for a known function or "
-    "'attocode-code-intel bootstrap' to locate unfamiliar behavior, then call the returned tool. "
-    "When a symbol is known, call inspect_symbol directly to get its source, references, imports and candidate tests; "
-    "add task_hint for focused excerpts and test ranking, and select a file/line if ambiguous. "
-    "For an unfamiliar repository or behavior, bootstrap(task_hint=...) locates relevant code and provides a map. "
-    "Use search_symbols to discover names. Focused excerpts are separate contiguous ranges; cite each range separately. "
-    "Native search remains useful for literal text and checking returned evidence. "
-    "Use impact_analysis and suggest_tests for change planning and verification. "
-    "Check source, revision, and coverage; incomplete indexes are not proof of no dependencies. "
-    "{watch} Keep uncommitted code local."
+    "If these tools are deferred (for example in Claude Code), load them with ToolSearch, for example "
+    "'attocode-code-intel inspect_symbol'. For a known symbol, call inspect_symbol. For unfamiliar behavior, "
+    "call bootstrap with a task_hint. Use search_symbols to find names, and impact_analysis and suggest_tests "
+    "to plan and check a change. Grep stays useful for literal text. Cite each excerpt range separately. "
+    "An incomplete index does not prove that a dependency is absent. {watch} Keep uncommitted code local."
 )
 # ponytail: two variants of one sentence; the server knows whether it watches files.
 WATCHING = "The server watches the project, so it indexes your edits without a call."
@@ -104,6 +98,28 @@ WRITES = frozenset(
 REMOTE_WRITES = frozenset(
     {"record_learning", "learning_feedback", "record_adr", "update_adr_status", "update_learning"}
 )
+
+
+def compact_schema(node, names=False):
+    """The input schema that a model reads: no pydantic titles, and no null branch for an optional argument.
+
+    NAMES marks a map of property names, whose keys are not schema keywords. Validation keeps the full
+    schema, so an explicit null stays valid.
+    """
+    if isinstance(node, list):
+        return [compact_schema(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    if names:
+        return {key: compact_schema(value) for key, value in node.items()}
+    node = {key: compact_schema(value, key in ("properties", "$defs", "definitions"))
+            for key, value in node.items() if key != "title"}
+    options = node.get("anyOf")
+    if (isinstance(options, list) and len(options) == 2 and {"type": "null"} in options
+            and "default" in node and node["default"] is None):
+        del node["anyOf"], node["default"]
+        node.update(next(option for option in options if option != {"type": "null"}))
+    return node
 
 
 def remote_available(name):

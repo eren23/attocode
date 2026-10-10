@@ -34,15 +34,7 @@ def file_analysis(path: str) -> str:
 
 @mcp.tool()
 def impact_analysis(changed_files: list[str]) -> str:
-    """Analyze the transitive impact of changing one or more files.
-
-    Uses BFS on the reverse dependency graph to find all files that
-    could be affected by changes to the given files. This is useful
-    for understanding the blast radius of a code change.
-
-    Args:
-        changed_files: List of file paths that were changed.
-    """
+    """List the files that a change to the given files can affect: the files that import them, directly or through other files."""
     return _get_service().impact_analysis(changed_files)
 
 
@@ -80,17 +72,13 @@ def cross_references(
     symbol_name: str, file_path: str | None = None, line: int | None = None,
     cursor: str | None = None, page_size: int | None = None,
 ) -> str:
-    """Find where a symbol is defined and all places it is referenced.
-
-    Shows both the definition locations and all call sites, imports,
-    and attribute accesses for the given symbol.
+    """Find where a symbol is defined and each place that references it: calls, imports and attribute accesses.
 
     Args:
-        symbol_name: Name of the symbol to look up.
-        file_path: Select a definition in this repository-relative file.
-        line: Select the definition's start line when names still collide.
-        cursor: Continue a gateway result from the same query and snapshot.
-        page_size: Maximum references per page (1-100; daily MCP defaults to 20).
+        file_path: When names collide, select the definition in this repository-relative file.
+        line: Select the definition by its start line.
+        cursor: Continue a paged result.
+        page_size: References per page, 1 to 100 (default 20).
     """
     if cursor or file_path is not None or line is not None or page_size is not None:
         # Pagination belongs to the authenticated operation gateway.
@@ -104,21 +92,12 @@ def call_graph(
     direction: str = "callees",
     depth: int = 1,
 ) -> str:
-    """Function-level call-graph traversal — who calls whom.
-
-    With ``direction="callees"``, returns symbols called by ``symbol``
-    (forward edges). With ``direction="callers"``, returns symbols that
-    call ``symbol`` (reverse edges). ``depth`` caps the BFS hops.
-
-    Edges are populated from tree-sitter parsing during indexing and
-    optionally enriched by LSP. The set of edges grows monotonically
-    as more files get indexed; rerun after a full ``reindex`` for
-    completeness.
+    """Follow the calls of a function or method.
 
     Args:
-        symbol: Function or method name (qualified or bare).
-        direction: "callees" (forward) or "callers" (reverse).
-        depth: Maximum BFS hops (default 1).
+        symbol: Function or method name, qualified or bare.
+        direction: "callees" (what it calls) or "callers" (what calls it).
+        depth: Maximum number of hops (default 1).
     """
     # call_graph has no server-side HTTP route, so it runs locally even when a
     # remote is configured (the local symbol index carries the call edges).
@@ -127,14 +106,7 @@ def call_graph(
 
 @mcp.tool()
 def dependencies(path: str) -> str:
-    """Get import/dependency relationships for a file.
-
-    Shows both what the file imports from (dependencies) and what files
-    import it (dependents/importers).
-
-    Args:
-        path: File path (relative to project root or absolute).
-    """
+    """Show what a file imports and which files import it."""
     return _get_service().dependencies(path)
 
 
