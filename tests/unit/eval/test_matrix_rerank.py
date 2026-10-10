@@ -123,6 +123,28 @@ def test_a_cache_hit_costs_nothing_and_a_missing_file_is_a_status(tmp_path, monk
     assert [r["files"] for r in _rows(out, "pool>none.3")] == [POOL, ["gone.py", *POOL]]
 
 
+def test_a_retry_makes_failed_requests_again_and_keeps_invalid_answers(tmp_path, monkeypatch):
+    out, cache, instances, calls = _workspace(tmp_path, monkeypatch, [POOL, POOL])
+    _seed_cost(cache, "fake-paid", 0.01)
+    first = iter(["request_failed", "invalid_output"])
+
+    def flaky(model, query, excerpts):
+        calls.append(query)
+        status = next(first, "ok")
+        return {"status": status, "order": list(range(len(excerpts))) if status == "ok" else None,
+                "error": None if status == "ok" else status, "ms": 1.0, "cost_usd": 0.01}
+
+    monkeypatch.setattr(rerank, "listwise", flaky)
+    config = _config(tmp_path, rerank=[{"arm": "fake-paid", "pools": ["pool"], "pages": [3]}])
+    matrix.rerank_pools(out, cache, instances, config, budget_usd=1)
+    failed = {r["instance_id"]: r["status"] for r in _rows(out, "pool>fake-paid.3")}
+    matrix.rerank_pools(out, cache, instances, config, budget_usd=1, retry_failed=True)
+    assert len(calls) == 3  # one more call: an invalid answer is a result of the arm
+    after = {r["instance_id"]: r["status"] for r in _rows(out, "pool>fake-paid.3")}
+    assert after == {key: "ok" if status == "request_failed" else status for key, status in failed.items()}
+    assert sorted(after.values()) == ["invalid_output", "ok"]
+
+
 def test_repeats_have_their_own_cache_keys(tmp_path, monkeypatch):
     out, cache, instances, calls = _workspace(tmp_path, monkeypatch, [POOL, POOL], tags=["core"])
     _seed_cost(cache, "fake-paid", 0.01)

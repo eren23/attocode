@@ -511,7 +511,8 @@ def execute(cache: Cache, budget: Budget, jobs: list[Job], *, retry_failed: bool
                           "cost_usd": 0.0}
         elif job.output is None and ARMS[job.arm]["kind"] != "cross":
             found = cache.get(job.key)
-            if found is not None and not (retry_failed and found["status"] != "ok"):
+            # An invalid answer is a result of the arm, so a retry makes only failed requests again.
+            if found is not None and not (retry_failed and found["status"] == "request_failed"):
                 job.output, job.cache_hit = found, True
     arms = list(dict.fromkeys(job.arm for job in jobs))
     todo = {arm: [job for job in jobs if job.arm == arm and job.output is None] for arm in arms}

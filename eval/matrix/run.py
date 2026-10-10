@@ -907,7 +907,8 @@ def main() -> None:
     stages.add_argument("--stage", required=True, choices=("snapshot", "retrieve", "rows", "rerank"))
     stages.add_argument("--shard", default="0/1", help="I/N: repositories I, I+N, I+2N, ... in name order. "
                                                        "For the rerank stage: instances in id order")
-    stages.add_argument("--retry-failed", action="store_true", help="make failed snapshots and results again")
+    stages.add_argument("--retry-failed", action="store_true", help="make failed snapshots, results and rerank "
+                                                                    "requests again")
     stages.add_argument("--config", type=Path, default=REGISTRY, help="the rerank entries (default: the registry)")
     stages.add_argument("--budget-usd", type=float, help="the cap of paid calls for this run folder, "
                                                          "over all invocations (default: run.budget_usd)")
