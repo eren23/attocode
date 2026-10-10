@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+def is_loopback(host: str) -> bool:
+    """True for a host that only this computer can reach."""
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 @dataclass(slots=True)
@@ -16,7 +27,8 @@ class CodeIntelConfig:
     host: str = "127.0.0.1"
     port: int = 8080
     api_key: str = ""
-    cors_origins: list[str] = field(default_factory=lambda: ["*"])
+    # No other web origin can call the API unless ATTOCODE_CORS_ORIGINS names it.
+    cors_origins: list[str] = field(default_factory=list)
     log_level: str = "info"
 
     # Indexing settings
@@ -93,7 +105,7 @@ class CodeIntelConfig:
             host=os.environ.get("ATTOCODE_HOST", "127.0.0.1"),
             port=int(os.environ.get("ATTOCODE_PORT", "8080")),
             api_key=os.environ.get("ATTOCODE_API_KEY", ""),
-            cors_origins=os.environ.get("ATTOCODE_CORS_ORIGINS", "*").split(","),
+            cors_origins=[o for o in os.environ.get("ATTOCODE_CORS_ORIGINS", "").split(",") if o],
             log_level=os.environ.get("ATTOCODE_LOG_LEVEL", "info"),
             file_cap=int(os.environ.get("ATTOCODE_FILE_CAP", "5000")),
             database_url=os.environ.get("DATABASE_URL", ""),

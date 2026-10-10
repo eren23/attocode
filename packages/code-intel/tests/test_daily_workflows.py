@@ -219,3 +219,68 @@ def test_claude_install_writes_no_claude_md_copy_and_removes_an_old_one(tmp_path
     guidance.write_text("# Mine\n\n<!-- attocode-code-intel:start -->\nold\n<!-- attocode-code-intel:end -->\n")
     configure_client("claude", str(tmp_path))
     assert guidance.read_text().strip() == "# Mine"
+
+
+def test_claude_install_record_moves_out_of_the_project_root(tmp_path):
+    # The record can hold an old entry with a credential, so it goes into the ignored cache folder.
+    old = tmp_path / ".attocode-intelligence-install.json"
+    record = tmp_path / ".attocode" / "claude-install.json"
+    configure_client("claude", str(tmp_path))
+    assert record.exists() and not old.exists()
+    record.rename(old)  # The layout of an install made before the move.
+    configure_client("claude", str(tmp_path), remove=True)
+    assert "attocode-code-intel" not in json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"]
+    assert record.exists() and not old.exists()
+
+
+def test_a_new_cache_folder_ignores_itself_and_an_existing_one_keeps_its_rules(tmp_path):
+    from attocode_intel.project_dir import cache_folder
+    from attocode_intel.service import CodeIntelService
+
+    CodeIntelService(str(tmp_path))
+    assert (tmp_path / ".attocode" / ".gitignore").read_text().endswith("\n*\n")
+    own = tmp_path / "own"
+    (own / ".attocode").mkdir(parents=True)
+    assert cache_folder(own) == own / ".attocode"
+    assert not (own / ".attocode" / ".gitignore").exists()
+
+
+def test_the_bare_server_lists_the_daily_tools(monkeypatch):
+    from attocode_intel import entrypoint
+
+    seen = {}
+
+    async def fake_stdio(opts):
+        seen["profile"] = opts.profile
+
+    monkeypatch.setattr(entrypoint, "_stdio", fake_stdio)
+    entrypoint.main([])
+    assert seen == {"profile": "daily"}
+
+
+def test_servers_on_other_hosts_need_a_key(monkeypatch, capsys):
+    from attocode_intel import cli, entrypoint
+    from attocode_intel.config import is_loopback
+
+    assert all(map(is_loopback, ["127.0.0.1", "::1", "localhost"]))
+    assert not any(map(is_loopback, ["0.0.0.0", "192.168.1.2", "intel.example.com"]))
+    monkeypatch.delenv("ATTOCODE_API_KEY", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(SystemExit):
+        cli._serve_http(".", host="0.0.0.0", port=8080, debug=False)
+    assert "Set ATTOCODE_API_KEY" in capsys.readouterr().err
+    with pytest.raises(SystemExit, match="SSE serves only this computer"):
+        entrypoint.main(["--transport", "sse", "--host", "0.0.0.0"])
+
+
+def test_the_local_api_allows_no_other_web_origin(tmp_path, monkeypatch):
+    from attocode_intel.api.app import create_app
+    from attocode_intel.config import CodeIntelConfig
+    from starlette.testclient import TestClient
+
+    monkeypatch.delenv("ATTOCODE_CORS_ORIGINS", raising=False)
+    assert CodeIntelConfig.from_env().cors_origins == []
+    with TestClient(create_app(CodeIntelConfig(project_dir=str(tmp_path)))) as client:
+        response = client.get("/health", headers={"Origin": "https://example.com"})
+    assert response.status_code == 200
+    assert not any(name.startswith("access-control-") for name in response.headers)

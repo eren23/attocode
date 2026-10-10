@@ -19,7 +19,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SWE-PolyBench +0.013. On the graded pack, where some tests are relevant,
   gNDCG@5 gained 0.031 (11 queries better, 2 worse).
 
+### Security — Code-intel HTTP server
+
+- The local HTTP API allows no other web origin by default. Before, CORS
+  allowed all origins, and without `ATTOCODE_API_KEY` any web page could read
+  the code index through `127.0.0.1`. Set `ATTOCODE_CORS_ORIGINS` to allow an
+  origin.
+- The HTTP server refuses a host that is not a loopback address unless
+  `ATTOCODE_API_KEY` is set. Service mode signs in its users, so the rule
+  does not apply to it. SSE has no sign-in, so it serves only loopback addresses. The
+  local Docker compose file asks for `ATTOCODE_API_KEY`, because it opens the
+  port to other computers.
+
 ### Changed — Code-intel server
+
+- The server command uses the daily profile when `--profile` is not given.
+  Before, a server that a person added by hand listed all tools (about 144).
+  `init` already wrote `--profile daily`. Use `--profile full` for all tools.
+- A new `.attocode/` folder gets a `.gitignore` with `*`, so the index stays
+  out of commits. A folder that exists keeps its own rules.
+- For a Claude project, `init` keeps its install record in
+  `.attocode/claude-install.json`, not in the project root. The record can
+  hold an earlier entry with a credential. `init --remove` also reads the
+  old file and deletes it.
+- `--local-only` says in its help that it has no effect. The flag stays for
+  old client configurations.
 
 - The local daily profile is smaller. It no longer lists the five learning
   tools (`recall`, `record_learning`, `list_learnings`, `learning_feedback`,

@@ -6,6 +6,7 @@ single source of truth for the shared code-intelligence surface.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import threading
@@ -18,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from attocode_intel._internal.integrations.utilities.token_estimate import estimate_tokens
 from attocode_intel.config import CodeIntelConfig
+from attocode_intel.project_dir import cache_folder
 from attocode_intel.query_ranking import (
     broad_rank_enabled,
     hit_evidence,
@@ -68,6 +70,8 @@ class CodeIntelService:
 
     def __init__(self, project_dir: str, config: CodeIntelConfig | None = None) -> None:
         self._project_dir = os.path.realpath(project_dir)
+        with contextlib.suppress(OSError):  # A read-only project still answers.
+            cache_folder(self._project_dir)
         self._config = config or CodeIntelConfig(project_dir=self._project_dir)
         self._scoring_config: SearchScoringConfig | None = None  # Optional override
         self._context_config: ContextAssemblyConfig | None = None  # Optional override
