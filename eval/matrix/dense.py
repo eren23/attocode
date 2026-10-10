@@ -1,4 +1,4 @@
-"""Dense first-stage arm of the eval matrix: CodeRankEmbed over the 40-line windows of each file.
+"""Dense first-stage arm of the eval matrix: CodeRankEmbed over the 40-line windows of each source file.
 
 The arm embeds and ranks the source files of product search (``ranked``): no docs and no data.
 A file scores the best cosine of its windows with the query. A GPU pod embeds the files and

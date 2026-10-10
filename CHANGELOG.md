@@ -165,11 +165,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `eval/locbench560/`. `import-legacy` loads the old Jev answers into
   `cache.db`. A replay of the Loc-Bench 560 trials gave Jev over 48 files the
   published Acc@5 of 0.7518, at a cost of $0.
-- New dense first-stage cells: `dense` (CodeRankEmbed over 40-line windows)
-  and `rrf(product+dense)`. A GPU pod makes the vectors with
-  `python -m eval.matrix.dense`, and the retrieve stage ranks without a
-  model. On the 560 Loc-Bench issues, the fused cell gave Acc@5 0.664
-  against 0.532 for `product`. The pod cost about $1.7.
+- New dense first-stage cells: `dense` (CodeRankEmbed over the 40-line
+  windows of the source files of product search) and `rrf(product+dense)`.
+  A GPU pod makes the vectors with `python -m eval.matrix.dense`, and the
+  retrieve stage ranks without a model. On the 560 Loc-Bench issues, `dense`
+  gave Acc@5 0.602 and the fused cell 0.679, against 0.532 for `product`.
+  The pod cost about $2.9 for the core mix and Loc-Bench 560. The first
+  version ranked all files, embedded at most 1,600 lines of a file and cut
+  the query at 512 tokens. It gave 0.541 and 0.664.
 
 ## [0.2.29] - 2026-10-09
 

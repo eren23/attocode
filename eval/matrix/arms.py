@@ -13,7 +13,7 @@ A family is one call per (snapshot, query). It fills one or more cells:
 - ``grep``: an agentic-grep stand-in. It greps the code-like terms of the query and
   ranks files by summed idf. Files that the query names by path come first.
 - ``repomap``: the order of the repo_map_ranked tool (PageRank and task relevance).
-- ``dense``: CodeRankEmbed over the 40-line windows of each file (``eval.matrix.dense``). It
+- ``dense``: CodeRankEmbed over the 40-line windows of each source file (``eval.matrix.dense``). It
   reads vectors that a GPU pod made, so it needs no model.
 
 A fused cell (``FUSED``) is the reciprocal-rank fusion of two cells. It has no result of its
