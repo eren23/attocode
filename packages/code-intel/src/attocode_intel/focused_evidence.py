@@ -12,14 +12,15 @@ _EXCLUSION_END = re.compile(r"[,;.!?]|\b(?:but|instead|rather|while)\b", re.IGNO
 _EXCLUSION_MODIFIERS = frozenset({"unrelated", "irrelevant", "unwanted", "other"})
 
 
-def terms(text):
+def terms(text, fold=True):
+    """Query or evidence words; ``fold`` cuts a plural "s", so both sides must use the same rule."""
     text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
     words = re.findall(r"[a-zA-Z][a-zA-Z0-9]*", text.lower())
-    return {word[:-1] if word.endswith("s") and not word.endswith("ss") and len(word) > 4 else word
+    return {word[:-1] if fold and word.endswith("s") and not word.endswith("ss") and len(word) > 4 else word
             for word in words if len(word) > 2 and word not in STOP_WORDS}
 
 
-def task_terms(text: str) -> tuple[set[str], set[str]]:
+def task_terms(text: str, fold: bool = True) -> tuple[set[str], set[str]]:
     """Separate explicit exclusions from positive task terms.
 
     The negative set is a *ranking hint*, never a hard filter. Deliberately
@@ -40,8 +41,8 @@ def task_terms(text: str) -> tuple[set[str], set[str]]:
         negative_parts.append(tail[:end.start()])
         remaining = tail[end.end():]
     positive_parts.append(remaining)
-    positive = terms(" ".join(positive_parts)) - _EXCLUSION_MODIFIERS
-    negative = terms(" ".join(negative_parts)) - _EXCLUSION_MODIFIERS
+    positive = terms(" ".join(positive_parts), fold) - _EXCLUSION_MODIFIERS
+    negative = terms(" ".join(negative_parts), fold) - _EXCLUSION_MODIFIERS
     return positive, negative
 
 
