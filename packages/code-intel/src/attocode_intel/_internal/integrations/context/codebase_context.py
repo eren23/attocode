@@ -856,9 +856,11 @@ class CodebaseContextManager:
                             self._ignored_checkout_dirs_capped = True
                 else:
                     kept_dirs.append(directory)
-            dirnames[:] = kept_dirs
+            # Sorted names: the file system order differs between macOS and Linux, and files of
+            # equal importance keep the walk order through the sort and the cap below.
+            dirnames[:] = sorted(kept_dirs)
 
-            for filename in filenames:
+            for filename in sorted(filenames):
                 if filename.startswith("."):
                     continue
                 if filename in SKIP_FILENAMES:

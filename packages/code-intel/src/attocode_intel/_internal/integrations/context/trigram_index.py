@@ -437,10 +437,10 @@ class TrigramIndex:
         """Walk *project_path* and return relative paths of indexable files."""
         result: list[str] = []
         for root, dirs, files in os.walk(project_path):
-            dirs[:] = [
+            dirs[:] = sorted(
                 d for d in dirs
                 if d not in _SKIP_DIRS and not d.startswith(".")
-            ]
+            )
             for fname in sorted(files):
                 fpath = Path(root) / fname
                 if fpath.suffix.lower() in _SKIP_EXTENSIONS:
