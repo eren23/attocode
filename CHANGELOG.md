@@ -173,6 +173,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The pod cost about $2.9 for the core mix and Loc-Bench 560. The first
   version ranked all files, embedded at most 1,600 lines of a file and cut
   the query at 512 tokens. It gave 0.541 and 0.664.
+- New results doc `packages/code-intel/evals/results/2026-10-10-matrix-r1.md`:
+  the first full run of the eval matrix (2,579 instances of 10 datasets). On
+  the core mix, a Jev rerank of the first 48 product files gave file Acc@5
+  0.594 against 0.425 for `product`. Neither harness check gave its
+  published number.
 
 ## [0.2.29] - 2026-10-09
 
