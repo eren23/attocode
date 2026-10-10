@@ -308,7 +308,7 @@ def test_task_file_scores_follow_the_model_order(tmp_path, monkeypatch):
     service = CodeIntelService(str(tmp_path), cfg)
     service._systemone_ranker._transport = httpx.MockTransport(
         lambda request: httpx.Response(200, json=_answer([0.1, 0.9])))
-    manager = type("Manager", (), {"search_candidates": lambda self, query, top_k: rows})()
+    manager = type("Manager", (), {"search_candidates": lambda self, query, top_k, **_kwargs: rows})()
     monkeypatch.setattr(service, "_get_semantic_search", lambda: manager)
     scores = service._task_file_scores("cache generation")
     assert scores["b.py"] > scores["a.py"]

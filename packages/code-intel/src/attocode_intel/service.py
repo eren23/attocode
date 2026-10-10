@@ -299,7 +299,7 @@ class CodeIntelService:
             return {}
         try:
             results = self._get_semantic_search().search_candidates(
-                task_hint, top_k=self._retrieval_depth(top_k))
+                task_hint, top_k=self._retrieval_depth(top_k), tests_last=False)
             if self._ranking_provider == "systemone":
                 results, _ranking = self._rank_search_results(task_hint, results, len(results))
         except Exception:

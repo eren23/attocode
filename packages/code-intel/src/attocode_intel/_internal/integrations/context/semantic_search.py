@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from attocode_intel.query_ranking import hit_evidence, rerank_broad_candidates
+from attocode_intel.query_ranking import demote_tests, hit_evidence, rerank_broad_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -965,7 +965,7 @@ class SemanticSearchManager:
 
     def search_candidates(
         self, query: str, top_k: int = 50, file_filter: str = "",
-        trace: dict[str, list[str]] | None = None,
+        trace: dict[str, list[str]] | None = None, tests_last: bool = True,
     ) -> list[SemanticSearchResult]:
         """Return local lexical candidates without initializing an embedding model.
 
@@ -976,6 +976,9 @@ class SemanticSearchManager:
         A ``trace`` dict receives the file order of each stage. The keys are
         ``keyword``, ``body``, ``file_bm25``, ``chunk_fused`` (before whole-file
         fusion) and ``fused`` (before the broad-query rerank).
+
+        ``tests_last`` puts test files after the other files, unless a short query
+        asks for tests (``demote_tests``). Task scores for test suggestions turn it off.
         """
         if top_k <= 0:
             return []
@@ -1004,7 +1007,11 @@ class SemanticSearchManager:
         if not body and not files:
             keyword = self._penalize_exclusions(keyword, negative)
             if trace is not None:
-                trace["chunk_fused"] = trace["fused"] = _file_order(keyword)
+                trace["chunk_fused"] = _file_order(keyword)
+            if tests_last:
+                keyword = demote_tests(query, keyword)
+            if trace is not None:
+                trace["fused"] = _file_order(keyword)
             return rerank_broad_candidates(query, keyword, top_k, file_filter)
 
         def key(result: SemanticSearchResult) -> tuple[str, str, str]:
@@ -1038,6 +1045,8 @@ class SemanticSearchManager:
             trace["chunk_fused"] = _file_order(fused)
         if files:
             fused = self._fuse_file_order(fused, files)
+        if tests_last:
+            fused = demote_tests(query, fused)
         if trace is not None:
             trace["fused"] = _file_order(fused)
         return rerank_broad_candidates(query, fused, top_k, file_filter)

@@ -128,12 +128,13 @@ def _ready(manager) -> bool:
     return manager.candidate_diagnostics().get("status") == "ready"
 
 
-def _search(manager, query: str, top_k: int, timeout: float, trace: dict | None = None) -> list:
+def _search(manager, query: str, top_k: int, timeout: float, trace: dict | None = None,
+            tests_last: bool = True) -> list:
     """search_candidates. A call during an index rebuild is repeated, as eval.ranking_pair did."""
     for _attempt in range(3):
         if trace is not None:
             trace.clear()
-        found = manager.search_candidates(query, top_k=top_k, trace=trace)
+        found = manager.search_candidates(query, top_k=top_k, trace=trace, tests_last=tests_last)
         if _ready(manager):
             return found
         if not manager.wait_for_body_index(timeout=timeout):
@@ -297,7 +298,7 @@ class Snapshot:
         manager = self.manager()
         manager.scoring_config = SearchScoringConfig()
         relevance: dict[str, float] = {}  # as service._task_file_scores
-        for rank, result in enumerate(_search(manager, query, RELEVANCE_TOP_K, self.timeout)):
+        for rank, result in enumerate(_search(manager, query, RELEVANCE_TOP_K, self.timeout, tests_last=False)):
             relevance[result.file_path] = max(relevance.get(result.file_path, 0.0), 1.0 / (1.0 + rank / 10.0))
         ranked = rank_repo_files(self.graph(), task_context=query, token_budget=10**12, relevance_by_file=relevance)
         return [entry.path for entry in ranked.entries[:DEPTH]]

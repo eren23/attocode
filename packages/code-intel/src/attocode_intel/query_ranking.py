@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from attocode_intel.focused_evidence import task_terms, terms
+from attocode_intel.test_ranking import is_test_path
 
 if TYPE_CHECKING:
     from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchResult
@@ -100,6 +101,18 @@ def _component(path: str) -> str:
     if parts[0] in {"src", "legacy"} and len(parts) > 2:
         return "/".join(parts[:4])
     return "/".join(parts[:2])
+
+
+def demote_tests(query: str, candidates: list[SemanticSearchResult]) -> list[SemanticSearchResult]:
+    """Put test files after the other files, unless a short query asks for tests.
+
+    An issue is fixed in source files, and ``suggest_tests`` finds the tests. A long
+    issue often says "test" about its reproduction, so only a short query shows test
+    intent. The order in each group does not change.
+    """
+    if re.search(r"\btests?\b", query, re.IGNORECASE) and len(terms(query)) <= 20:
+        return candidates
+    return sorted(candidates, key=lambda row: is_test_path(row.file_path))
 
 
 def _source_weight(path: str, test_intent: bool) -> float:
