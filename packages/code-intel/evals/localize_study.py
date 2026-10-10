@@ -304,16 +304,18 @@ def prepare_task(study, manifest, clone, task):
     if reason:
         shutil.rmtree(root)
         return {"status": "excluded", "reason": reason}
-    index = warm(study, root, study / "prepare" / task["id"], manifest)
+    # Only the intel setups read the index, so a study without them does not build it.
+    index = warm(study, root, study / "prepare" / task["id"], manifest) if set(INTEL) & set(manifest["setups"]) else None
     sweep(f"{study}/sources/")
-    return {"status": "ready" if index["ready"] else "excluded",
-            "reason": None if index["ready"] else "The index did not become ready",
+    ready = index is None or index["ready"]
+    return {"status": "ready" if ready else "excluded",
+            "reason": None if ready else "The index did not become ready",
             "tree_sha256": tree_hash(root), "files": len(tracked),
             "gold_in_tree": len(tracked & set(task["gold"])), "index": index}
 
 
 def prepare(args):
-    """Snapshot every instance (one clone at a time) and build its index. Resumable."""
+    """Snapshot every instance (one clone at a time) and, for the intel setups, build its index. Resumable."""
     study = args.study
     manifest = load(study)
     path = study / "preparation.json"

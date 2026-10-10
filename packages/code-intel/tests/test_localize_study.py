@@ -148,6 +148,15 @@ def test_one_row_end_to_end_with_resume_and_no_orphans(localize, stub, tmp_path,
     assert "Five random runs" in (study / "review.md").read_text()
 
 
+def test_native_only_study_prepares_without_an_index(localize, stub, tmp_path, monkeypatch):
+    study = frozen(localize, tmp_path, setups=("native",))
+    monkeypatch.setattr(localize, "warm", lambda *args: pytest.fail("a study without intel setups needs no index"))
+    localize.prepare(SimpleNamespace(study=study))
+    prepared = json.loads((study / "preparation.json").read_text())["tasks"]["fixture_fix-1"]
+    assert prepared["status"] == "ready" and prepared["index"] is None
+    assert not (study / "sources/fixture_fix-1/.attocode").exists()
+
+
 def test_warm_waits_until_search_has_its_indexes(localize, monkeypatch, tmp_path):
     import warm_cache
     requests = []

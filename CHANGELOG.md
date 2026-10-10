@@ -226,6 +226,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search of a timed run then built them. In 9 of 29 R2b runs, it found no
   index after its 15 s wait. On the crystal snapshot, the first search of a
   new server now answers in 0.8 s with results.
+- `prepare` of the agent study harness builds the search index only when the
+  study has an intel setup. A study with only `native` does not read the
+  index, so its preparation is faster.
 - The R2 results doc (`2026-10-10-agent-pilot.md`) has an enriched study:
   29 tasks where offline `product` has an Acc@10 hit and the `grep` arm does
   not. With the code-intel MCP server and its first search, Claude Code gave
