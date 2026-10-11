@@ -12,6 +12,7 @@ from pathlib import Path
 import tomlkit
 
 from attocode_intel.catalog import INSTRUCTIONS
+from attocode_intel.project_dir import cache_folder
 
 NAME = "attocode-code-intel"
 REMOTE_NAME = NAME + "-remote"
@@ -93,7 +94,12 @@ def configure_client(
     config, guidance, key = client_paths(client, root, global_scope)
     entry_name = REMOTE_NAME if server or repo else NAME
     state_path = config.parent / ".attocode-intelligence-install.json"
-    state = json.loads(state_path.read_text()) if state_path.exists() else {}
+    # The Claude project config sits in the project root, where the record would show in git status.
+    old_state = None
+    if config.parent == root:
+        old_state, state_path = state_path, root / ".attocode" / "claude-install.json"
+    source = state_path if state_path.exists() or not (old_state and old_state.exists()) else old_state
+    state = json.loads(source.read_text()) if source.exists() else {}
     is_toml = config.suffix == ".toml"
     if config.exists():
         raw = config.read_text()
@@ -171,7 +177,11 @@ def configure_client(
     atomic_write(config, output)
     if guidance.exists() or not (remove or drop):
         atomic_write(guidance, instruction)
+    if old_state:
+        cache_folder(root)
     atomic_write(state_path, json.dumps(state, indent=2) + "\n")
+    if old_state and old_state.exists():
+        old_state.unlink()
     return {"client": client, "config": str(config), "guidance": str(guidance), "removed": remove}
 
 

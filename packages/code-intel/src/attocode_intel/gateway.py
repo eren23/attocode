@@ -26,6 +26,7 @@ from attocode_intel.catalog import (
     tool_catalog,
 )
 from attocode_intel.output import bounded_compact, bounded_text, response_tokens
+from attocode_intel.project_dir import cache_folder
 from attocode_intel.query_ranking import hit_evidence, next_search_top_k
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
 
@@ -153,7 +154,7 @@ class OperationGateway:
         from attocode_intel.freshness import FreshnessTracker
 
         with bind_request(context):
-            directory = Path(context.project_dir) / ".attocode" / "cache"
+            directory = cache_folder(context.project_dir) / "cache"
             directory.mkdir(parents=True, exist_ok=True)
             with FileLock(str(directory / "operations.lock"), timeout=30):
                 tracker = context.stores.setdefault(
@@ -360,7 +361,7 @@ class OperationGateway:
     def _execute_sync(self, context, name, args, compact=False, timings=None):
         timings = timings if timings is not None else {}
         timings["queue"] = round((time.monotonic() - timings.pop("enqueued_at", time.monotonic())) * 1000, 2)
-        lock_dir = Path(context.project_dir) / ".attocode" / "cache"
+        lock_dir = cache_folder(context.project_dir) / "cache"
         lock_dir.mkdir(parents=True, exist_ok=True)
         start = time.monotonic()
         budget = int(args.get("max_tokens", 8000))

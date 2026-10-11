@@ -11,7 +11,7 @@ attocode-code-intel init --client codex --remove
 attocode-code-intel init --client codex --remove --remote
 ```
 
-If you edited the installed entry, removal asks you to preserve those edits rather than overwriting them. The installer saves its entry history in `.attocode-intelligence-install.json` beside the client configuration. Keep that file private, especially when replacing an entry that contained a credential. New configurations reference environment variables for credentials.
+If you edited the installed entry, removal asks you to preserve those edits rather than overwriting them. The installer saves its entry history in `.attocode-intelligence-install.json` beside the client configuration. For a Claude project, the file is `.attocode/claude-install.json`, so it stays out of the project root. Keep that file private, especially when replacing an entry that contained a credential. New configurations reference environment variables for credentials.
 
 `doctor` reads the installed configuration, initializes a real MCP session, discovers tools, verifies the selected workspace, and runs a bounded project query. Run it separately for each client and use `--remote` to check the remote entry. This verifies the generated protocol connection; enabling project trust, restarting the application, and accepting client MCP prompts remain client actions.
 

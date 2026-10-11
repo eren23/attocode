@@ -13,7 +13,7 @@ def test_defaults():
     assert cfg.host == "127.0.0.1"
     assert cfg.port == 8080
     assert cfg.api_key == ""
-    assert cfg.cors_origins == ["*"]
+    assert cfg.cors_origins == []
     assert cfg.log_level == "info"
 
 
@@ -44,7 +44,7 @@ def test_from_env_defaults(monkeypatch):
     assert cfg.host == "127.0.0.1"
     assert cfg.port == 8080
     assert cfg.api_key == ""
-    assert cfg.cors_origins == ["*"]
+    assert cfg.cors_origins == []
     assert cfg.log_level == "info"
 
 

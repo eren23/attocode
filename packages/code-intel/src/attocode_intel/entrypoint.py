@@ -101,13 +101,18 @@ def main(argv=None):
         description="Codebase intelligence for coding agents. Use init to configure clients; doctor verifies them.",
     )
     parser.add_argument("--project", default=os.environ.get("ATTOCODE_PROJECT_DIR", ""))
-    parser.add_argument("--profile", choices=["daily", "full"], default="full")
+    parser.add_argument(
+        "--profile", choices=["daily", "full"], default="daily",
+        help="daily: a short tool list for agents (default); full: all tools",
+    )
     parser.add_argument(
         "--transport", choices=["stdio", "sse", "http", "streamable-http"], default="stdio"
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--local-only", action="store_true")
+    parser.add_argument(
+        "--local-only", action="store_true", help="Accepted for old configurations; it has no effect"
+    )
     parser.add_argument("--no-watch", action="store_true")
     parser.add_argument("--watch-debounce", type=int, default=500)
     parser.add_argument("--version", action="version", version="attocode-code-intel 0.1.0")
@@ -120,6 +125,13 @@ def main(argv=None):
         os.environ["ATTOCODE_INTEL_WATCH_DEBOUNCE"] = str(opts.watch_debounce)
         _serve_http(opts.project, host=opts.host, port=opts.port, debug=False)
     elif opts.transport == "sse":
+        from attocode_intel.config import is_loopback
+
+        if not is_loopback(opts.host):
+            # SSE has no sign-in, so any computer that reaches the port could read the index.
+            raise SystemExit("Error: SSE serves only this computer. For other hosts, use "
+                             "--transport http with ATTOCODE_API_KEY.")
+        # ponytail: SSE runs the older server, which lists all tools. Use stdio or http for profiles.
         from attocode_intel.server import mcp
 
         mcp.settings.host, mcp.settings.port = opts.host, opts.port

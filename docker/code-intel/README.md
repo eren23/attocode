@@ -4,10 +4,11 @@ See the [product operations guide](../../docs/intelligence.md#self-host-the-team
 
 The Docker image installs the standalone `attocode-code-intel` package and the dashboard. It does not install the legacy agent. Use `docker-compose.service.yml` for PostgreSQL, Redis, API, and workers; set a persistent `SECRET_KEY` before startup. `docker-compose.dev.yml` supplies only development databases. The local `docker-compose.yml` serves a mounted working tree.
 
-For the local compose file, create the mountpoints before mounting source read-only:
+For the local compose file, create the mountpoints before mounting source read-only. The compose file opens the port to other computers, so it needs an API key. Clients send the key as a bearer token.
 
 ```sh
 export PROJECT_DIR=/absolute/path/to/repo
+export ATTOCODE_API_KEY="$(openssl rand -hex 32)"
 mkdir -p "$PROJECT_DIR/.attocode/cache" "$PROJECT_DIR/.attocode/index"
 docker compose -f docker/code-intel/docker-compose.yml up --build -d
 ```

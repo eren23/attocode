@@ -66,7 +66,7 @@ Local file watchers and per-operation filesystem checks pick up edits, new files
 
 Bootstrap excludes knowledge whose source anchors have changed; explicit `recall` still returns those entries with their stale flag.
 
-New installations use the compact **daily** tool profile. `init --profile full` exposes the complete local catalog, including rules and security analysis, history, architecture, retrieval pins, snapshots, overlays, and cache maintenance. Direct server invocations default to `full` for compatibility. `capabilities` reports the actual catalog and optional enhancements. The local daily profile leaves out the repository learning tools and the remote-only `revision` argument. Use `--profile full` for learnings in a local session.
+New installations use the compact **daily** tool profile. `init --profile full` exposes the complete local catalog, including rules and security analysis, history, architecture, retrieval pins, snapshots, overlays, and cache maintenance. Direct server invocations also use `daily` unless `--profile full` is given. `capabilities` reports the actual catalog and optional enhancements. The local daily profile leaves out the repository learning tools and the remote-only `revision` argument. Use `--profile full` for learnings in a local session.
 
 The local daily tool list also leaves out `hydration_status` and `cross_repo_search`, and `notify_file_changed` while the server watches the project. These tools stay callable.
 
