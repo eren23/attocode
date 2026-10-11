@@ -9,6 +9,13 @@ and Recall@5 was 0.545 against 0.477 (Δ +0.068, range -0.020 to +0.158).
 That is also below the rule. By the rule, the next work is better test
 ranking, not agent runs.
 
+**Update after the ranking change (#164): the holdout check also does not
+meet the rule.** On the 56 holdout tasks, `suggest_tests` had Recall@5
+0.640 and the name grep 0.586 (Δ +0.054, range -0.047 to +0.167). On the
+dev tasks, which we used to make the change, Δ was +0.213. Thus no agent
+runs. The section [After the ranking change](#after-the-ranking-change)
+gives the details.
+
 R4 follows the R3 rule: after the localization studies, test a review
 task. The [R3 results](2026-10-10-agent-r3.md) give the background.
 
@@ -123,12 +130,57 @@ for the ranking work, not results of the rule.
 - We now know the dev tasks. A ranking change that we tune on them needs
   a check on tasks that we did not look at.
 
+## After the ranking change
+
+The user approved these steps on 2026-10-11 (`studies/r4-addendum.md` in
+the evals store). Because we used the dev results to make the change, the
+holdout tasks decide. Each holdout task ran once, with the final version.
+
+- **Change.** PR #164 at commit `381ece4`. `suggest_tests` finds tests by
+  name in the whole repository, and any folder that holds a top-level
+  Python package is an import root.
+- **Setup.** The same script, arms and metric, on a new RunPod CPU pod
+  (128 CPUs). Dev and holdout ran at the same time, with 12 workers each.
+  The pod ran for about 0.5 hours and cost about USD 0.45.
+- **Two record-only fields.** `product_detail` holds the priority of each
+  candidate. `name_v011` is the name grep with the test detector of 0.1.1.
+  The `name` arm uses the detector of the installed version, and #164 adds
+  .NET, C# and C/C++ test names to it.
+
+| Set | Tasks | Failed | `product` R@5 | `name` R@5 | Δ | Range of Δ (95%) | `product` Hit@5 | `name` Hit@5 | Higher / lower | Rule met |
+|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---|
+| Dev (tuning) | 123 | 1 | 0.694 | 0.481 | +0.213 | +0.139 to +0.286 | 0.740 | 0.520 | 33 / 1 | Yes |
+| Holdout (decides) | 56 | 1 | 0.640 | 0.586 | +0.054 | -0.047 to +0.167 | 0.696 | 0.625 | 6 / 3 | No |
+
+With the 0.1.1 detector, the name grep had 0.477 on dev and 0.580 on the
+holdout. The Δ changes by less than 0.01. Each set has one task whose
+patch does not apply at the base commit (dubbo-3317 and dubbo-4678).
+
+**Reading.** On dev, `suggest_tests` improved on 21 tasks against the fix
+view, and no task got worse. All 7 matplotlib tasks had no test before.
+After the change, their Recall@5 is 0.50. On the holdout, the gain is
+small, and the range includes 0. By the rule, this is no evidence that
+the product names the tests for a change better than a file-name grep.
+The name grep is strong on the holdout. Both arms had a Hit@5 on 33 of
+55 tasks, because the developers changed the test that has the name of
+the source file.
+
+**Holdout misses.** These are leads only. The holdout tasks cannot check
+a fix for them.
+
+- `suggest_tests` found no test on 8 tasks.
+- In coreutils, the changed file is `src/uu/cp/src/cp.rs`. The name
+  finder skips names with fewer than 3 letters, so it did not find
+  `tests/by-util/test_cp.rs`.
+- In grommet and decap-cms, the gold set holds a Jest snapshot file
+  (`.snap`). `suggest_tests` gives only test source files, and the name
+  grep also gives data files.
+
 ## Next
 
-1. Release the race fix (#161) as code intel 0.1.2.
-2. Improve test ranking. Close the name-rule gaps above: a `tests/`
-   folder next to the source, Java packages and modules, C# and C/C++.
-   When the graph gives no test, use file-name matches as a fallback.
-3. Measure the change on the dev tasks, then once on the 56 holdout
-   tasks. The holdout tasks have not run yet, so they stay a clean check.
-   Stage 1 runs only if the change meets the rule.
+1. Merge #164 as a product change. Its claims are the numbers above, not
+   a measured gain on new tasks.
+2. No R4 agent runs. This also gives no new evidence for the cut of the
+   daily tool list.
+3. Any new test-ranking study needs new tasks, because we know the results
+   of all 179 tasks now.
