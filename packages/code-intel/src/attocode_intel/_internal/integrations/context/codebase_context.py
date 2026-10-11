@@ -366,22 +366,26 @@ def _build_file_index(
         normalized = f.relative_path.replace(os.sep, "/")
         file_index[normalized] = f.relative_path
 
-    # Detect source prefixes and add stripped alternate keys. A package below
-    # any src/ folder adds that folder too, as in packages/<name>/src/ of a monorepo.
+    # Detect source prefixes and add stripped alternate keys. The folder that holds a
+    # top-level package is an import root too: src/, packages/<name>/src/ of a monorepo,
+    # lib/ of matplotlib or python/ of ray.
     source_prefixes = set(_detect_source_prefixes(root_dir))
     for normalized in file_index:
-        path = "/" + normalized
-        if normalized.endswith("/__init__.py") and "/src/" in path:
-            source_prefixes.add(path[1:path.index("/src/") + 5])
+        package, _, name = normalized.rpartition("/")
+        parent = package.rpartition("/")[0]
+        if name == "__init__.py" and parent and parent + "/__init__.py" not in file_index:
+            source_prefixes.add(parent + "/")
     if source_prefixes:
         extra: dict[str, str] = {}
         for normalized, rel_path in file_index.items():
-            for prefix in sorted(source_prefixes):
-                if normalized.startswith(prefix):
-                    stripped = normalized[len(prefix):]
-                    # Don't override direct matches
-                    if stripped not in file_index:
-                        extra[stripped] = rel_path
+            parts = normalized.split("/")
+            # Shallow roots first, so a deeper root wins, as in sorted prefix order.
+            for depth in range(1, len(parts)):
+                prefix = "/".join(parts[:depth]) + "/"
+                stripped = normalized[len(prefix):]
+                # Don't override direct matches
+                if prefix in source_prefixes and stripped not in file_index:
+                    extra[stripped] = rel_path
         file_index.update(extra)
 
     file_index.configure_javascript(root_dir)

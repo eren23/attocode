@@ -123,6 +123,30 @@ def _find_test_files_by_convention(file_path: str, project_dir: str) -> list[str
     return existing
 
 
+def _test_paths(project_dir: str) -> list[str]:
+    """Tracked test source files. The index can leave out tests of a large repository."""
+    from pathlib import PurePosixPath
+
+    from attocode_intel._internal.integrations.context.codebase_context import EXTENSION_LANGUAGES
+    from attocode_intel.test_ranking import is_test_path
+
+    try:
+        listed = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=project_dir, capture_output=True, text=True, timeout=30, check=True,
+        ).stdout.split("\0")
+    except (OSError, subprocess.SubprocessError):
+        listed = []
+    if not any(listed):  # Not a git repository, or nothing tracked yet.
+        try:
+            listed = [f.relative_path for f in _get_context_mgr()._files]
+        except Exception:
+            return []
+    data = {"data", "yaml", "json", "toml", "markdown", "html", "css", "scss"}
+    return [path for path in listed if path
+            and EXTENSION_LANGUAGES.get(PurePosixPath(path).suffix, "data") not in data and is_test_path(path)]
+
+
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
@@ -429,6 +453,13 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
                 reason=f"Direct test file for `{f}`",
             )
 
+    # Test files named for a changed file, anywhere in the repository.
+    from attocode_intel.test_ranking import folder_overlap, name_matched_tests
+    test_paths = _test_paths(project_dir)
+    for f in files:
+        for test_file, priority, reason in name_matched_tests(f, test_paths):
+            _add_suggestion(test_file, priority, reason)
+
     # --- Priority 2: Import-based discovery ---
     try:
         ctx = _get_context_mgr()
@@ -558,10 +589,14 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
     except (AttributeError, OSError) as exc:
         logger.debug("Test reference ranking incomplete: %s", exc)
 
-    # Sort by evidence, then put repository tests before documentation examples.
+    # Sort by evidence, then put repository tests before documentation examples, then nearest first.
+    def nearness(path):
+        return max(folder_overlap(path, changed) for changed in files) if files else 0
+
     sorted_suggestions = sorted(
         suggestions.items(),
-        key=lambda kv: (kv[1]["priority"], kv[0] not in representatives, -symbol_hits.get(kv[0], 0), kv[0].startswith("docs"), kv[0]),
+        key=lambda kv: (kv[1]["priority"], kv[0] not in representatives, -symbol_hits.get(kv[0], 0),
+                        kv[0].startswith("docs"), -nearness(kv[0]), kv[0]),
     )
 
     return {"files": files, "candidates": [
@@ -598,6 +633,7 @@ def format_test_suggestions(data: dict) -> str:
         1: "DIRECT",
         2: "IMPORTS",
         3: "INDIRECT",
+        4: "NAME",
     }
 
     lines = [

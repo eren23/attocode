@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 SCHEMA_VERSION = "6"
 # Bump the suffix when a change alters the saved graph edges, for example import resolution.
 # Stores keep their tables, and the next start rebuilds the index once.
-SNAPSHOT_KEY = "structural_snapshot_v2"
+SNAPSHOT_KEY = "structural_snapshot_v3"
 SQLITE_BUSY_TIMEOUT_MS = 30_000
 INDEX_INIT_LOCK_TIMEOUT_SECONDS = 30
 

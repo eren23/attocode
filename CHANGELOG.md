@@ -13,7 +13,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fix below.
 - `attocode-code-intel` 0.1.2 also includes the `suggest_tests` fix below.
 
+### Changed — Code-intel test suggestions
+
+- `suggest_tests` now finds test files by name in the whole repository, not
+  only at fixed paths. A test whose name without its test affix is the file
+  name (`test_figure.py`, `FigureTest.java`, `FigureTests.cs` for `figure`)
+  ranks with the direct tests when it shares a folder name with the file.
+  Test files that only contain the file name rank last. Before, a `tests/`
+  folder next to the source, a Java test in another package or module, and
+  C# tests were not found.
+- `suggest_tests` lists test files with `git ls-files`. Thus it also finds
+  tests that the index leaves out of a large repository.
+- Test detection now knows .NET test projects (`App.Tests/`), C# test files
+  (`ParserTests.cs`) and C/C++ test files (`parser_test.cc`).
+- Candidates of the same priority now rank by the folder names that they
+  share with the changed files, then by path.
+
 ### Fixed — Code-intel navigation
+
+- A folder that holds a top-level Python package is now an import root,
+  for example `lib/` in matplotlib or `python/` in ray. Before, only `src/`
+  folders were import roots, and imports in other layouts stayed
+  unresolved. The saved index snapshot has a new key, so the first start
+  after an upgrade rebuilds the index once.
 
 - Python imports now resolve in packages below any `src/` folder, for example
   `packages/<name>/src/` in a monorepo. Before, these imports stayed
