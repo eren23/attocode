@@ -22,6 +22,12 @@ The repository's GitHub environment `pypi-intelligence` accepts only `intel-v*` 
 
 PyPI creates the project on the first successful upload. A pending publisher does not reserve its name. This flow needs no API token in repository secrets. See [PyPI's pending publisher documentation](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
 
+The 0.1.0 release created the project on 2026-10-11. The pending publisher is now an ordinary trusted publisher of the project, so later releases skip this step.
+
+## The agent package depends on this package
+
+`attocode` depends on `attocode-code-intel>=0.1.0,<0.2`. In the repository, the uv workspace installs the local source. A published `attocode` wheel gets the package from PyPI. Thus, when an `attocode` change needs new code in `attocode_intel`, release `attocode-code-intel` first. A 0.2 release of this package also needs a new upper bound in the root `pyproject.toml`.
+
 ## Release
 
 1. Update the version in `packages/code-intel/pyproject.toml` and in `src/attocode_intel/__init__.py`. A test fails when the two differ. The CLI, the MCP server and the HTTP API read `__version__`. Refresh `uv.lock`, and merge a reviewed change with passing Intelligence checks.
