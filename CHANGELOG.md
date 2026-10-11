@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed — Code-intel release
 
-- `attocode-code-intel` 0.1.1 includes the two code-intel fixes below.
+- `attocode-code-intel` 0.1.1 includes the `src/` import fix and the `init`
+  fix below.
+- `attocode-code-intel` 0.1.2 also includes the `suggest_tests` fix below.
 
 ### Fixed — Code-intel navigation
 
