@@ -196,3 +196,15 @@ def test_index_lookups_wait_for_a_background_writer():
             assert reader.is_alive()
         reader.join(5)
         assert not reader.is_alive()
+
+
+def test_http_indexer_resolves_relative_imports_and_import_roots():
+    from attocode_intel.indexing.full_indexer import _resolve_import_path
+
+    paths = {"lib/pkg/__init__.py", "lib/pkg/utils.py", "lib/pkg/sub/__init__.py", "lib/pkg/sub/f.py", "utils.py"}
+    resolve = lambda name: _resolve_import_path(name, "lib/pkg/sub/f.py", paths, "python")  # noqa: E731
+    assert resolve("..utils") == "lib/pkg/utils.py"
+    assert resolve("pkg.utils") == "lib/pkg/utils.py"  # lib/ holds the top-level package.
+    assert resolve(".") == "lib/pkg/sub/__init__.py"
+    # Before, the dots were dropped and .utils linked the unrelated top-level utils.py.
+    assert resolve(".utils") is None

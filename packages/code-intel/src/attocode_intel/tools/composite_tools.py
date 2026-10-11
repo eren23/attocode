@@ -589,14 +589,15 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
     except (AttributeError, OSError) as exc:
         logger.debug("Test reference ranking incomplete: %s", exc)
 
-    # Sort by evidence, then put repository tests before documentation examples, then nearest first.
+    # Sort by evidence, then put repository tests before documentation examples, then the
+    # shortest reverse-import path, then nearest first.
     def nearness(path):
         return max(folder_overlap(path, changed) for changed in files) if files else 0
 
     sorted_suggestions = sorted(
         suggestions.items(),
         key=lambda kv: (kv[1]["priority"], kv[0] not in representatives, -symbol_hits.get(kv[0], 0),
-                        kv[0].startswith("docs"), -nearness(kv[0]), kv[0]),
+                        kv[0].startswith("docs"), distances.get(kv[0], float("inf")), -nearness(kv[0]), kv[0]),
     )
 
     return {"files": files, "candidates": [

@@ -328,6 +328,9 @@ def test_name_matched_tests_prefer_the_nearest_test_for_the_file():
     # A fixture in a test folder has no test affix, and a test with no shared folder is far.
     assert [row[1] for row in name_matched_tests("lib/pkg/figure.py", ["lib/pkg/tests/data/figure.py"])] == [4]
     assert [row[1] for row in name_matched_tests("kernel/core.c", ["tools/selftests/test_core.c"])] == [3]
+    # A two-letter name matches its test exactly, but a name that only contains it is noise.
+    assert [row[0] for row in name_matched_tests("src/uu/cp/src/cp.rs", ["tests/test_cp.rs", "tests/test_scp.rs"])] == [
+        "tests/test_cp.rs"]
 
 
 async def test_lib_layout_links_tests_by_name_and_by_import(tmp_path, monkeypatch):
@@ -351,5 +354,25 @@ async def test_lib_layout_links_tests_by_name_and_by_import(tmp_path, monkeypatc
         paths = [row["file_path"] for row in decode(result)["candidates"]]
         assert paths[:2] == ["lib/pkg/tests/test_figure.py", "lib/pkg/tests/test_layout.py"]
         assert "lib/pkg/tests/test_text.py" not in paths
+    finally:
+        await gateway.close()
+
+
+async def test_tests_on_shorter_import_paths_rank_first(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "pkg/__init__.py").write_text("")
+    (tmp_path / "pkg/a.py").write_text("def base(): return 1\n")
+    (tmp_path / "pkg/b.py").write_text("from pkg.a import base\ndef mid(): return base()\n")
+    (tmp_path / "pkg/c.py").write_text("from pkg.b import mid\ndef top(): return mid()\n")
+    # Path order puts the farther test first; two import steps beat three.
+    (tmp_path / "tests/test_aa_far.py").write_text("from pkg.c import top\ndef test_top(): assert top()\n")
+    (tmp_path / "tests/test_zz_near.py").write_text("from pkg.b import mid\ndef test_mid(): assert mid()\n")
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        result = await gateway.execute_mcp("suggest_tests", {"files": ["pkg/a.py"]})
+        paths = [row["file_path"] for row in decode(result)["candidates"]]
+        assert paths == ["tests/test_zz_near.py", "tests/test_aa_far.py"]
     finally:
         await gateway.close()

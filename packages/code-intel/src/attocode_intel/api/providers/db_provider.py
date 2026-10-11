@@ -340,6 +340,9 @@ class DbAnalysisProvider:
 
         from sqlalchemy import select
 
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            python_module_index,
+        )
         from attocode_intel.db.models import FileContent
         from attocode_intel.indexing.full_indexer import _resolve_import_path
         from attocode_intel.indexing.parser import detect_language, extract_imports
@@ -347,6 +350,7 @@ class DbAnalysisProvider:
         logger = logging.getLogger(__name__)
         manifest = branch_ctx.manifest  # path -> sha
         known_paths = set(manifest.keys())
+        python_index = python_module_index(known_paths)
         sha_to_path = {sha: path for path, sha in manifest.items()}
         content_shas = list(set(manifest.values()))
 
@@ -378,7 +382,8 @@ class DbAnalysisProvider:
                 raw_content = content if isinstance(content, bytes) else content.encode("utf-8")
                 imports = extract_imports(raw_content, source_path, language)
                 for imp in imports:
-                    target = _resolve_import_path(imp, source_path, known_paths, language)
+                    target = _resolve_import_path(imp, source_path, known_paths, language,
+                                                  python_index=python_index)
                     if target and target != source_path:
                         edges.append({
                             "source": source_path,
