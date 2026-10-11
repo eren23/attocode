@@ -438,15 +438,17 @@ class CrossRefIndex:
 
     def get_definitions(self, symbol_name: str, *, include_shadowed: bool = False) -> list[SymbolLocation]:
         """Look up definitions for a symbol (exact or suffix match)."""
-        # Try exact qualified name first
-        if symbol_name in self.definitions and not include_shadowed:
-            return self.definitions[symbol_name]
-        # Try suffix match (e.g. "discover_files" matches "CodebaseContextManager.discover_files")
-        results: list[SymbolLocation] = []
-        for qname, locs in self.definitions.items():
-            if qname == symbol_name or qname.endswith(f".{symbol_name}"):
-                results.extend(locs)
-        return results
+        # The lock keeps a background index writer from changing the dict during the scan.
+        with self._lock:
+            # Try exact qualified name first
+            if symbol_name in self.definitions and not include_shadowed:
+                return self.definitions[symbol_name]
+            # Try suffix match (e.g. "discover_files" matches "CodebaseContextManager.discover_files")
+            results: list[SymbolLocation] = []
+            for qname, locs in self.definitions.items():
+                if qname == symbol_name or qname.endswith(f".{symbol_name}"):
+                    results.extend(locs)
+            return results
 
     def search_definitions(
         self,
@@ -455,7 +457,18 @@ class CrossRefIndex:
         limit: int = 50,
         kind_filter: str = "",
     ) -> list[tuple[SymbolLocation, float]]:
-        """Multi-strategy symbol search returning (location, score) pairs.
+        """Multi-strategy symbol search returning (location, score) pairs."""
+        with self._lock:
+            return self._search_definitions_locked(symbol_name, limit=limit, kind_filter=kind_filter)
+
+    def _search_definitions_locked(
+        self,
+        symbol_name: str,
+        *,
+        limit: int,
+        kind_filter: str,
+    ) -> list[tuple[SymbolLocation, float]]:
+        """Search the definitions. The caller holds the lock.
 
         Search strategies (in priority order):
         1. Exact qualified name match (score 1.0)
@@ -536,9 +549,10 @@ class CrossRefIndex:
         # Include exact and qualified candidates; an exact key must not hide others.
         # Suffix match (e.g. "clear" matches refs keyed as "MCPMetaTools.clear")
         results: list[SymbolRef] = []
-        for ref_name, refs in self.references.items():
-            if ref_name == symbol_name or ref_name.endswith(f".{symbol_name}"):
-                results.extend(refs)
+        with self._lock:
+            for ref_name, refs in self.references.items():
+                if ref_name == symbol_name or ref_name.endswith(f".{symbol_name}"):
+                    results.extend(refs)
         return results
 
     def get_dependents(self, file_path: str) -> set[str]:

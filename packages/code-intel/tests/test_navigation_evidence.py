@@ -1,8 +1,15 @@
 """Navigation regressions drawn from CommonJS, TSX and Rust workspace failures."""
 
+import threading
+
 import pytest
 from attocode_intel._internal.integrations.context.codebase_ast import parse_file
 from attocode_intel._internal.integrations.context.codebase_context import _resolve_rust_import
+from attocode_intel._internal.integrations.context.cross_references import (
+    CrossRefIndex,
+    SymbolLocation,
+    SymbolRef,
+)
 from attocode_intel._internal.integrations.context.syntax_evidence import symbol_position
 from attocode_intel.gateway import OperationGateway
 
@@ -172,3 +179,20 @@ async def test_invalid_tsconfig_options_do_not_break_relative_navigation(tmp_pat
         assert deps["data"]["imported_by"] == ["caller.ts"]
     finally:
         await gateway.close()
+
+
+def test_index_lookups_wait_for_a_background_writer():
+    """Hydration adds to the index while a query reads it; a scan must not see a change."""
+    index = CrossRefIndex()
+    index.add_definition(SymbolLocation("parse", "pkg.parse", "function", "pkg.py", 1, 2))
+    index.add_reference(SymbolRef("pkg.parse", "call", "tests/test_pkg.py", 3))
+    lookups = (lambda: index.get_references("parse"), lambda: index.get_definitions("parse"),
+               lambda: index.search_definitions("parse"))
+    for lookup in lookups:
+        reader = threading.Thread(target=lookup, daemon=True)
+        with index._lock:  # A writer holds the lock.
+            reader.start()
+            reader.join(0.2)
+            assert reader.is_alive()
+        reader.join(5)
+        assert not reader.is_alive()
