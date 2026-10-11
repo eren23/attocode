@@ -644,7 +644,9 @@ class OperationGateway:
 
 
 def create_mcp_server(gateway: OperationGateway) -> Server:
-    server = Server("attocode-code-intel", version="0.1.0", instructions=gateway.instructions)
+    from attocode_intel import __version__
+
+    server = Server("attocode-code-intel", version=__version__, instructions=gateway.instructions)
 
     @server.list_tools()
     async def list_tools():

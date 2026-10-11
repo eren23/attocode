@@ -7,10 +7,21 @@ build-backend = "hatchling.build"
 [project]
 name = "attocode-code-intel"
 version = "0.1.0"
-description = "Codebase intelligence for coding agents and teams"
+description = "Local code search and navigation for coding agents and people"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+keywords = ["mcp", "code-search", "code-navigation", "coding-agents", "tree-sitter"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
 dependencies = [
     "rich>=13",
     "click>=8.1",

@@ -110,7 +110,9 @@ def main(argv=None):
     parser.add_argument("--local-only", action="store_true")
     parser.add_argument("--no-watch", action="store_true")
     parser.add_argument("--watch-debounce", type=int, default=500)
-    parser.add_argument("--version", action="version", version="attocode-code-intel 0.1.0")
+    from attocode_intel import __version__
+
+    parser.add_argument("--version", action="version", version=f"attocode-code-intel {__version__}")
     opts = parser.parse_args(args)
     if opts.transport in {"http", "streamable-http"}:
         from attocode_intel.cli import _serve_http

@@ -6,6 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
+from attocode_intel import __version__
 from attocode_intel.config import CodeIntelConfig
 
 if TYPE_CHECKING:
@@ -107,7 +108,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
             "v1 endpoints return text (MCP-compatible), "
             "v2 endpoints return structured JSON (UI-ready)."
         ),
-        version="0.1.0",
+        version=__version__,
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=_lifespan,

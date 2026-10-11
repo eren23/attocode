@@ -3,6 +3,7 @@ on:
   pull_request:
     # The engine hash of the matrix covers all of packages/code-intel/src, so any change there can move the ranking.
     paths: ['packages/code-intel/src/**', 'eval/matrix/**', 'uv.lock', '.github/workflows/ranking-gate.yml']
+  workflow_call:
   workflow_dispatch:
     inputs:
       write_baseline:

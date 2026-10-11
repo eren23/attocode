@@ -7,20 +7,12 @@ permissions:
 jobs:
   checks:
     uses: ./.github/workflows/intelligence.yml
-  performance:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Require complete performance evidence for this engine
-        env:
-          INTELLIGENCE_EVIDENCE_URL: ${{ vars.INTELLIGENCE_EVIDENCE_URL }}
-          INTELLIGENCE_EVIDENCE_SHA256: ${{ vars.INTELLIGENCE_EVIDENCE_SHA256 }}
-        run: python packages/code-intel/evals/release_gate.py --download --project .
+  # The beta release checks quality and install health. The agent speed evidence of
+  # release_gate.py is needed only for a speed claim (docs/intelligence-release.md).
+  ranking:
+    uses: ./.github/workflows/ranking-gate.yml
   build:
-    needs: [checks, performance]
+    needs: [checks, ranking]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
