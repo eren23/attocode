@@ -52,6 +52,7 @@ nav:
   - Home: index.md
   - Intelligence Product: intelligence.md
   - Intelligence Tools: intelligence-tools.md
+  - Intelligence Search: intelligence-search.md
   - Intelligence Validation: intelligence-validation.md
   - Intelligence Releases: intelligence-release.md
   - Legacy Agent: legacy-agent.md

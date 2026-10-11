@@ -145,6 +145,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does not build the index at process start, so a session that never calls
   the server does no indexing.
 
+### Changed — Code-intel documentation
+
+- The package README is for a first-time user. It has a 3-step quickstart,
+  the 16 tools of the daily profile, the commands for people, what we
+  measured (search quality, and no gain in the agent studies), and limits
+  and troubleshooting. Its links are absolute, so they also work on PyPI.
+- The details of search ranking, the experimental rerankers, the response
+  format and the index moved without change to
+  `docs/intelligence-search.md`.
+
 ### Fixed — Agent
 
 - The agent no longer uses the home directory as the project root because
