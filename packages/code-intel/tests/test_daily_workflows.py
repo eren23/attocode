@@ -213,8 +213,9 @@ def test_local_and_remote_config_coexist_and_restore_existing(tmp_path, client, 
 
 def test_claude_install_writes_no_claude_md_copy_and_removes_an_old_one(tmp_path):
     # Claude Code shows the server instructions, so a copy in CLAUDE.md is a duplicate.
-    configure_client("claude", str(tmp_path))
+    assert configure_client("claude", str(tmp_path))["guidance"] is None
     assert not (tmp_path / "CLAUDE.md").exists()
+    assert configure_client("codex", str(tmp_path))["guidance"] == str(tmp_path / "AGENTS.md")
     guidance = tmp_path / "CLAUDE.md"
     guidance.write_text("# Mine\n\n<!-- attocode-code-intel:start -->\nold\n<!-- attocode-code-intel:end -->\n")
     configure_client("claude", str(tmp_path))

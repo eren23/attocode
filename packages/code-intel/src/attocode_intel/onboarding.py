@@ -165,13 +165,15 @@ def configure_client(
     # in every request. Claude gets no managed block, and an old block is removed.
     drop = client == "claude" or (remove and not any(name in servers for name in (NAME, REMOTE_NAME)))
     instruction = _instruction_text(guidance, client, remove=drop)
+    # Report the guidance file only when it holds the managed block.
+    guidance_file = str(guidance) if START in instruction else None
     # Prepare everything before writing either file; previews contain no credential values.
     if dry_run:
         return {
             "config": str(config),
             "entry": entry_name,
             "configuration": servers.get(entry_name),
-            "guidance": str(guidance),
+            "guidance": guidance_file,
             "instructions": instruction,
         }
     atomic_write(config, output)
@@ -182,7 +184,7 @@ def configure_client(
     atomic_write(state_path, json.dumps(state, indent=2) + "\n")
     if old_state and old_state.exists():
         old_state.unlink()
-    return {"client": client, "config": str(config), "guidance": str(guidance), "removed": remove}
+    return {"client": client, "config": str(config), "guidance": guidance_file, "removed": remove}
 
 
 async def diagnose(client, project=".", *, global_scope=False, remote=False):
