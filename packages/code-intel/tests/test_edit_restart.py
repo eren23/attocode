@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from attocode_intel._internal.integrations.context.ast_service import ASTService
-from attocode_intel._internal.integrations.context.index_store import IndexStore
+from attocode_intel._internal.integrations.context.index_store import SNAPSHOT_KEY, IndexStore
 from attocode_intel.freshness import FreshnessTracker
 
 
@@ -65,7 +65,7 @@ def test_edit_restart_matches_clean_index(tmp_path, online, kind):
     if online:
         assert first.repair_changed_files()
         assert first._last_snapshot_repair["reused_reference_files"] > 0
-        assert first._store.get_meta("structural_snapshot_v1")
+        assert first._store.get_meta(SNAPSHOT_KEY)
         first._store.close()
 
     reopened = ASTService(str(tmp_path))
@@ -100,7 +100,7 @@ def test_interrupted_repair_cannot_restore_partial_store(tmp_path):
         with (patch.object(IndexStore, "save_files_batch", side_effect=OSError("interrupted write")),
               pytest.raises(OSError, match="interrupted write")):
             first.repair_changed_files()
-        assert not first._store.get_meta("structural_snapshot_v1")
+        assert not first._store.get_meta(SNAPSHOT_KEY)
     finally:
         first._store.close()
     reopened = ASTService(str(tmp_path))
@@ -109,7 +109,7 @@ def test_interrupted_repair_cannot_restore_partial_store(tmp_path):
             state = reopened.initialize_skeleton()
         assert state.phase == "ready"
         assert extract.call_count == state.total_files
-        assert reopened._store.get_meta("structural_snapshot_v1")
+        assert reopened._store.get_meta(SNAPSHOT_KEY)
     finally:
         reopened._store.close()
 
@@ -132,7 +132,7 @@ def test_failed_live_repair_retries_filesystem_changes(tmp_path):
         assert tracker.manifest != before
         assert ast.find_symbol("renamed")
         assert not ast.find_symbol("helper")
-        assert ast._store.get_meta("structural_snapshot_v1")
+        assert ast._store.get_meta(SNAPSHOT_KEY)
     finally:
         ast._store.close()
 

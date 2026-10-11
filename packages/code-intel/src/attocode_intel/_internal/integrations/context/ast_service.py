@@ -42,7 +42,11 @@ from attocode_intel._internal.integrations.context.hydration import (
     classify_tier,
     skeleton_budget,
 )
-from attocode_intel._internal.integrations.context.index_store import IndexStore, StoredFile
+from attocode_intel._internal.integrations.context.index_store import (
+    SNAPSHOT_KEY,
+    IndexStore,
+    StoredFile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +214,7 @@ class ASTService:
         loads cached symbols/refs from SQLite and only re-parses files whose
         mtime has changed (incremental mode).  Otherwise does a full scan.
         """
-        self._store.set_meta("structural_snapshot_v1", "")
+        self._store.set_meta(SNAPSHOT_KEY, "")
         self._snapshot_start = None
         from attocode_intel.telemetry import measure
         with measure("discovery"):
@@ -404,7 +408,7 @@ class ASTService:
             self._initialized = True
             return state
         # A partial or interrupted rebuild must never be restored as complete.
-        self._store.set_meta("structural_snapshot_v1", "")
+        self._store.set_meta(SNAPSHOT_KEY, "")
         self._store.clear_all()
 
         to_parse = parseable[:budget]
@@ -473,7 +477,7 @@ class ASTService:
         expensive reference extraction and persistence are reused. Older caches
         without the completion record are rebuilt once.
         """
-        raw = self._store.get_meta("structural_snapshot_v1")
+        raw = self._store.get_meta(SNAPSHOT_KEY)
         if not raw:
             return False
         try:
@@ -533,7 +537,7 @@ class ASTService:
             (source, target) for source, targets in self._index.file_dependencies.items()
             for target in targets
         ])
-        self._store.set_meta("structural_snapshot_v1", json.dumps({
+        self._store.set_meta(SNAPSHOT_KEY, json.dumps({
             "identity": self._snapshot_start,
             "discovered": sorted(fi.relative_path for fi in self._context_mgr._files),
             "parsed": sorted(self._ast_cache),
@@ -727,7 +731,7 @@ class ASTService:
         on large repositories.  Files are parsed in batches of
         *batch_size* concurrently.
         """
-        self._store.set_meta("structural_snapshot_v1", "")
+        self._store.set_meta(SNAPSHOT_KEY, "")
         self._snapshot_start = None
         from attocode_intel.telemetry import measure
         with measure("discovery"):
@@ -793,7 +797,7 @@ class ASTService:
 
         rel = self._to_rel(path)
         abs_path = os.path.join(self._root_dir, rel)
-        self._store.set_meta("structural_snapshot_v1", "")
+        self._store.set_meta(SNAPSHOT_KEY, "")
         self._snapshot_start = None
 
         # Handle deletion

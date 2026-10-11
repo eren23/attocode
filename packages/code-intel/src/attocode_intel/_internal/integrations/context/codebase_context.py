@@ -295,9 +295,8 @@ def _detect_source_prefixes(root_dir: str) -> list[str]:
                 .get("packages", [])
             )
             for pkg in hatch_packages:
-                parts = Path(pkg).parts
-                if len(parts) >= 2:
-                    prefixes.add(parts[0] + "/")
+                if len(Path(pkg).parts) >= 2:
+                    prefixes.add(Path(pkg).parent.as_posix() + "/")
 
             # Setuptools: [tool.setuptools] package-dir = {"" = "src"}
             setup_pkg_dir = (
@@ -367,12 +366,17 @@ def _build_file_index(
         normalized = f.relative_path.replace(os.sep, "/")
         file_index[normalized] = f.relative_path
 
-    # Detect source prefixes and add stripped alternate keys
-    source_prefixes = _detect_source_prefixes(root_dir)
+    # Detect source prefixes and add stripped alternate keys. A package below
+    # any src/ folder adds that folder too, as in packages/<name>/src/ of a monorepo.
+    source_prefixes = set(_detect_source_prefixes(root_dir))
+    for normalized in file_index:
+        path = "/" + normalized
+        if normalized.endswith("/__init__.py") and "/src/" in path:
+            source_prefixes.add(path[1:path.index("/src/") + 5])
     if source_prefixes:
         extra: dict[str, str] = {}
         for normalized, rel_path in file_index.items():
-            for prefix in source_prefixes:
+            for prefix in sorted(source_prefixes):
                 if normalized.startswith(prefix):
                     stripped = normalized[len(prefix):]
                     # Don't override direct matches

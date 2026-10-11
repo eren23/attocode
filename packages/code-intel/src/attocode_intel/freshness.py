@@ -7,6 +7,7 @@ import os
 import threading
 from pathlib import Path
 
+from attocode_intel._internal.integrations.context.index_store import SNAPSHOT_KEY
 from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
 
 
@@ -104,7 +105,7 @@ class FreshnessTracker:
                 ast._context_mgr.discover_files()
             for path in changed:
                 if path not in manifest:
-                    ast._store.set_meta("structural_snapshot_v1", "")
+                    ast._store.set_meta(SNAPSHOT_KEY, "")
                     ast._snapshot_start = None
                     ast._index.remove_file(path)
                     ast._ast_cache.pop(path, None)

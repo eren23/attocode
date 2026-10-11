@@ -283,3 +283,27 @@ async def test_hint_does_not_hide_the_tail_of_a_short_function(tmp_path, monkeyp
         assert data["follow_up"]["next_source"] is None
     finally:
         await gateway.close()
+
+
+async def test_workspace_member_src_layout_links_its_tests(tmp_path, monkeypatch):
+    # A monorepo: the root config names only its own package, and a member package uses src/.
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    (tmp_path / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/app"]\n')
+    (tmp_path / "src/app").mkdir(parents=True)
+    (tmp_path / "src/app/__init__.py").write_text("")
+    member = tmp_path / "packages/lib"
+    (member / "src/mylib").mkdir(parents=True)
+    (member / "src/mylib/__init__.py").write_text("")
+    (member / "src/mylib/core.py").write_text("def target(): return 1\n")
+    (member / "tests").mkdir()
+    (member / "tests/test_core.py").write_text("from mylib.core import target\ndef test_core(): assert target() == 1\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_target_words.py").write_text("def test_target_words(): assert True\n")
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        bundle = decode(await gateway.execute_mcp("inspect_symbol", {
+            "symbol_name": "target", "file_path": "packages/lib/src/mylib/core.py"}))
+        assert bundle["tests"][0]["file_path"] == "packages/lib/tests/test_core.py"
+        assert bundle["tests"][0]["evidence"]["selected_symbol_reference"]
+    finally:
+        await gateway.close()
