@@ -420,3 +420,13 @@ def test_instructions_ask_for_notify_file_changed_only_without_a_watcher():
     from attocode_intel.gateway import OperationGateway
     assert "notify_file_changed" not in OperationGateway("", "daily").instructions
     assert "notify_file_changed" in OperationGateway("", "daily", watch=False).instructions
+
+
+def test_package_and_code_report_the_same_version():
+    import tomllib
+    from pathlib import Path
+
+    from attocode_intel import __version__
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    assert tomllib.loads(pyproject.read_text())["project"]["version"] == __version__

@@ -150,6 +150,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The agent no longer uses the home directory as the project root because
   of `~/.attocode`.
 
+### Changed — Code-intel release
+
+- The standalone release (`intel-v*` tags) no longer needs the agent speed
+  evidence of `release_gate.py`. The agent studies found no speed or
+  accuracy gain, so that gate could not pass. A release now needs the
+  product tests, the navigation gate, the ranking gate and a clean wheel
+  install. `release_gate.py` stays for a release that claims agent speed.
+- The wheel check starts the installed command as a stdio server, lists the
+  daily tools and runs one search. CI runs it on Linux and macOS.
+- The CLI, the MCP server and the HTTP API read the version from
+  `attocode_intel.__version__`. A test checks that it matches
+  `pyproject.toml`. The package metadata has classifiers (beta) and
+  keywords for PyPI.
+
 ### Internal — Code-intel search
 
 - `SearchScoringConfig` now holds the fusion constants of

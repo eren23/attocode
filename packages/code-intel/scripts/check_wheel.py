@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 import json
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -32,6 +33,31 @@ class NoAgent:
 
 
 sys.meta_path.insert(0, NoAgent())
+
+
+async def check_command(root):
+    """The installed command starts a stdio server that lists the daily tools and finds a file."""
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    command = Path(sys.executable).parent / "attocode-code-intel"
+    version = subprocess.run([command, "--version"], capture_output=True, text=True, check=True).stdout
+    assert version.split() == ["attocode-code-intel", importlib.metadata.version("attocode-code-intel")], version
+    params = StdioServerParameters(
+        command=str(command), args=["--project", str(root), "--profile", "daily", "--no-watch"]
+    )
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        names = {tool.name for tool in (await session.list_tools()).tools}
+        assert {"semantic_search", "inspect_symbol", "bootstrap"} <= names and len(names) < 25, names
+        # The first search can answer before the index of a new project is ready.
+        for _ in range(10):
+            result = await session.call_tool("semantic_search", {"query": "independently installed"})
+            if "helper.py" in result.content[0].text:
+                break
+            await asyncio.sleep(2)
+        else:
+            raise AssertionError(f"semantic_search did not find helper.py: {result.content[0].text[:500]}")
 
 
 async def check():
@@ -72,6 +98,7 @@ async def check():
             assert "typed.ts" in dependencies.structuredContent["data"]["imports"]
         finally:
             await gateway.close()
+        await check_command(root)
     from attocode_intel.rules.loader import load_builtin_rules
 
     assert load_builtin_rules(), "Builtin assets missing from wheel"

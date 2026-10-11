@@ -57,6 +57,21 @@ jobs:
           path: |
             dist/
             intelligence-eval.json
+  wheel-macos:
+    # The release builds on Linux. This job installs the same pure-Python wheel on macOS.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Build and verify standalone wheel
+        run: |
+          uv build --package attocode-code-intel
+          uv venv /tmp/intelligence-wheel
+          uv pip install --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
+          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
   dashboard:
     runs-on: ubuntu-latest
     steps:
