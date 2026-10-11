@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Code-intel CLI
+
+- `init --client claude` no longer names a `CLAUDE.md` guidance file that it
+  does not write. The `guidance` field is `null` when the client gets no
+  managed instruction block.
+
 ## [0.2.30] - 2026-10-11
 
 ### Changed — Packaging
