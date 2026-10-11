@@ -21,6 +21,9 @@ from filelock import FileLock
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "6"
+# Bump the suffix when a change alters the saved graph edges, for example import resolution.
+# Stores keep their tables, and the next start rebuilds the index once.
+SNAPSHOT_KEY = "structural_snapshot_v2"
 SQLITE_BUSY_TIMEOUT_MS = 30_000
 INDEX_INIT_LOCK_TIMEOUT_SECONDS = 30
 
@@ -544,12 +547,12 @@ class IndexStore:
         """Drop all data (keeps schema)."""
         conn = self._get_conn()
         with self._lock:
-            conn.executescript("""
+            conn.executescript(f"""
                 DELETE FROM refs;
                 DELETE FROM symbols;
                 DELETE FROM dependencies;
                 DELETE FROM files;
-                DELETE FROM metadata WHERE key = 'structural_snapshot_v1';
+                DELETE FROM metadata WHERE key = '{SNAPSHOT_KEY}';
             """)
             conn.commit()
 

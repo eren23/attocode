@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Code-intel navigation
+
+- Python imports now resolve in packages below any `src/` folder, for example
+  `packages/<name>/src/` in a monorepo. Before, these imports stayed
+  unresolved. References were only same-name candidates, files had no
+  imports, and the tests that import a symbol ranked below tests that only
+  share words with it. In this repository, `configure_client` now has 19
+  linked references, and its own test ranks first.
+- A wheel `packages` entry such as `packages/lib/src/pkg` now adds
+  `packages/lib/src/` as a source folder. Before, it added `packages/`.
+- The saved index snapshot has a new key. The first start after an upgrade
+  rebuilds the index once with the new import resolution.
+
 ### Fixed — Code-intel CLI
 
 - `init --client claude` no longer names a `CLAUDE.md` guidance file that it

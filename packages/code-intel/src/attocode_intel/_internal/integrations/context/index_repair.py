@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .codebase_context import build_dependency_graph
 from .cross_references import CrossRefIndex
+from .index_store import SNAPSHOT_KEY
 
 
 def changed_paths(before: dict, after: dict) -> set[str]:
@@ -54,7 +55,7 @@ def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict
 
     # Invalidate before the first write: a crash cannot bless a partial update.
     store = service._store
-    store.set_meta("structural_snapshot_v1", "")
+    store.set_meta(SNAPSHOT_KEY, "")
     removed = {row.path for row in store.get_all_files()} - asts.keys()
     for path in sorted(removed):
         store.remove_file(path)

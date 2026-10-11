@@ -11,6 +11,7 @@ import pytest
 from attocode_intel._internal.integrations.context import ast_service
 from attocode_intel._internal.integrations.context.ast_service import ASTService
 from attocode_intel._internal.integrations.context.index_store import (
+    SNAPSHOT_KEY,
     SQLITE_BUSY_TIMEOUT_MS,
     IndexSchemaVersionError,
     IndexStore,
@@ -77,7 +78,7 @@ def test_restart_restores_complete_index_beyond_skeleton_budget(tmp_path, monkey
     first._run_hydration()
     expected = first._store.stats()
     assert expected["dependencies"] > 0
-    assert first._store.get_meta("structural_snapshot_v1")
+    assert first._store.get_meta(SNAPSHOT_KEY)
     close(first)
     second = ASTService(str(tmp_path))
     try:
@@ -140,7 +141,7 @@ def test_incomplete_cache_is_not_restored(tmp_path, monkeypatch):
     second = ASTService(str(tmp_path))
     try:
         assert second.initialize_skeleton().phase == "skeleton"
-        assert not second._store.get_meta("structural_snapshot_v1")
+        assert not second._store.get_meta(SNAPSHOT_KEY)
     finally:
         close(second)
 
