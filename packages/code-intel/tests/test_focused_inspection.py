@@ -307,3 +307,49 @@ async def test_workspace_member_src_layout_links_its_tests(tmp_path, monkeypatch
         assert bundle["tests"][0]["evidence"]["selected_symbol_reference"]
     finally:
         await gateway.close()
+
+
+def test_name_matched_tests_prefer_the_nearest_test_for_the_file():
+    from attocode_intel.test_ranking import is_test_path, name_matched_tests
+
+    tests = ["lib/pkg/tests/test_figure.py", "lib/other/tests/test_figure.py", "lib/pkg/tests/test_figure_legend.py"]
+    assert name_matched_tests("lib/pkg/figure.py", tests) == [
+        ("lib/pkg/tests/test_figure.py", 1, "Test file named for `lib/pkg/figure.py`"),
+        ("lib/other/tests/test_figure.py", 3, "Test file named for `lib/pkg/figure.py`"),
+        ("lib/pkg/tests/test_figure_legend.py", 4, "Test file name contains `figure`"),
+    ]
+    # Java tests in another package or module, and .NET test projects.
+    java = "core/src/main/java/org/x/Version.java"
+    assert name_matched_tests(java, ["core-testing/src/test/java/org/x/v/VersionTest.java"])[0][1] == 1
+    assert is_test_path("App.Tests/Parsing/ParserTests.cs")
+    assert name_matched_tests("App/Parsing/Parser.cs", ["App.Tests/Parsing/ParserTests.cs"])[0][1] == 1
+    # A word that ends in "test" is not a test affix.
+    assert name_matched_tests("src/latest.py", ["tests/contest.py"]) == []
+    # A fixture in a test folder has no test affix, and a test with no shared folder is far.
+    assert [row[1] for row in name_matched_tests("lib/pkg/figure.py", ["lib/pkg/tests/data/figure.py"])] == [4]
+    assert [row[1] for row in name_matched_tests("kernel/core.c", ["tools/selftests/test_core.c"])] == [3]
+
+
+async def test_lib_layout_links_tests_by_name_and_by_import(tmp_path, monkeypatch):
+    # matplotlib keeps its package in lib/, and its tests in a tests/ folder next to the source.
+    import subprocess
+
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    (tmp_path / "lib/pkg/tests").mkdir(parents=True)
+    (tmp_path / "lib/pkg/__init__.py").write_text("")
+    (tmp_path / "lib/pkg/figure.py").write_text("class Figure:\n    pass\n")
+    (tmp_path / "lib/pkg/tests/__init__.py").write_text("")
+    (tmp_path / "lib/pkg/tests/test_figure.py").write_text("def test_figure(): assert True\n")
+    (tmp_path / "lib/pkg/tests/test_layout.py").write_text(
+        "from pkg.figure import Figure\ndef test_layout(): assert Figure()\n")
+    (tmp_path / "lib/pkg/tests/test_text.py").write_text("def test_text(): assert True\n")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        result = await gateway.execute_mcp("suggest_tests", {"files": ["lib/pkg/figure.py"]})
+        paths = [row["file_path"] for row in decode(result)["candidates"]]
+        assert paths[:2] == ["lib/pkg/tests/test_figure.py", "lib/pkg/tests/test_layout.py"]
+        assert "lib/pkg/tests/test_text.py" not in paths
+    finally:
+        await gateway.close()
