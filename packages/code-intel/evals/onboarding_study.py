@@ -80,7 +80,7 @@ def configure_setup(manifest, study, root, lane, stage_dir, client):
              "env": {"PYTHONPATH": str(study / "engine"), "ATTOCODE_INTEL_PRECISION": "off",
                      "ATTOCODE_INTEL_TRACE": str(stage_dir / "engine.jsonl")}}
     audit["servers"] = {NAME: entry}
-    guidance = Path(paths["guidance"])
+    guidance = root / GUIDANCE[client]
     # The installer writes no guidance file for Claude: Claude Code shows the server instructions.
     audit["installed_guidance_sha256"] = (hashlib.sha256(guidance.read_bytes()).hexdigest()
                                           if guidance.exists() else None)
