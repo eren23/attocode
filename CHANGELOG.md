@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `packages/lib/src/` as a source folder. Before, it added `packages/`.
 - The saved index snapshot has a new key. The first start after an upgrade
   rebuilds the index once with the new import resolution.
+- `suggest_tests` no longer fails with `RuntimeError: dictionary changed size
+  during iteration` while the index builds in the background. Reference and
+  definition lookups now hold the index lock, as the writers do. In an
+  offline check on 116 tasks, 14 calls on large repositories failed with
+  this error.
 
 ### Fixed — Code-intel CLI
 
