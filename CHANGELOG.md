@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.30] - 2026-10-11
+
+### Changed — Packaging
+
+- `attocode` depends on `attocode-code-intel>=0.1.0,<0.2` from PyPI again.
+  The `attocode` wheel no longer includes a copy of `attocode_intel`, its
+  dependencies or its license. The `attocode-code-intel` command now comes
+  from the dependency. Two installed packages no longer own the same files.
+
 ### Changed — Code-intel search
 
 - Search puts test files after the other files, unless a short query asks

@@ -20,7 +20,7 @@ To check the setup, run `attocode-code-intel doctor`. It starts the configured s
 
 For other clients (VS Code, Zed, Windsurf, Claude Desktop and more), run `attocode-code-intel install <target>`. `attocode-code-intel commands` lists the targets.
 
-Before the first PyPI release, install from a clone of this repository: `uv tool install /path/to/attocode/packages/code-intel`.
+To use the latest source, install from a clone of this repository: `uv tool install /path/to/attocode/packages/code-intel`.
 
 ## What your agent gets
 
