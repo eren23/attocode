@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import tarfile
 import threading
 import tomllib
@@ -952,6 +953,15 @@ class TestInstaller:
         entry = _build_server_entry("/tmp/project", local_only=False)
         assert "--local-only" not in entry["args"]
         assert "--project" in entry["args"]
+
+    def test_find_command_falls_back_to_the_current_server(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        """The older attocode_intel.server lists all tools and has no profiles."""
+        from attocode.code_intel.installer import _find_command
+
+        monkeypatch.setattr("shutil.which", lambda name: None)
+        assert _find_command(str(tmp_path)) == f"{sys.executable} -m attocode_intel.entrypoint"
 
     def test_find_command_uv_when_pyproject_has_entry(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

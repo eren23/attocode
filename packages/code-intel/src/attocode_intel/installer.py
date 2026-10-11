@@ -406,7 +406,8 @@ def _find_command(project_dir: str | None = None) -> str:
        project's ``pyproject.toml`` declares the script — MCP hosts often spawn
        subprocesses with a minimal PATH, so this is preferred for dev clones.
     2. ``attocode-code-intel`` on PATH (pipx / global install).
-    3. ``python -m attocode_intel.server`` using the current interpreter.
+    3. ``python -m attocode_intel.entrypoint`` using the current interpreter. The
+       older ``attocode_intel.server`` lists all tools and has no profiles.
     """
     base = Path(project_dir or ".").resolve()
     pyproject = base / "pyproject.toml"
@@ -421,7 +422,7 @@ def _find_command(project_dir: str | None = None) -> str:
     if shutil.which("attocode-code-intel"):
         return "attocode-code-intel"
 
-    return f"{sys.executable} -m attocode_intel.server"
+    return f"{sys.executable} -m attocode_intel.entrypoint"
 
 
 def _build_server_entry(

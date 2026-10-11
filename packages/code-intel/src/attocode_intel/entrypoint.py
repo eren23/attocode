@@ -10,6 +10,19 @@ import sys
 import threading
 import time
 
+COMMANDS = """commands:
+  init                Add the server to Codex, Claude Code or Cursor (--client)
+  doctor              Start the configured server and check that it answers
+  install <target>    Add the server to another client, for example vscode or zed
+  share               Send a learning to a team server
+  query <text>        Search the code
+  symbols <file>      List the symbols of a file, or find one with --search <name>
+  impact <file>...    Show the files that a change to these files can affect
+  hotspots            Show the files with the most risk or complexity
+  deps <file>         Show what a file imports and what imports it
+  commands            Show all commands, with maintenance commands and targets
+"""
+
 
 def exit_when_client_exits(interval: float = 5.0) -> None:
     """Stop a stdio server when the client process that started it is gone.
@@ -56,7 +69,7 @@ def main(argv=None):
         from attocode_intel.onboarding import configure_client, diagnose
 
         clients = ["codex", "claude", "cursor"] if opts.client == "all" else [opts.client]
-        failed = False
+        failed, ready = False, 0
         for client in clients:
             try:
                 if command == "init":
@@ -81,10 +94,14 @@ def main(argv=None):
                         )
                     )
                 print(json.dumps(result, indent=2))
+                ready += result.get("status") != "not configured"
             except Exception as exc:
-                print(f"{client}: {exc}", file=sys.stderr)
+                # A timeout has no message of its own.
+                reason = "the server did not answer in 30 s" if isinstance(exc, TimeoutError) else exc
+                print(f"{client}: {reason}", file=sys.stderr)
                 failed = True
-        if failed:
+        # With --client all, a client without configuration is not a failure, but one client must be ready.
+        if failed or not ready:
             raise SystemExit(1)
         return
     if args and args[0] not in {"serve", "help"} and not args[0].startswith("-"):
@@ -98,7 +115,10 @@ def main(argv=None):
         args = ["--help"]
     parser = argparse.ArgumentParser(
         prog="attocode-code-intel",
-        description="Codebase intelligence for coding agents. Use init to configure clients; doctor verifies them.",
+        description="Code search and navigation for coding agents and for people. "
+        "Without a command, it runs the MCP server.",
+        epilog=COMMANDS,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--project", default=os.environ.get("ATTOCODE_PROJECT_DIR", ""))
     parser.add_argument(
