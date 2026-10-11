@@ -34,8 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test_cp.rs` for `cp.rs`. Test files that only contain such a short name
   are not suggested.
 - Tests on a shorter reverse-import path now rank before tests on a longer
-  path of the same priority. Before, a test 8 imports away could rank
-  above a test 2 imports away because of its path.
+  path of the same priority and the same shared folders. Before, a test 8
+  imports away could rank above a test 2 imports away because of its path.
 
 ### Fixed — Code-intel navigation
 

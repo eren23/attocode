@@ -369,10 +369,13 @@ async def test_tests_on_shorter_import_paths_rank_first(tmp_path, monkeypatch):
     # Path order puts the farther test first; two import steps beat three.
     (tmp_path / "tests/test_aa_far.py").write_text("from pkg.c import top\ndef test_top(): assert top()\n")
     (tmp_path / "tests/test_zz_near.py").write_text("from pkg.b import mid\ndef test_mid(): assert mid()\n")
+    # A shared folder name beats a shorter import path (pylint tests/config/ for pylint/config/).
+    (tmp_path / "tests/pkg").mkdir()
+    (tmp_path / "tests/pkg/test_deep.py").write_text("from pkg.c import top\ndef test_top(): assert top()\n")
     gateway = OperationGateway(str(tmp_path), "daily", watch=False)
     try:
         result = await gateway.execute_mcp("suggest_tests", {"files": ["pkg/a.py"]})
         paths = [row["file_path"] for row in decode(result)["candidates"]]
-        assert paths == ["tests/test_zz_near.py", "tests/test_aa_far.py"]
+        assert paths == ["tests/pkg/test_deep.py", "tests/test_zz_near.py", "tests/test_aa_far.py"]
     finally:
         await gateway.close()
