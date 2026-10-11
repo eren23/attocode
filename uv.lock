@@ -396,7 +396,7 @@ provides-extras = ["anthropic", "openai", "tree-sitter", "tree-sitter-all", "wat
 
 [[package]]
 name = "attocode-code-intel"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "packages/code-intel" }
 dependencies = [
     { name = "aiosqlite" },

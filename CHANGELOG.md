@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Code-intel release
+
+- `attocode-code-intel` 0.1.1 includes the two code-intel fixes below.
+
 ### Fixed — Code-intel navigation
 
 - Python imports now resolve in packages below any `src/` folder, for example
