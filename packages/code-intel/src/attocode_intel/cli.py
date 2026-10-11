@@ -27,7 +27,7 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
     """
     args = list(parts)
 
-    if not args or args[0] in ("--help", "-h", "help"):
+    if not args or args[0] in ("--help", "-h", "help", "commands"):
         _print_help()
         return
 
@@ -81,9 +81,11 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
 
 def _print_help() -> None:
     print(
-        "Usage: attocode code-intel <command>\n"
+        "Usage: attocode-code-intel <command>\n"
         "\n"
         "Commands:\n"
+        "  init                Add the server to Codex, Claude Code or Cursor\n"
+        "  doctor              Start the configured server and check that it answers\n"
         "  install <target>    Install MCP server into a coding assistant\n"
         "  uninstall <target>  Remove MCP server from a coding assistant\n"
         "  connect             Connect project to a running code-intel server\n"
@@ -2048,8 +2050,8 @@ def _cmd_index(args: list[str]) -> None:
 
     if not mgr.is_available:
         print(
-            "No embedding provider available. Install sentence-transformers:\n"
-            "  pip install 'attocode[semantic]'",
+            "No embedding provider available. Install the semantic extra:\n"
+            "  uv tool install 'attocode-code-intel[semantic]'",
             file=sys.stderr,
         )
         mgr.close()
@@ -2204,6 +2206,13 @@ def _cmd_setup(args: list[str]) -> None:
 
     project_dir = os.path.abspath(project_dir)
     compose_file = os.path.join(project_dir, "docker", "code-intel", "docker-compose.dev.yml")
+    if not os.path.isfile(compose_file):
+        print(
+            "Error: setup works only in a clone of the attocode repository "
+            f"({compose_file} not found). Use --project to point at the clone.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     env_dev = os.path.join(project_dir, ".env.dev")
     state_path = os.path.join(project_dir, ".attocode", "dev-state.json")
     alembic_ini = os.path.join(
@@ -2862,8 +2871,8 @@ def _cmd_reindex(args: list[str]) -> None:
 
     if not mgr.is_available:
         print(
-            "No embedding provider available. Install sentence-transformers:\n"
-            "  pip install 'attocode[semantic]'",
+            "No embedding provider available. Install the semantic extra:\n"
+            "  uv tool install 'attocode-code-intel[semantic]'",
             file=sys.stderr,
         )
         mgr.close()

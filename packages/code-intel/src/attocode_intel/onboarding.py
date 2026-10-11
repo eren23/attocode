@@ -183,12 +183,13 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
 
     root = Path(project).resolve()
     config, _, key = client_paths(client, root, global_scope)
-    text = config.read_text()
-    doc = tomlkit.parse(text) if config.suffix == ".toml" else json.loads(text)
     name = REMOTE_NAME if remote else NAME
+    text = config.read_text() if config.exists() else ""
+    doc = (tomlkit.parse(text) if config.suffix == ".toml" else json.loads(text)) if text else {}
     entry = doc.get(key, {}).get(name)
     if not entry:
-        raise ValueError(f"No {name} entry in {config}")
+        return {"client": client, "status": "not configured", "config": str(config),
+                "hint": f"Run: attocode-code-intel init --client {client}"}
 
     async def probe(streams):
         async with ClientSession(streams[0], streams[1]) as session:

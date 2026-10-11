@@ -55,6 +55,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after them (52% fewer). The check sends one short request for each setup
   (`packages/code-intel/evals/token_overhead.py`).
 
+### Changed — Code-intel CLI
+
+- `attocode-code-intel --help` lists the commands: `init`, `doctor`,
+  `install`, `share`, and the commands for people (`query`, `symbols`,
+  `impact`, `hotspots`, `deps`). Before, the help showed only the server
+  options. `attocode-code-intel commands` shows all commands.
+- `doctor` with all clients shows "not configured" for a client without
+  configuration, and fails only when no client is ready. Before, one
+  missing client failed the run. A timeout now says "the server did not
+  answer in 30 s". Before, the message was empty.
+- `install <target>` falls back to `python -m attocode_intel.entrypoint`
+  when `attocode-code-intel` is not on the PATH. Before, the fallback started
+  the older server, which lists all tools and has no profiles.
+- The messages name the standalone package: `attocode-code-intel <command>`
+  in the help, and `uv tool install 'attocode-code-intel[semantic]'` for
+  the semantic extra. `setup` gives a clear error outside a clone of the
+  attocode repository.
+
 ### Fixed — Code-intel server
 
 - The server no longer selects the home directory as its project. Before, a
