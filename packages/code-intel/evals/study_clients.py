@@ -95,7 +95,8 @@ def command(client, model, root, directory, servers, prompt, *, answer_schema=No
             from onboarding_study import claude_exclusions
             settings["claudeMdExcludes"] = claude_exclusions(root)
         tools = NATIVE if tools is None else list(tools)
-        # A rule such as Bash(git diff:*) makes Bash available, and dontAsk denies other Bash commands.
+        # A rule such as Bash(git diff:*) makes Bash available. dontAsk denies the commands that Claude Code
+        # does not treat as read-only; read-only commands such as ls run without a rule.
         available = list(dict.fromkeys(tool.split("(")[0] for tool in tools))
         return ["claude", "-p", "--model", model, "--strict-mcp-config", "--mcp-config", str(config),
                 "--setting-sources", "project" if project_guidance else "", "--settings", json.dumps(settings),
