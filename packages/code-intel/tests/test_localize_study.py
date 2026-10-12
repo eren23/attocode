@@ -36,14 +36,14 @@ if "wiring check" in args[-1]:
     answer = {"readiness_token": token, "user_instructions": "none", "search_called": True}
     if "git diff --stat" in args[-1]:
         calls.append(({"id": "b1", "name": "Bash", "input": {"command": "git diff --stat"}}, diff("--stat")))
-        denials.append({"tool_name": "Bash", "tool_use_id": "b2", "tool_input": {"command": "ls"}})
+        denials.append({"tool_name": "Bash", "tool_use_id": "b2", "tool_input": {"command": "touch wiring_probe.txt"}})
 elif args[-1].startswith("Review the uncommitted change"):
     changed = diff("--name-only")
     calls.append(({"id": "b1", "name": "Bash", "input": {"command": "git diff --name-only"}}, changed))
     if "suggest_tests" in args[-1]:
         calls.append(({"id": "m1", "name": "mcp__attocode-code-intel__suggest_tests", "input": {"files": changed.split()}},
                       "tests/test_b.py\ntests/test_c.py"))
-    denials.append({"tool_name": "Bash", "tool_use_id": "b2", "tool_input": {"command": "git log"}})
+    denials.append({"tool_name": "Bash", "tool_use_id": "b2", "tool_input": {"command": "python -m pytest"}})
     # The new file is intent-to-add, so `git diff` must show it.
     answer = {"tests": ["tests/test_b.py"] if "pkg/new.py" in changed else []}
 else:
@@ -325,7 +325,7 @@ def test_review_mode_end_to_end_with_the_change_and_git_diff_only(localize, stub
                                             "remaining": True, "checked_at": time.time()}}))
     localize.wiring(SimpleNamespace(study=study, quota=quota))
     checks = json.loads((study / "wiring/result.json").read_text())["checks"]
-    assert checks["git_diff_allowed"] and checks["other_bash_denied"] and all(checks.values())
+    assert checks["git_diff_allowed"] and checks["bash_write_denied"] and all(checks.values())
     localize.run(SimpleNamespace(study=study, quota=quota, tasks=None, max_runs=None, jobs=1, deadline_minutes=100))
     argv = json.loads(stub.read_text().splitlines()[-1])
     assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob,Bash"

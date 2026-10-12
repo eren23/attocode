@@ -11,7 +11,8 @@ not import `eval.matrix`.
 
 Review mode (R4 Stage 1): Claude Code names the existing tests that check an uncommitted
 change. Each input line has an id, repo, base_commit, the `patch` (applied, not committed)
-and `gold` (the test files that the fix changed). The tools add Bash for `git diff` only, and
+and `gold` (the test files that the fix changed). The tools add Bash. Claude Code runs read-only
+commands such as `git diff` and `ls` without a rule, and dontAsk denies other commands.
 `intel_first` asks for one suggest_tests call first. A denied tool call does not fail a run.
 """
 from __future__ import annotations
@@ -62,9 +63,9 @@ INTEL = ("intel", "intel_first")
 # proves that the MCP tools are callable without it.
 NATIVE = ["Read", "Grep", "Glob"]
 TOOLS = {"native": NATIVE, "intel": NATIVE, "intel_first": NATIVE, "issue_only": []}
-REVIEW_PROMPT_V1 = ("Review the uncommitted change in this repository. Name the existing test files that a reviewer "
+REVIEW_PROMPT_V2 = ("Review the uncommitted change in this repository. Name the existing test files that a reviewer "
                     "must run to check this change, best first, at most 10. Do not run tests and do not edit files. "
-                    "Bash runs only `git diff`. Return JSON with a `tests` list of repository-relative paths.")
+                    "Bash runs only read-only commands, such as `git diff`. Return JSON with a `tests` list of repository-relative paths.")
 REVIEW_FIRST = " First run `git diff --name-only`, then call suggest_tests once with those files."
 REVIEW_SCHEMA = {"type": "object", "properties": {"tests": {"type": "array", "items": {"type": "string"}}},
                  "required": ["tests"], "additionalProperties": False}
@@ -82,7 +83,7 @@ WIRING_PROMPT = ("Excluded wiring check, not a scored trial. Do not edit files. 
                  "token in your project instructions; do not read files to find it. Set user_instructions to the "
                  "first line of any instructions that you loaded from the home directory, or to none. Call "
                  "semantic_search once with the query 'benchmark value', then set search_called to true.")
-REVIEW_WIRING = " Then run the shell command `git diff --stat`, and then the shell command `ls`."
+REVIEW_WIRING = " Then run the shell command `git diff --stat`, and then the shell command `touch wiring_probe.txt`."
 
 
 def is_review(manifest):
@@ -112,7 +113,7 @@ def as_task(instance, review=False):
 
 def prompt(task, setup, review=False):
     if review:
-        return REVIEW_PROMPT_V1 + (REVIEW_FIRST if setup == "intel_first" else "")
+        return REVIEW_PROMPT_V2 + (REVIEW_FIRST if setup == "intel_first" else "")
     return PROMPT_V1.format(issue=task["issue"]) + (FIRST if setup == "intel_first" else "")
 
 
@@ -174,7 +175,7 @@ def freeze(args):
     python = str(Path(sys.executable).absolute())
     server_env = {**LOCAL_ENV, **CONFIGS[args.config_id]}
     manifest = {"version": 1, "mode": "review" if review else "localize",
-                "prompt_version": "REVIEW_PROMPT_V1" if review else "PROMPT_V1", "client": "claude",
+                "prompt_version": "REVIEW_PROMPT_V2" if review else "PROMPT_V1", "client": "claude",
                 "answer_schema": REVIEW_SCHEMA if review else SCHEMA,
                 "model": args.model, "client_version": client_version(), "python": python, "project": str(project),
                 "config_id": args.config_id, "server_env": server_env,
@@ -442,7 +443,7 @@ def wiring(args):
     lines = [line.strip() for line in personal.read_text().splitlines() if len(line.strip()) >= 20] if personal.is_file() else []
     answer = result["output"]
     bash = [call for call in parsed["tool_calls"] if call["name"] == "Bash"]
-    forbidden = {"Edit", "Write", "NotebookEdit"} | (set() if review else {"Bash"})  # Review: Bash for git diff only.
+    forbidden = {"Edit", "Write", "NotebookEdit"} | (set() if review else {"Bash"})  # Review: read-only Bash.
     checks = {"client": completed(manifest, result),
               "guidance_without_reads": answer.get("readiness_token") == token and "CLAUDE.md" not in arguments,
               "no_home_instructions": not any(line in str(answer.get("user_instructions", "")) for line in lines)
@@ -453,8 +454,8 @@ def wiring(args):
     if review:
         checks["git_diff_allowed"] = any(str(call["arguments"].get("command", "")).startswith("git diff")
                                          and call["id"] in outputs and not outputs[call["id"]]["is_error"] for call in bash)
-        checks["other_bash_denied"] = any(denial.get("tool_name") == "Bash" and not str(
-            (denial.get("tool_input") or {}).get("command", "")).startswith("git diff") for denial in result["permission_denials"])
+        checks["bash_write_denied"] = any(denial.get("tool_name") == "Bash" and str(
+            (denial.get("tool_input") or {}).get("command", "")).startswith("touch") for denial in result["permission_denials"])
     record = {"study_id": manifest["study_id"], "excluded": True, "passed": all(checks.values()), "checks": checks,
               "init_tools": init.get("tools"), "mcp_servers": init.get("mcp_servers"), "setup": configured,
               "execution": result}
@@ -509,7 +510,7 @@ def trial(study, manifest, task, row):
 
 
 def completed(manifest, result):
-    """In review mode, a denied call (a Bash command other than git diff) does not fail the run."""
+    """In review mode, a denied call (a Bash command that is not read-only) does not fail the run."""
     return successful({**result, "permission_denials": None} if is_review(manifest) else result)
 
 
@@ -700,7 +701,7 @@ def summary(args):
                      f"{show(median([r['seconds'] for r in selected]), 1)} | {show(median([r['turns'] for r in selected]), 0)} | "
                      f"{sum(r['mcp_calls'] > 0 for r in selected)}/{len(selected)} | {sum(r['failed'] for r in selected)} |")
     if is_review(manifest):
-        lines += ["", "Denied calls (Bash other than git diff) and gold tests that an MCP result showed but the "
+        lines += ["", "Denied calls (Bash commands that are not read-only) and gold tests that an MCP result showed but the "
                   "answer did not name, for each setup:", ""]
         lines += [f"- {setup}: {sum(r['denials'] for r in rows if r['setup'] == setup)} denied, "
                   f"{sum(len(r['gold_shown_not_named']) for r in rows if r['setup'] == setup)} shown, not named"
