@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A file name of two letters now gets its exact test, for example
   `test_cp.rs` for `cp.rs`. Test files that only contain such a short name
   are not suggested.
+- The `suggest_tests` result has two new fields. `evidence` gives the
+  strongest evidence in the list: `direct`, `imports`, `indirect`, `names`
+  or `none`. `note` says that the list comes only from file names and
+  imports and is not complete. In R4 Stage 1, agents named only the listed
+  tests and stopped searching. The ranking does not change.
 
 ### Fixed — Code-intel navigation
 

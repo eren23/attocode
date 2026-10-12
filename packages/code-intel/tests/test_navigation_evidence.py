@@ -134,6 +134,10 @@ async def test_indirect_tests_and_stale_bootstrap(tmp_path):
         tests = await query(gateway, "suggest_tests", files=["serialize.py"])
         assert "tests/test_response.py" in tests["result"]
         assert "2 edges" in tests["result"]
+        # R4 Stage 1: agents named only the listed tests. The result says what the list is.
+        assert tests["data"]["evidence"] == "indirect" and "not complete" in tests["data"]["note"]
+        from attocode_intel.tools.composite_tools import _with_limits
+        assert _with_limits({"candidates": []})["evidence"] == "none"
         await query(gateway, "record_learning", type="gotcha", description="serialize_response USE_THE_OLD_FORMAT", scope="serialize.py")
     finally:
         await gateway.close()
