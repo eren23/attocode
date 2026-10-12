@@ -184,3 +184,7 @@ a fix for them.
    daily tool list.
 3. Any new test-ranking study needs new tasks, because we know the results
    of all 179 tasks now.
+
+**Update (2026-10-12): R5 checked the released ranking (0.1.3) on 383 new
+tasks and met the rule (Δ +0.1003).** By the R4 design, Stage 1 can now
+start, on R5 tasks. See the [R5 results](2026-10-12-r5-test-suggestions.md).
