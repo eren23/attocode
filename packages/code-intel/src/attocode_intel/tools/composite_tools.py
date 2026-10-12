@@ -560,12 +560,12 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
         service = _get_service()
         task_scores = (service._task_file_scores(task_hint)
                        if task_hint and hasattr(service, "_task_file_scores") else {})
-        return {"files": files, "symbol_name": symbol_name, "task_hint": task_hint,
+        return _with_limits({"files": files, "symbol_name": symbol_name, "task_hint": task_hint,
                 "candidates": rank_symbol_tests(_get_ast_service(), suggestions, files, symbol_name,
                                                 task_hint, distances, linked_reference_files,
                                                 relevance_by_file=task_scores),
                 "ranking": "Selected-symbol links, reverse-import distance, then lexical test names; verify candidates",
-                "absence_proven": False}
+                "absence_proven": False})
 
     # Prefer tests with concrete syntax references to changed definitions.
     symbol_hits: dict[str, int] = {}
@@ -599,10 +599,21 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
                         kv[0].startswith("docs"), -nearness(kv[0]), kv[0]),
     )
 
-    return {"files": files, "candidates": [
+    return _with_limits({"files": files, "candidates": [
         {"file_path": path, "priority": info["priority"], "reasons": info["reasons"][:3]}
         for path, info in sorted_suggestions
-    ], "absence_proven": False}
+    ], "absence_proven": False})
+
+
+TEST_NOTE = ("These candidates come only from file names and imports. The list is not complete: "
+             "other tests near the changed code can also check this change, so search for them too.")
+
+
+def _with_limits(result: dict) -> dict:
+    """In R4 Stage 1, agents named only the listed tests and stopped searching. Say what the list is."""
+    best = min((row["priority"] for row in result["candidates"]), default=None)
+    evidence = "none" if best is None else {1: "direct", 2: "imports", 3: "indirect"}.get(best, "names")
+    return {**result, "evidence": evidence, "note": TEST_NOTE}
 
 
 def format_test_suggestions(data: dict) -> str:
