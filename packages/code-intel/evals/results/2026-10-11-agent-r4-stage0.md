@@ -188,3 +188,7 @@ a fix for them.
 **Update (2026-10-12): R5 checked the released ranking (0.1.3) on 383 new
 tasks and met the rule (Δ +0.1003).** By the R4 design, Stage 1 can now
 start, on R5 tasks. See the [R5 results](2026-10-12-r5-test-suggestions.md).
+
+**Update (2026-10-12): Stage 1 found no evidence that the server helps a
+review (Δ -0.097, range -0.220 to +0.002, 29 tasks).** See the
+[Stage 1 results](2026-10-12-r4-stage1-review-agents.md).
