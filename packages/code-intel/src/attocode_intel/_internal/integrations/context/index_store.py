@@ -581,9 +581,11 @@ class IndexStore:
         return float(val) if val else None
 
     def close(self) -> None:
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+        # Background hydration can be inside a write. Closing under it crashes sqlite3.
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
 
     def __del__(self) -> None:
         self.close()

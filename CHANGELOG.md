@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `attocode-code-intel` 0.1.2 also includes the `suggest_tests` fix below.
 - `attocode-code-intel` 0.1.3 also includes the test suggestion changes, the
   import roots and the HTTP service import fix below.
+- `attocode-code-intel` 0.1.4 also includes the fix for the crash at
+  shutdown below.
 
 ### Changed — Code-intel test suggestions
 
@@ -60,6 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   definition lookups now hold the index lock, as the writers do. In an
   offline check on 116 tasks, 14 calls on large repositories failed with
   this error.
+- The server no longer crashes with a segmentation fault when it stops
+  while the background indexer writes to the index. Shutdown waits for the
+  indexer for 5 seconds only. On a very large repository, the indexer can
+  still be inside a write, and closing the SQLite connection under it
+  crashed Python. Closing the index and the vector store now waits for the
+  write in progress. In an offline check on 383 repositories, 5 large
+  repositories crashed at shutdown.
 
 ### Fixed — Code-intel CLI
 

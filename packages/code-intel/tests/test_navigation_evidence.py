@@ -198,6 +198,25 @@ def test_index_lookups_wait_for_a_background_writer():
         assert not reader.is_alive()
 
 
+
+@pytest.mark.parametrize("kind", ["index", "vector"])
+def test_close_waits_for_a_background_write(tmp_path, kind):
+    """Shutdown closed the store while hydration wrote to it, and sqlite3 crashed (R5)."""
+    from attocode_intel._internal.integrations.context.index_store import IndexStore
+    from attocode_intel._internal.integrations.context.vector_store import VectorStore
+
+    db = str(tmp_path / "store.db")
+    store = IndexStore(db_path=db) if kind == "index" else VectorStore(db_path=db, dimension=4)
+    closer = threading.Thread(target=store.close, daemon=True)
+    with store._lock:  # A writer is inside a statement.
+        closer.start()
+        closer.join(0.2)
+        assert closer.is_alive()
+        assert store._conn is not None
+    closer.join(5)
+    assert not closer.is_alive()
+    assert store._conn is None
+
 def test_http_indexer_resolves_relative_imports_and_import_roots():
     from attocode_intel.indexing.full_indexer import _resolve_import_path
 

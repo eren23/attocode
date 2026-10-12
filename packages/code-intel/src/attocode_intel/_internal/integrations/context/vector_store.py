@@ -383,9 +383,10 @@ class VectorStore:
         """
         conn = self._get_conn()
         try:
-            row = conn.execute(
-                "SELECT value FROM store_metadata WHERE key = 'rotation_state'"
-            ).fetchone()
+            with self._lock:
+                row = conn.execute(
+                    "SELECT value FROM store_metadata WHERE key = 'rotation_state'"
+                ).fetchone()
         except sqlite3.OperationalError:
             # Pre-v2 store without a store_metadata row yet — treat as
             # no rotation.
@@ -413,9 +414,10 @@ class VectorStore:
         """
         conn = self._get_conn()
         try:
-            row = conn.execute(
-                "SELECT value FROM store_metadata WHERE key = '_rotator_cache_ver'"
-            ).fetchone()
+            with self._lock:
+                row = conn.execute(
+                    "SELECT value FROM store_metadata WHERE key = '_rotator_cache_ver'"
+                ).fetchone()
         except sqlite3.OperationalError:
             return
         if row is None:
@@ -787,9 +789,11 @@ class VectorStore:
 
     def close(self) -> None:
         """Close the database connection."""
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+        # The background indexer can be inside a write. Closing under it crashes sqlite3.
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
 
     def __del__(self) -> None:
         self.close()
