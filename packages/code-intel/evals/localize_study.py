@@ -269,9 +269,14 @@ def commit(root):
 def apply_change(root, patch):
     """Review mode: apply the change without a commit. New files are intent-to-add, so `git diff` shows them."""
     try:
-        shell(["git", "apply", "--intent-to-add", "--whitespace=nowarn", "-"], cwd=root, input=patch, timeout=300)
+        shell(["git", "apply", "--whitespace=nowarn", "-"], cwd=root, input=patch, timeout=300)
     except subprocess.CalledProcessError:
         return "The patch does not apply at the base commit"
+    # Not `git apply --intent-to-add`: Git 2.50 then writes an index that holds only the changed files,
+    # so `git diff` shows each changed file as new and `git ls-files` loses the rest of the tree.
+    added = [path for path in git(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0") if path]
+    if added:
+        git(root, "add", "--intent-to-add", "--", *added)
     return None
 
 
