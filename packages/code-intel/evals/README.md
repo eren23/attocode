@@ -204,6 +204,14 @@ The primary comparisons are ΔAcc@5 and the geometric mean cost ratio. The repor
 
 With `--matrix OUT`, the report reads the rows of one offline cell (`--offline-cell`, default `product`) at variant `full` in `OUT/results.jsonl`. For each setup, it correlates the offline reciprocal rank of the first gold file with the agent Acc@5 (Spearman). It also gives a 2×2 table of offline hit@5 and agent hit. An agent hit is a task mean Acc@5 of 0.5 or more. The report counts the tasks without an offline row and does not score them.
 
+## Agent review study
+
+`study.py freeze --mode review` freezes a change-review study (R4 Stage 1). It uses the harness and the commands of the localization study. Each line of `--instances` has `id` (`dataset/native`), `repo`, `base_commit`, `patch` and `gold`. The gold files are the existing test files that the fix changed. `prepare` applies the patch to the one-commit snapshot without a commit. New files are intent-to-add, so `git diff` shows them. A review study has no `issue_only` setup.
+
+The frozen prompt `REVIEW_PROMPT_V1` asks for the existing test files that check the change. The answer is `{"tests": [...]}`: at most 10 paths, best first. All setups get `Read`, `Grep`, `Glob` and `Bash` for `git diff` only (`Bash(git diff:*)`). The client denies other Bash commands. A denied call does not fail the run, and `summary` counts the denied calls. `intel_first` asks the agent to run `git diff --name-only` and then to call `suggest_tests` once with those files. The wiring check also proves that `git diff` runs and that another Bash command is denied.
+
+`summary` scores test Recall@5 and Hit@5. For each run, `gold_shown_not_named` lists the gold tests that an MCP result named. The answer did not name them.
+
 ## Ranking gate
 
 `python -m eval.matrix.run ci` is a regression gate for search ranking. The Ranking gate workflow runs it when a pull request changes `packages/code-intel/src/`, `eval/matrix/` or `uv.lock`. The engine hash of the matrix covers all of `packages/code-intel/src/`, so a change in any of these files can move the ranking.

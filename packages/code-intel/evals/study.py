@@ -435,11 +435,11 @@ if __name__ == "__main__":
     freezing.add_argument("--models", type=Path, help="Required except in localize mode")
     freezing.add_argument("--serena-launcher", type=Path)
     freezing.add_argument("--mode", choices=("release", "pilot", "quality", "onboarding", "understanding", "external",
-                                             "localize"), default="release")
+                                             "localize", "review"), default="release")
     freezing.add_argument("--baseline-src", type=Path)
     freezing.add_argument("--case-pack", type=Path, help="Private understanding case-pack directory")
     freezing.add_argument("--benchmark-pack", type=Path, help="Prepared external benchmark pack, outside the repository")
-    freezing.add_argument("--instances", type=Path, help="Localize: matrix instances.jsonl (eval.matrix.run ingest)")
+    freezing.add_argument("--instances", type=Path, help="Localize: matrix instances.jsonl (eval.matrix.run ingest). Review: rows with id, repo, base_commit, patch, gold")
     freezing.add_argument("--ids", type=Path, help="Localize: file with one matrix id (dataset/native) per line")
     freezing.add_argument("--model", help="Localize: explicit Claude model ID")
     freezing.add_argument("--trials", type=int, default=2, help="Localize: trials per task and setup")
@@ -459,16 +459,16 @@ if __name__ == "__main__":
     for sub in commands.choices.values():
         sub.add_argument("--study", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "freeze" and args.mode != "localize" and not (args.repo_dir and args.models):
+    if args.command == "freeze" and args.mode not in {"localize", "review"} and not (args.repo_dir and args.models):
         parser.error("--repo-dir and --models are required in this mode")
     args.study = args.study.resolve()
     mode = args.mode if args.command == "freeze" else json.loads((args.study / "manifest.json").read_text()).get("mode")
-    if args.command in {"summary", "report"} and (args.command == "summary") != (mode == "localize"):
-        parser.error("Localize studies use summary; other modes use report")
-    if mode in {"understanding", "external", "localize"}:
+    if args.command in {"summary", "report"} and (args.command == "summary") != (mode in {"localize", "review"}):
+        parser.error("Localize and review studies use summary; other modes use report")
+    if mode in {"understanding", "external", "localize", "review"}:
         import importlib
         runner = importlib.import_module({"external": "external_study", "understanding": "understanding_study",
-                                          "localize": "localize_study"}[mode])
+                                          "localize": "localize_study", "review": "localize_study"}[mode])
         getattr(runner, args.command)(args)
         sys.exit(0)
     if args.command == "wiring":

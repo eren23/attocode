@@ -95,9 +95,11 @@ def command(client, model, root, directory, servers, prompt, *, answer_schema=No
             from onboarding_study import claude_exclusions
             settings["claudeMdExcludes"] = claude_exclusions(root)
         tools = NATIVE if tools is None else list(tools)
+        # A rule such as Bash(git diff:*) makes Bash available, and dontAsk denies other Bash commands.
+        available = list(dict.fromkeys(tool.split("(")[0] for tool in tools))
         return ["claude", "-p", "--model", model, "--strict-mcp-config", "--mcp-config", str(config),
                 "--setting-sources", "project" if project_guidance else "", "--settings", json.dumps(settings),
-                "--tools", ",".join(tools), "--allowedTools", ",".join(tools + ["mcp__" + name + "__*" for name in servers]),
+                "--tools", ",".join(available), "--allowedTools", ",".join(tools + ["mcp__" + name + "__*" for name in servers]),
                 "--permission-mode", "dontAsk", "--no-session-persistence", "--disable-slash-commands",
                 "--output-format", "stream-json", "--verbose",
                 *([] if plain_text else ["--json-schema", json.dumps(response_schema)]), prompt]
