@@ -86,6 +86,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   denied Bash call does not fail the run, and the wiring check proves the
   limit before scored runs start.
 
+### Fixed — Code-intel evals
+
+- The agent studies looked for quota messages in all client output,
+  also in tool results. A repository diff that quoted "rate limit
+  exceeded" thus marked a completed run as quota exhausted and stopped
+  the session. The check now ignores tool calls and tool results.
+
 ## [0.2.30] - 2026-10-11
 
 ### Changed — Packaging

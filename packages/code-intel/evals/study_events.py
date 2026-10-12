@@ -98,6 +98,31 @@ def capture(argv, root, directory, timeout, env, *, kill_grace=10):
             "timed_out": timed_out, "quota_exhausted": exhausted, "stderr_tail": stderr_tail[-1500:]}
 
 
+def client_text(stdout):
+    """STDOUT without tool calls and tool results. Repository text, such as a diff that quotes
+    "rate limit exceeded", must not count as a client quota message."""
+    kept = []
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            kept.append(line)
+            continue
+        if not isinstance(event, dict):
+            continue
+        event = event["event"] if isinstance(event.get("event"), dict) else event
+        if event.get("type") == "tool_call" or (event.get("item") or {}).get("type") in {"mcp_tool_call", "command_execution"}:
+            continue
+        message = event.get("message")
+        if isinstance(message, dict) and isinstance(message.get("content"), list):
+            event = {**event, "message": {**message, "content": [
+                block for block in message["content"]
+                if not (isinstance(block, dict) and block.get("type") in {"tool_use", "tool_result"})]}}
+        event.pop("tool_use_result", None)
+        kept.append(json.dumps(event))
+    return "\n".join(kept)
+
+
 def parse_events(client, stdout, answer_path=None):
     """Accept raw CLI JSONL or timestamped capture records, deduplicating by call ID."""
     calls, outputs, models, usage, answer, denials = {}, {}, set(), {}, {}, []

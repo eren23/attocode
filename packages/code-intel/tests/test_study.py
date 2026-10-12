@@ -119,6 +119,22 @@ def test_parses_actual_tool_result_shapes_without_double_counting(modules):
     assert len(parsed["tool_calls"]) == len(parsed["tool_results"]) == 1
 
 
+def test_quota_text_in_repository_data_is_not_a_quota_message(modules):
+    """A gleam diff quoted "rate limit exceeded", and a completed R4 Stage 1 run counted as quota exhausted."""
+    import study_events
+    quote = "avoids \"rate limit exceeded\" errors"
+    events = [{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "b", "name": "Bash", "input": {"command": quote}}]}},
+              {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "b", "content": quote}]},
+               "tool_use_result": {"stdout": quote}},
+              {"type": "item.completed", "item": {"type": "command_execution", "aggregated_output": quote}},
+              {"type": "tool_call", "subtype": "completed", "tool_call": {"shell": {"result": quote}}},
+              {"type": "result", "is_error": False, "result": "{}"}]
+    stdout = "\n".join(map(json.dumps, events))
+    assert study_events.QUOTA.search(stdout) and not study_events.QUOTA.search(study_events.client_text(stdout))
+    error = json.dumps({"type": "result", "is_error": True, "result": "Usage limit reached"})
+    assert study_events.QUOTA.search(study_events.client_text(stdout + "\n" + error))
+
+
 def test_read_only_options_change_only_their_own_client_flags(modules, tmp_path):
     clients = modules[1]
     servers = {"attocode-code-intel": {"command": "attocode-code-intel"}}

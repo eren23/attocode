@@ -7,7 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from study_events import QUOTA, capture, observations
+from study_events import QUOTA, capture, client_text, observations
 from study_events import parse_events as parse_events
 from study_tasks import SCHEMA
 
@@ -161,7 +161,7 @@ def invoke(client, model, root, directory, servers, prompt, timeout, env, *, ans
                     result["answer_text"] = event["result"]
     result["observations"] = observations(result)
     result.update(execution)
-    result["quota_exhausted"] |= bool(QUOTA.search((directory / "trace.jsonl").read_text(errors="replace")))
+    result["quota_exhausted"] |= bool(QUOTA.search(client_text((directory / "trace.jsonl").read_text(errors="replace"))))
     # Raw tool results belong in private traces, not the portable report.
     result.pop("tool_results")
     return result
