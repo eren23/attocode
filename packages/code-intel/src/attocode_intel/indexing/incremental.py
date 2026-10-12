@@ -159,9 +159,15 @@ class IncrementalPipeline:
                     for u_path, u_sha, _ in overlay_updates:
                         path_to_sha[u_path] = u_sha
 
+                    python_index = None
+                    if language == "python":
+                        from attocode_intel._internal.integrations.context.codebase_context import (
+                            python_module_index,
+                        )
+                        python_index = python_module_index(known_paths)
                     deps = []
                     for imp in imports:
-                        target = _resolve_import_path(imp, path, known_paths, language)
+                        target = _resolve_import_path(imp, path, known_paths, language, python_index=python_index)
                         if target and target in path_to_sha:
                             deps.append({
                                 "target_sha": path_to_sha[target],

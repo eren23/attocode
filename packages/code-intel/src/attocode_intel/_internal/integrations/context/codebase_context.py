@@ -366,29 +366,49 @@ def _build_file_index(
         normalized = f.relative_path.replace(os.sep, "/")
         file_index[normalized] = f.relative_path
 
-    # Detect source prefixes and add stripped alternate keys. The folder that holds a
-    # top-level package is an import root too: src/, packages/<name>/src/ of a monorepo,
-    # lib/ of matplotlib or python/ of ray.
-    source_prefixes = set(_detect_source_prefixes(root_dir))
-    for normalized in file_index:
-        package, _, name = normalized.rpartition("/")
-        parent = package.rpartition("/")[0]
-        if name == "__init__.py" and parent and parent + "/__init__.py" not in file_index:
-            source_prefixes.add(parent + "/")
+    # Detect source prefixes and add stripped alternate keys.
+    source_prefixes = set(_detect_source_prefixes(root_dir)) | _python_import_roots(file_index)
     if source_prefixes:
-        extra: dict[str, str] = {}
-        for normalized, rel_path in file_index.items():
-            parts = normalized.split("/")
-            # Shallow roots first, so a deeper root wins, as in sorted prefix order.
-            for depth in range(1, len(parts)):
-                prefix = "/".join(parts[:depth]) + "/"
-                stripped = normalized[len(prefix):]
-                # Don't override direct matches
-                if prefix in source_prefixes and stripped not in file_index:
-                    extra[stripped] = rel_path
-        file_index.update(extra)
+        _add_root_keys(file_index, source_prefixes)
 
     file_index.configure_javascript(root_dir)
+    return file_index
+
+
+def _python_import_roots(paths) -> set[str]:
+    """Folders that hold a top-level Python package, as ``lib/`` for ``lib/pkg/__init__.py``.
+
+    Such a folder is an import root: src/, packages/<name>/src/ of a monorepo,
+    lib/ of matplotlib or python/ of ray.
+    """
+    roots: set[str] = set()
+    for path in paths:
+        package, _, name = path.rpartition("/")
+        parent = package.rpartition("/")[0]
+        if name == "__init__.py" and parent and parent + "/__init__.py" not in paths:
+            roots.add(parent + "/")
+    return roots
+
+
+def _add_root_keys(file_index: dict[str, str], roots: set[str]) -> None:
+    """Add a key without the root prefix for each file below an import root."""
+    extra: dict[str, str] = {}
+    for normalized, rel_path in file_index.items():
+        parts = normalized.split("/")
+        # Shallow roots first, so a deeper root wins, as in sorted prefix order.
+        for depth in range(1, len(parts)):
+            prefix = "/".join(parts[:depth]) + "/"
+            stripped = normalized[len(prefix):]
+            # Don't override direct matches
+            if prefix in roots and stripped not in file_index:
+                extra[stripped] = rel_path
+    file_index.update(extra)
+
+
+def python_module_index(paths) -> dict[str, str]:
+    """Module-path keys for ``_resolve_python_import`` from repository paths alone."""
+    file_index = {path: path for path in paths}
+    _add_root_keys(file_index, _python_import_roots(file_index))
     return file_index
 
 

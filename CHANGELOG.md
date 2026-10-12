@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `attocode-code-intel` 0.1.1 includes the `src/` import fix and the `init`
   fix below.
 - `attocode-code-intel` 0.1.2 also includes the `suggest_tests` fix below.
+- `attocode-code-intel` 0.1.3 also includes the test suggestion changes, the
+  import roots and the HTTP service import fix below.
 
 ### Changed — Code-intel test suggestions
 
@@ -28,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`ParserTests.cs`) and C/C++ test files (`parser_test.cc`).
 - Candidates of the same priority now rank by the folder names that they
   share with the changed files, then by path.
+- A file name of two letters now gets its exact test, for example
+  `test_cp.rs` for `cp.rs`. Test files that only contain such a short name
+  are not suggested.
 
 ### Fixed — Code-intel navigation
 
@@ -36,7 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folders were import roots, and imports in other layouts stayed
   unresolved. The saved index snapshot has a new key, so the first start
   after an upgrade rebuilds the index once.
-
+- The HTTP service indexer now resolves Python imports as the local index
+  does: relative imports and the same import roots. Before, it dropped the
+  dots of a relative import, so `from .utils import x` could link an
+  unrelated top-level `utils.py`.
 - Python imports now resolve in packages below any `src/` folder, for example
   `packages/<name>/src/` in a monorepo. Before, these imports stayed
   unresolved. References were only same-name candidates, files had no

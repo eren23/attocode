@@ -64,7 +64,7 @@ def name_matched_tests(changed_file, test_paths, limit=10):
     folder names in common, so src/test/java/org/x mirrors src/main/java/org/x.
     """
     subject = file_subject(changed_file)
-    if len(subject) < 3:
+    if len(subject) < 2:
         return []
 
     def shared(path):
@@ -72,7 +72,9 @@ def name_matched_tests(changed_file, test_paths, limit=10):
 
     exact = [path for path in test_paths if test_subject(path) == subject]
     named = set(exact)
-    loose = [path for path in test_paths if path not in named and subject in _plain(PurePosixPath(path).name)]
+    # A short name is part of too many file names: cp.rs gets test_cp.rs, not every *cp* file.
+    loose = [path for path in test_paths if len(subject) >= 3 and path not in named
+             and subject in _plain(PurePosixPath(path).name)]
     exact.sort(key=lambda path: (-shared(path), len(path), path))
     loose.sort(key=lambda path: (-shared(path), len(path), path))
     nearest = shared(exact[0]) if exact else 0

@@ -69,18 +69,23 @@ def _resolve_import_path(
     known_paths: set[str],
     language: str | None,
     aliases: dict[str, str] | None = None,
+    python_index: dict[str, str] | None = None,
 ) -> str | None:
     """Resolve an import string to a file path in the repo.
 
-    Returns the matching path or None if unresolvable.
+    Returns the matching path or None if unresolvable. For Python, pass
+    ``python_index = python_module_index(known_paths)`` when resolving many imports.
     """
     from pathlib import PurePosixPath
 
     if language == "python":
-        # foo.bar -> foo/bar.py or foo/bar/__init__.py
-        parts = import_name.replace(".", "/")
-        candidates = [f"{parts}.py", f"{parts}/__init__.py"]
-    elif language in ("javascript", "typescript"):
+        # The resolver of the local index: relative imports and import roots such as src/ or lib/.
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            _resolve_python_import,
+            python_module_index,
+        )
+        return _resolve_python_import(import_name, source_path, python_index or python_module_index(known_paths))
+    if language in ("javascript", "typescript"):
         if import_name.startswith("."):
             # Relative import — resolve against source dir
             source_dir = str(PurePosixPath(source_path).parent)
@@ -249,8 +254,13 @@ class FullIndexer:
         if overlay_updates:
             await overlay.set_files_batch(branch_id, overlay_updates)
 
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            python_module_index,
+        )
+
         # Resolve path aliases from tsconfig/jsconfig
         aliases = _load_path_aliases(known_paths, config_contents)
+        python_index = python_module_index(known_paths)
 
         # Second pass: resolve imports to dependencies
         self._progress({"phase": "resolving_dependencies", "total": len(deferred_deps), "current": 0})
@@ -260,7 +270,8 @@ class FullIndexer:
                     continue
                 deps: list[dict] = []
                 for imp in imports:
-                    target_path = _resolve_import_path(imp, source_path, known_paths, language, aliases=aliases)
+                    target_path = _resolve_import_path(imp, source_path, known_paths, language, aliases=aliases,
+                                                       python_index=python_index)
                     if target_path and target_path in path_to_sha:
                         deps.append({
                             "target_sha": path_to_sha[target_path],

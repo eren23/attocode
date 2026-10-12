@@ -328,6 +328,9 @@ def test_name_matched_tests_prefer_the_nearest_test_for_the_file():
     # A fixture in a test folder has no test affix, and a test with no shared folder is far.
     assert [row[1] for row in name_matched_tests("lib/pkg/figure.py", ["lib/pkg/tests/data/figure.py"])] == [4]
     assert [row[1] for row in name_matched_tests("kernel/core.c", ["tools/selftests/test_core.c"])] == [3]
+    # A two-letter name matches its test exactly, but a name that only contains it is noise.
+    assert [row[0] for row in name_matched_tests("src/uu/cp/src/cp.rs", ["tests/test_cp.rs", "tests/test_scp.rs"])] == [
+        "tests/test_cp.rs"]
 
 
 async def test_lib_layout_links_tests_by_name_and_by_import(tmp_path, monkeypatch):
@@ -353,3 +356,4 @@ async def test_lib_layout_links_tests_by_name_and_by_import(tmp_path, monkeypatc
         assert "lib/pkg/tests/test_text.py" not in paths
     finally:
         await gateway.close()
+
