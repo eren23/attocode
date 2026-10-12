@@ -67,6 +67,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does not write. The `guidance` field is `null` when the client gets no
   managed instruction block.
 
+### Added — Code-intel evals
+
+- `study.py freeze --mode review` freezes an agent change-review study (R4
+  Stage 1). The snapshot has the change in the work tree, not in the
+  history. The agent names the existing tests that check the change, and
+  `summary` scores test Recall@5. All setups get `Bash` for `git diff`
+  only. A denied Bash call does not fail the run, and the wiring check
+  proves the limit before scored runs start.
+
 ## [0.2.30] - 2026-10-11
 
 ### Changed — Packaging

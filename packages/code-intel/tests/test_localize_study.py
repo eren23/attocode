@@ -27,20 +27,35 @@ if os.environ.get("STUB_SLEEPER"):
 def emit(event):
     print(json.dumps(event), flush=True)
 emit({"type": "system", "subtype": "init", "tools": args[args.index("--tools") + 1].split(",") + ["StructuredOutput"]})
+def diff(*flags):
+    return subprocess.run(["git", "diff", *flags], capture_output=True, text=True).stdout
+calls, denials = [], []
 if "wiring check" in args[-1]:
     token = re.search(r"Readiness token: (\w+)", open("CLAUDE.md").read()).group(1)
-    call = {"id": "m1", "name": "mcp__attocode-code-intel__semantic_search", "input": {"query": "benchmark value"}}
-    content = "{}"
+    calls.append(({"id": "m1", "name": "mcp__attocode-code-intel__semantic_search", "input": {"query": "benchmark value"}}, "{}"))
     answer = {"readiness_token": token, "user_instructions": "none", "search_called": True}
+    if "git diff --stat" in args[-1]:
+        calls.append(({"id": "b1", "name": "Bash", "input": {"command": "git diff --stat"}}, diff("--stat")))
+        denials.append({"tool_name": "Bash", "tool_use_id": "b2", "tool_input": {"command": "ls"}})
+elif args[-1].startswith("Review the uncommitted change"):
+    changed = diff("--name-only")
+    calls.append(({"id": "b1", "name": "Bash", "input": {"command": "git diff --name-only"}}, changed))
+    if "suggest_tests" in args[-1]:
+        calls.append(({"id": "m1", "name": "mcp__attocode-code-intel__suggest_tests", "input": {"files": changed.split()}},
+                      "tests/test_b.py\ntests/test_c.py"))
+    denials.append({"tool_name": "Bash", "tool_use_id": "b2", "tool_input": {"command": "git log"}})
+    # The new file is intent-to-add, so `git diff` must show it.
+    answer = {"tests": ["tests/test_b.py"] if "pkg/new.py" in changed else []}
 else:
-    call, content = {"id": "g1", "name": "Grep", "input": {"pattern": "target"}}, "pkg/b.py:1:def target():"
+    calls.append(({"id": "g1", "name": "Grep", "input": {"pattern": "target"}}, "pkg/b.py:1:def target():"))
     answer = {"files": ["./pkg/b.py:1", os.getcwd() + "/pkg/a.py", "missing.py"]}
-emit({"type": "assistant", "message": {"content": [{"type": "tool_use", **call}]}})
-time.sleep(.2)
-emit({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": call["id"], "content": content}]}})
+for call, content in calls:
+    emit({"type": "assistant", "message": {"content": [{"type": "tool_use", **call}]}})
+    time.sleep(.2)
+    emit({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": call["id"], "content": content}]}})
 emit({"type": "result", "subtype": "success", "is_error": False, "num_turns": 3, "total_cost_usd": 0.0123,
       "usage": {"input_tokens": 10, "cache_read_input_tokens": 100, "output_tokens": 20},
-      "structured_output": answer, "permission_denials": []})
+      "structured_output": answer, "permission_denials": denials})
 '''
 
 
@@ -272,3 +287,56 @@ def test_matrix_instances_become_tasks(localize, stub, tmp_path):
     assert tasks[pack["id"]]["source"] == str(Path.home() / "Documents/ai/benchmark-repos/okhttp")
     assert tasks[pack["id"]]["title"] == tasks[pack["id"]]["issue"] == "follow redirects"
     assert tasks[pack["id"]]["gold"] == ["a.kt"]
+
+
+def test_review_mode_end_to_end_with_the_change_and_git_diff_only(localize, stub, tmp_path):
+    source = Path.home() / "Documents/ai/benchmark-repos/review-repo"
+    (source / "pkg").mkdir(parents=True)
+    (source / "tests").mkdir()
+    (source / "pkg/b.py").write_text("def target():\n    return 1\n")
+    for name in ("b", "c"):
+        (source / f"tests/test_{name}.py").write_text("from pkg.b import target\n\ndef test_target():\n    assert target()\n")
+    user = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    git(source, "init", "-q")
+    git(source, "add", ".")
+    git(source, *user, "commit", "-qm", "base")
+    base = git(source, "rev-parse", "HEAD")
+    (source / "pkg/b.py").write_text("def target():\n    return 2\n")
+    (source / "pkg/new.py").write_text("VALUE = 1\n")
+    git(source, "add", ".")
+    patch = git(source, "diff", "--cached") + "\n"
+    git(source, *user, "commit", "-qm", "fix")
+    row = {"id": "fixture/review-1", "repo": "review-repo", "base_commit": base, "patch": patch,
+           "changed": ["pkg/b.py", "pkg/new.py"], "gold": ["tests/test_b.py", "tests/test_c.py"]}
+    (tmp_path / "rows.jsonl").write_text(json.dumps(row) + "\n")
+    (tmp_path / "ids.txt").write_text("fixture/review-1\n")
+    study = tmp_path / "review"
+    localize.freeze(SimpleNamespace(project=PROJECT, study=study, instances=tmp_path / "rows.jsonl", ids=tmp_path / "ids.txt",
+                                    model="stub-model-1", trials=1, setups=["native", "intel_first"], config_id="product",
+                                    mode="review"))
+    localize.prepare(SimpleNamespace(study=study))
+    assert json.loads((study / "preparation.json").read_text())["tasks"]["fixture_review-1"]["status"] == "ready"
+    snapshot = study / "sources/fixture_review-1"
+    # The change is in the work tree, not in the history; the new file shows in `git diff`.
+    assert git(snapshot, "diff", "--name-only").split() == ["pkg/b.py", "pkg/new.py"]
+    assert git(snapshot, "log", "--all", "--oneline").count("\n") == 0
+    quota = tmp_path / "quota.json"
+    quota.write_text(json.dumps({"claude": {"subscription_only": True, "extra_usage_disabled": True,
+                                            "remaining": True, "checked_at": time.time()}}))
+    localize.wiring(SimpleNamespace(study=study, quota=quota))
+    checks = json.loads((study / "wiring/result.json").read_text())["checks"]
+    assert checks["git_diff_allowed"] and checks["other_bash_denied"] and all(checks.values())
+    localize.run(SimpleNamespace(study=study, quota=quota, tasks=None, max_runs=None, jobs=1, deadline_minutes=100))
+    argv = json.loads(stub.read_text().splitlines()[-1])
+    assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob,Bash"
+    assert "Bash(git diff:*)" in argv[argv.index("--allowedTools") + 1].split(",")
+
+    localize.summary(SimpleNamespace(study=study))
+    rows = {row["setup"]: row for row in map(json.loads, (study / "runs.jsonl").read_text().splitlines())}
+    native, first = rows["native"], rows["intel_first"]
+    # A denied Bash command does not fail a review run.
+    assert native["status"] == first["status"] == "completed" and native["denials"] == 1
+    assert (native["files"], native["recall5"], native["hit5"]) == (["tests/test_b.py"], 0.5, 1.0)
+    assert first["mcp_calls"] == 1 and first["gold_shown_not_named"] == ["tests/test_c.py"]
+    summary = (study / "summary.md").read_text()
+    assert "# Review study summary" in summary and "| native | 1 | 1 | 0.50 |" in summary

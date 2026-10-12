@@ -8,6 +8,11 @@ control). `run` records what the client did. Only `summary` grades, with code.
 The input is a matrix `instances.jsonl`: one `asdict(eval.matrix.datasets.Instance)` on each
 line, as `python -m eval.matrix.run ingest` writes it. The harness reads it as JSON and does
 not import `eval.matrix`.
+
+Review mode (R4 Stage 1): Claude Code names the existing tests that check an uncommitted
+change. Each input line has an id, repo, base_commit, the `patch` (applied, not committed)
+and `gold` (the test files that the fix changed). The tools add Bash for `git diff` only, and
+`intel_first` asks for one suggest_tests call first. A denied tool call does not fail a run.
 """
 from __future__ import annotations
 
@@ -57,6 +62,13 @@ INTEL = ("intel", "intel_first")
 # proves that the MCP tools are callable without it.
 NATIVE = ["Read", "Grep", "Glob"]
 TOOLS = {"native": NATIVE, "intel": NATIVE, "intel_first": NATIVE, "issue_only": []}
+REVIEW_PROMPT_V1 = ("Review the uncommitted change in this repository. Name the existing test files that a reviewer "
+                    "must run to check this change, best first, at most 10. Do not run tests and do not edit files. "
+                    "Bash runs only `git diff`. Return JSON with a `tests` list of repository-relative paths.")
+REVIEW_FIRST = " First run `git diff --name-only`, then call suggest_tests once with those files."
+REVIEW_SCHEMA = {"type": "object", "properties": {"tests": {"type": "array", "items": {"type": "string"}}},
+                 "required": ["tests"], "additionalProperties": False}
+REVIEW_TOOLS = [*NATIVE, "Bash(git diff:*)"]
 # A config_id names extra MCP server environment. "product" is the shipped default.
 CONFIGS = {"product": {}}
 LOCAL_ENV = {"ATTOCODE_LOCAL_ONLY": "1", "HF_HUB_OFFLINE": "1"}
@@ -70,6 +82,11 @@ WIRING_PROMPT = ("Excluded wiring check, not a scored trial. Do not edit files. 
                  "token in your project instructions; do not read files to find it. Set user_instructions to the "
                  "first line of any instructions that you loaded from the home directory, or to none. Call "
                  "semantic_search once with the query 'benchmark value', then set search_called to true.")
+REVIEW_WIRING = " Then run the shell command `git diff --stat`, and then the shell command `ls`."
+
+
+def is_review(manifest):
+    return manifest.get("mode") == "review"
 
 
 def task_id(instance):
@@ -81,16 +98,21 @@ def source(repo):
     return f"https://github.com/{repo}.git" if "/" in repo else str(Path.home() / "Documents/ai/benchmark-repos" / repo)
 
 
-def as_task(instance):
-    """A study task from one matrix instance. The matrix id is the instance_id join key."""
-    queries = instance["queries"]
-    return {"id": task_id(instance), "instance_id": instance["id"], "dataset": instance["id"].split("/", 1)[0],
+def as_task(instance, review=False):
+    """A study task from one matrix instance (or review row). The matrix id is the instance_id join key."""
+    task = {"id": task_id(instance), "instance_id": instance["id"], "dataset": instance["id"].split("/", 1)[0],
             "repo": instance["repo"], "source": source(instance["repo"]), "base_commit": instance["base_commit"],
-            "language": instance.get("language", ""), "issue": queries["full"],
-            "title": queries.get("title") or queries["full"], "gold": instance["gold"]}
+            "gold": instance["gold"]}
+    if review:
+        return {**task, "patch": instance["patch"], "changed": instance.get("changed", [])}
+    queries = instance["queries"]
+    return {**task, "language": instance.get("language", ""), "issue": queries["full"],
+            "title": queries.get("title") or queries["full"]}
 
 
-def prompt(task, setup):
+def prompt(task, setup, review=False):
+    if review:
+        return REVIEW_PROMPT_V1 + (REVIEW_FIRST if setup == "intel_first" else "")
     return PROMPT_V1.format(issue=task["issue"]) + (FIRST if setup == "intel_first" else "")
 
 
@@ -106,14 +128,15 @@ def run_dir(study, row):
     return study / "runs" / row["id"].replace(":", "-")
 
 
-def check(instance):
+def check(instance, review=False):
     queries, gold = instance.get("queries"), instance.get("gold")
+    text = instance.get("patch") if review else queries.get("full") if isinstance(queries, dict) else None
     if not ("/" in str(instance.get("id")) and instance.get("repo")
             and re.fullmatch(r"[0-9a-f]{40}", str(instance.get("base_commit")))
-            and isinstance(queries, dict) and str(queries.get("full") or "").strip()
+            and isinstance(text, str) and text.strip()
             and isinstance(gold, list) and gold and all(isinstance(p, str) and p for p in gold)):
         raise ValueError(f"Instance {instance.get('id')} needs a dataset/native id, a repo, a full base_commit, "
-                         "queries.full and gold")
+                         f"{'a patch' if review else 'queries.full'} and gold")
 
 
 def freeze(args):
@@ -123,12 +146,13 @@ def freeze(args):
     if study.exists():
         raise ValueError("Study directory already exists; use a new directory for a new study")
     if not (args.instances and args.ids and args.model):
-        raise ValueError("Localize mode needs --instances, --ids and --model")
+        raise ValueError("Localize and review modes need --instances, --ids and --model")
+    review = getattr(args, "mode", "localize") == "review"
     if not re.search(r"\d", args.model):
         raise ValueError("Pin an explicit model ID, not an alias such as 'sonnet'")
     setups = list(args.setups or SETUPS)
-    if set(setups) - set(SETUPS) or len(set(setups)) != len(setups):
-        raise ValueError(f"Setups must be distinct names from {SETUPS}")
+    if set(setups) - set(SETUPS) or len(set(setups)) != len(setups) or (review and "issue_only" in setups):
+        raise ValueError(f"Setups must be distinct names from {SETUPS}, and a review study has no issue_only")
     if args.config_id not in CONFIGS or args.trials < 1:
         raise ValueError(f"Use --trials of 1 or more and a config id from {sorted(CONFIGS)}")
     wanted = {line.strip() for line in args.ids.read_text().splitlines() if line.strip() and not line.startswith("#")}
@@ -138,25 +162,28 @@ def freeze(args):
         raise ValueError(f"Each id must match the id of exactly one instance (dataset/native): {missing[:5]}")
     selected = [instance for instance in instances if instance.get("id") in wanted]
     for instance in selected:
-        check(instance)
-    tasks = [as_task(instance) for instance in selected]
+        check(instance, review)
+    tasks = [as_task(instance, review) for instance in selected]
     if len({task["id"] for task in tasks}) != len(tasks):
         raise ValueError("Two instances have the same path-safe task id")
     for task in tasks:
-        task["prompts"] = {setup: prompt(task, setup) for setup in setups}
+        task["prompts"] = {setup: prompt(task, setup, review) for setup in setups}
     study.mkdir(parents=True, mode=0o700)
     shutil.copytree(project / "packages/code-intel/src", study / "engine", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     shutil.copytree(HERE, study / "harness", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     python = str(Path(sys.executable).absolute())
     server_env = {**LOCAL_ENV, **CONFIGS[args.config_id]}
-    manifest = {"version": 1, "mode": "localize", "prompt_version": "PROMPT_V1", "client": "claude",
+    manifest = {"version": 1, "mode": "review" if review else "localize",
+                "prompt_version": "REVIEW_PROMPT_V1" if review else "PROMPT_V1", "client": "claude",
+                "answer_schema": REVIEW_SCHEMA if review else SCHEMA,
                 "model": args.model, "client_version": client_version(), "python": python, "project": str(project),
                 "config_id": args.config_id, "server_env": server_env,
                 # Trials replay the installed entry (onboarding_study.configure_setup) with this command.
                 "mcp_server": {"command": python, "args": ["-m", "attocode_intel.entrypoint", "--profile", "daily",
                                                            "--project", "<workspace>"],
                                "env": {"PYTHONPATH": "<study>/engine", "ATTOCODE_INTEL_PRECISION": "off", **server_env}},
-                "setups": setups, "tools": {setup: TOOLS[setup] for setup in setups}, "trials": args.trials,
+                "setups": setups, "tools": {setup: REVIEW_TOOLS if review else TOOLS[setup] for setup in setups},
+                "trials": args.trials,
                 "timeout": TIMEOUT, "seed": SEED, "tasks": tasks,
                 "schedule": [row for row in schedule(tasks, args.trials, seed=SEED, lanes=setups, clients=("claude",))
                              if row["lane"] != "issue_only" or row["repeat"] == 0],
@@ -164,7 +191,8 @@ def freeze(args):
                 "environment": environment_versions(),
                 "isolation": "History-free snapshot per instance, fresh copy per trial, read-only tools, project "
                              "guidance only; no hooks, memory, session persistence or other MCP servers",
-                "scope": "Development diagnostic of agent file localization; no release claim"}
+                "scope": "Development diagnostic of agent " + ("change review" if review else "file localization")
+                         + "; no release claim"}
     manifest["study_id"] = digest(manifest)
     write_json(study / "manifest.json", manifest)
     print(json.dumps({"study": str(study), "study_id": manifest["study_id"], "runs": len(manifest["schedule"])}))
@@ -237,9 +265,21 @@ def commit(root):
     exclude(root, [".attocode/"])
 
 
-def hide_setup_files(root):
-    """Ignore what the setup wrote (guidance, MCP config), so that only the agent can change `git status`."""
-    entries = [entry for entry in git(root, "status", "--porcelain", "-z").split("\0") if entry]
+def apply_change(root, patch):
+    """Review mode: apply the change without a commit. New files are intent-to-add, so `git diff` shows them."""
+    try:
+        shell(["git", "apply", "--intent-to-add", "--whitespace=nowarn", "-"], cwd=root, input=patch, timeout=300)
+    except subprocess.CalledProcessError:
+        return "The patch does not apply at the base commit"
+    return None
+
+
+def hide_setup_files(root, before=""):
+    """Ignore what the setup wrote (guidance, MCP config), so that only the agent can change `git status`.
+
+    BEFORE is `git status --porcelain -z` before the setup: in review mode, the change itself."""
+    known = set(before.split("\0"))
+    entries = [entry for entry in git(root, "status", "--porcelain", "-z").split("\0") if entry and entry not in known]
     if any(not entry.startswith("?? ") for entry in entries):
         raise RuntimeError("Setup changed tracked files")
     exclude(root, ["/" + entry[3:] for entry in entries])
@@ -306,6 +346,8 @@ def prepare_task(study, manifest, clone, task):
         tracked = set(git(root, "ls-files", "-z").split("\0")) - {""}
         if not tracked & set(task["gold"]):
             reason = "No gold file exists in the base tree"
+        elif is_review(manifest):
+            reason = apply_change(root, task["patch"])
     if reason:
         shutil.rmtree(root)
         return {"status": "excluded", "reason": reason}
@@ -375,13 +417,17 @@ def wiring(args):
     root.mkdir(parents=True)
     (root / "benchmark_fixture.py").write_text("def benchmark_value():\n    return 42\n")
     commit(root)
+    review = is_review(manifest)
+    if review:  # An uncommitted change for `git diff` to show.
+        (root / "benchmark_fixture.py").write_text("def benchmark_value():\n    return 43\n")
     configured = intel_setup(manifest, study, root, directory / "stage")
     token = secrets.token_hex(16)
     guidance = root / GUIDANCE["claude"]
     # Claude gets no installed guidance file, so the token file only checks the project loader.
     guidance.write_text((guidance.read_text() if guidance.exists() else "") + f"\nReadiness token: {token}\n")
     try:
-        result = invoke("claude", manifest["model"], root, directory / "stage", configured["servers"], WIRING_PROMPT, 300,
+        result = invoke("claude", manifest["model"], root, directory / "stage", configured["servers"],
+                        WIRING_PROMPT + (REVIEW_WIRING if review else ""), 300,
                         subscription_env(), answer_schema=WIRING_SCHEMA, project_guidance=True,
                         tools=next(manifest["tools"][setup] for setup in manifest["setups"] if setup in INTEL))
     finally:
@@ -395,13 +441,20 @@ def wiring(args):
     personal = Path.home() / ".claude/CLAUDE.md"
     lines = [line.strip() for line in personal.read_text().splitlines() if len(line.strip()) >= 20] if personal.is_file() else []
     answer = result["output"]
-    checks = {"client": successful(result),
+    bash = [call for call in parsed["tool_calls"] if call["name"] == "Bash"]
+    forbidden = {"Edit", "Write", "NotebookEdit"} | (set() if review else {"Bash"})  # Review: Bash for git diff only.
+    checks = {"client": completed(manifest, result),
               "guidance_without_reads": answer.get("readiness_token") == token and "CLAUDE.md" not in arguments,
               "no_home_instructions": not any(line in str(answer.get("user_instructions", "")) for line in lines)
               and "/.claude/" not in arguments,
               "mcp_transport": any(call["name"].startswith(f"mcp__{NAME}__") and call["id"] in outputs
                                    and not outputs[call["id"]]["is_error"] for call in parsed["tool_calls"]),
-              "read_only_tools": bool(init) and not {"Edit", "Write", "Bash", "NotebookEdit"} & set(init.get("tools", []))}
+              "read_only_tools": bool(init) and not forbidden & set(init.get("tools", []))}
+    if review:
+        checks["git_diff_allowed"] = any(str(call["arguments"].get("command", "")).startswith("git diff")
+                                         and call["id"] in outputs and not outputs[call["id"]]["is_error"] for call in bash)
+        checks["other_bash_denied"] = any(denial.get("tool_name") == "Bash" and not str(
+            (denial.get("tool_input") or {}).get("command", "")).startswith("git diff") for denial in result["permission_denials"])
     record = {"study_id": manifest["study_id"], "excluded": True, "passed": all(checks.values()), "checks": checks,
               "init_tools": init.get("tools"), "mcp_servers": init.get("mcp_servers"), "setup": configured,
               "execution": result}
@@ -427,9 +480,10 @@ def trial(study, manifest, task, row):
         else:
             shutil.copytree(study / "sources" / task["id"], root, symlinks=True,
                             ignore=None if setup in INTEL else shutil.ignore_patterns(".attocode"))
+        before = git(root, "status", "--porcelain", "-z")  # Review mode: the change. Else empty.
         configured = (intel_setup(manifest, study, root, stage) if setup in INTEL else
                       configure_setup(manifest, study, root, "native", stage, "claude"))
-        hide_setup_files(root)
+        hide_setup_files(root, before)
         if setup in INTEL:
             record["index_reused"] = (root / ".attocode").is_dir()
             # The copy changed the ctime of every file, so the server would repair the whole
@@ -440,11 +494,11 @@ def trial(study, manifest, task, row):
         record.update(configured=configured, setup_seconds=time.monotonic() - started)
         write_json(directory / "started.json", {**row, "study_id": manifest["study_id"], "time": time.time()})
         result = invoke("claude", manifest["model"], root, stage, configured["servers"], task["prompts"][setup],
-                        manifest["timeout"], subscription_env(), answer_schema=SCHEMA, project_guidance=True,
-                        tools=manifest["tools"][setup])
-        record.update(stage=result, seconds=result["seconds"], git_status=git(root, "status", "--porcelain"))
-        record["status"] = ("failed" if not successful(result) else
-                             "protocol_violation" if record["git_status"] else "completed")
+                        manifest["timeout"], subscription_env(), answer_schema=manifest.get("answer_schema", SCHEMA),
+                        project_guidance=True, tools=manifest["tools"][setup])
+        record.update(stage=result, seconds=result["seconds"], git_status=git(root, "status", "--porcelain", "-z"))
+        record["status"] = ("failed" if not completed(manifest, result) else
+                             "protocol_violation" if record["git_status"] != before else "completed")
     except Exception as exc:
         record["error"] = f"{type(exc).__name__}: {exc}"
     finally:
@@ -452,6 +506,11 @@ def trial(study, manifest, task, row):
         write_json(directory / "result.json", record)
         shutil.rmtree(root, ignore_errors=True)
     return record
+
+
+def completed(manifest, result):
+    """In review mode, a denied call (a Bash command other than git diff) does not fail the run."""
+    return successful({**result, "permission_denials": None} if is_review(manifest) else result)
 
 
 def run(args):
@@ -530,11 +589,15 @@ def clean_paths(paths, root=""):
     return cleaned[:10]
 
 
+def mentioned(content, path):
+    """True when CONTENT names PATH as a whole path, not as a part of a longer name."""
+    return re.search(r"(?<![\w.-])" + re.escape(path) + r"(?![\w-]|\.\w)", text_of(content)) is not None
+
+
 def gold_seen(results, gold):
     """Client seconds at the first tool result that names a gold file."""
-    patterns = [re.compile(r"(?<![\w.-])" + re.escape(path) + r"(?![\w-]|\.\w)") for path in gold]
     for row in sorted(results, key=lambda row: row["event_index"]):
-        if row["received_seconds"] is not None and any(p.search(text_of(row["content"])) for p in patterns):
+        if row["received_seconds"] is not None and any(mentioned(row["content"], path) for path in gold):
             return row["received_seconds"]
     return None
 
@@ -549,13 +612,14 @@ def grade(study, manifest, task, record, metrics, tracked):
     """Score one run. A failed run scores 0 and takes the full timeout."""
     stage = record.get("stage") or {}
     failed = record.get("status") != "completed"
-    answer = stage.get("output", {}).get("files")
+    answer = stage.get("output", {}).get("tests" if is_review(manifest) else "files")
     parsed = isinstance(answer, list) and all(isinstance(path, str) for path in answer)
     files = clean_paths(answer if parsed else [], record.get("workspace", ""))
     ranked, gold = [] if failed else files, set(task["gold"])
     events = run_dir(study, record) / "stage-0/events.jsonl"
     trace = parse_events("claude", events.read_text()) if events.exists() else {"tool_calls": [], "tool_results": []}
     mcp = {call["id"] for call in trace["tool_calls"] if call["name"].startswith("mcp__")}
+    shown = {path for row in trace["tool_results"] if row["id"] in mcp for path in gold if mentioned(row["content"], path)}
     usage = stage.get("usage") or {}
     return {"dataset": task["dataset"], "instance_id": task["instance_id"], "config_id": manifest["config_id"],
             "task": task["id"], "setup": record["lane"], "trial": record["repeat"], "id": record["id"],
@@ -564,7 +628,10 @@ def grade(study, manifest, task, record, metrics, tracked):
             "invalid_paths": None if tracked is None else sum(path not in tracked for path in files),
             "acc1": metrics.compute_acc_at_k(ranked, gold, 1), "acc5": metrics.compute_acc_at_k(ranked, gold, 5),
             "acc10": metrics.compute_acc_at_k(ranked, gold, 10), "recall10": metrics.compute_recall_at_k(ranked, gold, 10),
-            "mrr5": metrics.compute_mrr(ranked, gold, 5),
+            "mrr5": metrics.compute_mrr(ranked, gold, 5), "recall5": metrics.compute_recall_at_k(ranked, gold, 5),
+            "hit5": float(metrics.compute_mrr(ranked, gold, 5) > 0),
+            "denials": len(stage.get("permission_denials") or []),
+            "gold_shown_not_named": sorted(shown - set(files)),
             "seconds": manifest["timeout"] if failed else stage.get("seconds"), "turns": stage.get("turns"),
             "cost_usd": stage.get("cost_usd"), "tokens": {key: usage.get(key) for key in TOKENS},
             "tool_calls": dict(Counter(call["name"] for call in trace["tool_calls"])), "mcp_calls": len(mcp),
@@ -607,14 +674,16 @@ def summary(args):
     with (study / "runs.jsonl").open("w") as stream:
         stream.writelines(json.dumps({**row, "metrics_sha256": metrics_sha}) + "\n" for row in rows)
     excluded = {name: state["reason"] for name, state in prepared.items() if state.get("status") != "ready"}
-    lines = ["# Localize study summary", "",
+    key, hit, label = metric(manifest)
+    lines = [f"# {'Review' if is_review(manifest) else 'Localize'} study summary", "",
              f"Study `{manifest['study_id'][:12]}`. Model `{manifest['model']}`, config `{manifest['config_id']}`, "
              f"{manifest['trials']} trial(s) per task and setup. Recorded runs: {len(rows)} of {len(manifest['schedule'])} "
              f"scheduled. Excluded tasks: {len(excluded)}.",
              f"Metrics: `{metrics.__file__}` (sha256 `{metrics_sha[:12]}`). A failed run scores 0, takes the "
              f"{manifest['timeout']} s timeout and the worst cost of its setup.",
-             "pass@k: share of tasks with an Acc@5 hit in any of their k trials. pass^k: in all k trials.", "",
-             "| Setup | Runs | Tasks | Acc@5 | pass@k | pass^k | Median cost (USD) | Median seconds | Median turns "
+             f"pass@k: share of tasks with {'a Hit@5' if hit == 'hit5' else 'an Acc@5 hit'} in any of their k trials. "
+             "pass^k: in all k trials.", "",
+             f"| Setup | Runs | Tasks | {label} | pass@k | pass^k | Median cost (USD) | Median seconds | Median turns "
              "| MCP adoption | Failures |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for setup in manifest["setups"]:
         selected = [row for row in rows if row["setup"] == setup]
@@ -622,14 +691,20 @@ def summary(args):
             continue
         hits = {}
         for row in selected:
-            hits.setdefault(row["task"], []).append(row["acc5"] == 1)
+            hits.setdefault(row["task"], []).append(row[hit] == 1)
         worst = max((row["cost_usd"] for row in selected if row["cost_usd"] is not None), default=None)
-        lines.append(f"| {setup} | {len(selected)} | {len(hits)} | {show(statistics.fmean(r['acc5'] for r in selected))} | "
+        lines.append(f"| {setup} | {len(selected)} | {len(hits)} | {show(statistics.fmean(r[key] for r in selected))} | "
                      f"{show(statistics.fmean(any(v) for v in hits.values()))} | "
                      f"{show(statistics.fmean(all(v) for v in hits.values()))} | "
                      f"{show(median([worst if r['failed'] else r['cost_usd'] for r in selected]), 4)} | "
                      f"{show(median([r['seconds'] for r in selected]), 1)} | {show(median([r['turns'] for r in selected]), 0)} | "
                      f"{sum(r['mcp_calls'] > 0 for r in selected)}/{len(selected)} | {sum(r['failed'] for r in selected)} |")
+    if is_review(manifest):
+        lines += ["", "Denied calls (Bash other than git diff) and gold tests that an MCP result showed but the "
+                  "answer did not name, for each setup:", ""]
+        lines += [f"- {setup}: {sum(r['denials'] for r in rows if r['setup'] == setup)} denied, "
+                  f"{sum(len(r['gold_shown_not_named']) for r in rows if r['setup'] == setup)} shown, not named"
+                  for setup in manifest["setups"]]
     lines += ["", *[f"- Excluded `{name}`: {reason}" for name, reason in sorted(excluded.items())]]
     (study / "summary.md").write_text("\n".join(lines) + "\n")
     review(study, manifest, rows)
@@ -637,20 +712,26 @@ def summary(args):
                       "metrics_sha256": metrics_sha}), flush=True)
 
 
+def metric(manifest):
+    """The per-run score, the hit used for pass@k, and the score label."""
+    return ("recall5", "hit5", "Recall@5") if is_review(manifest) else ("acc5", "acc5", "Acc@5")
+
+
 def review(study, manifest, rows):
     """Material for a human pass: discordant pairs, failures and five random runs."""
+    key, _, label = metric(manifest)
     keyed = {(row["task"], row["trial"], row["setup"]): row for row in rows}
-    lines = ["# Localize study review", "", "## Discordant pairs (Acc@5 against native)", "",
-             "| Task | Trial | Setup | Native | Setup Acc@5 | Native events | Setup events |", "|---|---:|---|---:|---:|---|---|"]
+    lines = [f"# {'Review' if is_review(manifest) else 'Localize'} study review", "", f"## Discordant pairs ({label} against native)", "",
+             f"| Task | Trial | Setup | Native | Setup {label} | Native events | Setup events |", "|---|---:|---|---:|---:|---|---|"]
     for (name, number, setup), row in sorted(keyed.items()):
         native = keyed.get((name, number, "native"))
-        if setup != "native" and native and native["acc5"] != row["acc5"]:
-            lines.append(f"| {name} | {number} | {setup} | {native['acc5']:.0f} | {row['acc5']:.0f} | "
+        if setup != "native" and native and native[key] != row[key]:
+            lines.append(f"| {name} | {number} | {setup} | {native[key]:.2f} | {row[key]:.2f} | "
                          f"{native['events']} | {row['events']} |")
     lines += ["", "## Failures", ""]
     lines += [f"- `{row['id']}`: {row['failure']}. Events: {row['events']}" for row in rows if row["failed"]] or ["None."]
     lines += ["", "## Five random runs", ""]
     for row in random.Random(manifest["seed"]).sample(rows, min(5, len(rows))):
-        lines.append(f"- `{row['id']}`: Acc@5 {row['acc5']:.0f}, files {row['files']}, "
+        lines.append(f"- `{row['id']}`: {label} {row[key]:.2f}, files {row['files']}, "
                      f"MCP calls {row['mcp_calls']}. Events: {row['events']}")
     (study / "review.md").write_text("\n".join(lines) + "\n")
