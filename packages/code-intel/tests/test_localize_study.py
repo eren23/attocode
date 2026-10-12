@@ -319,6 +319,10 @@ def test_review_mode_end_to_end_with_the_change_and_git_diff_only(localize, stub
     snapshot = study / "sources/fixture_review-1"
     # The change is in the work tree, not in the history; the new file shows in `git diff`.
     assert git(snapshot, "diff", "--name-only").split() == ["pkg/b.py", "pkg/new.py"]
+    # The index keeps the base tree: `git diff` shows the edit, not a new file, and nothing else changed.
+    assert "-    return 1" in git(snapshot, "diff", "--", "pkg/b.py")
+    assert sorted(line.split()[-1] for line in git(snapshot, "status", "--porcelain").splitlines()) == ["pkg/b.py", "pkg/new.py"]
+    assert "tests/test_b.py" in git(snapshot, "ls-files").split()
     assert git(snapshot, "log", "--all", "--oneline").count("\n") == 0
     quota = tmp_path / "quota.json"
     quota.write_text(json.dumps({"claude": {"subscription_only": True, "extra_usage_disabled": True,

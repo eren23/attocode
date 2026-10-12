@@ -86,6 +86,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   denied Bash call does not fail the run, and the wiring check proves the
   limit before scored runs start.
 
+### Fixed — Code-intel evals
+
+- The agent studies looked for quota messages in all client output,
+  also in tool results. A repository diff that quoted "rate limit
+  exceeded" thus marked a completed run as quota exhausted and stopped
+  the session. The check now ignores tool calls and tool results.
+- Review mode applied the change with `git apply --intent-to-add`. With
+  Git 2.50, this command writes an index that holds only the changed
+  files. Thus `git diff` showed each changed file as a new file, `git
+  status` showed the rest of the tree as deleted, and `git ls-files`,
+  which `suggest_tests` uses, listed only the changed files. Review mode
+  now applies the change with `git apply` and marks only the new files
+  with `git add --intent-to-add`.
+
 ## [0.2.30] - 2026-10-11
 
 ### Changed — Packaging
