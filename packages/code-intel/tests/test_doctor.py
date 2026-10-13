@@ -6,7 +6,7 @@ from attocode_intel.onboarding import configure_client, diagnose
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("client", ["codex", "claude", "cursor"])
-@pytest.mark.parametrize("profile", ["daily", "full"])
+@pytest.mark.parametrize("profile", ["daily", "full", "lean"])
 async def test_doctor_reads_both_wire_formats(tmp_path, client, profile):
     (tmp_path / "main.py").write_text("def example(): return 1\n")
     configure_client(client, tmp_path, profile=profile)

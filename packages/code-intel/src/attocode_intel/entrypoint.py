@@ -44,6 +44,7 @@ def exit_when_client_exits(interval: float = 5.0) -> None:
 
 
 def main(argv=None):
+    from attocode_intel.catalog import PROFILES
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == "share":
         from attocode_intel.sharing import share
@@ -56,7 +57,7 @@ def main(argv=None):
         parser.add_argument("--client", choices=["codex", "claude", "cursor", "all"], default="all")
         parser.add_argument("--project", default=".")
         parser.add_argument("--global", dest="global_scope", action="store_true")
-        parser.add_argument("--profile", choices=["daily", "full"], default="daily")
+        parser.add_argument("--profile", choices=PROFILES, default="daily")
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--remove", action="store_true")
         parser.add_argument("--server", default="")
@@ -122,8 +123,8 @@ def main(argv=None):
     )
     parser.add_argument("--project", default=os.environ.get("ATTOCODE_PROJECT_DIR", ""))
     parser.add_argument(
-        "--profile", choices=["daily", "full"], default="daily",
-        help="daily: a short tool list for agents (default); full: all tools",
+        "--profile", choices=PROFILES, default="daily",
+        help="daily: default tool list; full: all tools; lean: experimental seven-tool local profile",
     )
     parser.add_argument(
         "--transport", choices=["stdio", "sse", "http", "streamable-http"], default="stdio"
@@ -139,6 +140,8 @@ def main(argv=None):
 
     parser.add_argument("--version", action="version", version=f"attocode-code-intel {__version__}")
     opts = parser.parse_args(args)
+    if opts.profile == "lean" and opts.transport == "sse":
+        parser.error("lean requires stdio or local HTTP; legacy SSE lists all tools")
     if opts.transport in {"http", "streamable-http"}:
         from attocode_intel.cli import _serve_http
 

@@ -17,6 +17,26 @@ INSTRUCTIONS = (
 WATCHING = "The server watches the project, so it indexes your edits without a call."
 NOT_WATCHING = "This server does not watch files: after edits, call notify_file_changed."
 INSTRUCTIONS, INSTRUCTIONS_NO_WATCH = INSTRUCTIONS.format(watch=WATCHING), INSTRUCTIONS.format(watch=NOT_WATCHING)
+PROFILES = ("daily", "full", "lean")
+COMPACT_PROFILES = frozenset({"daily", "lean"})
+LEAN = frozenset({"bootstrap", "search_symbols", "inspect_symbol", "semantic_search",
+                  "impact_analysis", "suggest_tests", "capabilities"})
+LEAN_INSTRUCTIONS = (
+    "Code intelligence is optional; use native tools whenever useful. If you choose this server, "
+    "inspect_symbol handles a known symbol, search_symbols finds names, and bootstrap or semantic_search "
+    "locates unfamiliar behavior. impact_analysis and suggest_tests offer candidates, not complete coverage. "
+    "Cite each source range separately. Missing relationships do not prove absence. {watch} "
+    "Advanced operations require a new full-profile session; ToolSearch cannot reveal unadvertised tools. "
+    "Keep uncommitted code local."
+)
+
+
+def profile_instructions(profile="daily", *, watch=True):
+    if profile == "lean":
+        return LEAN_INSTRUCTIONS.format(watch=WATCHING if watch else NOT_WATCHING)
+    return INSTRUCTIONS if watch else INSTRUCTIONS_NO_WATCH
+
+
 DAILY = frozenset(
     {
         "bootstrap",
@@ -137,8 +157,10 @@ def is_write(name: str) -> bool:
 
 
 def tool_catalog(profile: str = "full", *, remote: bool = False) -> list[Tool]:
-    if profile not in ("daily", "full"):
-        raise ValueError("profile must be daily or full")
+    if profile not in PROFILES:
+        raise ValueError("profile must be daily, full or lean")
+    if remote and profile == "lean":
+        raise ValueError("lean is an experimental local profile; remote profiles are daily or full")
     result = []
     for name, tool in registered_tools().items():
         if profile == "daily" and name not in DAILY:
@@ -239,4 +261,6 @@ def tool_catalog(profile: str = "full", *, remote: bool = False) -> list[Tool]:
         if not remote:  # local analysis always reads the working tree
             tool.inputSchema["properties"].pop("revision", None)
     local_daily = profile == "daily" and not remote
-    return [tool for tool in result if not (local_daily and tool.name in LEARNING)]
+    return [tool for tool in result
+            if not (local_daily and tool.name in LEARNING)
+            and (profile != "lean" or tool.name in LEAN | {"notify_file_changed"})]
