@@ -435,10 +435,11 @@ if __name__ == "__main__":
     freezing.add_argument("--models", type=Path, help="Required except in localize mode")
     freezing.add_argument("--serena-launcher", type=Path)
     freezing.add_argument("--mode", choices=("release", "pilot", "quality", "onboarding", "understanding", "external",
-                                             "localize", "review"), default="release")
+                                             "localize", "review", "repair"), default="release")
     freezing.add_argument("--baseline-src", type=Path)
     freezing.add_argument("--case-pack", type=Path, help="Private understanding case-pack directory")
     freezing.add_argument("--benchmark-pack", type=Path, help="Prepared external benchmark pack, outside the repository")
+    freezing.add_argument("--evaluator-python", type=Path, help="Repair: isolated pinned SWE-bench evaluator Python")
     freezing.add_argument("--instances", type=Path, help="Localize: matrix instances.jsonl (eval.matrix.run ingest). Review: rows with id, repo, base_commit, patch, gold")
     freezing.add_argument("--ids", type=Path, help="Localize: file with one matrix id (dataset/native) per line")
     freezing.add_argument("--model", help="Localize: explicit Claude model ID")
@@ -450,25 +451,29 @@ if __name__ == "__main__":
         if name in {"run", "wiring"}:
             sub.add_argument("--quota", type=Path)
             sub.add_argument("--clients", nargs="+", choices=CLIENTS)
+        if name == "wiring":
+            sub.add_argument("--offline", action="store_true", help="Repair: verify transport/runtime without model requests")
         if name == "run":
             sub.add_argument("--max-runs", type=int, help="Batch limit (pilot/quality: 6; release: 12; localize: all)")
             sub.add_argument("--tasks", nargs="+")
             sub.add_argument("--jobs", type=int, default=1, help="Localize: parallel trials, 1 or 2")
-            sub.add_argument("--deadline-minutes", type=float, default=100,
+            sub.add_argument("--deadline-minutes", type=float, default=None,
                              help="Localize: start no trial after this many minutes")
     for sub in commands.choices.values():
         sub.add_argument("--study", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "freeze" and args.mode not in {"localize", "review"} and not (args.repo_dir and args.models):
+    if args.command == "freeze" and args.mode not in {"localize", "review", "repair"} and not (args.repo_dir and args.models):
         parser.error("--repo-dir and --models are required in this mode")
     args.study = args.study.resolve()
     mode = args.mode if args.command == "freeze" else json.loads((args.study / "manifest.json").read_text()).get("mode")
-    if args.command in {"summary", "report"} and (args.command == "summary") != (mode in {"localize", "review"}):
+    if args.command == "run" and args.deadline_minutes is None:
+        args.deadline_minutes = 50 if mode == "repair" else 100
+    if args.command in {"summary", "report"} and (args.command == "summary") != (mode in {"localize", "review", "repair"}):
         parser.error("Localize and review studies use summary; other modes use report")
-    if mode in {"understanding", "external", "localize", "review"}:
+    if mode in {"understanding", "external", "localize", "review", "repair"}:
         import importlib
         runner = importlib.import_module({"external": "external_study", "understanding": "understanding_study",
-                                          "localize": "localize_study", "review": "localize_study"}[mode])
+                                          "localize": "localize_study", "review": "localize_study", "repair": "repair_study"}[mode])
         getattr(runner, args.command)(args)
         sys.exit(0)
     if args.command == "wiring":

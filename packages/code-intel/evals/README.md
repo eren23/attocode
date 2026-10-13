@@ -303,3 +303,75 @@ The table gives the core mix on the full query. The metric is Acc@5, but gNDCG@5
 No difference on the core mix passes the Holm test. The datasets are small.
 
 The earlier result (v1, also on 2026-10-09) ranked all stored files. It embedded at most 40 windows (1,600 lines) of a file and cut the query at 512 tokens. Markdown, reStructuredText, YAML and text files were about a fifth of the first ten files of `dense`. On the full issue of Loc-Bench 560, `dense` gave Acc@5 0.541 and `rrf(product+dense)` 0.664, against 0.532 for `product`. With only the Python files, `dense` gave 0.609. That pod embedded 1.99 million windows for about $1.7.
+
+
+## Repair completion pilot
+
+R7 compares optional local lean MCP with native tools on eight public
+SWE-bench Lite tasks from eight repositories, two trials per arm. The
+[protocol](designs/2026-10-13-r7-task-completion-pilot.md) fixes the outcome-first
+continuation gate. Adoption is descriptive. Host reads and edits use trace
+audit; Docker execution and independent grading have no network. This is
+not an OS sandbox for the host client.
+
+Use a separate Python 3.12 environment with PyArrow and SWE-bench pinned to
+`726c5461e2ef52d83cf1ea2107870a8bb3328d57`. The worker checks its installed
+commit and records dependency versions. Keep every pack/study outside this
+repository. A pack contains private reference patches, official tests and
+complete test lists; never mount it into an agent workspace.
+
+```sh
+# Preparation only: no Claude requests or quota check.
+EVALUATOR=/path/to/isolated-evaluator/bin/python
+PACK=/path/to/new-private-pack
+STUDY=/path/to/new-study
+DATASET=/path/to/lite@97f9af8814fe7eb15dcd9b2abaa9010e1eadda63/data/test-00000-of-00001.parquet
+"$EVALUATOR" packages/code-intel/evals/repair_worker.py prepare-pack --dataset "$DATASET" --pack "$PACK"
+.venv/bin/python packages/code-intel/evals/study.py freeze --mode repair --model claude-sonnet-5-5 --trials 2 --benchmark-pack "$PACK" --evaluator-python "$EVALUATOR" --study "$STUDY"
+PYTHONPATH="$STUDY/engine" .venv/bin/python "$STUDY/harness/study.py" prepare --study "$STUDY"
+PYTHONPATH="$STUDY/engine" .venv/bin/python "$STUDY/harness/study.py" wiring --offline --study "$STUDY"
+PYTHONPATH="$STUDY/engine" .venv/bin/python "$STUDY/harness/study.py" summary --study "$STUDY"
+```
+
+Preparation downloads task images and build wheels before offline tests,
+uses deterministic SHA-256 repository/task order, preserves exclusions,
+and requires image-only and mounted-source base/gold controls plus rejection
+of a synthetic regression. The strict grader requires every F2P and P2P
+ID to be observed PASSED and an actual zero test-command exit status.
+Missing, skipped, timed-out and unexecuted tests cannot pass. No regression
+cap is applied. Candidate changes to official test paths are restored
+before the immutable official patch. Submitted patches and logs remain
+available; stale cached verdicts are rejected.
+
+`prepare` validates the controls with the frozen harness. Exact-input
+cache reuse requires matching task, image, patch, source, evaluator and
+worker/grader hashes; drift is rejected. `wiring --offline`
+checks Docker command execution, the actual seven MCP tools and visibility
+of a container edit through inspection. It records `model_wiring: pending`.
+Scored `run` refuses to call a model until two separate excluded model
+wiring attempts pass. Those checks and the 32 scored runs are **not part of
+the build-and-prepare authorization**. Future execution requires fresh
+subscription-only quota observations, disabled paid usage, at most two
+workers, 50-minute sessions and a $20 cumulative client-estimate soft cap.
+Preserve failed/interrupted attempts; never change frozen inputs to resume.
+
+## Bounded Codex repair diagnostic
+
+`codex_repair_study.py` is a separate, explicitly authorized six-request
+diagnostic: two excluded wiring checks, then four repairs on the first two
+prepared R7 tasks with native/optional lean arms. It leaves Claude R7 frozen.
+Read the [design](designs/2026-10-13-codex-repair-diagnostic.md) before use.
+Freeze to a new external directory, then run the frozen harness's `prepare`,
+`wiring --index 0/1` and `repair --index 0/1/2/3` actions individually.
+Both wiring traces require a clear operator `review.json` before repairs.
+Preserve all attempts; no retries or replacement tasks.
+
+It reuses ChatGPT login in a private disposable client home, suppresses
+personal guidance/features per invocation, verifies instruction sources
+without a model turn, and pins `gpt-6.1-sol` at high reasoning. It checks fresh
+included quota before every request and stops if the observed credit balance
+decreases. This is an observational spending guard, not a provider-enforced
+credit prohibition. Strict independent grading is shared with R7; all shell
+commands and file edits still require review. Token usage is reported without
+an invented USD estimate. Four development repairs cannot establish an
+intelligence benefit or support a comparison between models.

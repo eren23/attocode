@@ -11,7 +11,7 @@ from pathlib import Path
 
 import tomlkit
 
-from attocode_intel.catalog import INSTRUCTIONS
+from attocode_intel.catalog import INSTRUCTIONS, PROFILES, profile_instructions
 from attocode_intel.project_dir import cache_folder
 
 NAME = "attocode-code-intel"
@@ -60,11 +60,11 @@ def atomic_write(path: Path, text: str):
             os.unlink(temporary)
 
 
-def _instruction_text(path: Path, client: str, remove=False):
+def _instruction_text(path: Path, client: str, remove=False, instructions=INSTRUCTIONS):
     text = path.read_text() if path.exists() else ""
     if (START in text) != (END in text):
         raise ValueError(f"Incomplete managed instruction block in {path}")
-    block = f"{START}\n{INSTRUCTIONS}\n{END}"
+    block = f"{START}\n{instructions}\n{END}"
     if START in text:
         first = text.index(START)
         last = text.index(END, first) + len(END)
@@ -88,6 +88,10 @@ def configure_client(
     token_env="ATTOCODE_API_KEY",
     repo="",
 ):
+    if profile not in PROFILES:
+        raise ValueError("profile must be daily, full or lean")
+    if profile == "lean" and (server or repo):
+        raise ValueError("lean is local-only; remote profiles are daily or full")
     if repo and not server and not remove:
         raise ValueError("Remote installation requires --server; use --remote only with doctor or --remove")
     root = Path(project).resolve()
@@ -164,7 +168,8 @@ def configure_client(
     # Claude Code shows the server instructions to the model, so a CLAUDE.md copy is a duplicate
     # in every request. Claude gets no managed block, and an old block is removed.
     drop = client == "claude" or (remove and not any(name in servers for name in (NAME, REMOTE_NAME)))
-    instruction = _instruction_text(guidance, client, remove=drop)
+    instruction = _instruction_text(guidance, client, remove=drop,
+                                    instructions=profile_instructions(profile))
     # Report the guidance file only when it holds the managed block.
     guidance_file = str(guidance) if START in instruction else None
     # Prepare everything before writing either file; previews contain no credential values.
@@ -218,8 +223,9 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
             metadata = payload.get("metadata", {})
             if "url" not in entry and metadata.get("workspace") != str(root):
                 raise RuntimeError("Server selected a different workspace")
+            probe_name = "project_summary" if any(t.name == "project_summary" for t in catalog.tools) else "bootstrap"
             query = await session.call_tool(
-                "project_summary", {"workspace": metadata["workspace"], "max_tokens": 512}
+                probe_name, {"workspace": metadata["workspace"], "max_tokens": 512}
             )
             if query.isError:
                 raise RuntimeError("Bounded project query failed")

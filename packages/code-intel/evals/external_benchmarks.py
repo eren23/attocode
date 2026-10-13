@@ -68,6 +68,8 @@ def start_runtime(task, root, name):
     workdir = task['workdir']
     # No grading data, host credentials, Docker socket or private study directory is mounted.
     shell(['docker', 'run', '-d', '--name', name, '--platform', task.get('platform', 'linux/amd64'),
+           *(['--cpus', str(task['cpus'])] if task.get('cpus') else []),
+           *(['--memory', str(task['memory'])] if task.get('memory') else []),
            *(['--shm-size', str(task['shm_size'])] if task.get('shm_size') else []),
            '--network', 'none', '--mount', f'type=bind,source={root},target={workdir}',
            '--workdir', workdir, '--entrypoint', 'sleep', task['image'], 'infinity'])

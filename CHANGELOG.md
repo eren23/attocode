@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Experimental intelligence and repair pilot
+
+- Opt-in local `lean` profile: seven watched MCP tools, conditional routing,
+  accurate advanced-tool follow-ups and capabilities, and installer/doctor
+  support. Daily/full defaults and remote surfaces are unchanged.
+- Separate R7 repair-study harness with pinned SWE-bench inputs, writable
+  Docker runtimes, strict all-test grading, immutable controls and offline
+  transport checks. Excluded model wiring passed; scored runs remain gated.
+  Adoption is descriptive; continuation depends on outcomes, cost and time.
+- Bounded Codex repair diagnostic: both wiring checks and all four development
+  repairs passed independent grading. Both optional runs used no MCP tools;
+  the result validates execution, not an intelligence benefit.
+
 ### Changed — Code-intel release
 
 - `attocode-code-intel` 0.1.1 includes the `src/` import fix and the `init`
@@ -83,6 +96,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — Code-intel evals
 
+- [R6 review results](packages/code-intel/evals/results/2026-10-13-r6-review-test-note.md):
+  with a note stating the limits of `suggest_tests`, the server showed no measured review benefit
+  on 29 new tasks (Recall@5 difference +0.007, 95% range −0.046 to +0.052).
+  The predefined no-harm rule was met narrowly. All 174 runs completed;
+  agents chose no additional server tool.
 - `study.py freeze --mode review` freezes an agent change-review study (R4
   Stage 1). The snapshot has the change in the work tree, not in the
   history. The agent names the existing tests that check the change, and

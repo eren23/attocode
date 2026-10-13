@@ -18,10 +18,10 @@ from mcp import types
 from mcp.server.lowlevel import Server
 
 from attocode_intel.catalog import (
-    INSTRUCTIONS,
-    INSTRUCTIONS_NO_WATCH,
+    COMPACT_PROFILES,
     compact_schema,
     is_write,
+    profile_instructions,
     registered_tools,
     tool_catalog,
 )
@@ -48,7 +48,7 @@ class OperationGateway:
         self._workers = {}
         self._stores = {}
         self.watch, self.watch_debounce = watch, watch_debounce
-        self.instructions = INSTRUCTIONS if watch else INSTRUCTIONS_NO_WATCH
+        self.instructions = profile_instructions(profile, watch=watch)
         self._closed = False
         self.max_workspaces = max(1, max_workspaces)
         self._active = {}
@@ -73,7 +73,7 @@ class OperationGateway:
         catalog = deepcopy(self._catalog()[0])
         if not mcp:
             return catalog
-        if not self.resolver and self.effective_profile() == "daily":
+        if not self.resolver and self.effective_profile() in COMPACT_PROFILES:
             # A local agent does not need these. They stay callable, for harnesses and diagnostics.
             hidden = {"hydration_status", "cross_repo_search"} | ({"notify_file_changed"} if self.watch else set())
             catalog = [tool for tool in catalog if tool.name not in hidden]
@@ -84,7 +84,7 @@ class OperationGateway:
             properties = tool.inputSchema["properties"]
             if not self.resolver and "workspace" in properties:
                 properties["workspace"] = {"type": "string", "description": "Project path (default: this project)"}
-            if self.effective_profile() == "daily":
+            if self.effective_profile() in COMPACT_PROFILES:
                 budget = {"type": "integer", "maximum": 32000, "default": 2000}
                 properties["max_tokens"] = {**budget, "minimum": 512} if is_write(tool.name) else budget
         return catalog
@@ -163,7 +163,9 @@ class OperationGateway:
                 tracker.refresh(context.service)
 
     async def execute_mcp(self, name: str, arguments: dict) -> types.CallToolResult:
-        return await self.execute(name, arguments, compact=self.effective_profile() == "daily")
+        if self.effective_profile() == "lean" and name not in {t.name for t in self.catalog(mcp=True)}:
+            raise ValueError(f"Tool {name!r} is not advertised in lean; start a full-profile session")
+        return await self.execute(name, arguments, compact=self.effective_profile() in COMPACT_PROFILES)
 
     async def execute(self, name: str, arguments: dict, *, compact=False) -> types.CallToolResult:
         from attocode_intel.telemetry import emit, enabled
@@ -392,6 +394,13 @@ class OperationGateway:
                     "guidance": self.instructions,
                     "languages": language_capabilities(getattr(context.stores.get("precision"), "verified_languages", ())),
                 }
+                if self.effective_profile() == "lean":
+                    advertised = {t.name for t in self.catalog(mcp=True)}
+                    payload.update(
+                        profiles=["daily", "full", "lean"], tools=sorted(advertised),
+                        advanced_tools=sorted(t.name for t in tool_catalog("full") if t.name not in advertised),
+                        advanced_profile={"profile": "full", "restart_required": True},
+                    )
                 text = json.dumps(payload, indent=2)
             else:
                 from attocode_intel.local_knowledge import LEARNING_TOOLS, execute_local_knowledge
@@ -599,6 +608,19 @@ class OperationGateway:
                 text = json.dumps(payload)
             if name in {"cross_references", "dependencies", "call_graph", "impact_analysis", "suggest_tests"}:
                 header += "Analysis: partial; relationships are candidates and missing results do not prove absence.\n"
+            if self.effective_profile() == "lean" and isinstance(payload, dict):
+                follow = payload.get("follow_up")
+                if isinstance(follow, dict):
+                    advertised = {t.name for t in self.catalog(mcp=True)}
+                    advanced = {}
+                    for key, value in list(follow.items()):
+                        if isinstance(value, dict) and value.get("tool") and value["tool"] not in advertised:
+                            advanced[key] = {**follow.pop(key), "profile": "full", "restart_required": True}
+                    if advanced:
+                        payload["advanced_follow_up"] = advanced
+                    text = json.dumps(payload, default=str)
+            if self.effective_profile() == "lean" and name == "bootstrap":
+                text = text.replace("`explore_codebase(dir)`", "native directory reads (advanced browsing requires full)")
             body = text
             text, truncated = bounded_text(header + text, budget) if not compact else (text, False)
             truncated = truncated or "[Truncated;" in text
