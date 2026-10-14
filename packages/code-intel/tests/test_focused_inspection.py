@@ -357,3 +357,24 @@ async def test_lib_layout_links_tests_by_name_and_by_import(tmp_path, monkeypatc
     finally:
         await gateway.close()
 
+
+
+async def test_unique_method_does_not_bind_unrelated_receivers(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    (tmp_path / "gateway.py").write_text(
+        "class Gateway:\n"
+        "    def close(self): pass\n"
+        "    def cleanup(self, store):\n"
+        "        store.close()\n"
+        "        self.close()\n"
+        "def unrelated(store):\n"
+        "    store.close()\n")
+    for _ in range(2):
+        gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+        try:
+            selected = decode(await gateway.execute_mcp("inspect_symbol", {
+                "symbol_name": "Gateway.close", "file_path": "gateway.py", "line": 2}))
+            assert {r["line"] for r in selected["references"]} == {5}
+            assert {r["line"] for r in selected["reference_candidates"]} == {4, 7}
+        finally:
+            await gateway.close()

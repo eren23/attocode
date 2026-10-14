@@ -136,11 +136,21 @@ def classify_symbol_references(ast, definition):
         local_names = names_by_file.get(ref.file_path, set())
         syntax_name = getattr(ref, "syntax_name", "") or ref.symbol_name
         caller = getattr(ref, "caller_qualified_name", "")
-        if (ref.file_path == definition.file_path
-                and (same_file_count <= 1
-                     or (selected_parent and caller.rsplit(".", 1)[0] == selected_parent))):
+        # A unique method name in a file does not bind arbitrary receivers to
+        # its class (e.g. store.close() is not Gateway.close()).
+        same_file = ref.file_path == definition.file_path
+        local_identity = (
+            not selected_parent and same_file_count == 1 and syntax_name == definition.name
+        ) or (
+            bool(selected_parent) and (
+                syntax_name == definition.qualified_name
+                or (syntax_name in {f"{receiver}.{definition.name}" for receiver in ("self", "cls", "this")}
+                    and caller.rsplit(".", 1)[0] == selected_parent)
+            )
+        )
+        if same_file and local_identity:
             resolution = "same_file"
-        elif {syntax_name, syntax_name.split(".", 1)[0]} & local_names:
+        elif not same_file and {syntax_name, syntax_name.split(".", 1)[0]} & local_names:
             resolution = "import_binding"
         elif ref.source == "lsp" and definition_count == 1:
             resolution = "language_server"

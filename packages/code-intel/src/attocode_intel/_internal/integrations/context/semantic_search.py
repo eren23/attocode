@@ -21,6 +21,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from attocode_intel.query_ranking import demote_tests, hit_evidence, rerank_broad_candidates
+from attocode_intel.search_evidence import search_snippet
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +322,9 @@ class SemanticSearchManager:
     _store: Any = field(default=None, repr=False)
     _indexed: bool = field(default=False, repr=False)
     _keyword_fallback: bool = field(default=False, repr=False)
-    _reindex_queue: queue.Queue[str] = field(default_factory=queue.Queue, repr=False)
+    _reindex_queue: queue.Queue[str | None] = field(default_factory=queue.Queue, repr=False)
+    _reindex_thread: threading.Thread | None = field(default=None, repr=False)
+    _closed: bool = field(default=False, repr=False)
     _reindex_pending: set[str] = field(default_factory=set, repr=False)
     _reindex_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _reindex_worker_started: bool = field(default=False, repr=False)
@@ -330,7 +333,7 @@ class SemanticSearchManager:
     _kw_avg_dl: float = field(default=0.0, repr=False)
     _kw_index_built: bool = field(default=False, repr=False)
     _kw_cache_db_path: str = field(default="", repr=False)
-    _kw_cache_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _kw_cache_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _body_index_built: bool = field(default=False, repr=False)
     _body_index_available: bool = field(default=True, repr=False)
     _body_revision: str = field(default="", repr=False)
@@ -540,28 +543,29 @@ class SemanticSearchManager:
     def _start_reindex_worker(self) -> None:
         """Start the background reindex worker once."""
         with self._reindex_lock:
-            if self._reindex_worker_started:
+            if self._reindex_worker_started or self._closed:
                 return
             self._reindex_worker_started = True
-
-        worker = threading.Thread(
-            target=self._reindex_worker_loop,
-            daemon=True,
-            name="semantic-reindex-worker",
-        )
-        worker.start()
+            self._reindex_thread = threading.Thread(
+                target=self._reindex_worker_loop, daemon=True,
+                name="semantic-reindex-worker",
+            )
+            self._reindex_thread.start()
 
     def _reindex_worker_loop(self) -> None:
         """Background worker for bounded, queued file reindexing."""
         while True:
             rel_path = self._reindex_queue.get()
             try:
+                if rel_path is None:
+                    return
                 self.reindex_file(rel_path)
             except Exception:
                 logger.debug("queue_reindex_failed: %s", rel_path, exc_info=True)
             finally:
                 with self._reindex_lock:
-                    self._reindex_pending.discard(rel_path)
+                    if rel_path is not None:
+                        self._reindex_pending.discard(rel_path)
                 self._reindex_queue.task_done()
 
     def queue_reindex(self, file_path: str) -> None:
@@ -579,10 +583,10 @@ class SemanticSearchManager:
 
         self._start_reindex_worker()
         with self._reindex_lock:
-            if rel in self._reindex_pending:
+            if self._closed or rel in self._reindex_pending:
                 return
             self._reindex_pending.add(rel)
-        self._reindex_queue.put(rel)
+            self._reindex_queue.put(rel)
 
     @property
     def is_available(self) -> bool:
@@ -1125,6 +1129,12 @@ class SemanticSearchManager:
 
     def _open_body_db(self) -> sqlite3.Connection | None:
         """Open the optional FTS5 index; classic BM25 remains the fallback."""
+        # Schema setup and invalidation share the same lock as index writes.
+        # Otherwise initial schema creation can race a background warm-up.
+        with self._kw_cache_lock:
+            return self._open_body_db_unlocked()
+
+    def _open_body_db_unlocked(self) -> sqlite3.Connection | None:
         if not self._body_index_available:
             return None
         conn = self._open_kw_cache_db()
@@ -1165,9 +1175,12 @@ class SemanticSearchManager:
                 )
                 conn.commit()
             return conn
-        except sqlite3.OperationalError:
-            logger.debug("FTS5 unavailable; using AST keyword search", exc_info=True)
-            self._body_index_available = False
+        except sqlite3.OperationalError as exc:
+            logger.debug("Source-body cache unavailable", exc_info=True)
+            # Busy/locked databases are transient, not evidence that SQLite
+            # lacks FTS5. Keep warm-up retryable after those failures.
+            if "no such module: fts5" in str(exc).lower():
+                self._body_index_available = False
             conn.close()
             return None
 
@@ -1898,6 +1911,11 @@ class SemanticSearchManager:
 
     def _open_kw_cache_db(self) -> sqlite3.Connection | None:
         """Open the keyword index cache database. Returns None on failure."""
+        with self._kw_cache_lock:
+            return self._open_kw_cache_db_unlocked()
+
+    def _open_kw_cache_db_unlocked(self) -> sqlite3.Connection | None:
+        conn = None
         try:
             cache_dir = os.path.dirname(self._kw_cache_db_path)
             root_real = os.path.realpath(self.root_dir)
@@ -1967,6 +1985,8 @@ class SemanticSearchManager:
             return conn
         except Exception:
             logger.debug("Failed to open kw cache db", exc_info=True)
+            if conn is not None:
+                conn.close()
             return None
 
     def _save_kw_cache(
@@ -2883,6 +2903,15 @@ class SemanticSearchManager:
 
     def close(self) -> None:
         """Close the vector store and stop background indexer."""
+        with self._reindex_lock:
+            if not self._closed:
+                self._closed = True
+                if self._reindex_thread is not None:
+                    self._reindex_queue.put(None)
+        if self._reindex_thread is not None:
+            self._reindex_thread.join(timeout=5.0)
+            if self._reindex_thread.is_alive():
+                raise RuntimeError("Reindex worker did not stop; store kept open")
         self.stop_background_indexing()
         thread = self._bg_thread
         if thread is not None:
@@ -2922,10 +2951,11 @@ class SemanticSearchManager:
                         + " (" + ", ".join(evidence["match_fields"]) + ")"
                     )
             if r.text:
-                # Show first 120 chars of text
-                body = r.text.split("\n", 1)[-1] if r.start_line > 0 else r.text
-                preview = body[:120]
-                if len(body) > 120:
+                evidence = search_snippet(r, query, 120)
+                preview = evidence["snippet"]
+                if evidence["snippet_start_line"] is not None:
+                    preview = f"snippet {evidence['snippet_start_line']}-{evidence['snippet_end_line']}: {preview}"
+                if evidence["snippet_truncated"]:
                     preview += "..."
                 lines.append(f"     {preview}")
         return "\n".join(lines)

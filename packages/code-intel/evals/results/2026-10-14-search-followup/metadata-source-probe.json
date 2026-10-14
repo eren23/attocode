@@ -1,0 +1,103 @@
+{
+  "kind": "read-only SQLite snapshot; replayed global lexical body caps 576 fetched rows / 72 unique symbols / 8 per file; not a relevance evaluation",
+  "observations": [
+    {
+      "query": "index warming",
+      "file_path": "src/attoswarm/protocol/models.py",
+      "source_chunks_indexed": 24,
+      "query_matching_source_chunks": 5,
+      "first_global_fts_rank": 322,
+      "in_replayed_capped_body_stage": false,
+      "first_matching_source_chunk": {
+        "name": "TaskSpec",
+        "start_line": 104,
+        "end_line": 118,
+        "body": "\n\n@dataclass(slots=True)\nclass CodeIndexSpec:\n    snapshot_id: str | None = None\n    freshness_ts: str | None = None\n    index_version: str = \"1\"\n\n\n@dataclass(slots=True)\nclass LauncherInfo:\n    started_via: str = \"attoswarm\"\n    command_family: str = \"attoswarm\"\n\n    @classmethod"
+      }
+    },
+    {
+      "query": "index warming",
+      "file_path": "src/attocode_core/ast_index/indexer.py",
+      "source_chunks_indexed": 6,
+      "query_matching_source_chunks": 5,
+      "first_global_fts_rank": 197,
+      "in_replayed_capped_body_stage": false,
+      "first_matching_source_chunk": {
+        "name": "SymbolDef",
+        "start_line": 29,
+        "end_line": 35,
+        "body": "\n@dataclass(slots=True)\nclass CodeIndex:\n    root: str\n    files: list[FileIndex] = field(default_factory=list)\n\n    @classmethod"
+      }
+    },
+    {
+      "query": "message routing",
+      "file_path": "src/attocode/types/messages.py",
+      "source_chunks_indexed": 14,
+      "query_matching_source_chunks": 3,
+      "first_global_fts_rank": 1548,
+      "in_replayed_capped_body_stage": false,
+      "first_matching_source_chunk": {
+        "name": "ChatOptions",
+        "start_line": 168,
+        "end_line": 199,
+        "body": "\n\n@dataclass(slots=True)\nclass MessageWithStructuredContent:\n    \"\"\"A message that can contain structured content blocks.\"\"\"\n\n    role: Role\n    content: str | list[ContentBlock]\n    tool_calls: list[ToolCall] | None = None\n    tool_call_id: str | None = None\n    name: str | None = None\n    metadata: dict[str, Any] | None = None\n\n\n@dataclass(slots=True)\nclass ChatOptions:\n    \"\"\"Options for an LLM chat request.\"\"\"\n\n    model: str | None = None\n    max_tokens: int | None = None\n    temperature: float | None = None\n    top_p: float | None = None\n    stop_sequences: list[str] | None = None\n    tools: list[ToolDefinition] | None = None\n    system: str | None = None\n    stream: bool = False\n\n\n@dataclass(slots=True)\nclass ChatResponse:\n    \"\"\"Response from an LLM chat request.\"\"\"\n"
+      }
+    },
+    {
+      "query": "cache generation",
+      "file_path": "src/attocode/types/messages.py",
+      "source_chunks_indexed": 14,
+      "query_matching_source_chunks": 4,
+      "first_global_fts_rank": 539,
+      "in_replayed_capped_body_stage": false,
+      "first_matching_source_chunk": {
+        "name": "TextContentBlock",
+        "start_line": 131,
+        "end_line": 162,
+        "body": "\n\n@dataclass(slots=True)\nclass TextContentBlock:\n    \"\"\"A text content block.\"\"\"\n\n    text: str\n    type: str = \"text\"\n    cache_control: CacheControl | None = None\n\n\n@dataclass(slots=True)\nclass ImageContentBlock:\n    \"\"\"An image content block.\"\"\"\n\n    source: ImageSource\n    type: str = \"image\"\n    cache_control: CacheControl | None = None\n\n\nContentBlock = TextContentBlock | ImageContentBlock\n\n\n@dataclass(slots=True)\nclass Message:\n    \"\"\"A conversation message.\"\"\"\n\n    role: Role\n    content: str\n    tool_calls: list[ToolCall] | None = None\n    tool_call_id: str | None = None\n    name: str | None = None"
+      }
+    },
+    {
+      "query": "cache generation",
+      "file_path": "src/attocode/tricks/kv_cache.py",
+      "source_chunks_indexed": 21,
+      "query_matching_source_chunks": 13,
+      "first_global_fts_rank": 119,
+      "in_replayed_capped_body_stage": false,
+      "first_matching_source_chunk": {
+        "name": "estimate_cache_savings",
+        "start_line": 300,
+        "end_line": 318,
+        "body": "def estimate_cache_savings(\n    system_prompt_tokens: int,\n    avg_messages_per_turn: int = 3,\n    turns: int = 10,\n    cache_hit_rate: float = 0.85,\n) -> dict[str, float]:\n    \"\"\"Estimate token savings from KV-cache over a session.\"\"\"\n    total_without_cache = system_prompt_tokens * turns\n    total_with_cache = system_prompt_tokens + (system_prompt_tokens * (1 - cache_hit_rate) * (turns - 1))\n    savings = total_without_cache - total_with_cache\n    savings_pct = savings / max(1, total_without_cache) * 100\n\n    return {\n        \"total_without_cache\": total_without_cache,\n        \"total_with_cache\": total_with_cache,\n        \"token_savings\": savings,\n        \"savings_percentage\": savings_pct,\n        \"estimated_cost_savings_usd\": savings / 1_000_000 * 3.0,  # sonnet input rate\n    }"
+      }
+    },
+    {
+      "query": "cache generation",
+      "file_path": "src/attoswarm/coordinator/cache.py",
+      "source_chunks_indexed": 14,
+      "query_matching_source_chunks": 5,
+      "first_global_fts_rank": 109,
+      "in_replayed_capped_body_stage": false,
+      "first_matching_source_chunk": {
+        "name": "SwarmCache",
+        "start_line": 38,
+        "end_line": 58,
+        "body": "\n\n@dataclass(slots=True)\nclass _CacheEntry:\n    \"\"\"Internal cache entry with value and expiry.\"\"\"\n\n    value: Any\n    expires_at: float\n\n\nclass SwarmCache:\n    \"\"\"In-memory LRU cache with TTL support.\n\n    Usage::\n\n        cache = SwarmCache(max_size=256, default_ttl=300.0)\n        cache.put(\"key\", value, ttl=60.0)\n        result = cache.get(\"key\")  # returns value or None\n        cache.invalidate_prefix(\"task:\")  # remove all keys starting with \"task:\"\n    \"\"\"\n"
+      }
+    },
+    {
+      "query": "cache generation",
+      "file_path": "src/attocode/integrations/context/file_cache.py",
+      "source_chunks_indexed": 20,
+      "query_matching_source_chunks": 17,
+      "first_global_fts_rank": 365,
+      "in_replayed_capped_body_stage": false,
+      "first_matching_source_chunk": {
+        "name": "FileCache._evict_lru",
+        "start_line": 202,
+        "end_line": 209,
+        "body": "    def _evict_lru(self) -> None:\n        if self._cache:\n            path, _ = self._cache.popitem(last=False)\n            entry = self._cache.get(path)\n            if entry:\n                self._total_bytes -= entry.size\n            self._stats.evictions += 1\n            self._stats.total_bytes_cached = self._total_bytes"
+      }
+    }
+  ]
+}

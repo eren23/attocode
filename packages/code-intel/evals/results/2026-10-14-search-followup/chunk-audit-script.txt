@@ -1,0 +1,75 @@
+import hashlib,json,os,subprocess,time
+from dataclasses import asdict
+from pathlib import Path
+from types import SimpleNamespace
+os.environ.update(ATTOCODE_INTEL_PRECISION='off',ATTOCODE_INTEL_BROAD_RERANK='0',
+ ATTOCODE_INTEL_RANKING_PROVIDER='off',ATTOCODE_INTEL_RANKING_ALLOW_REMOTE='0',
+ ATTOCODE_EMBEDDING_MODEL='',ATTOCODE_NL_EMBEDDING_MODE='none',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',OPENAI_API_KEY='')
+from attocode_intel._internal.integrations.context import semantic_search as module
+from attocode_intel.query_ranking import query_concepts
+from attocode_intel.search_evidence import source_body,search_snippet
+from attocode_intel.focused_evidence import terms
+from attocode_intel.service import CodeIntelService
+ROOT=Path('/Users/eren/Documents/AI/first-principles-agent')
+QUERIES=['search snippet window','result output budget','index warming','message routing','cache generation']
+OUT=Path('/private/tmp/attocode-chunk-audit-20261014')
+OUT.mkdir(exist_ok=False)
+sha=lambda b:hashlib.sha256(b).hexdigest()
+captures=[]; original=module.rerank_broad_candidates
+
+def capture(query,candidates,top_k,file_filter=''):
+    selected=original(query,candidates,top_k,file_filter)
+    captures.append((query,list(candidates),list(selected)))
+    return selected
+module.rerank_broad_candidates=capture
+service=CodeIntelService(str(ROOT)); mgr=service._get_semantic_search(); rows=[]
+try:
+    mgr.warm()
+    for query in QUERIES:
+        captures.clear(); tick=time.monotonic()
+        delivered=service._search_after_warmup(mgr,lambda:mgr.search(query,top_k=24))
+        assert captures and mgr.candidate_diagnostics()['status']=='ready',query
+        expanded,pool,selected=captures[-1]
+        assert selected==delivered and len(pool)<=256,(query,len(pool))
+        rows.append({'query':query,'retrieval_query':expanded,'retrieval_depth':24,'page_size':5,
+            'seconds':round(time.monotonic()-tick,3),'capture_passes':len(captures),
+            'index':mgr.candidate_diagnostics(),'pool':[asdict(r) for r in pool],
+            'selected':[asdict(r) for r in selected],
+            'source_sha256':{r.file_path:sha((ROOT/r.file_path).read_bytes()) for r in pool if (ROOT/r.file_path).is_file()}})
+        print(json.dumps({'query':query,'pre_diversity_chunks':len(pool),'selected_chunks':len(selected)}),flush=True)
+finally:
+    module.rerank_broad_candidates=original
+    mgr.close()
+    ast=getattr(service,'_ast_service',None)
+    if ast is not None and hasattr(ast,'close'):ast.close()
+sources=ROOT/'packages/code-intel/src/attocode_intel'
+artifact={'kind':'five predetermined development queries on this checkout; no model calls or relevance judgments',
+ 'queries_declared':QUERIES,'git_head':subprocess.run(['git','rev-parse','HEAD'],cwd=ROOT,check=True,capture_output=True,text=True).stdout.strip(),
+ 'source_sha256':{p:sha((sources/p).read_bytes()) for p in ('query_ranking.py','search_evidence.py','focused_evidence.py','_internal/integrations/context/semantic_search.py')},
+ 'rows':rows}
+(OUT/'pools.json').write_text(json.dumps(artifact,indent=2)+'\n')
+# All diagnostics below use only the frozen pools, never another retrieval.
+artifact=json.loads((OUT/'pools.json').read_text()); observations=[]
+for row in artifact['rows']:
+    concepts=set(query_concepts(row['query']))
+    for page_rank,chosen in enumerate(row['selected'][:5],1):
+        others=[(rank+1,c) for rank,c in enumerate(row['pool']) if c['file_path']==chosen['file_path']]
+        def overlap(c):
+            return len(concepts & terms(source_body(SimpleNamespace(**c)))) if c['start_line'] else 0
+        best_rank,best=max(others,key=lambda rc:(overlap(rc[1]),-rc[0]))
+        observations.append({'query':row['query'],'page_rank':page_rank,'file_path':chosen['file_path'],
+          'chosen':chosen,'chosen_source_term_overlap':overlap(chosen),
+          'same_file_chunks':len(others),'best_overlap_candidate':best,'best_overlap_pool_rank':best_rank,
+          'best_source_term_overlap':overlap(best),'higher_overlap_exists':overlap(best)>overlap(chosen),
+          'chosen_is_constructor':chosen['name'].split('.')[-1] in {'__init__','constructor','new'},
+          'chosen_preview':search_snippet(SimpleNamespace(**chosen),row['query'],320),
+          'alternative_preview':search_snippet(SimpleNamespace(**best),row['query'],320)})
+analysis={'pool_sha256':sha((OUT/'pools.json').read_bytes()),'scope':'only first-five displayed chunks; lexical overlap is not usefulness',
+ 'summary':{'displayed_chunks':len(observations),'higher_overlap_alternatives':sum(o['higher_overlap_exists'] for o in observations),
+   'constructor_representatives':sum(o['chosen_is_constructor'] for o in observations),
+   'metadata_representatives':sum(not o['chosen']['start_line'] for o in observations)},'observations':observations}
+(OUT/'analysis.json').write_text(json.dumps(analysis,indent=2)+'\n')
+print(json.dumps(analysis['summary'],indent=2))
+for o in observations:
+    if o['higher_overlap_exists'] or o['chosen_is_constructor']:
+        print(json.dumps({k:o[k] for k in ('query','page_rank','file_path','chosen_source_term_overlap','best_source_term_overlap','same_file_chunks','chosen_preview','alternative_preview')},ensure_ascii=False))

@@ -80,3 +80,6 @@ scripts/*
 
 # search-quality sweep scratch output
 eval/sweep_out/
+
+# Bounded validation workspaces, reports and cloud ledger
+.attocode/quality/

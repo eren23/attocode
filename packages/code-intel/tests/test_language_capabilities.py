@@ -17,6 +17,11 @@ CASES = [
     ("sample.php", "<?php class Sample { public function greet($name) { return $name; } }", "greet"),
     ("sample.kt", "class Sample { fun greet(name: String): String { return name } }", "greet"),
     ("sample.swift", "struct Sample { func greet(_ name: String) -> String { return name } }", "greet"),
+    ("sample.sh", "greet() { echo hello; }\n", "greet"),
+    ("sample.ex", "defmodule Sample do\n  def greet(name), do: name\nend\n", "greet"),
+    ("sample.lua", "function greet(name)\n return name\nend\n", "greet"),
+    ("Sample.scala", "object Sample { def greet(name: String): String = name }", "greet"),
+    ("sample.zig", "pub fn greet(name: i32) i32 { return name; }", "greet"),
 ]
 
 

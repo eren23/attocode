@@ -74,7 +74,8 @@ def test_symbol_task_context_breaks_equal_match_scores_without_hiding_definition
     assert [row["file_path"] for row in rows] == ["src/search.py", "src/swarm.py"]
 
 
-def test_model_cold_falls_back_without_source_hydration(tmp_path):
+def test_model_cold_falls_back_without_source_hydration(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_INTEL_RANKING_PROVIDER", "auto")
     svc = CodeIntelService(str(tmp_path))
     result = SimpleNamespace(file_path="src/search.py", chunk_type="function",
                              name="search", text="summary", score=1.0,
@@ -155,7 +156,8 @@ def test_semantic_search_warming_is_not_reported_as_no_match(tmp_path):
     assert "do not prove absence" in text
 
 
-def test_ready_local_reranker_reorders_bounded_source_candidates(tmp_path):
+def test_ready_local_reranker_reorders_bounded_source_candidates(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_INTEL_RANKING_PROVIDER", "auto")
     (tmp_path / "a.py").write_text("def a():\n    return 'old'\n")
     (tmp_path / "b.py").write_text("def b():\n    return 'ranking implementation'\n")
     svc = CodeIntelService(str(tmp_path))

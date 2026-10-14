@@ -1,0 +1,16 @@
+{
+  "engine_sha256": "0ab23a661fe5fe2ea24f4abdff0b05610ad3df33e03d92cdb371fb8d721543e2",
+  "files": {
+    "broad-report.json": "7955011e7487415f3ed5e0a00656daedb1c4ed47dae32ce2cc68bac3033e6be1",
+    "lifecycle.json": "03ab97bf7ebb40dde4372a2188cd4a91777b7eaa36ccab2262295d377010f590",
+    "quick-report.json": "b61d983320a66611ea3ce2781ff3f99a7bf1e443fa9c4670fa9f1e90abafcd6e",
+    "ranking.json": "14ed4f987cbc36a112630ed79e67979862550588c20675a4bc86198dc8d53b3d",
+    "ranking.log": "635b28b9a13ce22a131b1f4d2db7a278819711a5ff20c54a229b63ab72fd47e1",
+    "scale.json": "bab5a3d4e778e812f5540a2bc44d2830fcc628121a4613d92e9612cf29ecfe95",
+    "storage.json": "2c275bee55dca271aedbd9255f74e46050f47f0e4a98ede22a43d2edd30013cf",
+    "workflows.json": "7d0e1aefd631a9125b438803e56b4d1851ef9adea68aaef8c0479a19af64c436"
+  },
+  "model_runs": 0,
+  "live_cloud_runs": 0,
+  "note": "Broad validates the product engine. Afterwards, only cloud storage admission/report ownership and runner retention/fixture-integrity guards changed; the final quick gate validates those changes."
+}

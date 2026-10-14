@@ -1,0 +1,40 @@
+{
+  "scope": "Read-only inventory; shared and frozen data are protected",
+  "docker_disk": {
+    "path": "/Users/eren/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw",
+    "logical_bytes": 994609987584,
+    "allocated_bytes": 217618866176,
+    "automatic_cleanup": false,
+    "note": "Sparse VM disk, not directly deletable; preserve study images and volumes"
+  },
+  "protected": [
+    "/Users/eren/Documents/AI/first-principles-agent/.claude/worktrees/stage1",
+    "Historical traces, scores, pinned source blobs"
+  ],
+  "paths": [
+    {
+      "path": "/Users/eren/Documents/AI/first-principles-agent/.attocode/quality",
+      "category": "managed",
+      "bytes": 1048576,
+      "automatic_cleanup": true
+    },
+    {
+      "path": "/Users/eren/Documents/AI/attocode-evals",
+      "category": "historical_evaluations",
+      "bytes": 59380244568,
+      "automatic_cleanup": false
+    },
+    {
+      "path": "/Users/eren/.cache/uv",
+      "category": "shared_uv",
+      "bytes": 47152661523,
+      "automatic_cleanup": false
+    },
+    {
+      "path": "/Users/eren/.cache/huggingface",
+      "category": "shared_models",
+      "bytes": 24577699681,
+      "automatic_cleanup": false
+    }
+  ]
+}

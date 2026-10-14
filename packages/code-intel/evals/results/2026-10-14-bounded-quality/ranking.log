@@ -1,0 +1,39 @@
+AzureAD/microsoft-authentication-library-for-python@3062770948f1: 4 results, index 0 s, total 0 s
+AzureAD/microsoft-authentication-library-for-python@66a1c5a935e5: 4 results, index 0 s, total 0 s
+Happy-Algorithms-League/hal-cgp@5421d9cdf081: 4 results, index 0 s, total 0 s
+Innopoints/backend@c17794091307: 2 results, index 0 s, total 0 s
+JackPlowman/repo_standards_validator@35962a9fbb57: 2 results, index 0 s, total 0 s
+SYSTRAN/faster-whisper@85e61ea11173: 4 results, index 0 s, total 0 s
+SYSTRAN/faster-whisper@b568faec40ee: 4 results, index 0 s, total 0 s
+SYSTRAN/faster-whisper@bcd8ce0fc72d: 4 results, index 0 s, total 0 s
+Standard-Labs/real-intent@708f4a641280: 4 results, index 0 s, total 0 s
+Standard-Labs/real-intent@ed2a2cf98cbc: 4 results, index 0 s, total 0 s
+alexa-pi/AlexaPi@81d04a41212a: 4 results, index 0 s, total 0 s
+avantifellows/quiz-backend@f970b54634a9: 2 results, index 0 s, total 0 s
+cli/cli@6e49747f49f3: 10 results, index 8 s, total 9 s
+duncanscanga/VDRS-Solutions@c97e24d072fe: 2 results, index 0 s, total 0 s
+eren23/attocode@5b67651850a5: 8 results, index 18 s, total 19 s
+fastapi/fastapi@11614be9021a: 18 results, index 26 s, total 27 s
+jobatabs/textec@951409c20a2c: 4 results, index 0 s, total 0 s
+kiasambrook/tfl-live-tracker@b38f2a397075: 4 results, index 0 s, total 0 s
+latchset/jwcrypto@e0249b1161cb: 4 results, index 0 s, total 0 s
+okta/okta-jwt-verifier-python@cb4e6780c55c: 4 results, index 0 s, total 0 s
+pandas-dev/pandas@0039f168fe05: 14 results, index 18 s, total 20 s
+pyca/pyopenssl@f189de9becf1: 4 results, index 1 s, total 1 s
+rapidsai/dask-cuda@f4ffc5782330: 4 results, index 0 s, total 0 s
+redis/redis@20f163eb3dcc: 16 results, index 14 s, total 15 s
+sancus-tee/sancus-compiler@dc3910192f99: 2 results, index 1 s, total 1 s
+retrieve: 136 results made, 0 from the cache
+Ranking gate: 68 queries. Baseline engine 8718a8f3fcad (commit ecd82203f3d8), this engine 0ab23a661fe5.
+
+| Cell | Queries | Acc@5 lost | Acc@5 gained | R@5 lost | R@5 gained | MRR@5 baseline | MRR@5 now | Result |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| product | 68 | 0 | 0 | 0 | 0 | 0.537 | 0.537 | pass |
+| kw | 68 | 0 | 0 | 0 | 0 | 0.495 | 0.495 | pass |
+| body | 68 | 0 | 0 | 0 | 0 | 0.328 | 0.328 | pass |
+| filebm25 | 68 | 0 | 0 | 0 | 0 | 0.121 | 0.121 | pass |
+| grep | 68 | 0 | 0 | 0 | 0 | 0.123 | 0.123 | pass |
+
+0 queries changed their first five files.
+
+Ranking gate passed.

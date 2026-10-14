@@ -1,0 +1,9 @@
+{
+  "exit_code": 0,
+  "frozen_local_snapshot": true,
+  "model_runs": 0,
+  "pack_sha256": "7f8afa4eb01a4cc4a481e5809c03a67470ac5b76d5d5975c6796548d1e50748c",
+  "passed": true,
+  "repositories": [],
+  "scope": "Development evidence anchors, not exhaustive recall or agent benefit"
+}

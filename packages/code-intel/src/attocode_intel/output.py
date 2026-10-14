@@ -8,6 +8,7 @@ from copy import deepcopy
 from mcp import types
 
 from attocode_intel._internal.integrations.utilities.token_estimate import count_tokens
+from attocode_intel.search_evidence import snippet_window
 
 
 def bounded_text(text: str, max_tokens: int) -> tuple[str, bool]:
@@ -132,6 +133,20 @@ def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResu
         result = compact_result(metadata, data)
         if response_tokens(result) <= max_tokens:
             return result
+        if search_result_count is not None:
+            # Search rows are identifiers plus optional prose. Spend the remaining
+            # budget on shorter previews before sacrificing whole retrieved files.
+            snippets = [hit for hit in data["results"]
+                        if isinstance(hit, dict) and len(hit.get("snippet", "")) > 32]
+            if snippets:
+                hit = max(snippets, key=lambda item: len(item["snippet"]))
+                hit.update(snippet_window(hit["snippet"], data.get("query", ""), len(hit["snippet"]) // 2,
+                                          hit.get("snippet_start_line")))
+                hit["snippet_truncated"] = True
+                omitted["data.results.snippet"] = "shortened"
+                metadata["truncated"] = True
+                metadata["omitted"] = omitted
+                continue
         choices = []
 
         def visit(value, parent=None, key=None, path="data", choices=choices):
@@ -166,6 +181,12 @@ def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResu
             omitted[path] = omitted.get(path, 0) + len(value) - keep
         else:
             shortened = value[:len(value) // 2]
+            if key == "snippet" and "snippet_truncated" in parent:
+                query = data.get("query", "") if isinstance(data, dict) else ""
+                parent.update(snippet_window(value, query, len(value) // 2,
+                                             parent.get("snippet_start_line")))
+                parent["snippet_truncated"] = True
+                shortened = parent["snippet"]
             # Source excerpts must end on a complete line with accurate coordinates.
             if key == "text" and "start_line" in parent:
                 shortened = shortened.rsplit("\n", 1)[0] if "\n" in shortened else ""

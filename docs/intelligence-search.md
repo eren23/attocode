@@ -1,5 +1,14 @@
 # Search and navigation details
 
+Search previews select a contiguous window around the line with the most positive query terms; ties use the earliest line. This is a lexical aid, not a relevance judgment. With no source match, or for symbol metadata, the preview remains a prefix. MCP hits include `name` and `chunk_type`; `line`/`end_line` identify the original chunk, while `snippet_start_line`/`snippet_end_line` identify the source lines actually shown. Metadata-only previews have null snippet coordinates. A long line can be shown partially. `snippet_truncated` is true whenever any chunk content is omitted, including after final budget trimming. `matched_terms` and `match_fields` still describe the original hit and can include evidence outside the preview. Compact output shortens previews before dropping whole hits; delivered/omitted counts describe the final response. Retrieval, ranking, and scores are unchanged.
+
+For selected local metadata-only hits, the gateway can recover current source
+from up to eight files and 2 MB per page, at most 1 MB per file. Symbol hits require
+a unique exact definition; ambiguous, missing, changing, oversized or escaped
+paths retain metadata. Enrichment preserves hit order, identity and scores;
+coordinates and matched-term diagnostics then describe the recovered source.
+Hosted results retain their committed-revision behavior.
+
 This page has the details of the code-intel tools: how search ranks results, the experimental rankers, the response format and the index. The [package README](https://github.com/eren23/attocode/blob/main/packages/code-intel/README.md) has the quickstart.
 
 When you know the symbol, call `inspect_symbol(symbol_name="...", task_hint="behavior you are investigating")` directly. It bundles the definition, source, references, module relationships, and symbol-specific candidate tests. The optional hint adds up to three separate source excerpts beyond the opening preview and helps rank tests by their paths and function names. Python and JavaScript/TypeScript excerpts retain enclosing branch conditions, including alternative guards. Each excerpt and its `context_ranges` have exact contiguous line ranges; cite each range separately. Context stays with its excerpt when responses are trimmed. Selection ranks identifiers and executable literals and does not establish complete control flow, data flow, or test coverage. Unsupported or unparseable source uses a lexical fallback with `context_incomplete=true`. Without a hint, inspection retains its normal source preview. Select `file_path` and the definition's start `line` if the name is ambiguous.

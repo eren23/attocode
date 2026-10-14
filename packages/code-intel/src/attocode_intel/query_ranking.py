@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from attocode_intel.focused_evidence import task_terms, terms
+from attocode_intel.search_evidence import source_body
 from attocode_intel.test_ranking import is_test_path
 
 if TYPE_CHECKING:
@@ -65,7 +66,7 @@ def hit_evidence(query: str, result: SemanticSearchResult) -> dict[str, object]:
     """Report exactly which query concepts appear in identity and source."""
     concepts = set(query_concepts(query))
     identity = terms(f"{result.file_path} {result.name}")
-    evidence_text = result.text.split("\n", 1)[-1] if result.start_line else result.text
+    evidence_text = source_body(result)
     text_terms = terms(evidence_text)
     in_identity = sorted(concepts & identity)
     in_text = sorted(concepts & text_terms)

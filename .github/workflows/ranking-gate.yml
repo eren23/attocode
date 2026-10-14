@@ -2,7 +2,7 @@ name: Ranking gate
 on:
   pull_request:
     # The engine hash of the matrix covers all of packages/code-intel/src, so any change there can move the ranking.
-    paths: ['packages/code-intel/src/**', 'eval/matrix/**', 'uv.lock', '.github/workflows/ranking-gate.yml']
+    paths: ['packages/code-intel/src/**', 'eval/matrix/**', 'eval/quality/**', 'uv.lock', '.github/workflows/ranking-gate.yml']
   workflow_call:
   workflow_dispatch:
     inputs:
@@ -10,6 +10,12 @@ on:
         description: Upload the baseline of this code, also when the gate passes
         type: boolean
         default: false
+
+permissions:
+  contents: read
+concurrency:
+  group: ranking-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ranking-gate:
@@ -39,4 +45,5 @@ jobs:
         if: failure() || inputs.write_baseline
         with:
           name: ranking-baseline
+          retention-days: 7
           path: eval/matrix/ci_baseline.json

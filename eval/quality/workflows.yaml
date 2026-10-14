@@ -1,0 +1,65 @@
+# Development workflow checks, not held-out relevance or agent-outcome evidence.
+version: 1
+repositories:
+  - id: fastapi
+    repo: fastapi/fastapi
+    commit: 11614be9021aa4ac078d4d0693a8b5250a1010d8
+    language: python
+    file: fastapi/routing.py
+    symbol: serialize_response
+    anchor: 'async def serialize_response('
+    caller: fastapi/routing.py
+    importer: fastapi/utils.py
+    test: tests/test_custom_route_class.py
+  - id: express
+    repo: expressjs/express
+    commit: 6c4249feec8ab40631817c8e7001baf2ed022224
+    language: javascript
+    file: lib/response.js
+    symbol: json
+    anchor: 'res.json = function json(obj)'
+    caller: test/res.json.js
+    importer: lib/express.js
+    test: test/res.json.js
+  - id: frontend
+    repo: eren23/attocode
+    commit: 67b9afbb7e5bc8e5939db182edc9b2973dd32523
+    subdir: frontend
+    language: typescript
+    file: src/lib/cn.ts
+    symbol: cn
+    query: twMerge clsx
+    anchor: 'export function cn('
+    caller: src/components/layout/Sidebar.tsx
+    importer: src/components/layout/Sidebar.tsx
+    test: null
+  - id: gh-cli
+    repo: cli/cli
+    commit: 6e49747f49f31c9c0a68cfa344df7262a684e723
+    language: go
+    file: pkg/cmd/version/version.go
+    symbol: NewCmdVersion
+    anchor: 'func NewCmdVersion('
+    caller: pkg/cmd/root/root.go
+    importer: pkg/cmd/root/root.go
+    test: pkg/cmd/version/version_test.go
+  - id: ripgrep
+    repo: BurntSushi/ripgrep
+    commit: 4519153e5e461527f4bca45b042fff45c4ec6fb9
+    language: rust
+    file: crates/ignore/src/walk.rs
+    symbol: WalkBuilder
+    anchor: 'pub struct WalkBuilder'
+    caller: crates/core/flags/hiargs.rs
+    importer: crates/ignore/src/lib.rs
+    test: crates/ignore/src/walk.rs
+  - id: gson
+    repo: google/gson
+    commit: 8e01b54682612471a9ab40c73911dfbf6b5be036
+    language: java
+    file: gson/src/main/java/com/google/gson/Gson.java
+    symbol: longAdapter
+    anchor: 'private static TypeAdapter<Number> longAdapter('
+    caller: gson/src/main/java/com/google/gson/Gson.java
+    importer: null
+    test: null

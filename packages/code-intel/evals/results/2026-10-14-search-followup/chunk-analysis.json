@@ -1,0 +1,1037 @@
+{
+  "pool_sha256": "03fe9bcfe8b15a390edc9520b5de9caca24d16d7e4e6891554adaf3b0f000b52",
+  "scope": "only first-five displayed chunks; lexical overlap is not usefulness",
+  "summary": {
+    "displayed_chunks": 25,
+    "higher_overlap_alternatives": 1,
+    "constructor_representatives": 0,
+    "metadata_representatives": 7
+  },
+  "observations": [
+    {
+      "query": "search snippet window",
+      "page_rank": 1,
+      "file_path": "packages/code-intel/src/attocode_intel/search_evidence.py",
+      "chosen": {
+        "file_path": "packages/code-intel/src/attocode_intel/search_evidence.py",
+        "chunk_type": "function",
+        "name": "search_snippet",
+        "text": "packages/code-intel/src/attocode_intel/search_evidence.py:67-68\ndef search_snippet(result, query: str, max_chars: int) -> dict:\n    return snippet_window(source_body(result), query, max_chars, result.start_line or None)",
+        "score": 0.100216,
+        "start_line": 67,
+        "end_line": 68
+      },
+      "chosen_source_term_overlap": 3,
+      "same_file_chunks": 3,
+      "best_overlap_candidate": {
+        "file_path": "packages/code-intel/src/attocode_intel/search_evidence.py",
+        "chunk_type": "function",
+        "name": "search_snippet",
+        "text": "packages/code-intel/src/attocode_intel/search_evidence.py:67-68\ndef search_snippet(result, query: str, max_chars: int) -> dict:\n    return snippet_window(source_body(result), query, max_chars, result.start_line or None)",
+        "score": 0.100216,
+        "start_line": 67,
+        "end_line": 68
+      },
+      "best_overlap_pool_rank": 1,
+      "best_source_term_overlap": 3,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "def search_snippet(result, query: str, max_chars: int) -> dict:\n    return snippet_window(source_body(result), query, max_chars, result.start_line or None)",
+        "snippet_truncated": false,
+        "snippet_start_line": 67,
+        "snippet_end_line": 68
+      },
+      "alternative_preview": {
+        "snippet": "def search_snippet(result, query: str, max_chars: int) -> dict:\n    return snippet_window(source_body(result), query, max_chars, result.start_line or None)",
+        "snippet_truncated": false,
+        "snippet_start_line": 67,
+        "snippet_end_line": 68
+      }
+    },
+    {
+      "query": "search snippet window",
+      "page_rank": 2,
+      "file_path": "packages/code-intel/src/attocode_intel/cli.py",
+      "chosen": {
+        "file_path": "packages/code-intel/src/attocode_intel/cli.py",
+        "chunk_type": "function",
+        "name": "_print_search_results",
+        "text": "packages/code-intel/src/attocode_intel/cli.py:2903-2929\ndef _print_search_results(data: dict) -> None:\n    \"\"\"Print semantic search results as a numbered list with file, score, snippet.\"\"\"\n    results = data.get(\"results\", [])\n    total = data.get(\"total\", len(results))\n    query = data.get(\"query\", \"\")\n\n    print(f\"Semantic search: \\\"{query}\\\" ({total} result(s))\\n\")\n\n    if not results:\n        print(\"  No results found.\")\n        return\n\n    for idx, r in enumerate(results, 1):\n        file_path = r.get(\"file_path\", \"?\")\n        score = r.get(\"score\", 0.0)\n        snippet = r.get(\"snippet\", \"\")\n        line = r.get(\"line\")\n\n        loc = f\"{file_path}:{line}\" if line else file_path\n        print(f\"  {idx:>3}. {loc}  (score: {score:.4f})\")\n\n        if snippet:\n            # Indent snippet lines, truncate long ones\n            for sline in snippet.strip().splitlines()[:3]:\n                truncated = sline[:120] + \"...\" if len(sline) > 120 else sline\n                print(f\"       {truncated}\")\n        print()",
+        "score": 0.054585,
+        "start_line": 2903,
+        "end_line": 2929
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 1,
+      "best_overlap_candidate": {
+        "file_path": "packages/code-intel/src/attocode_intel/cli.py",
+        "chunk_type": "function",
+        "name": "_print_search_results",
+        "text": "packages/code-intel/src/attocode_intel/cli.py:2903-2929\ndef _print_search_results(data: dict) -> None:\n    \"\"\"Print semantic search results as a numbered list with file, score, snippet.\"\"\"\n    results = data.get(\"results\", [])\n    total = data.get(\"total\", len(results))\n    query = data.get(\"query\", \"\")\n\n    print(f\"Semantic search: \\\"{query}\\\" ({total} result(s))\\n\")\n\n    if not results:\n        print(\"  No results found.\")\n        return\n\n    for idx, r in enumerate(results, 1):\n        file_path = r.get(\"file_path\", \"?\")\n        score = r.get(\"score\", 0.0)\n        snippet = r.get(\"snippet\", \"\")\n        line = r.get(\"line\")\n\n        loc = f\"{file_path}:{line}\" if line else file_path\n        print(f\"  {idx:>3}. {loc}  (score: {score:.4f})\")\n\n        if snippet:\n            # Indent snippet lines, truncate long ones\n            for sline in snippet.strip().splitlines()[:3]:\n                truncated = sline[:120] + \"...\" if len(sline) > 120 else sline\n                print(f\"       {truncated}\")\n        print()",
+        "score": 0.054585,
+        "start_line": 2903,
+        "end_line": 2929
+      },
+      "best_overlap_pool_rank": 3,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "def _print_search_results(data: dict) -> None:\n    \"\"\"Print semantic search results as a numbered list with file, score, snippet.\"\"\"\n    results = data.get(\"results\", [])\n    total = data.get(\"total\", len(results))\n    query = data.get(\"query\", \"\")\n\n    print(f\"Semantic search: \\\"{query}\\\" ({total} result(s))\\n\")\n\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 2903,
+        "snippet_end_line": 2910
+      },
+      "alternative_preview": {
+        "snippet": "def _print_search_results(data: dict) -> None:\n    \"\"\"Print semantic search results as a numbered list with file, score, snippet.\"\"\"\n    results = data.get(\"results\", [])\n    total = data.get(\"total\", len(results))\n    query = data.get(\"query\", \"\")\n\n    print(f\"Semantic search: \\\"{query}\\\" ({total} result(s))\\n\")\n\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 2903,
+        "snippet_end_line": 2910
+      }
+    },
+    {
+      "query": "search snippet window",
+      "page_rank": 3,
+      "file_path": "src/attocode/providers/base.py",
+      "chosen": {
+        "file_path": "src/attocode/providers/base.py",
+        "chunk_type": "function",
+        "name": "get_model_context_window",
+        "text": "src/attocode/providers/base.py:248-261\ndef get_model_context_window(model_id: str) -> int:\n    \"\"\"Return the context window for *model_id*.\n\n    Resolution: dynamic cache \u2192 builtin registry \u2192 200 000 default.\n    \"\"\"\n    from attocode.providers.model_cache import get_cached_context_length\n\n    cached = get_cached_context_length(model_id)\n    if cached is not None:\n        return cached\n    info = _lookup_builtin(model_id)\n    if info is not None:\n        return info.max_context_tokens\n    return DEFAULT_CONTEXT_WINDOW",
+        "score": 0.051099,
+        "start_line": 248,
+        "end_line": 261
+      },
+      "chosen_source_term_overlap": 1,
+      "same_file_chunks": 1,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/providers/base.py",
+        "chunk_type": "function",
+        "name": "get_model_context_window",
+        "text": "src/attocode/providers/base.py:248-261\ndef get_model_context_window(model_id: str) -> int:\n    \"\"\"Return the context window for *model_id*.\n\n    Resolution: dynamic cache \u2192 builtin registry \u2192 200 000 default.\n    \"\"\"\n    from attocode.providers.model_cache import get_cached_context_length\n\n    cached = get_cached_context_length(model_id)\n    if cached is not None:\n        return cached\n    info = _lookup_builtin(model_id)\n    if info is not None:\n        return info.max_context_tokens\n    return DEFAULT_CONTEXT_WINDOW",
+        "score": 0.051099,
+        "start_line": 248,
+        "end_line": 261
+      },
+      "best_overlap_pool_rank": 4,
+      "best_source_term_overlap": 1,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "def get_model_context_window(model_id: str) -> int:\n    \"\"\"Return the context window for *model_id*.\n\n    Resolution: dynamic cache \u2192 builtin registry \u2192 200 000 default.\n    \"\"\"\n    from attocode.providers.model_cache import get_cached_context_length\n\n    cached = get_cached_context_length(model_id)\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 248,
+        "snippet_end_line": 255
+      },
+      "alternative_preview": {
+        "snippet": "def get_model_context_window(model_id: str) -> int:\n    \"\"\"Return the context window for *model_id*.\n\n    Resolution: dynamic cache \u2192 builtin registry \u2192 200 000 default.\n    \"\"\"\n    from attocode.providers.model_cache import get_cached_context_length\n\n    cached = get_cached_context_length(model_id)\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 248,
+        "snippet_end_line": 255
+      }
+    },
+    {
+      "query": "search snippet window",
+      "page_rank": 4,
+      "file_path": "packages/code-intel/src/attocode_intel/output.py",
+      "chosen": {
+        "file_path": "packages/code-intel/src/attocode_intel/output.py",
+        "chunk_type": "file",
+        "name": "output.py",
+        "text": "packages/code-intel/src/attocode_intel/output.py:1-13\n\"\"\"A single output budget, including all composed sections.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom copy import deepcopy\n\nfrom mcp import types\n\nfrom attocode_intel._internal.integrations.utilities.token_estimate import count_tokens\nfrom attocode_intel.search_evidence import snippet_window\n\n",
+        "score": 0.047917,
+        "start_line": 1,
+        "end_line": 13
+      },
+      "chosen_source_term_overlap": 3,
+      "same_file_chunks": 2,
+      "best_overlap_candidate": {
+        "file_path": "packages/code-intel/src/attocode_intel/output.py",
+        "chunk_type": "file",
+        "name": "output.py",
+        "text": "packages/code-intel/src/attocode_intel/output.py:1-13\n\"\"\"A single output budget, including all composed sections.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom copy import deepcopy\n\nfrom mcp import types\n\nfrom attocode_intel._internal.integrations.utilities.token_estimate import count_tokens\nfrom attocode_intel.search_evidence import snippet_window\n\n",
+        "score": 0.047917,
+        "start_line": 1,
+        "end_line": 13
+      },
+      "best_overlap_pool_rank": 5,
+      "best_source_term_overlap": 3,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "from attocode_intel._internal.integrations.utilities.token_estimate import count_tokens\nfrom attocode_intel.search_evidence import snippet_window\n\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 10,
+        "snippet_end_line": 12
+      },
+      "alternative_preview": {
+        "snippet": "from attocode_intel._internal.integrations.utilities.token_estimate import count_tokens\nfrom attocode_intel.search_evidence import snippet_window\n\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 10,
+        "snippet_end_line": 12
+      }
+    },
+    {
+      "query": "search snippet window",
+      "page_rank": 5,
+      "file_path": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "chosen": {
+        "file_path": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+        "chunk_type": "method",
+        "name": "SemanticSearchManager.format_results",
+        "text": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py:2904-2933\n    def format_results(self, results: list[SemanticSearchResult], query: str = \"\") -> str:\n        \"\"\"Format search results as human-readable text.\"\"\"\n        if not results:\n            return \"No results found.\"\n\n        lines = [f\"Semantic search results ({len(results)}):\"]\n        for i, r in enumerate(results, 1):\n            location = r.file_path\n            if r.start_line > 0:\n                location += f\":{r.start_line}-{r.end_line or r.start_line}\"\n            lines.append(\n                f\"  {i}. [{r.chunk_type}] {location}\"\n                f\" \u2014 {r.name} (score: {r.score:.3f})\"\n            )\n            if query:\n                evidence = hit_evidence(query, r)\n                if evidence[\"matched_terms\"]:\n                    lines.append(\n                        \"     matches: \" + \", \".join(evidence[\"matched_terms\"])\n                        + \" (\" + \", \".join(evidence[\"match_fields\"]) + \")\"\n                    )\n            if r.text:\n                evidence = search_snippet(r, query, 120)\n                preview = evidence[\"snippet\"]\n                if evidence[\"snippet_start_line\"] is not None:\n                    preview = f\"snippet {evidence['snippet_start_line']}-{evidence['snippet_end_line']}: {preview}\"\n                if evidence[\"snippet_truncated\"]:\n                    preview += \"...\"\n                lines.append(f\"     {preview}\")\n        return \"\\n\".join(lines)",
+        "score": 0.044231,
+        "start_line": 2904,
+        "end_line": 2933
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 5,
+      "best_overlap_candidate": {
+        "file_path": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+        "chunk_type": "method",
+        "name": "SemanticSearchManager.format_results",
+        "text": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py:2904-2933\n    def format_results(self, results: list[SemanticSearchResult], query: str = \"\") -> str:\n        \"\"\"Format search results as human-readable text.\"\"\"\n        if not results:\n            return \"No results found.\"\n\n        lines = [f\"Semantic search results ({len(results)}):\"]\n        for i, r in enumerate(results, 1):\n            location = r.file_path\n            if r.start_line > 0:\n                location += f\":{r.start_line}-{r.end_line or r.start_line}\"\n            lines.append(\n                f\"  {i}. [{r.chunk_type}] {location}\"\n                f\" \u2014 {r.name} (score: {r.score:.3f})\"\n            )\n            if query:\n                evidence = hit_evidence(query, r)\n                if evidence[\"matched_terms\"]:\n                    lines.append(\n                        \"     matches: \" + \", \".join(evidence[\"matched_terms\"])\n                        + \" (\" + \", \".join(evidence[\"match_fields\"]) + \")\"\n                    )\n            if r.text:\n                evidence = search_snippet(r, query, 120)\n                preview = evidence[\"snippet\"]\n                if evidence[\"snippet_start_line\"] is not None:\n                    preview = f\"snippet {evidence['snippet_start_line']}-{evidence['snippet_end_line']}: {preview}\"\n                if evidence[\"snippet_truncated\"]:\n                    preview += \"...\"\n                lines.append(f\"     {preview}\")\n        return \"\\n\".join(lines)",
+        "score": 0.044231,
+        "start_line": 2904,
+        "end_line": 2933
+      },
+      "best_overlap_pool_rank": 6,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "            if r.text:\n                evidence = search_snippet(r, query, 120)\n                preview = evidence[\"snippet\"]\n                if evidence[\"snippet_start_line\"] is not None:\n                    preview = f\"snippet {evidence['snippet_start_line']}-{evidence['snippet_end_line']}: {preview}\"\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 2925,
+        "snippet_end_line": 2929
+      },
+      "alternative_preview": {
+        "snippet": "            if r.text:\n                evidence = search_snippet(r, query, 120)\n                preview = evidence[\"snippet\"]\n                if evidence[\"snippet_start_line\"] is not None:\n                    preview = f\"snippet {evidence['snippet_start_line']}-{evidence['snippet_end_line']}: {preview}\"\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 2925,
+        "snippet_end_line": 2929
+      }
+    },
+    {
+      "query": "result output budget",
+      "page_rank": 1,
+      "file_path": "src/attocode/commands.py",
+      "chosen": {
+        "file_path": "src/attocode/commands.py",
+        "chunk_type": "function",
+        "name": "_budget_command",
+        "text": "src/attocode/commands.py:503-523\ndef _budget_command(agent: Any) -> CommandResult:\n    if agent is None:\n        return CommandResult(output=\"No agent running.\")\n\n    ctx = getattr(agent, \"context\", None)\n    if not ctx:\n        return CommandResult(output=\"No active context.\")\n\n    lines = [\"Budget:\"]\n    budget = ctx.budget\n    lines.append(f\"  Max tokens: {budget.max_tokens:,}\")\n    lines.append(f\"  Max iterations: {budget.max_iterations or 'unlimited'}\")\n    lines.append(f\"  Max cost: ${budget.max_cost or 0:.2f}\")\n    lines.append(f\"  Used: {ctx.metrics.total_tokens:,} tokens ({agent.get_budget_usage():.0%})\")\n\n    if ctx.economics:\n        econ = ctx.economics\n        lines.append(f\"  Economics status: {econ.check_budget().status}\")\n        lines.append(f\"  LLM calls: {econ.llm_calls}\")\n\n    return CommandResult(output=\"\\n\".join(lines))",
+        "score": 0.087987,
+        "start_line": 503,
+        "end_line": 523
+      },
+      "chosen_source_term_overlap": 3,
+      "same_file_chunks": 4,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/commands.py",
+        "chunk_type": "function",
+        "name": "_budget_command",
+        "text": "src/attocode/commands.py:503-523\ndef _budget_command(agent: Any) -> CommandResult:\n    if agent is None:\n        return CommandResult(output=\"No agent running.\")\n\n    ctx = getattr(agent, \"context\", None)\n    if not ctx:\n        return CommandResult(output=\"No active context.\")\n\n    lines = [\"Budget:\"]\n    budget = ctx.budget\n    lines.append(f\"  Max tokens: {budget.max_tokens:,}\")\n    lines.append(f\"  Max iterations: {budget.max_iterations or 'unlimited'}\")\n    lines.append(f\"  Max cost: ${budget.max_cost or 0:.2f}\")\n    lines.append(f\"  Used: {ctx.metrics.total_tokens:,} tokens ({agent.get_budget_usage():.0%})\")\n\n    if ctx.economics:\n        econ = ctx.economics\n        lines.append(f\"  Economics status: {econ.check_budget().status}\")\n        lines.append(f\"  LLM calls: {econ.llm_calls}\")\n\n    return CommandResult(output=\"\\n\".join(lines))",
+        "score": 0.087987,
+        "start_line": 503,
+        "end_line": 523
+      },
+      "best_overlap_pool_rank": 1,
+      "best_source_term_overlap": 3,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "def _budget_command(agent: Any) -> CommandResult:\n    if agent is None:\n        return CommandResult(output=\"No agent running.\")\n\n    ctx = getattr(agent, \"context\", None)\n    if not ctx:\n        return CommandResult(output=\"No active context.\")\n\n    lines = [\"Budget:\"]\n    budget = ctx.budget\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 503,
+        "snippet_end_line": 512
+      },
+      "alternative_preview": {
+        "snippet": "def _budget_command(agent: Any) -> CommandResult:\n    if agent is None:\n        return CommandResult(output=\"No agent running.\")\n\n    ctx = getattr(agent, \"context\", None)\n    if not ctx:\n        return CommandResult(output=\"No active context.\")\n\n    lines = [\"Budget:\"]\n    budget = ctx.budget\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 503,
+        "snippet_end_line": 512
+      }
+    },
+    {
+      "query": "result output budget",
+      "page_rank": 2,
+      "file_path": "src/attocode/types/budget.py",
+      "chosen": {
+        "file_path": "src/attocode/types/budget.py",
+        "chunk_type": "class",
+        "name": "BudgetCheckResult",
+        "text": "src/attocode/types/budget.py:42-56\n\n\n@dataclass(slots=True)\nclass BudgetCheckResult:\n    \"\"\"Result of a budget check.\"\"\"\n\n    status: BudgetStatus\n    token_usage: float = 0.0\n    cost_usage: float = 0.0\n    duration_usage: float = 0.0\n    iteration_usage: float = 0.0\n    should_stop: bool = False\n    message: str | None = None\n\n    @property",
+        "score": 0.061208,
+        "start_line": 42,
+        "end_line": 56
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 7,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/types/budget.py",
+        "chunk_type": "class",
+        "name": "BudgetCheckResult",
+        "text": "src/attocode/types/budget.py:42-56\n\n\n@dataclass(slots=True)\nclass BudgetCheckResult:\n    \"\"\"Result of a budget check.\"\"\"\n\n    status: BudgetStatus\n    token_usage: float = 0.0\n    cost_usage: float = 0.0\n    duration_usage: float = 0.0\n    iteration_usage: float = 0.0\n    should_stop: bool = False\n    message: str | None = None\n\n    @property",
+        "score": 0.061208,
+        "start_line": 42,
+        "end_line": 56
+      },
+      "best_overlap_pool_rank": 3,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "@dataclass(slots=True)\nclass BudgetCheckResult:\n    \"\"\"Result of a budget check.\"\"\"\n\n    status: BudgetStatus\n    token_usage: float = 0.0\n    cost_usage: float = 0.0\n    duration_usage: float = 0.0\n    iteration_usage: float = 0.0\n    should_stop: bool = False\n    message: str | None = None\n\n    @property",
+        "snippet_truncated": true,
+        "snippet_start_line": 44,
+        "snippet_end_line": 56
+      },
+      "alternative_preview": {
+        "snippet": "@dataclass(slots=True)\nclass BudgetCheckResult:\n    \"\"\"Result of a budget check.\"\"\"\n\n    status: BudgetStatus\n    token_usage: float = 0.0\n    cost_usage: float = 0.0\n    duration_usage: float = 0.0\n    iteration_usage: float = 0.0\n    should_stop: bool = False\n    message: str | None = None\n\n    @property",
+        "snippet_truncated": true,
+        "snippet_start_line": 44,
+        "snippet_end_line": 56
+      }
+    },
+    {
+      "query": "result output budget",
+      "page_rank": 3,
+      "file_path": "src/attocode/shared/budget_tracker.py",
+      "chosen": {
+        "file_path": "src/attocode/shared/budget_tracker.py",
+        "chunk_type": "method",
+        "name": "WorkerBudgetTracker.check_budget",
+        "text": "src/attocode/shared/budget_tracker.py:97-123\n    def check_budget(self) -> WorkerBudgetCheckResult:\n        \"\"\"Return budget check result with detailed reason.\"\"\"\n        # Token check\n        if self.config.max_tokens > 0 and self._total_tokens >= self.config.max_tokens:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n                reason=f\"Token budget exhausted: {self._total_tokens} / {self.config.max_tokens}\",\n                budget_type=\"tokens\",\n            )\n\n        # Iteration check\n        if self.config.max_iterations > 0 and self._iterations >= self.config.max_iterations:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n                reason=f\"Iteration limit reached: {self._iterations} / {self.config.max_iterations}\",\n                budget_type=\"iterations\",\n            )\n\n        # Doom loop check\n        if self._consecutive_count >= self.config.doom_loop_threshold:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n                reason=f\"Local doom loop: {self._consecutive_count} consecutive identical calls\",\n                budget_type=\"doom_loop\",\n            )\n\n        return WorkerBudgetCheckResult(can_continue=True)",
+        "score": 0.053167,
+        "start_line": 97,
+        "end_line": 123
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 6,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/shared/budget_tracker.py",
+        "chunk_type": "method",
+        "name": "WorkerBudgetTracker.check_budget",
+        "text": "src/attocode/shared/budget_tracker.py:97-123\n    def check_budget(self) -> WorkerBudgetCheckResult:\n        \"\"\"Return budget check result with detailed reason.\"\"\"\n        # Token check\n        if self.config.max_tokens > 0 and self._total_tokens >= self.config.max_tokens:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n                reason=f\"Token budget exhausted: {self._total_tokens} / {self.config.max_tokens}\",\n                budget_type=\"tokens\",\n            )\n\n        # Iteration check\n        if self.config.max_iterations > 0 and self._iterations >= self.config.max_iterations:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n                reason=f\"Iteration limit reached: {self._iterations} / {self.config.max_iterations}\",\n                budget_type=\"iterations\",\n            )\n\n        # Doom loop check\n        if self._consecutive_count >= self.config.doom_loop_threshold:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n                reason=f\"Local doom loop: {self._consecutive_count} consecutive identical calls\",\n                budget_type=\"doom_loop\",\n            )\n\n        return WorkerBudgetCheckResult(can_continue=True)",
+        "score": 0.053167,
+        "start_line": 97,
+        "end_line": 123
+      },
+      "best_overlap_pool_rank": 4,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "    def check_budget(self) -> WorkerBudgetCheckResult:\n        \"\"\"Return budget check result with detailed reason.\"\"\"\n        # Token check\n        if self.config.max_tokens > 0 and self._total_tokens >= self.config.max_tokens:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 97,
+        "snippet_end_line": 102
+      },
+      "alternative_preview": {
+        "snippet": "    def check_budget(self) -> WorkerBudgetCheckResult:\n        \"\"\"Return budget check result with detailed reason.\"\"\"\n        # Token check\n        if self.config.max_tokens > 0 and self._total_tokens >= self.config.max_tokens:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 97,
+        "snippet_end_line": 102
+      }
+    },
+    {
+      "query": "result output budget",
+      "page_rank": 4,
+      "file_path": "src/attoswarm/coordinator/preflight.py",
+      "chosen": {
+        "file_path": "src/attoswarm/coordinator/preflight.py",
+        "chunk_type": "method",
+        "name": "PreflightValidator._check_budget",
+        "text": "src/attoswarm/coordinator/preflight.py:118-126\n    def _check_budget(self, task_id: str, result: PreflightResult) -> None:\n        \"\"\"Check budget gate.\"\"\"\n        if not self._budget_gate:\n            return\n\n        estimated = self._budget_gate.estimated_task_cost()\n        decision = self._budget_gate.can_dispatch(task_id, estimated_cost=estimated)\n        if not decision.allowed:\n            result.blockers.append(f\"budget: {decision.reason}\")",
+        "score": 0.052881,
+        "start_line": 118,
+        "end_line": 126
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 1,
+      "best_overlap_candidate": {
+        "file_path": "src/attoswarm/coordinator/preflight.py",
+        "chunk_type": "method",
+        "name": "PreflightValidator._check_budget",
+        "text": "src/attoswarm/coordinator/preflight.py:118-126\n    def _check_budget(self, task_id: str, result: PreflightResult) -> None:\n        \"\"\"Check budget gate.\"\"\"\n        if not self._budget_gate:\n            return\n\n        estimated = self._budget_gate.estimated_task_cost()\n        decision = self._budget_gate.can_dispatch(task_id, estimated_cost=estimated)\n        if not decision.allowed:\n            result.blockers.append(f\"budget: {decision.reason}\")",
+        "score": 0.052881,
+        "start_line": 118,
+        "end_line": 126
+      },
+      "best_overlap_pool_rank": 5,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "    def _check_budget(self, task_id: str, result: PreflightResult) -> None:\n        \"\"\"Check budget gate.\"\"\"\n        if not self._budget_gate:\n            return\n\n        estimated = self._budget_gate.estimated_task_cost()\n        decision = self._budget_gate.can_dispatch(task_id, estimated_cost=estimated)\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 118,
+        "snippet_end_line": 124
+      },
+      "alternative_preview": {
+        "snippet": "    def _check_budget(self, task_id: str, result: PreflightResult) -> None:\n        \"\"\"Check budget gate.\"\"\"\n        if not self._budget_gate:\n            return\n\n        estimated = self._budget_gate.estimated_task_cost()\n        decision = self._budget_gate.can_dispatch(task_id, estimated_cost=estimated)\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 118,
+        "snippet_end_line": 124
+      }
+    },
+    {
+      "query": "result output budget",
+      "page_rank": 5,
+      "file_path": "src/attocode/core/loop.py",
+      "chosen": {
+        "file_path": "src/attocode/core/loop.py",
+        "chunk_type": "function",
+        "name": "check_iteration_budget",
+        "text": "src/attocode/core/loop.py:229-244\n                reason=CompletionReason.BUDGET_LIMIT,\n                message=budget_check.message,\n            )\n\n        nudge = \"\"\n        if budget_check.injected_prompt:\n            nudge = budget_check.injected_prompt\n\n        return BudgetPreflightResult(\n            can_continue=True,\n            force_text_only=budget_check.force_text_only,\n            injected_nudge=nudge,\n        )\n\n    # No economics \u2014 all clear\n    return BudgetPreflightResult(can_continue=True)",
+        "score": 0.051395,
+        "start_line": 229,
+        "end_line": 244
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 4,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/core/loop.py",
+        "chunk_type": "file",
+        "name": "loop.py",
+        "text": "src/attocode/core/loop.py:29-60\nfrom attocode.core.tool_executor import (\n    build_tool_result_messages,\n    execute_tool_calls_concurrent,\n)\nfrom attocode.errors import BudgetExhaustedError, CancellationError\nfrom attocode.integrations.context.compaction import adjust_slice_for_tool_pairs, microcompact\nfrom attocode.types.agent import AgentCompletionStatus, AgentResult, CompletionReason\nfrom attocode.types.events import EventType\nfrom attocode.types.messages import Message, Role, ToolResult\n\nif TYPE_CHECKING:\n    from attocode.agent.context import AgentContext\n\n# Context overflow guard constants\nMAX_SINGLE_TOOL_RESULT_TOKENS = 50_000\nMAX_TOTAL_TOOL_RESULTS_TOKENS = 100_000\nTRUNCATION_SUFFIX = \"\\n\\n[... output truncated ({original} chars \u2192 {truncated} chars)]\"\n\n\n@dataclass(slots=True)\nclass LoopResult:\n    \"\"\"Result of the execution loop.\"\"\"\n\n    success: bool\n    response: str\n    reason: CompletionReason\n    message: str = \"\"\n\n\n@dataclass(slots=True)\nclass BudgetPreflightResult:\n    \"\"\"Result of budget pre-flight check.\"\"\"",
+        "score": 0.022549,
+        "start_line": 29,
+        "end_line": 60
+      },
+      "best_overlap_pool_rank": 47,
+      "best_source_term_overlap": 3,
+      "higher_overlap_exists": true,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "\n        return BudgetPreflightResult(\n            can_continue=True,\n            force_text_only=budget_check.force_text_only,\n            injected_nudge=nudge,\n        )\n\n    # No economics \u2014 all clear\n    return BudgetPreflightResult(can_continue=True)",
+        "snippet_truncated": true,
+        "snippet_start_line": 236,
+        "snippet_end_line": 244
+      },
+      "alternative_preview": {
+        "snippet": "@dataclass(slots=True)\nclass BudgetPreflightResult:\n    \"\"\"Result of budget pre-flight check.\"\"\"",
+        "snippet_truncated": true,
+        "snippet_start_line": 58,
+        "snippet_end_line": 60
+      }
+    },
+    {
+      "query": "index warming",
+      "page_rank": 1,
+      "file_path": "eval/search_quality.py",
+      "chosen": {
+        "file_path": "eval/search_quality.py",
+        "chunk_type": "function",
+        "name": "search_is_warming",
+        "text": "eval/search_quality.py:152-156\ndef search_is_warming(service: CodeIntelService, output: str) -> bool:\n    \"\"\"Treat both structured index state and legacy warming text as incomplete.\"\"\"\n    diagnostics = getattr(service._get_semantic_search(), \"candidate_diagnostics\", None)\n    state = diagnostics() if callable(diagnostics) else {}\n    return state.get(\"status\") == \"warming\" or output.startswith(\"Search index warming;\")",
+        "score": 0.094762,
+        "start_line": 152,
+        "end_line": 156
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 3,
+      "best_overlap_candidate": {
+        "file_path": "eval/search_quality.py",
+        "chunk_type": "function",
+        "name": "search_is_warming",
+        "text": "eval/search_quality.py:152-156\ndef search_is_warming(service: CodeIntelService, output: str) -> bool:\n    \"\"\"Treat both structured index state and legacy warming text as incomplete.\"\"\"\n    diagnostics = getattr(service._get_semantic_search(), \"candidate_diagnostics\", None)\n    state = diagnostics() if callable(diagnostics) else {}\n    return state.get(\"status\") == \"warming\" or output.startswith(\"Search index warming;\")",
+        "score": 0.094762,
+        "start_line": 152,
+        "end_line": 156
+      },
+      "best_overlap_pool_rank": 1,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "def search_is_warming(service: CodeIntelService, output: str) -> bool:\n    \"\"\"Treat both structured index state and legacy warming text as incomplete.\"\"\"\n    diagnostics = getattr(service._get_semantic_search(), \"candidate_diagnostics\", None)\n    state = diagnostics() if callable(diagnostics) else {}\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 152,
+        "snippet_end_line": 155
+      },
+      "alternative_preview": {
+        "snippet": "def search_is_warming(service: CodeIntelService, output: str) -> bool:\n    \"\"\"Treat both structured index state and legacy warming text as incomplete.\"\"\"\n    diagnostics = getattr(service._get_semantic_search(), \"candidate_diagnostics\", None)\n    state = diagnostics() if callable(diagnostics) else {}\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 152,
+        "snippet_end_line": 155
+      }
+    },
+    {
+      "query": "index warming",
+      "page_rank": 2,
+      "file_path": "packages/code-intel/src/attocode_intel/gateway.py",
+      "chosen": {
+        "file_path": "packages/code-intel/src/attocode_intel/gateway.py",
+        "chunk_type": "method",
+        "name": "OperationGateway._dispatch",
+        "text": "packages/code-intel/src/attocode_intel/gateway.py:220-251\n                        \"top_k\": args.get(\"top_k\", 10),\n                        \"mode\": \"keyword\",\n                    }\n                    # Tiny/new workspaces commonly finish indexing within this bound.\n                    # Keep the outer search responsive on large checkouts, where the\n                    # explicit warming signal is more honest than an empty match set.\n                    deadline = time.monotonic() + 0.75\n                    while True:\n                        response = await self.execute(\"semantic_search\", request)\n                        index = response.structuredContent[\"metadata\"].get(\"ranking\", {}).get(\"index\", {})\n                        if index.get(\"status\") != \"warming\" or time.monotonic() >= deadline:\n                            break\n                        await asyncio.sleep(0.05)\n                    structured = response.structuredContent\n                    if index.get(\"status\") == \"warming\":\n                        warming_workspaces.append(target)\n                    for rank, match in enumerate(structured[\"data\"][\"results\"], 1):\n                        results.append(\n                            {\n                                **match,\n                                \"workspace\": structured[\"metadata\"][\"workspace\"],\n                                \"revision\": structured[\"metadata\"][\"revision\"],\n                                \"source\": structured[\"metadata\"][\"source\"],\n                                \"freshness\": structured[\"metadata\"][\"freshness\"],\n                                \"index\": structured[\"metadata\"][\"coverage\"].get(\"phase\", \"unknown\"),\n                                \"fusion_score\": 1 / (60 + rank),\n                            }\n                        )\n            finally:\n                SEARCH_WARMUP_WAIT.reset(wait)\n            results.sort(key=lambda row: row[\"fusion_score\"], reverse=True)\n            results = results[: args.get(\"top_k\", 10)]",
+        "score": 0.05,
+        "start_line": 220,
+        "end_line": 251
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 2,
+      "best_overlap_candidate": {
+        "file_path": "packages/code-intel/src/attocode_intel/gateway.py",
+        "chunk_type": "method",
+        "name": "OperationGateway._dispatch",
+        "text": "packages/code-intel/src/attocode_intel/gateway.py:220-251\n                        \"top_k\": args.get(\"top_k\", 10),\n                        \"mode\": \"keyword\",\n                    }\n                    # Tiny/new workspaces commonly finish indexing within this bound.\n                    # Keep the outer search responsive on large checkouts, where the\n                    # explicit warming signal is more honest than an empty match set.\n                    deadline = time.monotonic() + 0.75\n                    while True:\n                        response = await self.execute(\"semantic_search\", request)\n                        index = response.structuredContent[\"metadata\"].get(\"ranking\", {}).get(\"index\", {})\n                        if index.get(\"status\") != \"warming\" or time.monotonic() >= deadline:\n                            break\n                        await asyncio.sleep(0.05)\n                    structured = response.structuredContent\n                    if index.get(\"status\") == \"warming\":\n                        warming_workspaces.append(target)\n                    for rank, match in enumerate(structured[\"data\"][\"results\"], 1):\n                        results.append(\n                            {\n                                **match,\n                                \"workspace\": structured[\"metadata\"][\"workspace\"],\n                                \"revision\": structured[\"metadata\"][\"revision\"],\n                                \"source\": structured[\"metadata\"][\"source\"],\n                                \"freshness\": structured[\"metadata\"][\"freshness\"],\n                                \"index\": structured[\"metadata\"][\"coverage\"].get(\"phase\", \"unknown\"),\n                                \"fusion_score\": 1 / (60 + rank),\n                            }\n                        )\n            finally:\n                SEARCH_WARMUP_WAIT.reset(wait)\n            results.sort(key=lambda row: row[\"fusion_score\"], reverse=True)\n            results = results[: args.get(\"top_k\", 10)]",
+        "score": 0.05,
+        "start_line": 220,
+        "end_line": 251
+      },
+      "best_overlap_pool_rank": 2,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "                        index = response.structuredContent[\"metadata\"].get(\"ranking\", {}).get(\"index\", {})\n                        if index.get(\"status\") != \"warming\" or time.monotonic() >= deadline:\n                            break\n                        await asyncio.sleep(0.05)\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 229,
+        "snippet_end_line": 232
+      },
+      "alternative_preview": {
+        "snippet": "                        index = response.structuredContent[\"metadata\"].get(\"ranking\", {}).get(\"index\", {})\n                        if index.get(\"status\") != \"warming\" or time.monotonic() >= deadline:\n                            break\n                        await asyncio.sleep(0.05)\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 229,
+        "snippet_end_line": 232
+      }
+    },
+    {
+      "query": "index warming",
+      "page_rank": 3,
+      "file_path": "src/attoswarm/protocol/models.py",
+      "chosen": {
+        "file_path": "src/attoswarm/protocol/models.py",
+        "chunk_type": "class",
+        "name": "CodeIndexSpec",
+        "text": "class CodeIndexSpec",
+        "score": 0.047619,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "chosen_source_term_overlap": 0,
+      "same_file_chunks": 1,
+      "best_overlap_candidate": {
+        "file_path": "src/attoswarm/protocol/models.py",
+        "chunk_type": "class",
+        "name": "CodeIndexSpec",
+        "text": "class CodeIndexSpec",
+        "score": 0.047619,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "best_overlap_pool_rank": 3,
+      "best_source_term_overlap": 0,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "class CodeIndexSpec",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      },
+      "alternative_preview": {
+        "snippet": "class CodeIndexSpec",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      }
+    },
+    {
+      "query": "index warming",
+      "page_rank": 4,
+      "file_path": "src/attocode_core/ast_index/indexer.py",
+      "chosen": {
+        "file_path": "src/attocode_core/ast_index/indexer.py",
+        "chunk_type": "class",
+        "name": "FileIndex",
+        "text": "class FileIndex",
+        "score": 0.045455,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "chosen_source_term_overlap": 0,
+      "same_file_chunks": 7,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode_core/ast_index/indexer.py",
+        "chunk_type": "class",
+        "name": "FileIndex",
+        "text": "class FileIndex",
+        "score": 0.045455,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "best_overlap_pool_rank": 4,
+      "best_source_term_overlap": 0,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "class FileIndex",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      },
+      "alternative_preview": {
+        "snippet": "class FileIndex",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      }
+    },
+    {
+      "query": "index warming",
+      "page_rank": 5,
+      "file_path": "src/attocode/tools/search.py",
+      "chosen": {
+        "file_path": "src/attocode/tools/search.py",
+        "chunk_type": "function",
+        "name": "_get_trigram_index",
+        "text": "src/attocode/tools/search.py:22-46\ndef _get_trigram_index(root: Path) -> Any | None:\n    \"\"\"Return a loaded TrigramIndex for *root*, or None if unavailable.\"\"\"\n    key = str(root)\n    if key in _trigram_indexes:\n        return _trigram_indexes[key]\n\n    index_dir = root / \".attocode\" / \"index\"\n    if not index_dir.is_dir():\n        _trigram_indexes[key] = None\n        return None\n\n    try:\n        from attocode.integrations.context.trigram_index import TrigramIndex\n\n        idx = TrigramIndex(index_dir=str(index_dir))\n        if idx.load():\n            _trigram_indexes[key] = idx\n            logger.debug(\"trigram index loaded for %s\", root)\n        else:\n            _trigram_indexes[key] = None\n    except Exception:\n        logger.debug(\"Failed to load trigram index for %s\", root, exc_info=True)\n        _trigram_indexes[key] = None\n\n    return _trigram_indexes[key]",
+        "score": 0.045435,
+        "start_line": 22,
+        "end_line": 46
+      },
+      "chosen_source_term_overlap": 1,
+      "same_file_chunks": 1,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/tools/search.py",
+        "chunk_type": "function",
+        "name": "_get_trigram_index",
+        "text": "src/attocode/tools/search.py:22-46\ndef _get_trigram_index(root: Path) -> Any | None:\n    \"\"\"Return a loaded TrigramIndex for *root*, or None if unavailable.\"\"\"\n    key = str(root)\n    if key in _trigram_indexes:\n        return _trigram_indexes[key]\n\n    index_dir = root / \".attocode\" / \"index\"\n    if not index_dir.is_dir():\n        _trigram_indexes[key] = None\n        return None\n\n    try:\n        from attocode.integrations.context.trigram_index import TrigramIndex\n\n        idx = TrigramIndex(index_dir=str(index_dir))\n        if idx.load():\n            _trigram_indexes[key] = idx\n            logger.debug(\"trigram index loaded for %s\", root)\n        else:\n            _trigram_indexes[key] = None\n    except Exception:\n        logger.debug(\"Failed to load trigram index for %s\", root, exc_info=True)\n        _trigram_indexes[key] = None\n\n    return _trigram_indexes[key]",
+        "score": 0.045435,
+        "start_line": 22,
+        "end_line": 46
+      },
+      "best_overlap_pool_rank": 5,
+      "best_source_term_overlap": 1,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "def _get_trigram_index(root: Path) -> Any | None:\n    \"\"\"Return a loaded TrigramIndex for *root*, or None if unavailable.\"\"\"\n    key = str(root)\n    if key in _trigram_indexes:\n        return _trigram_indexes[key]\n\n    index_dir = root / \".attocode\" / \"index\"\n    if not index_dir.is_dir():\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 22,
+        "snippet_end_line": 29
+      },
+      "alternative_preview": {
+        "snippet": "def _get_trigram_index(root: Path) -> Any | None:\n    \"\"\"Return a loaded TrigramIndex for *root*, or None if unavailable.\"\"\"\n    key = str(root)\n    if key in _trigram_indexes:\n        return _trigram_indexes[key]\n\n    index_dir = root / \".attocode\" / \"index\"\n    if not index_dir.is_dir():\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 22,
+        "snippet_end_line": 29
+      }
+    },
+    {
+      "query": "message routing",
+      "page_rank": 1,
+      "file_path": "src/attocode/integrations/utilities/routing.py",
+      "chosen": {
+        "file_path": "src/attocode/integrations/utilities/routing.py",
+        "chunk_type": "class",
+        "name": "RoutingDecision",
+        "text": "src/attocode/integrations/utilities/routing.py:72-88\n@dataclass(slots=True)\nclass RoutingRule:\n    \"\"\"A rule for rules-based routing.\"\"\"\n\n    condition: str  # 'model_contains', 'task_type', 'token_count_gt', 'cost_sensitive'\n    value: str\n    provider_name: str\n    priority: int = 0\n\n\nclass RoutingManager:\n    \"\"\"Routes LLM requests to providers based on strategy.\n\n    Supports multiple routing strategies, fallback chains,\n    and circuit breaker patterns for resilient provider selection.\n    \"\"\"\n",
+        "score": 0.079278,
+        "start_line": 72,
+        "end_line": 88
+      },
+      "chosen_source_term_overlap": 1,
+      "same_file_chunks": 12,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/integrations/utilities/routing.py",
+        "chunk_type": "class",
+        "name": "RoutingDecision",
+        "text": "src/attocode/integrations/utilities/routing.py:72-88\n@dataclass(slots=True)\nclass RoutingRule:\n    \"\"\"A rule for rules-based routing.\"\"\"\n\n    condition: str  # 'model_contains', 'task_type', 'token_count_gt', 'cost_sensitive'\n    value: str\n    provider_name: str\n    priority: int = 0\n\n\nclass RoutingManager:\n    \"\"\"Routes LLM requests to providers based on strategy.\n\n    Supports multiple routing strategies, fallback chains,\n    and circuit breaker patterns for resilient provider selection.\n    \"\"\"\n",
+        "score": 0.079278,
+        "start_line": 72,
+        "end_line": 88
+      },
+      "best_overlap_pool_rank": 1,
+      "best_source_term_overlap": 1,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "@dataclass(slots=True)\nclass RoutingRule:\n    \"\"\"A rule for rules-based routing.\"\"\"\n\n    condition: str  # 'model_contains', 'task_type', 'token_count_gt', 'cost_sensitive'\n    value: str\n    provider_name: str\n    priority: int = 0\n\n\nclass RoutingManager:\n    \"\"\"Routes LLM requests to providers based on strategy.\n\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 72,
+        "snippet_end_line": 84
+      },
+      "alternative_preview": {
+        "snippet": "@dataclass(slots=True)\nclass RoutingRule:\n    \"\"\"A rule for rules-based routing.\"\"\"\n\n    condition: str  # 'model_contains', 'task_type', 'token_count_gt', 'cost_sensitive'\n    value: str\n    provider_name: str\n    priority: int = 0\n\n\nclass RoutingManager:\n    \"\"\"Routes LLM requests to providers based on strategy.\n\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 72,
+        "snippet_end_line": 84
+      }
+    },
+    {
+      "query": "message routing",
+      "page_rank": 2,
+      "file_path": "src/attocode/integrations/utilities/resilience.py",
+      "chosen": {
+        "file_path": "src/attocode/integrations/utilities/resilience.py",
+        "chunk_type": "class",
+        "name": "RoutingStrategy",
+        "text": "src/attocode/integrations/utilities/resilience.py:354-379\n\n\n# ============================================================\n# Routing Strategies\n# ============================================================\n\nclass RoutingStrategy(StrEnum):\n    \"\"\"Strategy for selecting a provider.\"\"\"\n\n    COST = \"cost\"\n    QUALITY = \"quality\"\n    LATENCY = \"latency\"\n    BALANCED = \"balanced\"\n    RULES = \"rules\"\n\n\n@dataclass(slots=True)\nclass ProviderScore:\n    \"\"\"Score for a provider based on routing criteria.\"\"\"\n\n    provider: Any\n    cost_score: float = 0.5\n    quality_score: float = 0.5\n    latency_score: float = 0.5\n\n    @property",
+        "score": 0.07193,
+        "start_line": 354,
+        "end_line": 379
+      },
+      "chosen_source_term_overlap": 1,
+      "same_file_chunks": 3,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/integrations/utilities/resilience.py",
+        "chunk_type": "class",
+        "name": "RoutingStrategy",
+        "text": "src/attocode/integrations/utilities/resilience.py:354-379\n\n\n# ============================================================\n# Routing Strategies\n# ============================================================\n\nclass RoutingStrategy(StrEnum):\n    \"\"\"Strategy for selecting a provider.\"\"\"\n\n    COST = \"cost\"\n    QUALITY = \"quality\"\n    LATENCY = \"latency\"\n    BALANCED = \"balanced\"\n    RULES = \"rules\"\n\n\n@dataclass(slots=True)\nclass ProviderScore:\n    \"\"\"Score for a provider based on routing criteria.\"\"\"\n\n    provider: Any\n    cost_score: float = 0.5\n    quality_score: float = 0.5\n    latency_score: float = 0.5\n\n    @property",
+        "score": 0.07193,
+        "start_line": 354,
+        "end_line": 379
+      },
+      "best_overlap_pool_rank": 2,
+      "best_source_term_overlap": 1,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "# ============================================================\n# Routing Strategies\n# ============================================================\n\nclass RoutingStrategy(StrEnum):\n    \"\"\"Strategy for selecting a provider.\"\"\"\n\n    COST = \"cost\"\n    QUALITY = \"quality\"\n    LATENCY = \"latency\"\n    BALANCED = \"balanced\"\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 356,
+        "snippet_end_line": 366
+      },
+      "alternative_preview": {
+        "snippet": "# ============================================================\n# Routing Strategies\n# ============================================================\n\nclass RoutingStrategy(StrEnum):\n    \"\"\"Strategy for selecting a provider.\"\"\"\n\n    COST = \"cost\"\n    QUALITY = \"quality\"\n    LATENCY = \"latency\"\n    BALANCED = \"balanced\"\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 356,
+        "snippet_end_line": 366
+      }
+    },
+    {
+      "query": "message routing",
+      "page_rank": 3,
+      "file_path": "legacy/src/integrations/utilities/routing.ts",
+      "chosen": {
+        "file_path": "legacy/src/integrations/utilities/routing.ts",
+        "chunk_type": "class",
+        "name": "ModelCapability",
+        "text": "legacy/src/integrations/utilities/routing.ts:1-32\n/**\n * Lesson 23: Routing Integration\n *\n * Integrates model routing (Lesson 22) into the production agent.\n * Provides intelligent model selection and fallback capabilities.\n */\n\nimport type { RoutingConfig, LLMProvider, Message, ChatResponse } from '../../types.js';\nimport type { MessageWithContent } from '../../providers/types.js';\nimport { logger } from './logger.js';\n\n// =============================================================================\n// MODEL CAPABILITY\n// =============================================================================\n\ninterface ModelCapability {\n  model: string;\n  provider: LLMProvider;\n  maxTokens: number;\n  supportsTools: boolean;\n  supportsVision: boolean;\n  costPer1kInput: number;\n  costPer1kOutput: number;\n  latencyMs: number;\n  qualityScore: number;\n  available: boolean;\n  errorCount: number;\n  lastError?: Date;\n}\n\n// =============================================================================\n// ROUTING MANAGER",
+        "score": 0.054762,
+        "start_line": 1,
+        "end_line": 32
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 7,
+      "best_overlap_candidate": {
+        "file_path": "legacy/src/integrations/utilities/routing.ts",
+        "chunk_type": "class",
+        "name": "ModelCapability",
+        "text": "legacy/src/integrations/utilities/routing.ts:1-32\n/**\n * Lesson 23: Routing Integration\n *\n * Integrates model routing (Lesson 22) into the production agent.\n * Provides intelligent model selection and fallback capabilities.\n */\n\nimport type { RoutingConfig, LLMProvider, Message, ChatResponse } from '../../types.js';\nimport type { MessageWithContent } from '../../providers/types.js';\nimport { logger } from './logger.js';\n\n// =============================================================================\n// MODEL CAPABILITY\n// =============================================================================\n\ninterface ModelCapability {\n  model: string;\n  provider: LLMProvider;\n  maxTokens: number;\n  supportsTools: boolean;\n  supportsVision: boolean;\n  costPer1kInput: number;\n  costPer1kOutput: number;\n  latencyMs: number;\n  qualityScore: number;\n  available: boolean;\n  errorCount: number;\n  lastError?: Date;\n}\n\n// =============================================================================\n// ROUTING MANAGER",
+        "score": 0.054762,
+        "start_line": 1,
+        "end_line": 32
+      },
+      "best_overlap_pool_rank": 3,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "\nimport type { RoutingConfig, LLMProvider, Message, ChatResponse } from '../../types.js';\nimport type { MessageWithContent } from '../../providers/types.js';\nimport { logger } from './logger.js';\n\n// =============================================================================\n// MODEL CAPABILITY\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 7,
+        "snippet_end_line": 13
+      },
+      "alternative_preview": {
+        "snippet": "\nimport type { RoutingConfig, LLMProvider, Message, ChatResponse } from '../../types.js';\nimport type { MessageWithContent } from '../../providers/types.js';\nimport { logger } from './logger.js';\n\n// =============================================================================\n// MODEL CAPABILITY\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 7,
+        "snippet_end_line": 13
+      }
+    },
+    {
+      "query": "message routing",
+      "page_rank": 4,
+      "file_path": "lessons/25-production-agent/agent.ts",
+      "chosen": {
+        "file_path": "lessons/25-production-agent/agent.ts",
+        "chunk_type": "method",
+        "name": "ProductionAgent.initializeFeatures",
+        "text": "lessons/25-production-agent/agent.ts:222-253\n          outputDir: traceCaptureConfig.outputDir ?? '.traces',\n          captureMessageContent: traceCaptureConfig.captureMessageContent ?? true,\n          captureToolResults: traceCaptureConfig.captureToolResults ?? true,\n          analyzeCacheBoundaries: traceCaptureConfig.analyzeCacheBoundaries ?? true,\n          filePattern: traceCaptureConfig.filePattern ?? 'trace-{sessionId}-{timestamp}.jsonl',\n          enableConsoleOutput: false,\n        });\n      }\n    }\n\n    // Safety (Sandbox + Human-in-Loop)\n    if (isFeatureEnabled(this.config.sandbox) || isFeatureEnabled(this.config.humanInLoop)) {\n      this.safety = new SafetyManager(\n        isFeatureEnabled(this.config.sandbox) ? this.config.sandbox : false,\n        isFeatureEnabled(this.config.humanInLoop) ? this.config.humanInLoop : false\n      );\n    }\n\n    // Routing\n    if (isFeatureEnabled(this.config.routing)) {\n      this.routing = new RoutingManager(this.config.routing);\n    }\n\n    // Multi-Agent (Lesson 17)\n    if (isFeatureEnabled(this.config.multiAgent)) {\n      const roles = (this.config.multiAgent.roles || []).map((r: AgentRoleConfig) => ({\n        name: r.name,\n        description: r.description,\n        systemPrompt: r.systemPrompt,\n        capabilities: r.capabilities,\n        authority: r.authority,\n        model: r.model,",
+        "score": 0.052273,
+        "start_line": 222,
+        "end_line": 253
+      },
+      "chosen_source_term_overlap": 2,
+      "same_file_chunks": 5,
+      "best_overlap_candidate": {
+        "file_path": "lessons/25-production-agent/agent.ts",
+        "chunk_type": "method",
+        "name": "ProductionAgent.initializeFeatures",
+        "text": "lessons/25-production-agent/agent.ts:222-253\n          outputDir: traceCaptureConfig.outputDir ?? '.traces',\n          captureMessageContent: traceCaptureConfig.captureMessageContent ?? true,\n          captureToolResults: traceCaptureConfig.captureToolResults ?? true,\n          analyzeCacheBoundaries: traceCaptureConfig.analyzeCacheBoundaries ?? true,\n          filePattern: traceCaptureConfig.filePattern ?? 'trace-{sessionId}-{timestamp}.jsonl',\n          enableConsoleOutput: false,\n        });\n      }\n    }\n\n    // Safety (Sandbox + Human-in-Loop)\n    if (isFeatureEnabled(this.config.sandbox) || isFeatureEnabled(this.config.humanInLoop)) {\n      this.safety = new SafetyManager(\n        isFeatureEnabled(this.config.sandbox) ? this.config.sandbox : false,\n        isFeatureEnabled(this.config.humanInLoop) ? this.config.humanInLoop : false\n      );\n    }\n\n    // Routing\n    if (isFeatureEnabled(this.config.routing)) {\n      this.routing = new RoutingManager(this.config.routing);\n    }\n\n    // Multi-Agent (Lesson 17)\n    if (isFeatureEnabled(this.config.multiAgent)) {\n      const roles = (this.config.multiAgent.roles || []).map((r: AgentRoleConfig) => ({\n        name: r.name,\n        description: r.description,\n        systemPrompt: r.systemPrompt,\n        capabilities: r.capabilities,\n        authority: r.authority,\n        model: r.model,",
+        "score": 0.052273,
+        "start_line": 222,
+        "end_line": 253
+      },
+      "best_overlap_pool_rank": 4,
+      "best_source_term_overlap": 2,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "          outputDir: traceCaptureConfig.outputDir ?? '.traces',\n          captureMessageContent: traceCaptureConfig.captureMessageContent ?? true,\n          captureToolResults: traceCaptureConfig.captureToolResults ?? true,\n          analyzeCacheBoundaries: traceCaptureConfig.analyzeCacheBoundaries ?? true,\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 222,
+        "snippet_end_line": 225
+      },
+      "alternative_preview": {
+        "snippet": "          outputDir: traceCaptureConfig.outputDir ?? '.traces',\n          captureMessageContent: traceCaptureConfig.captureMessageContent ?? true,\n          captureToolResults: traceCaptureConfig.captureToolResults ?? true,\n          analyzeCacheBoundaries: traceCaptureConfig.analyzeCacheBoundaries ?? true,\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 222,
+        "snippet_end_line": 225
+      }
+    },
+    {
+      "query": "message routing",
+      "page_rank": 5,
+      "file_path": "src/attocode/types/messages.py",
+      "chosen": {
+        "file_path": "src/attocode/types/messages.py",
+        "chunk_type": "class",
+        "name": "Message",
+        "text": "class Message",
+        "score": 0.047619,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "chosen_source_term_overlap": 0,
+      "same_file_chunks": 3,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/types/messages.py",
+        "chunk_type": "class",
+        "name": "Message",
+        "text": "class Message",
+        "score": 0.047619,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "best_overlap_pool_rank": 7,
+      "best_source_term_overlap": 0,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "class Message",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      },
+      "alternative_preview": {
+        "snippet": "class Message",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      }
+    },
+    {
+      "query": "cache generation",
+      "page_rank": 1,
+      "file_path": "src/attocode/integrations/lifecycle/__init__.py",
+      "chosen": {
+        "file_path": "src/attocode/integrations/lifecycle/__init__.py",
+        "chunk_type": "class",
+        "name": "GenerationGuardedFuture",
+        "text": "src/attocode/integrations/lifecycle/__init__.py:88-98\n\n\nclass GenerationGuardedFuture:\n    \"\"\"An asyncio Future whose result is guarded by a GenerationCounter.\n\n    Resolves the future, but only if the generation hasn't advanced.\n    If the generation has advanced, the result is discarded.\n    \"\"\"\n\n    __slots__ = (\"_future\", \"_generation\", \"_counter\", \"_result\")\n",
+        "score": 0.083788,
+        "start_line": 88,
+        "end_line": 98
+      },
+      "chosen_source_term_overlap": 1,
+      "same_file_chunks": 10,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/integrations/lifecycle/__init__.py",
+        "chunk_type": "class",
+        "name": "GenerationGuardedFuture",
+        "text": "src/attocode/integrations/lifecycle/__init__.py:88-98\n\n\nclass GenerationGuardedFuture:\n    \"\"\"An asyncio Future whose result is guarded by a GenerationCounter.\n\n    Resolves the future, but only if the generation hasn't advanced.\n    If the generation has advanced, the result is discarded.\n    \"\"\"\n\n    __slots__ = (\"_future\", \"_generation\", \"_counter\", \"_result\")\n",
+        "score": 0.083788,
+        "start_line": 88,
+        "end_line": 98
+      },
+      "best_overlap_pool_rank": 1,
+      "best_source_term_overlap": 1,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "\nclass GenerationGuardedFuture:\n    \"\"\"An asyncio Future whose result is guarded by a GenerationCounter.\n\n    Resolves the future, but only if the generation hasn't advanced.\n    If the generation has advanced, the result is discarded.\n    \"\"\"\n\n    __slots__ = (\"_future\", \"_generation\", \"_counter\", \"_result\")\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 89,
+        "snippet_end_line": 97
+      },
+      "alternative_preview": {
+        "snippet": "\nclass GenerationGuardedFuture:\n    \"\"\"An asyncio Future whose result is guarded by a GenerationCounter.\n\n    Resolves the future, but only if the generation hasn't advanced.\n    If the generation has advanced, the result is discarded.\n    \"\"\"\n\n    __slots__ = (\"_future\", \"_generation\", \"_counter\", \"_result\")\n",
+        "snippet_truncated": true,
+        "snippet_start_line": 89,
+        "snippet_end_line": 97
+      }
+    },
+    {
+      "query": "cache generation",
+      "page_rank": 2,
+      "file_path": "src/attocode/types/messages.py",
+      "chosen": {
+        "file_path": "src/attocode/types/messages.py",
+        "chunk_type": "class",
+        "name": "CacheControl",
+        "text": "class CacheControl",
+        "score": 0.043478,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "chosen_source_term_overlap": 0,
+      "same_file_chunks": 1,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/types/messages.py",
+        "chunk_type": "class",
+        "name": "CacheControl",
+        "text": "class CacheControl",
+        "score": 0.043478,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "best_overlap_pool_rank": 4,
+      "best_source_term_overlap": 0,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "class CacheControl",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      },
+      "alternative_preview": {
+        "snippet": "class CacheControl",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      }
+    },
+    {
+      "query": "cache generation",
+      "page_rank": 3,
+      "file_path": "src/attocode/tricks/kv_cache.py",
+      "chosen": {
+        "file_path": "src/attocode/tricks/kv_cache.py",
+        "chunk_type": "class",
+        "name": "CacheStats",
+        "text": "class CacheStats",
+        "score": 0.041667,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "chosen_source_term_overlap": 0,
+      "same_file_chunks": 7,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/tricks/kv_cache.py",
+        "chunk_type": "class",
+        "name": "CacheStats",
+        "text": "class CacheStats",
+        "score": 0.041667,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "best_overlap_pool_rank": 6,
+      "best_source_term_overlap": 0,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "class CacheStats",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      },
+      "alternative_preview": {
+        "snippet": "class CacheStats",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      }
+    },
+    {
+      "query": "cache generation",
+      "page_rank": 4,
+      "file_path": "src/attoswarm/coordinator/cache.py",
+      "chosen": {
+        "file_path": "src/attoswarm/coordinator/cache.py",
+        "chunk_type": "class",
+        "name": "_CacheEntry",
+        "text": "class _CacheEntry",
+        "score": 0.04,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "chosen_source_term_overlap": 0,
+      "same_file_chunks": 5,
+      "best_overlap_candidate": {
+        "file_path": "src/attoswarm/coordinator/cache.py",
+        "chunk_type": "class",
+        "name": "_CacheEntry",
+        "text": "class _CacheEntry",
+        "score": 0.04,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "best_overlap_pool_rank": 7,
+      "best_source_term_overlap": 0,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "class _CacheEntry",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      },
+      "alternative_preview": {
+        "snippet": "class _CacheEntry",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      }
+    },
+    {
+      "query": "cache generation",
+      "page_rank": 5,
+      "file_path": "src/attocode/integrations/context/file_cache.py",
+      "chosen": {
+        "file_path": "src/attocode/integrations/context/file_cache.py",
+        "chunk_type": "class",
+        "name": "CacheEntry",
+        "text": "class CacheEntry",
+        "score": 0.038462,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "chosen_source_term_overlap": 0,
+      "same_file_chunks": 5,
+      "best_overlap_candidate": {
+        "file_path": "src/attocode/integrations/context/file_cache.py",
+        "chunk_type": "class",
+        "name": "CacheEntry",
+        "text": "class CacheEntry",
+        "score": 0.038462,
+        "start_line": 0,
+        "end_line": 0
+      },
+      "best_overlap_pool_rank": 9,
+      "best_source_term_overlap": 0,
+      "higher_overlap_exists": false,
+      "chosen_is_constructor": false,
+      "chosen_preview": {
+        "snippet": "class CacheEntry",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      },
+      "alternative_preview": {
+        "snippet": "class CacheEntry",
+        "snippet_truncated": false,
+        "snippet_start_line": null,
+        "snippet_end_line": null
+      }
+    }
+  ]
+}

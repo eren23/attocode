@@ -1,0 +1,590 @@
+{
+  "kind": "fresh local stdio MCP smoke, real checkout; no agent or model calls",
+  "profile": "lean",
+  "watch": false,
+  "tools": [
+    "bootstrap",
+    "capabilities",
+    "impact_analysis",
+    "inspect_symbol",
+    "notify_file_changed",
+    "search_symbols",
+    "semantic_search",
+    "suggest_tests"
+  ],
+  "server": {
+    "name": "attocode-code-intel",
+    "title": null,
+    "version": "0.1.4",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "elapsed_seconds": 3.87,
+  "queries": [
+    {
+      "arguments": {
+        "query": "search snippet window",
+        "file_filter": "packages/code-intel/src/attocode_intel/search_evidence.py"
+      },
+      "seconds": 3.236,
+      "wire_tokens": 861,
+      "response": {
+        "metadata": {
+          "workspace": "/Users/eren/Documents/AI/first-principles-agent",
+          "source": "local",
+          "revision": "working-tree",
+          "freshness": "working_tree",
+          "truncated": false,
+          "ranking": {
+            "method": "source_aware_deterministic",
+            "returned_count": 3,
+            "model_status": "off",
+            "broad_ranker": "off",
+            "query": {
+              "concepts": [
+                "search",
+                "snippet",
+                "window"
+              ],
+              "scope": "packages/code-intel/src/attocode_intel/search_evidence.py",
+              "ambiguous": false,
+              "matching_components": []
+            },
+            "provider": "off",
+            "candidate_pool_count": 3,
+            "index": {
+              "status": "ready",
+              "keyword_index_ready": true,
+              "body_index_available": true,
+              "body_index_ready": true,
+              "body_indexed_files": 3015,
+              "keyword_indexed_files": 3016,
+              "body_index_coverage": 1.0,
+              "vector_status": "idle",
+              "vector_coverage": 0.0
+            },
+            "delivered_count": 3
+          },
+          "index": {
+            "phase": "not_started"
+          },
+          "analysis": "not_started",
+          "absence_proven": false,
+          "precision": "not_requested"
+        },
+        "data": {
+          "query": "search snippet window",
+          "results": [
+            {
+              "file_path": "packages/code-intel/src/attocode_intel/search_evidence.py",
+              "name": "search_snippet",
+              "chunk_type": "function",
+              "score": 0.100216,
+              "snippet": "def search_snippet(result, query: str, max_chars: int) -> dict:\n    return snippet_window(source_body(result), query, max_chars, result.start_line or None)",
+              "snippet_truncated": false,
+              "snippet_start_line": 67,
+              "snippet_end_line": 68,
+              "line": 67,
+              "end_line": 68,
+              "matched_terms": [
+                "search",
+                "snippet",
+                "window"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            },
+            {
+              "file_path": "packages/code-intel/src/attocode_intel/search_evidence.py",
+              "name": "snippet_window",
+              "chunk_type": "function",
+              "score": 0.099892,
+              "snippet": "                finish = offsets[end]\n    snippet = body[begin:finish]\n    first_line = start_line + bisect_right(offsets, begin) - 1 if start_line and snippet else None\n    last_line = start_line + bisect_left(offsets, finish) - 1 if start_line and snippet else None\n    return {\n        \"snippet\": snippet,\n",
+              "snippet_truncated": true,
+              "snippet_start_line": 55,
+              "snippet_end_line": 60,
+              "line": 48,
+              "end_line": 64,
+              "matched_terms": [
+                "search",
+                "snippet",
+                "window"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            },
+            {
+              "file_path": "packages/code-intel/src/attocode_intel/search_evidence.py",
+              "name": "search_evidence.py",
+              "chunk_type": "file",
+              "score": 0.093478,
+              "snippet": "\"\"\"Bounded, contiguous search previews; lexical overlap is not semantic relevance.\"\"\"\n\nfrom __future__ import annotations\n\nimport re\nfrom bisect import bisect_left, bisect_right\n\nfrom attocode_intel.focused_evidence import task_terms, terms\n\n",
+              "snippet_truncated": false,
+              "snippet_start_line": 1,
+              "snippet_end_line": 9,
+              "line": 1,
+              "end_line": 10,
+              "matched_terms": [
+                "search"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            }
+          ],
+          "ranking": {
+            "method": "source_aware_deterministic",
+            "returned_count": 3,
+            "model_status": "off",
+            "broad_ranker": "off",
+            "query": {
+              "concepts": [
+                "search",
+                "snippet",
+                "window"
+              ],
+              "scope": "packages/code-intel/src/attocode_intel/search_evidence.py",
+              "ambiguous": false,
+              "matching_components": []
+            },
+            "provider": "off",
+            "candidate_pool_count": 3,
+            "index": {
+              "status": "ready",
+              "keyword_index_ready": true,
+              "body_index_available": true,
+              "body_index_ready": true,
+              "body_indexed_files": 3015,
+              "keyword_indexed_files": 3016,
+              "body_index_coverage": 1.0,
+              "vector_status": "idle",
+              "vector_coverage": 0.0
+            },
+            "delivered_count": 3
+          }
+        }
+      }
+    },
+    {
+      "arguments": {
+        "query": "result output budget"
+      },
+      "seconds": 0.225,
+      "wire_tokens": 1336,
+      "response": {
+        "metadata": {
+          "workspace": "/Users/eren/Documents/AI/first-principles-agent",
+          "source": "local",
+          "revision": "working-tree",
+          "freshness": "working_tree",
+          "truncated": false,
+          "ranking": {
+            "method": "source_aware_deterministic",
+            "returned_count": 5,
+            "model_status": "off",
+            "broad_ranker": "off",
+            "query": {
+              "concepts": [
+                "budget",
+                "output",
+                "result"
+              ],
+              "scope": "workspace",
+              "ambiguous": true,
+              "matching_components": [
+                "src/attocode",
+                "legacy/src/integrations/swarm",
+                "lessons/25-production-agent"
+              ]
+            },
+            "provider": "off",
+            "candidate_pool_count": 24,
+            "index": {
+              "status": "ready",
+              "keyword_index_ready": true,
+              "body_index_available": true,
+              "body_index_ready": true,
+              "body_indexed_files": 3015,
+              "keyword_indexed_files": 3016,
+              "body_index_coverage": 1.0,
+              "vector_status": "idle",
+              "vector_coverage": 0.0
+            },
+            "delivered_count": 5
+          },
+          "index": {
+            "phase": "not_started"
+          },
+          "analysis": "not_started",
+          "absence_proven": false,
+          "precision": "not_requested"
+        },
+        "data": {
+          "query": "result output budget",
+          "results": [
+            {
+              "file_path": "src/attocode/commands.py",
+              "name": "_budget_command",
+              "chunk_type": "function",
+              "score": 0.087987,
+              "snippet": "def _budget_command(agent: Any) -> CommandResult:\n    if agent is None:\n        return CommandResult(output=\"No agent running.\")\n\n    ctx = getattr(agent, \"context\", None)\n    if not ctx:\n        return CommandResult(output=\"No active context.\")\n\n    lines = [\"Budget:\"]\n    budget = ctx.budget\n",
+              "snippet_truncated": true,
+              "snippet_start_line": 503,
+              "snippet_end_line": 512,
+              "line": 503,
+              "end_line": 523,
+              "matched_terms": [
+                "budget",
+                "output",
+                "result"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            },
+            {
+              "file_path": "src/attocode/types/budget.py",
+              "name": "BudgetCheckResult",
+              "chunk_type": "class",
+              "score": 0.061208,
+              "snippet": "@dataclass(slots=True)\nclass BudgetCheckResult:\n    \"\"\"Result of a budget check.\"\"\"\n\n    status: BudgetStatus\n    token_usage: float = 0.0\n    cost_usage: float = 0.0\n    duration_usage: float = 0.0\n    iteration_usage: float = 0.0\n    should_stop: bool = False\n    message: str | None = None\n\n    @property",
+              "snippet_truncated": true,
+              "snippet_start_line": 44,
+              "snippet_end_line": 56,
+              "line": 42,
+              "end_line": 56,
+              "matched_terms": [
+                "budget",
+                "result"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            },
+            {
+              "file_path": "src/attocode/shared/budget_tracker.py",
+              "name": "WorkerBudgetTracker.check_budget",
+              "chunk_type": "method",
+              "score": 0.053167,
+              "snippet": "    def check_budget(self) -> WorkerBudgetCheckResult:\n        \"\"\"Return budget check result with detailed reason.\"\"\"\n        # Token check\n        if self.config.max_tokens > 0 and self._total_tokens >= self.config.max_tokens:\n            return WorkerBudgetCheckResult(\n                can_continue=False,\n",
+              "snippet_truncated": true,
+              "snippet_start_line": 97,
+              "snippet_end_line": 102,
+              "line": 97,
+              "end_line": 123,
+              "matched_terms": [
+                "budget",
+                "result"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            },
+            {
+              "file_path": "src/attoswarm/coordinator/preflight.py",
+              "name": "PreflightValidator._check_budget",
+              "chunk_type": "method",
+              "score": 0.052881,
+              "snippet": "    def _check_budget(self, task_id: str, result: PreflightResult) -> None:\n        \"\"\"Check budget gate.\"\"\"\n        if not self._budget_gate:\n            return\n\n        estimated = self._budget_gate.estimated_task_cost()\n        decision = self._budget_gate.can_dispatch(task_id, estimated_cost=estimated)\n",
+              "snippet_truncated": true,
+              "snippet_start_line": 118,
+              "snippet_end_line": 124,
+              "line": 118,
+              "end_line": 126,
+              "matched_terms": [
+                "budget",
+                "result"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            },
+            {
+              "file_path": "src/attocode/core/loop.py",
+              "name": "check_iteration_budget",
+              "chunk_type": "function",
+              "score": 0.051395,
+              "snippet": "\n        return BudgetPreflightResult(\n            can_continue=True,\n            force_text_only=budget_check.force_text_only,\n            injected_nudge=nudge,\n        )\n\n    # No economics \u2014 all clear\n    return BudgetPreflightResult(can_continue=True)",
+              "snippet_truncated": true,
+              "snippet_start_line": 236,
+              "snippet_end_line": 244,
+              "line": 229,
+              "end_line": 244,
+              "matched_terms": [
+                "budget",
+                "result"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            }
+          ],
+          "ranking": {
+            "method": "source_aware_deterministic",
+            "returned_count": 5,
+            "model_status": "off",
+            "broad_ranker": "off",
+            "query": {
+              "concepts": [
+                "budget",
+                "output",
+                "result"
+              ],
+              "scope": "workspace",
+              "ambiguous": true,
+              "matching_components": [
+                "src/attocode",
+                "legacy/src/integrations/swarm",
+                "lessons/25-production-agent"
+              ]
+            },
+            "provider": "off",
+            "candidate_pool_count": 24,
+            "index": {
+              "status": "ready",
+              "keyword_index_ready": true,
+              "body_index_available": true,
+              "body_index_ready": true,
+              "body_indexed_files": 3015,
+              "keyword_indexed_files": 3016,
+              "body_index_coverage": 1.0,
+              "vector_status": "idle",
+              "vector_coverage": 0.0
+            },
+            "delivered_count": 5
+          },
+          "follow_up": {
+            "tool": "semantic_search",
+            "arguments": {
+              "query": "result output budget",
+              "top_k": 24,
+              "file_filter": "",
+              "mode": "auto",
+              "workspace": "/Users/eren/Documents/AI/first-principles-agent",
+              "max_tokens": 4352
+            },
+            "reruns_current_index": true
+          }
+        }
+      }
+    },
+    {
+      "arguments": {
+        "query": "index warming"
+      },
+      "seconds": 0.062,
+      "wire_tokens": 1125,
+      "response": {
+        "metadata": {
+          "workspace": "/Users/eren/Documents/AI/first-principles-agent",
+          "source": "local",
+          "revision": "working-tree",
+          "freshness": "working_tree",
+          "truncated": false,
+          "ranking": {
+            "method": "source_aware_deterministic",
+            "returned_count": 5,
+            "model_status": "off",
+            "broad_ranker": "off",
+            "query": {
+              "concepts": [
+                "index",
+                "warming"
+              ],
+              "scope": "workspace",
+              "ambiguous": true,
+              "matching_components": [
+                "eval",
+                "packages/code-intel",
+                "."
+              ]
+            },
+            "provider": "off",
+            "candidate_pool_count": 24,
+            "index": {
+              "status": "ready",
+              "keyword_index_ready": true,
+              "body_index_available": true,
+              "body_index_ready": true,
+              "body_indexed_files": 3015,
+              "keyword_indexed_files": 3016,
+              "body_index_coverage": 1.0,
+              "vector_status": "idle",
+              "vector_coverage": 0.0
+            },
+            "delivered_count": 5
+          },
+          "index": {
+            "phase": "not_started"
+          },
+          "analysis": "not_started",
+          "absence_proven": false,
+          "precision": "not_requested"
+        },
+        "data": {
+          "query": "index warming",
+          "results": [
+            {
+              "file_path": "eval/search_quality.py",
+              "name": "search_is_warming",
+              "chunk_type": "function",
+              "score": 0.094762,
+              "snippet": "def search_is_warming(service: CodeIntelService, output: str) -> bool:\n    \"\"\"Treat both structured index state and legacy warming text as incomplete.\"\"\"\n    diagnostics = getattr(service._get_semantic_search(), \"candidate_diagnostics\", None)\n    state = diagnostics() if callable(diagnostics) else {}\n",
+              "snippet_truncated": true,
+              "snippet_start_line": 152,
+              "snippet_end_line": 155,
+              "line": 152,
+              "end_line": 156,
+              "matched_terms": [
+                "index",
+                "warming"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            },
+            {
+              "file_path": "packages/code-intel/src/attocode_intel/gateway.py",
+              "name": "OperationGateway._dispatch",
+              "chunk_type": "method",
+              "score": 0.05,
+              "snippet": "                        index = response.structuredContent[\"metadata\"].get(\"ranking\", {}).get(\"index\", {})\n                        if index.get(\"status\") != \"warming\" or time.monotonic() >= deadline:\n                            break\n                        await asyncio.sleep(0.05)\n",
+              "snippet_truncated": true,
+              "snippet_start_line": 229,
+              "snippet_end_line": 232,
+              "line": 220,
+              "end_line": 251,
+              "matched_terms": [
+                "index",
+                "warming"
+              ],
+              "match_fields": [
+                "source_body"
+              ]
+            },
+            {
+              "file_path": "src/attoswarm/protocol/models.py",
+              "name": "CodeIndexSpec",
+              "chunk_type": "class",
+              "score": 0.047619,
+              "snippet": "class CodeIndexSpec",
+              "snippet_truncated": false,
+              "snippet_start_line": null,
+              "snippet_end_line": null,
+              "line": null,
+              "end_line": null,
+              "matched_terms": [
+                "index"
+              ],
+              "match_fields": [
+                "identity",
+                "symbol_metadata"
+              ]
+            },
+            {
+              "file_path": "src/attocode_core/ast_index/indexer.py",
+              "name": "FileIndex",
+              "chunk_type": "class",
+              "score": 0.045455,
+              "snippet": "class FileIndex",
+              "snippet_truncated": false,
+              "snippet_start_line": null,
+              "snippet_end_line": null,
+              "line": null,
+              "end_line": null,
+              "matched_terms": [
+                "index"
+              ],
+              "match_fields": [
+                "identity",
+                "symbol_metadata"
+              ]
+            },
+            {
+              "file_path": "src/attocode/tools/search.py",
+              "name": "_get_trigram_index",
+              "chunk_type": "function",
+              "score": 0.045435,
+              "snippet": "def _get_trigram_index(root: Path) -> Any | None:\n    \"\"\"Return a loaded TrigramIndex for *root*, or None if unavailable.\"\"\"\n    key = str(root)\n    if key in _trigram_indexes:\n        return _trigram_indexes[key]\n\n    index_dir = root / \".attocode\" / \"index\"\n    if not index_dir.is_dir():\n",
+              "snippet_truncated": true,
+              "snippet_start_line": 22,
+              "snippet_end_line": 29,
+              "line": 22,
+              "end_line": 46,
+              "matched_terms": [
+                "index"
+              ],
+              "match_fields": [
+                "identity",
+                "source_body"
+              ]
+            }
+          ],
+          "ranking": {
+            "method": "source_aware_deterministic",
+            "returned_count": 5,
+            "model_status": "off",
+            "broad_ranker": "off",
+            "query": {
+              "concepts": [
+                "index",
+                "warming"
+              ],
+              "scope": "workspace",
+              "ambiguous": true,
+              "matching_components": [
+                "eval",
+                "packages/code-intel",
+                "."
+              ]
+            },
+            "provider": "off",
+            "candidate_pool_count": 24,
+            "index": {
+              "status": "ready",
+              "keyword_index_ready": true,
+              "body_index_available": true,
+              "body_index_ready": true,
+              "body_indexed_files": 3015,
+              "keyword_indexed_files": 3016,
+              "body_index_coverage": 1.0,
+              "vector_status": "idle",
+              "vector_coverage": 0.0
+            },
+            "delivered_count": 5
+          },
+          "follow_up": {
+            "tool": "semantic_search",
+            "arguments": {
+              "query": "index warming",
+              "top_k": 24,
+              "file_filter": "",
+              "mode": "auto",
+              "workspace": "/Users/eren/Documents/AI/first-principles-agent",
+              "max_tokens": 4352
+            },
+            "reruns_current_index": true
+          }
+        }
+      }
+    }
+  ],
+  "source_sha256": {
+    "search_evidence.py": "e164e4a315129a8c21ae1dc67a7f66305bcdec5614785d84b95f6366beab2d97",
+    "gateway.py": "438ff38f796a3de7a0492077ea4af3e834be327dae6b0a7f264d40dd13a5ff12",
+    "output.py": "96e065e4b0b736b09f40a7dc1dc0b0831406ba185d967f917107ecc32a257a28",
+    "query_ranking.py": "c95f7ce954c473963e3d84103e97c4ca472a22c74422f5ce56423c93426ccac7",
+    "_internal/integrations/context/semantic_search.py": "c818d248227cad9274b4e43edcbc081edcc010aebb6d7efc3f17fe7d4557efbd"
+  }
+}
