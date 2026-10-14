@@ -1271,6 +1271,8 @@ class SemanticSearchManager:
 
     def _sync_body_index(self, context_manager: Any = None) -> None:
         """Refresh changed/deleted discovered files, including branch changes."""
+        if self._closed:
+            return
         generation = self._body_generation
         revision = self._source_revision()
         if self._body_index_built and revision == self._body_revision:
@@ -1291,6 +1293,8 @@ class SemanticSearchManager:
             current: dict[str, tuple[str, int, int]] = {}
             root_real = os.path.realpath(self.root_dir)
             for file_info in ctx._files:
+                if self._closed:
+                    return
                 try:
                     # Discovery can include symlinks. Never read or persist
                     # source from outside the selected workspace.
@@ -1317,12 +1321,18 @@ class SemanticSearchManager:
                     if cached.get(path) != (mtime, size)
                 }
                 for path in sorted(deleted | stale):
+                    if self._closed:
+                        return
                     conn.execute("DELETE FROM body_fts WHERE file_path = ?", (path,))
                     conn.execute("DELETE FROM body_file_fts WHERE file_path = ?", (path,))
                     conn.execute("DELETE FROM body_files WHERE file_path = ?", (path,))
                 for path in sorted(stale):
+                    if self._closed:
+                        return
                     abs_path, mtime, size = current[path]
                     for chunk_type, name, start, end, body, terms in self._body_chunks(path, abs_path):
+                        if self._closed:
+                            return
                         conn.execute(
                             "INSERT INTO body_fts "
                             "(file_path, chunk_type, name, start_line, end_line, body, terms) "
@@ -1347,6 +1357,8 @@ class SemanticSearchManager:
                         "INSERT INTO body_files (file_path, mtime_ns, size) VALUES (?, ?, ?)",
                         (path, mtime, size),
                     )
+                if self._closed:
+                    return  # Closing the connection rolls back this partial refresh.
                 conn.commit()
             self._body_index_built = generation == self._body_generation
             self._body_revision = revision
@@ -1360,6 +1372,8 @@ class SemanticSearchManager:
         if self._kw_index_built and not self._body_index_available:
             return
         with self._body_state_lock:
+            if self._closed:
+                return
             if self._body_thread is not None and self._body_thread.is_alive():
                 return
             if self._body_failed_at and time.monotonic() - self._body_failed_at < 5.0:
@@ -1386,21 +1400,27 @@ class SemanticSearchManager:
 
             # One file discovery serves all three steps. A new context per step
             # discovered the files and built the dependency graph three times.
-            ctx = CodebaseContextManager(root_dir=self.root_dir)
+            ctx = CodebaseContextManager(root_dir=self.root_dir, cancelled=lambda: self._closed)
+            if self._closed:
+                return
             if not self._kw_index_built:
                 self._build_keyword_index(ctx)
-                if generation != self._body_generation:
+                if self._closed or generation != self._body_generation:
                     self._kw_index_built = False
                     return
             # Importance is used in first-query scoring; trigram mmap files
             # remain lazy to avoid holding descriptors in idle workspaces.
             self._load_importance_scores(ctx)
+            if self._closed:
+                return
             if self._body_index_available and not self._body_index_built:
                 self._sync_body_index(ctx)
+        except InterruptedError:
+            return
         except Exception:
             logger.warning("Lexical candidate warm-up failed", exc_info=True)
         finally:
-            if generation == self._body_generation and not (
+            if not self._closed and generation == self._body_generation and not (
                 self._kw_index_built
                 and (self._body_index_built or not self._body_index_available)
             ):
@@ -1995,6 +2015,8 @@ class SemanticSearchManager:
         file_mtimes: dict[str, float],
     ) -> None:
         """Persist keyword index docs to disk cache."""
+        if self._closed:
+            return
         conn = self._open_kw_cache_db()
         if conn is None:
             return
@@ -2003,11 +2025,15 @@ class SemanticSearchManager:
                 conn.execute("DELETE FROM kw_files")
                 conn.execute("DELETE FROM kw_docs")
                 for fpath, mtime in file_mtimes.items():
+                    if self._closed:
+                        return
                     conn.execute(
                         "INSERT INTO kw_files (file_path, mtime) VALUES (?, ?)",
                         (fpath, mtime),
                     )
                 for doc in docs:
+                    if self._closed:
+                        return
                     conn.execute(
                         "INSERT OR REPLACE INTO kw_docs "
                         "(id, file_path, chunk_type, name, text, is_config, "
@@ -2019,6 +2045,8 @@ class SemanticSearchManager:
                             json.dumps(doc.term_freqs), doc.doc_len,
                         ),
                     )
+                if self._closed:
+                    return
                 conn.commit()
         except Exception:
             logger.debug("Failed to save kw cache", exc_info=True)
@@ -2096,6 +2124,8 @@ class SemanticSearchManager:
 
         Uses disk cache to avoid re-parsing unchanged files.
         """
+        if self._closed:
+            return
         from attocode_intel._internal.integrations.context.codebase_ast import parse_file
         from attocode_intel._internal.integrations.context.codebase_context import (
             CodebaseContextManager,
@@ -2116,6 +2146,8 @@ class SemanticSearchManager:
         current_files: dict[str, tuple[str, float]] = {}
         file_meta: dict[str, tuple[bool, bool]] = {}  # rel -> (is_config, is_test)
         for f in ctx._files:
+            if self._closed:
+                return
             try:
                 mtime = os.path.getmtime(f.path)
             except OSError:
@@ -2142,6 +2174,8 @@ class SemanticSearchManager:
 
         # Parse only files that need updating
         for rel in files_to_parse:
+            if self._closed:
+                return
             entry = current_files.get(rel)
             if entry is None:
                 continue
@@ -2287,6 +2321,8 @@ class SemanticSearchManager:
         # Build document frequencies (always recomputed from full doc list)
         df: dict[str, int] = {}
         for doc in docs:
+            if self._closed:
+                return
             for term in doc.term_freqs:
                 df[term] = df.get(term, 0) + 1
 
@@ -2908,26 +2944,28 @@ class SemanticSearchManager:
                 self._closed = True
                 if self._reindex_thread is not None:
                     self._reindex_queue.put(None)
+        self.stop_background_indexing()
+        # Synchronize with scheduling so a worker cannot start after this join.
+        with self._body_state_lock:
+            body_thread = self._body_thread
+        if body_thread is not None:
+            body_thread.join(timeout=5.0)
+            if body_thread.is_alive():
+                raise RuntimeError("Source-body indexer did not stop; resources kept open")
         if self._reindex_thread is not None:
             self._reindex_thread.join(timeout=5.0)
             if self._reindex_thread.is_alive():
                 raise RuntimeError("Reindex worker did not stop; store kept open")
-        self.stop_background_indexing()
         thread = self._bg_thread
         if thread is not None:
             thread.join(timeout=5.0)
             if thread.is_alive():
-                logger.warning("Background indexer thread did not stop within 5s")
+                raise RuntimeError("Background indexer did not stop; store kept open")
         if self._store:
             self._store.close()
         if self._trigram_index is not None:
             self._trigram_index.close()
             self._trigram_index = None
-        body_thread = self._body_thread
-        if body_thread is not None:
-            body_thread.join(timeout=5.0)
-            if body_thread.is_alive():
-                logger.warning("Source-body indexer thread did not stop within 5s")
 
     def format_results(self, results: list[SemanticSearchResult], query: str = "") -> str:
         """Format search results as human-readable text."""

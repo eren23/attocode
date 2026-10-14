@@ -56,6 +56,25 @@ def materialize(spec, destination, cache):
     return tree.get("tree")
 
 
+async def ready_search(gateway, arguments, *, timeout=90):
+    """Wait only on an explicit warming response, recording cold-start cost."""
+    started = time.monotonic()
+    warming = 0
+    while True:
+        response = await gateway.execute_mcp("semantic_search", arguments)
+        if response_tokens(response) > arguments["max_tokens"]:
+            raise ValueError("Search warmup response exceeded its output budget")
+        decoded = json.loads(response.content[0].text)
+        status = decoded.get("data", {}).get("ranking", {}).get("index", {}).get("status")
+        if response.isError or status != "warming":
+            return response, {"warming_responses": warming,
+                              "warmup_seconds": time.monotonic() - started if warming else 0}
+        warming += 1
+        if time.monotonic() - started >= timeout:
+            raise TimeoutError(f"Search index still warming after {timeout} seconds")
+        await asyncio.sleep(.1)
+
+
 async def evaluate(root, spec):
     source = root / spec["file"]
     content = source.read_text()
@@ -66,7 +85,11 @@ async def evaluate(root, spec):
     rows = []
     async def check(name, tool, arguments, predicate, *, paginate=False):
         start = time.monotonic()
-        response = await gateway.execute_mcp(tool, {"max_tokens": 4000, **arguments})
+        warmup = {}
+        if tool == "semantic_search":
+            response, warmup = await ready_search(gateway, {"max_tokens": 4000, **arguments})
+        else:
+            response = await gateway.execute_mcp(tool, {"max_tokens": 4000, **arguments})
         decoded = json.loads(response.content[0].text)
         data = decoded.get("data", {})
         pages = [decoded]
@@ -81,7 +104,7 @@ async def evaluate(root, spec):
                 break
         passed = not response.isError and within_budget and bool(predicate(data))
         rows.append({"name": name, "passed": passed, "seconds": time.monotonic() - start,
-                     "response": decoded, "tool": tool, "pages_requested": len(pages)})
+                     "response": decoded, "tool": tool, "pages_requested": len(pages), **warmup})
         return data
     try:
         await check("definition", "search_symbols", {"name": spec["symbol"]},
@@ -182,8 +205,9 @@ def main():
                             if isinstance(exc, subprocess.CalledProcessError) and exc.stderr:
                                 detail = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr
                                 row["stderr_tail"] = detail[-2000:]
-                    report["repositories"].append(row)
-                    write_json(args.output, report)
+                        # Preserve check outcomes even if workspace cleanup fails.
+                        report["repositories"].append(row)
+                        write_json(args.output, report)
                     print(json.dumps({"repository": spec["id"], "passed": row["passed"]}), flush=True)
                 report["passed"] = all(r["passed"] for r in report["repositories"])
     finally:
