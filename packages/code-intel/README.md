@@ -40,14 +40,14 @@ The agent sees 16 tools (the `daily` profile):
 
 For all tools (about 140: rules, security scans, history, snapshots and more), add `--profile full` to `init`. The [tool catalog](https://github.com/eren23/attocode/blob/main/docs/intelligence-tools.md) lists them. The [search details](https://github.com/eren23/attocode/blob/main/docs/intelligence-search.md) page describes ranking, the response format and the experimental rerankers.
 
-For an experimental local seven-tool surface, use `init --profile lean`
-from this checkout and restart your client. It advertises `bootstrap`,
+For an experimental local seven-tool surface (0.1.5 or later), use
+`init --profile lean` and restart your client. It advertises `bootstrap`,
 `search_symbols`, `inspect_symbol`, `semantic_search`, `impact_analysis`,
 `suggest_tests` and `capabilities`, with conditional routing instructions
 and 2,000-token responses. Without file watching, `notify_file_changed`
 is an eighth tool. Advanced tools require a full-profile session.
 This opt-in profile has no demonstrated completion benefit; see the
-[design](evals/designs/2026-10-13-r7-task-completion-pilot.md).
+[completed pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md).
 
 ## Commands for people
 
@@ -69,8 +69,8 @@ Search matches the words of the code and its paths. It does not use embeddings u
 - **Search.** We ran the 560 issues of Loc-Bench V1, with the full issue as the query. For 53.2% of them, the first five files held all files of the fix (file Acc@5 0.532). On a mix of 10 public benchmarks, file Acc@5 was 0.425. See the [first-stage results](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-09-locbench-560-first-stage.md) and the [matrix results](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-10-matrix-r1.md).
 - **Agents.** In four studies, Claude Code (Sonnet 5.5) named the files to edit for an issue. The server did not raise file Acc@5. Each run with the server cost 1.4 to 2.1 times as much. When the agent could choose, it seldom called the server. See the [agent pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-10-agent-pilot.md) and [study R3](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-10-agent-r3.md).
 
-The [R6 review study](evals/results/2026-10-13-r6-review-test-note.md)
-found no demonstrated review benefit. The [completed R7 repair pilot](evals/results/2026-10-14-r7-completion-pilot.md)
+The [R6 review study](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-13-r6-review-test-note.md)
+found no demonstrated review benefit. The [completed R7 repair pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)
 also found no demonstrated benefit; its reviewed decision is to stop expansion.
 
 ## Limits and troubleshooting
@@ -118,7 +118,7 @@ uv build --package attocode-code-intel
 For routine work, use `.venv/bin/python -m eval.quality quick` (two minutes)
 or `local` (ten minutes). They isolate scratch and caches in a monitored 5 GiB
 workspace and report incomplete runs separately from passes. The
-[quality guide](../../docs/intelligence-quality.md) covers pinned multi-language
+[quality guide](https://github.com/eren23/attocode/blob/main/docs/intelligence-quality.md) covers pinned multi-language
 workflow checks, storage inventory, cleanup and optional CPU cloud batches.
 
 Releases use `intel-v*` tags ([release guide](https://github.com/eren23/attocode/blob/main/docs/intelligence-release.md)).
