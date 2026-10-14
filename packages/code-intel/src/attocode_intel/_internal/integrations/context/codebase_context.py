@@ -873,6 +873,7 @@ class CodebaseContextManager:
             List of FileInfo objects for discovered files.
         """
         root = Path(self.root_dir)
+        resolved_root = root.resolve()
         from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
 
         ignore = IgnoreManager(root)
@@ -913,6 +914,15 @@ class CodebaseContextManager:
                     continue
 
                 full_path = os.path.join(dirpath, filename)
+                # os.walk does not descend through directory links, but file
+                # links still appear in filenames. Do not read outside source.
+                if os.path.islink(full_path):
+                    try:
+                        target = Path(full_path).resolve(strict=True)
+                        if not target.is_relative_to(resolved_root):
+                            continue
+                    except (OSError, RuntimeError):
+                        continue
                 try:
                     rel_path = os.path.relpath(full_path, root)
                 except ValueError:

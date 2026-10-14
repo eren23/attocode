@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Workspace indexing boundaries
+
+- Discovery and freshness tracking exclude source-file symlinks outside the
+  workspace, broken links and loops. Retargeting an internal alias outside removes
+  its cached symbols; internal aliases remain supported.
+- Local/broad quality gates now cover seeded mixed edit sequences, small mixed
+  language workspaces, and real process contention/interrupted-write recovery.
+  These regression checks do not establish improved agent outcomes.
+
 ### Added — Bounded quality checks
 
 - Shared `python -m eval.quality` quick/local/broad gates with deadlines,
