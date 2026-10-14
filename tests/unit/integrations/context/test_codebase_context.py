@@ -220,8 +220,8 @@ class TestDetectLanguage:
         assert EXTENSION_LANGUAGES[".java"] == "java"
 
     def test_shell_extensions(self) -> None:
-        assert EXTENSION_LANGUAGES[".sh"] == "shell"
-        assert EXTENSION_LANGUAGES[".bash"] == "shell"
+        assert EXTENSION_LANGUAGES[".sh"] == "bash"
+        assert EXTENSION_LANGUAGES[".bash"] == "bash"
 
     def test_config_extensions(self) -> None:
         assert EXTENSION_LANGUAGES[".yaml"] == "yaml"

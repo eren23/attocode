@@ -219,3 +219,37 @@ async def test_fuzzy_same_file_definition_is_not_the_labeled_symbol(tmp_path, mo
     rows = await evaluate(tmp_path, {'file':'source.py','symbol':'helper','anchor':'# helper',
                                     'caller':None,'importer':None,'test':None})
     assert next(c for c in rows if c['name'] == 'definition')['outcome'] == 'failed'
+
+
+def test_worker_grammar_acquisition_records_absent_artifact_without_downloading_it(tmp_path, monkeypatch):
+    import runpy
+    from pathlib import Path
+    from types import SimpleNamespace
+    names = ['haskell','erlang','clojure','perl','dart','ocaml','fsharp','julia','nim','r','objc']
+    calls = []
+    pack = SimpleNamespace(configure=lambda **kwargs: None, manifest_languages=lambda: names,
+                           download=lambda selected: calls.append(selected), downloaded_languages=lambda: names)
+    monkeypatch.setitem(sys.modules, 'tree_sitter_language_pack', pack)
+    monkeypatch.setattr(pytest, 'main', lambda arguments: 0)
+    monkeypatch.setenv('QUALITY_ALLOW_DOWNLOADS', '1')
+    monkeypatch.setattr(sys, 'argv', ['check', '--cache', str(tmp_path / 'grammars')])
+    main = runpy.run_path(str(Path(__file__).parents[1] / 'scripts/check_optional_grammars.py'))['main']
+    assert main() == 0
+    assert calls == [names]
+    monkeypatch.setattr(sys, 'argv', ['check', '--cache', str(tmp_path / 'unexpected')])
+    pack.manifest_languages = lambda: names[:-1]
+    with pytest.raises(RuntimeError, match='Unexpected unavailable'):
+        main()
+    assert calls == [names]
+
+
+@pytest.mark.parametrize('name,expected,matched', [
+    ('cmd.run_command','run_command',True), ('Phoenix.Endpoint','Phoenix.Endpoint',True),
+    ('Endpoint','Phoenix.Endpoint',True), ('helpers','helper',False),
+    ('Other.Endpoint','Phoenix.Endpoint',False),
+])
+def test_definition_identity_accepts_qualified_adapters_without_fuzzy_matches(name, expected, matched):
+    from eval.quality.corpus import definition_matches
+    spec = {'file':'source', 'symbol':expected}
+    assert definition_matches({'file_path':'source','name':name}, spec) is matched
+    assert not definition_matches({'file_path':'elsewhere','name':name}, spec)

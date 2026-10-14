@@ -19,9 +19,16 @@ def main():
     import tree_sitter_language_pack as pack
     names = ['haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal']
     pack.configure(cache_dir=str(args.cache.resolve()))
-    pack.download(names)
-    missing = sorted(set(names) - set(pack.downloaded_languages()))
-    print(json.dumps({'requested':names, 'missing':missing,
+    available = set(pack.manifest_languages())
+    unsupported = sorted(set(names) - available)
+    # The locked 1.1.2 pack has no downloadable Crystal artifact. Preserve that
+    # explicit unsupported row; an unexpected missing adapter still fails CI.
+    if set(unsupported) - {'crystal'}:
+        raise RuntimeError('Unexpected unavailable grammars: ' + ', '.join(unsupported))
+    requested = [name for name in names if name in available]
+    pack.download(requested)
+    missing = sorted(set(requested) - set(pack.downloaded_languages()))
+    print(json.dumps({'requested':requested, 'unsupported':unsupported, 'missing':missing,
                       'bytes':sum(p.stat().st_size for p in args.cache.rglob('*') if p.is_file())}), flush=True)
     if missing:
         raise RuntimeError('Required optional grammar acquisition incomplete: ' + ', '.join(missing))

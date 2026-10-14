@@ -13,10 +13,12 @@ import logging
 import os
 import re
 import shutil
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from attocode_intel._internal.errors import ConfigurationError, ToolError
 from attocode_intel._internal.types.events import SimpleEventListener
@@ -222,7 +224,9 @@ class _LSPClient:
         await self._request("initialize", {
             "processId": os.getpid(),
             "rootUri": self._root_uri,
+            "workspaceFolders": [{"uri": self._root_uri, "name": "workspace"}],
             "capabilities": {
+                "workspace": {"workspaceFolders": True},
                 "textDocument": {
                     "completion": {"completionItem": {"snippetSupport": True}},
                     "hover": {},
@@ -1039,7 +1043,7 @@ class LSPManager:
         """
         all_symbols: list[WSSymbol] = []
 
-        for lang_id, client in self._clients.items():
+        for client in self._clients.values():
             if not client.is_initialized:
                 continue
             try:

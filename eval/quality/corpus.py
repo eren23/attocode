@@ -34,6 +34,14 @@ CLONES = Path.home() / "Documents/ai/benchmark-repos"
 PACK_SECONDS = 180
 
 
+def definition_matches(row, spec):
+    """Require exact identity, accepting adapters that retain qualified names."""
+    name, expected = row["name"], spec["symbol"]
+    return row["file_path"] == spec["file"] and (
+        name in {expected, expected.split(".")[-1]}
+        or ("." not in expected and name.split(".")[-1] == expected))
+
+
 def materialize(spec, destination, cache):
     name, commit = spec["repo"], spec["commit"]
     historical = matrix._tree_file(HISTORY, name, commit)
@@ -129,13 +137,11 @@ async def evaluate(root, spec, *, observations=None, checkpoint=None):
         return data
     try:
         definitions = await check("definition", "search_symbols", {"name": spec["symbol"]},
-                    lambda d: any(r["file_path"] == spec["file"] and
-                                  r["name"] == spec["symbol"].split('.')[-1] for r in d))
+                    lambda d: any(definition_matches(r, spec) for r in d))
         # Attributes/decorators can precede the declaration's name. Follow the
         # returned selection contract, while requiring it to contain the native
         # source anchor; never substitute a different same-named definition.
-        choices = [d for d in definitions if d["file_path"] == spec["file"]
-                   and d["name"] == spec["symbol"].split(".")[-1]]
+        choices = [d for d in definitions if definition_matches(d, spec)]
         if len(choices) > 1:
             choices = [d for d in choices if d["start_line"] <= line <= d["end_line"]]
         if len(choices) == 1:

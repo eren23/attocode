@@ -187,7 +187,8 @@ def test_search_coverage_follows_product_discovery():
     assert search_coverage("src/app.py") == "parsed"
     assert search_coverage("src/robot/output/conf.py") == "skipped"  # "output" is an ignored folder name
     assert search_coverage(".size-limit.js") == "skipped" and search_coverage("yarn.lock") == "skipped"
-    assert search_coverage("src/compiler/parser.cr") == "text_only"
+    assert search_coverage("src/compiler/parser.cr") == "parsed"  # registered optional adapter, not availability
+    assert search_coverage("src/unknown.custom") == "text_only"
 
 
 def _instance(iid: str, repo: str, language: str = "python", category: str = "") -> Instance:

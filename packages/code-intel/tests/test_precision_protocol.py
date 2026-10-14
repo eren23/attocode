@@ -38,6 +38,8 @@ while True:
     msg = json.loads(sys.stdin.buffer.read(size))
     method, params = msg.get('method'), msg.get('params') or {}
     if method == 'initialize':
+        assert params['workspaceFolders'] == [{'uri':params['rootUri'], 'name':'workspace'}]
+        assert params['capabilities']['workspace']['workspaceFolders'] is True
         root = Path(unquote(urlparse(params['rootUri']).path))
         pending_init = msg['id']
         # A server request may reuse a client request ID: direction matters.

@@ -504,6 +504,12 @@ def _resolve_rust_import(module: str, source_file: str, file_index: dict[str, st
 def _resolve_go_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
     """Compatibility single-target view; package imports can have several files."""
     candidates = file_index.go_candidates(module, source_file) if hasattr(file_index, "go_candidates") else []
+    if not hasattr(file_index, "go_candidates") and module.startswith(("./", "../")):
+        directory = os.path.normpath(str(Path(source_file).parent / module)).replace(os.sep, "/")
+        if directory != ".." and not directory.startswith("../"):
+            candidates = sorted({value for key, value in file_index.items()
+                                 if str(Path(key).parent) == directory
+                                 and key.endswith(".go") and not key.endswith("_test.go")})
     return candidates[0] if len(candidates) == 1 else None
 
 

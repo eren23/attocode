@@ -239,7 +239,8 @@ def search_coverage(path: str) -> str:
 
     "skipped": discovery never reads the file (a skipped name, extension or folder, or a hidden path).
     "text_only": the product has no parser for the extension, so search sees the path and text
-    windows only, with no symbols and no whole-file BM25. "parsed": a file with a language.
+    windows only, with no symbols and no whole-file BM25. "parsed": a registered language;
+    this classification does not prove its optional grammar is installed or parsing succeeds.
     Size limits and .gitignore rules also skip files. They need the tree, so this check does not see them.
     """
     from attocode_intel._internal.integrations.context.codebase_context import (
