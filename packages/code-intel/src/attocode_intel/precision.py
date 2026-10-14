@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shutil
 from pathlib import Path
@@ -84,9 +85,9 @@ class PrecisionSession:
                     manager.on_result_callback = None
                     try:
                         resolved = await manager.get_definition(path, *position)
-                        if resolved is None:
-                            outcomes.append({"language": language, "status": "not_resolved"})
-                            continue
+                        # Some servers (including rust-analyzer) return no
+                        # definition when queried on the declaration itself,
+                        # but do resolve references at that exact identifier.
                         references = await manager.get_references(path, *position, include_declaration=False)
                         # Some servers initially know only the opened definition. Prime a
                         # bounded set of indexed candidates, then retry once within the same
@@ -114,11 +115,15 @@ class PrecisionSession:
                                 self.documents[str(candidate)] = 1
                                 remaining_bytes -= len(content)
                             references = await manager.get_references(path, *position, include_declaration=False)
+                        if resolved is None and not references:
+                            outcomes.append({"language": language, "status": "not_resolved"})
+                            continue
                     finally:
                         manager.on_result_callback = callback
                     ast.ingest_lsp_results("references", path, references,
                                            {"line": position[0], "col": position[1],
-                                            "symbol_name": definition.qualified_name})
+                                            "symbol_name": definition.qualified_name,
+                                            "definition_key": json.dumps([definition.file_path, definition.start_line, definition.qualified_name])})
                     self.verified_languages.add(language)
                     outcomes.append({"language": language, "status": "verified" if references or not candidates else "no_references",
                                      "symbol": definition.qualified_name, "references": len(references)})

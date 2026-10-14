@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Broader bounded intelligence validation
+
+- A frozen 36-repository source matrix with 144 unscoped retrieval questions,
+  deterministic shards, compatible resume/aggregation and separate passed,
+  failed, limited, unsupported and incomplete outcomes. Labels are development
+  anchors, not exhaustive relevance judgments or agent-outcome evidence.
+- A 36-language/format discovery and parser matrix; explicit worker-only optional
+  grammar acquisition, real TypeScript/Rust reference checks, worker Python/Go
+  server checks, all-tool input rejection and runtime operation inventories.
+- Linux/macOS Python 3.12/3.13 clean wheel and persisted-index upgrade checks.
+
+### Fixed — Module ownership and selected evidence
+
+- Resolve declared Go modules, local Rust path dependencies, JSONC aliases,
+  Java/C#/PHP/Kotlin/Scala namespaces, compilation-database includes and Swift
+  target paths without running project build commands. Literal Ruby, Lua, Bash,
+  Elixir and Zig imports remain conservative; dynamic cases stay unresolved.
+- Bind explicit namespace/type aliases to selected members, preserve selected
+  definition identity in persisted language-server references, and invalidate
+  stale precise links after edits. Rust declaration references work when the
+  server returns no redundant definition result.
+- Recognize C++ syntax in `.h` files and bounded export annotations; improve F#,
+  OCaml, Julia, Objective-C and HTML extraction. Bound grammar parsing and batch
+  reference persistence to prevent pathological cold starts.
+- Align discovery and refresh exclusions, allow explicit `.gitignore` negations
+  for build-named source folders, and recover exact scoped identifiers within
+  eligible files. No model, ranking-weight or daily-profile default changed.
+
 ### Fixed — Workspace indexing boundaries
 
 - Discovery and freshness tracking exclude source-file symlinks outside the

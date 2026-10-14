@@ -63,6 +63,7 @@ class SymbolRef:
     # when the reference is at module top level or the enclosing symbol
     # could not be resolved. Populated for call-graph construction.
     caller_qualified_name: str = ""
+    definition_key: str = ""  # JSON [definition file, start line, qualified name] from a selected LSP query
 
 
 @dataclass(slots=True)
@@ -179,6 +180,7 @@ class CrossRefIndex:
                 "source": ref.source,
                 "syntax_name": ref.syntax_name,
                 "caller_qualified_name": ref.caller_qualified_name,
+                "definition_key": ref.definition_key,
             })
         self._store.save_references(file_path, ref_dicts)
 
@@ -224,6 +226,7 @@ class CrossRefIndex:
                 source=r.source,
                 syntax_name=getattr(r, "syntax_name", ""),
                 caller_qualified_name=getattr(r, "caller_qualified_name", ""),
+                definition_key=getattr(r, "definition_key", ""),
             )
             self.add_reference(ref)
 
@@ -289,6 +292,7 @@ class CrossRefIndex:
                 source="lsp",
                 syntax_name=ref.syntax_name,
                 caller_qualified_name=ref.caller_qualified_name,
+                definition_key=ref.definition_key,
             )
             # LSP wins on (file, line) collision — but ONLY when the
             # incoming ref carries a resolved caller. Without one, the
@@ -300,7 +304,8 @@ class CrossRefIndex:
             existing = self.references.get(lsp_ref.symbol_name, [])
             dup_index: int | None = None
             for i, ex in enumerate(existing):
-                if ex.file_path == lsp_ref.file_path and ex.line == lsp_ref.line:
+                if (ex.file_path == lsp_ref.file_path and ex.line == lsp_ref.line
+                        and (not ex.definition_key or ex.definition_key == lsp_ref.definition_key)):
                     dup_index = i
                     break
 

@@ -41,9 +41,9 @@ def rust_imports(node, source: bytes) -> list[dict]:
 
 
 def syntax_tree(path: str, content: str, language: str):
-    from .ts_parser import _get_parser
+    from .ts_parser import _get_parser, bounded_parse
     parser = _get_parser("tsx" if Path(path).suffix == ".tsx" else language)
-    return parser.parse(content.encode()) if parser else None
+    return bounded_parse(parser, content.encode()) if parser else None
 
 
 def reference_candidates(path: str, content: str, language: str):
@@ -58,13 +58,22 @@ def reference_candidates(path: str, content: str, language: str):
         node = stack.pop()
         if node.type in {"comment", "line_comment", "block_comment", "string", "string_literal"}:
             continue
-        if node.type in {"call", "call_expression", "method_invocation", "object_creation_expression", "new_expression"}:
+        if node.type in {"call", "call_expression", "method_invocation", "object_creation_expression", "new_expression",
+                         "function_call", "invocation_expression", "scoped_call_expression", "command"}:
             target = (node.child_by_field_name("function") or node.child_by_field_name("name")
-                      or node.child_by_field_name("constructor"))
+                      or node.child_by_field_name("constructor") or node.child_by_field_name("target")
+                      or node.child_by_field_name("method"))
+            if target is None and language in {"kotlin", "swift", "php"} and node.named_children:
+                target = node.named_children[0]
             if target:
                 # Generic Rust calls have a wrapper around their function path.
                 target = target.child_by_field_name("function") or target
                 name = source[target.start_byte:target.end_byte].decode().replace("::", ".")
+                receiver = node.child_by_field_name("receiver") if language == "ruby" else (
+                    node.child_by_field_name("object") if language == "java" else (
+                        node.child_by_field_name("scope") if language == "php" else None))
+                if receiver is not None:
+                    name = source[receiver.start_byte:receiver.end_byte].decode() + "." + name
                 if all(part.isidentifier() for part in name.split(".")):
                     result.append((name, "call", target.start_point[0] + 1))
                     if language == "rust" and "." in name:

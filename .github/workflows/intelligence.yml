@@ -43,7 +43,7 @@ jobs:
       - name: Apply all migrations
         run: uv run --no-sync python -c 'import asyncio, os; from attocode_intel.api.app import _run_migrations; asyncio.run(_run_migrations(os.environ["TEST_DATABASE_URL"]))'
       - name: Product tests with PostgreSQL
-        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -q
+        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -q -p eval.quality.coverage --quality-operations=quality-artifacts/operations.json --junitxml=quality-artifacts/product.xml
       - name: Bounded local quality gate
         run: uv run --no-sync python -m eval.quality local
       - name: Catalog stays synchronized
@@ -54,7 +54,10 @@ jobs:
         run: |
           uv build --package attocode-code-intel
           uv venv /tmp/intelligence-wheel
-          uv pip install --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
+          uv pip install --python /tmp/intelligence-wheel/bin/python attocode-code-intel==0.1.5
+          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_upgrade.py prepare '/tmp/intelligence upgrade project'
+          uv pip install --reinstall-package attocode-code-intel --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
+          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_upgrade.py verify '/tmp/intelligence upgrade project'
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
       - uses: actions/upload-artifact@v4
         if: always()
@@ -63,24 +66,79 @@ jobs:
           retention-days: 7
           path: |
             dist/
+            quality-artifacts/
             .attocode/quality/runs/*/*.json
             .attocode/quality/runs/*/*.log
+            .attocode/quality/runs/*/*.xml
           include-hidden-files: true
   wheel-macos:
     # The release builds on Linux. This job installs the same pure-Python wheel on macOS.
     runs-on: macos-latest
     timeout-minutes: 20
+    strategy:
+      matrix:
+        python: ['3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Build and verify standalone wheel
+        run: |
+          uv build --package attocode-code-intel
+          uv venv /tmp/intelligence-wheel
+          uv pip install --python /tmp/intelligence-wheel/bin/python attocode-code-intel==0.1.5
+          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_upgrade.py prepare '/tmp/intelligence upgrade project'
+          uv pip install --reinstall-package attocode-code-intel --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
+          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_upgrade.py verify '/tmp/intelligence upgrade project'
+          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
+  optional-grammars:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
-      - name: Build and verify standalone wheel
-        run: |
-          uv build --package attocode-code-intel
-          uv venv /tmp/intelligence-wheel
-          uv pip install --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
-          /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Explicit acquisition and all adapter checks in disposable storage
+        env:
+          QUALITY_ALLOW_DOWNLOADS: '1'
+        run: uv run --no-sync python packages/code-intel/scripts/check_optional_grammars.py --cache '${{ runner.temp }}/quality-grammars'
+  real-language-servers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.6'
+          cache: false
+      - run: |
+          npm install --global typescript@5.9.3 typescript-language-server@5.1.3 pyright@1.1.409
+          go install golang.org/x/tools/gopls@v0.21.0
+          rustup toolchain install 1.94.1 --profile minimal --component rust-analyzer --component rust-src
+          rustup default 1.94.1
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Real servers with bounded warmup, identity, edit and shutdown checks
+        env:
+          QUALITY_REQUIRE_REAL_LSP: '1'
+          QUALITY_REAL_LSP_LANGUAGES: python,go,rust
+          CARGO_NET_OFFLINE: 'true'
+          GOPROXY: 'off'
+        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_real_language_server.py -q --junitxml=quality-artifacts/real-servers.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-language-server-results
+          retention-days: 7
+          path: quality-artifacts/
   dashboard:
     runs-on: ubuntu-latest
     timeout-minutes: 10

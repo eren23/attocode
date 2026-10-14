@@ -22,7 +22,7 @@ From the repository root, with the existing development environment:
 | --- | --- | --- |
 | `quick` | Changed-surface lint, search/reference contracts, language fixtures, supervisor/cloud failures, short lifecycle check | 2 minutes |
 | `local` | Quick checks, product/navigation/remote contracts, edit and index reuse, 100/1,000/10,000-file gate, 20 lifecycle cycles | 10 minutes |
-| `broad` | Local plus six pinned workflow packs and the existing 53-case, 21-repository ranking gate | 60 minutes on the remote worker |
+| `broad` | Local plus 36 pinned source packs / 144 retrieval questions and the unchanged frozen ranking gate | 60 minutes on the remote worker |
 
 For an offline broad run using already available snapshots on the Mac, use
 `broad --seconds 600`. Missing snapshots fail without downloading; the remote
@@ -55,13 +55,49 @@ operation offered by this runner.
 
 ## What the evidence covers
 
-`eval/quality/workflows.yaml` pins FastAPI, Express, this repository's TypeScript
-frontend, GitHub CLI, ripgrep and Gson. Each pack checks definition discovery,
-source selection, scoped search, caller syntax, dependencies, impact, candidate
-tests and restart. Ambiguous definitions use file and line selection; references
-follow at most ten bounded pages. Impact can be found in the depth layers even
-when the flattened list is trimmed. A short known identifier such as `cn` uses
-symbol lookup; its search check uses source terms `twMerge clsx`.
+`eval/quality/workflows.yaml` freezes 36 repositories and 144 unscoped queries
+with literal source anchors, line numbers and hashes. Each pack attempts definition
+lookup, selected source, scoped search, caller syntax, dependencies, impact,
+candidate tests and restart. The original six packs have relationship labels;
+most new packs have definition/retrieval labels only. Unlabeled relationships are
+`limited`, never successful relationship assertions. The queries are development
+anchors with non-exhaustive relevant-file labels, not a held-out benchmark.
+
+Run subsets without repeating the entire matrix:
+
+```sh
+.venv/bin/python -m eval.quality broad --suite workflows --pack requests --seconds 600
+.venv/bin/python -m eval.quality broad --suite workflows --shard 1/3 --seconds 600
+.venv/bin/python -m eval.quality broad --suite workflows --resume PATH/workflows.json --seconds 600
+.venv/bin/python -m eval.quality report A/workflows.json --merge B/workflows.json --merge C/workflows.json
+.venv/bin/python -m eval.quality broad --suite ranking --seconds 600
+```
+
+Shards are sorted by pack ID and disjoint. Aggregation requires identical source,
+harness, fixture, manifest, dependency, Python/platform, grammar-cache and relevant
+setting identities. Resume reuses only completed clean packs with all questions
+observed. Failed/incomplete packs run again. Reports from different platforms or
+code versions cannot be merged into one apparent matrix. Cloud `run` accepts
+`--pack`, `--shard`, `--suite` and `--resume`. The controller checks resume source
+hashes before renting; the worker also requires an identical environment before
+reusing evidence. Cross-platform resume is rejected, not relabeled compatible.
+
+Each pack has a 180-second evaluation limit inside the unchanged tier deadline.
+The first expanded run used 90 seconds; CockroachDB needed 73 seconds just to warm
+scoped search, so that limit could cut off later checks. Both interrupted results
+and completed observations are retained. One source pack and its copied blobs are
+removed before admitting the next. Original cached inputs remain read-only.
+
+Execution can finish successfully while evidence remains `limited` or
+`unsupported`; inspect the outcome counts, not just the command exit code.
+A missing optional grammar or an explicitly ignored labeled source is unsupported,
+not a positive assertion. A wrong answer for eligible supported source is failed.
+Missing packs/questions, changed inputs and unverified cleanup are incomplete.
+The pinned Perl pack includes real source under `dist/`, which default discovery
+excludes; the original failure is retained. New reports identify this independently
+from the ignore policy. A separate regression proves that explicit `!dist/` in
+root `.gitignore` admits it and that removing the override removes its symbols.
+The frozen source pack itself is not altered to obtain a pass.
 
 Remote source acquisition fetches a shallow filtered commit and inspects only
 the downloaded objects, so inspecting omitted large files cannot trigger an
@@ -69,16 +105,41 @@ unbounded lazy fetch. Workflow reports record the Git version and a bounded
 stderr tail when a source command fails.
 Cold search responses explicitly marked `warming` are retried for up to 90
 seconds per pack, with warming-response counts and elapsed time recorded.
-Ready responses and errors are never retried to obtain a better answer. The
-same eight assertions still apply; this separates readiness from retrieval.
+Ready responses and errors are never retried to obtain a better answer. The eight workflow checks remain distinct from the four unscoped retrieval observations.
 
 These are development evidence anchors, not held-out relevance judgments or
 exhaustive call resolution. Caller syntax is not necessarily a linked reference.
 Unavailable import/test anchors are explicitly marked limited. Existing negative
 evidence tests retain `absence_proven: false` for partial analysis. The parser
-fixtures check definitions and missing names in 18 programming languages; they
-do not establish precise cross-file references, dependencies or test selection
-for every language. Data/config formats need their own behavior checks.
+fixtures cover 18 core programming languages, six data/config formats and 12
+optional languages. Optional checks skip when grammars are absent; the CI-only
+acquisition script requests only that explicit set in a disposable cache. Neither
+capability discovery nor product navigation downloads missing grammars.
+
+Static module ownership covers JSONC/local extends, declared Go module/package
+files, Rust local path dependencies, C/C++ compilation-database include order,
+Java/C#/PHP/Kotlin/Scala namespaces, Swift literal target paths, and literal
+Ruby/Lua/Bash/Elixir/Zig imports. Explicit aliases and type-qualified calls have
+positive and negative controls. Dynamic imports, compiler flags/macros beyond the
+bounded recognized cases, arbitrary build scripts and type inference remain
+unresolved. An LSP reference stores the selected file/line/qualified symbol identity;
+workspace edits invalidate old precise links before they can be reused.
+
+`operations.json` inventories every advertised operation against gateway calls in
+passing tests. `response_observed`, `error_only` and `unmapped` are separate; a
+successful response is not proof that every semantic branch is correct. All 139
+current operations have input-rejection checks. Real stdio and authenticated HTTP,
+profiles, multi-workspace isolation, limits and malformed protocol cases are tested
+separately. Direct internal calls and subprocess MCP calls are outside this runtime
+inventory. `contracts.xml` preserves per-test pass/skip/failure evidence.
+
+The installed TypeScript server has a cold selected-definition/edit/shutdown test.
+The opt-in Python/Go/Rust worker matrix allows at most 30 seconds of explicit server
+warmup and 15 seconds for an edit; it does not establish cold production latency.
+Production precision retains its two-second deadline and reports partial evidence
+when unavailable. CI installs pinned test servers in disposable runners, never on
+the user's device. Linux/macOS wheel jobs cover Python 3.12 and 3.13 and upgrade a
+0.1.5 index/configuration before checking the candidate wheel.
 
 The ranking gate uses its unchanged frozen baseline. A temporary local commit
 lets that gate inspect the current working input without committing or publishing
@@ -155,7 +216,10 @@ public source reaches the worker; no private working edits, historical studies,
 model weights or user home directories are uploaded.
 
 Setup, execution and collection fit a 90-minute controller deadline; tests have
-60 minutes. Results exported to the Mac are JSON/logs only, at most 20 MiB total.
+60 minutes. Results exported to the Mac are JSON, logs and JUnit XML, at most 20 MiB total
+and 2 MiB per exported file. JSON whitespace is removed without dropping evidence;
+JSON inputs above 8 MiB are refused before parsing. Source corpora and indexes
+are not downloaded to the Mac.
 Before package installation, a 15-second DNS probe checks the worker's configured
 resolver. If it fails, the disposable Ubuntu worker temporarily uses public
 resolvers `1.1.1.1` and `8.8.8.8` on `eth0`, logs the intervention, and retries

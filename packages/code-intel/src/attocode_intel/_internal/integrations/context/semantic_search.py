@@ -755,7 +755,7 @@ class SemanticSearchManager:
         # load or download weights on an interactive request. Explicit indexing
         # activates vectors; until then, lexical candidates remain available.
         if self._provider is None:
-            return self.search_candidates(expanded_query, top_k, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
 
         # An explicitly initialized vector path retains keyword fusion.
         if not self._kw_index_built:
@@ -763,7 +763,7 @@ class SemanticSearchManager:
 
         self._ensure_provider()
         if self._keyword_fallback:
-            return self.search_candidates(expanded_query, top_k, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
 
         # Refuse vectors produced by a different embedding model (manual-reindex
         # migration): serving them returns semantically garbage results.
@@ -775,17 +775,17 @@ class SemanticSearchManager:
                 "keyword results only. Run reindex to rebuild vectors.",
                 store_model, active_model,
             )
-            return self.search_candidates(expanded_query, top_k, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
 
         # Coverage-based switchover: use keyword fallback while indexing
         if not self._indexed and self._store:
             count = self._store.count()
             if count == 0 and self._bg_indexer is None:
                 # No embeddings and no background indexer — use keyword fallback
-                return self.search_candidates(expanded_query, top_k, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
             elif not self.is_index_ready() and self._bg_indexer is not None:
                 # Indexer running but coverage < 80% — use keyword fallback
-                return self.search_candidates(expanded_query, top_k, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
 
         # Embed query — use expanded query for better recall
         try:
@@ -793,13 +793,13 @@ class SemanticSearchManager:
             if not query_vectors or not query_vectors[0]:
                 self._index_progress.degraded_reason = "query_embedding_failed"
                 self._index_progress.last_error = "Query embedding returned no vector."
-                return self.search_candidates(expanded_query, top_k, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
             query_vec = query_vectors[0]
         except Exception as exc:
             logger.warning("Query embedding failed, falling back to keyword", exc_info=True)
             self._index_progress.degraded_reason = "query_embedding_failed"
             self._index_progress.last_error = f"Query embedding failed: {type(exc).__name__}: {exc}"
-            return self.search_candidates(expanded_query, top_k, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
 
         # Build set of files that exist on disk to filter out stale branch data.
         # In local mode the filesystem is the source of truth — vectors from
@@ -967,6 +967,14 @@ class SemanticSearchManager:
 
         return merged
 
+    def _scoped_literal_results(self, query, file_filter):
+        if not file_filter or not self._kw_index_built:
+            return []
+        from attocode_intel.search_evidence import exact_scoped_source
+        hit = exact_scoped_source(self.root_dir, query, file_filter,
+                                  {doc.file_path for doc in self._kw_docs})
+        return [hit] if hit is not None else []
+
     def search_candidates(
         self, query: str, top_k: int = 50, file_filter: str = "",
         trace: dict[str, list[str]] | None = None, tests_last: bool = True,
@@ -993,7 +1001,9 @@ class SemanticSearchManager:
         positive |= task_terms(query, fold=False)[0]
         terms = sorted(positive) if positive else _tokenize(query)
         if not terms:
-            return []
+            if not self._kw_index_built:
+                self._schedule_body_index()
+            return self._scoped_literal_results(query, file_filter)
         if not self._kw_index_built:
             self._schedule_body_index()
             return []
@@ -1011,6 +1021,8 @@ class SemanticSearchManager:
         if trace is not None:
             trace.update(keyword=_file_order(keyword), body=_file_order(body), file_bm25=files)
         if not body and not files:
+            if not keyword:
+                keyword = self._scoped_literal_results(query, file_filter)
             keyword = self._penalize_exclusions(keyword, negative)
             if trace is not None:
                 trace["chunk_fused"] = _file_order(keyword)
@@ -1144,7 +1156,10 @@ class SemanticSearchManager:
             version_row = conn.execute(
                 "SELECT value FROM metadata WHERE key = 'body_schema_version'",
             ).fetchone()
-            if version_row is None or version_row[0] != "4":
+            if version_row and (not version_row[0].isdigit() or int(version_row[0]) > 5):
+                conn.close()
+                return None
+            if version_row is None or version_row[0] != "5":
                 conn.execute("DROP TABLE IF EXISTS body_fts")
                 conn.execute("DROP TABLE IF EXISTS body_file_fts")
                 conn.execute("DROP TABLE IF EXISTS body_files")
@@ -1168,10 +1183,10 @@ class SemanticSearchManager:
                     file_path UNINDEXED, terms
                 )
             """)
-            if version_row is None or version_row[0] != "4":
+            if version_row is None or version_row[0] != "5":
                 conn.execute(
                     "INSERT OR REPLACE INTO metadata (key, value) "
-                    "VALUES ('body_schema_version', '4')",
+                    "VALUES ('body_schema_version', '5')",
                 )
                 conn.commit()
             return conn
@@ -1976,10 +1991,13 @@ class SemanticSearchManager:
             ).fetchone()
             if row is None:
                 conn.execute(
-                    "INSERT INTO metadata (key, value) VALUES ('schema_version', '1')",
+                    "INSERT INTO metadata (key, value) VALUES ('schema_version', '2')",
                 )
                 conn.commit()
-            elif row[0] != "1":
+            elif not row[0].isdigit() or int(row[0]) > 2:
+                conn.close()
+                return None
+            elif row[0] != "2":
                 conn.executescript(
                     "DROP TABLE IF EXISTS kw_files; DROP TABLE IF EXISTS kw_docs;"
                 )
@@ -1999,7 +2017,7 @@ class SemanticSearchManager:
                 """)
                 conn.execute(
                     "INSERT OR REPLACE INTO metadata (key, value) "
-                    "VALUES ('schema_version', '1')",
+                    "VALUES ('schema_version', '2')",
                 )
                 conn.commit()
             return conn

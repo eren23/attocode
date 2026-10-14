@@ -29,6 +29,9 @@ def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict
 
     names = {name.rsplit(".", 1)[-1] for name in old.definitions.keys() ^ new.definitions.keys()}
     affected = changed & asts.keys()
+    # Precision is tied to a complete workspace generation, including target edits.
+    affected |= {ref.file_path for refs in old.references.values() for ref in refs
+                 if ref.source == "lsp" and ref.file_path in asts}
     if names:
         # Broad refactors fall back to complete reference extraction. Small
         # edits scan text once without parsing every call site again.

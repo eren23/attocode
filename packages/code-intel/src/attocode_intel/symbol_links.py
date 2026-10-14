@@ -1,6 +1,7 @@
 """Resolve selected-symbol evidence through local import bindings."""
 from __future__ import annotations
 
+import json
 from collections import deque
 from pathlib import Path, PurePosixPath
 
@@ -11,7 +12,7 @@ from attocode_intel._internal.integrations.context.syntax_evidence import refere
 def _file_index(ast):
     try:
         from attocode_intel._internal.integrations.context.codebase_context import _build_file_index
-        return _build_file_index(ast._context_mgr._files, ast._root_dir)
+        return _build_file_index(ast._context_mgr._files, ast._root_dir, ast._ast_cache)
     except AttributeError:
         return None
 
@@ -21,14 +22,15 @@ def _imports_from(ast, source, target, index):
     if index is None:
         return []
     try:
-        from attocode_intel._internal.integrations.context.codebase_context import IMPORT_RESOLVERS
+        from attocode_intel._internal.integrations.context.codebase_context import (
+            resolve_import_targets,
+        )
         file_ast = ast._ast_cache.get(source)
         if file_ast is None:
             ast.ensure_file_parsed(source)
             file_ast = ast._ast_cache.get(source)
-        resolver = IMPORT_RESOLVERS.get(file_ast.language) if file_ast else None
         return [imp for imp in (file_ast.imports if file_ast else [])
-                if resolver and resolver(imp.module, source, index) == target]
+                if target in resolve_import_targets(file_ast.language, imp.module, source, index, include_system=imp.include_system)]
     except (AttributeError, OSError, ValueError):
         return []
 
@@ -52,12 +54,40 @@ def linked_names_by_file(ast, definition):
             break
         for source in dependents:
             for imp in _imports_from(ast, source, target, index):
+                source_ast = ast._ast_cache.get(source)
+                target_ast = ast._ast_cache.get(target)
+                parent = definition.qualified_name.rsplit('.', 1)[0] if '.' in definition.qualified_name else ''
+                if (source_ast and target_ast and parent in {c.name for c in target_ast.classes}
+                        and source_ast.language in {'java', 'csharp', 'scala', 'php', 'kotlin'}):
+                    module = imp.module.replace('\\', '.')
+                    namespaces = {ns.replace('\\', '.') for ns in target_ast.namespaces}
+                    if (module.endswith('.' + parent) or module in {ns + '.*' for ns in namespaces}
+                            or source_ast.language == 'csharp' and module in namespaces):
+                        names.setdefault(source, set()).add(f'{imp.alias or parent}.{exported_name}')
+                        continue
+                    if module.endswith('.' + parent + '.' + exported_name):
+                        names.setdefault(source, set()).add(imp.alias or exported_name)
+                        continue
                 imported = imp.names[-1] if imp.names else ("*" if imp.is_reexport else "")
                 if imported not in {exported_name, "*"}:
                     continue
                 local = imp.alias or (exported_name if imported == "*" else imported)
+                if source_ast and source_ast.language == "go":
+                    package_names = target_ast.namespaces if target_ast else []
+                    package = imp.alias or (package_names[0] if len(package_names) == 1 else "")
+                    if not package or package in {"_", "."}:
+                        continue
+                    names.setdefault(source, set()).add(f"{package}.{exported_name}")
+                    continue
                 bound = names.setdefault(source, set())
-                bound.update({exported_name, imported, local})
+                if imported == "*" and imp.alias and not imp.is_reexport:
+                    # Namespace imports bind ns.member, not every bare member or
+                    # every other call through ns.
+                    bound.add(f"{imp.alias}.{exported_name}")
+                else:
+                    bound.add(local)
+                if source_ast and source_ast.language == "swift":
+                    bound.add(f"{imp.module}.{exported_name}")
                 reexport = imp.is_reexport or PurePosixPath(source).name == "__init__.py"
                 state = (source, local)
                 if reexport and local and state not in visited:
@@ -133,6 +163,10 @@ def classify_symbol_references(ast, definition):
                        if "." in definition.qualified_name else "")
     linked, unresolved = [], []
     for ref in candidates:
+        selected_key = json.dumps([definition.file_path, definition.start_line, definition.qualified_name])
+        precise_key = getattr(ref, "definition_key", "")
+        if precise_key and precise_key != selected_key:
+            continue
         local_names = names_by_file.get(ref.file_path, set())
         syntax_name = getattr(ref, "syntax_name", "") or ref.symbol_name
         caller = getattr(ref, "caller_qualified_name", "")
@@ -148,7 +182,9 @@ def classify_symbol_references(ast, definition):
                     and caller.rsplit(".", 1)[0] == selected_parent)
             )
         )
-        if same_file and local_identity:
+        if ref.source == "lsp" and precise_key == selected_key:
+            resolution = "language_server"
+        elif same_file and local_identity:
             resolution = "same_file"
         elif not same_file and {syntax_name, syntax_name.split(".", 1)[0]} & local_names:
             resolution = "import_binding"

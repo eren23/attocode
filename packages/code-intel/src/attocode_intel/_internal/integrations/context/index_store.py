@@ -20,10 +20,10 @@ from filelock import FileLock
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "6"
+SCHEMA_VERSION = "7"
 # Bump the suffix when a change alters the saved graph edges, for example import resolution.
 # Stores keep their tables, and the next start rebuilds the index once.
-SNAPSHOT_KEY = "structural_snapshot_v3"
+SNAPSHOT_KEY = "structural_snapshot_v4"
 SQLITE_BUSY_TIMEOUT_MS = 30_000
 INDEX_INIT_LOCK_TIMEOUT_SECONDS = 30
 
@@ -71,6 +71,7 @@ class StoredReference:
     source: str  # "tree-sitter" | "lsp"
     syntax_name: str = ""  # identifier/member expression as written in source
     caller_qualified_name: str = ""  # enclosing function/method (call-graph edge)
+    definition_key: str = ""
 
 
 @dataclass(slots=True)
@@ -220,7 +221,8 @@ class IndexStore:
                 col INTEGER NOT NULL DEFAULT 0,
                 source TEXT NOT NULL DEFAULT 'tree-sitter',
                 syntax_name TEXT NOT NULL DEFAULT '',
-                caller_qualified_name TEXT NOT NULL DEFAULT ''
+                caller_qualified_name TEXT NOT NULL DEFAULT '',
+                definition_key TEXT NOT NULL DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS dependencies (
@@ -455,6 +457,7 @@ class IndexStore:
                 r.get("source", "tree-sitter"),
                 r.get("syntax_name", ""),
                 r.get("caller_qualified_name", ""),
+                r.get("definition_key", ""),
             )
             for r in refs
         ]
@@ -463,8 +466,8 @@ class IndexStore:
             conn.executemany(
                 """INSERT INTO refs
                    (file_path, symbol_name, ref_kind, line, col, source,
-                    syntax_name, caller_qualified_name)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    syntax_name, caller_qualified_name, definition_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 rows,
             )
             conn.commit()
@@ -476,19 +479,19 @@ class IndexStore:
             if file_path:
                 rows = conn.execute(
                     "SELECT id, file_path, symbol_name, ref_kind, line, col, "
-                    "source, syntax_name, caller_qualified_name FROM refs WHERE file_path = ?",
+                    "source, syntax_name, caller_qualified_name, definition_key FROM refs WHERE file_path = ?",
                     (file_path,),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT id, file_path, symbol_name, ref_kind, line, col, "
-                    "source, syntax_name, caller_qualified_name FROM refs"
+                    "source, syntax_name, caller_qualified_name, definition_key FROM refs"
                 ).fetchall()
         return [
             StoredReference(
                 id=r[0], file_path=r[1], symbol_name=r[2], ref_kind=r[3],
                 line=r[4], column=r[5], source=r[6], syntax_name=r[7],
-                caller_qualified_name=r[8],
+                caller_qualified_name=r[8], definition_key=r[9],
             )
             for r in rows
         ]

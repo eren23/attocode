@@ -176,3 +176,57 @@ def test_missing_reaper_blocks_before_provisioning(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="heartbeat"):
         batch(api, tmp_path / "managed")
     assert not api.nodes and not api.deleted
+
+
+def test_cloud_selection_validated_before_budget_or_provisioning(tmp_path):
+    from eval.quality.cloud import workflow_arguments
+    assert workflow_arguments(['express'], '1/1', 'workflows') == [
+        '--suite', 'workflows', '--pack', 'express', '--shard', '1/1']
+    api = FakeAPI()
+    with pytest.raises(ValueError, match='Unknown quality packs'):
+        batch(api, tmp_path / 'managed', packs=['not-a-pack'], execute=lambda *args: None)
+    assert not api.nodes and not (tmp_path / 'managed').exists()
+
+
+def test_cloud_resume_rejects_changed_inputs_before_reserving(tmp_path, monkeypatch):
+    from eval.quality import corpus
+    from eval.quality.cloud import validated_resume, workflow_arguments
+    identity = {k:'frozen' for k in ('source_sha256','harness_sha256','fixture_sha256','pack_sha256')}
+    monkeypatch.setattr(corpus, 'evidence_identity', lambda: identity)
+    path = tmp_path / 'resume.json'
+    data = {'schema_version':2,'identity':identity.copy(),'manifest_packs':['express'], 'repositories':[]}
+    path.write_text(json.dumps(data))
+    assert validated_resume(path) == data
+    assert workflow_arguments(['express'], None, 'workflows', resume=True)[-2:] == [
+        '--resume','/root/job/.attocode/quality/resume.json']
+    data['identity']['source_sha256'] = 'different'
+    path.write_text(json.dumps(data))
+    api = FakeAPI()
+    with pytest.raises(ValueError, match='different candidate'):
+        batch(api, tmp_path / 'managed', resume=path, execute=lambda *args: None)
+    assert not api.nodes and not (tmp_path / 'managed').exists()
+
+
+def test_report_export_compacts_json_losslessly_and_rejects_oversize(tmp_path):
+    import json
+    import tarfile
+
+    from eval.quality.export import export_reports
+    root = tmp_path / 'runs'
+    run = root / 'one'
+    run.mkdir(parents=True)
+    data = {'results': [{'symbol':'helper','outcome':'limited'}] * 35000}
+    source = run / 'workflows.json'
+    source.write_text(json.dumps(data, indent=2))
+    assert source.stat().st_size > 2**21
+    (run / 'ignored.txt').write_text('not exported')
+    (run / 'link.json').symlink_to(source)
+    target = tmp_path / 'reports.tar.gz'
+    export_reports(root, target)
+    with tarfile.open(target) as archive:
+        assert archive.getnames() == ['.attocode/quality/runs/one/workflows.json']
+        assert json.load(archive.extractfile(archive.getmembers()[0])) == data
+        assert archive.getmembers()[0].size <= 2**21
+    source.write_text(json.dumps({'large':'x' * (2**21)}))
+    with pytest.raises(ValueError, match='export exceeds'):
+        export_reports(root, target)

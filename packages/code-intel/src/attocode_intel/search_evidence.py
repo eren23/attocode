@@ -130,3 +130,41 @@ def hydrate_selected_sources(root_dir: str, results: list) -> list:
         except (OSError, UnicodeError, ValueError):
             continue
     return enriched
+
+
+def exact_scoped_source(root_dir, query, file_filter, eligible_paths):
+    """Recover an exact identifier from one explicitly selected, eligible file.
+
+    This does not widen an unscoped candidate pool or bypass discovery exclusions.
+    At most one MB is read; changing or external files cannot produce evidence.
+    """
+    if file_filter not in eligible_paths or not re.fullmatch(r'[A-Za-z_]\w*(?:(?:\.|::)\w+)*', query) or len(query) > 128:
+        return None
+    root = Path(root_dir).resolve()
+    try:
+        path = (root / file_filter).resolve()
+        if not path.is_relative_to(root):
+            return None
+        before = path.stat()
+        if before.st_size > 1_000_000:
+            return None
+        with path.open('rb') as stream:
+            raw = stream.read(1_000_001)
+        if len(raw) > 1_000_000:
+            return None
+        after = path.stat()
+        if (before.st_mtime_ns, before.st_ctime_ns, before.st_size) != (after.st_mtime_ns, after.st_ctime_ns, after.st_size):
+            return None
+        source = raw.decode('utf-8', errors='replace')
+        match = re.search(r'(?<!\w)' + re.escape(query) + r'(?!\w)', source)
+        if match is None:
+            return None
+        start = max(source.rfind('\n', 0, match.start()) + 1, match.start() - 200)
+        end = min(len(source), start + 2400)
+        from ._internal.integrations.context.semantic_search import SemanticSearchResult
+        return SemanticSearchResult(file_path=file_filter, chunk_type='file', name=path.name,
+                                    text=source[start:end], score=0.0,
+                                    start_line=source.count('\n', 0, start) + 1,
+                                    end_line=source.count('\n', 0, max(start, end - 1)) + 1)
+    except (OSError, ValueError):
+        return None

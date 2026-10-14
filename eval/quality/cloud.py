@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import hashlib
 import ipaddress
 import json
 import os
+import shlex
 import subprocess
 import time
 import urllib.error
@@ -187,7 +189,7 @@ def verify_reaper():
 
 def public_bundle(path):
     relevant = ["packages/code-intel/src", "packages/code-intel/tests", "packages/code-intel/pyproject.toml",
-                "eval/quality", "eval/matrix", "pyproject.toml", "uv.lock"]
+                "packages/code-intel/scripts", "eval/quality", "eval/matrix", "pyproject.toml", "uv.lock"]
     dirty = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", *relevant], cwd=REPO)
     if dirty.strip():
         raise ValueError("Remote runs require committed inputs; uncommitted code stays local")
@@ -200,8 +202,46 @@ def public_bundle(path):
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
 
 
-def batch(api, root, *, execute=None):
+def workflow_arguments(packs=(), shard=None, suite="all", *, resume=False):
+    import yaml
+
+    from eval.quality.corpus import PACK
+    from eval.quality.evidence import select_packs
+    if suite not in {"all", "workflows", "ranking"} or (suite == "ranking" and (packs or shard or resume)):
+        raise ValueError("Invalid workflow selection; ranking requires the complete gate")
+    select_packs(yaml.safe_load(PACK.read_text())["repositories"], packs, shard)
+    arguments = ["--suite", suite]
+    for pack in packs:
+        arguments.extend(["--pack", pack])
+    if shard:
+        arguments.extend(["--shard", shard])
+    if resume:
+        arguments.extend(["--resume", "/root/job/.attocode/quality/resume.json"])
+    return arguments
+
+
+def validated_resume(path):
+    """Reject wrong source inputs before spending; the worker checks its environment."""
+    if path is None:
+        return None
+    from eval.quality.corpus import evidence_identity
+    from eval.quality.evidence import reusable_rows
+    path = Path(path)
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 2**21:
+        raise ValueError("Resume report must be a regular file of at most 2 MiB")
+    data = json.loads(path.read_text())
+    identity = evidence_identity()
+    for key in ('source_sha256', 'harness_sha256', 'fixture_sha256', 'pack_sha256'):
+        if data.get('identity', {}).get(key) != identity[key]:
+            raise ValueError("Resume report has different candidate inputs")
+    reusable_rows(data, data['identity'], data.get('manifest_packs', []))
+    return data
+
+
+def batch(api, root, *, execute=None, packs=(), shard=None, suite="all", resume=None):
     """One controller owns the ledger; tests inject execution, never a cloud key."""
+    workflow_arguments(packs, shard, suite, resume=bool(resume))
+    resume_data = validated_resume(resume)  # Validate before provisioning or reservation.
     root = managed_root(root)
     cloud = root / "cloud"
     cloud.mkdir(exist_ok=True)
@@ -217,6 +257,8 @@ def batch(api, root, *, execute=None):
         run_tag = TAG + "-" + run_id
         directory = root / "runs" / ("cloud-" + run_id)
         directory.mkdir()
+        if resume_data is not None:
+            write_json(directory / "resume.json", resume_data)
         if execute is None:
             verify_reaper()
             key = Path(os.environ.get("QUALITY_SSH_KEY", str(Path.home() / ".ssh/id_ed25519")))
@@ -227,7 +269,10 @@ def batch(api, root, *, execute=None):
         else:
             key, key_id, commit = Path("injected"), "injected", "injected"
         row = reserve(ledger, run_id, price, time.time())
-        row.update(owner=MARKER, run_tag=run_tag, source_commit=commit)
+        row.update(owner=MARKER, run_tag=run_tag, source_commit=commit,
+                   selection={"packs": list(packs), "shard": shard, "suite": suite})
+        if resume_data is not None:
+            row['selection']['resume_sha256'] = hashlib.sha256((directory / 'resume.json').read_bytes()).hexdigest()
         write_json(ledger_path, ledger)
         node_id = None
         try:
@@ -237,7 +282,11 @@ def batch(api, root, *, execute=None):
             node_id = node["id"]
             row["node_id"] = node_id
             write_json(ledger_path, ledger)
-            (execute or execute_batch)(api, node_id, directory, root, key)
+            if execute:
+                execute(api, node_id, directory, root, key)
+            else:
+                execute_batch(api, node_id, directory, root, key, packs=packs, shard=shard, suite=suite,
+                              resume=resume_data is not None)
             row["status"] = "completed"
         except BaseException as exc:
             row.update(status="failed", error=f"{type(exc).__name__}: {exc}")
@@ -264,7 +313,8 @@ def batch(api, root, *, execute=None):
         return row
 
 
-def execute_batch(api, node_id, directory, root, key):
+def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, suite="all", resume=False):
+    arguments = shlex.join(workflow_arguments(packs, shard, suite, resume=resume))
     start = time.monotonic()
     deadline = start + 90 * 60
     host = None
@@ -300,8 +350,11 @@ def execute_batch(api, node_id, directory, root, key):
                    "cd /root/job; mkdir -p .attocode/quality; printf %s attocode-quality-v1 > .attocode/quality/.owner; "
                    "UV_CACHE_DIR=/root/job/.attocode/quality/cache/uv /root/bootstrap/bin/uv sync "
                    "--locked --package attocode-code-intel --extra dev --extra service"]),
-        ("tests", [*ssh, "cd /root/job; QUALITY_ALLOW_DOWNLOADS=1 .venv/bin/python -m eval.quality broad"]),
+        ("tests", [*ssh, "cd /root/job; QUALITY_ALLOW_DOWNLOADS=1 .venv/bin/python -m eval.quality broad " + arguments]),
     ]
+    if resume:
+        commands.insert(2, ('resume', ['scp', *options, str(directory / 'resume.json'),
+                                      'root@' + host + ':/root/job/.attocode/quality/resume.json']))
     rows = []
     try:
         for name, command in commands:
@@ -313,14 +366,7 @@ def execute_batch(api, node_id, directory, root, key):
                 raise RuntimeError(f"Remote {name} failed; see bounded controller log")
     finally:
         # Reports/logs only: no cloning the remote corpora or indexes to the Mac.
-        collect = [*ssh, "cd /root/job; python3 - <<'PYREMOTE'\nimport pathlib,tarfile\nsize=0\n"
-                   "with tarfile.open('/root/results.tar.gz','w:gz') as out:\n"
-                   " for p in pathlib.Path('.attocode/quality/runs').glob('*/*'):\n"
-                   "  if p.is_file() and not p.is_symlink() and p.suffix in ('.json','.log'):\n"
-                   "   size += p.stat().st_size\n"
-                   "   assert p.stat().st_size <= 2**21 and size <= 20*2**20, 'Report export exceeds limit'\n"
-                   "   out.add(p)\n"
-                   "PYREMOTE"]
+        collect = [*ssh, "cd /root/job; python3 -m eval.quality.export"]
         result = supervise(collect, cwd=REPO, env=env, root=root, log=directory / "collect.log",
                            deadline=min(deadline, time.monotonic() + 120), max_bytes=5 * GIB)
         rows.append({"name": "collect", **result})
@@ -334,13 +380,13 @@ def execute_batch(api, node_id, directory, root, key):
         raise RuntimeError("Remote result collection incomplete")
 
 
-def main(command="quote", *, root=None):
+def main(command="quote", *, root=None, packs=(), shard=None, suite="all", resume=None):
     try:
         api = API()
         if command == "quote":
             result = quote(api)
         elif command == "run":
-            result = batch(api, root or REPO / ".attocode/quality")
+            result = batch(api, root or REPO / ".attocode/quality", packs=packs, shard=shard, suite=suite, resume=resume)
         elif command == "reconcile":
             result = reconcile(api, root or REPO / ".attocode/quality")
         elif command in {"reap", "reap-apply"}:

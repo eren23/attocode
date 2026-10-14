@@ -227,3 +227,31 @@ def test_metadata_hydration_refuses_ambiguous_oversized_and_escaping_source(tmp_
         ("duplicate.py", "function", "close"), ("large.py", "file", "large.py"),
         ("../outside.py", "file", "outside.py")]]
     assert all(a is b for a, b in zip(hits, hydrate_selected_sources(str(tmp_path), hits), strict=True))
+
+
+async def test_exact_scoped_common_identifier_and_large_file_without_unscoped_promotion(tmp_path, monkeypatch):
+    from attocode_intel.gateway import OperationGateway
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    (tmp_path / 'types.py').write_text('class Type:\n    pass\n')
+    (tmp_path / 'large.py').write_text('# padding\n' * 60000 + 'class LargeTarget:\n    pass\n')
+    gateway = OperationGateway(str(tmp_path), 'daily', watch=False)
+    try:
+        for name, path in [('Type','types.py'), ('LargeTarget','large.py')]:
+            result = await gateway.execute('semantic_search', {'query':name,'file_filter':path,'top_k':5})
+            data = result.structuredContent['data']
+            assert any(r['file_path'] == path and name in r['snippet'] for r in data['results'])
+    finally:
+        await gateway.close()
+
+
+def test_exact_scoped_recovery_respects_discovery_and_root_boundary(tmp_path):
+    from attocode_intel.search_evidence import exact_scoped_source
+    root = tmp_path / 'root'
+    root.mkdir()
+    private = tmp_path / 'private.py'
+    private.write_text('class Type: pass\n')
+    (root / 'link.py').symlink_to(private)
+    assert exact_scoped_source(str(root), 'Type', 'link.py', {'link.py'}) is None
+    (root / 'ignored.py').write_text('class Type: pass\n')
+    assert exact_scoped_source(str(root), 'Type', 'ignored.py', set()) is None
+    assert exact_scoped_source(str(root), 'Type', '*.py', {'ignored.py'}) is None
