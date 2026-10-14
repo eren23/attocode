@@ -94,6 +94,25 @@ focused lookup below 1 second on the one-file lifecycle workload. The separate
 coverage. These workloads do not establish latency on arbitrary real monorepos,
 or prove that every cause of the historical root-suite descriptor failure is fixed.
 
+The local and broad contract suites also include 72 seeded mixed-edit comparisons
+against a fresh index and independently enumerated Python definitions. A disabled
+repair negative control must fail. A small six-language workspace checks duplicate
+symbol selection, exact source ranges, Unicode/spaced paths, ignored generated
+files, malformed-source recovery and TypeScript import updates, live and reopened.
+File symlinks outside the workspace, broken links and loops are excluded from
+discovery and freshness tracking; internal file aliases remain supported, including
+retargeting between requests. These checks are not an OS sandbox against concurrent
+filesystem changes.
+
+Two gateway processes share a disposable index in the process tests. An explicit
+barrier holds the first writer after snapshot invalidation and partial persistence,
+with a real SQLite write transaction open. The second process must demonstrate lock
+contention. Both orderly completion and killing the first writer must leave a
+complete recoverable index, rolled-back uncommitted writes and SQLite integrity.
+Each barrier/wait has a deadline and child processes are reaped in `finally`.
+These small fixtures add no downloads or model calls and stay within the existing
+local tier's time/storage limits; they are not a long-running contention benchmark.
+
 ## DigitalOcean batches
 
 The optional controller uses DigitalOcean's API and SSH. It selects one

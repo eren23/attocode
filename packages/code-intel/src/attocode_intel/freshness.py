@@ -44,6 +44,7 @@ class FreshnessTracker:
         manifest = {}
         eligibility = {}
         pending = [(self.root, "")]
+        resolved_root = Path(self.root).resolve()
         while pending:
             directory, prefix = pending.pop()
             try:
@@ -54,6 +55,12 @@ class FreshnessTracker:
                             continue
                         rel = prefix + name
                         try:
+                            # Recheck link targets even when the path filter is
+                            # cached: retargeting must invalidate old symbols.
+                            if entry.is_symlink():
+                                target = Path(entry.path).resolve(strict=True)
+                                if not target.is_relative_to(resolved_root):
+                                    continue
                             is_dir = entry.is_dir()
                             key = rel + "/" if is_dir else rel
                             allowed = self._eligibility.get(key)
@@ -72,7 +79,7 @@ class FreshnessTracker:
                                 stat = entry.stat()
                                 if stat.st_size <= 1_000_000:
                                     manifest[rel] = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
-                        except OSError:
+                        except (OSError, RuntimeError):
                             continue
             except OSError:
                 continue
