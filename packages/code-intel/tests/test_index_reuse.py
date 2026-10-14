@@ -266,3 +266,42 @@ def test_hydration_reuses_parsed_files_for_deferred_dependencies(tmp_path, monke
         assert len(service._store.get_all_files()) == 3
     finally:
         close(service)
+
+
+def test_known_name_snapshot_reuse_and_definition_mutations(tmp_path):
+    from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+    from attocode_intel._internal.integrations.context.cross_references import (
+        CrossRefIndex,
+        SymbolLocation,
+    )
+
+    index = CrossRefIndex()
+    empty = index.known_symbol_names()
+    assert empty == frozenset() and index.known_symbol_names() is empty
+    index.add_definition(SymbolLocation("helper", "helper", "function", "a.py", 1, 2))
+    original = index.known_symbol_names()
+    assert original == {"helper"} and index.known_symbol_names() is original
+    index.add_definition(SymbolLocation("helper", "Thing.helper", "method", "b.py", 1, 2))
+    assert index.known_symbol_names() is original
+    index.remove_file("a.py")
+    assert index.known_symbol_names() is original  # second definition still owns the name
+    index.remove_file("b.py")
+    assert index.known_symbol_names() == frozenset()
+    assert original == {"helper"}  # an in-flight reader's view stays immutable
+
+    (tmp_path / "caller.py").write_text("def caller():\n    return fresh()\n")
+    service = ASTService(str(tmp_path))
+    try:
+        ast = parse_file(str(tmp_path / "caller.py"))
+        service._index = index
+        service._index_references("caller.py", ast)
+        assert not index.get_references("fresh")
+        index.add_definition(SymbolLocation("fresh", "fresh", "function", "fresh.py", 1, 2))
+        service._index_references("caller.py", ast)
+        assert {r.file_path for r in index.get_references("fresh")} == {"caller.py"}
+        index.remove_file("fresh.py")
+        index.remove_file("caller.py")
+        service._index_references("caller.py", ast)
+        assert not index.get_references("fresh")
+    finally:
+        close(service)
