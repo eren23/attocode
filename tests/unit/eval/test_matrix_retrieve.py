@@ -94,6 +94,36 @@ def test_snapshot_from_a_local_clone_and_a_remote(tmp_path, monkeypatch):
     assert (root / "config_link.py").is_symlink() and not (root / "big.txt").exists()
 
 
+def test_filtered_snapshot_never_requests_omitted_blobs(tmp_path, monkeypatch):
+    monkeypatch.setattr(matrix, "MAX_BYTES", 1000)
+    source = tmp_path / "source"
+    sha = _repo(source)
+    _git(source, "config", "uploadpack.allowFilter", "true")
+    monkeypatch.setattr(matrix, "REMOTE", source.as_uri())
+    clone = matrix._remote("fixture", tmp_path)
+    matrix._git(clone, "fetch", "-q", "--depth", "1", "--filter=blob:limit=1001", "origin", sha)
+
+    def git_without_lazy_fetch_guard(cwd, *args, data=None):
+        # Emulate Git builds that ignore this environment variable. The remote
+        # stays available, so an accidental lazy fetch would succeed and grow
+        # the clone rather than merely making the test fail on connectivity.
+        env = os.environ.copy()
+        env.pop("GIT_NO_LAZY_FETCH", None)
+        return subprocess.run(["git", "-C", str(cwd), *args], input=data, env=env,
+                              check=True, capture_output=True).stdout
+
+    monkeypatch.setattr(matrix, "_git", git_without_lazy_fetch_guard)
+    before = matrix._git(clone, "cat-file", "--batch-all-objects", "--batch-check")
+    tree = matrix._read_tree(clone, sha, tmp_path / "cache", remote=True)
+    assert matrix._git(clone, "cat-file", "--batch-all-objects", "--batch-check") == before
+    assert next(e[3] for e in tree["entries"] if e[0] == "big.txt") == -1
+    destination = tmp_path / "materialized"
+    matrix._materialize(tmp_path / "cache", tree, destination)
+    assert (destination / "pkg/config.py").read_text() == FILES["pkg/config.py"]
+    assert (destination / "config_link.py").is_symlink()
+    assert not (destination / "big.txt").exists()
+
+
 def _workspace(tmp_path, monkeypatch, calls):
     """A product repository, a snapshot of a source repository, and a fake arm that counts its calls."""
     product = tmp_path / "product"

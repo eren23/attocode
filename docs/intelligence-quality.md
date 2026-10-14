@@ -63,6 +63,11 @@ follow at most ten bounded pages. Impact can be found in the depth layers even
 when the flattened list is trimmed. A short known identifier such as `cn` uses
 symbol lookup; its search check uses source terms `twMerge clsx`.
 
+Remote source acquisition fetches a shallow filtered commit and inspects only
+the downloaded objects, so inspecting omitted large files cannot trigger an
+unbounded lazy fetch. Workflow reports record the Git version and a bounded
+stderr tail when a source command fails.
+
 These are development evidence anchors, not held-out relevance judgments or
 exhaustive call resolution. Caller syntax is not necessarily a linked reference.
 Unavailable import/test anchors are explicitly marked limited. Existing negative
