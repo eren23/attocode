@@ -334,8 +334,7 @@ class ASTService:
             stored_files.append(self._build_stored_file(rel, ast, mtime_map.get(rel, 0.0)))
         if stored_files:
             self._store.save_files_batch(stored_files)
-        for rel in self._ast_cache:
-            self._index.persist_file(rel)
+        self._index.persist_files(set(self._ast_cache))
 
         self._store.record_scan_time()
         self._initialized = True
@@ -445,8 +444,7 @@ class ASTService:
                     stored_files.append(self._build_stored_file(rel, ast_item, mtime))
                 if stored_files:
                     self._store.save_files_batch(stored_files)
-                for rel in self._ast_cache:
-                    self._index.persist_file(rel)
+                self._index.persist_files(set(self._ast_cache))
                 self._store.record_scan_time()
                 self._save_snapshot()
 
