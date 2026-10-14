@@ -220,3 +220,49 @@ def test_analysis_batches_are_atomic_bounded_and_preserve_definition_keys(tmp_pa
         assert len(store.load_symbols('1.py')) == 1
     finally:
         store.close()
+
+
+@pytest.mark.parametrize("entrypoint", ["initialize", "initialize_skeleton"])
+def test_full_initialization_has_bounded_commits_and_complete_evidence(tmp_path, entrypoint):
+    for i in range(205):
+        source = "" if i == 0 else "from f0 import helper0\n"
+        source += f"def helper{i}():\n    return " + ("0\n" if i == 0 else "helper0()\n")
+        (tmp_path / f"f{i}.py").write_text(source)
+    service = ASTService(str(tmp_path))
+    statements = []
+    service._store._get_conn().set_trace_callback(statements.append)
+    try:
+        getattr(service, entrypoint)()
+        # Includes metadata and file/dependency writes, not just symbol batches.
+        # A per-file commit loop exceeds this budget on this modest repository.
+        assert sum(s == "COMMIT" for s in statements) <= 20
+        assert len(service._store.load_symbols()) == 205
+        refs = service._store.load_references()
+        assert {r.file_path for r in refs} == {f"f{i}.py" for i in range(1, 205)}
+        assert {r.ref_kind for r in refs} >= {"import", "call"}
+        assert service._store._get_conn().execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        close(service)
+
+
+def test_hydration_reuses_parsed_files_for_deferred_dependencies(tmp_path, monkeypatch):
+    from attocode_intel._internal.integrations.context import codebase_ast
+    from attocode_intel._internal.integrations.context.codebase_context import DependencyGraph
+
+    repository(tmp_path)
+    service = ASTService(str(tmp_path))
+    try:
+        service.initialize_skeleton(indexing_depth="minimal")
+        service._context_mgr._dep_graph = DependencyGraph()
+        # ASTService holds its own parser binding for phase 2a. Re-parsing from
+        # the deferred dependency builder would unnecessarily read every file again.
+        def redundant_parse(*args, **kwargs):
+            raise AssertionError("Deferred dependencies reparsed hydrated source")
+        monkeypatch.setattr(codebase_ast, "parse_file", redundant_parse)
+        service._run_hydration()
+        assert service._hydration_state.phase == "ready"
+        assert service._index.get_dependencies("caller.py") == {"helper.py"}
+        assert service._index.get_references("helper")
+        assert len(service._store.get_all_files()) == 3
+    finally:
+        close(service)
