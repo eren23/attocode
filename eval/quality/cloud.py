@@ -32,7 +32,7 @@ from eval.quality.runner import (
 )
 
 TAG = "attocode-quality-v1"
-SIZE = "c-8"
+SIZE = "s-8vcpu-16gb-amd"
 REGION = "fra1"
 BATCH_USD = 1.0
 MONTH_USD = 10.0
