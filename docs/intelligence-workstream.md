@@ -8,7 +8,7 @@ three successive groups. This is offline product evidence, not an agent study.
 
 | Milestone | Status | Required evidence |
 | --- | --- | --- |
-| Coverage foundation | In progress | Frozen source-backed manifest; honest outcomes; bounded selection, shards and resume; complete baseline |
+| Coverage foundation | Validated locally and in CI | Frozen source-backed manifest; honest outcomes; bounded selection, shards and resume; complete baseline |
 | Python, JS/TS, Go, Rust | Implemented; final gates pending | Module/alias/re-export and negative controls; real language-server checks |
 | C/C++, Java, C# | Implemented; final gates pending | Include/package/namespace resolution, ambiguity and selected-definition identity |
 | Ruby, PHP, Kotlin, Swift, Scala, Elixir, Lua, Bash, Zig | Implemented; final gates pending | Explicit module bindings, qualified references and dynamic-case limitations |
@@ -55,8 +55,9 @@ hash, corrected examples, limitations, runtime/storage and cleanup here.
   bounded slow grammars, C++/Objective-C headers and F# recursive type declarations.
   Bulk persistence avoids scanning all references once per file.
 - Real TypeScript cold and installed Rust warmed identity/edit/shutdown checks
-  passed. Python/Go worker checks, explicit optional-grammar acquisition and
-  Linux/macOS 3.12/3.13 upgrade checks are implemented in CI; remote results pending.
+  passed. Python/Go worker checks, explicit acquisition of 11 available optional grammars,
+  and Linux/macOS 3.12/3.13 upgrade checks have passed CI. Crystal is unavailable
+  in the pinned grammar release and remains explicit unsupported evidence.
 - Full standalone diagnostic: 525 passed, four skipped, 52.8 seconds, 746.6 MiB
   sampled RSS, 95.5 MiB managed disk, cleanup verified. Seven earlier test-location
   failures remain recorded; study fixtures require external scratch paths.
@@ -69,8 +70,8 @@ hash, corrected examples, limitations, runtime/storage and cleanup here.
   being collected. Later fixes require a fresh final candidate.
 - The first isolated 0.1.5-to-0.1.6 wheel upgrade check passed all seven phases;
   all three project-local client configurations and persisted index/edit freshness
-  were verified. Its temporary environment/cache were removed. This was a local
-  candidate build, not publication and not proof of later edits.
+  were verified. Its temporary environment/cache were removed. The final source wheel also
+  passed all seven phases in `release-0.1.6-final`; this is not publication.
 
 ### Remaining delivery gates
 
@@ -79,3 +80,41 @@ reviewed implementation, run bounded remote validation within the unchanged ledg
 verify deletion, then publish 0.1.6 after its release gates. Keep failures, unsupported
 cases, missing relationship labels and untested advanced operations visible. No
 model benefit, ranking improvement or universal reference resolution is claimed.
+
+### CI corrections and final verification
+
+- Real Python, TypeScript, Go and Rust servers passed selected-definition, duplicate
+  identity, edit and shutdown checks. Pyright exposed missing `workspaceFolders`
+  during initialization; the client and protocol regression now provide/check it.
+- Root tests exposed a relative Go import compatibility regression, now fixed with
+  unique-target handling; registered Bash/optional-Crystal expectations were updated.
+- Full standalone run `20261014-full-final`: 684 passed/four skipped, 62.7 seconds,
+  730.6 MiB sampled RSS, 98.5 MiB managed disk, scratch cleanup verified. Additional
+  CI correction/export regressions were checked separately.
+- Stage C observed all 144 questions (99 known-target hits at 5, 126 at 24). Two
+  qualified-name harness failures are retained. Stage D corrects exact-name matching
+  without accepting fuzzy symbols; its full matrix and unchanged ranking gate follow.
+- Runtime inventory: 30 operations with successful response observations, 109 with
+  rejection-only evidence, zero unmapped. This does not establish semantic coverage
+  of all 139 operations; subprocess MCP calls are outside this inventory.
+- Cloud reports compact JSON losslessly before the unchanged 2 MiB/file, 20 MiB total
+  export limits. No corpora or indexes are downloaded. PR `no-model-review` prevents
+  automatic model review for this explicitly model-free workstream.
+
+Final stage D source matrix: all 36 packs and 144 questions completed across three
+coherent shards. Outcomes: 157 passed assertions, 124 limited, seven unsupported,
+zero failed/incomplete. Known-target hits: 99/144 at five, 126/144 at 24; these are
+non-exhaustive development labels. Local contracts: 493 passed/four skipped.
+Final ranking and cloud/release evidence are tracked separately. Stage D predates
+the report-export-only harness correction; product source is unchanged by it.
+
+Prior-push CI root suite on Python 3.12: 8,477 passed, five skipped, one expected
+failure; Python 3.13 also passed. Final commit gates must still run before merge.
+
+The local checks plus source matrix took 504.3 supervised seconds, peaking at
+1,249.2 MiB managed storage and 830.4 MiB sampled process-tree RSS. Cleanup was
+verified. The unchanged ranking gate is an additional separately recorded check.
+
+Stage D ranking run `20261014T210555-39a71a6c` passed in 55.5 seconds: the
+frozen 68-query/five-method gate remains unchanged. Total supervised final local
+checks, source matrix and ranking time: 559.8 seconds; all cleanup verified.

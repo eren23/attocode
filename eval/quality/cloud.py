@@ -366,14 +366,7 @@ def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, s
                 raise RuntimeError(f"Remote {name} failed; see bounded controller log")
     finally:
         # Reports/logs only: no cloning the remote corpora or indexes to the Mac.
-        collect = [*ssh, "cd /root/job; python3 - <<'PYREMOTE'\nimport pathlib,tarfile\nsize=0\n"
-                   "with tarfile.open('/root/results.tar.gz','w:gz') as out:\n"
-                   " for p in pathlib.Path('.attocode/quality/runs').glob('*/*'):\n"
-                   "  if p.is_file() and not p.is_symlink() and p.suffix in ('.json','.log','.xml'):\n"
-                   "   size += p.stat().st_size\n"
-                   "   assert p.stat().st_size <= 2**21 and size <= 20*2**20, 'Report export exceeds limit'\n"
-                   "   out.add(p)\n"
-                   "PYREMOTE"]
+        collect = [*ssh, "cd /root/job; python3 -m eval.quality.export"]
         result = supervise(collect, cwd=REPO, env=env, root=root, log=directory / "collect.log",
                            deadline=min(deadline, time.monotonic() + 120), max_bytes=5 * GIB)
         rows.append({"name": "collect", **result})

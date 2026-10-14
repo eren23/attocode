@@ -205,3 +205,28 @@ def test_cloud_resume_rejects_changed_inputs_before_reserving(tmp_path, monkeypa
     with pytest.raises(ValueError, match='different candidate'):
         batch(api, tmp_path / 'managed', resume=path, execute=lambda *args: None)
     assert not api.nodes and not (tmp_path / 'managed').exists()
+
+
+def test_report_export_compacts_json_losslessly_and_rejects_oversize(tmp_path):
+    import json
+    import tarfile
+
+    from eval.quality.export import export_reports
+    root = tmp_path / 'runs'
+    run = root / 'one'
+    run.mkdir(parents=True)
+    data = {'results': [{'symbol':'helper','outcome':'limited'}] * 35000}
+    source = run / 'workflows.json'
+    source.write_text(json.dumps(data, indent=2))
+    assert source.stat().st_size > 2**21
+    (run / 'ignored.txt').write_text('not exported')
+    (run / 'link.json').symlink_to(source)
+    target = tmp_path / 'reports.tar.gz'
+    export_reports(root, target)
+    with tarfile.open(target) as archive:
+        assert archive.getnames() == ['.attocode/quality/runs/one/workflows.json']
+        assert json.load(archive.extractfile(archive.getmembers()[0])) == data
+        assert archive.getmembers()[0].size <= 2**21
+    source.write_text(json.dumps({'large':'x' * (2**21)}))
+    with pytest.raises(ValueError, match='export exceeds'):
+        export_reports(root, target)

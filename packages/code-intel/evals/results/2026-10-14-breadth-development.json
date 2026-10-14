@@ -4853,5 +4853,5503 @@
       "20261014T203800-246b50d1"
     ],
     "status": "failed"
+  },
+  "c": {
+    "cleanup_verified": true,
+    "complete": true,
+    "identity": {
+      "dependencies": [
+        [
+          "aiosqlite",
+          "0.22.1"
+        ],
+        [
+          "alembic",
+          "1.18.4"
+        ],
+        [
+          "annotated-doc",
+          "0.0.4"
+        ],
+        [
+          "annotated-types",
+          "0.7.0"
+        ],
+        [
+          "anthropic",
+          "0.84.0"
+        ],
+        [
+          "anyio",
+          "4.12.1"
+        ],
+        [
+          "arq",
+          "0.27.0"
+        ],
+        [
+          "asyncpg",
+          "0.31.0"
+        ],
+        [
+          "attocode",
+          "0.2.30"
+        ],
+        [
+          "attocode-code-intel",
+          "0.1.4"
+        ],
+        [
+          "attrs",
+          "25.4.0"
+        ],
+        [
+          "babel",
+          "2.18.0"
+        ],
+        [
+          "backrefs",
+          "6.2"
+        ],
+        [
+          "bcrypt",
+          "5.0.0"
+        ],
+        [
+          "bracex",
+          "2.6"
+        ],
+        [
+          "bump-my-version",
+          "1.2.7"
+        ],
+        [
+          "certifi",
+          "2026.2.25"
+        ],
+        [
+          "cffi",
+          "2.0.0"
+        ],
+        [
+          "charset-normalizer",
+          "3.4.4"
+        ],
+        [
+          "click",
+          "8.3.1"
+        ],
+        [
+          "colorama",
+          "0.4.6"
+        ],
+        [
+          "contourpy",
+          "1.3.3"
+        ],
+        [
+          "coverage",
+          "7.13.4"
+        ],
+        [
+          "cryptography",
+          "46.0.5"
+        ],
+        [
+          "cycler",
+          "0.12.1"
+        ],
+        [
+          "distro",
+          "1.9.0"
+        ],
+        [
+          "docstring_parser",
+          "0.17.0"
+        ],
+        [
+          "ecdsa",
+          "0.19.1"
+        ],
+        [
+          "einops",
+          "0.8.2"
+        ],
+        [
+          "fastapi",
+          "0.135.1"
+        ],
+        [
+          "filelock",
+          "3.25.0"
+        ],
+        [
+          "fonttools",
+          "4.61.1"
+        ],
+        [
+          "fsspec",
+          "2026.2.0"
+        ],
+        [
+          "ghp-import",
+          "2.1.0"
+        ],
+        [
+          "greenlet",
+          "3.3.2"
+        ],
+        [
+          "h11",
+          "0.16.0"
+        ],
+        [
+          "hf-xet",
+          "1.3.2"
+        ],
+        [
+          "hiredis",
+          "3.3.0"
+        ],
+        [
+          "httpcore",
+          "1.0.9"
+        ],
+        [
+          "httptools",
+          "0.7.1"
+        ],
+        [
+          "httpx",
+          "0.28.1"
+        ],
+        [
+          "httpx-oauth",
+          "0.16.1"
+        ],
+        [
+          "httpx-sse",
+          "0.4.3"
+        ],
+        [
+          "huggingface_hub",
+          "1.5.0"
+        ],
+        [
+          "idna",
+          "3.11"
+        ],
+        [
+          "iniconfig",
+          "2.3.0"
+        ],
+        [
+          "jinja2",
+          "3.1.6"
+        ],
+        [
+          "jiter",
+          "0.13.0"
+        ],
+        [
+          "joblib",
+          "1.5.3"
+        ],
+        [
+          "jsonschema",
+          "4.26.0"
+        ],
+        [
+          "jsonschema-specifications",
+          "2025.9.1"
+        ],
+        [
+          "kiwisolver",
+          "1.4.9"
+        ],
+        [
+          "librt",
+          "0.8.1"
+        ],
+        [
+          "linkify-it-py",
+          "2.0.3"
+        ],
+        [
+          "mako",
+          "1.3.10"
+        ],
+        [
+          "markdown",
+          "3.10.2"
+        ],
+        [
+          "markdown-it-py",
+          "4.0.0"
+        ],
+        [
+          "markupsafe",
+          "3.0.3"
+        ],
+        [
+          "matplotlib",
+          "3.10.8"
+        ],
+        [
+          "mcp",
+          "1.26.0"
+        ],
+        [
+          "mdit-py-plugins",
+          "0.5.0"
+        ],
+        [
+          "mdurl",
+          "0.1.2"
+        ],
+        [
+          "mergedeep",
+          "1.3.4"
+        ],
+        [
+          "mkdocs",
+          "1.6.1"
+        ],
+        [
+          "mkdocs-get-deps",
+          "0.2.0"
+        ],
+        [
+          "mkdocs-material",
+          "9.7.3"
+        ],
+        [
+          "mkdocs-material-extensions",
+          "1.3.1"
+        ],
+        [
+          "mpmath",
+          "1.3.0"
+        ],
+        [
+          "mypy",
+          "1.19.1"
+        ],
+        [
+          "mypy_extensions",
+          "1.1.0"
+        ],
+        [
+          "networkx",
+          "3.6.1"
+        ],
+        [
+          "numpy",
+          "2.4.2"
+        ],
+        [
+          "openai",
+          "2.24.0"
+        ],
+        [
+          "packaging",
+          "26.0"
+        ],
+        [
+          "paginate",
+          "0.5.7"
+        ],
+        [
+          "pathspec",
+          "1.0.4"
+        ],
+        [
+          "pgvector",
+          "0.4.2"
+        ],
+        [
+          "pillow",
+          "12.1.1"
+        ],
+        [
+          "platformdirs",
+          "4.9.2"
+        ],
+        [
+          "pluggy",
+          "1.6.0"
+        ],
+        [
+          "prompt_toolkit",
+          "3.0.52"
+        ],
+        [
+          "psutil",
+          "7.2.2"
+        ],
+        [
+          "pyasn1",
+          "0.6.2"
+        ],
+        [
+          "pycparser",
+          "3.0"
+        ],
+        [
+          "pydantic",
+          "2.12.5"
+        ],
+        [
+          "pydantic-settings",
+          "2.13.1"
+        ],
+        [
+          "pydantic_core",
+          "2.41.5"
+        ],
+        [
+          "pygit2",
+          "1.19.1"
+        ],
+        [
+          "pygments",
+          "2.19.2"
+        ],
+        [
+          "pyjwt",
+          "2.11.0"
+        ],
+        [
+          "pymdown-extensions",
+          "10.21"
+        ],
+        [
+          "pyparsing",
+          "3.3.2"
+        ],
+        [
+          "pytest",
+          "9.0.2"
+        ],
+        [
+          "pytest-asyncio",
+          "1.3.0"
+        ],
+        [
+          "pytest-cov",
+          "7.0.0"
+        ],
+        [
+          "pytest-mock",
+          "3.15.1"
+        ],
+        [
+          "pytest-textual-snapshot",
+          "1.0.0"
+        ],
+        [
+          "python-dateutil",
+          "2.9.0.post0"
+        ],
+        [
+          "python-dotenv",
+          "1.2.1"
+        ],
+        [
+          "python-jose",
+          "3.5.0"
+        ],
+        [
+          "python-multipart",
+          "0.0.22"
+        ],
+        [
+          "pyyaml",
+          "6.0.3"
+        ],
+        [
+          "pyyaml_env_tag",
+          "1.1"
+        ],
+        [
+          "questionary",
+          "2.1.1"
+        ],
+        [
+          "redis",
+          "5.3.1"
+        ],
+        [
+          "referencing",
+          "0.37.0"
+        ],
+        [
+          "regex",
+          "2026.2.28"
+        ],
+        [
+          "requests",
+          "2.32.5"
+        ],
+        [
+          "respx",
+          "0.22.0"
+        ],
+        [
+          "rich",
+          "14.3.3"
+        ],
+        [
+          "rich-click",
+          "1.9.7"
+        ],
+        [
+          "rpds-py",
+          "0.30.0"
+        ],
+        [
+          "rsa",
+          "4.9.1"
+        ],
+        [
+          "ruff",
+          "0.15.4"
+        ],
+        [
+          "safetensors",
+          "0.7.0"
+        ],
+        [
+          "scikit-learn",
+          "1.8.0"
+        ],
+        [
+          "scipy",
+          "1.17.1"
+        ],
+        [
+          "sentence-transformers",
+          "5.2.3"
+        ],
+        [
+          "setuptools",
+          "82.0.0"
+        ],
+        [
+          "shellingham",
+          "1.5.4"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "sniffio",
+          "1.3.1"
+        ],
+        [
+          "sqlalchemy",
+          "2.0.48"
+        ],
+        [
+          "sse-starlette",
+          "3.3.2"
+        ],
+        [
+          "starlette",
+          "0.52.1"
+        ],
+        [
+          "structlog",
+          "25.5.0"
+        ],
+        [
+          "sympy",
+          "1.14.0"
+        ],
+        [
+          "syrupy",
+          "5.1.0"
+        ],
+        [
+          "tenacity",
+          "9.1.4"
+        ],
+        [
+          "textual",
+          "8.0.0"
+        ],
+        [
+          "threadpoolctl",
+          "3.6.0"
+        ],
+        [
+          "tiktoken",
+          "0.12.0"
+        ],
+        [
+          "tokenizers",
+          "0.22.2"
+        ],
+        [
+          "tomli_w",
+          "1.2.0"
+        ],
+        [
+          "tomlkit",
+          "0.14.0"
+        ],
+        [
+          "torch",
+          "2.10.0"
+        ],
+        [
+          "tqdm",
+          "4.67.3"
+        ],
+        [
+          "transformers",
+          "5.2.0"
+        ],
+        [
+          "tree-sitter",
+          "0.25.2"
+        ],
+        [
+          "tree-sitter-bash",
+          "0.25.1"
+        ],
+        [
+          "tree-sitter-c",
+          "0.24.1"
+        ],
+        [
+          "tree-sitter-c-sharp",
+          "0.23.1"
+        ],
+        [
+          "tree-sitter-cpp",
+          "0.23.4"
+        ],
+        [
+          "tree-sitter-css",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-elixir",
+          "0.3.5"
+        ],
+        [
+          "tree-sitter-go",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-hcl",
+          "1.2.0"
+        ],
+        [
+          "tree-sitter-html",
+          "0.23.2"
+        ],
+        [
+          "tree-sitter-java",
+          "0.23.5"
+        ],
+        [
+          "tree-sitter-javascript",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-json",
+          "0.24.8"
+        ],
+        [
+          "tree-sitter-kotlin",
+          "1.1.0"
+        ],
+        [
+          "tree-sitter-language-pack",
+          "1.1.2"
+        ],
+        [
+          "tree-sitter-lua",
+          "0.5.0"
+        ],
+        [
+          "tree-sitter-php",
+          "0.24.1"
+        ],
+        [
+          "tree-sitter-python",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-ruby",
+          "0.23.1"
+        ],
+        [
+          "tree-sitter-rust",
+          "0.24.0"
+        ],
+        [
+          "tree-sitter-scala",
+          "0.24.0"
+        ],
+        [
+          "tree-sitter-swift",
+          "0.0.1"
+        ],
+        [
+          "tree-sitter-toml",
+          "0.7.0"
+        ],
+        [
+          "tree-sitter-typescript",
+          "0.23.2"
+        ],
+        [
+          "tree-sitter-yaml",
+          "0.7.2"
+        ],
+        [
+          "tree-sitter-zig",
+          "1.1.2"
+        ],
+        [
+          "typer",
+          "0.24.1"
+        ],
+        [
+          "typer-slim",
+          "0.24.0"
+        ],
+        [
+          "typing-inspection",
+          "0.4.2"
+        ],
+        [
+          "typing_extensions",
+          "4.15.0"
+        ],
+        [
+          "uc-micro-py",
+          "1.0.3"
+        ],
+        [
+          "urllib3",
+          "2.6.3"
+        ],
+        [
+          "uvicorn",
+          "0.41.0"
+        ],
+        [
+          "uvloop",
+          "0.22.1"
+        ],
+        [
+          "watchdog",
+          "6.0.0"
+        ],
+        [
+          "watchfiles",
+          "1.1.1"
+        ],
+        [
+          "wcmatch",
+          "10.1"
+        ],
+        [
+          "wcwidth",
+          "0.6.0"
+        ],
+        [
+          "websockets",
+          "16.0"
+        ]
+      ],
+      "fixture_sha256": "daf28a85ec05405884b40217801511f650bcc0c210da9eaf9b6f7f8590b183bf",
+      "harness_sha256": "8052d5f92cf6073d42846316109fa49fda3c44e580d741a546dcbe499576ed67",
+      "optional_grammars": {
+        "cache_sha256": "33de365f463f920ff46a0712f884df77a0b7637517c492de1a9f896bddb3008d",
+        "languages": [
+          "clojure",
+          "dart",
+          "erlang",
+          "fsharp",
+          "haskell",
+          "julia",
+          "nim",
+          "objc",
+          "ocaml",
+          "perl",
+          "r"
+        ]
+      },
+      "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+      "platform": "macOS-26.2-arm64-arm-64bit",
+      "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
+      "settings": {
+        "ATTOCODE_EMBEDDING_MODEL": "",
+        "ATTOCODE_INTEL_BROAD_RERANK": "0",
+        "ATTOCODE_INTEL_PRECISION": "off",
+        "ATTOCODE_INTEL_RANKING_ALLOW_REMOTE": "0",
+        "ATTOCODE_INTEL_RANKING_PROVIDER": "off",
+        "ATTOCODE_LOCAL_ONLY": "1",
+        "ATTOCODE_NL_EMBEDDING_MODE": "none"
+      },
+      "source_sha256": "72cde3d907858182adfc67b9197efb8a5370eef670e858b3279031f7b142cea6"
+    },
+    "outcomes": {
+      "failed": 2,
+      "incomplete": 0,
+      "limited": 124,
+      "passed": 155,
+      "unsupported": 7
+    },
+    "packs": [
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 3.6473815829958767
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.023471832973882556
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.3494062919635326
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0025261660339310765
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0014883329859003425
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0011388750281184912
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.036887874943204224
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.0724495410686359
+          }
+        ],
+        "error": null,
+        "id": "Nim",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 4.9746123750228435
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.07659683295059949
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 3.738302000099793
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.007955042063258588
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0028106659883633256
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0028286660090088844
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.026987083023414016
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.0606822919799015
+          }
+        ],
+        "error": null,
+        "id": "SwiftFormat",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.4294085409492254
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.02309874992351979
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.7623509999830276
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0021169580286368728
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0013075830647721887
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.001033750013448298
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.020455291960388422
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.3620327078970149
+          }
+        ],
+        "error": null,
+        "id": "acme-sh",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.7035930840065703
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.35199466592166573
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 6.174443167052232
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.006996874930337071
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.007425500079989433
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.016099208034574986
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.03210391697939485
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.414259291952476
+          }
+        ],
+        "error": null,
+        "id": "aspnetcore",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.7319434999953955
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.050988915958441794
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.8677386669442058
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.008396707940846682
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.006069416995160282
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.006048915907740593
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.019512792001478374
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.0317100830143318
+          }
+        ],
+        "error": null,
+        "id": "cats-effect",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 11.336024207994342
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 2.6668455000035465
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 76.21918570797425
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.05000491696409881
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.039643250056542456
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.040850042016245425
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.987231208011508
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 14.830199124990031
+          }
+        ],
+        "error": null,
+        "id": "cockroach",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": "Optional grammar is not installed/cached; no acquisition during navigation",
+            "name": "definition",
+            "outcome": "unsupported",
+            "seconds": 0.6638755419990048
+          },
+          {
+            "limitation": "Optional grammar is not installed/cached; no acquisition during navigation",
+            "name": "source",
+            "outcome": "unsupported",
+            "seconds": 0.5640349589521065
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 3.5416357920039445
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.01537466689478606
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.014263374963775277
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.012642875080928206
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.03087016602512449
+          },
+          {
+            "limitation": "Optional grammar is not installed/cached; no acquisition during navigation",
+            "name": "restart",
+            "outcome": "unsupported",
+            "seconds": 0.45858233293984085
+          }
+        ],
+        "error": null,
+        "id": "crystal",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.4176513330312446
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 1.0516803750069812
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 9.419686417095363
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.008602707996033132
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.006585917086340487
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.006743208039551973
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.027300249901600182
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.3714104999089614
+          }
+        ],
+        "error": null,
+        "id": "dart-sdk",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.5863045000005513
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.04798541602212936
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.48304887500125915
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0019982090452685952
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0009028749773278832
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0009979589376598597
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.013509375043213367
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.312189833028242
+          }
+        ],
+        "error": null,
+        "id": "deno",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.4024044999387115
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.029623833019286394
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.28118275001179427
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.007685458054766059
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.0016588340513408184
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.0023789589758962393
+          },
+          {
+            "limitation": null,
+            "name": "tests",
+            "outcome": "passed",
+            "seconds": 0.016718125087209046
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.1298958749976009
+          }
+        ],
+        "error": null,
+        "id": "express",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.4832466669613495
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.41784883406944573
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 3.4067918750224635
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.013390291016548872
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.011567416950128973
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.019409958040341735
+          },
+          {
+            "limitation": null,
+            "name": "tests",
+            "outcome": "passed",
+            "seconds": 0.04085037508048117
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.3434545840136707
+          }
+        ],
+        "error": null,
+        "id": "fastapi",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 5.258366875001229
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.8974002080503851
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 11.766316332970746
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.019789500045590103
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0187856670236215
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.019170707906596363
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.0614147090818733
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 5.485360000049695
+          }
+        ],
+        "error": null,
+        "id": "framework",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.36413329106289893
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.028307000058703125
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.31534445798024535
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.002294624922797084
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.001204208005219698
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.0014565408928319812
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.011270000017248094
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.15167862502858043
+          }
+        ],
+        "error": null,
+        "id": "frontend",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 5.420995124964975
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.03838591603562236
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 7.746944042039104
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0028511250857263803
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.001664250041358173
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0017549580661579967
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.013940792065113783
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 3.0204237090656534
+          }
+        ],
+        "error": null,
+        "id": "fsharp",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.7407941250130534
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.03564983303658664
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.148768833023496
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.004251624923199415
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0025429169181734324
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0024715830804780126
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.014268958009779453
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.23814083402976394
+          }
+        ],
+        "error": null,
+        "id": "ggplot2",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 3.8749305410310626
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.07281129201874137
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 4.4405754579929635
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.008642332977615297
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.006913874996826053
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.006752541987225413
+          },
+          {
+            "limitation": null,
+            "name": "tests",
+            "outcome": "passed",
+            "seconds": 0.02158641698770225
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.409540417022072
+          }
+        ],
+        "error": null,
+        "id": "gh-cli",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.750783291994594
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.04083987500052899
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.7472583749331534
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.003973208018578589
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0035017499467357993
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0054645410273224115
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.018238333985209465
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.37967475003097206
+          }
+        ],
+        "error": null,
+        "id": "gson",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 6.764491291018203
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.8209997500525787
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 16.908474916941486
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.011244082939811051
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.00762837496586144
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0075489579467102885
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.5569515830138698
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 6.876996083068661
+          }
+        ],
+        "error": null,
+        "id": "iTerm2",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.571083625080064
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.02379437501076609
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.1189103750512004
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.002230375073850155
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0012441250728443265
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.001066792057827115
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.012722583953291178
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.7453677500598133
+          }
+        ],
+        "error": null,
+        "id": "julia",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "failed",
+            "seconds": 0.733733749948442
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.029643457964994013
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.8838433750206605
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0036476670065894723
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0022591250017285347
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0019327499903738499
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.013805124908685684
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.4408105839975178
+          }
+        ],
+        "error": null,
+        "id": "luarocks",
+        "status": "failed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.7872272089589387
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.02561570901889354
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.4636067500105128
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0023461669916287065
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0012004169402644038
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0010918329935520887
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.012193082948215306
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.909626999986358
+          }
+        ],
+        "error": null,
+        "id": "ocaml",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.1301672080298886
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.08330320799723268
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.2557382499799132
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.010548375081270933
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.008493874920532107
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.015375916962511837
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.04092937498353422
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.0856250829529017
+          }
+        ],
+        "error": null,
+        "id": "okhttp",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 3.2208222090266645
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.08203104103449732
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 5.4799839169718325
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0062965418910607696
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0045370829757303
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.004364999942481518
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.01774354197550565
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.900970249902457
+          }
+        ],
+        "error": null,
+        "id": "otp",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 5.222520457929932
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 1.5678949580760673
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 14.862629125011154
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.049844541936181486
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.01570287498179823
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.03123500000219792
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.19946733303368092
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 5.746207042015158
+          }
+        ],
+        "error": null,
+        "id": "pandas",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required",
+            "name": "definition",
+            "outcome": "unsupported",
+            "seconds": 0.5220714160241187
+          },
+          {
+            "limitation": "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required",
+            "name": "source",
+            "outcome": "unsupported",
+            "seconds": 0.011449458892457187
+          },
+          {
+            "limitation": "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required",
+            "name": "scoped_search",
+            "outcome": "unsupported",
+            "seconds": 1.1485262080095708
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0024468330666422844
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.006376667064614594
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0015033750096336007
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.011171958991326392
+          },
+          {
+            "limitation": "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required",
+            "name": "restart",
+            "outcome": "unsupported",
+            "seconds": 0.20923991699237376
+          }
+        ],
+        "error": null,
+        "id": "perl5",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "failed",
+            "seconds": 1.3396008330164477
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.03645224997308105
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.5190455840202048
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.004326583934016526
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0030159170273691416
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0033664170186966658
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.029008000041358173
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.7516995420446619
+          }
+        ],
+        "error": null,
+        "id": "phoenix",
+        "status": "failed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.5201988749904558
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.030717625049874187
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.6943781250156462
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0030234159203246236
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0025361659936606884
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0020531669724732637
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.01306945807300508
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.1896239590132609
+          }
+        ],
+        "error": null,
+        "id": "postgrest",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.4183158329688013
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 1.4360460420139134
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 4.4522988749668
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0373038750840351
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.035188374924473464
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.04649974999483675
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.10492495796643198
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.5920959999784827
+          }
+        ],
+        "error": null,
+        "id": "prisma",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 4.725359125062823
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 2.3359450839925557
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 13.73157516703941
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.15177116601262242
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.03853020793758333
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.04106858395971358
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.2732969580683857
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 5.5773206249577925
+          }
+        ],
+        "error": null,
+        "id": "rails",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 4.24409720802214
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.7235307920491323
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 9.575465083005838
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.008715959032997489
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.006072999909520149
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0064067080384120345
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.2772858339594677
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 4.15496445808094
+          }
+        ],
+        "error": null,
+        "id": "redis",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.33787816599942744
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.03137920796871185
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.21968570805620402
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0024387920275330544
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0014113340293988585
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0011772499419748783
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.011054584058001637
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.1028830410214141
+          }
+        ],
+        "error": null,
+        "id": "requests",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.2791329580359161
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.036350500071421266
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.14395641698502004
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0025695000076666474
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0021082080202177167
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0019080409547314048
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.011877499986439943
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.05255795794073492
+          }
+        ],
+        "error": null,
+        "id": "ring",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.9887842920143157
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.0376268329564482
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.2528491659322754
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.005537749966606498
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.0030590000096708536
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.0016992500750347972
+          },
+          {
+            "limitation": null,
+            "name": "tests",
+            "outcome": "passed",
+            "seconds": 0.024099875008687377
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.5961706249509007
+          }
+        ],
+        "error": null,
+        "id": "ripgrep",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.5397840830264613
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.028155083069577813
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.944470916991122
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0021082089515402913
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0011262919288128614
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0019363330211490393
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.01617091696243733
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.1501812499482185
+          }
+        ],
+        "error": null,
+        "id": "spdlog",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.574493334046565
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.0984866670332849
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.2569808330154046
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.007554500014521182
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.005387500044889748
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.005763041903264821
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.016965916962362826
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.157499749911949
+          }
+        ],
+        "error": null,
+        "id": "starship",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.202934208093211
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.06334550003521144
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.2741272080456838
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0024636670714244246
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0014508749591186643
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.001110833021812141
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.012898416956886649
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.6983303329907358
+          }
+        ],
+        "error": null,
+        "id": "zls",
+        "status": "passed"
+      }
+    ],
+    "retrieval": {
+      "labeled_hit_at_24": 126,
+      "labeled_hit_at_5": 99,
+      "missing_questions": [],
+      "observed_questions": 144,
+      "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+    },
+    "run_ids": [
+      "20261014T204830-4b992f4f",
+      "20261014T204949-26990bb1",
+      "20261014T205153-a91c485a"
+    ],
+    "status": "failed"
+  },
+  "d": {
+    "cleanup_verified": true,
+    "complete": true,
+    "identity": {
+      "dependencies": [
+        [
+          "aiosqlite",
+          "0.22.1"
+        ],
+        [
+          "alembic",
+          "1.18.4"
+        ],
+        [
+          "annotated-doc",
+          "0.0.4"
+        ],
+        [
+          "annotated-types",
+          "0.7.0"
+        ],
+        [
+          "anthropic",
+          "0.84.0"
+        ],
+        [
+          "anyio",
+          "4.12.1"
+        ],
+        [
+          "arq",
+          "0.27.0"
+        ],
+        [
+          "asyncpg",
+          "0.31.0"
+        ],
+        [
+          "attocode",
+          "0.2.30"
+        ],
+        [
+          "attocode-code-intel",
+          "0.1.4"
+        ],
+        [
+          "attrs",
+          "25.4.0"
+        ],
+        [
+          "babel",
+          "2.18.0"
+        ],
+        [
+          "backrefs",
+          "6.2"
+        ],
+        [
+          "bcrypt",
+          "5.0.0"
+        ],
+        [
+          "bracex",
+          "2.6"
+        ],
+        [
+          "bump-my-version",
+          "1.2.7"
+        ],
+        [
+          "certifi",
+          "2026.2.25"
+        ],
+        [
+          "cffi",
+          "2.0.0"
+        ],
+        [
+          "charset-normalizer",
+          "3.4.4"
+        ],
+        [
+          "click",
+          "8.3.1"
+        ],
+        [
+          "colorama",
+          "0.4.6"
+        ],
+        [
+          "contourpy",
+          "1.3.3"
+        ],
+        [
+          "coverage",
+          "7.13.4"
+        ],
+        [
+          "cryptography",
+          "46.0.5"
+        ],
+        [
+          "cycler",
+          "0.12.1"
+        ],
+        [
+          "distro",
+          "1.9.0"
+        ],
+        [
+          "docstring_parser",
+          "0.17.0"
+        ],
+        [
+          "ecdsa",
+          "0.19.1"
+        ],
+        [
+          "einops",
+          "0.8.2"
+        ],
+        [
+          "fastapi",
+          "0.135.1"
+        ],
+        [
+          "filelock",
+          "3.25.0"
+        ],
+        [
+          "fonttools",
+          "4.61.1"
+        ],
+        [
+          "fsspec",
+          "2026.2.0"
+        ],
+        [
+          "ghp-import",
+          "2.1.0"
+        ],
+        [
+          "greenlet",
+          "3.3.2"
+        ],
+        [
+          "h11",
+          "0.16.0"
+        ],
+        [
+          "hf-xet",
+          "1.3.2"
+        ],
+        [
+          "hiredis",
+          "3.3.0"
+        ],
+        [
+          "httpcore",
+          "1.0.9"
+        ],
+        [
+          "httptools",
+          "0.7.1"
+        ],
+        [
+          "httpx",
+          "0.28.1"
+        ],
+        [
+          "httpx-oauth",
+          "0.16.1"
+        ],
+        [
+          "httpx-sse",
+          "0.4.3"
+        ],
+        [
+          "huggingface_hub",
+          "1.5.0"
+        ],
+        [
+          "idna",
+          "3.11"
+        ],
+        [
+          "iniconfig",
+          "2.3.0"
+        ],
+        [
+          "jinja2",
+          "3.1.6"
+        ],
+        [
+          "jiter",
+          "0.13.0"
+        ],
+        [
+          "joblib",
+          "1.5.3"
+        ],
+        [
+          "jsonschema",
+          "4.26.0"
+        ],
+        [
+          "jsonschema-specifications",
+          "2025.9.1"
+        ],
+        [
+          "kiwisolver",
+          "1.4.9"
+        ],
+        [
+          "librt",
+          "0.8.1"
+        ],
+        [
+          "linkify-it-py",
+          "2.0.3"
+        ],
+        [
+          "mako",
+          "1.3.10"
+        ],
+        [
+          "markdown",
+          "3.10.2"
+        ],
+        [
+          "markdown-it-py",
+          "4.0.0"
+        ],
+        [
+          "markupsafe",
+          "3.0.3"
+        ],
+        [
+          "matplotlib",
+          "3.10.8"
+        ],
+        [
+          "mcp",
+          "1.26.0"
+        ],
+        [
+          "mdit-py-plugins",
+          "0.5.0"
+        ],
+        [
+          "mdurl",
+          "0.1.2"
+        ],
+        [
+          "mergedeep",
+          "1.3.4"
+        ],
+        [
+          "mkdocs",
+          "1.6.1"
+        ],
+        [
+          "mkdocs-get-deps",
+          "0.2.0"
+        ],
+        [
+          "mkdocs-material",
+          "9.7.3"
+        ],
+        [
+          "mkdocs-material-extensions",
+          "1.3.1"
+        ],
+        [
+          "mpmath",
+          "1.3.0"
+        ],
+        [
+          "mypy",
+          "1.19.1"
+        ],
+        [
+          "mypy_extensions",
+          "1.1.0"
+        ],
+        [
+          "networkx",
+          "3.6.1"
+        ],
+        [
+          "numpy",
+          "2.4.2"
+        ],
+        [
+          "openai",
+          "2.24.0"
+        ],
+        [
+          "packaging",
+          "26.0"
+        ],
+        [
+          "paginate",
+          "0.5.7"
+        ],
+        [
+          "pathspec",
+          "1.0.4"
+        ],
+        [
+          "pgvector",
+          "0.4.2"
+        ],
+        [
+          "pillow",
+          "12.1.1"
+        ],
+        [
+          "platformdirs",
+          "4.9.2"
+        ],
+        [
+          "pluggy",
+          "1.6.0"
+        ],
+        [
+          "prompt_toolkit",
+          "3.0.52"
+        ],
+        [
+          "psutil",
+          "7.2.2"
+        ],
+        [
+          "pyasn1",
+          "0.6.2"
+        ],
+        [
+          "pycparser",
+          "3.0"
+        ],
+        [
+          "pydantic",
+          "2.12.5"
+        ],
+        [
+          "pydantic-settings",
+          "2.13.1"
+        ],
+        [
+          "pydantic_core",
+          "2.41.5"
+        ],
+        [
+          "pygit2",
+          "1.19.1"
+        ],
+        [
+          "pygments",
+          "2.19.2"
+        ],
+        [
+          "pyjwt",
+          "2.11.0"
+        ],
+        [
+          "pymdown-extensions",
+          "10.21"
+        ],
+        [
+          "pyparsing",
+          "3.3.2"
+        ],
+        [
+          "pytest",
+          "9.0.2"
+        ],
+        [
+          "pytest-asyncio",
+          "1.3.0"
+        ],
+        [
+          "pytest-cov",
+          "7.0.0"
+        ],
+        [
+          "pytest-mock",
+          "3.15.1"
+        ],
+        [
+          "pytest-textual-snapshot",
+          "1.0.0"
+        ],
+        [
+          "python-dateutil",
+          "2.9.0.post0"
+        ],
+        [
+          "python-dotenv",
+          "1.2.1"
+        ],
+        [
+          "python-jose",
+          "3.5.0"
+        ],
+        [
+          "python-multipart",
+          "0.0.22"
+        ],
+        [
+          "pyyaml",
+          "6.0.3"
+        ],
+        [
+          "pyyaml_env_tag",
+          "1.1"
+        ],
+        [
+          "questionary",
+          "2.1.1"
+        ],
+        [
+          "redis",
+          "5.3.1"
+        ],
+        [
+          "referencing",
+          "0.37.0"
+        ],
+        [
+          "regex",
+          "2026.2.28"
+        ],
+        [
+          "requests",
+          "2.32.5"
+        ],
+        [
+          "respx",
+          "0.22.0"
+        ],
+        [
+          "rich",
+          "14.3.3"
+        ],
+        [
+          "rich-click",
+          "1.9.7"
+        ],
+        [
+          "rpds-py",
+          "0.30.0"
+        ],
+        [
+          "rsa",
+          "4.9.1"
+        ],
+        [
+          "ruff",
+          "0.15.4"
+        ],
+        [
+          "safetensors",
+          "0.7.0"
+        ],
+        [
+          "scikit-learn",
+          "1.8.0"
+        ],
+        [
+          "scipy",
+          "1.17.1"
+        ],
+        [
+          "sentence-transformers",
+          "5.2.3"
+        ],
+        [
+          "setuptools",
+          "82.0.0"
+        ],
+        [
+          "shellingham",
+          "1.5.4"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "sniffio",
+          "1.3.1"
+        ],
+        [
+          "sqlalchemy",
+          "2.0.48"
+        ],
+        [
+          "sse-starlette",
+          "3.3.2"
+        ],
+        [
+          "starlette",
+          "0.52.1"
+        ],
+        [
+          "structlog",
+          "25.5.0"
+        ],
+        [
+          "sympy",
+          "1.14.0"
+        ],
+        [
+          "syrupy",
+          "5.1.0"
+        ],
+        [
+          "tenacity",
+          "9.1.4"
+        ],
+        [
+          "textual",
+          "8.0.0"
+        ],
+        [
+          "threadpoolctl",
+          "3.6.0"
+        ],
+        [
+          "tiktoken",
+          "0.12.0"
+        ],
+        [
+          "tokenizers",
+          "0.22.2"
+        ],
+        [
+          "tomli_w",
+          "1.2.0"
+        ],
+        [
+          "tomlkit",
+          "0.14.0"
+        ],
+        [
+          "torch",
+          "2.10.0"
+        ],
+        [
+          "tqdm",
+          "4.67.3"
+        ],
+        [
+          "transformers",
+          "5.2.0"
+        ],
+        [
+          "tree-sitter",
+          "0.25.2"
+        ],
+        [
+          "tree-sitter-bash",
+          "0.25.1"
+        ],
+        [
+          "tree-sitter-c",
+          "0.24.1"
+        ],
+        [
+          "tree-sitter-c-sharp",
+          "0.23.1"
+        ],
+        [
+          "tree-sitter-cpp",
+          "0.23.4"
+        ],
+        [
+          "tree-sitter-css",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-elixir",
+          "0.3.5"
+        ],
+        [
+          "tree-sitter-go",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-hcl",
+          "1.2.0"
+        ],
+        [
+          "tree-sitter-html",
+          "0.23.2"
+        ],
+        [
+          "tree-sitter-java",
+          "0.23.5"
+        ],
+        [
+          "tree-sitter-javascript",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-json",
+          "0.24.8"
+        ],
+        [
+          "tree-sitter-kotlin",
+          "1.1.0"
+        ],
+        [
+          "tree-sitter-language-pack",
+          "1.1.2"
+        ],
+        [
+          "tree-sitter-lua",
+          "0.5.0"
+        ],
+        [
+          "tree-sitter-php",
+          "0.24.1"
+        ],
+        [
+          "tree-sitter-python",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-ruby",
+          "0.23.1"
+        ],
+        [
+          "tree-sitter-rust",
+          "0.24.0"
+        ],
+        [
+          "tree-sitter-scala",
+          "0.24.0"
+        ],
+        [
+          "tree-sitter-swift",
+          "0.0.1"
+        ],
+        [
+          "tree-sitter-toml",
+          "0.7.0"
+        ],
+        [
+          "tree-sitter-typescript",
+          "0.23.2"
+        ],
+        [
+          "tree-sitter-yaml",
+          "0.7.2"
+        ],
+        [
+          "tree-sitter-zig",
+          "1.1.2"
+        ],
+        [
+          "typer",
+          "0.24.1"
+        ],
+        [
+          "typer-slim",
+          "0.24.0"
+        ],
+        [
+          "typing-inspection",
+          "0.4.2"
+        ],
+        [
+          "typing_extensions",
+          "4.15.0"
+        ],
+        [
+          "uc-micro-py",
+          "1.0.3"
+        ],
+        [
+          "urllib3",
+          "2.6.3"
+        ],
+        [
+          "uvicorn",
+          "0.41.0"
+        ],
+        [
+          "uvloop",
+          "0.22.1"
+        ],
+        [
+          "watchdog",
+          "6.0.0"
+        ],
+        [
+          "watchfiles",
+          "1.1.1"
+        ],
+        [
+          "wcmatch",
+          "10.1"
+        ],
+        [
+          "wcwidth",
+          "0.6.0"
+        ],
+        [
+          "websockets",
+          "16.0"
+        ]
+      ],
+      "fixture_sha256": "9288c4bb8d33f98d0a91ee272479a0e85b184aa596642d5318ef07983adf3977",
+      "harness_sha256": "d0041f5999b1ae9da5debc77176b4acedc82ca39fee965613764ba32f3a6906e",
+      "optional_grammars": {
+        "cache_sha256": "33de365f463f920ff46a0712f884df77a0b7637517c492de1a9f896bddb3008d",
+        "languages": [
+          "clojure",
+          "dart",
+          "erlang",
+          "fsharp",
+          "haskell",
+          "julia",
+          "nim",
+          "objc",
+          "ocaml",
+          "perl",
+          "r"
+        ]
+      },
+      "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+      "platform": "macOS-26.2-arm64-arm-64bit",
+      "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
+      "settings": {
+        "ATTOCODE_EMBEDDING_MODEL": "",
+        "ATTOCODE_INTEL_BROAD_RERANK": "0",
+        "ATTOCODE_INTEL_PRECISION": "off",
+        "ATTOCODE_INTEL_RANKING_ALLOW_REMOTE": "0",
+        "ATTOCODE_INTEL_RANKING_PROVIDER": "off",
+        "ATTOCODE_LOCAL_ONLY": "1",
+        "ATTOCODE_NL_EMBEDDING_MODE": "none"
+      },
+      "source_sha256": "0858ed71cf0c4d575503f8e11771309f3273b939fe11f9732dfd236e0a8b5cc8"
+    },
+    "outcomes": {
+      "failed": 0,
+      "incomplete": 0,
+      "limited": 124,
+      "passed": 157,
+      "unsupported": 7
+    },
+    "packs": [
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 3.6078271659789607
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.024727375013753772
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.3202672080369666
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0022544580278918147
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.000963500002399087
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0009414170635864139
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.03399141598492861
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.9417350830044597
+          }
+        ],
+        "error": null,
+        "id": "Nim",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 5.053614708944224
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.07839183392934501
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 3.7830276659224182
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.007958750007674098
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.002911958028562367
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.002850834047421813
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.026680416078306735
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.0663003750378266
+          }
+        ],
+        "error": null,
+        "id": "SwiftFormat",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.7543694579508156
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.025193457957357168
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.7574047920061275
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.002284083981066942
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.001370833022519946
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.001028624945320189
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.019193375017493963
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.3656357500003651
+          }
+        ],
+        "error": null,
+        "id": "acme-sh",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.472204833989963
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.19559195800684392
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 5.811452875030227
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.008968250011093915
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0107542920159176
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.017229792079888284
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.03229674999602139
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.4463482920546085
+          }
+        ],
+        "error": null,
+        "id": "aspnetcore",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.8069982499582693
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.06707970809657127
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.976192291942425
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.011421457980759442
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.009470249991863966
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.010084874927997589
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.025716208037920296
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.1105362909147516
+          }
+        ],
+        "error": null,
+        "id": "cats-effect",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 11.329218459082767
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 1.8383493749424815
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 74.21928416704759
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.051599583006463945
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.043934417073614895
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.04628129198681563
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.9925369580741972
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 14.346544417086989
+          }
+        ],
+        "error": null,
+        "id": "cockroach",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": "Optional grammar is not installed/cached; no acquisition during navigation",
+            "name": "definition",
+            "outcome": "unsupported",
+            "seconds": 0.6821155420038849
+          },
+          {
+            "limitation": "Optional grammar is not installed/cached; no acquisition during navigation",
+            "name": "source",
+            "outcome": "unsupported",
+            "seconds": 0.5482368749799207
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 3.5336759999627247
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.013821666943840683
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.012003125040791929
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.011891665984876454
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.029749459004960954
+          },
+          {
+            "limitation": "Optional grammar is not installed/cached; no acquisition during navigation",
+            "name": "restart",
+            "outcome": "unsupported",
+            "seconds": 0.44845479202922434
+          }
+        ],
+        "error": null,
+        "id": "crystal",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.5351019999943674
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 1.1645120409084484
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 10.556088207988068
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.009715792024508119
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.008399207959882915
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.009728707955218852
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.029489166918210685
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.5394473749911413
+          }
+        ],
+        "error": null,
+        "id": "dart-sdk",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.5885206249076873
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.05703533301129937
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.48366608400829136
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0019889589166268706
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0007837499724701047
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0008930839831009507
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.013497333973646164
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.3107769580092281
+          }
+        ],
+        "error": null,
+        "id": "deno",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.3992797080427408
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.03334095794707537
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.30413195898290724
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.010950875002890825
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.001962792011909187
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.002977082971483469
+          },
+          {
+            "limitation": null,
+            "name": "tests",
+            "outcome": "passed",
+            "seconds": 0.020075083943083882
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.13605441700201482
+          }
+        ],
+        "error": null,
+        "id": "express",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.609326291945763
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.5617521660169587
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 3.7064755839528516
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.017347958055324852
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.016589583014138043
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.02708945795893669
+          },
+          {
+            "limitation": null,
+            "name": "tests",
+            "outcome": "passed",
+            "seconds": 0.04809508298058063
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.5693496249150485
+          }
+        ],
+        "error": null,
+        "id": "fastapi",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 5.151330125052482
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.9246967909857631
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 11.702686583041213
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.018401707988232374
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.014747333945706487
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.01438366703223437
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.056845624931156635
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 5.355773124960251
+          }
+        ],
+        "error": null,
+        "id": "framework",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.36048324999865144
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.02822379197459668
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.2877164171077311
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.002104375045746565
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.001307041966356337
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.0015074589755386114
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.011454917024821043
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.1487701250007376
+          }
+        ],
+        "error": null,
+        "id": "frontend",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 6.08144908293616
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.053886916022747755
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 8.313398291007616
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.004106709035113454
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.002801083028316498
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0029415000462904572
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.01619808399118483
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 3.2246302500134334
+          }
+        ],
+        "error": null,
+        "id": "fsharp",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.7060315830167383
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.034804790979251266
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.1275368329370394
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.003972999984398484
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.002299749990925193
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0020378329791128635
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.013954041060060263
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.23390350001864135
+          }
+        ],
+        "error": null,
+        "id": "ggplot2",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 3.8929945830022916
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.078413916984573
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 4.453841125010513
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.009097083006054163
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.007485332898795605
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.007215040968731046
+          },
+          {
+            "limitation": null,
+            "name": "tests",
+            "outcome": "passed",
+            "seconds": 0.02160670794546604
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.4668187919305637
+          }
+        ],
+        "error": null,
+        "id": "gh-cli",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.8416327079758048
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.07067579100839794
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.8997454169439152
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.0050635000225156546
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.004277125000953674
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.006319999927654862
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.020743833971209824
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.4092958749970421
+          }
+        ],
+        "error": null,
+        "id": "gson",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 6.734994165948592
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.8356878749327734
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 16.506927332957275
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.010157290962524712
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.006891166092827916
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.007615041919052601
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.5697313749697059
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 6.818268958944827
+          }
+        ],
+        "error": null,
+        "id": "iTerm2",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.5708816249389201
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.023122083046473563
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.070720167015679
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0023093749769032
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0011318339966237545
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.001094832899980247
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.01243320805951953
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.7592743330169469
+          }
+        ],
+        "error": null,
+        "id": "julia",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.8076250829035416
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.030425667064264417
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.9814055829774588
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.005482500069774687
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.003894207999110222
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.004455917049199343
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.016305957920849323
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.4706422499148175
+          }
+        ],
+        "error": null,
+        "id": "luarocks",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.7864217080641538
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.02489941695239395
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.442759959027171
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0020427919225767255
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0014772909926250577
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0010874170111492276
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.012854166910983622
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.9695686250925064
+          }
+        ],
+        "error": null,
+        "id": "ocaml",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.156143540982157
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.0949970840010792
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.266365041024983
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.013389665982685983
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.010121125029399991
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.016062458977103233
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.045745916897431016
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.246627458021976
+          }
+        ],
+        "error": null,
+        "id": "okhttp",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 3.506023208028637
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.08393712504766881
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 6.207524667028338
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0075417920015752316
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.006011167075484991
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.006067708949558437
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.021210166974924505
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.1363074170658365
+          }
+        ],
+        "error": null,
+        "id": "otp",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 5.236758125014603
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 1.5653954999288544
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 14.526359125040472
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.16639637493062764
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.01794270903337747
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.031213833019137383
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.21742812497541308
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 5.8581204999936745
+          }
+        ],
+        "error": null,
+        "id": "pandas",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required",
+            "name": "definition",
+            "outcome": "unsupported",
+            "seconds": 0.5525311250239611
+          },
+          {
+            "limitation": "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required",
+            "name": "source",
+            "outcome": "unsupported",
+            "seconds": 0.01189087494276464
+          },
+          {
+            "limitation": "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required",
+            "name": "scoped_search",
+            "outcome": "unsupported",
+            "seconds": 1.2003359999507666
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.002777834073640406
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.007198874955065548
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.001880040974356234
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.013433792046271265
+          },
+          {
+            "limitation": "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required",
+            "name": "restart",
+            "outcome": "unsupported",
+            "seconds": 0.2206665420671925
+          }
+        ],
+        "error": null,
+        "id": "perl5",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.4872170420130715
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.043954874970950186
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.694292000029236
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.006660624989308417
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.004676042008213699
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.004568250034935772
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.03561245906166732
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.8069785831030458
+          }
+        ],
+        "error": null,
+        "id": "phoenix",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.5175394160905853
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.030808708048425615
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.6841332500334829
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0031264160061255097
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0018328330479562283
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0017766669625416398
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.012935166945680976
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.18836787494365126
+          }
+        ],
+        "error": null,
+        "id": "postgrest",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 2.4578017089515924
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 1.3822155420202762
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 5.010270666913129
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0368645410053432
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.03496237506624311
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.05166770797222853
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.10417412500828505
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 2.501575249945745
+          }
+        ],
+        "error": null,
+        "id": "prisma",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 5.327666333061643
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 2.2663099999772385
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 15.492945124977268
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.12555537500884384
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.04385383299086243
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.044852665974758565
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.23726691701449454
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 6.030844375025481
+          }
+        ],
+        "error": null,
+        "id": "rails",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 4.121201499947347
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.6843070000177249
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 9.766952290898189
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.008358874940313399
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.005943958065472543
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.005598957999609411
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.2739128340035677
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 4.159555917023681
+          }
+        ],
+        "error": null,
+        "id": "redis",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.3411643330473453
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.03221179195679724
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.22101954196114093
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0023389169946312904
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0011873330222442746
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0011417920468375087
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.012313415994867682
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.11855791707057506
+          }
+        ],
+        "error": null,
+        "id": "requests",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.2812560409074649
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.032071375055238605
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 0.15811200009193271
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0032090420136228204
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.00205220899078995
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0019040830666199327
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.011819958919659257
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.05510820809286088
+          }
+        ],
+        "error": null,
+        "id": "ring",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 0.9982950839912519
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.038726833066903055
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.205912375007756
+          },
+          {
+            "limitation": null,
+            "name": "caller_syntax",
+            "outcome": "passed",
+            "seconds": 0.003333417000249028
+          },
+          {
+            "limitation": null,
+            "name": "dependencies",
+            "outcome": "passed",
+            "seconds": 0.0017859169747680426
+          },
+          {
+            "limitation": null,
+            "name": "impact",
+            "outcome": "passed",
+            "seconds": 0.0022706249728798866
+          },
+          {
+            "limitation": null,
+            "name": "tests",
+            "outcome": "passed",
+            "seconds": 0.025268457946367562
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.5972953749587759
+          }
+        ],
+        "error": null,
+        "id": "ripgrep",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.5403503749985248
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.032948166015557945
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.895007332903333
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0020607910118997097
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.001106458017602563
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0016262910794466734
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.015598791069351137
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.1519950409419835
+          }
+        ],
+        "error": null,
+        "id": "spdlog",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.6465830000815913
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.09384045796468854
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 2.260846499935724
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0069945830618962646
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0044810420367866755
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0052010000217705965
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.016553708002902567
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 1.150335417012684
+          }
+        ],
+        "error": null,
+        "id": "starship",
+        "status": "passed"
+      },
+      {
+        "checks": [
+          {
+            "limitation": null,
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 1.063835124950856
+          },
+          {
+            "limitation": null,
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 0.0561857910361141
+          },
+          {
+            "limitation": null,
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 1.2269456660142168
+          },
+          {
+            "limitation": "No independently labeled caller",
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.0018755829660221934
+          },
+          {
+            "limitation": "No labeled importer; only uncertainty reporting is checked",
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.0010077499318867922
+          },
+          {
+            "limitation": "No labeled impacted file; only uncertainty reporting is checked",
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.0009282910032197833
+          },
+          {
+            "limitation": "No labeled test; only uncertainty reporting is checked",
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 0.01220995793119073
+          },
+          {
+            "limitation": null,
+            "name": "restart",
+            "outcome": "passed",
+            "seconds": 0.6778579999227077
+          }
+        ],
+        "error": null,
+        "id": "zls",
+        "status": "passed"
+      }
+    ],
+    "retrieval": {
+      "labeled_hit_at_24": 126,
+      "labeled_hit_at_5": 99,
+      "missing_questions": [],
+      "observed_questions": 144,
+      "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+    },
+    "run_ids": [
+      "20261014T205810-6cd9c86f",
+      "20261014T205931-9c34542c",
+      "20261014T210146-fecbbba1"
+    ],
+    "status": "passed"
   }
 }

@@ -9,7 +9,7 @@ compiler-resolution proofs or agent-outcome results.
 
 ## Intermediate candidates (preserved)
 
-[Machine-readable observations](2026-10-14-breadth-development.json) bind both
+[Machine-readable observations](2026-10-14-breadth-development.json) bind the
 immutable candidates to source/harness/fixture/environment identities. Original
 full responses and resource logs remain in the local managed quality reports.
 
@@ -46,7 +46,8 @@ passed. The production precision deadline remains two seconds.
 The first isolated 0.1.5-to-0.1.6 local wheel upgrade passed seven phases, preserving
 Codex/Claude/Cursor project configuration hashes and recovering persisted navigation
 and edit freshness. It also passed actual stdio daily/lean startup without the agent
-package. Its environment/cache were removed. Later edits still require final gates.
+package. Its environment/cache were removed. The final source wheel also passed all seven phases in `release-0.1.6-final`;
+this remains local-build evidence rather than a published-package check.
 
 The operation inventory distinguishes successful responses, rejection-only evidence
 and unmapped operations. All 139 advertised operations have malformed-input controls;
@@ -67,3 +68,45 @@ checks are limited, not assertions of relationship accuracy. Optional grammars
 remain unsupported when absent. Static build/module handling does not execute
 project code and cannot emulate arbitrary compiler, macro, class-loader or dynamic
 runtime behavior. No overall agent-quality or ranking-improvement claim follows.
+
+## Later validation
+
+The full standalone suite reached 684 passing tests with four skips in 62.7 seconds
+under supervision (730.6 MiB sampled RSS, 98.5 MiB managed disk, cleanup verified).
+CI then exercised real Python, TypeScript, Go and Rust language servers, 11 available
+optional grammars and Linux/macOS Python 3.12/3.13 upgrades. Crystal is absent from
+the pinned grammar release. Pyright revealed missing workspace-folder initialization;
+the client now sends it, and protocol and real-server checks pass.
+
+Stage C completed all 144 questions and retained two qualified-name assertion
+failures (Lua and Elixir). The final check accepts adapter-qualified exact names,
+while rejecting fuzzy matches and wrong qualified identities. F# and Objective-C
+passed. Stage C and the final candidate use the same frozen source/query manifest.
+
+The runtime operation inventory has 30 successful-response observations, 109
+rejection-only entries and zero unmapped operations. Passing a response assertion
+is not proof of every semantic feature, and subprocess MCP calls are not captured
+by this in-process inventory.
+
+## Final local source matrix (stage D)
+
+All 36 packs completed, with all 144 retrieval observations and clean scratch.
+There are **157 passed assertions, 124 limited checks, seven unsupported checks,
+and zero failed/incomplete checks**. Known-target hits remain 99/144 at five and
+126/144 at 24. This is coverage and diagnosis evidence, not a ranking gain.
+The seven unsupported checks comprise Crystal's missing grammar and the pinned
+Perl source excluded by default discovery.
+
+Run IDs: `20261014T205810-6cd9c86f`, `20261014T205931-9c34542c`,
+`20261014T210146-fecbbba1`. Their source, harness, fixture and environment identities
+match exactly. Stage D's local gate `20261014T205728-7f6ffb0d` passed 493 tests/four
+skips, scale and lifecycle. The later lossless cloud-export correction is tested
+separately and does not change the product source or these observations.
+
+The local checks plus source matrix took 504.3 supervised seconds, peaking at
+1,249.2 MiB managed storage and 830.4 MiB sampled process-tree RSS. Cleanup was
+verified. The unchanged ranking gate is an additional separately recorded check.
+
+Stage D ranking run `20261014T210555-39a71a6c` passed in 55.5 seconds: the
+frozen 68-query/five-method gate remains unchanged. Total supervised final local
+checks, source matrix and ranking time: 559.8 seconds; all cleanup verified.

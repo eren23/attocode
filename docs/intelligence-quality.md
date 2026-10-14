@@ -216,7 +216,10 @@ public source reaches the worker; no private working edits, historical studies,
 model weights or user home directories are uploaded.
 
 Setup, execution and collection fit a 90-minute controller deadline; tests have
-60 minutes. Results exported to the Mac are JSON/logs only, at most 20 MiB total.
+60 minutes. Results exported to the Mac are JSON, logs and JUnit XML, at most 20 MiB total
+and 2 MiB per exported file. JSON whitespace is removed without dropping evidence;
+JSON inputs above 8 MiB are refused before parsing. Source corpora and indexes
+are not downloaded to the Mac.
 Before package installation, a 15-second DNS probe checks the worker's configured
 resolver. If it fails, the disposable Ubuntu worker temporarily uses public
 resolvers `1.1.1.1` and `8.8.8.8` on `eth0`, logs the intervention, and retries
