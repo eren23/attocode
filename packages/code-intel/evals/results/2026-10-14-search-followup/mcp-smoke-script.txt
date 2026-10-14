@@ -1,0 +1,54 @@
+import asyncio,hashlib,json,os,time
+from pathlib import Path
+from mcp import ClientSession,StdioServerParameters
+from mcp.client.stdio import stdio_client
+from attocode_intel.output import response_tokens
+
+ROOT=Path('/Users/eren/Documents/AI/first-principles-agent')
+QUERIES=[
+ {'query':'search snippet window','file_filter':'packages/code-intel/src/attocode_intel/search_evidence.py'},
+ {'query':'result output budget'},
+ {'query':'index warming'},
+]
+async def main():
+    env=dict(os.environ)
+    env.update(ATTOCODE_INTEL_PRECISION='off',ATTOCODE_INTEL_BROAD_RERANK='0',
+      ATTOCODE_INTEL_RANKING_PROVIDER='off',ATTOCODE_INTEL_RANKING_ALLOW_REMOTE='0',
+      ATTOCODE_EMBEDDING_MODEL='',ATTOCODE_NL_EMBEDDING_MODE='none',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',OPENAI_API_KEY='')
+    params=StdioServerParameters(command=str(ROOT/'.venv/bin/attocode-code-intel'),
+      args=['--project',str(ROOT),'--profile','lean','--no-watch'],env=env)
+    start=time.monotonic(); records=[]
+    with Path('/private/tmp/attocode-mcp-smoke-20261014.stderr').open('w') as err:
+      async with stdio_client(params,errlog=err) as (read,write),ClientSession(read,write) as session:
+        init=await session.initialize()
+        tools=sorted(t.name for t in (await session.list_tools()).tools)
+        assert len(tools)==8 and 'semantic_search' in tools,tools
+        for spec in QUERIES:
+          tick=time.monotonic()
+          result=await session.call_tool('semantic_search',{**spec,'top_k':5,'max_tokens':2000})
+          assert not result.isError,result.content
+          payload=json.loads(result.content[0].text); data=payload['data']
+          assert data['ranking']['index']['status']=='ready',data['ranking']
+          assert data['results'],data
+          assert response_tokens(result)<=2000
+          assert data['ranking']['delivered_count']==len(data['results'])
+          for hit in data['results']:
+            assert all(k in hit for k in ('name','chunk_type','snippet_start_line','snippet_end_line'))
+            if hit['snippet_start_line'] is not None:
+              path=(ROOT/hit['file_path']).resolve(); assert path.is_relative_to(ROOT)
+              lines=path.read_text().splitlines(keepends=True)
+              lo,hi=hit['snippet_start_line'],hit['snippet_end_line']
+              assert 1<=lo<=hi<=len(lines),(hit, len(lines))
+              assert hit['snippet'] in ''.join(lines[lo-1:hi]),hit
+              assert hit['line']<=lo<=hi<=hit['end_line'],hit
+          records.append({'arguments':spec,'seconds':round(time.monotonic()-tick,3),
+            'wire_tokens':response_tokens(result),'response':payload})
+          print(json.dumps({'query':spec['query'],'hits':len(data['results']),'wire_tokens':response_tokens(result)}),flush=True)
+    artifact={'kind':'fresh local stdio MCP smoke, real checkout; no agent or model calls',
+      'profile':'lean','watch':False,'tools':tools,'server':init.serverInfo.model_dump(),
+      'elapsed_seconds':round(time.monotonic()-start,3),'queries':records,
+      'source_sha256':{p:hashlib.sha256((ROOT/'packages/code-intel/src/attocode_intel'/p).read_bytes()).hexdigest()
+        for p in ('search_evidence.py','gateway.py','output.py','query_ranking.py','_internal/integrations/context/semantic_search.py')}}
+    Path('/private/tmp/attocode-mcp-smoke-20261014.json').write_text(json.dumps(artifact,indent=2)+'\n')
+    print('Fresh MCP exited cleanly; all smoke checks passed.',flush=True)
+asyncio.run(asyncio.wait_for(main(),timeout=150))

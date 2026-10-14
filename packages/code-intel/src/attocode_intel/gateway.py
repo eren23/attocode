@@ -29,6 +29,7 @@ from attocode_intel.output import bounded_compact, bounded_text, response_tokens
 from attocode_intel.project_dir import cache_folder
 from attocode_intel.query_ranking import hit_evidence, next_search_top_k
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
+from attocode_intel.search_evidence import hydrate_selected_sources, search_snippet
 
 
 class OperationGateway:
@@ -478,19 +479,20 @@ class OperationGateway:
                     result_cap = max(1, budget // 120)
                     omitted_results = max(0, len(results) - result_cap)
                     results = results[:result_cap]
+                    if not self.resolver:
+                        results = hydrate_selected_sources(service.project_dir, results)
                     ranking["delivered_count"] = len(results)
                     if omitted_results:
                         ranking["omitted_results_due_to_budget"] = omitted_results
                     snippet_cap = max(32, min(320, budget // max(1, len(results))))
                     hits = []
                     for result in results:
-                        snippet = (result.text.split("\n", 1)[-1]
-                                   if result.start_line else result.text)
                         hits.append({
                             "file_path": result.file_path,
+                            "name": result.name,
+                            "chunk_type": result.chunk_type,
                             "score": result.score,
-                            "snippet": snippet[:snippet_cap],
-                            "snippet_truncated": len(snippet) > snippet_cap,
+                            **search_snippet(result, args["query"], snippet_cap),
                             "line": result.start_line or None,
                             "end_line": result.end_line or None,
                             **hit_evidence(args["query"], result),

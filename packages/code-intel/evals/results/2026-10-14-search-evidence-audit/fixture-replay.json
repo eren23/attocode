@@ -1,0 +1,429 @@
+{
+  "measurement": "controlled fixed-candidate presentation fixture; no agent calls or historical source reconstruction",
+  "baseline_ref": "67b9afbb7e5bc8e5939db182edc9b2973dd32523",
+  "baseline_gateway_sha256": "c9f882e9fb14f79ecb5e986a1ff952b8570b63956a0c60f0f240a0fa0d1f419e",
+  "baseline_rule": "exact old hit fields and body[:320] prefix rule; serializer unchanged",
+  "current_source_sha256": {
+    "gateway.py": "438ff38f796a3de7a0492077ea4af3e834be327dae6b0a7f264d40dd13a5ff12",
+    "output.py": "96e065e4b0b736b09f40a7dc1dc0b0831406ba185d967f917107ecc32a257a28",
+    "query_ranking.py": "c95f7ce954c473963e3d84103e97c4ca472a22c74422f5ce56423c93426ccac7",
+    "search_evidence.py": "e164e4a315129a8c21ae1dc67a7f66305bcdec5614785d84b95f6366beab2d97",
+    "_internal/integrations/context/semantic_search.py": "c818d248227cad9274b4e43edcbc081edcc010aebb6d7efc3f17fe7d4557efbd"
+  },
+  "fixture": {
+    "query": "cleanup upload",
+    "body": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n */\nvoid cleanupUpload() {}\n",
+    "body_sha256": "6f4a46306b9235cf25d5fee96c7bcd5f5f358f46132780b6bc1c139f733914db",
+    "chunk_start_line": 41,
+    "chunk_end_line": 55,
+    "max_tokens": 4000
+  },
+  "metrics": {
+    "before": {
+      "delivered_files": 10,
+      "wire_tokens": 1464,
+      "previews_containing_cleanupUpload": 0
+    },
+    "after": {
+      "delivered_files": 10,
+      "wire_tokens": 994,
+      "previews_containing_cleanupUpload": 10
+    }
+  },
+  "before": {
+    "metadata": {
+      "workspace": "/fixture",
+      "source": "local",
+      "revision": "fixture",
+      "freshness": "working_tree",
+      "truncated": false
+    },
+    "data": {
+      "query": "cleanup upload",
+      "results": [
+        {
+          "file_path": "src/worker_0/Upload.java",
+          "score": 0.9,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_1/Upload.java",
+          "score": 0.89,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_2/Upload.java",
+          "score": 0.88,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_3/Upload.java",
+          "score": 0.87,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_4/Upload.java",
+          "score": 0.86,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_5/Upload.java",
+          "score": 0.85,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_6/Upload.java",
+          "score": 0.8400000000000001,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_7/Upload.java",
+          "score": 0.8300000000000001,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_8/Upload.java",
+          "score": 0.8200000000000001,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_9/Upload.java",
+          "score": 0.81,
+          "snippet": "/*\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright and license boilerplate.\n * Copyright ",
+          "snippet_truncated": true,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        }
+      ],
+      "ranking": {
+        "candidate_pool_count": 10,
+        "delivered_count": 10
+      }
+    }
+  },
+  "after": {
+    "metadata": {
+      "workspace": "/fixture",
+      "source": "local",
+      "revision": "fixture",
+      "freshness": "working_tree",
+      "truncated": false
+    },
+    "data": {
+      "query": "cleanup upload",
+      "results": [
+        {
+          "file_path": "src/worker_0/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.9,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_1/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.89,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_2/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.88,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_3/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.87,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_4/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.86,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_5/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.85,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_6/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.8400000000000001,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_7/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.8300000000000001,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_8/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.8200000000000001,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        },
+        {
+          "file_path": "src/worker_9/Upload.java",
+          "name": "cleanupUpload",
+          "chunk_type": "method",
+          "score": 0.81,
+          "snippet": " */\nvoid cleanupUpload() {}\n",
+          "snippet_truncated": true,
+          "snippet_start_line": 54,
+          "snippet_end_line": 55,
+          "line": 41,
+          "end_line": 55,
+          "matched_terms": [
+            "cleanup",
+            "upload"
+          ],
+          "match_fields": [
+            "identity",
+            "source_body"
+          ]
+        }
+      ],
+      "ranking": {
+        "candidate_pool_count": 10,
+        "delivered_count": 10
+      }
+    }
+  }
+}

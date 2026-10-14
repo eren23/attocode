@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Bounded quality checks
+
+- Shared `python -m eval.quality` quick/local/broad gates with deadlines,
+  managed storage and memory monitoring, bounded logs, process cleanup and
+  hash-bound reports. Six pinned workflow packs complement the existing frozen
+  ranking gate; definition fixtures cover 18 programming languages.
+- Optional DigitalOcean CPU controller with monthly reservations, verified
+  deletion, independent TTL cleanup and offline failure-path tests. Live launch
+  requires authentication, published inputs and a verified cleanup heartbeat.
+- Intelligence CI cancellation, explicit job limits and seven-day artifacts.
+
+### Fixed — Local evidence and lifecycle
+
+- Selected metadata search hits can recover bounded exact source without
+  changing ranking. Unknown receiver calls remain reference candidates instead
+  of binding to a same-file method solely because its name is unique.
+- Serialize lexical SQLite schema initialization with cache writes; transient
+  database errors no longer permanently disable source search, and failed opens
+  close their connections. Optional reindex workers stop before store shutdown.
+
+### Fixed — Search evidence previews
+
+- Search previews select a contiguous window around matching query terms
+  instead of always showing the start of a chunk, which could be only a
+  copyright header. MCP hits retain symbol names and chunk types and report
+  the actual snippet line range separately from the original chunk range.
+- Compact search responses shorten previews before dropping whole hits.
+  Further shortening preserves snippet coordinates and truncation flags.
+  Candidate selection, ranking and scores are unchanged.
+- Added a hash-bound offline audit of the existing R3 traces. It reproduces
+  14/30 runs omitting a delivered labeled file; this output fix has no new
+  agent-outcome evidence.
+
 ### Added — Experimental intelligence and repair pilot
 
 - Opt-in local `lean` profile: seven watched MCP tools, conditional routing,
@@ -14,8 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   support. Daily/full defaults and remote surfaces are unchanged.
 - Separate R7 repair-study harness with pinned SWE-bench inputs, writable
   Docker runtimes, strict all-test grading, immutable controls and offline
-  transport checks. Excluded model wiring passed; scored runs remain gated.
-  Adoption is descriptive; continuation depends on outcomes, cost and time.
+  transport checks. All 32 scored attempts are complete: reviewed outcomes
+  were 14/16 native and 13/16 optional lean, with no voluntary MCP use.
+  The predeclared continuation gate says stop; this is not evidence of an
+  intelligence benefit.
 - Bounded Codex repair diagnostic: both wiring checks and all four development
   repairs passed independent grading. Both optional runs used no MCP tools;
   the result validates execution, not an intelligence benefit.

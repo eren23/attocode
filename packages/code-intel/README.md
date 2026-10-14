@@ -70,7 +70,8 @@ Search matches the words of the code and its paths. It does not use embeddings u
 - **Agents.** In four studies, Claude Code (Sonnet 5.5) named the files to edit for an issue. The server did not raise file Acc@5. Each run with the server cost 1.4 to 2.1 times as much. When the agent could choose, it seldom called the server. See the [agent pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-10-agent-pilot.md) and [study R3](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-10-agent-r3.md).
 
 The [R6 review study](evals/results/2026-10-13-r6-review-test-note.md)
-found no demonstrated review benefit. Completed edits remain unevaluated.
+found no demonstrated review benefit. The [completed R7 repair pilot](evals/results/2026-10-14-r7-completion-pilot.md)
+also found no demonstrated benefit; its reviewed decision is to stop expansion.
 
 ## Limits and troubleshooting
 
@@ -113,6 +114,12 @@ uv sync --extra dev --extra code-intel
 uv run pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests
 uv build --package attocode-code-intel
 ```
+
+For routine work, use `.venv/bin/python -m eval.quality quick` (two minutes)
+or `local` (ten minutes). They isolate scratch and caches in a monitored 5 GiB
+workspace and report incomplete runs separately from passes. The
+[quality guide](../../docs/intelligence-quality.md) covers pinned multi-language
+workflow checks, storage inventory, cleanup and optional CPU cloud batches.
 
 Releases use `intel-v*` tags ([release guide](https://github.com/eren23/attocode/blob/main/docs/intelligence-release.md)).
 

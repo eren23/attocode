@@ -1,0 +1,24 @@
+name: Quality worker cleanup
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: quality-worker-cleanup
+  cancel-in-progress: false
+jobs:
+  reap:
+    if: vars.QUALITY_CLOUD_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Reap expired quality workers
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.QUALITY_DIGITALOCEAN_TOKEN }}
+        run: uv run --no-project --with filelock --with psutil python -m eval.quality cloud reap-apply
