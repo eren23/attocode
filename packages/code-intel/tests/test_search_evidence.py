@@ -293,3 +293,56 @@ def test_warmup_span_reuse_preserves_chunks_and_rejects_same_metadata_edits(tmp_
     empty.put('source.py', changed, parse(str(source), changed))
     assert empty.rows == {} and empty.remaining == 1
     assert SemanticSearchManager._body_chunks('source.py', str(source), empty) == chunks
+
+
+def test_batched_tokenization_preserves_ascii_boundaries_digits_and_unicode():
+    import random
+    import re
+
+    from attocode_intel._internal.integrations.context.semantic_search import _STOP_WORDS, _tokenize
+
+    # Frozen prior token semantics: changing these would change index terms and
+    # ranking. Compare punctuation, acronym edges, digits and Unicode case folds.
+    camel = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+    def previous(text):
+        return [word.lower() for part in re.split(r"[^a-zA-Z0-9]+", text)
+                for word in camel.sub("_", part).split("_")
+                if len(word) >= 2 and word.lower() not in _STOP_WORDS]
+    inputs = ["HTTPServer fooBar XML2HTTPResponse foo99Bar", "İıKéΔ🧪 helloWorld\r\nname_42",
+              "aa--BB.ccDD//EEff", "", "x Y 1 _", "return returnValue RETURN_VALUE"]
+    rng = random.Random(912)
+    alphabet = "aAzZ09_ -.!\nİıKéΔ🧪"
+    inputs.extend("".join(rng.choices(alphabet, k=rng.randint(0, 300))) for _ in range(1000))
+    for text in inputs:
+        assert _tokenize(text) == previous(text)
+
+
+def test_warmup_diagnostics_show_pending_stage_without_waiting(tmp_path, monkeypatch):
+    import threading
+
+    from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
+
+    (tmp_path / "source.py").write_text("def useful_name():\n    return 42\n")
+    entered, release = threading.Event(), threading.Event()
+    original = SemanticSearchManager._sync_body_index
+    def delayed(self, *args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(SemanticSearchManager, "_sync_body_index", delayed)
+    manager = SemanticSearchManager(root_dir=str(tmp_path))
+    try:
+        manager.warm()
+        assert entered.wait(5)
+        pending = manager.candidate_diagnostics()
+        assert pending["status"] == "warming" and pending["warmup_stage"] == "body"
+        assert pending["keyword_seconds"] >= 0 and pending["warmup_seconds"] >= 0
+        release.set()
+        assert manager.wait_for_body_index(5)
+        ready = manager.candidate_diagnostics()
+        assert ready["status"] == "ready" and ready["warmup_stage"] == "ready"
+        assert ready["body_seconds"] >= 0
+        assert manager.candidate_diagnostics()["warmup_seconds"] == ready["warmup_seconds"]
+    finally:
+        release.set()
+        manager.close()
