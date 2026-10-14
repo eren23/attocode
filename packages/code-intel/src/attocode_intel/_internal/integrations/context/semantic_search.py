@@ -7,6 +7,7 @@ embedding provider is available.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -58,6 +59,37 @@ _CONSTRUCT_HINTS: dict[str, list[str]] = {
     "auth": ["auth", "login", "password", "token", "session"],
     "database": ["query", "model", "schema", "migration", "table"],
 }
+
+
+def _source_spans(ast):
+    symbols = [(f.start_line, f.end_line, "function", f.name) for f in ast.functions]
+    classes = []
+    for cls in ast.classes:
+        classes.append((cls.start_line, cls.end_line, "class", cls.name))
+        symbols.extend((m.start_line, m.end_line, "method", f"{cls.name}.{m.name}") for m in cls.methods)
+    return symbols, classes
+
+
+class _BodySpanCache:
+    """One warm-up's bounded source-hash-bound spans, never retained ASTs or source."""
+
+    def __init__(self, budget_bytes=16 * 2**20):
+        self.remaining = budget_bytes
+        self.rows = {}
+
+    def put(self, path, content, ast):
+        symbols, classes = _source_spans(ast)
+        # Conservative allowance for Python containers, integers and names.
+        size = 512 + len(path.encode()) + sum(256 + len(span[3].encode()) for span in [*symbols, *classes])
+        if size <= self.remaining and len(content.encode()) <= 512 * 1024:
+            self.rows[path] = (hashlib.sha256(content.encode()).digest(), (symbols, classes))
+            self.remaining -= size
+
+    def take(self, path, content):
+        row = self.rows.pop(path, None)
+        if row and row[0] == hashlib.sha256(content.encode()).digest():
+            return row[1]
+        return None
 
 
 def _tokenize(text: str) -> list[str]:
@@ -1200,31 +1232,23 @@ class SemanticSearchManager:
             return None
 
     @staticmethod
-    def _body_chunks(rel_path: str, abs_path: str) -> list[tuple[str, str, int, int, str, str]]:
+    def _body_chunks(rel_path: str, abs_path: str, body_spans=None) -> list[tuple[str, str, int, int, str, str]]:
         """Produce bounded, line-accurate source windows with enclosing symbols."""
         from attocode_intel._internal.integrations.context.codebase_ast import parse_file
 
         try:
             with open(abs_path, encoding="utf-8", errors="replace") as source:
-                lines = source.read().splitlines()
+                content = source.read()
+                lines = content.splitlines()
         except OSError:
             return []
         if not lines:
             return []
 
-        symbol_spans: list[tuple[int, int, str, str]] = []
-        class_spans: list[tuple[int, int, str, str]] = []
+        symbol_spans, class_spans = [], []
         try:
-            ast = parse_file(abs_path)
-            symbol_spans.extend(
-                (f.start_line, f.end_line, "function", f.name) for f in ast.functions
-            )
-            for cls in ast.classes:
-                class_spans.append((cls.start_line, cls.end_line, "class", cls.name))
-                symbol_spans.extend(
-                    (m.start_line, m.end_line, "method", f"{cls.name}.{m.name}")
-                    for m in cls.methods
-                )
+            cached = body_spans.take(rel_path, content) if body_spans is not None else None
+            symbol_spans, class_spans = cached if cached is not None else _source_spans(parse_file(abs_path, content))
         except Exception:
             logger.debug("Source window AST parse failed for %s", rel_path, exc_info=True)
 
@@ -1284,7 +1308,7 @@ class SemanticSearchManager:
             emit(first + 1, cursor, chunk_type, name)
         return chunks
 
-    def _sync_body_index(self, context_manager: Any = None) -> None:
+    def _sync_body_index(self, context_manager: Any = None, body_spans=None) -> None:
         """Refresh changed/deleted discovered files, including branch changes."""
         if self._closed:
             return
@@ -1345,7 +1369,7 @@ class SemanticSearchManager:
                     if self._closed:
                         return
                     abs_path, mtime, size = current[path]
-                    for chunk_type, name, start, end, body, terms in self._body_chunks(path, abs_path):
+                    for chunk_type, name, start, end, body, terms in self._body_chunks(path, abs_path, body_spans):
                         if self._closed:
                             return
                         conn.execute(
@@ -1418,8 +1442,9 @@ class SemanticSearchManager:
             ctx = CodebaseContextManager(root_dir=self.root_dir, cancelled=lambda: self._closed)
             if self._closed:
                 return
+            body_spans = _BodySpanCache()
             if not self._kw_index_built:
-                self._build_keyword_index(ctx)
+                self._build_keyword_index(ctx, body_spans)
                 if self._closed or generation != self._body_generation:
                     self._kw_index_built = False
                     return
@@ -1429,7 +1454,7 @@ class SemanticSearchManager:
             if self._closed:
                 return
             if self._body_index_available and not self._body_index_built:
-                self._sync_body_index(ctx)
+                self._sync_body_index(ctx, body_spans)
         except InterruptedError:
             return
         except Exception:
@@ -2137,7 +2162,7 @@ class SemanticSearchManager:
     # BM25 keyword index builder (incremental with cache)
     # ------------------------------------------------------------------
 
-    def _build_keyword_index(self, context_manager: Any = None) -> None:
+    def _build_keyword_index(self, context_manager: Any = None, body_spans=None) -> None:
         """Build BM25 inverted index from AST-extracted data.
 
         Uses disk cache to avoid re-parsing unchanged files.
@@ -2201,7 +2226,13 @@ class SemanticSearchManager:
             is_config, is_test = file_meta.get(rel, (False, False))
 
             try:
-                ast = parse_file(abs_path)
+                if body_spans is None:
+                    ast = parse_file(abs_path)
+                else:
+                    with open(abs_path, encoding="utf-8", errors="replace") as source:
+                        content = source.read()
+                    ast = parse_file(abs_path, content)
+                    body_spans.put(rel, content, ast)
             except Exception:
                 continue
 

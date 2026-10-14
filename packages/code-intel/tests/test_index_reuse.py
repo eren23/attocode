@@ -182,3 +182,41 @@ def test_scan_reuses_filters_but_detects_immediate_changes(tmp_path):
     assert "helper.py" not in renamed and "renamed.py" in renamed
     (tmp_path / "renamed.py").unlink()
     assert "renamed.py" not in tracker.scan_manifest()
+
+
+def test_analysis_batches_are_atomic_bounded_and_preserve_definition_keys(tmp_path):
+    from attocode_intel._internal.integrations.context.cross_references import (
+        CrossRefIndex,
+        SymbolLocation,
+        SymbolRef,
+    )
+    store = IndexStore(db_path=str(tmp_path / 'batch.db'))
+    index = CrossRefIndex()
+    index.set_store(store)
+    paths = {f'{i}.py' for i in range(205)}
+    try:
+        store.save_files_batch([StoredFile(path=p,mtime=1,size=1,language='python',line_count=1,content_hash='x') for p in paths])
+        for path in paths:
+            index.add_definition(SymbolLocation('helper','helper','function',path,1,2))
+            index.add_reference(SymbolRef('helper','call',path,2,definition_key='selected-identity'))
+        statements = []
+        store._get_conn().set_trace_callback(statements.append)
+        index.persist_files(paths)
+        assert sum(s == 'COMMIT' for s in statements) == 3
+        assert len(store.load_symbols()) == len(store.load_references()) == 205
+        assert {r.definition_key for r in store.load_references()} == {'selected-identity'}
+        before_symbols, before_refs = store.load_symbols(), store.load_references()
+        with pytest.raises(sqlite3.IntegrityError):
+            store.save_analysis_batch([
+                ('0.py', [], []),
+                ('missing.py', [], [{'symbol_name':'invalid-foreign-key'}]),
+            ])
+        assert store.load_symbols() == before_symbols
+        assert store.load_references() == before_refs
+        # Definition-only callers retain refs, and reference-only callers retain definitions.
+        store.save_symbols('0.py', [])
+        assert len(store.load_references('0.py')) == 1
+        store.save_references('1.py', [])
+        assert len(store.load_symbols('1.py')) == 1
+    finally:
+        store.close()

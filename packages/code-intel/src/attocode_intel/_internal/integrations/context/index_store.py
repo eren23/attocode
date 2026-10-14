@@ -393,29 +393,40 @@ class IndexStore:
     # ------------------------------------------------------------------
 
     def save_symbols(self, file_path: str, symbols: list[dict[str, Any]]) -> None:
-        """Save symbol definitions for a file (replaces existing)."""
+        """Save symbol definitions without replacing the file's references."""
+        self.save_analysis_batch([(file_path, symbols, None)])
+
+    def save_analysis_batch(self, files) -> None:
+        """Atomically replace selected files' symbols/references; None preserves a table.
+
+        Hydration supplies at most 100 files per batch. A failed insertion rolls
+        back every replacement in the batch, including earlier files.
+        """
         conn = self._get_conn()
-        rows = [
-            (
-                file_path,
-                s["name"],
-                s["qualified_name"],
-                s["kind"],
-                s.get("line", 0),
-                s.get("end_line", 0),
-                s.get("source", "tree-sitter"),
-            )
-            for s in symbols
-        ]
-        with self._lock:
-            conn.execute("DELETE FROM symbols WHERE file_path = ?", (file_path,))
-            conn.executemany(
-                """INSERT INTO symbols
-                   (file_path, name, qualified_name, kind, line, end_line, source)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                rows,
-            )
-            conn.commit()
+        with self._lock, conn:
+            for file_path, symbols, refs in files:
+                if symbols is not None:
+                    conn.execute("DELETE FROM symbols WHERE file_path = ?", (file_path,))
+                    conn.executemany(
+                        """INSERT INTO symbols
+                           (file_path, name, qualified_name, kind, line, end_line, source)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        [(file_path, s["name"], s["qualified_name"], s["kind"],
+                          s.get("line", 0), s.get("end_line", 0), s.get("source", "tree-sitter"))
+                         for s in symbols],
+                    )
+                if refs is not None:
+                    conn.execute("DELETE FROM refs WHERE file_path = ?", (file_path,))
+                    conn.executemany(
+                        """INSERT INTO refs
+                           (file_path, symbol_name, ref_kind, line, col, source,
+                            syntax_name, caller_qualified_name, definition_key)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        [(file_path, r["symbol_name"], r.get("ref_kind", "call"),
+                          r.get("line", 0), r.get("column", 0), r.get("source", "tree-sitter"),
+                          r.get("syntax_name", ""), r.get("caller_qualified_name", ""),
+                          r.get("definition_key", "")) for r in refs],
+                    )
 
     def load_symbols(self, file_path: str | None = None) -> list[StoredSymbol]:
         """Load symbols, optionally filtered by file."""
@@ -445,32 +456,8 @@ class IndexStore:
     # ------------------------------------------------------------------
 
     def save_references(self, file_path: str, refs: list[dict[str, Any]]) -> None:
-        """Save references for a file (replaces existing)."""
-        conn = self._get_conn()
-        rows = [
-            (
-                file_path,
-                r["symbol_name"],
-                r.get("ref_kind", "call"),
-                r.get("line", 0),
-                r.get("column", 0),
-                r.get("source", "tree-sitter"),
-                r.get("syntax_name", ""),
-                r.get("caller_qualified_name", ""),
-                r.get("definition_key", ""),
-            )
-            for r in refs
-        ]
-        with self._lock:
-            conn.execute("DELETE FROM refs WHERE file_path = ?", (file_path,))
-            conn.executemany(
-                """INSERT INTO refs
-                   (file_path, symbol_name, ref_kind, line, col, source,
-                    syntax_name, caller_qualified_name, definition_key)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                rows,
-            )
-            conn.commit()
+        """Save references without replacing the file's definitions."""
+        self.save_analysis_batch([(file_path, None, refs)])
 
     def load_references(self, file_path: str | None = None) -> list[StoredReference]:
         """Load references, optionally filtered by file."""

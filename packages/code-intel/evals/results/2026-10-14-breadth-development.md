@@ -60,8 +60,9 @@ workspace isolation and resource cleanup are separate tests.
 One source copy and its blobs exist at a time; scratch is removed before the next
 pack. Shared caches, historical evaluations and frozen studies remain untouched.
 No model requests/downloads, Claude usage checks or new agent studies were made.
-No paid worker has yet been launched for this workstream. Final CI/cloud/release
-results will be recorded separately rather than inferred from local candidates.
+The first clean cloud worker completed with two cold-indexing failures, recorded
+[separately](2026-10-14-breadth-cloud-first.json). Release gates remain pending;
+local success does not imply success on a slower clean worker.
 
 Most new source packs lack independently labeled callers/importers/tests: those
 checks are limited, not assertions of relationship accuracy. Optional grammars

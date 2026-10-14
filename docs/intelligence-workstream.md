@@ -118,3 +118,31 @@ verified. The unchanged ranking gate is an additional separately recorded check.
 Stage D ranking run `20261014T210555-39a71a6c` passed in 55.5 seconds: the
 frozen 68-query/five-method gate remains unchanged. Total supervised final local
 checks, source matrix and ranking time: 559.8 seconds; all cleanup verified.
+
+### Clean Linux cold-start failures and follow-up
+
+PR #181 merged as `fbd5211f7f8b9c47d7bc37fc18471792a8e6fe41` after its
+required checks passed on the final head. The first clean cloud batch,
+`293a9ef68f1547fd`, tested that published source. Lint, 480 contracts (18 explicit
+skips), scale and lifecycle passed. Of 36 source packs, 34 completed; CockroachDB
+exceeded the 180-second pack limit and Pandas exceeded the 90-second cold search
+warmup wait. Eight questions are missing, not failed retrieval observations.
+The runner correctly stopped before ranking, so this is not a passing broad run.
+
+Retained check outcomes: 123 passed, 116 limited, 37 unsupported; no failed
+assertions were observed before the two pack interruptions. Optional grammars
+were absent on this clean worker. The report's check-level incomplete count does
+not count interrupted packs; their explicit statuses and missing questions govern
+completeness. See the [remote record](../packages/code-intel/evals/results/2026-10-14-breadth-cloud-first.json).
+
+The cloud worker and its scratch were deleted and an independent API query found
+zero active quality workers. Estimated compute cost: $0.0733; one of this
+workstream's six allowed batches used, $4 cumulative monthly reservations.
+Reports exported 1.30 MiB, with no corpora or indexes downloaded.
+
+The follow-up batches symbol/reference persistence in atomic groups of at most
+100 files and reuses a bounded set of content-hash-checked symbol spans between
+keyword and body indexing. It retains no ASTs or source text. Regression controls
+check rollback, selected-definition keys, identical source chunks, bounded-cache
+fallback and same-size/same-mtime edits. No ranking weights, labels or timeout
+limits changed. Final performance and remote revalidation remain required.
