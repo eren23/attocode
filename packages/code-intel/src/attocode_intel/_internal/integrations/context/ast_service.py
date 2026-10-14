@@ -1373,8 +1373,7 @@ class ASTService:
             return
 
         # Collect known symbol names for targeted scanning
-        with index._lock:
-            known_symbols = set(index._name_to_qnames)
+        known_symbols = index.known_symbol_names()
 
         if not known_symbols:
             return

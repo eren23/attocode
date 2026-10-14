@@ -108,6 +108,7 @@ class CrossRefIndex:
     # --- Inverted name indexes (populated by add_definition) ---
     # bare name -> set of qualified names
     _name_to_qnames: dict[str, set[str]] = field(default_factory=dict)
+    _known_names_snapshot: frozenset[str] | None = field(default=None, repr=False, compare=False)
     # lowercased bare name -> set of qualified names
     _lower_to_qnames: dict[str, set[str]] = field(default_factory=dict)
     # individual token -> set of qualified names
@@ -336,6 +337,18 @@ class CrossRefIndex:
         self.persist_file(file_path)
         return added
 
+    def known_symbol_names(self) -> frozenset[str]:
+        """Share one immutable name snapshot until definitions add/remove a name.
+
+        Bulk reference indexing must not copy every repository name per file.
+        Existing readers retain a consistent snapshot while edits invalidate the
+        next lookup under the same lock as the inverted name index.
+        """
+        with self._lock:
+            if self._known_names_snapshot is None:
+                self._known_names_snapshot = frozenset(self._name_to_qnames)
+            return self._known_names_snapshot
+
     def add_definition(self, loc: SymbolLocation) -> None:
         """Register a symbol definition."""
         with self._lock:
@@ -343,6 +356,8 @@ class CrossRefIndex:
             self.file_symbols.setdefault(loc.file_path, set()).add(loc.qualified_name)
             # Populate inverted indexes
             bare = loc.qualified_name.rsplit(".", 1)[-1]
+            if bare not in self._name_to_qnames:
+                self._known_names_snapshot = None
             self._name_to_qnames.setdefault(bare, set()).add(loc.qualified_name)
             self._lower_to_qnames.setdefault(bare.lower(), set()).add(loc.qualified_name)
             for token in _split_name_tokens(bare):
@@ -398,6 +413,7 @@ class CrossRefIndex:
                     s.discard(qname)
                     if not s:
                         del self._name_to_qnames[bare]
+                        self._known_names_snapshot = None
                 s = self._lower_to_qnames.get(bare.lower())
                 if s:
                     s.discard(qname)
