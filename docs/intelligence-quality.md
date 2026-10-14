@@ -87,8 +87,9 @@ or prove that every cause of the historical root-suite descriptor failure is fix
 
 ## DigitalOcean batches
 
-The optional controller uses DigitalOcean's API and SSH. It selects one `c-8`
-CPU worker in `fra1`, with at least 8 vCPUs and 16 GiB memory, and verifies the
+The optional controller uses DigitalOcean's API and SSH. It selects one
+`s-8vcpu-16gb-amd` shared CPU worker in `fra1`, with at least 8 vCPUs and
+16 GiB memory, and verifies the
 live provider quote before provisioning. The admission budget is $1 per batch
 and $10 per UTC month, before tax. A reservation is retained for the whole month;
 runtime estimates are not refunds or invoices. Keep one controller and preserve
@@ -104,9 +105,11 @@ Before a live batch, publish the reviewed code and configure:
 The DigitalOcean MCP OAuth connection is separate from these unattended API
 credentials. A successful MCP connection does not configure the controller or
 GitHub cleanup job. On 2026-10-14 the connected account returned no droplets,
-and its size listing did not include the planned `c-8`. Treat that configuration
-as unavailable until the live quote passes; no worker size or region is
-automatically substituted.
+and its size listing did not include the originally planned dedicated `c-8`.
+The user approved the available shared CPU size instead, quoted at $0.16667/hour
+before tax. Shared CPU contention can affect timing, so reports from this worker
+are not dedicated-CPU latency measurements. The live quote must still pass;
+no worker size or region is automatically substituted.
 
 ```sh
 .venv/bin/python -m eval.quality cloud quote

@@ -10,14 +10,14 @@ from eval.quality.cloud import TAG, batch, execute_batch, quote, reap, reconcile
 
 
 class FakeAPI:
-    def __init__(self, *, fail_create=False, fail_delete=False, rate=.25):
+    def __init__(self, *, fail_create=False, fail_delete=False, rate=.16667):
         self.nodes = []
         self.deleted = []
         self.fail_create, self.fail_delete, self.rate = fail_create, fail_delete, rate
 
     def list(self, resource, query=""):
         if resource == "sizes":
-            return [{"slug": "c-8", "available": True, "regions": ["fra1"], "vcpus": 8,
+            return [{"slug": "s-8vcpu-16gb-amd", "available": True, "regions": ["fra1"], "vcpus": 8,
                      "memory": 16384, "price_hourly": self.rate}]
         return self.nodes[:]
 
@@ -42,9 +42,22 @@ class FakeAPI:
 
 
 def test_quote_rejects_price_over_budget():
-    assert quote(FakeAPI())["estimated_70_minutes_usd"] == .2917
+    assert quote(FakeAPI())["estimated_70_minutes_usd"] == .1944
     with pytest.raises(ValueError, match="budget"):
         quote(FakeAPI(rate=2))
+
+
+@pytest.mark.parametrize("change", [
+    {"slug": "c-8"}, {"regions": ["nyc1"]}, {"available": False},
+    {"vcpus": 4}, {"memory": 8192},
+])
+def test_quote_rejects_unapproved_or_insufficient_capacity(change):
+    api = FakeAPI()
+    sizes = api.list("sizes")
+    sizes[0].update(change)
+    api.list = lambda *args: sizes
+    with pytest.raises(ValueError, match="capacity unavailable"):
+        quote(api)
 
 
 def test_monthly_admission_and_unresolved_cleanup_block():
