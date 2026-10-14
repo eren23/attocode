@@ -1,8 +1,17 @@
 """Real subprocess framing, request ordering and workspace-loop regression."""
 import sys
 
+import pytest
 from attocode_intel._internal.integrations.lsp.client import BUILTIN_SERVERS, LanguageServerConfig
 from attocode_intel.gateway import OperationGateway
+
+
+@pytest.fixture(autouse=True)
+def enable_protocol_fixture_precision(monkeypatch):
+    # These tests explicitly start their own protocol fixture, including when
+    # the outer offline runner disables automatic discovery for normal tests.
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "auto")
+
 
 SERVER = r'''
 import json, sys
@@ -62,9 +71,11 @@ while True:
 '''
 
 
-async def test_precise_references_across_calls_edits_and_shutdown(tmp_path, monkeypatch):
+@pytest.mark.parametrize('definition_response', [True, False])
+async def test_precise_references_across_calls_edits_and_shutdown(tmp_path, monkeypatch, definition_response):
     script = tmp_path / "server.py"
-    script.write_text(SERVER)
+    script.write_text(SERVER if definition_response else SERVER.replace(
+        "result = [location(root/'helper.py', 0)]", "result = None"))
     monkeypatch.setitem(BUILTIN_SERVERS, "python", LanguageServerConfig(
         command=sys.executable, args=[str(script)], extensions=[".py"], language_id="python"))
     monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "auto")

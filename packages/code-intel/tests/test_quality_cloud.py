@@ -176,3 +176,32 @@ def test_missing_reaper_blocks_before_provisioning(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="heartbeat"):
         batch(api, tmp_path / "managed")
     assert not api.nodes and not api.deleted
+
+
+def test_cloud_selection_validated_before_budget_or_provisioning(tmp_path):
+    from eval.quality.cloud import workflow_arguments
+    assert workflow_arguments(['express'], '1/1', 'workflows') == [
+        '--suite', 'workflows', '--pack', 'express', '--shard', '1/1']
+    api = FakeAPI()
+    with pytest.raises(ValueError, match='Unknown quality packs'):
+        batch(api, tmp_path / 'managed', packs=['not-a-pack'], execute=lambda *args: None)
+    assert not api.nodes and not (tmp_path / 'managed').exists()
+
+
+def test_cloud_resume_rejects_changed_inputs_before_reserving(tmp_path, monkeypatch):
+    from eval.quality import corpus
+    from eval.quality.cloud import validated_resume, workflow_arguments
+    identity = {k:'frozen' for k in ('source_sha256','harness_sha256','fixture_sha256','pack_sha256')}
+    monkeypatch.setattr(corpus, 'evidence_identity', lambda: identity)
+    path = tmp_path / 'resume.json'
+    data = {'schema_version':2,'identity':identity.copy(),'manifest_packs':['express'], 'repositories':[]}
+    path.write_text(json.dumps(data))
+    assert validated_resume(path) == data
+    assert workflow_arguments(['express'], None, 'workflows', resume=True)[-2:] == [
+        '--resume','/root/job/.attocode/quality/resume.json']
+    data['identity']['source_sha256'] = 'different'
+    path.write_text(json.dumps(data))
+    api = FakeAPI()
+    with pytest.raises(ValueError, match='different candidate'):
+        batch(api, tmp_path / 'managed', resume=path, execute=lambda *args: None)
+    assert not api.nodes and not (tmp_path / 'managed').exists()

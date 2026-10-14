@@ -21,20 +21,30 @@ GIB = 1024**3
 MARKER = "attocode-quality-v1"
 LIMITS = {"quick": 120, "local": 600, "broad": 3600}
 QUICK_TESTS = ["test_search_evidence.py", "test_focused_inspection.py", "test_language_capabilities.py",
-               "test_quality_runner.py", "test_quality_cloud.py", "test_quality_lifecycle.py"]
+               "test_quality_runner.py", "test_quality_cloud.py", "test_quality_lifecycle.py", "test_quality_evidence.py"]
 LOCAL_TESTS = QUICK_TESTS + ["test_product.py", "test_query_ranking.py", "test_ranking_intent.py",
                            "test_compact_inspection.py", "test_lean_profile.py", "test_daily_workflows.py",
                            "test_index_reuse.py", "test_edit_restart.py", "test_navigation_evidence.py",
                            "test_index_sequences.py", "test_mixed_workspace.py", "test_index_processes.py",
-                           "test_structural_evidence.py", "test_search_evidence_audit.py", "test_remote.py"]
+                           "test_structural_evidence.py", "test_search_evidence_audit.py", "test_remote.py",
+                           "test_module_ownership.py", "test_real_language_server.py", "test_precision_protocol.py",
+                           "test_source_exclusions.py", "test_operation_contracts.py"]
 LINT_PATHS = ["eval/quality", *["packages/code-intel/src/attocode_intel/" + p for p in (
     "search_evidence.py", "symbol_links.py", "output.py", "query_ranking.py", "gateway.py",
     "freshness.py", "_internal/integrations/context/codebase_context.py",
-    "_internal/integrations/context/semantic_search.py")],
+    "_internal/integrations/context/semantic_search.py",
+    "_internal/integrations/context/ts_parser.py", "_internal/integrations/context/codebase_ast.py",
+    "_internal/integrations/context/syntax_evidence.py",
+    "_internal/integrations/context/language_registry.py", "_internal/integrations/context/module_resolution.py",
+    "_internal/integrations/context/index_store.py", "_internal/integrations/context/cross_references.py",
+    "_internal/integrations/context/index_repair.py", "_internal/integrations/context/ast_service.py",
+    "precision.py", "_internal/integrations/utilities/ignore.py")],
     *["packages/code-intel/tests/" + p for p in QUICK_TESTS],
     "packages/code-intel/tests/test_search_evidence_audit.py",
     *["packages/code-intel/tests/" + p for p in (
-        "test_index_sequences.py", "test_mixed_workspace.py", "test_index_processes.py")]]
+        "test_index_sequences.py", "test_mixed_workspace.py", "test_index_processes.py",
+        "test_module_ownership.py", "test_real_language_server.py", "test_source_exclusions.py",
+        "test_operation_contracts.py")]]
 
 
 def write_json(path, value):
@@ -215,11 +225,13 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
     return row
 
 
-def commands(tier, directory):
+def commands(tier, directory, *, packs=(), shard=None, resume=None, suite="all"):
     tests = QUICK_TESTS if tier == "quick" else LOCAL_TESTS
     base = [sys.executable, "-m", "pytest", "-c", "packages/code-intel/pyproject.toml",
             "--confcutdir=packages/code-intel/tests", "-q", "-o", "cache_dir=" + str(directory / "pytest-cache"),
-            "--basetemp=" + str(directory / "pytest-tmp")]
+            "--basetemp=" + str(directory / "pytest-tmp"), "-p", "eval.quality.coverage",
+            "--quality-operations=" + str(directory / "operations.json"),
+            "--junitxml=" + str(directory / "contracts.xml")]
     result = [("lint", [sys.executable, "-m", "ruff", "check", *LINT_PATHS]),
               ("contracts", base + ["packages/code-intel/tests/" + name for name in tests])]
     if tier != "quick":
@@ -227,8 +239,19 @@ def commands(tier, directory):
                               "--output", str(directory / "scale.json")]),
                    ("lifecycle", [sys.executable, "-m", "eval.quality.probes", "--output", str(directory / "lifecycle.json")])]
     if tier == "broad":
-        result += [("workflows", [sys.executable, "-m", "eval.quality.corpus", "--output", str(directory / "workflows.json")]),
+        workflows = [sys.executable, "-m", "eval.quality.corpus", "--output", str(directory / "workflows.json")]
+        for pack in packs:
+            workflows += ["--pack", pack]
+        if shard:
+            workflows += ["--shard", shard]
+        if resume:
+            workflows += ["--resume", str(Path(resume).resolve())]
+        result += [("workflows", workflows),
                    ("ranking", [sys.executable, "-m", "eval.quality.corpus", "--ranking", "--output", str(directory / "ranking.json")])]
+    if suite != "all":
+        result = [item for item in result if item[0] == suite]
+    if not result:
+        raise ValueError("No checks selected for quality tier")
     return result
 
 
@@ -266,7 +289,15 @@ def prune(root, *, apply=False):
     return {"dry_run": not apply, "paths": rows}
 
 
-def run(tier, root, *, max_bytes=5 * GIB, seconds=None):
+def run(tier, root, *, max_bytes=5 * GIB, seconds=None, packs=(), shard=None, resume=None, suite="all"):
+    if tier not in LIMITS or suite not in {"all", "workflows", "ranking"}:
+        raise ValueError("Unknown quality tier or suite")
+    if (packs or shard or resume or suite != "all") and tier != "broad":
+        raise ValueError("Workflow selection requires broad tier")
+    if suite == "ranking" and (packs or shard or resume):
+        raise ValueError("Ranking uses its unchanged complete frozen gate")
+    if seconds is not None and not 1 <= seconds <= LIMITS[tier]:
+        raise ValueError("Runtime must be positive and no greater than the tier limit")
     root = managed_root(root)
     with FileLock(str(root / ".lock"), timeout=0):
         if disk_bytes(root) >= max_bytes:
@@ -280,6 +311,9 @@ def run(tier, root, *, max_bytes=5 * GIB, seconds=None):
         env.update({"TMPDIR": str(work), "TMP": str(work), "TEMP": str(work), "QUALITY_WORK": str(work),
                     "PYTHONPATH": str(REPO / "packages/code-intel/src") + os.pathsep + str(REPO)})
         report = {"owner": MARKER, "run_id": run_id, "tier": tier, "status": "running", "checks": [],
+                  "selection": {"suite": suite, "packs": list(packs), "shard": shard,
+                                "resume": str(resume) if resume else None},
+                  "full_tier": suite == "all" and not packs and not shard,
                   "source_sha256": fingerprint([REPO / "packages/code-intel/src", REPO / "eval/quality"]),
                   "fixture_sha256": fingerprint([REPO / "packages/code-intel/tests", REPO / "eval/matrix/configs"]),
                   "harness_sha256": fingerprint([REPO / "eval/matrix", REPO / "eval/meta_harness",
@@ -290,7 +324,7 @@ def run(tier, root, *, max_bytes=5 * GIB, seconds=None):
         output = directory / "report.json"
         write_json(output, report)
         deadline = time.monotonic() + report["budget_seconds"]
-        sequence = commands(tier, directory)
+        sequence = commands(tier, directory, packs=packs, shard=shard, resume=resume, suite=suite)
         try:
             for name, command in sequence:
                 if time.monotonic() >= deadline:

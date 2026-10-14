@@ -714,8 +714,7 @@ class ASTService:
                             continue
                         batch.append(self._build_stored_file(rel, ast, mtime))
                     self._store.save_files_batch(batch)
-                    for stored in batch:
-                        self._index.persist_file(stored.path)
+                    self._index.persist_files({stored.path for stored in batch})
                 self._store.record_scan_time()
                 self._save_snapshot()
             except Exception:
@@ -1099,6 +1098,7 @@ class ASTService:
                         line=line,
                         source="lsp",
                         caller_qualified_name=qname,
+                        definition_key=query.get("definition_key", "") if query else "",
                     )
                 else:
                     ref = SymbolRef(

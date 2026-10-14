@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from .language_registry import LANG_EXTENSIONS
+
 # ---------------------------------------------------------------------------
 # Parameter and property detail types
 # ---------------------------------------------------------------------------
@@ -96,6 +98,7 @@ class ImportDef:
     alias: str = ""
     is_from: bool = False
     is_reexport: bool = False
+    include_system: bool = False
     line: int = 0
 
 
@@ -110,6 +113,7 @@ class FileAST:
     imports: list[ImportDef] = field(default_factory=list)
     top_level_vars: list[str] = field(default_factory=list)
     line_count: int = 0
+    namespaces: list[str] = field(default_factory=list)
     parsing_tier: str = ""  # "tree_sitter", "regex", "generic_ts", "ctags", "minimal"
 
     @property
@@ -159,67 +163,6 @@ class FileChangeResult:
 
 
 # Language detection
-LANG_EXTENSIONS: dict[str, str] = {
-    ".py": "python",
-    ".pyi": "python",
-    ".js": "javascript",
-    ".jsx": "javascript",
-    ".mjs": "javascript",
-    ".cjs": "javascript",
-    ".ts": "typescript",
-    ".tsx": "typescript",
-    ".mts": "typescript",
-    ".cts": "typescript",
-    ".go": "go",
-    ".rs": "rust",
-    ".java": "java",
-    ".rb": "ruby",
-    ".c": "c",
-    ".h": "c",
-    ".cpp": "cpp",
-    ".hpp": "cpp",
-    ".cc": "cpp",
-    ".cxx": "cpp",
-    ".hxx": "cpp",
-    ".hh": "cpp",
-    ".metal": "cpp",
-    ".cs": "csharp",
-    ".php": "php",
-    ".swift": "swift",
-    ".kt": "kotlin",
-    ".kts": "kotlin",
-    ".scala": "scala",
-    ".sc": "scala",
-    ".lua": "lua",
-    ".ex": "elixir",
-    ".exs": "elixir",
-    ".hs": "haskell",
-    ".lhs": "haskell",
-    ".sh": "bash",
-    ".bash": "bash",
-    ".zsh": "bash",
-    ".tf": "hcl",
-    ".hcl": "hcl",
-    ".tfvars": "hcl",
-    ".zig": "zig",
-    ".nim": "nim",
-    ".fs": "fsharp",
-    ".fsi": "fsharp",
-    ".fsx": "fsharp",
-    ".cr": "crystal",
-    ".m": "objc",
-    ".mm": "objc",
-    # Data/config languages
-    ".yaml": "yaml",
-    ".yml": "yaml",
-    ".toml": "toml",
-    ".json": "json",
-    ".jsonc": "json",
-    ".html": "html",
-    ".htm": "html",
-    ".css": "css",
-    ".scss": "css",
-}
 
 
 def detect_language(file_path: str) -> str:
@@ -1226,6 +1169,7 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
             names=imp.get("names", []),
             alias=imp.get("alias", ""),
             is_reexport=imp.get("is_reexport", False),
+            include_system=imp.get("include_system", False),
             line=imp.get("start_line", 0),
         ))
 
@@ -1237,6 +1181,7 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
         imports=imports,
         top_level_vars=result.get("top_level_vars", []),
         line_count=result.get("line_count", 0),
+        namespaces=result.get("namespaces", []),
     )
 
 

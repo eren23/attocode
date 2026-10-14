@@ -13,10 +13,14 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from attocode_intel._internal.integrations.utilities.ignore import DEFAULT_IGNORES
 from attocode_intel._internal.integrations.utilities.token_estimate import CHARS_PER_TOKEN
+
+from .language_registry import LANG_EXTENSIONS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -151,35 +155,9 @@ class DependencyGraph:
 
 
 # Language detection by extension
+
 EXTENSION_LANGUAGES: dict[str, str] = {
-    ".py": "python", ".pyi": "python",
-    ".ts": "typescript", ".tsx": "typescript",
-    ".js": "javascript", ".jsx": "javascript",
-    ".rs": "rust",
-    ".go": "go",
-    ".java": "java",
-    ".kt": "kotlin",
-    ".c": "c", ".h": "c",
-    ".cpp": "cpp", ".hpp": "cpp", ".cc": "cpp",
-    ".rb": "ruby",
-    ".php": "php",
-    ".swift": "swift",
-    ".cs": "csharp",
-    ".lua": "lua",
-    ".scala": "scala", ".sc": "scala",
-    ".ex": "elixir", ".exs": "elixir",
-    ".zig": "zig",
-    ".hs": "haskell", ".lhs": "haskell",
-    ".tf": "hcl", ".tfvars": "hcl", ".hcl": "hcl",
-    ".sh": "shell", ".bash": "shell", ".zsh": "shell",
-    ".yaml": "yaml", ".yml": "yaml",
-    ".json": "json",
-    ".toml": "toml",
-    ".md": "markdown",
-    ".html": "html", ".htm": "html",
-    ".css": "css", ".scss": "scss",
-    ".sql": "sql",
-    ".dockerfile": "docker",
+    **LANG_EXTENSIONS, ".md": "markdown", ".sql": "sql", ".dockerfile": "docker",
 }
 
 # Patterns indicating test files
@@ -196,35 +174,6 @@ CONFIG_PATTERNS = (
     ".eslintrc", ".prettierrc", "Makefile", "Dockerfile",
     ".github/", ".gitlab-ci",
 )
-
-# Default ignore directories
-DEFAULT_IGNORES = {
-    # VCS
-    ".git", ".svn", ".hg",
-    # Python
-    "__pycache__", ".venv", "venv", "env", ".env",
-    ".mypy_cache", ".pytest_cache", ".ruff_cache",
-    ".tox", ".nox", ".eggs", "*.egg-info",
-    "site-packages",
-    # JS/TS
-    "node_modules", "bower_components",
-    ".next", ".nuxt", ".svelte-kit", ".parcel-cache",
-    # Build output
-    "dist", "build", "out", "output", "target",
-    "_build", "cmake-build-debug", "cmake-build-release",
-    # Coverage / test artifacts
-    "coverage", ".coverage", "htmlcov", ".nyc_output",
-    # IDE / editor
-    ".idea", ".vscode", ".vs",
-    # OS
-    ".DS_Store", "Thumbs.db",
-    # Containers / infra
-    ".terraform", ".vagrant",
-    # Misc generated
-    ".cache", ".tmp", "tmp",
-    "vendor",  # Go/PHP/Ruby vendor dirs
-    ".gradle", ".maven",
-}
 
 # File extensions to skip (non-source, binary, generated)
 SKIP_EXTENSIONS = {
@@ -345,6 +294,7 @@ def _detect_source_prefixes(root_dir: str) -> list[str]:
 def _build_file_index(
     files: list[FileInfo],
     root_dir: str,
+    ast_cache: dict | None = None,
 ) -> dict[str, str]:
     """Build a file index mapping normalized paths to relative paths.
 
@@ -375,6 +325,11 @@ def _build_file_index(
         _add_root_keys(file_index, source_prefixes)
 
     file_index.configure_javascript(root_dir)
+    file_index.configure_go(root_dir)
+    file_index.configure_rust(root_dir)
+    file_index.configure_namespaces(ast_cache or {})
+    file_index.configure_native_includes(root_dir)
+    file_index.configure_swift(root_dir)
     return file_index
 
 
@@ -396,6 +351,7 @@ def _python_import_roots(paths) -> set[str]:
 def _add_root_keys(file_index: dict[str, str], roots: set[str]) -> None:
     """Add a key without the root prefix for each file below an import root."""
     extra: dict[str, str] = {}
+    ambiguous: set[str] = set()
     for normalized, rel_path in file_index.items():
         parts = normalized.split("/")
         # Shallow roots first, so a deeper root wins, as in sorted prefix order.
@@ -404,8 +360,10 @@ def _add_root_keys(file_index: dict[str, str], roots: set[str]) -> None:
             stripped = normalized[len(prefix):]
             # Don't override direct matches
             if prefix in roots and stripped not in file_index:
+                if stripped in extra and extra[stripped] != rel_path:
+                    ambiguous.add(stripped)
                 extra[stripped] = rel_path
-    file_index.update(extra)
+    file_index.update({key: value for key, value in extra.items() if key not in ambiguous})
 
 
 def python_module_index(paths) -> dict[str, str]:
@@ -488,6 +446,19 @@ def _resolve_rust_import(module: str, source_file: str, file_index: dict[str, st
     """
     if not module or module.startswith(("std::", "core::", "alloc::", "extern ")):
         return None
+    if hasattr(file_index, "rust_dependency_entry") and "::" in module:
+        alias, rest = module.split("::", 1)
+        entry = file_index.rust_dependency_entry(alias, source_file)
+        if entry:
+            base = Path(entry).parent
+            parts = rest.split("::")
+            for length in range(len(parts), 0, -1):
+                candidate = str(base.joinpath(*parts[:length]))
+                for suffix in (".rs", "/mod.rs"):
+                    key = os.path.normpath(candidate + suffix).replace(os.sep, "/")
+                    if key in file_index:
+                        return file_index[key]
+            return entry
     source = Path(source_file)
     roots = [parent for parent in (source.parent, *source.parents)
              if any(str(parent / entry) in file_index for entry in ("lib.rs", "main.rs"))]
@@ -531,42 +502,24 @@ def _resolve_rust_import(module: str, source_file: str, file_index: dict[str, st
 
 
 def _resolve_go_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
-    """Resolve a Go import path to a relative file path.
+    """Compatibility single-target view; package imports can have several files."""
+    candidates = file_index.go_candidates(module, source_file) if hasattr(file_index, "go_candidates") else []
+    return candidates[0] if len(candidates) == 1 else None
 
-    Handles:
-    - ``import "./internal/parser"`` → relative local import
-    - Internal packages sharing module path prefix → local resolution
-    - Skips stdlib (no dots in path) and external packages
-    """
-    if not module:
-        return None
 
-    # Relative imports (rare but valid in Go)
-    if module.startswith("./") or module.startswith("../"):
-        base = Path(source_file).parent
-        resolved = os.path.normpath(str(base / module)).replace(os.sep, "/")
-        # Go packages are directories — look for any .go file in that dir
-        for suffix in (".go", "/main.go", "/"+Path(resolved).name+".go"):
-            key = resolved + suffix
-            if key in file_index:
-                return file_index[key]
-        return None
-
-    # Skip stdlib (no dots in import path = stdlib in Go)
-    if "." not in module:
-        return None
-
-    # Skip external packages — only resolve if the module path maps to local files
-    # Try the last N segments as a directory path
-    parts = module.split("/")
-    for start in range(len(parts)):
-        candidate_dir = "/".join(parts[start:])
-        # Look for any file under this directory in the index
-        for key in file_index:
-            if key.startswith(candidate_dir + "/") and key.endswith(".go"):
-                return file_index[key]
-
-    return None
+def resolve_import_targets(language, module, source_file, file_index, *, include_system=False):
+    """All local files supported by an import, never an arbitrary first match."""
+    if language in {"c", "cpp"} and hasattr(file_index, "c_candidates"):
+        return file_index.c_candidates(module, source_file, system=include_system)
+    if language == "swift" and hasattr(file_index, "swift_candidates"):
+        return file_index.swift_candidates(module, source_file)
+    if language in {"java", "csharp", "kotlin", "scala", "php", "elixir"} and hasattr(file_index, "namespace_candidates"):
+        return file_index.namespace_candidates(language, module)
+    if language == "go" and hasattr(file_index, "go_candidates"):
+        return file_index.go_candidates(module, source_file)
+    resolver = IMPORT_RESOLVERS.get(language)
+    target = resolver(module, source_file, file_index) if resolver else None
+    return [target] if target else []
 
 
 def _resolve_java_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
@@ -580,9 +533,7 @@ def _resolve_java_import(module: str, source_file: str, file_index: dict[str, st
         return None
 
     # Skip stdlib and common external packages
-    if module.startswith(("java.", "javax.", "sun.", "com.sun.",
-                          "org.junit.", "org.apache.", "org.springframework.",
-                          "com.google.", "org.slf4j.", "org.mockito.")):
+    if module.startswith(("java.", "javax.", "sun.", "com.sun.")):
         return None
 
     # Skip wildcard imports for resolution (still tracked for other purposes)
@@ -688,10 +639,31 @@ def _resolve_c_import(module: str, source_file: str, file_index: dict[str, str])
     return None
 
 
+def _resolve_literal_import(language, module, source_file, file_index):
+    if not module:
+        return None
+    if language == "zig":
+        keys = [os.path.normpath(str(Path(source_file).parent / module))] if module.endswith(".zig") else []
+    elif language == "lua":
+        base = module.replace(".", "/")
+        keys = [base + ".lua", base + "/init.lua"]
+    else:  # Shell source paths depend on cwd; do not choose between local candidates.
+        keys = [os.path.normpath(module), os.path.normpath(str(Path(source_file).parent / module))]
+    targets = {file_index[key] for key in keys if key in file_index and not key.startswith("../")}
+    return next(iter(targets)) if len(targets) == 1 else None
+
+
+def _resolve_namespace_import(language, module, source_file, file_index):
+    candidates = file_index.namespace_candidates(language, module) if hasattr(file_index, "namespace_candidates") else []
+    return candidates[0] if len(candidates) == 1 else None
+
+
 IMPORT_RESOLVERS = {
     "python": _resolve_python_import, "javascript": _resolve_js_import,
     "typescript": _resolve_js_import, "rust": _resolve_rust_import,
     "go": _resolve_go_import, "java": _resolve_java_import,
+    **{language: partial(_resolve_namespace_import, language) for language in ("csharp", "php", "kotlin", "scala", "elixir", "swift")},
+    **{language: partial(_resolve_literal_import, language) for language in ("lua", "bash", "zig")},
     "ruby": _resolve_ruby_import, "c": _resolve_c_import, "cpp": _resolve_c_import,
 }
 
@@ -750,13 +722,21 @@ def build_dependency_graph(
 
     graph = DependencyGraph()
 
-    # Build index with prefix-stripped alternate keys for src/ layout
-    file_index = _build_file_index(files, root_dir)
-
-    _resolvers = IMPORT_RESOLVERS
+    # Namespace imports require declaration evidence, not a directory suffix.
+    # Reuse already parsed files and parse each missing namespace file once.
+    cached = dict(ast_cache or {})
+    for f in files:
+        if f.language in {"java", "csharp", "kotlin", "scala", "php", "go", "elixir"} and f.relative_path not in cached:
+            if check_cancelled is not None:
+                check_cancelled()
+            try:
+                cached[f.relative_path] = parse_file(f.path)
+            except (OSError, ValueError):
+                continue
+    file_index = _build_file_index(files, root_dir, cached)
 
     # Languages that have parseable imports
-    supported_langs = set(_resolvers.keys())
+    supported_langs = set(IMPORT_RESOLVERS)
 
     for f in files:
         if check_cancelled is not None:
@@ -765,20 +745,20 @@ def build_dependency_graph(
             continue
 
         try:
-            ast = ast_cache.get(f.relative_path) if ast_cache is not None else None
+            ast = cached.get(f.relative_path)
             if ast is None:
                 ast = parse_file(f.path)
         except Exception:
             continue
 
-        resolver = _resolvers[f.language]
         for imp in ast.imports:
             if check_cancelled is not None:
                 check_cancelled()
-            target = resolver(imp.module, f.relative_path, file_index)
-            if target is not None and target != f.relative_path:
-                graph.add_edge(f.relative_path, target)
-            elif target is None:
+            targets = resolve_import_targets(f.language, imp.module, f.relative_path, file_index, include_system=imp.include_system)
+            for target in targets:
+                if target != f.relative_path:
+                    graph.add_edge(f.relative_path, target)
+            if not targets:
                 graph.unresolved.setdefault(f.relative_path, []).append(imp.module)
 
     return graph
@@ -876,7 +856,7 @@ class CodebaseContextManager:
         resolved_root = root.resolve()
         from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
 
-        ignore = IgnoreManager(root)
+        ignore = IgnoreManager(root, default_dirs=self.ignore_patterns)
         files: list[FileInfo] = []
         _SAFETY_CEILING = 50_000  # noqa: N806  # OOM guard for massive repos
         self._ignored_checkout_dirs = []
@@ -887,7 +867,7 @@ class CodebaseContextManager:
             # Filter ignored directories (in-place to prevent os.walk descent)
             kept_dirs = []
             for directory in dirnames:
-                if directory in self.ignore_patterns or directory.startswith("."):
+                if directory.startswith("."):
                     continue
                 path = Path(dirpath) / directory
                 rel_path = path.relative_to(root).as_posix()
@@ -1461,11 +1441,11 @@ class CodebaseContextManager:
                 # Add new edges
                 self._dep_graph.unresolved.pop(rel_path, None)
                 for imp in new_ast.imports:
-                    resolver = IMPORT_RESOLVERS.get(new_ast.language)
-                    target = resolver(imp.module, rel_path, file_index) if resolver else None
-                    if target is not None and target != rel_path:
-                        self._dep_graph.add_edge(rel_path, target)
-                    elif target is None:
+                    targets = resolve_import_targets(new_ast.language, imp.module, rel_path, file_index, include_system=imp.include_system)
+                    for target in targets:
+                        if target != rel_path:
+                            self._dep_graph.add_edge(rel_path, target)
+                    if not targets:
                         self._dep_graph.unresolved.setdefault(rel_path, []).append(imp.module)
 
             # Update file mtime

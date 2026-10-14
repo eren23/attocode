@@ -16,7 +16,10 @@ The main entry point is ``ts_parse_file()`` which returns a ``FileAST``
 
 from __future__ import annotations
 
+import functools
 import logging
+import re
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +30,25 @@ logger = logging.getLogger(__name__)
 
 _TS_AVAILABLE = False
 _PARSERS: dict[str, object] = {}  # lang -> tree_sitter.Parser
+PARSE_TIMEOUT_MICROS = 100_000
+
+
+def bounded_parse(parser, source_bytes):
+    """Bound grammar work and reset timeout state before another document.
+
+    The supported tree-sitter range is 0.23–0.25; its timeout setter is deprecated
+    in 0.25 but works for byte input across that range. A failed grammar falls
+    through to the existing conservative adapters, never to an unbounded retry.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        parser.timeout_micros = PARSE_TIMEOUT_MICROS
+    try:
+        return parser.parse(source_bytes)
+    except ValueError:
+        return None
+    finally:
+        parser.reset()
 
 
 @dataclass(slots=True)
@@ -216,7 +238,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         grammar_module="tree_sitter_html",
         function_types=(),
         class_types=("element",),  # HTML elements
-        import_types=("script_element", "style_element"),  # External resources
+        import_types=(),  # External resources are extracted from attributes below.
     ),
     "css": _LangConfig(
         grammar_module="tree_sitter_css",
@@ -260,7 +282,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
     ),
     "ocaml": _LangConfig(
         grammar_module="tree_sitter_ocaml",
-        function_types=("value_definition", "let_binding"),
+        function_types=("let_binding",),
         class_types=("type_definition", "module_definition", "class_definition"),
         import_types=("open_statement",),
         language_func="language_ocaml",
@@ -268,7 +290,8 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
     "fsharp": _LangConfig(
         grammar_module="tree_sitter_fsharp",
         function_types=("function_or_value_defn", "member_defn"),
-        class_types=("type_definition", "module_defn", "namespace_defn"),
+        class_types=("union_type_defn", "record_type_defn", "type_abbrev_defn", "class_type_defn",
+                     "module_defn", "namespace_defn", "named_module", "namespace"),
         import_types=("open_declaration", "module_abbrev"),
     ),
     "julia": _LangConfig(
@@ -301,7 +324,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
             "protocol_declaration", "category_interface",
         ),
         import_types=("preproc_import", "preproc_include"),
-        method_types=("method_declaration",),
+        method_types=("method_declaration", "method_definition"),
     ),
 }
 
@@ -328,6 +351,17 @@ def _try_init_tree_sitter() -> bool:
     except ImportError:
         _TS_AVAILABLE = False
     return _TS_AVAILABLE
+
+
+def _cached_pack_language(language: str):
+    """Load a bundled or cached optional grammar without initiating a download."""
+    import tree_sitter_language_pack as pack
+
+    if callable(getattr(pack, "download", None)):
+        downloaded = getattr(pack, "downloaded_languages", None)
+        if not callable(downloaded) or language not in downloaded():
+            return None
+    return pack.get_language(language)
 
 
 def _get_parser(language: str):
@@ -359,12 +393,16 @@ def _get_parser(language: str):
     except (ImportError, AttributeError, Exception) as e:
         logger.debug("tree-sitter grammar for %s not available via module: %s", language, e)
 
-    # Fallback: try tree-sitter-language-pack
+    # Older language packs bundle their grammars. Newer packs download missing
+    # grammars from get_language(), including during capability discovery.
+    # Navigation must only load already-installed/cached code; acquisition is
+    # an explicit operator step, never a side effect of inspecting a project.
     try:
         import tree_sitter as ts
-        from tree_sitter_language_pack import get_language as _pack_get_language
-
-        lang = _pack_get_language(language)
+        lang = _cached_pack_language(language)
+        if lang is None:
+            _PARSERS[language] = None
+            return None
         parser = ts.Parser(lang)
         _PARSERS[language] = parser
         return parser
@@ -405,6 +443,12 @@ def _find_name(node, source_bytes: bytes) -> str:
     if name_node:
         return _node_text(name_node, source_bytes)
 
+    if node.type in {"union_type_defn", "record_type_defn", "type_abbrev_defn", "class_type_defn"}:
+        head = next((c for c in node.named_children if c.type == "type_name"), None)
+        name = head.child_by_field_name("type_name") if head is not None else None
+        if name is not None:
+            return _node_text(name, source_bytes)
+
     # C/C++: name is inside declarator → function_declarator → identifier
     declarator = node.child_by_field_name("declarator")
     if declarator:
@@ -418,6 +462,35 @@ def _find_name(node, source_bytes: bytes) -> str:
                 for child in sub.children:
                     if child.type == "identifier":
                         return _node_text(child, source_bytes)
+
+    # F# binds function names inside the declaration head, before arguments.
+    if node.type == "function_or_value_defn":
+        head = next((c for c in node.named_children if c.type == "function_declaration_left"), None)
+        if head is not None:
+            return _find_name(head, source_bytes)
+        # The grammar uses a value pattern when an incomplete edit lacks its
+        # final dedent. Only the first binding identifier is a declaration.
+        head = next((c for c in node.named_children if c.type == "value_declaration_left"), None)
+        while head is not None and head.named_children:
+            head = head.named_children[0]
+        if head is not None and head.type == "identifier":
+            return _node_text(head, source_bytes)
+
+    if node.type == "let_binding":
+        pattern = node.child_by_field_name("pattern")
+        if pattern is not None and pattern.type == "value_name":
+            return _node_text(pattern, source_bytes)
+
+    if node.type in ("function_definition", "short_function_definition"):
+        signature = next((c for c in node.named_children if c.type == "signature"), None)
+        if signature is not None:
+            call = signature
+            for _ in range(8):
+                if call.type not in {"signature", "where_expression", "typed_expression", "parenthesized_expression"} or not call.named_children:
+                    break
+                call = call.named_children[0]
+            if call.type == "call_expression" and call.named_children:
+                return _node_text(call.named_children[0], source_bytes)
 
     # Fallback: look for identifier child
     for child in node.children:
@@ -632,6 +705,15 @@ def _extract_import_module(node, source_bytes: bytes, language: str) -> str:
             return parts[-1].strip().strip("'\"`;")
         if text.startswith("import "):
             return text[7:].strip().strip("'\"`;")
+    elif language == "bash":
+        command = node.child_by_field_name("name")
+        if command is None or _node_text(command, source_bytes) not in {"source", "."}:
+            return ""
+        argument = node.child_by_field_name("argument")
+        if argument is None or argument.type not in {"word", "string", "raw_string"}:
+            return ""
+        text = _node_text(argument, source_bytes).strip("\"'")
+        return text if text and not any(c in text for c in "$`\\") else ""
     elif language == "go":
         # import "fmt" or import ( "fmt" "os" )
         # Tree-sitter Go grammar: import_declaration → import_spec → path
@@ -659,38 +741,39 @@ def _extract_import_module(node, source_bytes: bytes, language: str) -> str:
             return _node_text(arg_node, source_bytes).rstrip(";")
     elif language == "java":
         # import java.util.List;
-        return text.replace("import ", "").rstrip(";").strip()
+        return text.replace("import ", "", 1).removeprefix("static ").rstrip(";").strip()
     elif language == "ruby":
         # require 'foo' or require_relative 'foo'
-        if "require" in text:
-            parts = text.split("'")
-            if len(parts) >= 2:
-                return parts[1]
-            parts = text.split('"')
-            if len(parts) >= 2:
-                return parts[1]
+        method = node.child_by_field_name("method")
+        args = node.child_by_field_name("arguments")
+        if (method is not None and _node_text(method, source_bytes) in {"require", "require_relative"}
+                and node.child_by_field_name("receiver") is None and args is not None
+                and len(args.named_children) == 1):
+            literal = args.named_children[0]
+            if literal.type == "string" and all(c.type == "string_content" for c in literal.named_children):
+                return _node_text(literal, source_bytes)[1:-1]
     elif language in ("c", "cpp"):
         # #include <stdio.h> or #include "header.h"
-        for ch in ('<', '"'):
-            if ch in text:
-                return text.split(ch)[1].split('>' if ch == '<' else '"')[0]
+        path = node.child_by_field_name("path")
+        if path is not None and path.type in {"string_literal", "system_lib_string"}:
+            return _node_text(path, source_bytes)[1:-1]
     elif language == "csharp":
         # using System.Collections.Generic;
         text = text.replace("using ", "").rstrip(";").strip()
         # Remove "static" keyword for static usings
         if text.startswith("static "):
             text = text[7:]
-        return text
+        return text.split("=", 1)[-1].strip()
     elif language == "php":
         # use App\Models\User;
         text = text.replace("use ", "").rstrip(";").strip()
-        return text
+        return text.split(" as ", 1)[0].removeprefix("function ").removeprefix("const ").strip()
     elif language == "swift":
         # import Foundation
         return text.replace("import ", "").strip()
     elif language == "kotlin":
         # import kotlin.collections.mutableListOf
-        return text.replace("import ", "").strip()
+        return text.replace("import ", "", 1).split(" as ", 1)[0].strip()
     elif language == "scala":
         # import scala.collection.mutable._
         return text.replace("import ", "").strip()
@@ -951,6 +1034,8 @@ def _process_elixir_call(
                     "module": module,
                     "is_from": macro_name == "alias",
                     "start_line": node.start_point[0] + 1,
+                    "names": ["*"] if macro_name in {"alias", "import"} and len(args.named_children) == 1 else [],
+                    "alias": module.rsplit(".", 1)[-1] if macro_name == "alias" and len(args.named_children) == 1 else "",
                 })
 
     return ""
@@ -1120,6 +1205,128 @@ def _process_r_assignment(
 # ---------------------------------------------------------------------------
 
 
+def _literal_call_imports(root, source_bytes, language):
+    """Only literal require/@import calls create static module edges."""
+    if language not in {"lua", "zig"}:
+        return []
+    imports = []
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        stack.extend(reversed(node.named_children))
+        wanted = "function_call" if language == "lua" else "builtin_function"
+        if node.type != wanted:
+            continue
+        name = node.child_by_field_name("name") if language == "lua" else next(
+            (c for c in node.named_children if c.type == "builtin_identifier"), None)
+        if name is None or _node_text(name, source_bytes) != ("require" if language == "lua" else "@import"):
+            continue
+        args = next((c for c in node.named_children if c.type == "arguments"), None)
+        values = args.named_children if args is not None else []
+        if len(values) != 1 or values[0].type != "string":
+            continue
+        text = _node_text(values[0], source_bytes)
+        if len(text) < 2 or text[0] not in "\"'" or text[-1] != text[0]:
+            continue
+        module = text[1:-1]
+        if not module or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./-" for c in module):
+            continue
+        alias = ""
+        parent = node.parent
+        if language == "zig" and parent is not None and parent.type == "variable_declaration":
+            names = [c for c in parent.named_children if c.type == "identifier"]
+            if len(names) == 1:
+                alias = _node_text(names[0], source_bytes)
+        elif language == "lua" and parent is not None and parent.type == "expression_list":
+            assignment = parent.parent
+            variables = next((c for c in assignment.named_children if c.type == "variable_list"), None)
+            if variables is not None and len(variables.named_children) == len(parent.named_children) == 1:
+                name = variables.named_children[0]
+                if name.type == "identifier":
+                    alias = _node_text(name, source_bytes)
+        imports.append({"module": module, "alias": alias, "names": ["*"] if alias else [],
+                        "start_line": node.start_point[0] + 1})
+    return imports
+
+
+def _namespace_names(root, source_bytes, language):
+    kinds = {
+        "java": {"package_declaration"}, "go": {"package_clause"},
+        "csharp": {"namespace_declaration", "file_scoped_namespace_declaration"},
+        "kotlin": {"package_header"}, "scala": {"package_clause"},
+        "php": {"namespace_definition"},
+    }.get(language, set())
+    found = []
+    def visit(node, prefix=""):
+        if node.type in kinds:
+            name = node.child_by_field_name("name")
+            if name is None:
+                name = next((c for c in node.named_children if c.type in {
+                    "identifier", "package_identifier", "scoped_identifier", "qualified_identifier",
+                    "qualified_name", "namespace_name"}), None)
+            if name is not None:
+                text = _node_text(name, source_bytes)
+                qualified = prefix + "." + text if prefix else text
+                found.append(qualified)
+                body = node.child_by_field_name("body")
+                if body is not None:
+                    for child in body.named_children:
+                        visit(child, qualified)
+    for child in root.named_children:
+        visit(child)
+    return sorted(set(found))
+
+
+def _cpp_header_tree(source_bytes, file_path, language, tree):
+    """Recognize C++ headers from syntax, preserving source offsets around export macros.
+
+    This handles a single object-like annotation before a class name, not general
+    preprocessing. Only parser-identified declaration nodes are masked; comments
+    and strings cannot turn a C header into C++ or create declarations.
+    """
+    if language not in {"c", "cpp"} or (language == "c" and Path(file_path).suffix != ".h"):
+        return language, tree
+    parser = _get_parser("cpp")
+    if parser is None:
+        return language, tree
+    candidate = bounded_parse(parser, source_bytes) if language == "c" else tree
+    if candidate is None:
+        return language, tree
+    stack = [candidate.root_node]
+    cpp_syntax = language == "cpp"
+    masked = bytearray(source_bytes)
+    changed = False
+    while stack:
+        node = stack.pop()
+        if language == "c" and node.type == "ERROR" and _node_text(node, source_bytes).lstrip().startswith('@'):
+            # Objective-C @class forward declarations otherwise look like C++
+            # class definitions with an unexpected '@'. Do not invent those
+            # extra definitions, which crowd real implementations out of lookup.
+            objc = _get_parser("objc")
+            objc_tree = bounded_parse(objc, source_bytes) if objc else None
+            if objc_tree is not None and any(c.type in {
+                    'class_declaration', 'class_interface', 'class_implementation', 'protocol_declaration'
+                    } for c in objc_tree.root_node.named_children):
+                return "objc", objc_tree
+            return language, tree
+        if node.type in {"namespace_definition", "class_specifier", "template_declaration"}:
+            cpp_syntax = True
+        if node.type == "function_definition":
+            type_node = node.child_by_field_name("type")
+            declarator = node.child_by_field_name("declarator")
+            if (type_node is not None and type_node.type in {"class_specifier", "struct_specifier"}
+                    and type_node.child_by_field_name("body") is None
+                    and declarator is not None and declarator.type == "identifier"):
+                annotation = type_node.child_by_field_name("name")
+                if annotation is not None and re.fullmatch(r"[A-Z][A-Z0-9_]+", _node_text(annotation, source_bytes)):
+                    masked[annotation.start_byte:annotation.end_byte] = b" " * (annotation.end_byte - annotation.start_byte)
+                    changed = True
+        stack.extend(node.named_children)
+    if not cpp_syntax:
+        return language, tree
+    return "cpp", (bounded_parse(parser, bytes(masked)) or candidate) if changed else candidate
+
+
 def ts_parse_file(file_path: str, content: str | None = None, language: str = "") -> dict | None:
     """Parse a file using tree-sitter and return structured AST data.
 
@@ -1153,7 +1360,10 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
     source_bytes = content.encode("utf-8")
 
     try:
-        tree = parser.parse(source_bytes)
+        tree = bounded_parse(parser, source_bytes)
+        if tree is None:
+            return None
+        language, tree = _cpp_header_tree(source_bytes, file_path, language, tree)
     except Exception as e:
         logger.debug("tree-sitter parse error for %s: %s", file_path, e)
         return None
@@ -1163,7 +1373,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
 
     functions: list[dict] = []
     classes: list[dict] = []
-    imports: list[dict] = []
+    imports: list[dict] = _literal_call_imports(root, source_bytes, language)
     top_level_vars: list[str] = []
 
     def _process_node(node, parent_class: str = "", parent_function: str = "") -> None:
@@ -1437,17 +1647,35 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                         path = item.child_by_field_name("path")
                         if path:
                             imports.append({"module": _node_text(path, source_bytes).strip('"'),
+                                            "alias": _node_text(item.child_by_field_name("name"), source_bytes)
+                                            if item.child_by_field_name("name") else "",
+                                            "names": ["*"],
                                             "start_line": item.start_point[0] + 1})
                     else:
                         stack.extend(reversed(item.named_children))
                 return
             module = _extract_import_module(node, source_bytes, language)
+            if language == "ruby" and _node_text(node, source_bytes).startswith("require_relative") and not module.startswith("."):
+                module = "./" + module
             if module:
                 is_from = language == "python" and ntype == "import_from_statement"
+                bindings = {}
+                if language in {"ruby", "bash", "swift"}:
+                    bindings = {"names": ["*"]}
+                if language in {"kotlin", "php"}:
+                    raw = _node_text(node, source_bytes).strip().rstrip(";")
+                    # Grouped imports need individual binding extraction; leave
+                    # them unresolved rather than assigning one alias to all.
+                    if "{" not in raw:
+                        bindings = {"names": [module.replace("\\", ".").rsplit(".", 1)[-1]],
+                                    "alias": raw.split(" as ", 1)[1].strip() if " as " in raw else ""}
                 imports.append({
                     "module": module,
                     "is_from": is_from,
+                    "include_system": language in {"c", "cpp"} and any(
+                        child.type == "system_lib_string" for child in node.named_children),
                     "start_line": node.start_point[0] + 1,
+                    **bindings,
                 })
             return
 
@@ -1502,9 +1730,9 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
             return
 
         # R: detect function assignments (f <- function(...) { ... })
-        if language == "r" and ntype in ("left_assignment", "equals_assignment", "binary_operator"):
-            if _process_r_assignment(node, source_bytes, functions, parent_class):
-                return
+        if (language == "r" and ntype in ("left_assignment", "equals_assignment", "binary_operator")
+                and _process_r_assignment(node, source_bytes, functions, parent_class)):
+            return
 
         # R: filter import calls to only library() and require()
         if language == "r" and ntype == "call":
@@ -1554,6 +1782,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
         "top_level_vars": top_level_vars,
         "line_count": content.count("\n") + 1,
         "language": language,
+        "namespaces": _namespace_names(root, source_bytes, language),
     }
 
 
@@ -1626,12 +1855,12 @@ def _extract_html_symbols(
 ) -> None:
     """Extract meaningful symbols from HTML."""
     def _walk_html(node) -> None:
-        if node.type == "element":
+        if node.type in ("element", "script_element", "style_element"):
             tag_node = node.child_by_field_name("tag_name")
             if not tag_node:
                 # Try first child for self-closing
                 for child in node.children:
-                    if child.type == "start_tag":
+                    if child.type in ("start_tag", "self_closing_tag"):
                         for sub in child.children:
                             if sub.type == "tag_name":
                                 tag_node = sub
@@ -1652,14 +1881,25 @@ def _extract_html_symbols(
     _walk_html(root)
 
 
+def _html_attribute(attr):
+    """Support both fielded and positional HTML grammar attributes."""
+    name = attr.child_by_field_name("name")
+    value = attr.child_by_field_name("value")
+    if name is None:
+        name = next((c for c in attr.named_children if c.type == "attribute_name"), None)
+    if value is None:
+        value = next((c for c in attr.named_children
+                      if c.type in ("attribute_value", "quoted_attribute_value")), None)
+    return name, value
+
+
 def _extract_html_resource(node, source_bytes: bytes, imports: list[dict]) -> None:
     """Extract src/href from script/link tags."""
     for child in node.children:
         if child.type in ("start_tag", "self_closing_tag"):
             for attr in child.children:
                 if attr.type == "attribute":
-                    name_node = attr.child_by_field_name("name")
-                    val_node = attr.child_by_field_name("value")
+                    name_node, val_node = _html_attribute(attr)
                     if name_node and val_node:
                         attr_name = _node_text(name_node, source_bytes)
                         if attr_name in ("src", "href"):
@@ -1680,8 +1920,7 @@ def _extract_html_id(
         if child.type in ("start_tag", "self_closing_tag"):
             for attr in child.children:
                 if attr.type == "attribute":
-                    name_node = attr.child_by_field_name("name")
-                    val_node = attr.child_by_field_name("value")
+                    name_node, val_node = _html_attribute(attr)
                     if name_node and val_node and _node_text(name_node, source_bytes) == "id":
                         id_val = _node_text(val_node, source_bytes).strip('"\'')
                         if id_val:
@@ -1775,7 +2014,6 @@ _GENERIC_IMPORT_TYPES = frozenset({
     "require_expression", "require",  # Clojure, Crystal
     "include_statement", "include_directive",  # Nim, C
     "import_attribute", "attribute",  # Erlang
-    "import_header",  # Obj-C
     "using_statement",  # Julia
     "library_import",  # R
 })
@@ -1833,8 +2071,7 @@ class GenericTreeSitterExtractor:
         # Strategy 2: tree-sitter-language-pack fallback
         if language:
             try:
-                from tree_sitter_language_pack import get_language
-                lang_obj = get_language(language)
+                lang_obj = _cached_pack_language(language)
                 self._grammar_cache[cache_key] = lang_obj
                 logger.debug("Loaded %s from tree-sitter-language-pack", language)
                 return lang_obj
@@ -1870,7 +2107,9 @@ class GenericTreeSitterExtractor:
 
         source_bytes = content.encode("utf-8")
         try:
-            tree = parser.parse(source_bytes)
+            tree = bounded_parse(parser, source_bytes)
+            if tree is None:
+                return None
         except Exception as e:
             logger.debug("Generic parse error for %s: %s", file_path, e)
             return None
@@ -2085,6 +2324,32 @@ def ts_parse_file_generic(
 # ---------------------------------------------------------------------------
 
 
+def _ctags_command():
+    """Probe a compatible executable once per binary identity, not once per file."""
+    import shutil
+    command = shutil.which('ctags')
+    if not command:
+        return None
+    try:
+        stat = Path(command).stat()
+        identity = (command, stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return None
+    return command if _ctags_supports_json(identity) else None
+
+
+@functools.lru_cache(maxsize=8)
+def _ctags_supports_json(identity):
+    import subprocess
+    try:
+        result = subprocess.run([identity[0], '--list-features'], capture_output=True,
+                                text=True, timeout=1)
+        return result.returncode == 0 and any(
+            line.split() and line.split()[0].lower() == 'json' for line in result.stdout.splitlines())
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def ctags_parse_file(file_path: str, content: str | None = None) -> dict | None:
     """Parse a file using universal-ctags as a subprocess fallback.
 
@@ -2094,6 +2359,10 @@ def ctags_parse_file(file_path: str, content: str | None = None) -> dict | None:
     import json as json_mod
     import subprocess
 
+    command = _ctags_command()
+    if command is None:
+        return None
+    temp_file = None
     # Write content to a temp file if provided (ctags needs a file on disk)
     target_path = file_path
     if content is not None:
@@ -2112,7 +2381,7 @@ def ctags_parse_file(file_path: str, content: str | None = None) -> dict | None:
     try:
         result = subprocess.run(
             [
-                "ctags", "--output-format=json", "--fields=+neKS",
+                command, "--output-format=json", "--fields=+neKS",
                 "--kinds-all=*", "-f", "-", target_path,
             ],
             capture_output=True, text=True, timeout=10,

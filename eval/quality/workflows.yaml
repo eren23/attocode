@@ -1,65 +1,1531 @@
-# Development workflow checks, not held-out relevance or agent-outcome evidence.
-version: 1
+# Frozen native-source labels, 2026-10-14, before evaluating this expanded query pack.
+version: 2
+judgment_scope: Development source-bound labels; non-exhaustive, not held-out or agent-outcome
+  evidence. Four questions per pack; acme.sh intentionally shares one source file.
 repositories:
-  - id: fastapi
-    repo: fastapi/fastapi
-    commit: 11614be9021aa4ac078d4d0693a8b5250a1010d8
-    language: python
-    file: fastapi/routing.py
-    symbol: serialize_response
-    anchor: 'async def serialize_response('
-    caller: fastapi/routing.py
-    importer: fastapi/utils.py
-    test: tests/test_custom_route_class.py
-  - id: express
-    repo: expressjs/express
-    commit: 6c4249feec8ab40631817c8e7001baf2ed022224
-    language: javascript
-    file: lib/response.js
-    symbol: json
-    anchor: 'res.json = function json(obj)'
-    caller: test/res.json.js
-    importer: lib/express.js
-    test: test/res.json.js
-  - id: frontend
-    repo: eren23/attocode
-    commit: 67b9afbb7e5bc8e5939db182edc9b2973dd32523
-    subdir: frontend
-    language: typescript
-    file: src/lib/cn.ts
-    symbol: cn
-    query: twMerge clsx
-    anchor: 'export function cn('
-    caller: src/components/layout/Sidebar.tsx
-    importer: src/components/layout/Sidebar.tsx
-    test: null
-  - id: gh-cli
-    repo: cli/cli
-    commit: 6e49747f49f31c9c0a68cfa344df7262a684e723
-    language: go
-    file: pkg/cmd/version/version.go
-    symbol: NewCmdVersion
-    anchor: 'func NewCmdVersion('
-    caller: pkg/cmd/root/root.go
-    importer: pkg/cmd/root/root.go
-    test: pkg/cmd/version/version_test.go
-  - id: ripgrep
-    repo: BurntSushi/ripgrep
-    commit: 4519153e5e461527f4bca45b042fff45c4ec6fb9
-    language: rust
-    file: crates/ignore/src/walk.rs
-    symbol: WalkBuilder
-    anchor: 'pub struct WalkBuilder'
-    caller: crates/core/flags/hiargs.rs
-    importer: crates/ignore/src/lib.rs
-    test: crates/ignore/src/walk.rs
-  - id: gson
-    repo: google/gson
-    commit: 8e01b54682612471a9ab40c73911dfbf6b5be036
-    language: java
-    file: gson/src/main/java/com/google/gson/Gson.java
-    symbol: longAdapter
-    anchor: 'private static TypeAdapter<Number> longAdapter('
-    caller: gson/src/main/java/com/google/gson/Gson.java
-    importer: null
-    test: null
+- id: fastapi
+  repo: fastapi/fastapi
+  commit: 11614be9021aa4ac078d4d0693a8b5250a1010d8
+  language: python
+  file: fastapi/routing.py
+  symbol: serialize_response
+  anchor: async def serialize_response(
+  caller: fastapi/routing.py
+  importer: fastapi/utils.py
+  test: tests/test_custom_route_class.py
+  source_sha256: 07c7a5bdf12fa7b0c8cdca6f72d532eebb12d0554060c7827af7b692f4fdb827
+  queries:
+  - id: fastapi:1
+    query: Serialize and validate the outgoing response
+    evidence:
+    - file: fastapi/routing.py
+      line: 273
+      quote: async def serialize_response(
+      source_sha256: 07c7a5bdf12fa7b0c8cdca6f72d532eebb12d0554060c7827af7b692f4fdb827
+  - id: fastapi:2
+    query: Resolve dependencies for an incoming request
+    evidence:
+    - file: fastapi/dependencies/utils.py
+      line: 595
+      quote: async def solve_dependencies(
+      source_sha256: 434b0b2ade506c141727f9e91082093cbcc68e6b1417a417d7f9875dc5e56e9f
+  - id: fastapi:3
+    query: Generate an OpenAPI schema for routes
+    evidence:
+    - file: fastapi/openapi/utils.py
+      line: 517
+      quote: def get_openapi(
+      source_sha256: 575ede6885766494c4403cf64db94307c9c89a675d515ada1194a8b2c3c03a67
+  - id: fastapi:4
+    query: Extract a bearer token from the authorization header
+    evidence:
+    - file: fastapi/security/oauth2.py
+      line: 433
+      quote: 'class OAuth2PasswordBearer(OAuth2):'
+      source_sha256: a2c6302589904a961bb055d67c8931bccdb5c1ee2eaa45f019b35426539d68e8
+  parser_requirement: bundled
+- id: express
+  repo: expressjs/express
+  commit: 6c4249feec8ab40631817c8e7001baf2ed022224
+  language: javascript
+  file: lib/response.js
+  symbol: json
+  anchor: res.json = function json(obj)
+  caller: test/res.json.js
+  importer: lib/express.js
+  test: test/res.json.js
+  source_sha256: 5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da
+  queries:
+  - id: express:1
+    query: Send a JSON response with the content type set
+    evidence:
+    - file: lib/response.js
+      line: 232
+      quote: res.json = function json(obj) {
+      source_sha256: 5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da
+  - id: express:2
+    query: Determine whether an incoming request accepts a content type
+    evidence:
+    - file: lib/request.js
+      line: 127
+      quote: req.accepts = function(){
+      source_sha256: d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d
+  - id: express:3
+    query: Register middleware on the application
+    evidence:
+    - file: lib/application.js
+      line: 190
+      quote: app.use = function use(fn) {
+      source_sha256: 505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab
+  - id: express:4
+    query: Compile the query string parser setting
+    evidence:
+    - file: lib/utils.js
+      line: 162
+      quote: exports.compileQueryParser = function compileQueryParser(val) {
+      source_sha256: 4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112
+  parser_requirement: bundled
+- id: frontend
+  repo: eren23/attocode
+  commit: 67b9afbb7e5bc8e5939db182edc9b2973dd32523
+  subdir: frontend
+  language: typescript
+  file: src/lib/cn.ts
+  symbol: cn
+  query: twMerge clsx
+  anchor: export function cn(
+  caller: src/components/layout/Sidebar.tsx
+  importer: src/components/layout/Sidebar.tsx
+  test: null
+  source_sha256: 4acbc7165a8d54738ff62b51414e772c08fe78434e524e6d8770180d3ba2925f
+  queries:
+  - id: frontend:1
+    query: Merge conditional CSS classes and Tailwind overrides
+    evidence:
+    - file: src/lib/cn.ts
+      line: 2
+      quote: import { twMerge } from "tailwind-merge";
+      source_sha256: 4acbc7165a8d54738ff62b51414e772c08fe78434e524e6d8770180d3ba2925f
+  - id: frontend:2
+    query: Prevent unauthenticated access to protected routes
+    evidence:
+    - file: src/components/auth/AuthGuard.tsx
+      line: 7
+      quote: 'export function AuthGuard({ children }: { children: ReactNode }) {'
+      source_sha256: 2097998bc34d0fd0b1adb0266aea71ab662a86355004f11d0249a61dd2e2c2a1
+  - id: frontend:3
+    query: Display a source file with line highlighting
+    evidence:
+    - file: src/components/code/FileViewer.tsx
+      line: 54
+      quote: interface FileViewerProps {
+      source_sha256: 0e8472ccf805a8587a337bf25e83a237871da343ea4aca56fb5579adf68f5690
+  - id: frontend:4
+    query: Show repository dependency relationships as a graph
+    evidence:
+    - file: src/components/graph/DependencyGraph.tsx
+      line: 5
+      quote: '  DependencyGraphNode,'
+      source_sha256: 56e5796df3907b258092cf940664ca75bc96a19af76840d93fcc5175ccae842e
+  parser_requirement: bundled
+- id: gh-cli
+  repo: cli/cli
+  commit: 6e49747f49f31c9c0a68cfa344df7262a684e723
+  language: go
+  file: pkg/cmd/version/version.go
+  symbol: NewCmdVersion
+  anchor: func NewCmdVersion(
+  caller: pkg/cmd/root/root.go
+  importer: pkg/cmd/root/root.go
+  test: pkg/cmd/version/version_test.go
+  source_sha256: a0dc239cfd0042976d48c3fcd19a781e4e76e78f68a42fec03df18cddc9bfacd
+  queries:
+  - id: gh-cli:1
+    query: Display the installed command line version
+    evidence:
+    - file: pkg/cmd/version/version.go
+      line: 12
+      quote: func NewCmdVersion(f *cmdutil.Factory, version, buildDate string) *cobra.Command
+        {
+      source_sha256: a0dc239cfd0042976d48c3fcd19a781e4e76e78f68a42fec03df18cddc9bfacd
+  - id: gh-cli:2
+    query: Construct the root command and attach subcommands
+    evidence:
+    - file: pkg/cmd/root/root.go
+      line: 59
+      quote: func NewCmdRoot(f *cmdutil.Factory, version, buildDate string) (*cobra.Command,
+        error) {
+      source_sha256: 32407c16e343e41eab506815dd13cdd89e4ed3acdc5dc59a092ee577bf129a9c
+  - id: gh-cli:3
+    query: Build an HTTP client for authenticated API requests
+    evidence:
+    - file: api/http_client.go
+      line: 30
+      quote: func NewHTTPClient(opts HTTPClientOptions) (*http.Client, error) {
+      source_sha256: 96c67f387ebb02634592654dbe94202b8db9d8126d0308c0877cd2b85474f098
+  - id: gh-cli:4
+    query: Log in to a GitHub account from the command line
+    evidence:
+    - file: pkg/cmd/auth/login/login.go
+      line: 45
+      quote: func NewCmdLogin(f *cmdutil.Factory, runF func(*LoginOptions) error)
+        *cobra.Command {
+      source_sha256: 562bfd23e0e4a5e85e45d99e8805363617f52fe0d7cad33c40389aac8f1939aa
+  parser_requirement: bundled
+- id: ripgrep
+  repo: BurntSushi/ripgrep
+  commit: 4519153e5e461527f4bca45b042fff45c4ec6fb9
+  language: rust
+  file: crates/ignore/src/walk.rs
+  symbol: WalkBuilder
+  anchor: pub struct WalkBuilder
+  caller: crates/core/flags/hiargs.rs
+  importer: crates/ignore/src/lib.rs
+  test: crates/ignore/src/walk.rs
+  source_sha256: 3173c55f99ac90119eb00b615fbd9f5532a27c7a969e7ba0a369aba7ba71f1f3
+  queries:
+  - id: ripgrep:1
+    query: Walk directories while respecting ignore rules
+    evidence:
+    - file: crates/ignore/src/walk.rs
+      line: 434
+      quote: /// WalkBuilder builds a recursive directory iterator.
+      source_sha256: 3173c55f99ac90119eb00b615fbd9f5532a27c7a969e7ba0a369aba7ba71f1f3
+  - id: ripgrep:2
+    query: Parse and match gitignore patterns
+    evidence:
+    - file: crates/ignore/src/gitignore.rs
+      line: 95
+      quote: '    /// use `GitignoreBuilder`.'
+      source_sha256: f089d28ba4b07fd9fdb627d49f6d98084d5de55aefbdfdeda71a96468f485097
+  - id: ripgrep:3
+    query: Search a file using a configured search worker
+    evidence:
+    - file: crates/core/search.rs
+      line: 41
+      quote: pub(crate) struct SearchWorkerBuilder {
+      source_sha256: 1ebd56cf3b1c83e522356760bbac869d6972105c454f95b579020e24a93ade7c
+  - id: ripgrep:4
+    query: Read default command line arguments from a configuration file
+    evidence:
+    - file: crates/core/flags/config.rs
+      line: 17
+      quote: '    let config_path = match std::env::var_os("RIPGREP_CONFIG_PATH")
+        {'
+      source_sha256: adb0b126590521b981db9d913091f6d564f0b142b2d024861e84538a225cf23e
+  parser_requirement: bundled
+- id: gson
+  repo: google/gson
+  commit: 8e01b54682612471a9ab40c73911dfbf6b5be036
+  language: java
+  file: gson/src/main/java/com/google/gson/Gson.java
+  symbol: longAdapter
+  anchor: private static TypeAdapter<Number> longAdapter(
+  caller: gson/src/main/java/com/google/gson/Gson.java
+  importer: null
+  test: null
+  source_sha256: 16dfef6c154e162e72bb2c95ea718bd6a4002512ce9014b1234f2fba143a5a1a
+  queries:
+  - id: gson:1
+    query: Select the JSON adapter for long integer values
+    evidence:
+    - file: gson/src/main/java/com/google/gson/Gson.java
+      line: 253
+      quote: '    TypeAdapter<Number> longAdapter = longAdapter(longSerializationPolicy);'
+      source_sha256: 16dfef6c154e162e72bb2c95ea718bd6a4002512ce9014b1234f2fba143a5a1a
+  - id: gson:2
+    query: Read the next token from a JSON stream
+    evidence:
+    - file: gson/src/main/java/com/google/gson/stream/JsonReader.java
+      line: 60
+      quote: ' * <p>If a value may be null, you should first check using {@link #peek()}.'
+      source_sha256: 4b373e5b50986971d8743a67caba3150a829b45c3b65323f57f546abbf5cd94a
+  - id: gson:3
+    query: Write a string value to a JSON stream
+    evidence:
+    - file: gson/src/main/java/com/google/gson/stream/JsonWriter.java
+      line: 412
+      quote: '  public JsonWriter value(String value) throws IOException {'
+      source_sha256: 9b247089eaa9934495a7e4898f1b950523d70602e23ccaa74b06c415a1f7943f
+  - id: gson:4
+    query: Convert a Java boolean through a built in JSON adapter
+    evidence:
+    - file: gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java
+      line: 106
+      quote: '        case BOOLEAN:'
+      source_sha256: 213ffab65bdb8aeacd088bdc25ae7cacb0ef2e109ef54af59c0cc9f0051a30e8
+  parser_requirement: bundled
+- id: redis
+  repo: redis/redis
+  commit: 20f163eb3dcc1311cfe6c0dda5a3beef08ab1a5d
+  language: c
+  file: src/server.c
+  symbol: initServer
+  anchor: void initServer(void)
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 4439a02c16f74d6ebb81816e76df3a58a87800fb44a40f2febd02bb67bc287a4
+  queries:
+  - id: redis:1
+    query: Initialize the database server event loop
+    evidence:
+    - file: src/server.c
+      line: 2867
+      quote: void initServer(void) {
+      source_sha256: 4439a02c16f74d6ebb81816e76df3a58a87800fb44a40f2febd02bb67bc287a4
+  - id: redis:2
+    query: Evict keys when the memory limit is reached
+    evidence:
+    - file: src/evict.c
+      line: 26
+      quote: ' * that are good candidate for eviction across performEvictions() calls.'
+      source_sha256: d314ea5b1c957b72a39ebae4673b00e0365af1fb8bd2cd056a6a8b5a6a459ceb
+  - id: redis:3
+    query: Expire keys whose time to live has elapsed
+    evidence:
+    - file: src/expire.c
+      line: 29
+      quote: /* Helper function for the activeExpireCycle() function.
+      source_sha256: 7f2c22e1c66b335b786a8d8d12b3cee1a8cd4f68940b792dac603f48eb12adb6
+  - id: redis:4
+    query: Read client commands from the input buffer
+    evidence:
+    - file: src/networking.c
+      line: 3095
+      quote: ' * This function is called if processInputBuffer() detects that the
+        next'
+      source_sha256: 9faec6310626aa67acdc8208905b35f85a9f023238398e87bd6e4cec23c47714
+  parser_requirement: bundled
+- id: spdlog
+  repo: gabime/spdlog
+  commit: 0f7562a0f9273cfc71fddc6ae52ebff7a490fa04
+  language: cpp
+  file: include/spdlog/logger.h
+  symbol: logger
+  anchor: class SPDLOG_API logger
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 472abbe80dcc3f54497a49021325585a06883d196d20604ba10d3ed4b3fde009
+  queries:
+  - id: spdlog:1
+    query: Dispatch a log message to configured sinks
+    evidence:
+    - file: include/spdlog/logger-inl.h
+      line: 128
+      quote: '        sink_it_(log_msg);'
+      source_sha256: 3383207e7ab09b9fc68f5ea2116bf21070d707165e94597378b63cf415ea361d
+  - id: spdlog:2
+    query: Format log messages using pattern flags
+    evidence:
+    - file: include/spdlog/pattern_formatter-inl.h
+      line: 7
+      quote: '#include <spdlog/pattern_formatter.h>'
+      source_sha256: 7ee9d22a946e9eb8d8e67d17c6661d9054e6914007c1bade9de4ef7d91add542
+  - id: spdlog:3
+    query: Rotate log files when they exceed the size limit
+    evidence:
+    - file: include/spdlog/sinks/rotating_file_sink-inl.h
+      line: 30
+      quote: '    bool rotate_on_open,'
+      source_sha256: 8dc1c0985be041ac2ec0f155b534b748cd44b3eb33e8836dc849f9314c21d13e
+  - id: spdlog:4
+    query: Queue log messages for asynchronous processing
+    evidence:
+    - file: include/spdlog/details/thread_pool-inl.h
+      line: 57
+      quote: void SPDLOG_INLINE thread_pool::post_log(async_logger_ptr &&worker_ptr,
+      source_sha256: b7042c70da4d1c0398ddc74fc12bb5eec746647c18857ace1c6f425b5cf9435e
+  parser_requirement: bundled
+- id: aspnetcore
+  repo: dotnet/aspnetcore
+  commit: 2b1cb0a7ae862ba622fd172a960ed937063c5f08
+  language: csharp
+  file: src/Http/Http.Abstractions/src/HttpContext.cs
+  symbol: HttpContext
+  anchor: public abstract class HttpContext
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 90881468902edd1541687085e1d308c9a384961660156efd4e193af62ce0d58e
+  queries:
+  - id: aspnetcore:1
+    query: Access the current HTTP request and response
+    evidence:
+    - file: src/Http/Http.Abstractions/src/HttpContext.cs
+      line: 27
+      quote: '    public abstract HttpRequest Request { get; }'
+      source_sha256: 90881468902edd1541687085e1d308c9a384961660156efd4e193af62ce0d58e
+  - id: aspnetcore:2
+    query: Read request query values
+    evidence:
+    - file: src/Http/Http.Abstractions/src/HttpRequest.cs
+      line: 75
+      quote: '    public abstract IQueryCollection Query { get; set; }'
+      source_sha256: b34eef3a22e5b353fa75af531b179226d402b88d39fbefa3f0d8d4372def62a3
+  - id: aspnetcore:3
+    query: Set response headers and status
+    evidence:
+    - file: src/Http/Http.Abstractions/src/HttpResponse.cs
+      line: 42
+      quote: '    public abstract int StatusCode { get; set; }'
+      source_sha256: ab90db2d8cc50f168d71432ad53a29a4a1a54cdac4b8e5073db4ed63469b0178
+  - id: aspnetcore:4
+    query: Implement a default request context
+    evidence:
+    - file: src/Http/Http/src/DefaultHttpContext.cs
+      line: 21
+      quote: 'public sealed class DefaultHttpContext : HttpContext'
+      source_sha256: 47c5b075d224daf3dd991d0bdde50597e170483a5c76d48550a760962b93d5a2
+  include:
+  - src/Http
+  parser_requirement: bundled
+- id: framework
+  repo: laravel/framework
+  commit: 0ac6e5592da1a172d9685591c5f82fb1fb8995fb
+  language: php
+  file: src/Illuminate/Routing/Router.php
+  symbol: dispatch
+  anchor: public function dispatch(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 778dcd6d4e189b433198ea1cda502fb2399bc7d2621ca1f741f99e4c79fdfa14
+  queries:
+  - id: framework:1
+    query: Dispatch a request to the matching route
+    evidence:
+    - file: src/Illuminate/Routing/Router.php
+      line: 753
+      quote: '        return $this->dispatchToRoute($request);'
+      source_sha256: 778dcd6d4e189b433198ea1cda502fb2399bc7d2621ca1f741f99e4c79fdfa14
+  - id: framework:2
+    query: Resolve a dependency from the service container
+    evidence:
+    - file: src/Illuminate/Container/Container.php
+      line: 901
+      quote: '    protected function resolve($abstract, $parameters = [], $raiseEvents
+        = true)'
+      source_sha256: d28f83f1219b4fada990ceaed856fdf3290f0026a3c420341138d7e8842b5011
+  - id: framework:3
+    query: Start a database transaction
+    evidence:
+    - file: src/Illuminate/Database/Concerns/ManagesTransactions.php
+      line: 124
+      quote: '    public function beginTransaction()'
+      source_sha256: bb71e1cbe34f3f88a65e7ad192ade967a0f5b8c360e480197ed054ba8f11419c
+  - id: framework:4
+    query: Read a configuration option using dot notation
+    evidence:
+    - file: src/Illuminate/Config/Repository.php
+      line: 51
+      quote: '    public function get($key, $default = null)'
+      source_sha256: 724814f955454e3fd0b6ca31203dd02c8d28d62afcbbbcbed108cc74bae6ea10
+  parser_requirement: bundled
+- id: SwiftFormat
+  repo: nicklockwood/SwiftFormat
+  commit: c8e50ff2cfc2eab46246c072a9ae25ab656c6ec3
+  language: swift
+  file: Sources/FormatRule.swift
+  symbol: FormatRule
+  anchor: public final class FormatRule
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 8baa8b07ffb85c8390871522432e00491296a0d446676e6e2f83b1a091aff8f1
+  queries:
+  - id: SwiftFormat:1
+    query: Apply a formatting rule to the token stream
+    evidence:
+    - file: Sources/FormatRule.swift
+      line: 81
+      quote: '    public func apply(with formatter: Formatter) {'
+      source_sha256: 8baa8b07ffb85c8390871522432e00491296a0d446676e6e2f83b1a091aff8f1
+  - id: SwiftFormat:2
+    query: Tokenize Swift source code
+    evidence:
+    - file: Sources/Tokenizer.swift
+      line: 1305
+      quote: 'public func tokenize(_ source: String) -> [Token] {'
+      source_sha256: b884d2d5f7f0b1241e5d8148a17f33c13fdc25ff416c7a9cccf1f61355a8254e
+  - id: SwiftFormat:3
+    query: Split a command line string into arguments while respecting quoted text
+    evidence:
+    - file: Sources/Arguments.swift
+      line: 209
+      quote: 'func parseArguments(_ argumentString: String, ignoreComments: Bool =
+        true) -> [String] {'
+      source_sha256: 0f9c09f1276853eef6464ede1ca42c9fbd6509dd1d40a47d72c4f1c14da14f0a
+  - id: SwiftFormat:4
+    query: Remove trailing whitespace from source lines
+    evidence:
+    - file: Sources/Rules/TrailingSpace.swift
+      line: 14
+      quote: '    static let trailingSpace = FormatRule('
+      source_sha256: 8fe949e22536f3cc0625fd997765be75fa77b05f5400e1463159f3e49f1515f0
+  parser_requirement: bundled
+- id: okhttp
+  repo: square/okhttp
+  commit: e2061bdd146ae3ce5f097b78fa7a731dc7638510
+  language: kotlin
+  file: okhttp/src/commonJvmAndroid/kotlin/okhttp3/OkHttpClient.kt
+  symbol: OkHttpClient
+  anchor: open class OkHttpClient
+  caller: null
+  importer: null
+  test: null
+  source_sha256: b3da56258229e38a67e0c44260b6baabab4128cb2b9ed97306ff5eb48b56e7fb
+  queries:
+  - id: okhttp:1
+    query: Follow HTTP redirects
+    evidence:
+    - file: okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RetryAndFollowUpInterceptor.kt
+      line: 229
+      quote: '        return buildRedirectRequest(userResponse, method, chain)'
+      source_sha256: a0b503646f95a9634f0508e671ac4d44ff78acd07082e1db05043cf7b2ee583e
+  - id: okhttp:2
+    query: Remove idle connections from the pool
+    evidence:
+    - file: okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnectionPool.kt
+      line: 48
+      quote: '      override fun runOnce(): Long = closeConnections(System.nanoTime())'
+      source_sha256: bc55a48f9688c2ce65d7aa9ba4f64d70874d7d59b564654ae0e9844fe5c65cda
+  - id: okhttp:3
+    query: Parse cookies received in response headers
+    evidence:
+    - file: okhttp/src/commonJvmAndroid/kotlin/okhttp3/Cookie.kt
+      line: 445
+      quote: '    fun parse('
+      source_sha256: 1d1f8768feda6779220c5f61e1346c02173c8a99c8362ddfc0e9935024bc4f73
+  - id: okhttp:4
+    query: Limit simultaneous outbound HTTP requests
+    evidence:
+    - file: okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt
+      line: 60
+      quote: '   * If more than [maxRequestsPerHost] requests are in flight when this
+        is invoked, those requests'
+      source_sha256: da36494a287ed4a975aa7dfbdb91161cd58dcb3abc661e0860b0dfad3f40becc
+  parser_requirement: bundled
+- id: cats-effect
+  repo: typelevel/cats-effect
+  commit: 10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7
+  language: scala
+  file: core/shared/src/main/scala/cats/effect/unsafe/IORuntimeConfig.scala
+  symbol: IORuntimeConfig
+  anchor: final case class IORuntimeConfig
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 605108f664dfa92921ab4bb83b9660eb35cdc2e0d3349e4253756f904358dde8
+  queries:
+  - id: cats-effect:1
+    query: Configure cancellation checks in the asynchronous runtime
+    evidence:
+    - file: core/shared/src/main/scala/cats/effect/unsafe/IORuntimeConfig.scala
+      line: 23
+      quote: '    val cancelationCheckThreshold: Int,'
+      source_sha256: 605108f664dfa92921ab4bb83b9660eb35cdc2e0d3349e4253756f904358dde8
+  - id: cats-effect:2
+    query: Describe asynchronous computations as IO values
+    evidence:
+    - file: core/shared/src/main/scala/cats/effect/IO.scala
+      line: 117
+      quote: sealed abstract class IO[+A] private () extends IOPlatform[A] {
+      source_sha256: 144fd9851777e594c389aca4cd8fd2455459dd221742906433a6bfa49e89c827
+  - id: cats-effect:3
+    query: Build the runtime that executes IO programs
+    evidence:
+    - file: core/shared/src/main/scala/cats/effect/unsafe/IORuntime.scala
+      line: 40
+      quote: final class IORuntime private[unsafe] (
+      source_sha256: 47c1320a286b9139f1f29485221c23751fbbb47ed68a7b64888e409c9cf79ae8
+  - id: cats-effect:4
+    query: Acquire and release a resource safely
+    evidence:
+    - file: kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala
+      line: 67
+      quote: ' * Also note that a _new_ resource is allocated every time `use` is
+        called, so the following'
+      source_sha256: be4ebfb1dc6e6753cb3512cfe910368a706811232793611474988c1a26c581a6
+  parser_requirement: bundled
+- id: luarocks
+  repo: luarocks/luarocks
+  commit: 47301d83aba58925e1b9594023621ebb27070cdb
+  language: lua
+  file: src/luarocks/cmd.lua
+  symbol: run_command
+  anchor: function cmd.run_command(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 896fc52877ec46f02f26adf87fd4f70a136128102d297e6f008d64812c6eb022
+  queries:
+  - id: luarocks:1
+    query: Dispatch a package manager command
+    evidence:
+    - file: src/luarocks/cmd.lua
+      line: 553
+      quote: function cmd.run_command(description, commands, external_namespace, ...)
+      source_sha256: 896fc52877ec46f02f26adf87fd4f70a136128102d297e6f008d64812c6eb022
+  - id: luarocks:2
+    query: Load Lua modules from installed rocks
+    evidence:
+    - file: src/luarocks/loader.lua
+      line: 313
+      quote: function loader.luarocks_loader(module)
+      source_sha256: 6f94b262ef4bbe10d7fbf94c3b374d92f0ecab8dab389949146c54e8eeb753f2
+  - id: luarocks:3
+    query: Install a rock package
+    evidence:
+    - file: src/luarocks/cmd/install.lua
+      line: 222
+      quote: function install.command(args)
+      source_sha256: 37b939133662312d13ce91599f75e7787df6248f485853c95d62bf8c5bfb2f00
+  - id: luarocks:4
+    query: Resolve rock dependencies
+    evidence:
+    - file: src/luarocks/deps.lua
+      line: 289
+      quote: function deps.fulfill_dependencies(rockspec, depskey, deps_mode, verify,
+        deplock_dir)
+      source_sha256: 270ebfaba8a5e1179d812187dc60eb6e43e1dba7dd767db04502230843f3d83b
+  parser_requirement: bundled
+- id: phoenix
+  repo: phoenixframework/phoenix
+  commit: 850162d618cf4e31be82fb53ad6e259095fa6126
+  language: elixir
+  file: lib/phoenix/endpoint.ex
+  symbol: Phoenix.Endpoint
+  anchor: defmodule Phoenix.Endpoint do
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 5194a8a5efbb278fe6801761f5f1d3f95082bd59993206acce6be94c7ccca0c4
+  queries:
+  - id: phoenix:1
+    query: Broadcast events through the endpoint
+    evidence:
+    - file: lib/phoenix/endpoint.ex
+      line: 455
+      quote: '      def broadcast(topic, event, msg) do'
+      source_sha256: 5194a8a5efbb278fe6801761f5f1d3f95082bd59993206acce6be94c7ccca0c4
+  - id: phoenix:2
+    query: Define HTTP routes and pipelines
+    evidence:
+    - file: lib/phoenix/router.ex
+      line: 775
+      quote: '  defmacro pipeline(plug, do: block) do'
+      source_sha256: 4b48f046e8d68282bb9941453b4b168e248bc2589b63bdb937df4cbe0aa09db4
+  - id: phoenix:3
+    query: Join a channel and handle socket events
+    evidence:
+    - file: lib/phoenix/channel.ex
+      line: 12
+      quote: '  Every time you join a channel, you need to choose which particular
+        topic you'
+      source_sha256: 00c78fc053344e9cd54b12a98b21748cc8f9ed596ad4121d06ea7d4651e9bce2
+  - id: phoenix:4
+    query: Verify a signed token
+    evidence:
+    - file: lib/phoenix/token.ex
+      line: 220
+      quote: '  def verify(context, salt, token, opts \\ []) when is_binary(salt)
+        do'
+      source_sha256: 493936140f4f19b9a406de18db05630951987254d8436890d993831dbbad9f82
+  parser_requirement: bundled
+- id: postgrest
+  repo: PostgREST/postgrest
+  commit: 58368513abdc104e377c4f358f476f49bc1dd2ba
+  language: haskell
+  file: src/PostgREST/AppState.hs
+  symbol: getConfig
+  anchor: 'getConfig ::'
+  caller: null
+  importer: null
+  test: null
+  source_sha256: dd8cee4f7407eaa74625d98e6a766432ab2c5ee7f4728b0562ef05c4e43e3165
+  queries:
+  - id: postgrest:1
+    query: Read the current application configuration
+    evidence:
+    - file: src/PostgREST/AppState.hs
+      line: 304
+      quote: 'getConfig :: AppState -> IO AppConfig'
+      source_sha256: dd8cee4f7407eaa74625d98e6a766432ab2c5ee7f4728b0562ef05c4e43e3165
+  - id: postgrest:2
+    query: Verify the bearer authentication token
+    evidence:
+    - file: src/PostgREST/Auth.hs
+      line: 44
+      quote: middleware appState app req respond = do
+      source_sha256: 1f20b7f540f476eb83df388c48258ebacc14d705233ea8cd5dd326176a739191
+  - id: postgrest:3
+    query: Parse URL query parameters into filters and ordering
+    evidence:
+    - file: src/PostgREST/ApiRequest/QueryParams.hs
+      line: 115
+      quote: 'parse :: Bool -> ByteString -> Either QPError QueryParams'
+      source_sha256: 36ab551c1ddb461e9f5c2a1076f033324e6859b90df0a22c40d3cddb7f53c8c1
+  - id: postgrest:4
+    query: Generate SQL for a read request
+    evidence:
+    - file: src/PostgREST/Query/QueryBuilder.hs
+      line: 47
+      quote: readPlanToQuery node@(Node ReadPlan{select,from=mainQi,fromAlias,where_=logicForest,order,
+        range_=readRange, relToParent, relJoinConds, relSelect, relSpread} forest)
+        =
+      source_sha256: 26145586bdb5956917c16d46dd6ce84c05d29938bc003e244c8ff50b45eaf44a
+  parser_requirement: optional
+- id: acme-sh
+  repo: acmesh-official/acme.sh
+  commit: d08b4de794c2ea0958551cde6cd906a15795a4f8
+  language: bash
+  file: acme.sh
+  symbol: renew
+  anchor: renew() {
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 0429c6d4481906aa04a329734557d0ece58dfc14430ac35ac59da3db4c0598bf
+  queries:
+  - id: acme-sh:1
+    query: Renew an existing TLS certificate
+    evidence:
+    - file: acme.sh
+      line: 5531
+      quote: renew() {
+      source_sha256: 0429c6d4481906aa04a329734557d0ece58dfc14430ac35ac59da3db4c0598bf
+  - id: acme-sh:2
+    query: Create a certificate signing request
+    evidence:
+    - file: acme.sh
+      line: 1247
+      quote: _createcsr() {
+      source_sha256: 0429c6d4481906aa04a329734557d0ece58dfc14430ac35ac59da3db4c0598bf
+  - id: acme-sh:3
+    query: Install certificate and key files to their destination
+    evidence:
+    - file: acme.sh
+      line: 6027
+      quote: installcert() {
+      source_sha256: 0429c6d4481906aa04a329734557d0ece58dfc14430ac35ac59da3db4c0598bf
+  - id: acme-sh:4
+    query: Revoke an issued certificate
+    evidence:
+    - file: acme.sh
+      line: 6325
+      quote: revoke() {
+      source_sha256: 0429c6d4481906aa04a329734557d0ece58dfc14430ac35ac59da3db4c0598bf
+  parser_requirement: bundled
+- id: zls
+  repo: zigtools/zls
+  commit: 695a1d5c8a607f927b552784c2dc9f9c1d1f6130
+  language: zig
+  file: src/main.zig
+  symbol: createLogFile
+  anchor: fn createLogFile(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: f6141eb341cafca58573284d1492e00847e5a42d6a389d7e9d71de97d3af77f9
+  queries:
+  - id: zls:1
+    query: Create the language server log file
+    evidence:
+    - file: src/main.zig
+      line: 133
+      quote: fn createLogFile(
+      source_sha256: f6141eb341cafca58573284d1492e00847e5a42d6a389d7e9d71de97d3af77f9
+  - id: zls:2
+    query: Store and update open source documents
+    evidence:
+    - file: src/DocumentStore.zig
+      line: 840
+      quote: 'pub fn openLspSyncedDocument(self: *DocumentStore, uri: Uri, text: []const
+        u8) error{ Canceled, OutOfMemory }!void {'
+      source_sha256: 2d244df126f279b4159df260996f70698f7c5dd91e492d4f68e6a0c3fdaea315
+  - id: zls:3
+    query: Find completions at a source position
+    evidence:
+    - file: src/features/completions.zig
+      line: 1
+      quote: //! Implementation of [`textDocument/completion`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion)
+      source_sha256: 2accd4ddd5d7cd9f97657a25fb2b7fb8c609bc04e106a2a6f87db1e1518cc78c
+  - id: zls:4
+    query: Navigate to a symbol definition
+    evidence:
+    - file: src/features/goto.zig
+      line: 3
+      quote: //! - [`textDocument/definition`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition)
+      source_sha256: aad42e44e110f762dfbb9c14f93cf677b2eb636251dd6084b83fcb97e1961241
+  parser_requirement: bundled
+- id: cockroach
+  repo: cockroachdb/cockroach
+  commit: 53aadff3cedde4d810c72b69ddd96e6a735d93e7
+  language: go
+  file: pkg/server/server.go
+  symbol: NewServer
+  anchor: func NewServer(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: a7047e6e34cb7143a9fc2550ff2dd947007870f0861d0bfae42d65eba8e9bfa1
+  queries:
+  - id: cockroach:1
+    query: Construct a distributed database server
+    evidence:
+    - file: pkg/server/server.go
+      line: 255
+      quote: func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterface,
+        error) {
+      source_sha256: a7047e6e34cb7143a9fc2550ff2dd947007870f0861d0bfae42d65eba8e9bfa1
+  - id: cockroach:2
+    query: Find the command selected by command line arguments
+    evidence:
+    - file: pkg/cli/cli.go
+      line: 62
+      quote: "\tcmd, _, _ := cockroachCmd.Find(os.Args[1:])"
+      source_sha256: 97026538f40aa66943ed025228c1a9964d8220afca83a828ecfc6170d8563160
+  - id: cockroach:3
+    query: Execute SQL statements in a connection executor
+    evidence:
+    - file: pkg/sql/conn_executor_exec.go
+      line: 97
+      quote: // execStmtInOpenStateWithPausablePortal to be used instead of
+      source_sha256: df1b04374af10b174532f968473d4a983b65cffab3a06691faa23b8705609563
+  - id: cockroach:4
+    query: Retry a transaction after a serialization error
+    evidence:
+    - file: pkg/kv/txn.go
+      line: 88
+      quote: "\t// Set when the workload is from SQL execution."
+      source_sha256: cd29137c7df96a1219928218e49aa55b9de33d35ebef3ce7ee844c5765a56b54
+  include:
+  - pkg/server
+  - pkg/cli
+  - pkg/sql
+  - pkg/kv
+  parser_requirement: bundled
+- id: prisma
+  repo: prisma/prisma
+  commit: 33667c373c0ae84ad37c7aed2497b99452da589c
+  language: typescript
+  file: packages/client/src/runtime/getPrismaClient.ts
+  symbol: getPrismaClient
+  anchor: export function getPrismaClient(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 5f4606761c70ab3025b6a31ded377d5b9a0211e04f7db29f4f6162da569e92cc
+  queries:
+  - id: prisma:1
+    query: Construct a client for database queries
+    evidence:
+    - file: packages/client/src/runtime/getPrismaClient.ts
+      line: 291
+      quote: 'export function getPrismaClient(config: GetPrismaClientConfig) {'
+      source_sha256: 5f4606761c70ab3025b6a31ded377d5b9a0211e04f7db29f4f6162da569e92cc
+  - id: prisma:2
+    query: Batch database requests to reduce round trips
+    evidence:
+    - file: packages/client/src/runtime/DataLoader.ts
+      line: 16
+      quote: export class DataLoader<T = unknown> {
+      source_sha256: bc5fef34651f11c6e05d6f106f45a5c5cbfaa98e239e359e21f835051c9d8a20
+  - id: prisma:3
+    query: Handle database request errors
+    evidence:
+    - file: packages/client/src/runtime/RequestHandler.ts
+      line: 183
+      quote: '      this.handleRequestError(params)'
+      source_sha256: 10e739bae3b5f788fb5c90bf223986ba4dadb8082efaa893c853f16a3e1ad639
+  - id: prisma:4
+    query: Serialize a client query into the JSON protocol
+    evidence:
+    - file: packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.ts
+      line: 83
+      quote: export function serializeJsonQuery({
+      source_sha256: 524998bf23dada4b82ed2eb542c15372aff2f34d8d0d370e0ff6491eb5470212
+  parser_requirement: bundled
+- id: rails
+  repo: rails/rails
+  commit: e72eb4c20b6bb5bdc7f63a4477992209585a1fa9
+  language: ruby
+  file: railties/lib/rails/application.rb
+  symbol: Application
+  anchor: class Application < Engine
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 6b24babc738b93527bf68c3ad74f88b986fec7772e3ad7c61f8f734c6b603a1d
+  queries:
+  - id: rails:1
+    query: Initialize the Rails application
+    evidence:
+    - file: railties/lib/rails/application.rb
+      line: 473
+      quote: '    def initialize!(group = :default) # :nodoc:'
+      source_sha256: 6b24babc738b93527bf68c3ad74f88b986fec7772e3ad7c61f8f734c6b603a1d
+  - id: rails:2
+    query: Manage model database connections
+    evidence:
+    - file: activerecord/lib/active_record/connection_handling.rb
+      line: 13
+      quote: '    #   ActiveRecord::Base.establish_connection('
+      source_sha256: 658636e6d3ec8c5227b369d131f59d7d0a45126f0aefc0073accad484d28aadb
+  - id: rails:3
+    query: Render a controller response
+    evidence:
+    - file: actionpack/lib/action_controller/metal/rendering.rb
+      line: 171
+      quote: '    def render(*args)'
+      source_sha256: ae98c3bfd508964f9783b3eddc8fef9a26a0690e9f34b569c6871256387a9e1d
+  - id: rails:4
+    query: Enqueue a background job
+    evidence:
+    - file: activejob/lib/active_job/enqueuing.rb
+      line: 81
+      quote: '      def perform_later(...)'
+      source_sha256: 6dcabf64043e52c826ab3d5b3e6d5f6e20fa9c8a5c890710ee5e27a049a4cfc6
+  parser_requirement: bundled
+- id: requests
+  repo: psf/requests
+  commit: ebf71906798ec82f34e07d3168f8b8aecaf8a3be
+  language: python
+  file: src/requests/sessions.py
+  symbol: Session
+  anchor: class Session(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2
+  queries:
+  - id: requests:1
+    query: Follow redirects while preserving the session
+    evidence:
+    - file: src/requests/sessions.py
+      line: 160
+      quote: '    def resolve_redirects('
+      source_sha256: 81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2
+  - id: requests:2
+    query: Send an HTTP request through a connection pool
+    evidence:
+    - file: src/requests/adapters.py
+      line: 121
+      quote: '    def send('
+      source_sha256: 5aecc78b49b5c39fbf7c4a5ba18ca4195b44ed26b34d91e1039359605e97f06e
+  - id: requests:3
+    query: Decode JSON from an HTTP response
+    evidence:
+    - file: src/requests/models.py
+      line: 949
+      quote: '    def json(self, **kwargs):'
+      source_sha256: 24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc
+  - id: requests:4
+    query: Prepare cookies for an outgoing request
+    evidence:
+    - file: src/requests/cookies.py
+      line: 140
+      quote: 'def get_cookie_header(jar, request):'
+      source_sha256: 6cd8be8aa123e0d3d9d34fa86feac7bf392f39bccdde5129830de0ea9692dd7c
+  parser_requirement: bundled
+- id: starship
+  repo: starship/starship
+  commit: 6d0a1263fcc74381791805cee57fc466f6e6359c
+  language: rust
+  file: src/module.rs
+  symbol: Module
+  anchor: pub struct Module
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 535f6bfa0accea4cb7f0649c6ebaaffd2da604da2a596dd35573f21ec88df383
+  queries:
+  - id: starship:1
+    query: Render the configured shell prompt modules
+    evidence:
+    - file: src/print.rs
+      line: 76
+      quote: '    write!(handle, "{}", get_prompt(&context)).unwrap();'
+      source_sha256: 1b5d9ff365fe78054c8756f5bf5b840532d966be0fd433347bb23779e095ba72
+  - id: starship:2
+    query: Build a prompt module from segments
+    evidence:
+    - file: src/module.rs
+      line: 116
+      quote: pub struct Module<'a> {
+      source_sha256: 535f6bfa0accea4cb7f0649c6ebaaffd2da604da2a596dd35573f21ec88df383
+  - id: starship:3
+    query: Display the current git branch in the prompt
+    evidence:
+    - file: src/modules/git_branch.rs
+      line: 14
+      quote: 'pub fn module<''a>(context: &''a Context) -> Option<Module<''a>> {'
+      source_sha256: 369b6bd55b7bfaad3a6a198df6789a255d10f930ab61d3da56d84d3c82926588
+  - id: starship:4
+    query: Display command execution duration
+    evidence:
+    - file: src/modules/cmd_duration.rs
+      line: 11
+      quote: 'pub fn module<''a>(context: &''a Context) -> Option<Module<''a>> {'
+      source_sha256: a9029b7fb8434def9215c8477abb996dc85cac1341ca0e5c34c776a89917017b
+  parser_requirement: bundled
+- id: crystal
+  repo: crystal-lang/crystal
+  commit: 066c322f53676e4e59d5e495cc3fa7331c376e8a
+  language: crystal
+  file: src/compiler/crystal/types.cr
+  symbol: Type
+  anchor: abstract class Type
+  caller: null
+  importer: null
+  test: null
+  source_sha256: eee72725070a3286b0c19f65f6ed31a07afe7dc0dbbfe77c2887b926f4f6b671
+  queries:
+  - id: crystal:1
+    query: Represent compiler type information
+    evidence:
+    - file: src/compiler/crystal/types.cr
+      line: 5
+      quote: '  abstract class Type'
+      source_sha256: eee72725070a3286b0c19f65f6ed31a07afe7dc0dbbfe77c2887b926f4f6b671
+  - id: crystal:2
+    query: Tokenize Crystal source text
+    evidence:
+    - file: src/compiler/crystal/syntax/lexer.cr
+      line: 7
+      quote: '  class Lexer'
+      source_sha256: c3be5db3c4d17c53b5ed631c8a1b7f3e72f930c06fd2887fb49c912c10072ff0
+  - id: crystal:3
+    query: Parse Crystal syntax into an AST
+    evidence:
+    - file: src/compiler/crystal/syntax/parser.cr
+      line: 6
+      quote: '  class Parser < Lexer'
+      source_sha256: fb7fae640f1980cb67eef27e9ce447b15bf6be38ea37ec9b192134b2b2bafe89
+  - id: crystal:4
+    query: Perform semantic type analysis
+    evidence:
+    - file: src/compiler/crystal/semantic.cr
+      line: 4
+      quote: require "./semantic/*"
+      source_sha256: 22f2dc65463f741c73f817498a9ef532f9f6fedf869a358178645e6363152265
+  parser_requirement: optional
+- id: dart-sdk
+  repo: dart-lang/sdk
+  commit: 2a83a782138bbdac5467a54a83c994e88b84dc3b
+  language: dart
+  file: pkg/analyzer/lib/src/dart/element/element.dart
+  symbol: ClassElementImpl
+  anchor: class ClassElementImpl extends
+  caller: null
+  importer: null
+  test: null
+  source_sha256: d59a1e88b0926ebb29d8f65f8d273b804f634c051b475ba51734198591749cd0
+  queries:
+  - id: dart-sdk:1
+    query: Represent a resolved class in the analyzer element model
+    evidence:
+    - file: pkg/analyzer/lib/src/dart/element/element.dart
+      line: 132
+      quote: class ClassElementImpl extends InterfaceElementImpl implements ClassElement
+        {
+      source_sha256: d59a1e88b0926ebb29d8f65f8d273b804f634c051b475ba51734198591749cd0
+  - id: dart-sdk:2
+    query: Represent parsed syntax nodes
+    evidence:
+    - file: pkg/analyzer/lib/src/dart/ast/ast.dart
+      line: 2052
+      quote: sealed class AstNodeImpl extends SyntacticEntity implements AstNode {
+      source_sha256: 95c76ac5eeb185cee14c922e9b4ccf8e365a6225d6aefc1e6190e442229a26b8
+  - id: dart-sdk:3
+    query: Create an analysis context collection
+    evidence:
+    - file: pkg/analyzer/lib/src/dart/analysis/analysis_context_collection.dart
+      line: 24
+      quote: class AnalysisContextCollectionImpl implements AnalysisContextCollection
+        {
+      source_sha256: 82faa883bfbfe791f1788b8aa564c262bd979d7583b25e43371bfe2566c6fb13
+  - id: dart-sdk:4
+    query: Evaluate constant expressions
+    evidence:
+    - file: pkg/analyzer/lib/src/dart/constant/evaluation.dart
+      line: 95
+      quote: '        var constantVisitor = ConstantVisitor('
+      source_sha256: eaa7aa4f6c40a746bbfd2910a4c18b96ff644d61635b67e0692ee5c64477bf9a
+  include:
+  - pkg/analyzer
+  parser_requirement: optional
+- id: fsharp
+  repo: dotnet/fsharp
+  commit: ff81858ea7eaa4631e1d1ad6aa4f61d7b8967139
+  language: fsharp
+  file: src/Compiler/Checking/CheckDeclarations.fs
+  symbol: MutRecShape
+  anchor: type MutRecShape<
+  caller: null
+  importer: null
+  test: null
+  source_sha256: e88e417b12bbf2b7791e3c07ebd9f9f0d9a7bcffad67de2211fabe73eebe6cb6
+  queries:
+  - id: fsharp:1
+    query: Check mutually recursive type and module declarations
+    evidence:
+    - file: src/Compiler/Checking/CheckDeclarations.fs
+      line: 62
+      quote: 'type MutRecShape<''TypeData, ''LetsData, ''ModuleData> = '
+      source_sha256: e88e417b12bbf2b7791e3c07ebd9f9f0d9a7bcffad67de2211fabe73eebe6cb6
+  - id: fsharp:2
+    query: Solve type inference constraints
+    evidence:
+    - file: src/Compiler/Checking/ConstraintSolver.fs
+      line: 43
+      quote: module internal FSharp.Compiler.ConstraintSolver
+      source_sha256: 4ba58853cf4117f88251fe3b6180e3e01e75bf03504804ea4acfb6aa646ff1a1
+  - id: fsharp:3
+    query: Check pattern matching expressions
+    evidence:
+    - file: src/Compiler/Checking/CheckPatterns.fs
+      line: 5
+      quote: module internal FSharp.Compiler.CheckPatterns
+      source_sha256: 7cba255de558598c55dbd1bee10cd5e5cd827b3654c38cfe8ec01dfc88ddbf6c
+  - id: fsharp:4
+    query: Read compiled intermediate language metadata
+    evidence:
+    - file: src/Compiler/AbstractIL/ilread.fs
+      line: 8
+      quote: module FSharp.Compiler.AbstractIL.ILBinaryReader
+      source_sha256: 49c39c489b84940c4cd59e1dd97a8116e66b4de4acffaef8efa429dbd152b796
+  include:
+  - src/Compiler
+  parser_requirement: optional
+- id: ggplot2
+  repo: tidyverse/ggplot2
+  commit: 6f1d98842de0489222c04bff64b3596b796d492d
+  language: r
+  file: R/scale-.R
+  symbol: continuous_scale
+  anchor: continuous_scale <- function(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: f9519a28589ba67f1bc7403affb7fb8a89b86eaed59f09b9ae56f0be835d1a5e
+  queries:
+  - id: ggplot2:1
+    query: Create a continuous aesthetic scale
+    evidence:
+    - file: R/scale-.R
+      line: 106
+      quote: continuous_scale <- function(aesthetics, scale_name = deprecated(), palette,
+        name = waiver(),
+      source_sha256: f9519a28589ba67f1bc7403affb7fb8a89b86eaed59f09b9ae56f0be835d1a5e
+  - id: ggplot2:2
+    query: Construct a plotting layer
+    evidence:
+    - file: R/layer.R
+      line: 40
+      quote: layer <- function(geom = NULL, stat = NULL,
+      source_sha256: 108812567e3ab8a7ada3c86867a091642b05285185987142c87e6a2b0d9170fa
+  - id: ggplot2:3
+    query: Save a plot to a file
+    evidence:
+    - file: R/save.R
+      line: 92
+      quote: ggsave <- function(filename, plot = get_last_plot(),
+      source_sha256: 5229b64329c1ee32d7b6781a5a83efc6dd741e7ef6af097073f3f157ca336572
+  - id: ggplot2:4
+    query: Draw point geometry
+    evidence:
+    - file: R/geom-point.R
+      line: 5
+      quote: GeomPoint <- ggproto(
+      source_sha256: 46245ebdcc052715bc7a3b74fd71dd419270697852bc111266fe675584cc410d
+  parser_requirement: optional
+- id: iTerm2
+  repo: gnachman/iTerm2
+  commit: b3c558ac8e0d59bceea49b4986df45cc88005839
+  language: objc
+  file: sources/PTYSession.m
+  symbol: PTYSession
+  anchor: '@implementation PTYSession {'
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 751817328ce61d6c505eb4ce812c3985a7a4a3b486e10f73c55faa4dfa998153
+  queries:
+  - id: iTerm2:1
+    query: Manage a terminal session
+    evidence:
+    - file: sources/PTYSession.m
+      line: 387
+      quote: '@implementation PTYSession {'
+      source_sha256: 751817328ce61d6c505eb4ce812c3985a7a4a3b486e10f73c55faa4dfa998153
+  - id: iTerm2:2
+    query: Decode VT100 terminal escape sequences
+    evidence:
+    - file: sources/VT100Parser.m
+      line: 23
+      quote: '@implementation VT100Parser {'
+      source_sha256: 145f47ee1449341ade9d1e4dfa6cff06fc2c906365b290a15e1b4ca0f34195a2
+  - id: iTerm2:3
+    query: Maintain the terminal screen contents
+    evidence:
+    - file: sources/VT100Screen.m
+      line: 55
+      quote: '@implementation VT100Screen {'
+      source_sha256: 02fa24a16f64082bd6574a2058b859433c08f3a54467fab9c68cceaed900ed78
+  - id: iTerm2:4
+    query: Manage terminal application windows
+    evidence:
+    - file: sources/iTermController.m
+      line: 93
+      quote: '@implementation iTermController {'
+      source_sha256: d8f61571e204502a3ddc79de81be62716bc2850c5f1fc608feee7d5dd5b2cfe8
+  include:
+  - sources
+  parser_requirement: optional
+- id: julia
+  repo: JuliaLang/julia
+  commit: 8493b13f44455a5f16f1f830c223845a3dacf2c8
+  language: julia
+  file: base/array.jl
+  symbol: vect
+  anchor: function vect(X::T...)
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 17f608f9f403d73637622f8807c760d26eb13934002e737dcd35079c28268f90
+  queries:
+  - id: julia:1
+    query: Construct a vector from supplied elements
+    evidence:
+    - file: base/array.jl
+      line: 159
+      quote: function vect(X::T...) where T
+      source_sha256: 17f608f9f403d73637622f8807c760d26eb13934002e737dcd35079c28268f90
+  - id: julia:2
+    query: Represent a hash based dictionary
+    evidence:
+    - file: base/dict.jl
+      line: 65
+      quote: 'mutable struct Dict{K,V} <: AbstractDict{K,V}'
+      source_sha256: b2c239445f9336c4c0954b9cb117e61f9ef29e551f1586fb3da5d5e416848565
+  - id: julia:3
+    query: Read bytes from a stream
+    evidence:
+    - file: base/io.jl
+      line: 920
+      quote: function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+      source_sha256: a21252ec14937f9d90701b45af3d1149f0aebdef45349174de548e2a9946d8bb
+  - id: julia:4
+    query: Sort values using a selected algorithm
+    evidence:
+    - file: base/sort.jl
+      line: 1734
+      quote: function sort!(v::AbstractVector{T};
+      source_sha256: 0facd66d763960bca189adf57b029d9eab602bb67904ba20ff86729a98e9712c
+  include:
+  - base
+  parser_requirement: optional
+- id: Nim
+  repo: nim-lang/Nim
+  commit: 4414b5a396fa00f2cfeca385445d0fd6077bed93
+  language: nim
+  file: compiler/semexprs.nim
+  symbol: semExprCheck
+  anchor: proc semExprCheck(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 6a21b493bf28c97e2b418c0e76eb2b73a7a69b2278ffc33a8285b3903f0822f0
+  queries:
+  - id: Nim:1
+    query: Check the type of a source expression
+    evidence:
+    - file: compiler/semexprs.nim
+      line: 64
+      quote: 'proc semExprCheck(c: PContext, n: PNode, flags: TExprFlags, expectedType:
+        PType = nil): PNode ='
+      source_sha256: 6a21b493bf28c97e2b418c0e76eb2b73a7a69b2278ffc33a8285b3903f0822f0
+  - id: Nim:2
+    query: Parse a source module
+    evidence:
+    - file: compiler/parser.nim
+      line: 2586
+      quote: 'proc parseAll*(p: var Parser): PNode ='
+      source_sha256: f265cadcbd7af215be90edd96cf38206e6b400bfa623b9b3bdba34454e6b97ce
+  - id: Nim:3
+    query: Tokenize source code
+    evidence:
+    - file: compiler/lexer.nim
+      line: 1202
+      quote: 'proc rawGetTok*(L: var Lexer, tok: var Token) ='
+      source_sha256: 04e7b86e0ec564d84f81dc75b543f1373a6ab090290a7053682475ec27e12053
+  - id: Nim:4
+    query: Generate C code for a module
+    evidence:
+    - file: compiler/cgen.nim
+      line: 2277
+      quote: 'proc genModule(m: BModule, cfile: Cfile): Rope ='
+      source_sha256: 4551d7bc909598633e819bcd201654fa62f1973ae96c53df51f357e8b04b0a5c
+  include:
+  - compiler
+  parser_requirement: optional
+- id: ocaml
+  repo: ocaml/ocaml
+  commit: 5fbe515aa215909e28328a059701da430bc3cff8
+  language: ocaml
+  file: typing/typecore.ml
+  symbol: type_expression
+  anchor: let type_expression env sexp =
+  caller: null
+  importer: null
+  test: null
+  source_sha256: c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010
+  queries:
+  - id: ocaml:1
+    query: Infer the type of a top level expression
+    evidence:
+    - file: typing/typecore.ml
+      line: 7378
+      quote: let type_expression env sexp =
+      source_sha256: c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010
+  - id: ocaml:2
+    query: Check pattern match exhaustiveness
+    evidence:
+    - file: typing/parmatch.ml
+      line: 1343
+      quote: '       If [exhaust] has been called by [do_check_partial], then the
+        witnesses'
+      source_sha256: b16a90520b3fa873daa5c6f3ef11277f67a073984a6199f2bc2c63c2907a7b0e
+  - id: ocaml:3
+    query: Look up values in the typing environment
+    evidence:
+    - file: typing/env.ml
+      line: 36
+      quote: '    type, or ...) is used explicitly (lookup_value, ...) or implicitly'
+      source_sha256: b5def4ad0b737363c9a05030ac1d2415b9c95620768cd10e773c6acdcd166c9d
+  - id: ocaml:4
+    query: Unify types during type inference
+    evidence:
+    - file: typing/ctype.ml
+      line: 487
+      quote: let unify_eq uenv t1 t2 =
+      source_sha256: 557af032e0c2bbe7600ca709f2c58308678c55b68aee6d1d428d6db8b15dadae
+  include:
+  - typing
+  - stdlib
+  parser_requirement: optional
+- id: deno
+  repo: denoland/deno
+  commit: 574272ded08b82c7dec64da2120be8442a1f7636
+  language: rust
+  file: runtime/worker.rs
+  symbol: create_validate_import_attributes_callback
+  anchor: pub fn create_validate_import_attributes_callback(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 69f8223ba67f545076e8c524dfefecd6957dd56300cada53821e7ad64bde6cd1
+  queries:
+  - id: deno:1
+    query: Validate JavaScript module import attributes
+    evidence:
+    - file: runtime/worker.rs
+      line: 97
+      quote: pub fn create_validate_import_attributes_callback(
+      source_sha256: 69f8223ba67f545076e8c524dfefecd6957dd56300cada53821e7ad64bde6cd1
+  - id: deno:2
+    query: Cache compiled JavaScript code
+    evidence:
+    - file: runtime/code_cache.rs
+      line: 6
+      quote: pub enum CodeCacheType {
+      source_sha256: f13cbcdd7e249099aa462a1d0f176ab92f2ed6131644c790f6c6c4431b60d062
+  - id: deno:3
+    query: Format a JavaScript exception for display
+    evidence:
+    - file: runtime/fmt_errors.rs
+      line: 193
+      quote: '    let error_string = format_js_error_inner('
+      source_sha256: a060e414267298e2c746b0d370d00417f89a66b361d2d49f70b0e95eb770217a
+  - id: deno:4
+    query: Implement filesystem change event watching
+    evidence:
+    - file: runtime/ops/fs_events.rs
+      line: 35
+      quote: '  ops = [op_fs_events_open, op_fs_events_poll],'
+      source_sha256: 85af64be55ae458f71a9fa0995d9b96d919a54a05fff48625d75146075aa51f3
+  include:
+  - runtime
+  parser_requirement: bundled
+- id: pandas
+  repo: pandas-dev/pandas
+  commit: 0039f168fe057b945e8ec2a65c9d1e973c7c1fe9
+  language: python
+  file: pandas/core/frame.py
+  symbol: DataFrame
+  anchor: class DataFrame(
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 4a6c12927169792ce4da666883d5b8ee7718efed25e7f7e0ad73f5aa53287364
+  queries:
+  - id: pandas:1
+    query: Construct a two dimensional data frame
+    evidence:
+    - file: pandas/core/frame.py
+      line: 270
+      quote: 'class DataFrame(NDFrame, OpsMixin):'
+      source_sha256: 4a6c12927169792ce4da666883d5b8ee7718efed25e7f7e0ad73f5aa53287364
+  - id: pandas:2
+    query: Join data frames on matching keys
+    evidence:
+    - file: pandas/core/reshape/merge.py
+      line: 148
+      quote: def merge(
+      source_sha256: d5a3451dcf1774d31cc3eba1ed853956bad5119e8133e277a1a414f51a6585d4
+  - id: pandas:3
+    query: Parse a CSV file into a data frame
+    evidence:
+    - file: pandas/io/parsers/readers.py
+      line: 310
+      quote: def read_csv(
+      source_sha256: 7abc074ab2c2663a27830ce65e39bfe2bdd03db0acc959302c5e2ff5cf1209c1
+  - id: pandas:4
+    query: Detect missing values in an array
+    evidence:
+    - file: pandas/core/dtypes/missing.py
+      line: 73
+      quote: 'def isna(obj: Scalar | Pattern | NAType | NaTType) -> bool: ...'
+      source_sha256: bd4139b36941a2c611ad5243fb2e1634effd6aa584c7c3c448e3e0d7ee265331
+  parser_requirement: bundled
+- id: otp
+  repo: erlang/otp
+  commit: 1a14bac7486708dfff367d4810dfe4478f87fcef
+  language: erlang
+  file: lib/stdlib/src/lists.erl
+  symbol: foldl
+  anchor: foldl(F, Accu, List)
+  caller: null
+  importer: null
+  test: null
+  source_sha256: 88739296809b9e9ea9a340a3e2a9bed926bcaaf4713db2a3e19cde4177c68903
+  queries:
+  - id: otp:1
+    query: Fold a function over a list from the left
+    evidence:
+    - file: lib/stdlib/src/lists.erl
+      line: 2463
+      quote: foldl(F, Accu, List) when is_function(F, 2) ->
+      source_sha256: 88739296809b9e9ea9a340a3e2a9bed926bcaaf4713db2a3e19cde4177c68903
+  - id: otp:2
+    query: Make a synchronous call to a generic server
+    evidence:
+    - file: lib/stdlib/src/gen_server.erl
+      line: 1216
+      quote: call(ServerRef, Request) ->
+      source_sha256: 6c1a762de6673802b72c23591e4674a06c37c2a1053f24df70aea9208ddae26c
+  - id: otp:3
+    query: Restart supervised child processes
+    evidence:
+    - file: lib/stdlib/src/supervisor.erl
+      line: 685
+      quote: restart_child(Supervisor, Id) ->
+      source_sha256: 3af90b61f311c3b3cac6a03d0600e95e2fa571467278d3acb32d03effd55f5ef
+  - id: otp:4
+    query: Encode Erlang terms as JSON
+    evidence:
+    - file: lib/stdlib/src/json.erl
+      line: 148
+      quote: encode(Term) -> encode(Term, fun do_encode/2).
+      source_sha256: 7692d3589d505c6d379721ca70d99bf2e176faa824750305746cf7817f2a8fab
+  include:
+  - lib/stdlib
+  parser_requirement: optional
+- id: ring
+  repo: ring-clojure/ring
+  commit: 0a36f21646232cdcaed92e55da8f31ba7f44e856
+  language: clojure
+  file: ring-core/src/ring/middleware/params.clj
+  symbol: wrap-params
+  anchor: (defn wrap-params
+  caller: null
+  importer: null
+  test: null
+  source_sha256: f883ccd75c6b0ad4e670308f50e37cb9a3cab3f0c407a0b66e6f1a907d9c40b1
+  queries:
+  - id: ring:1
+    query: Parse query and form parameters in HTTP middleware
+    evidence:
+    - file: ring-core/src/ring/middleware/params.clj
+      line: 56
+      quote: (defn wrap-params
+      source_sha256: f883ccd75c6b0ad4e670308f50e37cb9a3cab3f0c407a0b66e6f1a907d9c40b1
+  - id: ring:2
+    query: Create an HTTP redirect response
+    evidence:
+    - file: ring-core/src/ring/util/response.clj
+      line: 20
+      quote: (defn redirect
+      source_sha256: e3bccc33e76d5030e62399ad5110ecb1c8add8ca3a86bc25491a45d0636e78ec
+  - id: ring:3
+    query: Read and write HTTP cookies
+    evidence:
+    - file: ring-core/src/ring/middleware/cookies.clj
+      line: 160
+      quote: (defn wrap-cookies
+      source_sha256: d1ca92302200935991139329d40cbebc6268aee66e653820f02292b3b526e160
+  - id: ring:4
+    query: Manage HTTP session state
+    evidence:
+    - file: ring-core/src/ring/middleware/session.clj
+      line: 78
+      quote: (defn wrap-session
+      source_sha256: 8466bc060a34c55a2334d655efc57596fe2d868078548adcf3ac49e5737cc831
+  parser_requirement: optional
+- id: perl5
+  repo: Perl/perl5
+  commit: ef53bc6892cb851320be193e8cd9b15b2494e24c
+  language: perl
+  file: dist/Carp/lib/Carp.pm
+  symbol: croak
+  anchor: sub croak
+  caller: null
+  importer: null
+  test: null
+  source_sha256: f2e590a6925ed3574197edf157db4baf8e14cf074636839e0123b1f3b70efa75
+  queries:
+  - id: perl5:1
+    query: Report an error from the perspective of the caller
+    evidence:
+    - file: dist/Carp/lib/Carp.pm
+      line: 291
+      quote: sub croak   { die shortmess @_ }
+      source_sha256: f2e590a6925ed3574197edf157db4baf8e14cf074636839e0123b1f3b70efa75
+  - id: perl5:2
+    query: Copy a file to a destination
+    evidence:
+    - file: lib/File/Copy.pm
+      line: 64
+      quote: sub copy {
+      source_sha256: b04592c9bf9bcafd8db7ec1a74909fa355a1a73ace750f8030ac5e31933f66da
+  - id: perl5:3
+    query: Split a path into directory and base name
+    evidence:
+    - file: lib/File/Basename.pm
+      line: 104
+      quote: sub fileparse {
+      source_sha256: 6030b2b1539dc25fd82718943444bd219762d8c88c927cacf2a40488710f7e49
+  - id: perl5:4
+    query: Benchmark the execution time of code
+    evidence:
+    - file: lib/Benchmark.pm
+      line: 882
+      quote: sub timethis{
+      source_sha256: 2ca62c70a8270df370149f409aceff20c7e2946568df7c30f70380874c174509
+  include:
+  - dist/Carp
+  - lib
+  parser_requirement: optional
