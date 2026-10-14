@@ -451,11 +451,16 @@ def _read_tree(git_dir: Path, commit: str, cache: Path, *, remote: bool) -> dict
             entries.append([os.fsdecode(path), mode, oid, 0])
     blobs = sorted({oid for _path, mode, oid, _size in entries if mode != "160000"})
     sizes = {}
-    for line in _git(git_dir, "cat-file", "--batch-check", data="".join(o + "\n" for o in blobs).encode()).splitlines():
+    # Enumerate only downloaded objects in filtered clones. Asking about each
+    # omitted blob can trigger a lazy fetch on Git builds that do not support
+    # GIT_NO_LAZY_FETCH, defeating the source-size bound (or failing offline).
+    info = (_git(git_dir, "cat-file", "--batch-all-objects", "--batch-check") if remote else
+            _git(git_dir, "cat-file", "--batch-check", data="".join(o + "\n" for o in blobs).encode()))
+    for line in info.splitlines():
         oid, *rest = line.decode().split()
         sizes[oid] = int(rest[1]) if rest[0] == "blob" else -1  # -1: missing
     for entry in entries:
-        entry[3] = sizes.get(entry[2], 0) if entry[1] != "160000" else 0
+        entry[3] = sizes.get(entry[2], -1) if entry[1] != "160000" else 0
     if not remote and any(entry[3] < 0 and _stored([*entry[:3], 0]) for entry in entries):
         raise _MissingFilesError(f"{git_dir} does not have all files of {sha}")
     need = sorted({entry[2] for entry in entries if _stored(entry) and not _blob_file(cache, entry[2]).exists()})

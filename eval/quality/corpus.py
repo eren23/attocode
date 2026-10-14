@@ -161,6 +161,7 @@ def main():
     args = parser.parse_args()
     report = {"pack_sha256": hashlib.sha256(PACK.read_bytes()).hexdigest(), "repositories": [],
               "model_runs": 0, "scope": "Development evidence anchors, not exhaustive recall or agent benefit"}
+    report["git_version"] = subprocess.check_output(["git", "--version"], text=True).strip()
     try:
         with tempfile.TemporaryDirectory(prefix="quality-corpus-") as tmp:
             if args.ranking:
@@ -178,6 +179,9 @@ def main():
                             row["limited_checks"] = [name for name, key in (("dependencies", "importer"), ("impact", "importer"), ("tests", "test")) if not spec[key]]
                         except Exception as exc:
                             row.update(passed=False, error=f"{type(exc).__name__}: {exc}")
+                            if isinstance(exc, subprocess.CalledProcessError) and exc.stderr:
+                                detail = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr
+                                row["stderr_tail"] = detail[-2000:]
                     report["repositories"].append(row)
                     write_json(args.output, report)
                     print(json.dumps({"repository": spec["id"], "passed": row["passed"]}), flush=True)

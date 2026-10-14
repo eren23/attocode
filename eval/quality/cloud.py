@@ -37,6 +37,15 @@ REGION = "fra1"
 BATCH_USD = 1.0
 MONTH_USD = 10.0
 TTL_SECONDS = 7200
+# This applies only to the disposable Ubuntu worker, never the account's VPC
+# or the controller. Keep DNS failure bounded before apt's long retry cycle.
+WORKER_DNS_PREFLIGHT = (
+    "timeout 15 getent ahostsv4 archive.ubuntu.com >/dev/null || { "
+    "echo 'Worker DNS unavailable; applying temporary eth0 public DNS fallback'; "
+    "resolvectl dns eth0 1.1.1.1 8.8.8.8; resolvectl domain eth0 '~.'; "
+    "resolvectl flush-caches; "
+    "timeout 15 getent ahostsv4 archive.ubuntu.com >/dev/null; }; "
+)
 
 
 class API:
@@ -284,7 +293,8 @@ def execute_batch(api, node_id, directory, root, key):
         raise TimeoutError("SSH was not ready within setup budget")
     commands = [
         ("upload", ["scp", *options, str(directory / "source.tar.gz"), "root@" + host + ":/root/source.tar.gz"]),
-        ("setup", [*ssh, "set -eu; mkdir -p /root/job; tar -xzf /root/source.tar.gz -C /root/job; rm /root/source.tar.gz; "
+        ("setup", [*ssh, "set -eu; " + WORKER_DNS_PREFLIGHT +
+                   "mkdir -p /root/job; tar -xzf /root/source.tar.gz -C /root/job; rm /root/source.tar.gz; "
                    "apt-get update -qq; apt-get install -y -qq python3-venv git ripgrep; "
                    "python3 -m venv /root/bootstrap; /root/bootstrap/bin/pip -q install uv==0.10.7; "
                    "cd /root/job; mkdir -p .attocode/quality; printf %s attocode-quality-v1 > .attocode/quality/.owner; "

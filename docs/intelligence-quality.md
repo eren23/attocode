@@ -63,6 +63,11 @@ follow at most ten bounded pages. Impact can be found in the depth layers even
 when the flattened list is trimmed. A short known identifier such as `cn` uses
 symbol lookup; its search check uses source terms `twMerge clsx`.
 
+Remote source acquisition fetches a shallow filtered commit and inspects only
+the downloaded objects, so inspecting omitted large files cannot trigger an
+unbounded lazy fetch. Workflow reports record the Git version and a bounded
+stderr tail when a source command fails.
+
 These are development evidence anchors, not held-out relevance judgments or
 exhaustive call resolution. Caller syntax is not necessarily a linked reference.
 Unavailable import/test anchors are explicitly marked limited. Existing negative
@@ -128,6 +133,11 @@ model weights or user home directories are uploaded.
 
 Setup, execution and collection fit a 90-minute controller deadline; tests have
 60 minutes. Results exported to the Mac are JSON/logs only, at most 20 MiB total.
+Before package installation, a 15-second DNS probe checks the worker's configured
+resolver. If it fails, the disposable Ubuntu worker temporarily uses public
+resolvers `1.1.1.1` and `8.8.8.8` on `eth0`, logs the intervention, and retries
+for at most 15 seconds. Continued failure aborts setup. This changes neither
+the account's VPC settings nor the Mac's DNS; healthy worker DNS is preserved.
 The controller always attempts deletion and verifies provider absence, including
 lost create responses and collection failures. Unknown provisioning/deletion
 state blocks another launch. `reconcile` verifies external cleanup without

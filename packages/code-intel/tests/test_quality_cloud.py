@@ -1,6 +1,8 @@
 """Cloud failure paths must release resources and preserve budget reservations."""
 import datetime as dt
 import json
+import os
+import subprocess
 import urllib.error
 from types import SimpleNamespace
 
@@ -58,6 +60,33 @@ def test_quote_rejects_unapproved_or_insufficient_capacity(change):
     api.list = lambda *args: sizes
     with pytest.raises(ValueError, match="capacity unavailable"):
         quote(api)
+
+
+@pytest.mark.parametrize("mode,expected_calls,passed", [
+    ("healthy", 0, True), ("recovered", 3, True), ("unavailable", 3, False),
+])
+def test_worker_dns_preflight_preserves_working_dns_and_fails_closed(tmp_path, mode, expected_calls, passed):
+    from eval.quality.cloud import WORKER_DNS_PREFLIGHT
+    # Run the actual setup shell branch with offline stand-ins for system tools.
+    script = '''
+count=0
+timeout() { test "$1" = 15; shift; "$@"; }
+getent() {
+  count=$((count + 1))
+  test "$DNS_MODE" = healthy || { test "$DNS_MODE" = recovered && test "$count" -gt 1; }
+}
+resolvectl() { printf '%s\\n' "$*" >> "$DNS_TRACE"; }
+'''
+    trace = tmp_path / "dns.log"
+    result = subprocess.run(["/bin/sh", "-ec", script + WORKER_DNS_PREFLIGHT + "echo setup-ready"],
+                            env={**os.environ, "DNS_MODE": mode, "DNS_TRACE": str(trace)},
+                            capture_output=True, text=True)
+    assert (result.returncode == 0) is passed
+    assert ("setup-ready" in result.stdout) is passed
+    calls = trace.read_text().splitlines() if trace.exists() else []
+    assert len(calls) == expected_calls
+    if calls:
+        assert calls == ["dns eth0 1.1.1.1 8.8.8.8", "domain eth0 ~.", "flush-caches"]
 
 
 def test_monthly_admission_and_unresolved_cleanup_block():
