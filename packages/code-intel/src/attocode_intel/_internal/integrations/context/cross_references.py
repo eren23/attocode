@@ -139,18 +139,27 @@ class CrossRefIndex:
 
     def persist_files(self, file_paths: set[str]) -> None:
         """Persist a changed batch without rescanning all references per file."""
+        if self._store is None:
+            return
         with self._lock:
             grouped: dict[str, list[SymbolRef]] = {}
             for refs in self.references.values():
                 for ref in refs:
                     if ref.file_path in file_paths:
                         grouped.setdefault(ref.file_path, []).append(ref)
-            for path in sorted(file_paths):
-                self._persist_file_locked(path, grouped.get(path, []))
+            paths = sorted(file_paths)
+            for offset in range(0, len(paths), 100):
+                self._store.save_analysis_batch([
+                    (path, *self._file_evidence_locked(path, grouped.get(path, [])))
+                    for path in paths[offset:offset + 100]
+                ])
 
     def _persist_file_locked(self, file_path: str, references=None) -> None:
         if self._store is None:
             return
+        self._store.save_analysis_batch([(file_path, *self._file_evidence_locked(file_path, references))])
+
+    def _file_evidence_locked(self, file_path: str, references=None):
         # Collect symbols for this file
         sym_dicts: list[dict[str, Any]] = []
         for qname in self.file_symbols.get(file_path, set()):
@@ -164,7 +173,6 @@ class CrossRefIndex:
                         "end_line": loc.end_line,
                         "source": loc.source,
                     })
-        self._store.save_symbols(file_path, sym_dicts)
 
         # Collect references originating from this file
         ref_dicts: list[dict[str, Any]] = []
@@ -182,7 +190,7 @@ class CrossRefIndex:
                 "caller_qualified_name": ref.caller_qualified_name,
                 "definition_key": ref.definition_key,
             })
-        self._store.save_references(file_path, ref_dicts)
+        return sym_dicts, ref_dicts
 
     def load_from_store(self) -> int:
         """Bulk-load symbols, references, and dependencies from the store.

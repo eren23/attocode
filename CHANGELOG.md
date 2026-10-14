@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for build-named source folders, and recover exact scoped identifiers within
   eligible files. No model, ranking-weight or daily-profile default changed.
 
+### Fixed — Cold indexing cost
+
+- Reuse bounded content-verified symbol spans between keyword and source-window
+  indexing, and persist symbols/references atomically in batches of up to 100
+  files. Same-metadata edits invalidate reused spans; failed writes roll back.
+
 ### Fixed — Workspace indexing boundaries
 
 - Discovery and freshness tracking exclude source-file symlinks outside the

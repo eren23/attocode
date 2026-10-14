@@ -255,3 +255,41 @@ def test_exact_scoped_recovery_respects_discovery_and_root_boundary(tmp_path):
     (root / 'ignored.py').write_text('class Type: pass\n')
     assert exact_scoped_source(str(root), 'Type', 'ignored.py', set()) is None
     assert exact_scoped_source(str(root), 'Type', '*.py', {'ignored.py'}) is None
+
+
+def test_warmup_span_reuse_preserves_chunks_and_rejects_same_metadata_edits(tmp_path, monkeypatch):
+    import os
+
+    from attocode_intel._internal.integrations.context import codebase_ast
+    from attocode_intel._internal.integrations.context.semantic_search import (
+        SemanticSearchManager,
+        _BodySpanCache,
+    )
+    source = tmp_path / 'source.py'
+    original = 'class Thing:\n    def first(self):\n        return 1\n'
+    source.write_text(original)
+    ast = codebase_ast.parse_file(str(source), original)
+    baseline = SemanticSearchManager._body_chunks('source.py', str(source))
+    cache = _BodySpanCache()
+    cache.put('source.py', original, ast)
+    parse = codebase_ast.parse_file
+    calls = []
+    def record(*args, **kwargs):
+        calls.append(args)
+        return parse(*args, **kwargs)
+    monkeypatch.setattr(codebase_ast, 'parse_file', record)
+    assert SemanticSearchManager._body_chunks('source.py', str(source), cache) == baseline
+    assert calls == [] and cache.rows == {}
+    cache.put('source.py', original, ast)
+    stat = source.stat()
+    changed = original.replace('first', 'other')
+    source.write_text(changed)
+    os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    assert source.stat().st_size == stat.st_size and source.stat().st_mtime_ns == stat.st_mtime_ns
+    chunks = SemanticSearchManager._body_chunks('source.py', str(source), cache)
+    assert len(calls) == 1
+    assert any(c[1] == 'Thing.other' for c in chunks) and not any(c[1] == 'Thing.first' for c in chunks)
+    empty = _BodySpanCache(budget_bytes=1)
+    empty.put('source.py', changed, parse(str(source), changed))
+    assert empty.rows == {} and empty.remaining == 1
+    assert SemanticSearchManager._body_chunks('source.py', str(source), empty) == chunks
