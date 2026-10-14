@@ -25,7 +25,7 @@ def main():
         parser.error("Cloud selection requires run")
     if args.merge and args.command != "report":
         parser.error("--merge requires the report command")
-    if args.command in {"broad", "cloud"}:
+    if args.command == "broad" or (args.command == "cloud" and args.target == "run"):
         import yaml
 
         from eval.quality.corpus import PACK

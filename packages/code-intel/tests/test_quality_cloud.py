@@ -3,12 +3,41 @@ import datetime as dt
 import json
 import os
 import subprocess
+import sys
 import urllib.error
 from types import SimpleNamespace
 
 import pytest
 
 from eval.quality.cloud import TAG, batch, execute_batch, quote, reap, reconcile, reserve
+
+
+@pytest.mark.parametrize("command", ["quote", "reap", "reap-apply", "reconcile"])
+def test_maintenance_cli_does_not_import_product_or_workflow_dependencies(command):
+    from eval.quality.runner import REPO
+
+    script = r'''
+import builtins, sys
+original = builtins.__import__
+def guarded(name, *args, **kwargs):
+    if name.split('.')[0] in {'yaml', 'attocode_intel'}:
+        raise ImportError('Maintenance unexpectedly requires ' + name)
+    return original(name, *args, **kwargs)
+builtins.__import__ = guarded
+from eval.quality import cloud
+seen = []
+def dispatch(command, **kwargs):
+    seen.append(command)
+    return 0
+cloud.main = dispatch
+command = sys.argv[1]
+sys.argv = ['quality', 'cloud', command]
+from eval.quality.__main__ import main
+assert main() == 0 and seen == [command]
+'''
+    result = subprocess.run([sys.executable, "-c", script, command], cwd=REPO,
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
 
 
 class FakeAPI:
