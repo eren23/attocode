@@ -36,3 +36,11 @@ The 0.1.0 release created the project on 2026-10-11. The pending publisher is no
 4. Verify a clean `uv tool install attocode-code-intel==0.1.0`, run `init` and `doctor` in a disposable project, then create the GitHub release with installation instructions and the validation results.
 
 If PyPI reports `invalid-publisher`, check the exact account settings above and rerun the failed publishing job after correcting them. Do not move an already published tag or reuse a published version. A package release does not deploy a hosted service.
+
+If a workflow bug prevents publication, fix and merge the workflow through normal
+CI, verify that the version is still absent from PyPI, and use a new tag such as
+`intel-v0.1.5-retry.1`. The optional `-retry.N` suffix names the publishing attempt;
+the package version remains `0.1.5`. Preserve the failed original tag and run all
+release gates again. Confirm that package source and dependencies match the
+original candidate when claiming a workflow-only retry. Never use this path to
+replace a version that has already been uploaded to PyPI.

@@ -20,9 +20,15 @@ jobs:
         with:
           python-version: '3.12'
       - name: Validate tag
-        run: python -c 'import os, tomllib; v = tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"]; assert os.environ["GITHUB_REF_NAME"] == "intel-v" + v'
+        # A retry tag preserves the original failed tag when CI needs repair.
+        run: |
+          python - <<'PY'
+          import os, re, tomllib
+          version = tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"]
+          assert re.fullmatch(r"intel-v" + re.escape(version) + r"(?:-retry\.[1-9][0-9]*)?", os.environ["GITHUB_REF_NAME"])
+          PY
       - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
-      - run: uv run --no-sync pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -q
+      - run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -q
       - run: uv build --package attocode-code-intel
       - name: Verify wheel without the agent
         run: |
