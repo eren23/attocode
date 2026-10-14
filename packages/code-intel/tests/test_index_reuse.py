@@ -243,3 +243,26 @@ def test_full_initialization_has_bounded_commits_and_complete_evidence(tmp_path,
         assert service._store._get_conn().execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
         close(service)
+
+
+def test_hydration_reuses_parsed_files_for_deferred_dependencies(tmp_path, monkeypatch):
+    from attocode_intel._internal.integrations.context import codebase_ast
+    from attocode_intel._internal.integrations.context.codebase_context import DependencyGraph
+
+    repository(tmp_path)
+    service = ASTService(str(tmp_path))
+    try:
+        service.initialize_skeleton(indexing_depth="minimal")
+        service._context_mgr._dep_graph = DependencyGraph()
+        # ASTService holds its own parser binding for phase 2a. Re-parsing from
+        # the deferred dependency builder would unnecessarily read every file again.
+        def redundant_parse(*args, **kwargs):
+            raise AssertionError("Deferred dependencies reparsed hydrated source")
+        monkeypatch.setattr(codebase_ast, "parse_file", redundant_parse)
+        service._run_hydration()
+        assert service._hydration_state.phase == "ready"
+        assert service._index.get_dependencies("caller.py") == {"helper.py"}
+        assert service._index.get_references("helper")
+        assert len(service._store.get_all_files()) == 3
+    finally:
+        close(service)

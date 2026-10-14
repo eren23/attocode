@@ -691,7 +691,9 @@ class ASTService:
         )
         dep_graph = self._context_mgr.dependency_graph
         if dep_graph is None or not dep_graph.forward:
-            self._context_mgr._dep_graph = build_dependency_graph(ctx_files, self._root_dir)
+            self._context_mgr._dep_graph = build_dependency_graph(
+                ctx_files, self._root_dir, ast_cache=dict(cache_snapshot),
+            )
         dep_graph = self._context_mgr.dependency_graph
         if dep_graph:
             for src, targets in dep_graph.forward.items():
