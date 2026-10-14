@@ -14,9 +14,12 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode_intel._internal.integrations.utilities.token_estimate import CHARS_PER_TOKEN
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(slots=True)
@@ -729,6 +732,7 @@ def build_dependency_graph(
     root_dir: str,
     *,
     ast_cache: dict | None = None,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> DependencyGraph:
     """Build a dependency graph from file imports.
 
@@ -755,6 +759,8 @@ def build_dependency_graph(
     supported_langs = set(_resolvers.keys())
 
     for f in files:
+        if check_cancelled is not None:
+            check_cancelled()
         if f.language not in supported_langs:
             continue
 
@@ -767,6 +773,8 @@ def build_dependency_graph(
 
         resolver = _resolvers[f.language]
         for imp in ast.imports:
+            if check_cancelled is not None:
+                check_cancelled()
             target = resolver(imp.module, f.relative_path, file_index)
             if target is not None and target != f.relative_path:
                 graph.add_edge(f.relative_path, target)
@@ -806,6 +814,11 @@ class CodebaseContextManager:
     _staleness_threshold: float = field(default=300.0, repr=False)  # 5 minutes
     _ignored_checkout_dirs: list[str] = field(default_factory=list, repr=False)
     _ignored_checkout_dirs_capped: bool = field(default=False, repr=False)
+    cancelled: Callable[[], bool] | None = field(default=None, repr=False, compare=False)
+
+    def _check_cancelled(self) -> None:
+        if self.cancelled is not None and self.cancelled():
+            raise InterruptedError("File discovery cancelled")
 
     @property
     def is_stale(self) -> bool:
@@ -869,6 +882,7 @@ class CodebaseContextManager:
         self._ignored_checkout_dirs_capped = False
 
         for dirpath, dirnames, filenames in os.walk(root):
+            self._check_cancelled()
             # Filter ignored directories (in-place to prevent os.walk descent)
             kept_dirs = []
             for directory in dirnames:
@@ -889,6 +903,7 @@ class CodebaseContextManager:
             dirnames[:] = sorted(kept_dirs)
 
             for filename in sorted(filenames):
+                self._check_cancelled()
                 if filename.startswith("."):
                     continue
                 if filename in SKIP_FILENAMES:
@@ -954,7 +969,7 @@ class CodebaseContextManager:
         # skeleton init; full dep graph is built during background hydration.
         source_count = sum(1 for f in files if f.language)
         if source_count < 5_000:
-            self._dep_graph = build_dependency_graph(files, self.root_dir)
+            self._dep_graph = build_dependency_graph(files, self.root_dir, check_cancelled=self._check_cancelled)
             pr_scores = self._dep_graph.pagerank()
             for f in files:
                 pr = pr_scores.get(f.relative_path, 0.0)

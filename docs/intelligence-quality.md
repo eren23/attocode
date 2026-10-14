@@ -67,6 +67,10 @@ Remote source acquisition fetches a shallow filtered commit and inspects only
 the downloaded objects, so inspecting omitted large files cannot trigger an
 unbounded lazy fetch. Workflow reports record the Git version and a bounded
 stderr tail when a source command fails.
+Cold search responses explicitly marked `warming` are retried for up to 90
+seconds per pack, with warming-response counts and elapsed time recorded.
+Ready responses and errors are never retried to obtain a better answer. The
+same eight assertions still apply; this separates readiness from retrieval.
 
 These are development evidence anchors, not held-out relevance judgments or
 exhaustive call resolution. Caller syntax is not necessarily a linked reference.

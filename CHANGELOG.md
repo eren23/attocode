@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Serialize lexical SQLite schema initialization with cache writes; transient
   database errors no longer permanently disable source search, and failed opens
   close their connections. Optional reindex workers stop before store shutdown.
+- Closing lexical search cancels discovery, import-graph building and index
+  writes, rolls back interrupted refreshes, and refuses to report successful
+  shutdown while an indexer is still alive.
 
 ### Fixed — Search evidence previews
 
