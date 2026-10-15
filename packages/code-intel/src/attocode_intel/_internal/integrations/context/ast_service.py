@@ -43,6 +43,7 @@ from attocode_intel._internal.integrations.context.hydration import (
     skeleton_budget,
 )
 from attocode_intel._internal.integrations.context.index_store import (
+    AST_SNAPSHOT_KEY,
     SNAPSHOT_KEY,
     IndexStore,
     StoredFile,
@@ -471,8 +472,8 @@ class ASTService:
     def _restore_snapshot(self, files, parseable, state) -> bool:
         """Restore a completed index and repair offline edits when necessary.
 
-        ASTs are reparsed to preserve all existing context/analysis consumers;
-        expensive reference extraction and persistence are reused. Older caches
+        Bounded summaries reuse unchanged ASTs with exact source/parser identity;
+        missing or invalid entries are reparsed. References remain persisted. Older caches
         without the completion record are rebuilt once.
         """
         raw = self._store.get_meta(SNAPSHOT_KEY)
@@ -482,7 +483,13 @@ class ASTService:
             saved = json.loads(raw)
             if saved["counts"] != self._store.stats():
                 return False
-            cached = {fi.relative_path: parse_file(fi.path) for fi in parseable}
+            from .ast_snapshot import restore_summaries
+
+            summaries = restore_summaries(self._store, raw, parseable)
+            cached = summaries if summaries is not None else {}
+            for fi in parseable:
+                if fi.relative_path not in cached:
+                    cached[fi.relative_path] = parse_file(fi.path)
             if self._snapshot_identity() != self._snapshot_start:
                 return False
             self._index.load_from_store()
@@ -503,6 +510,12 @@ class ASTService:
             for source, targets in self._index.file_dependencies.items():
                 for target in targets:
                     graph.add_edge(source, target)
+            if summaries is None:
+                from .ast_snapshot import encode_summaries
+
+                # Upgrade an older/missing cache once; partial bounded caches are
+                # intentionally not rewritten for every oversized-file miss.
+                self._store.set_meta(AST_SNAPSHOT_KEY, encode_summaries(cached, raw))
             self._context_mgr._dep_graph = graph
             self._ast_cache = cached
             self._reference_indexed_files = set(cached)
@@ -535,13 +548,19 @@ class ASTService:
             (source, target) for source, targets in self._index.file_dependencies.items()
             for target in targets
         ])
-        self._store.set_meta(SNAPSHOT_KEY, json.dumps({
+        snapshot = json.dumps({
             "identity": self._snapshot_start,
             "discovered": sorted(fi.relative_path for fi in self._context_mgr._files),
             "parsed": sorted(self._ast_cache),
             "counts": self._store.stats(),
             "unresolved": graph.unresolved if graph else {},
-        }, separators=(",", ":")))
+        }, separators=(",", ":"))
+        from .ast_snapshot import encode_summaries
+
+        # Bind the disposable payload to the completion record; publish it first.
+        # A partial/interleaved write can only cause a parse fallback on restart.
+        self._store.set_meta(AST_SNAPSHOT_KEY, encode_summaries(self._ast_cache, snapshot))
+        self._store.set_meta(SNAPSHOT_KEY, snapshot)
         return True
 
     def repair_changed_files(self, *, expected_manifest=None) -> bool:

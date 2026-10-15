@@ -330,3 +330,19 @@ run was not launched. All 18 workers are deleted, with $0.8221 cumulative estima
 compute (not an invoice). One reservation remains unused, but the failed target
 blocks using it for the full gate. Next work is local restart/freshness analysis;
 no release or further rental follows from this incomplete result.
+
+### Bounded structural restart summaries
+
+Completed structural snapshots may retain up to 32 MiB of JSON AST summaries in
+one existing SQLite metadata entry, with a 1 MiB per-file limit. These are payload
+limits, not total SQLite/WAL or memory limits. Missing and excluded entries parse
+normally; no source file is dropped to fit the cache. Source SHA-256, structural
+snapshot binding, typed fields, absolute source path and installed parser/grammar
+code identities guard reuse. Only direct installed tree-sitter grammars are
+eligible; optional-pack, regex and ctags paths retain normal parsing. No schema
+migration, model download, ranking change or deadline extension is required.
+
+The [local restart comparison](../packages/code-intel/evals/results/2026-10-15-ast-restart.md)
+includes the added cold-write cost, process restart and exact-evidence controls.
+It does not establish a passing CockroachDB target or full release gate. The
+previous target failure still blocks the conditional second cloud rental.
