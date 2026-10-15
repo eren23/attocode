@@ -178,11 +178,15 @@ local tier's time/storage limits; they are not a long-running contention benchma
 
 The controller checks both wall and monotonic deadlines, including after a host
 suspension. Phase reports expose `wall_seconds` separately from `seconds`.
-Remote setup, tests and export also run under worker-side GNU `timeout`, with
-TERM followed by KILL after ten seconds. Expired controllers refuse new work and
+Remote setup, tests and export run in transient systemd services with a runtime
+deadline and `KillMode=control-group`, covering children that start new sessions.
+TERM is followed by KILL after ten seconds. Expired controllers refuse new work and
 attempt deletion. A suspended/offline controller cannot itself delete a worker:
 the independent TTL reaper remains the billing cleanup backstop. These limits
 are not a guarantee that provider deletion finishes at exactly 90 minutes.
+The service properties follow the upstream [systemd execution](https://github.com/systemd/systemd/blob/main/man/systemd-run.xml)
+and [control-group cleanup](https://github.com/systemd/systemd/blob/main/man/systemd.kill.xml)
+contracts; Linux CI checks a TERM-resistant detached child with the actual service manager.
 
 Search warmup reports `warmup_reused_asts` for content-hash-verified structural
 AST reuse; it adds no second AST cache and does not initialize structural indexing

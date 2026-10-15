@@ -6,9 +6,11 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 from types import SimpleNamespace
 
+import psutil
 import pytest
 
 from eval.quality.cloud import TAG, batch, execute_batch, quote, reap, reconcile, reserve
@@ -21,15 +23,54 @@ def test_worker_timeout_cannot_be_disabled(seconds):
         worker_command('true', seconds)
 
 
-def test_worker_timeout_kills_term_resistant_command_without_controller():
+def test_worker_timeout_kills_term_resistant_detached_descendant(tmp_path):
     from eval.quality.cloud import worker_command
 
-    if not shutil.which('timeout'):
-        pytest.skip('GNU timeout is installed on the Linux worker and Linux CI')
-    script = 'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); print("started",flush=True); time.sleep(60)'
+    if os.environ.get('QUALITY_TEST_SYSTEMD') != '1':
+        pytest.skip('Dedicated Linux CI enables the systemd worker test')
+    assert sys.platform == 'linux' and shutil.which('systemd-run') and shutil.which('sudo')
+    # Single-quote the value so the worker shell, not systemd, owns expansion.
+    successful = worker_command("value='literal $dollar'; printf '%s' \"$value\"", 5)
+    completed = subprocess.run(['sudo', '-n', '/bin/sh', '-c', successful],
+                               capture_output=True, text=True, timeout=10)
+    assert completed.returncode == 0 and completed.stdout == 'literal $dollar', completed.stderr
+    record = tmp_path / 'worker.json'
+    child = 'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'
+    script = (
+        'import json,os,signal,subprocess,sys,time; from pathlib import Path; '
+        'signal.signal(signal.SIGTERM, signal.SIG_IGN); '
+        f'p=subprocess.Popen([sys.executable,"-c",{child!r}], start_new_session=True); '
+        f'Path({str(record)!r}).write_text(json.dumps([os.getpid(), p.pid])); '
+        'time.sleep(60)'
+    )
     command = worker_command('exec ' + shlex.join([sys.executable, '-c', script]), 1)
-    result = subprocess.run(['/bin/sh', '-c', command], capture_output=True, text=True, timeout=15)
-    assert result.returncode in {137, -9} and 'started' in result.stdout
+    unit = next(a.split('=', 1)[1] for a in shlex.split(command) if a.startswith('--unit='))
+    try:
+        result = subprocess.run(['sudo', '-n', '/bin/sh', '-c', command],
+                                capture_output=True, text=True, timeout=18)
+        assert result.returncode != 0, result.stdout + result.stderr
+        assert record.exists(), result.stderr
+        pids = json.loads(record.read_text())
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and any(psutil.pid_exists(pid) for pid in pids):
+            time.sleep(.05)
+        for pid in pids:
+            try:
+                assert psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
+            except psutil.NoSuchProcess:
+                pass
+    finally:
+        subprocess.run(['sudo', '-n', 'systemctl', 'stop', unit], capture_output=True, timeout=15)
+
+
+def test_worker_command_uses_independent_cgroup_and_preserves_shell_text():
+    from eval.quality.cloud import worker_command
+    script = 'printf "%s" "$literal"; echo "quoted text"'
+    command = shlex.split(worker_command(script, 60))
+    assert command[-3:] == ['/bin/sh', '-c', script]
+    assert '--expand-environment=no' in command
+    for setting in ['RuntimeMaxSec=60s', 'TimeoutStopSec=10s', 'KillMode=control-group', 'SendSIGKILL=yes']:
+        assert '--property=' + setting in command
 
 
 def test_controller_resume_past_wall_deadline_does_not_start_tests(tmp_path, monkeypatch):
@@ -60,7 +101,7 @@ def test_controller_resume_past_wall_deadline_does_not_start_tests(tmp_path, mon
     with pytest.raises(TimeoutError, match='deadline'):
         batch(api, tmp_path / 'managed', execute=execute_batch)
     assert [name for name, _ in started] == ['upload', 'setup']
-    assert 'timeout --signal=TERM --kill-after=10s 600s sh -c' in started[1][1][-1]
+    assert '--property=RuntimeMaxSec=600s' in started[1][1][-1]
     assert 'ServerAliveInterval=15' in started[1][1]
     assert api.deleted == [42]
 

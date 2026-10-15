@@ -316,11 +316,18 @@ def batch(api, root, *, execute=None, packs=(), shard=None, suite="all", resume=
 
 
 def worker_command(command, seconds):
-    """Bound remote work on the worker even if the SSH controller disappears."""
+    """Bound the worker cgroup, including children that create new sessions."""
     seconds = int(seconds)
     if not 0 < seconds <= CONTROLLER_SECONDS:
         raise ValueError("Worker timeout must be positive and within the controller budget")
-    return f"timeout --signal=TERM --kill-after=10s {seconds}s sh -c {shlex.quote(command)}"
+    return shlex.join([
+        "systemd-run", "--quiet", "--wait", "--pipe", "--collect",
+        "--service-type=exec", "--expand-environment=no",
+        "--unit=attocode-quality-" + uuid.uuid4().hex,
+        f"--property=RuntimeMaxSec={seconds}s", "--property=TimeoutStopSec=10s",
+        "--property=KillMode=control-group", "--property=SendSIGKILL=yes",
+        "/bin/sh", "-c", command,
+    ])
 
 
 def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, suite="all", resume=False,
@@ -379,7 +386,7 @@ def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, s
             if remaining() <= 0:
                 raise TimeoutError("Controller wall or monotonic deadline expired")
             if name in {"setup", "tests"}:
-                # Leave ten seconds for GNU timeout's SIGKILL escalation.
+                # Leave ten seconds for systemd's SIGKILL escalation.
                 seconds = min(600 if name == "setup" else 3600, int(remaining()) - 10)
                 if seconds <= 0:
                     raise TimeoutError("Insufficient controller time for remote work")
