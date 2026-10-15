@@ -1,0 +1,2257 @@
+{
+  "scope": "Local component and correctness evidence, no Cockroach confirmation or release-gate pass",
+  "body": {
+    "scope": "Generated document generation, empty known spans; no parsing, SQL or cold-start claim",
+    "baseline_commit": "3d7c41ca628e8dfd2f62cf7eff9c4ae3aadbbdc2",
+    "baseline_source_sha256": "8b011fb8327ee65b61e0d2523b8a312d7f397b2ad8476d0a01d7863fef57c2b5",
+    "candidate_source_sha256": "de1a753714d09f26960f25d76d4ac09c48d3f79f423cc7e0b86f72eb23775a5d",
+    "profiler_sha256": "6652c07cafba7b3cd0eb924406920883ea678db746826eaf6ee8c0c53bc316d0",
+    "probe_sha256": "79184e10383e3aa7d942a94ea5fbb3852493cea3137763f56183f78a2c602d17",
+    "python": "3.12.12",
+    "platform": "macOS-26.2-arm64-arm-64bit",
+    "source_bytes": {
+      "repeated": 991872,
+      "unique": 1071216
+    },
+    "observations": [
+      {
+        "workload": "repeated",
+        "mode": "baseline_off",
+        "rotation": 0,
+        "wall_seconds": 0.10141150001436472,
+        "thread_cpu_seconds": 0.098841542,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "repeated",
+        "mode": "off",
+        "rotation": 0,
+        "wall_seconds": 0.01927683304529637,
+        "thread_cpu_seconds": 0.01724262500000001,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "repeated",
+        "mode": "all_calls",
+        "rotation": 0,
+        "wall_seconds": 0.020810750080272555,
+        "thread_cpu_seconds": 0.018719249999999993,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {},
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.001398791908286512,
+              "thread_cpu_seconds": 0.001310293000000018
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 7.874798029661179e-06,
+              "thread_cpu_seconds": 7.957999999974597e-06
+            },
+            "body.tokenize": {
+              "calls": 1032,
+              "wall_seconds": 0.0028192094760015607,
+              "thread_cpu_seconds": 0.0025224030000001174
+            }
+          },
+          "counts": {
+            "body.read_chars": 991872
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "repeated",
+        "mode": "default",
+        "rotation": 0,
+        "wall_seconds": 0.019516958040185273,
+        "thread_cpu_seconds": 0.01785941699999999,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {
+              "body.tokenize": 1032
+            },
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0018056659027934074,
+              "thread_cpu_seconds": 0.0016054990000000657
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 9.333016350865364e-06,
+              "thread_cpu_seconds": 9.124999999943206e-06
+            },
+            "body.tokenize": {
+              "calls": 17,
+              "wall_seconds": 6.01249048486352e-05,
+              "thread_cpu_seconds": 5.7372999999860674e-05
+            }
+          },
+          "counts": {
+            "body.read_chars": 991872
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "repeated",
+        "mode": "off",
+        "rotation": 1,
+        "wall_seconds": 0.018751665949821472,
+        "thread_cpu_seconds": 0.016617207999999994,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "repeated",
+        "mode": "all_calls",
+        "rotation": 1,
+        "wall_seconds": 0.022176416008733213,
+        "thread_cpu_seconds": 0.020855750000000006,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {},
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0018857920076698065,
+              "thread_cpu_seconds": 0.0016667479999999402
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 9.041978046298027e-06,
+              "thread_cpu_seconds": 8.834999999929316e-06
+            },
+            "body.tokenize": {
+              "calls": 1032,
+              "wall_seconds": 0.0028957760659977794,
+              "thread_cpu_seconds": 0.0027557139999999647
+            }
+          },
+          "counts": {
+            "body.read_chars": 991872
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "repeated",
+        "mode": "default",
+        "rotation": 1,
+        "wall_seconds": 0.01712450000923127,
+        "thread_cpu_seconds": 0.01691520799999996,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {
+              "body.tokenize": 1032
+            },
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.001241413876414299,
+              "thread_cpu_seconds": 0.001221207000000002
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 6.541842594742775e-06,
+              "thread_cpu_seconds": 6.62600000006508e-06
+            },
+            "body.tokenize": {
+              "calls": 17,
+              "wall_seconds": 4.504027310758829e-05,
+              "thread_cpu_seconds": 4.408399999988877e-05
+            }
+          },
+          "counts": {
+            "body.read_chars": 991872
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "repeated",
+        "mode": "baseline_off",
+        "rotation": 1,
+        "wall_seconds": 0.10271516698412597,
+        "thread_cpu_seconds": 0.09883037499999997,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "repeated",
+        "mode": "all_calls",
+        "rotation": 2,
+        "wall_seconds": 0.017863458022475243,
+        "thread_cpu_seconds": 0.017847166999999997,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {},
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0009956257417798042,
+              "thread_cpu_seconds": 0.0009958340000000843
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 5.832873284816742e-06,
+              "thread_cpu_seconds": 5.707999999993163e-06
+            },
+            "body.tokenize": {
+              "calls": 1032,
+              "wall_seconds": 0.002470591920427978,
+              "thread_cpu_seconds": 0.002470980999999428
+            }
+          },
+          "counts": {
+            "body.read_chars": 991872
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "repeated",
+        "mode": "default",
+        "rotation": 2,
+        "wall_seconds": 0.0833704590331763,
+        "thread_cpu_seconds": 0.01695270800000004,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {
+              "body.tokenize": 1032
+            },
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0031450007809326053,
+              "thread_cpu_seconds": 0.0012703330000000124
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 8.042086847126484e-06,
+              "thread_cpu_seconds": 7.958999999890803e-06
+            },
+            "body.tokenize": {
+              "calls": 17,
+              "wall_seconds": 4.8459041863679886e-05,
+              "thread_cpu_seconds": 4.558100000001675e-05
+            }
+          },
+          "counts": {
+            "body.read_chars": 991872
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "repeated",
+        "mode": "baseline_off",
+        "rotation": 2,
+        "wall_seconds": 0.08183270797599107,
+        "thread_cpu_seconds": 0.078070042,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "repeated",
+        "mode": "off",
+        "rotation": 2,
+        "wall_seconds": 0.02502075000666082,
+        "thread_cpu_seconds": 0.022615834,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "repeated",
+        "mode": "default",
+        "rotation": 3,
+        "wall_seconds": 0.020224459003657103,
+        "thread_cpu_seconds": 0.018980084000000064,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {
+              "body.tokenize": 1032
+            },
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.002126623992808163,
+              "thread_cpu_seconds": 0.0014749560000000272
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 8.332892321050167e-06,
+              "thread_cpu_seconds": 8.290999999993609e-06
+            },
+            "body.tokenize": {
+              "calls": 17,
+              "wall_seconds": 5.8583798818290234e-05,
+              "thread_cpu_seconds": 5.608300000004007e-05
+            }
+          },
+          "counts": {
+            "body.read_chars": 991872
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "repeated",
+        "mode": "baseline_off",
+        "rotation": 3,
+        "wall_seconds": 0.1039627919672057,
+        "thread_cpu_seconds": 0.09844137500000005,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "repeated",
+        "mode": "off",
+        "rotation": 3,
+        "wall_seconds": 0.018833540962077677,
+        "thread_cpu_seconds": 0.017653041999999952,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "repeated",
+        "mode": "all_calls",
+        "rotation": 3,
+        "wall_seconds": 0.017054750001989305,
+        "thread_cpu_seconds": 0.01695208299999995,
+        "output_sha256": "2fe146aa5dc101535cde555496e8cdb85a74e0def33ff3289dc1006f637504ee",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {},
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.001146750058978796,
+              "thread_cpu_seconds": 0.001142207999999978
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 5.707028321921825e-06,
+              "thread_cpu_seconds": 5.6669999998204545e-06
+            },
+            "body.tokenize": {
+              "calls": 1032,
+              "wall_seconds": 0.0023599722189828753,
+              "thread_cpu_seconds": 0.0023355410000005516
+            }
+          },
+          "counts": {
+            "body.read_chars": 991872
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "unique",
+        "mode": "baseline_off",
+        "rotation": 0,
+        "wall_seconds": 0.09231283399276435,
+        "thread_cpu_seconds": 0.08536612499999996,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "unique",
+        "mode": "off",
+        "rotation": 0,
+        "wall_seconds": 0.13952979200985283,
+        "thread_cpu_seconds": 0.10823183400000003,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "unique",
+        "mode": "all_calls",
+        "rotation": 0,
+        "wall_seconds": 0.17973116703797132,
+        "thread_cpu_seconds": 0.16767279200000007,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {},
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0018646251410245895,
+              "thread_cpu_seconds": 0.001798294000000089
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 8.75093974173069e-06,
+              "thread_cpu_seconds": 8.710999999994584e-06
+            },
+            "body.tokenize": {
+              "calls": 32776,
+              "wall_seconds": 0.10095731809269637,
+              "thread_cpu_seconds": 0.09484103299998448
+            }
+          },
+          "counts": {
+            "body.read_chars": 1071216
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "unique",
+        "mode": "default",
+        "rotation": 0,
+        "wall_seconds": 0.10274066694546491,
+        "thread_cpu_seconds": 0.0986430840000001,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {
+              "body.tokenize": 32776
+            },
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0017099999822676182,
+              "thread_cpu_seconds": 0.001580458999999701
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 9.249779395759106e-06,
+              "thread_cpu_seconds": 9.207999999594207e-06
+            },
+            "body.tokenize": {
+              "calls": 513,
+              "wall_seconds": 0.0013709258055314422,
+              "thread_cpu_seconds": 0.0013426340000011194
+            }
+          },
+          "counts": {
+            "body.read_chars": 1071216
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "unique",
+        "mode": "off",
+        "rotation": 1,
+        "wall_seconds": 0.08805508399382234,
+        "thread_cpu_seconds": 0.08549925000000003,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "unique",
+        "mode": "all_calls",
+        "rotation": 1,
+        "wall_seconds": 0.14827600005082786,
+        "thread_cpu_seconds": 0.1359557090000001,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {},
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0020021230448037386,
+              "thread_cpu_seconds": 0.001773165000000354
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 1.170916948467493e-05,
+              "thread_cpu_seconds": 1.1458000000352797e-05
+            },
+            "body.tokenize": {
+              "calls": 32776,
+              "wall_seconds": 0.08501069492194802,
+              "thread_cpu_seconds": 0.07823266799999318
+            }
+          },
+          "counts": {
+            "body.read_chars": 1071216
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "unique",
+        "mode": "default",
+        "rotation": 1,
+        "wall_seconds": 0.16692479199264199,
+        "thread_cpu_seconds": 0.1093535000000001,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {
+              "body.tokenize": 32776
+            },
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0022359590511769056,
+              "thread_cpu_seconds": 0.0017423320000000686
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 9.91614069789648e-06,
+              "thread_cpu_seconds": 9.875999999797713e-06
+            },
+            "body.tokenize": {
+              "calls": 513,
+              "wall_seconds": 0.001686136587522924,
+              "thread_cpu_seconds": 0.0015056650000000449
+            }
+          },
+          "counts": {
+            "body.read_chars": 1071216
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "unique",
+        "mode": "baseline_off",
+        "rotation": 1,
+        "wall_seconds": 0.11128012498375028,
+        "thread_cpu_seconds": 0.098109,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "unique",
+        "mode": "all_calls",
+        "rotation": 2,
+        "wall_seconds": 0.19408437504898757,
+        "thread_cpu_seconds": 0.17061345799999983,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {},
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0023257900029420853,
+              "thread_cpu_seconds": 0.0018057090000000997
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 9.624171070754528e-06,
+              "thread_cpu_seconds": 9.499999999995623e-06
+            },
+            "body.tokenize": {
+              "calls": 32776,
+              "wall_seconds": 0.10741536843124777,
+              "thread_cpu_seconds": 0.09583740300001908
+            }
+          },
+          "counts": {
+            "body.read_chars": 1071216
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "unique",
+        "mode": "default",
+        "rotation": 2,
+        "wall_seconds": 0.16258795792236924,
+        "thread_cpu_seconds": 0.13174833400000008,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {
+              "body.tokenize": 32776
+            },
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0019740427378565073,
+              "thread_cpu_seconds": 0.0019339589999995965
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 1.0708929039537907e-05,
+              "thread_cpu_seconds": 1.0957999999616774e-05
+            },
+            "body.tokenize": {
+              "calls": 513,
+              "wall_seconds": 0.0026922307442873716,
+              "thread_cpu_seconds": 0.0019135599999975383
+            }
+          },
+          "counts": {
+            "body.read_chars": 1071216
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "unique",
+        "mode": "baseline_off",
+        "rotation": 2,
+        "wall_seconds": 0.1109988329699263,
+        "thread_cpu_seconds": 0.10272104100000012,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "unique",
+        "mode": "off",
+        "rotation": 2,
+        "wall_seconds": 0.10493716690689325,
+        "thread_cpu_seconds": 0.0964833340000002,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "unique",
+        "mode": "default",
+        "rotation": 3,
+        "wall_seconds": 0.12521187507081777,
+        "thread_cpu_seconds": 0.1149717090000002,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {
+              "body.tokenize": 32776
+            },
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.0019603761611506343,
+              "thread_cpu_seconds": 0.0018378340000002602
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 9.293085895478725e-06,
+              "thread_cpu_seconds": 9.334000000027487e-06
+            },
+            "body.tokenize": {
+              "calls": 513,
+              "wall_seconds": 0.0016804266488179564,
+              "thread_cpu_seconds": 0.0015963669999972119
+            }
+          },
+          "counts": {
+            "body.read_chars": 1071216
+          },
+          "slow_files": [],
+          "active": []
+        }
+      },
+      {
+        "workload": "unique",
+        "mode": "baseline_off",
+        "rotation": 3,
+        "wall_seconds": 0.12235791701823473,
+        "thread_cpu_seconds": 0.09852137500000024,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "unique",
+        "mode": "off",
+        "rotation": 3,
+        "wall_seconds": 0.11956470797304064,
+        "thread_cpu_seconds": 0.10642545800000036,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": null
+      },
+      {
+        "workload": "unique",
+        "mode": "all_calls",
+        "rotation": 3,
+        "wall_seconds": 0.21770512498915195,
+        "thread_cpu_seconds": 0.18681958300000012,
+        "output_sha256": "c82414d14e434057414a65f2169bc7da22873fe3586daeb07659b27041cb28e4",
+        "windows": 1176,
+        "profile": {
+          "schema": 2,
+          "sampling": {
+            "every": 64,
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "observed_calls": {},
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "timing": "inclusive; completed scopes only; indexing-thread CPU",
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.read": {
+              "calls": 8,
+              "wall_seconds": 0.002661166130565107,
+              "thread_cpu_seconds": 0.0023126659999999077
+            },
+            "body.spans": {
+              "calls": 8,
+              "wall_seconds": 1.1582975275814533e-05,
+              "thread_cpu_seconds": 1.1373999999619855e-05
+            },
+            "body.tokenize": {
+              "calls": 32776,
+              "wall_seconds": 0.12051265395712107,
+              "thread_cpu_seconds": 0.1036001930000161
+            }
+          },
+          "counts": {
+            "body.read_chars": 1071216
+          },
+          "slow_files": [],
+          "active": []
+        }
+      }
+    ],
+    "cleanup_verified": true
+  },
+  "discovery": {
+    "scope": "Generated 640-file two-consumer inventory work; no cloud or cold-gate claim",
+    "baseline_commit": "3d7c41ca628e8dfd2f62cf7eff9c4ae3aadbbdc2",
+    "baseline_source_sha256": "232f8cb3450a3308897bd0387cc331b5b004c30447bf041186793758476a5daf",
+    "candidate_source_sha256": "99997f9523a15024035fd468d9ce60f656ec35bf9cf84e6cdd5b15846e9dfc48",
+    "snapshot_source_sha256": "42ae4f6e1ead4b580c20f2ca8a0fbc8594bd2cddd59a922acfbd1a7889e734d4",
+    "probe_sha256": "6d26663477aafbfd212ec1a3282b9d8140fe1214b1d25e338f3abcce9722be94",
+    "python": "3.12.12",
+    "platform": "macOS-26.2-arm64-arm-64bit",
+    "source_bytes": 119880,
+    "observations": [
+      {
+        "mode": "baseline",
+        "wall_seconds": 0.20657258399296552,
+        "thread_cpu_seconds": 0.18436924999999998,
+        "donor_seconds": 0.11832008394412696,
+        "consumer_seconds": 0.08825250004883856,
+        "files": 640,
+        "inventory_sha256": "f1ff3d0907bbcf17397971182afc66a7576b62d64b8e33226a8d924e278b6b5e"
+      },
+      {
+        "mode": "reuse",
+        "wall_seconds": 0.10014833405148238,
+        "thread_cpu_seconds": 0.08969033300000001,
+        "donor_seconds": 0.0976847920101136,
+        "consumer_seconds": 0.0024635420413687825,
+        "files": 640,
+        "inventory_sha256": "f1ff3d0907bbcf17397971182afc66a7576b62d64b8e33226a8d924e278b6b5e"
+      },
+      {
+        "mode": "reuse",
+        "wall_seconds": 0.11954458302352577,
+        "thread_cpu_seconds": 0.10593604099999993,
+        "donor_seconds": 0.11586333299055696,
+        "consumer_seconds": 0.003681250032968819,
+        "files": 640,
+        "inventory_sha256": "f1ff3d0907bbcf17397971182afc66a7576b62d64b8e33226a8d924e278b6b5e"
+      },
+      {
+        "mode": "baseline",
+        "wall_seconds": 0.17918291606474668,
+        "thread_cpu_seconds": 0.16209287500000003,
+        "donor_seconds": 0.09823608305305243,
+        "consumer_seconds": 0.08094683301169425,
+        "files": 640,
+        "inventory_sha256": "f1ff3d0907bbcf17397971182afc66a7576b62d64b8e33226a8d924e278b6b5e"
+      },
+      {
+        "mode": "baseline",
+        "wall_seconds": 0.17137058300431818,
+        "thread_cpu_seconds": 0.15492908400000005,
+        "donor_seconds": 0.0908881250070408,
+        "consumer_seconds": 0.08048245799727738,
+        "files": 640,
+        "inventory_sha256": "f1ff3d0907bbcf17397971182afc66a7576b62d64b8e33226a8d924e278b6b5e"
+      },
+      {
+        "mode": "reuse",
+        "wall_seconds": 0.11528254102449864,
+        "thread_cpu_seconds": 0.09587520800000005,
+        "donor_seconds": 0.11343945795670152,
+        "consumer_seconds": 0.0018430830677971244,
+        "files": 640,
+        "inventory_sha256": "f1ff3d0907bbcf17397971182afc66a7576b62d64b8e33226a8d924e278b6b5e"
+      }
+    ],
+    "cleanup_verified": true
+  },
+  "validation": {
+    "local_run": "20261015T150441-19249d91",
+    "passed_tests": 583,
+    "skipped_tests": 8,
+    "seconds": 47.806989669799805,
+    "source_sha256": "2563b114e0d232038f8ebf2c291fa9ae04cbcb5aa71aa95c32d51355ae45e5ef",
+    "fixture_sha256": "4e4b55845a1f162f33414c85247a9a4eebd9f1688b4fe829ea84af2075cdd168",
+    "harness_sha256": "4e846fe69f4cc2d1f8767f06beee72ec1983418e3992894f9a337e3a977a1973",
+    "cleanup_verified": true,
+    "checks": [
+      {
+        "name": "lint",
+        "status": "passed",
+        "seconds": 0.216,
+        "peak_disk_bytes": 229376,
+        "peak_rss_bytes": 5619712,
+        "cleanup_verified": true
+      },
+      {
+        "name": "contracts",
+        "status": "passed",
+        "seconds": 31.652,
+        "peak_disk_bytes": 37279224,
+        "peak_rss_bytes": 801849344,
+        "cleanup_verified": true
+      },
+      {
+        "name": "scale",
+        "status": "passed",
+        "seconds": 11.926,
+        "peak_disk_bytes": 106604024,
+        "peak_rss_bytes": 188071936,
+        "cleanup_verified": true
+      },
+      {
+        "name": "lifecycle",
+        "status": "passed",
+        "seconds": 3.684,
+        "peak_disk_bytes": 36668920,
+        "peak_rss_bytes": 131252224,
+        "cleanup_verified": true
+      }
+    ],
+    "wiring_run": "index-probe-110451210e57",
+    "wiring_status": "completed",
+    "wiring_identity": {
+      "dependencies": [
+        [
+          "aiosqlite",
+          "0.22.1"
+        ],
+        [
+          "alembic",
+          "1.18.4"
+        ],
+        [
+          "annotated-doc",
+          "0.0.4"
+        ],
+        [
+          "annotated-types",
+          "0.7.0"
+        ],
+        [
+          "anthropic",
+          "0.84.0"
+        ],
+        [
+          "anyio",
+          "4.12.1"
+        ],
+        [
+          "arq",
+          "0.27.0"
+        ],
+        [
+          "asyncpg",
+          "0.31.0"
+        ],
+        [
+          "attocode",
+          "0.2.30"
+        ],
+        [
+          "attocode-code-intel",
+          "0.1.4"
+        ],
+        [
+          "attrs",
+          "25.4.0"
+        ],
+        [
+          "babel",
+          "2.18.0"
+        ],
+        [
+          "backrefs",
+          "6.2"
+        ],
+        [
+          "bcrypt",
+          "5.0.0"
+        ],
+        [
+          "bracex",
+          "2.6"
+        ],
+        [
+          "bump-my-version",
+          "1.2.7"
+        ],
+        [
+          "certifi",
+          "2026.2.25"
+        ],
+        [
+          "cffi",
+          "2.0.0"
+        ],
+        [
+          "charset-normalizer",
+          "3.4.4"
+        ],
+        [
+          "click",
+          "8.3.1"
+        ],
+        [
+          "colorama",
+          "0.4.6"
+        ],
+        [
+          "contourpy",
+          "1.3.3"
+        ],
+        [
+          "coverage",
+          "7.13.4"
+        ],
+        [
+          "cryptography",
+          "46.0.5"
+        ],
+        [
+          "cycler",
+          "0.12.1"
+        ],
+        [
+          "distro",
+          "1.9.0"
+        ],
+        [
+          "docstring_parser",
+          "0.17.0"
+        ],
+        [
+          "ecdsa",
+          "0.19.1"
+        ],
+        [
+          "einops",
+          "0.8.2"
+        ],
+        [
+          "fastapi",
+          "0.135.1"
+        ],
+        [
+          "filelock",
+          "3.25.0"
+        ],
+        [
+          "fonttools",
+          "4.61.1"
+        ],
+        [
+          "fsspec",
+          "2026.2.0"
+        ],
+        [
+          "ghp-import",
+          "2.1.0"
+        ],
+        [
+          "greenlet",
+          "3.3.2"
+        ],
+        [
+          "h11",
+          "0.16.0"
+        ],
+        [
+          "hf-xet",
+          "1.3.2"
+        ],
+        [
+          "hiredis",
+          "3.3.0"
+        ],
+        [
+          "httpcore",
+          "1.0.9"
+        ],
+        [
+          "httptools",
+          "0.7.1"
+        ],
+        [
+          "httpx",
+          "0.28.1"
+        ],
+        [
+          "httpx-oauth",
+          "0.16.1"
+        ],
+        [
+          "httpx-sse",
+          "0.4.3"
+        ],
+        [
+          "huggingface_hub",
+          "1.5.0"
+        ],
+        [
+          "idna",
+          "3.11"
+        ],
+        [
+          "iniconfig",
+          "2.3.0"
+        ],
+        [
+          "jinja2",
+          "3.1.6"
+        ],
+        [
+          "jiter",
+          "0.13.0"
+        ],
+        [
+          "joblib",
+          "1.5.3"
+        ],
+        [
+          "jsonschema",
+          "4.26.0"
+        ],
+        [
+          "jsonschema-specifications",
+          "2025.9.1"
+        ],
+        [
+          "kiwisolver",
+          "1.4.9"
+        ],
+        [
+          "librt",
+          "0.8.1"
+        ],
+        [
+          "linkify-it-py",
+          "2.0.3"
+        ],
+        [
+          "mako",
+          "1.3.10"
+        ],
+        [
+          "markdown",
+          "3.10.2"
+        ],
+        [
+          "markdown-it-py",
+          "4.0.0"
+        ],
+        [
+          "markupsafe",
+          "3.0.3"
+        ],
+        [
+          "matplotlib",
+          "3.10.8"
+        ],
+        [
+          "mcp",
+          "1.26.0"
+        ],
+        [
+          "mdit-py-plugins",
+          "0.5.0"
+        ],
+        [
+          "mdurl",
+          "0.1.2"
+        ],
+        [
+          "mergedeep",
+          "1.3.4"
+        ],
+        [
+          "mkdocs",
+          "1.6.1"
+        ],
+        [
+          "mkdocs-get-deps",
+          "0.2.0"
+        ],
+        [
+          "mkdocs-material",
+          "9.7.3"
+        ],
+        [
+          "mkdocs-material-extensions",
+          "1.3.1"
+        ],
+        [
+          "mpmath",
+          "1.3.0"
+        ],
+        [
+          "mypy",
+          "1.19.1"
+        ],
+        [
+          "mypy_extensions",
+          "1.1.0"
+        ],
+        [
+          "networkx",
+          "3.6.1"
+        ],
+        [
+          "numpy",
+          "2.4.2"
+        ],
+        [
+          "openai",
+          "2.24.0"
+        ],
+        [
+          "packaging",
+          "26.0"
+        ],
+        [
+          "paginate",
+          "0.5.7"
+        ],
+        [
+          "pathspec",
+          "1.0.4"
+        ],
+        [
+          "pgvector",
+          "0.4.2"
+        ],
+        [
+          "pillow",
+          "12.1.1"
+        ],
+        [
+          "platformdirs",
+          "4.9.2"
+        ],
+        [
+          "pluggy",
+          "1.6.0"
+        ],
+        [
+          "prompt_toolkit",
+          "3.0.52"
+        ],
+        [
+          "psutil",
+          "7.2.2"
+        ],
+        [
+          "pyasn1",
+          "0.6.2"
+        ],
+        [
+          "pycparser",
+          "3.0"
+        ],
+        [
+          "pydantic",
+          "2.12.5"
+        ],
+        [
+          "pydantic-settings",
+          "2.13.1"
+        ],
+        [
+          "pydantic_core",
+          "2.41.5"
+        ],
+        [
+          "pygit2",
+          "1.19.1"
+        ],
+        [
+          "pygments",
+          "2.19.2"
+        ],
+        [
+          "pyjwt",
+          "2.11.0"
+        ],
+        [
+          "pymdown-extensions",
+          "10.21"
+        ],
+        [
+          "pyparsing",
+          "3.3.2"
+        ],
+        [
+          "pytest",
+          "9.0.2"
+        ],
+        [
+          "pytest-asyncio",
+          "1.3.0"
+        ],
+        [
+          "pytest-cov",
+          "7.0.0"
+        ],
+        [
+          "pytest-mock",
+          "3.15.1"
+        ],
+        [
+          "pytest-textual-snapshot",
+          "1.0.0"
+        ],
+        [
+          "python-dateutil",
+          "2.9.0.post0"
+        ],
+        [
+          "python-dotenv",
+          "1.2.1"
+        ],
+        [
+          "python-jose",
+          "3.5.0"
+        ],
+        [
+          "python-multipart",
+          "0.0.22"
+        ],
+        [
+          "pyyaml",
+          "6.0.3"
+        ],
+        [
+          "pyyaml_env_tag",
+          "1.1"
+        ],
+        [
+          "questionary",
+          "2.1.1"
+        ],
+        [
+          "redis",
+          "5.3.1"
+        ],
+        [
+          "referencing",
+          "0.37.0"
+        ],
+        [
+          "regex",
+          "2026.2.28"
+        ],
+        [
+          "requests",
+          "2.32.5"
+        ],
+        [
+          "respx",
+          "0.22.0"
+        ],
+        [
+          "rich",
+          "14.3.3"
+        ],
+        [
+          "rich-click",
+          "1.9.7"
+        ],
+        [
+          "rpds-py",
+          "0.30.0"
+        ],
+        [
+          "rsa",
+          "4.9.1"
+        ],
+        [
+          "ruff",
+          "0.15.4"
+        ],
+        [
+          "safetensors",
+          "0.7.0"
+        ],
+        [
+          "scikit-learn",
+          "1.8.0"
+        ],
+        [
+          "scipy",
+          "1.17.1"
+        ],
+        [
+          "sentence-transformers",
+          "5.2.3"
+        ],
+        [
+          "setuptools",
+          "82.0.0"
+        ],
+        [
+          "shellingham",
+          "1.5.4"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "sniffio",
+          "1.3.1"
+        ],
+        [
+          "sqlalchemy",
+          "2.0.48"
+        ],
+        [
+          "sse-starlette",
+          "3.3.2"
+        ],
+        [
+          "starlette",
+          "0.52.1"
+        ],
+        [
+          "structlog",
+          "25.5.0"
+        ],
+        [
+          "sympy",
+          "1.14.0"
+        ],
+        [
+          "syrupy",
+          "5.1.0"
+        ],
+        [
+          "tenacity",
+          "9.1.4"
+        ],
+        [
+          "textual",
+          "8.0.0"
+        ],
+        [
+          "threadpoolctl",
+          "3.6.0"
+        ],
+        [
+          "tiktoken",
+          "0.12.0"
+        ],
+        [
+          "tokenizers",
+          "0.22.2"
+        ],
+        [
+          "tomli_w",
+          "1.2.0"
+        ],
+        [
+          "tomlkit",
+          "0.14.0"
+        ],
+        [
+          "torch",
+          "2.10.0"
+        ],
+        [
+          "tqdm",
+          "4.67.3"
+        ],
+        [
+          "transformers",
+          "5.2.0"
+        ],
+        [
+          "tree-sitter",
+          "0.25.2"
+        ],
+        [
+          "tree-sitter-bash",
+          "0.25.1"
+        ],
+        [
+          "tree-sitter-c",
+          "0.24.1"
+        ],
+        [
+          "tree-sitter-c-sharp",
+          "0.23.1"
+        ],
+        [
+          "tree-sitter-cpp",
+          "0.23.4"
+        ],
+        [
+          "tree-sitter-css",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-elixir",
+          "0.3.5"
+        ],
+        [
+          "tree-sitter-go",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-hcl",
+          "1.2.0"
+        ],
+        [
+          "tree-sitter-html",
+          "0.23.2"
+        ],
+        [
+          "tree-sitter-java",
+          "0.23.5"
+        ],
+        [
+          "tree-sitter-javascript",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-json",
+          "0.24.8"
+        ],
+        [
+          "tree-sitter-kotlin",
+          "1.1.0"
+        ],
+        [
+          "tree-sitter-language-pack",
+          "1.1.2"
+        ],
+        [
+          "tree-sitter-lua",
+          "0.5.0"
+        ],
+        [
+          "tree-sitter-php",
+          "0.24.1"
+        ],
+        [
+          "tree-sitter-python",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-ruby",
+          "0.23.1"
+        ],
+        [
+          "tree-sitter-rust",
+          "0.24.0"
+        ],
+        [
+          "tree-sitter-scala",
+          "0.24.0"
+        ],
+        [
+          "tree-sitter-swift",
+          "0.0.1"
+        ],
+        [
+          "tree-sitter-toml",
+          "0.7.0"
+        ],
+        [
+          "tree-sitter-typescript",
+          "0.23.2"
+        ],
+        [
+          "tree-sitter-yaml",
+          "0.7.2"
+        ],
+        [
+          "tree-sitter-zig",
+          "1.1.2"
+        ],
+        [
+          "typer",
+          "0.24.1"
+        ],
+        [
+          "typer-slim",
+          "0.24.0"
+        ],
+        [
+          "typing-inspection",
+          "0.4.2"
+        ],
+        [
+          "typing_extensions",
+          "4.15.0"
+        ],
+        [
+          "uc-micro-py",
+          "1.0.3"
+        ],
+        [
+          "urllib3",
+          "2.6.3"
+        ],
+        [
+          "uvicorn",
+          "0.41.0"
+        ],
+        [
+          "uvloop",
+          "0.22.1"
+        ],
+        [
+          "watchdog",
+          "6.0.0"
+        ],
+        [
+          "watchfiles",
+          "1.1.1"
+        ],
+        [
+          "wcmatch",
+          "10.1"
+        ],
+        [
+          "wcwidth",
+          "0.6.0"
+        ],
+        [
+          "websockets",
+          "16.0"
+        ]
+      ],
+      "fixture_sha256": "6c37fefea2e28e8f804333dcc2c98135a6490372c3441225a737519b480b8df5",
+      "harness_sha256": "6d3bd80ef881fae3efdddcc1574a2b81d91b57f9167ddd1243eb4a95c940238c",
+      "optional_grammars": {
+        "cache_sha256": "33de365f463f920ff46a0712f884df77a0b7637517c492de1a9f896bddb3008d",
+        "languages": [
+          "clojure",
+          "dart",
+          "erlang",
+          "fsharp",
+          "haskell",
+          "julia",
+          "nim",
+          "objc",
+          "ocaml",
+          "perl",
+          "r"
+        ]
+      },
+      "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+      "platform": "macOS-26.2-arm64-arm-64bit",
+      "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
+      "settings": {
+        "ATTOCODE_EMBEDDING_MODEL": null,
+        "ATTOCODE_INTEL_BROAD_RERANK": null,
+        "ATTOCODE_INTEL_PRECISION": null,
+        "ATTOCODE_INTEL_RANKING_ALLOW_REMOTE": null,
+        "ATTOCODE_INTEL_RANKING_PROVIDER": null,
+        "ATTOCODE_LOCAL_ONLY": null,
+        "ATTOCODE_NL_EMBEDDING_MODE": null
+      },
+      "source_sha256": "612f8bd1e3a24cdf5b3ef3be66da142943066001562a837b51c20ef490a8faf2"
+    },
+    "wiring_profiles": [
+      {
+        "mode": "concurrent",
+        "source": {
+          "bytes": 1142,
+          "files": 24,
+          "sha256": "54541a0d48a130a7c36c0d6ebf66b04941629da025fd567fb3de3abeb01d81c6"
+        },
+        "status": "completed",
+        "profile": {
+          "active": [],
+          "counts": {
+            "body.commits": 1,
+            "body.files_completed": 24,
+            "body.files_started": 24,
+            "body.read_chars": 1142,
+            "body.windows": 24,
+            "keyword.commits": 1,
+            "keyword.discovery_reused": 1,
+            "keyword.documents": 48,
+            "keyword.files_completed": 24,
+            "keyword.files_started": 24,
+            "keyword.read_chars": 1142
+          },
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.cache_load": {
+              "calls": 1,
+              "thread_cpu_seconds": 9.999999999999593e-06,
+              "wall_seconds": 1.0041985660791397e-05
+            },
+            "body.commit": {
+              "calls": 1,
+              "thread_cpu_seconds": 8.808400000000043e-05,
+              "wall_seconds": 8.808297570794821e-05
+            },
+            "body.delete": {
+              "calls": 1,
+              "thread_cpu_seconds": 8.075000000000096e-05,
+              "wall_seconds": 8.079200051724911e-05
+            },
+            "body.discovery": {
+              "calls": 1,
+              "thread_cpu_seconds": 2.082999999999946e-06,
+              "wall_seconds": 2.08395067602396e-06
+            },
+            "body.document": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.0006647500000000004,
+              "wall_seconds": 0.0006647498812526464
+            },
+            "body.files": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.0010190830000000005,
+              "wall_seconds": 0.0010191249893978238
+            },
+            "body.lock": {
+              "calls": 1,
+              "thread_cpu_seconds": 6.669999999993348e-07,
+              "wall_seconds": 6.249174475669861e-07
+            },
+            "body.open": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.001153958,
+              "wall_seconds": 0.0019523330265656114
+            },
+            "body.read": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.0003746630000000008,
+              "wall_seconds": 0.00037470494862645864
+            },
+            "body.revision": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.002216542,
+              "wall_seconds": 0.04005566705018282
+            },
+            "body.spans": {
+              "calls": 24,
+              "thread_cpu_seconds": 3.1665999999990965e-05,
+              "wall_seconds": 3.162282519042492e-05
+            },
+            "body.sql": {
+              "calls": 76,
+              "thread_cpu_seconds": 0.00025558000000000004,
+              "wall_seconds": 0.00025478797033429146
+            },
+            "body.stat": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.0003300830000000001,
+              "wall_seconds": 0.00033004197757691145
+            },
+            "body.tokenize": {
+              "calls": 1,
+              "thread_cpu_seconds": 4.124999999998921e-06,
+              "wall_seconds": 4.124944098293781e-06
+            },
+            "keyword.cache_load": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.002127125,
+              "wall_seconds": 0.00303312495816499
+            },
+            "keyword.cache_save": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.001301875,
+              "wall_seconds": 0.0014415000332519412
+            },
+            "keyword.commit": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.00011462500000000014,
+              "wall_seconds": 0.0001265830360352993
+            },
+            "keyword.discovery": {
+              "calls": 1,
+              "thread_cpu_seconds": 4.499999999999947e-06,
+              "wall_seconds": 4.708999767899513e-06
+            },
+            "keyword.discovery_reuse": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.00045562500000000003,
+              "wall_seconds": 0.0009521250613033772
+            },
+            "keyword.documents": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.0007506249999999991,
+              "wall_seconds": 0.0009232929442077875
+            },
+            "keyword.files": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.0025587089999999997,
+              "wall_seconds": 0.006300208042375743
+            },
+            "keyword.frequencies": {
+              "calls": 1,
+              "thread_cpu_seconds": 1.7083000000000202e-05,
+              "wall_seconds": 1.708301715552807e-05
+            },
+            "keyword.hash_lookup": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.00018420899999999898,
+              "wall_seconds": 0.0002704198705032468
+            },
+            "keyword.read": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.0011267919999999989,
+              "wall_seconds": 0.004575749859213829
+            },
+            "keyword.serialize": {
+              "calls": 1,
+              "thread_cpu_seconds": 1.916700000000049e-05,
+              "wall_seconds": 1.9208993762731552e-05
+            },
+            "keyword.spans": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.00012837899999999835,
+              "wall_seconds": 0.00015350221656262875
+            },
+            "keyword.sql": {
+              "calls": 4,
+              "thread_cpu_seconds": 0.00011662500000000128,
+              "wall_seconds": 0.00011670903768390417
+            },
+            "keyword.stat": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.00022687499999999986,
+              "wall_seconds": 0.000488666002638638
+            },
+            "keyword.tokenize": {
+              "calls": 1,
+              "thread_cpu_seconds": 6.749999999999812e-06,
+              "wall_seconds": 6.749993190169334e-06
+            }
+          },
+          "sampling": {
+            "every": 64,
+            "observed_calls": {
+              "body.tokenize": 48,
+              "keyword.serialize": 48,
+              "keyword.tokenize": 48
+            },
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "schema": 2,
+          "slow_files": [
+            {
+              "file": "file19.py",
+              "phase": "keyword.documents",
+              "wall_seconds": 0.00043245800770819187
+            },
+            {
+              "file": "file12.py",
+              "phase": "keyword.documents",
+              "wall_seconds": 7.837498560547829e-05
+            },
+            {
+              "file": "file0.py",
+              "phase": "body.document",
+              "wall_seconds": 6.987492088228464e-05
+            },
+            {
+              "file": "file22.py",
+              "phase": "keyword.documents",
+              "wall_seconds": 5.379202775657177e-05
+            },
+            {
+              "file": "file0.py",
+              "phase": "keyword.documents",
+              "wall_seconds": 4.8749963752925396e-05
+            },
+            {
+              "file": "file1.py",
+              "phase": "body.document",
+              "wall_seconds": 4.016596358269453e-05
+            },
+            {
+              "file": "file10.py",
+              "phase": "body.document",
+              "wall_seconds": 3.1208968721330166e-05
+            },
+            {
+              "file": "file3.py",
+              "phase": "keyword.documents",
+              "wall_seconds": 3.108300734311342e-05
+            }
+          ],
+          "timing": "inclusive; completed scopes only; indexing-thread CPU"
+        }
+      },
+      {
+        "mode": "prehydrated",
+        "source": {
+          "bytes": 1142,
+          "files": 24,
+          "sha256": "54541a0d48a130a7c36c0d6ebf66b04941629da025fd567fb3de3abeb01d81c6"
+        },
+        "status": "completed",
+        "profile": {
+          "active": [],
+          "counts": {
+            "body.commits": 1,
+            "body.files_completed": 24,
+            "body.files_started": 24,
+            "body.read_chars": 1142,
+            "body.windows": 24,
+            "keyword.commits": 1,
+            "keyword.discovery_reused": 1,
+            "keyword.documents": 48,
+            "keyword.files_completed": 24,
+            "keyword.files_started": 24,
+            "keyword.read_chars": 1142
+          },
+          "counts_semantics": "attempted work, not committed rows; commits counted separately",
+          "phases": {
+            "body.cache_load": {
+              "calls": 1,
+              "thread_cpu_seconds": 3.8999999999999105e-05,
+              "wall_seconds": 3.9082951843738556e-05
+            },
+            "body.commit": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.00010412500000000005,
+              "wall_seconds": 0.00015012500807642937
+            },
+            "body.delete": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.00012891700000000096,
+              "wall_seconds": 0.0002597499405965209
+            },
+            "body.discovery": {
+              "calls": 1,
+              "thread_cpu_seconds": 2.999999999999531e-06,
+              "wall_seconds": 3.00002284348011e-06
+            },
+            "body.document": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.001104626000000001,
+              "wall_seconds": 0.0012819578405469656
+            },
+            "body.files": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.0017351250000000006,
+              "wall_seconds": 0.0019455829169601202
+            },
+            "body.lock": {
+              "calls": 1,
+              "thread_cpu_seconds": 1.7920000000004599e-06,
+              "wall_seconds": 1.8749851733446121e-06
+            },
+            "body.open": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.0014137920000000005,
+              "wall_seconds": 0.001567375031299889
+            },
+            "body.read": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.0006182450000000016,
+              "wall_seconds": 0.0006889196811243892
+            },
+            "body.revision": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.0018106659999999998,
+              "wall_seconds": 0.01704895799048245
+            },
+            "body.spans": {
+              "calls": 24,
+              "thread_cpu_seconds": 5.699799999999561e-05,
+              "wall_seconds": 6.775069050490856e-05
+            },
+            "body.sql": {
+              "calls": 76,
+              "thread_cpu_seconds": 0.0004896260000000069,
+              "wall_seconds": 0.0006322090048342943
+            },
+            "body.stat": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.0006693330000000011,
+              "wall_seconds": 0.0007822079351171851
+            },
+            "body.tokenize": {
+              "calls": 1,
+              "thread_cpu_seconds": 1.1541999999999802e-05,
+              "wall_seconds": 1.191697083413601e-05
+            },
+            "keyword.cache_load": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.0020748750000000003,
+              "wall_seconds": 0.006073332973755896
+            },
+            "keyword.cache_save": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.001704708,
+              "wall_seconds": 0.0030431250343099236
+            },
+            "keyword.commit": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.00022725000000000002,
+              "wall_seconds": 0.00035920809023082256
+            },
+            "keyword.discovery": {
+              "calls": 1,
+              "thread_cpu_seconds": 2.37499999999999e-06,
+              "wall_seconds": 2.2909371182322502e-06
+            },
+            "keyword.discovery_reuse": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.000243084,
+              "wall_seconds": 0.0005375839537009597
+            },
+            "keyword.documents": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.0008291640000000003,
+              "wall_seconds": 0.0010600860696285963
+            },
+            "keyword.files": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.002332541,
+              "wall_seconds": 0.002767666010186076
+            },
+            "keyword.frequencies": {
+              "calls": 1,
+              "thread_cpu_seconds": 2.7166999999999816e-05,
+              "wall_seconds": 2.7082976885139942e-05
+            },
+            "keyword.hash_lookup": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.00013392000000000005,
+              "wall_seconds": 0.0001394582213833928
+            },
+            "keyword.read": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.0009016270000000003,
+              "wall_seconds": 0.0009929623920470476
+            },
+            "keyword.serialize": {
+              "calls": 1,
+              "thread_cpu_seconds": 3.66250000000002e-05,
+              "wall_seconds": 3.975001163780689e-05
+            },
+            "keyword.spans": {
+              "calls": 24,
+              "thread_cpu_seconds": 0.00011837300000000061,
+              "wall_seconds": 0.00020266766659915447
+            },
+            "keyword.sql": {
+              "calls": 4,
+              "thread_cpu_seconds": 0.00018570800000000057,
+              "wall_seconds": 0.0002304170047864318
+            },
+            "keyword.stat": {
+              "calls": 1,
+              "thread_cpu_seconds": 0.00012858300000000004,
+              "wall_seconds": 0.00031758309341967106
+            },
+            "keyword.tokenize": {
+              "calls": 1,
+              "thread_cpu_seconds": 2.191699999999977e-05,
+              "wall_seconds": 2.2541964426636696e-05
+            }
+          },
+          "sampling": {
+            "every": 64,
+            "observed_calls": {
+              "body.tokenize": 48,
+              "keyword.serialize": 48,
+              "keyword.tokenize": 48
+            },
+            "phases": [
+              "body.tokenize",
+              "keyword.serialize",
+              "keyword.tokenize"
+            ],
+            "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes"
+          },
+          "schema": 2,
+          "slow_files": [
+            {
+              "file": "file10.py",
+              "phase": "keyword.documents",
+              "wall_seconds": 0.0002702920464798808
+            },
+            {
+              "file": "file0.py",
+              "phase": "body.document",
+              "wall_seconds": 0.00017908297013491392
+            },
+            {
+              "file": "file1.py",
+              "phase": "body.document",
+              "wall_seconds": 0.00011912500485777855
+            },
+            {
+              "file": "file11.py",
+              "phase": "keyword.documents",
+              "wall_seconds": 0.00010041706264019012
+            },
+            {
+              "file": "file2.py",
+              "phase": "body.document",
+              "wall_seconds": 9.720795787870884e-05
+            },
+            {
+              "file": "file18.py",
+              "phase": "body.document",
+              "wall_seconds": 9.545800276100636e-05
+            },
+            {
+              "file": "file22.py",
+              "phase": "body.document",
+              "wall_seconds": 8.983304724097252e-05
+            },
+            {
+              "file": "file21.py",
+              "phase": "keyword.documents",
+              "wall_seconds": 7.795891724526882e-05
+            }
+          ],
+          "timing": "inclusive; completed scopes only; indexing-thread CPU"
+        }
+      }
+    ],
+    "negative_controls": [
+      "disabled discovery reuse: redundant-discovery assertion fails",
+      "baseline body method: repeated-line call-count assertion fails"
+    ]
+  }
+}

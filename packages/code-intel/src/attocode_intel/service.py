@@ -279,6 +279,11 @@ class CodeIntelService:
                     self._security_scanner = SecurityScanner(root_dir=self._project_dir)
         return self._security_scanner
 
+    def _cached_discovery_snapshot(self):
+        # Do not initialize structural indexing or wait for hydration here.
+        ast = self._ast_service
+        return ast._context_mgr._discovery_snapshot if ast is not None else None
+
     def _get_semantic_search(self) -> SemanticSearchManager:
         if self._semantic_search is None:
             with self._init_lock:
@@ -288,7 +293,8 @@ class CodeIntelService:
                     )
 
                     kwargs: dict[str, object] = {"root_dir": self._project_dir,
-                                                 "ast_lookup": self._cached_search_ast}
+                                                 "ast_lookup": self._cached_search_ast,
+                                                 "discovery_snapshot": self._cached_discovery_snapshot}
                     if self._scoring_config is not None:
                         kwargs["scoring_config"] = self._scoring_config
                     self._semantic_search = SemanticSearchManager(**kwargs)

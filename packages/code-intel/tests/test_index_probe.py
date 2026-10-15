@@ -68,6 +68,8 @@ def test_probe_retention_is_fixed_and_rejects_dynamic_labels():
         pass
     with pytest.raises(ValueError):
         p.count("arbitrary key")
+    with pytest.raises(ValueError):
+        p.sample_call("arbitrary key")
 
 
 def rows(manager):
@@ -109,7 +111,8 @@ def test_opt_in_warmup_has_exact_cache_fts_and_ranking_parity(tmp_path, monkeypa
         assert s["counts"]["body.files_completed"] == 12
         assert s["counts"]["keyword.files_completed"] == 12
         assert s["counts"]["body.commits"] == s["counts"]["keyword.commits"] == 1
-        assert s["phases"]["keyword.serialize"]["calls"] > 12
+        assert s["sampling"]["observed_calls"]["keyword.serialize"] > 12
+        assert s["phases"]["keyword.serialize"]["calls"] < 12
         assert {"body.sql", "body.tokenize", "keyword.frequencies", "keyword.discovery"} <= s[
             "phases"
         ].keys()
@@ -188,3 +191,39 @@ def test_probe_pack_requires_explicit_worker_before_workspace_creation(tmp_path,
     with pytest.raises(ValueError, match="Linux worker"):
         run(root, "cockroach")
     assert not root.exists()
+
+
+def test_hot_calls_count_all_but_time_only_fixed_samples(monkeypatch):
+    reads = []
+    def clock():
+        reads.append(1)
+        return float(len(reads))
+    monkeypatch.setattr(probe, "time", SimpleNamespace(monotonic=clock, thread_time=clock))
+    p = probe.IndexProbe()
+    with probe.activate(p):
+        f = probe.instrument("body.tokenize", lambda value: value + 1)
+        assert [f(i) for i in range(130)] == list(range(1, 131))
+        # Rewrapping for another file must not restart sampling/counts.
+        f = probe.instrument("body.tokenize", lambda value: value + 1)
+        assert f(130) == 131
+    assert len(reads) == 3 * 4  # calls 1, 65, 129; two clocks at entry/exit
+    s = p.snapshot()
+    assert s["schema"] == 2 and s["sampling"]["observed_calls"] == {"body.tokenize": 131}
+    assert s["phases"]["body.tokenize"]["calls"] == 3
+    assert "no extrapolation" in s["sampling"]["timing"]
+    assert not s["active"]
+
+
+def test_sampled_and_unsampled_exceptions_keep_their_behavior():
+    p = probe.IndexProbe()
+    def fail():
+        raise LookupError("unchanged")
+    with probe.activate(p):
+        f = probe.instrument("body.tokenize", fail)
+        for _ in range(2):
+            with pytest.raises(LookupError, match="unchanged"):
+                f()
+    s = p.snapshot()
+    assert s["sampling"]["observed_calls"]["body.tokenize"] == 2
+    assert s["phases"]["body.tokenize"]["calls"] == 1
+    assert not s["active"]
