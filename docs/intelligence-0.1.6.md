@@ -1,8 +1,12 @@
 # Attocode Intelligence 0.1.6 candidate
 
 This candidate extends static navigation across more language/module layouts and
-adds a bounded, inspectable quality matrix. Publication and final CI evidence are
-still pending; the local candidate upgrade check is not a PyPI publication check.
+adds a bounded, inspectable quality matrix. The implementation is merged and its
+required CI passed, but publication is blocked: the final cold cloud run completed
+35 of 36 source packs and CockroachDB search indexing timed out. All six authorized
+batches are used and all workers deleted. See the
+[final cloud evidence](../packages/code-intel/evals/results/2026-10-15-breadth-cloud.md).
+The local candidate upgrade check is not a PyPI publication check.
 
 ## Changes
 
