@@ -1,0 +1,2809 @@
+{
+  "development_replay": {
+    "scope": "Local lexical replay; depth 96 reruns candidate generation, not a stable cursor. Development labels unchanged. No models, downloads, or agent runs.",
+    "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+    "repositories": [
+      {
+        "pack": "fastapi",
+        "commit": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+        "tree": "ed4cc219ce1c8f8bddd88a60c52a701fef3b5f64",
+        "diagnostics": {
+          "status": "ready",
+          "keyword_index_ready": true,
+          "body_index_available": true,
+          "body_index_ready": true,
+          "body_indexed_files": 2642,
+          "keyword_indexed_files": 2643,
+          "body_index_coverage": 1.0,
+          "vector_status": "idle",
+          "vector_coverage": 0.0,
+          "warmup_stage": "ready",
+          "warmup_reused_asts": 0,
+          "warmup_seconds": 2.691,
+          "keyword_seconds": 1.423,
+          "importance_seconds": 0.0,
+          "body_seconds": 1.268
+        },
+        "queries": [
+          {
+            "id": "fastapi:1",
+            "query": "Serialize and validate the outgoing response",
+            "depth": 24,
+            "labeled_files": [
+              "fastapi/routing.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/routing.py": 1
+              },
+              "body": {
+                "fastapi/routing.py": 1
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/routing.py": 1
+              },
+              "fused": {
+                "fastapi/routing.py": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 39,
+              "body": 39,
+              "file_bm25": 0,
+              "chunk_fused": 63,
+              "fused": 63
+            },
+            "returned_labeled_ranks": {
+              "fastapi/routing.py": 1
+            },
+            "ranked_files": [
+              "fastapi/routing.py",
+              "fastapi/_compat/v2.py",
+              "fastapi/dependencies/utils.py",
+              "fastapi/openapi/models.py",
+              "fastapi/datastructures.py",
+              "docs/tr/docs/advanced/response-directly.md",
+              "docs/en/docs/tutorial/server-sent-events.md",
+              "docs/en/docs/advanced/json-base64-bytes.md",
+              "docs/tr/docs/tutorial/sql-databases.md",
+              "fastapi/responses.py",
+              "docs/en/docs/tutorial/stream-json-lines.md",
+              "scripts/contributors.py",
+              "scripts/sponsors.py",
+              "scripts/notify_translations.py",
+              "fastapi/sse.py",
+              "docs_src/stream_data/tutorial002_py310.py",
+              "docs/en/docs/tutorial/sql-databases.md",
+              "scripts/people.py",
+              "fastapi/exceptions.py",
+              "docs_src/custom_response/tutorial009c_py310.py",
+              "docs/en/docs/advanced/custom-response.md",
+              "docs/en/docs/reference/openapi/models.md",
+              "docs_src/generate_clients/tutorial001_py310.py",
+              "docs_src/generate_clients/tutorial002_py310.py"
+            ],
+            "seconds": 0.03818429191596806
+          },
+          {
+            "id": "fastapi:1",
+            "query": "Serialize and validate the outgoing response",
+            "depth": 96,
+            "labeled_files": [
+              "fastapi/routing.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/routing.py": 1
+              },
+              "body": {
+                "fastapi/routing.py": 1
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/routing.py": 1
+              },
+              "fused": {
+                "fastapi/routing.py": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 125,
+              "body": 200,
+              "file_bm25": 0,
+              "chunk_fused": 285,
+              "fused": 285
+            },
+            "returned_labeled_ranks": {
+              "fastapi/routing.py": 1
+            },
+            "ranked_files": [
+              "fastapi/routing.py",
+              "fastapi/_compat/v2.py",
+              "fastapi/dependencies/utils.py",
+              "fastapi/openapi/models.py",
+              "fastapi/datastructures.py",
+              "docs/tr/docs/advanced/response-directly.md",
+              "docs/en/docs/tutorial/server-sent-events.md",
+              "fastapi/responses.py",
+              "docs/en/docs/advanced/json-base64-bytes.md",
+              "docs/tr/docs/tutorial/sql-databases.md",
+              "docs/en/docs/tutorial/stream-json-lines.md",
+              "scripts/contributors.py",
+              "scripts/sponsors.py",
+              "scripts/notify_translations.py",
+              "fastapi/sse.py",
+              "docs_src/stream_data/tutorial002_py310.py",
+              "docs/en/docs/tutorial/sql-databases.md",
+              "scripts/people.py",
+              "fastapi/exceptions.py",
+              "docs_src/custom_response/tutorial009c_py310.py",
+              "docs/en/docs/advanced/custom-response.md",
+              "docs/en/docs/reference/openapi/models.md",
+              "fastapi/applications.py",
+              "docs_src/sql_databases/tutorial002_an_py310.py",
+              "docs_src/generate_clients/tutorial001_py310.py",
+              "docs_src/generate_clients/tutorial002_py310.py",
+              "docs/en/docs/tutorial/response-model.md",
+              "docs_src/generate_clients/tutorial003_py310.py",
+              "docs_src/sql_databases/tutorial002_py310.py",
+              "docs/tr/docs/advanced/custom-response.md",
+              "fastapi/_compat/__init__.py",
+              "pyproject.toml",
+              "docs_src/custom_response/tutorial004_py310.py",
+              "fastapi/openapi/docs.py",
+              "docs/en/docs/reference/responses.md",
+              "docs/ko/docs/_llm-test.md",
+              "docs/zh/docs/_llm-test.md",
+              "docs/en/docs/advanced/response-directly.md",
+              "docs_src/path_operation_advanced_configuration/tutorial007_py310.py",
+              "docs/en/docs/tutorial/body-nested-models.md",
+              "docs/en/docs/index.md",
+              "README.md",
+              "docs/ru/llm-prompt.md",
+              "docs_src/custom_request_and_route/tutorial003_py310.py",
+              "docs/en/docs/_llm-test.md",
+              "docs_src/security/tutorial004_py310.py",
+              "docs_src/security/tutorial004_an_py310.py",
+              "docs/en/docs/tutorial/body-multiple-params.md",
+              "docs/tr/docs/_llm-test.md",
+              "docs/tr/docs/advanced/additional-status-codes.md",
+              "docs/en/docs/advanced/stream-data.md",
+              "docs/tr/docs/tutorial/body-multiple-params.md",
+              "docs/en/docs/advanced/path-operation-advanced-configuration.md",
+              "docs/en/docs/tutorial/query-params-str-validations.md",
+              "docs/en/docs/python-types.md",
+              "docs/tr/docs/tutorial/response-model.md",
+              "docs/en/docs/advanced/middleware.md",
+              "docs_src/security/tutorial005_py310.py",
+              "docs_src/security/tutorial005_an_py310.py",
+              "docs/en/docs/advanced/settings.md",
+              "docs/en/docs/tutorial/body.md",
+              "docs/en/docs/alternatives.md",
+              "docs/en/docs/advanced/security/oauth2-scopes.md",
+              "docs/tr/docs/tutorial/body.md",
+              "docs/tr/docs/advanced/using-request-directly.md",
+              "docs/en/docs/features.md",
+              "docs/en/docs/js/init_kapa_widget.js",
+              "docs/zh/docs/advanced/response-cookies.md",
+              "docs/zh-hant/docs/advanced/response-cookies.md",
+              "docs/ko/docs/advanced/response-cookies.md",
+              "docs/uk/docs/advanced/response-cookies.md",
+              "docs/ko/docs/advanced/custom-response.md",
+              "docs/ru/docs/advanced/custom-response.md",
+              "docs/uk/docs/advanced/custom-response.md",
+              "docs/zh/docs/advanced/custom-response.md",
+              "docs/uk/docs/advanced/response-headers.md",
+              "docs/zh-hant/docs/advanced/custom-response.md",
+              "docs/ja/docs/advanced/custom-response.md",
+              "docs/zh-hant/docs/advanced/response-headers.md",
+              "docs/uk/docs/advanced/response-directly.md",
+              "docs/ja/docs/advanced/response-cookies.md",
+              "docs/ru/docs/advanced/response-cookies.md",
+              "docs/ko/docs/advanced/response-headers.md",
+              "docs/ja/docs/advanced/response-headers.md",
+              "docs/zh/docs/advanced/response-directly.md",
+              "docs/zh-hant/docs/advanced/response-directly.md",
+              "docs/zh/docs/advanced/response-headers.md",
+              "docs/ru/docs/advanced/response-headers.md",
+              "docs/ru/docs/tutorial/response-model.md",
+              "docs/uk/docs/tutorial/response-model.md",
+              "docs/zh-hant/docs/tutorial/response-model.md",
+              "docs/zh/docs/tutorial/response-model.md",
+              "docs/ko/docs/advanced/response-directly.md",
+              "docs/ru/docs/advanced/response-directly.md",
+              "docs/ja/docs/advanced/response-directly.md",
+              "docs/ja/docs/tutorial/response-model.md"
+            ],
+            "seconds": 0.054673834005370736
+          },
+          {
+            "id": "fastapi:2",
+            "query": "Resolve dependencies for an incoming request",
+            "depth": 24,
+            "labeled_files": [
+              "fastapi/dependencies/utils.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/dependencies/utils.py": 1
+              },
+              "body": {
+                "fastapi/dependencies/utils.py": 33
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/dependencies/utils.py": 2
+              },
+              "fused": {
+                "fastapi/dependencies/utils.py": 2
+              }
+            },
+            "stage_counts": {
+              "keyword": 37,
+              "body": 61,
+              "file_bm25": 0,
+              "chunk_fused": 90,
+              "fused": 90
+            },
+            "returned_labeled_ranks": {
+              "fastapi/dependencies/utils.py": 2
+            },
+            "ranked_files": [
+              "scripts/mkdocs_hooks.py",
+              "fastapi/dependencies/utils.py",
+              "docs/en/docs/js/termynal.js",
+              "fastapi/routing.py",
+              "docs/en/docs/js/custom.js",
+              "docs/en/docs/advanced/middleware.md",
+              "docs_src/custom_request_and_route/tutorial001_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial001_py310.py",
+              "fastapi/exceptions.py",
+              "fastapi/param_functions.py",
+              "fastapi/openapi/models.py",
+              "scripts/contributors.py",
+              "docs/en/mkdocs.yml",
+              "fastapi/security/oauth2.py",
+              "fastapi/dependencies/models.py",
+              "fastapi/exception_handlers.py",
+              "pyproject.toml",
+              "fastapi/openapi/utils.py",
+              "docs/ko/docs/advanced/advanced-dependencies.md",
+              "scripts/people.py",
+              "docs/ja/docs/advanced/advanced-dependencies.md",
+              "docs/ru/docs/advanced/advanced-dependencies.md",
+              "docs/uk/docs/advanced/advanced-dependencies.md",
+              "docs/zh-hant/docs/advanced/advanced-dependencies.md"
+            ],
+            "seconds": 0.029588458011858165
+          },
+          {
+            "id": "fastapi:2",
+            "query": "Resolve dependencies for an incoming request",
+            "depth": 96,
+            "labeled_files": [
+              "fastapi/dependencies/utils.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/dependencies/utils.py": 1
+              },
+              "body": {
+                "fastapi/dependencies/utils.py": 33
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/dependencies/utils.py": 2
+              },
+              "fused": {
+                "fastapi/dependencies/utils.py": 2
+              }
+            },
+            "stage_counts": {
+              "keyword": 197,
+              "body": 253,
+              "file_bm25": 0,
+              "chunk_fused": 393,
+              "fused": 393
+            },
+            "returned_labeled_ranks": {
+              "fastapi/dependencies/utils.py": 2
+            },
+            "ranked_files": [
+              "scripts/mkdocs_hooks.py",
+              "fastapi/dependencies/utils.py",
+              "docs/en/docs/js/termynal.js",
+              "fastapi/routing.py",
+              "docs/en/docs/js/custom.js",
+              "docs/en/docs/advanced/middleware.md",
+              "docs_src/custom_request_and_route/tutorial001_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial001_py310.py",
+              "fastapi/exceptions.py",
+              "fastapi/param_functions.py",
+              "fastapi/dependencies/models.py",
+              "fastapi/openapi/models.py",
+              "scripts/contributors.py",
+              "docs/en/mkdocs.yml",
+              "fastapi/security/oauth2.py",
+              "fastapi/exception_handlers.py",
+              "fastapi/applications.py",
+              "fastapi/openapi/utils.py",
+              "pyproject.toml",
+              "docs/ko/docs/advanced/advanced-dependencies.md",
+              "scripts/people.py",
+              "docs/ja/docs/advanced/advanced-dependencies.md",
+              "docs/ru/docs/advanced/advanced-dependencies.md",
+              "docs/uk/docs/advanced/advanced-dependencies.md",
+              "docs/zh-hant/docs/advanced/advanced-dependencies.md",
+              "docs/zh/docs/advanced/advanced-dependencies.md",
+              "docs/en/docs/alternatives.md",
+              "docs_src/bigger_applications/app_an_py310/main.py",
+              "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/ru/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/en/docs/tutorial/dependencies/index.md",
+              "docs/en/docs/reference/request.md",
+              "docs/ko/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/uk/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/zh-hant/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/zh/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/en/docs/reference/security/index.md",
+              "docs/en/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+              "docs/en/docs/tutorial/cors.md",
+              "docs/uk/docs/advanced/templates.md",
+              "fastapi/middleware/asyncexitstack.py",
+              "docs/en/docs/index.md",
+              "docs/ru/docs/advanced/templates.md",
+              "docs/zh/docs/advanced/templates.md",
+              "docs/zh-hant/docs/advanced/templates.md",
+              "docs/en/docs/advanced/advanced-dependencies.md",
+              "docs/en/docs/reference/httpconnection.md",
+              "docs/ja/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs_src/bigger_applications/app_an_py310/dependencies.py",
+              "docs/en/docs/tutorial/dependencies/sub-dependencies.md",
+              "docs/en/docs/advanced/security/oauth2-scopes.md",
+              "docs/en/docs/advanced/templates.md",
+              "docs/en/docs/tutorial/bigger-applications.md",
+              "docs/ko/docs/advanced/templates.md",
+              "docs/en/docs/deployment/https.md",
+              "docs/ko/docs/advanced/security/oauth2-scopes.md",
+              "docs_src/handling_errors/tutorial004_py310.py",
+              "docs/zh/docs/advanced/security/oauth2-scopes.md",
+              "docs_src/handling_errors/tutorial005_py310.py",
+              "docs/ru/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+              "docs/ja/docs/advanced/templates.md",
+              "docs_src/handling_errors/tutorial006_py310.py",
+              "docs_src/behind_a_proxy/tutorial003_py310.py",
+              "docs_src/behind_a_proxy/tutorial004_py310.py",
+              "docs_src/templates/tutorial001_py310.py",
+              "docs_src/path_operation_advanced_configuration/tutorial007_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_an_py310.py",
+              "docs/en/docs/tutorial/middleware.md",
+              "docs_src/custom_request_and_route/tutorial002_py310.py",
+              "docs_src/path_operation_advanced_configuration/tutorial006_py310.py",
+              "docs/ko/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+              "docs_src/behind_a_proxy/tutorial001_py310.py",
+              "docs_src/dependencies/tutorial013_an_py310.py",
+              "docs/uk/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+              "docs_src/behind_a_proxy/tutorial002_py310.py",
+              "docs/zh/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+              "docs_src/dependencies/tutorial014_an_py310.py",
+              "docs/ko/docs/tutorial/bigger-applications.md",
+              "README.md",
+              "docs/de/docs/tutorial/bigger-applications.md",
+              "docs_src/bigger_applications/app_an_py310/routers/items.py",
+              "docs/zh-hant/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+              "docs_src/dependencies/tutorial006_an_py310.py",
+              "docs/de/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+              "docs_src/dependencies/tutorial006_py310.py",
+              "docs/ja/docs/advanced/security/oauth2-scopes.md",
+              "docs/ko/docs/tutorial/dependencies/global-dependencies.md",
+              "docs/ru/docs/tutorial/dependencies/global-dependencies.md",
+              "docs/uk/docs/tutorial/dependencies/global-dependencies.md",
+              "docs/zh/docs/tutorial/dependencies/global-dependencies.md",
+              "docs/zh-hant/docs/tutorial/dependencies/global-dependencies.md",
+              "docs/en/docs/tutorial/extra-data-types.md",
+              "docs/ja/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+              "docs_src/dependencies/tutorial012_py310.py",
+              "docs_src/dependencies/tutorial012_an_py310.py",
+              "docs/zh/docs/tutorial/bigger-applications.md"
+            ],
+            "seconds": 0.048762707971036434
+          },
+          {
+            "id": "fastapi:3",
+            "query": "Generate an OpenAPI schema for routes",
+            "depth": 24,
+            "labeled_files": [
+              "fastapi/openapi/utils.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/openapi/utils.py": 16
+              },
+              "body": {
+                "fastapi/openapi/utils.py": 3
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/openapi/utils.py": 3
+              },
+              "fused": {
+                "fastapi/openapi/utils.py": 3
+              }
+            },
+            "stage_counts": {
+              "keyword": 31,
+              "body": 44,
+              "file_bm25": 0,
+              "chunk_fused": 62,
+              "fused": 62
+            },
+            "returned_labeled_ranks": {
+              "fastapi/openapi/utils.py": 3
+            },
+            "ranked_files": [
+              "fastapi/routing.py",
+              "fastapi/applications.py",
+              "fastapi/openapi/utils.py",
+              "docs_src/custom_request_and_route/tutorial001_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial001_py310.py",
+              "docs_src/custom_request_and_route/tutorial003_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_py310.py",
+              "fastapi/openapi/models.py",
+              "fastapi/utils.py",
+              "docs_src/generate_clients/tutorial003_py310.py",
+              "fastapi/_compat/v2.py",
+              "docs_src/path_operation_advanced_configuration/tutorial002_py310.py",
+              "docs_src/generate_clients/tutorial004.js",
+              "docs/ru/docs/advanced/generate-clients.md",
+              "docs/zh/docs/advanced/generate-clients.md",
+              "docs/zh-hant/docs/advanced/generate-clients.md",
+              "docs/zh/docs/how-to/extending-openapi.md",
+              "docs_src/dependencies/tutorial013_an_py310.py",
+              "docs/uk/docs/advanced/generate-clients.md",
+              "docs_src/dependencies/tutorial014_an_py310.py",
+              "docs_src/extending_openapi/tutorial001_py310.py",
+              "docs/zh-hant/docs/how-to/extending-openapi.md",
+              "docs/ja/docs/advanced/generate-clients.md"
+            ],
+            "seconds": 0.060798333026468754
+          },
+          {
+            "id": "fastapi:3",
+            "query": "Generate an OpenAPI schema for routes",
+            "depth": 96,
+            "labeled_files": [
+              "fastapi/openapi/utils.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/openapi/utils.py": 16
+              },
+              "body": {
+                "fastapi/openapi/utils.py": 3
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/openapi/utils.py": 4
+              },
+              "fused": {
+                "fastapi/openapi/utils.py": 3
+              }
+            },
+            "stage_counts": {
+              "keyword": 128,
+              "body": 213,
+              "file_bm25": 0,
+              "chunk_fused": 302,
+              "fused": 302
+            },
+            "returned_labeled_ranks": {
+              "fastapi/openapi/utils.py": 3
+            },
+            "ranked_files": [
+              "fastapi/routing.py",
+              "fastapi/applications.py",
+              "fastapi/openapi/utils.py",
+              "docs_src/custom_request_and_route/tutorial001_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial001_py310.py",
+              "docs_src/custom_request_and_route/tutorial003_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_py310.py",
+              "fastapi/openapi/models.py",
+              "docs_src/path_operation_advanced_configuration/tutorial002_py310.py",
+              "fastapi/utils.py",
+              "docs_src/generate_clients/tutorial003_py310.py",
+              "fastapi/_compat/v2.py",
+              "docs_src/generate_clients/tutorial004.js",
+              "docs_src/dependencies/tutorial013_an_py310.py",
+              "docs_src/dependencies/tutorial014_an_py310.py",
+              "docs/ru/docs/advanced/generate-clients.md",
+              "docs/zh/docs/advanced/generate-clients.md",
+              "docs/zh-hant/docs/advanced/generate-clients.md",
+              "docs/zh/docs/how-to/extending-openapi.md",
+              "docs/uk/docs/advanced/generate-clients.md",
+              "docs_src/extending_openapi/tutorial001_py310.py",
+              "docs/zh-hant/docs/how-to/extending-openapi.md",
+              "fastapi/datastructures.py",
+              "docs/ja/docs/advanced/generate-clients.md",
+              "docs/ko/docs/advanced/generate-clients.md",
+              "fastapi/security/open_id_connect_url.py",
+              "docs/ko/docs/how-to/extending-openapi.md",
+              "docs/ru/docs/how-to/extending-openapi.md",
+              "docs/uk/docs/how-to/extending-openapi.md",
+              "docs/en/docs/how-to/custom-request-and-route.md",
+              "fastapi/exceptions.py",
+              "docs_src/handling_errors/tutorial006_py310.py",
+              "docs/ja/docs/how-to/extending-openapi.md",
+              "docs/en/docs/how-to/extending-openapi.md",
+              "docs/en/docs/js/custom.js",
+              "docs/zh-hant/docs/tutorial/first-steps.md",
+              "docs/ko/docs/how-to/custom-request-and-route.md",
+              "docs/ja/docs/how-to/custom-request-and-route.md",
+              "fastapi/security/api_key.py",
+              "docs/uk/docs/how-to/custom-request-and-route.md",
+              "docs/zh-hant/docs/how-to/custom-request-and-route.md",
+              "docs/zh/docs/how-to/custom-request-and-route.md",
+              "docs/ru/docs/how-to/custom-request-and-route.md",
+              "docs/tr/docs/how-to/extending-openapi.md",
+              "docs_src/handling_errors/tutorial003_py310.py",
+              "docs/en/docs/advanced/generate-clients.md",
+              "docs_src/handling_errors/tutorial004_py310.py",
+              "docs/tr/docs/how-to/custom-request-and-route.md",
+              "docs/ko/docs/alternatives.md",
+              "scripts/docs.py",
+              "docs_src/handling_errors/tutorial005_py310.py",
+              "docs/tr/docs/advanced/openapi-callbacks.md",
+              "docs/tr/docs/advanced/generate-clients.md",
+              "docs/ru/docs/deployment/concepts.md",
+              "docs/zh/docs/deployment/concepts.md",
+              "docs_src/websockets_/tutorial001_py310.py",
+              "docs/en/docs/reference/openapi/models.md",
+              "fastapi/encoders.py",
+              "fastapi/exception_handlers.py",
+              "docs/fr/docs/how-to/extending-openapi.md",
+              "docs/en/docs/alternatives.md",
+              "scripts/translate.py",
+              "docs/ko/docs/deployment/concepts.md",
+              "docs/uk/docs/deployment/concepts.md",
+              "docs/de/docs/how-to/extending-openapi.md",
+              "docs_src/websockets_/tutorial003_py310.py",
+              "docs/de/docs/advanced/generate-clients.md",
+              "docs/pt/docs/advanced/generate-clients.md",
+              "docs/es/docs/advanced/generate-clients.md",
+              "docs/zh-hant/docs/deployment/concepts.md",
+              "docs/ko/docs/advanced/custom-response.md",
+              "docs/ru/docs/advanced/custom-response.md",
+              "docs/uk/docs/advanced/custom-response.md",
+              "docs/zh/docs/advanced/custom-response.md",
+              "docs/zh-hant/docs/advanced/custom-response.md",
+              "docs/ja/docs/advanced/custom-response.md",
+              "docs/ko/docs/advanced/openapi-callbacks.md",
+              "docs/fr/docs/advanced/generate-clients.md",
+              "docs/pt/docs/how-to/custom-request-and-route.md",
+              "docs/ja/docs/deployment/concepts.md",
+              "docs/es/docs/how-to/custom-request-and-route.md",
+              "docs_src/websockets_/tutorial002_an_py310.py",
+              "docs/en/docs/tutorial/first-steps.md",
+              "docs/en/docs/advanced/additional-responses.md",
+              "docs_src/websockets_/tutorial002_py310.py",
+              "docs_src/custom_response/tutorial004_py310.py",
+              "docs/pt/docs/how-to/extending-openapi.md",
+              "scripts/mkdocs_hooks.py",
+              "docs/en/docs/advanced/behind-a-proxy.md",
+              "docs/de/docs/how-to/custom-request-and-route.md",
+              "docs/zh/docs/advanced/openapi-callbacks.md",
+              "docs/ru/docs/advanced/openapi-callbacks.md",
+              "docs/uk/docs/advanced/openapi-callbacks.md",
+              "docs/fr/docs/how-to/custom-request-and-route.md",
+              "docs/zh-hant/docs/advanced/openapi-callbacks.md"
+            ],
+            "seconds": 0.09163875004742295
+          },
+          {
+            "id": "fastapi:4",
+            "query": "Extract a bearer token from the authorization header",
+            "depth": 24,
+            "labeled_files": [
+              "fastapi/security/oauth2.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/security/oauth2.py": 25
+              },
+              "body": {
+                "fastapi/security/oauth2.py": 32
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/security/oauth2.py": 22
+              },
+              "fused": {
+                "fastapi/security/oauth2.py": 21
+              }
+            },
+            "stage_counts": {
+              "keyword": 40,
+              "body": 48,
+              "file_bm25": 0,
+              "chunk_fused": 76,
+              "fused": 76
+            },
+            "returned_labeled_ranks": {
+              "fastapi/security/oauth2.py": 21
+            },
+            "ranked_files": [
+              "docs_src/security/tutorial004_an_py310.py",
+              "docs_src/security/tutorial004_py310.py",
+              "docs_src/security/tutorial003_an_py310.py",
+              "docs_src/security/tutorial003_py310.py",
+              "fastapi/security/http.py",
+              "docs_src/security/tutorial005_an_py310.py",
+              "docs_src/security/tutorial005_py310.py",
+              "docs/zh-hant/docs/tutorial/security/first-steps.md",
+              "docs/ko/docs/tutorial/security/first-steps.md",
+              "docs/zh/docs/tutorial/security/first-steps.md",
+              "docs/ja/docs/tutorial/security/first-steps.md",
+              "docs_src/request_forms/tutorial001_an_py310.py",
+              "docs/ru/docs/tutorial/security/first-steps.md",
+              "docs_src/request_forms/tutorial001_py310.py",
+              "docs/uk/docs/tutorial/security/first-steps.md",
+              "docs/zh-hant/docs/tutorial/security/index.md",
+              "scripts/doc_parsing_utils.py",
+              "fastapi/openapi/models.py",
+              "docs/en/docs/tutorial/security/first-steps.md",
+              "docs/pt/docs/tutorial/security/first-steps.md",
+              "fastapi/security/oauth2.py",
+              "docs_src/request_form_models/tutorial001_an_py310.py",
+              "docs_src/request_form_models/tutorial001_py310.py",
+              "docs_src/request_form_models/tutorial002_an_py310.py"
+            ],
+            "seconds": 0.02998666709754616
+          },
+          {
+            "id": "fastapi:4",
+            "query": "Extract a bearer token from the authorization header",
+            "depth": 96,
+            "labeled_files": [
+              "fastapi/security/oauth2.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/security/oauth2.py": 25
+              },
+              "body": {
+                "fastapi/security/oauth2.py": 32
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/security/oauth2.py": 24
+              },
+              "fused": {
+                "fastapi/security/oauth2.py": 21
+              }
+            },
+            "stage_counts": {
+              "keyword": 99,
+              "body": 158,
+              "file_bm25": 0,
+              "chunk_fused": 197,
+              "fused": 197
+            },
+            "returned_labeled_ranks": {
+              "fastapi/security/oauth2.py": 21
+            },
+            "ranked_files": [
+              "docs_src/security/tutorial004_an_py310.py",
+              "docs_src/security/tutorial004_py310.py",
+              "docs_src/security/tutorial003_an_py310.py",
+              "docs_src/security/tutorial003_py310.py",
+              "fastapi/security/http.py",
+              "docs_src/security/tutorial005_an_py310.py",
+              "docs_src/security/tutorial005_py310.py",
+              "docs/zh-hant/docs/tutorial/security/first-steps.md",
+              "docs_src/request_forms/tutorial001_an_py310.py",
+              "docs/ko/docs/tutorial/security/first-steps.md",
+              "docs_src/request_forms/tutorial001_py310.py",
+              "docs/zh/docs/tutorial/security/first-steps.md",
+              "docs/ja/docs/tutorial/security/first-steps.md",
+              "scripts/doc_parsing_utils.py",
+              "docs/ru/docs/tutorial/security/first-steps.md",
+              "docs/uk/docs/tutorial/security/first-steps.md",
+              "docs/zh-hant/docs/tutorial/security/index.md",
+              "fastapi/openapi/models.py",
+              "docs/en/docs/tutorial/security/first-steps.md",
+              "docs/pt/docs/tutorial/security/first-steps.md",
+              "fastapi/security/oauth2.py",
+              "docs_src/request_form_models/tutorial001_an_py310.py",
+              "fastapi/security/utils.py",
+              "docs_src/request_form_models/tutorial001_py310.py",
+              "docs_src/request_form_models/tutorial002_an_py310.py",
+              "docs_src/request_form_models/tutorial002_py310.py",
+              "docs/tr/docs/tutorial/security/first-steps.md",
+              "docs_src/bigger_applications/app_an_py310/dependencies.py",
+              "docs_src/websockets_/tutorial002_an_py310.py",
+              "docs_src/websockets_/tutorial002_py310.py",
+              "docs/es/docs/tutorial/security/first-steps.md",
+              "fastapi/params.py",
+              "docs/de/docs/tutorial/security/first-steps.md",
+              "docs/uk/llm-prompt.md",
+              "docs/en/docs/tutorial/security/oauth2-jwt.md",
+              "docs/zh/docs/tutorial/security/simple-oauth2.md",
+              "fastapi/routing.py",
+              "docs/zh-hant/docs/tutorial/security/simple-oauth2.md",
+              "fastapi/dependencies/utils.py",
+              "fastapi/param_functions.py",
+              "docs/ja/docs/tutorial/security/simple-oauth2.md",
+              "docs/ko/docs/tutorial/security/simple-oauth2.md",
+              "docs/uk/docs/tutorial/security/simple-oauth2.md",
+              "docs/uk/docs/tutorial/security/index.md",
+              "docs_src/dependencies/tutorial006_py310.py",
+              "docs_src/dependencies/tutorial006_an_py310.py",
+              "docs_src/dependencies/tutorial012_py310.py",
+              "docs_src/dependencies/tutorial012_an_py310.py",
+              "docs/ja/docs/tutorial/security/index.md",
+              "docs/zh/docs/tutorial/security/index.md",
+              "fastapi/security/__init__.py",
+              "docs/ru/docs/tutorial/security/index.md",
+              "docs/tr/docs/tutorial/security/oauth2-jwt.md",
+              "docs/en/docs/tutorial/security/index.md",
+              "docs/ko/docs/tutorial/security/index.md",
+              "scripts/docs.py",
+              "docs/fr/docs/tutorial/security/first-steps.md",
+              "docs/en/docs/tutorial/security/simple-oauth2.md",
+              "docs_src/extra_models/tutorial001_py310.py",
+              "docs_src/extra_models/tutorial002_py310.py",
+              "fastapi/security/api_key.py",
+              "docs_src/sql_databases/tutorial001_an_py310.py",
+              "docs_src/sql_databases/tutorial001_py310.py",
+              "docs_src/sql_databases/tutorial002_an_py310.py",
+              "docs_src/sql_databases/tutorial002_py310.py",
+              "docs/tr/docs/tutorial/security/simple-oauth2.md",
+              "docs_src/dependencies/tutorial013_an_py310.py",
+              "docs_src/dependencies/tutorial014_an_py310.py",
+              "docs/tr/docs/tutorial/security/index.md",
+              "docs/en/docs/css/custom.css",
+              "docs/de/docs/tutorial/security/index.md",
+              "docs_src/security/tutorial002_an_py310.py",
+              "docs_src/security/tutorial002_py310.py",
+              "docs/zh-hant/docs/tutorial/security/oauth2-jwt.md",
+              "docs/en/docs/_llm-test.md",
+              "docs/ko/docs/_llm-test.md",
+              "docs/tr/docs/_llm-test.md",
+              "docs/zh/docs/_llm-test.md",
+              "docs/pt/docs/tutorial/security/simple-oauth2.md",
+              "docs/pt/docs/tutorial/security/index.md",
+              "docs/zh-hant/docs/advanced/security/oauth2-scopes.md",
+              "docs_src/handling_errors/tutorial002_py310.py",
+              "docs/es/docs/tutorial/security/simple-oauth2.md",
+              "docs/es/docs/tutorial/security/index.md",
+              "docs/es/docs/tutorial/security/oauth2-jwt.md",
+              "docs_src/middleware/tutorial001_py310.py",
+              "docs/en/docs/reference/security/index.md",
+              "docs_src/authentication_error_status_code/tutorial001_an_py310.py",
+              "docs/de/docs/tutorial/security/simple-oauth2.md",
+              "docs/ru/docs/tutorial/security/simple-oauth2.md",
+              "docs_src/security/tutorial001_py310.py",
+              "docs_src/security/tutorial001_an_py310.py",
+              "docs/ja/docs/tutorial/cors.md",
+              "docs/ko/docs/tutorial/cors.md",
+              "docs/en/data/topic_repos.yml",
+              "docs/zh-hant/docs/tutorial/cors.md"
+            ],
+            "seconds": 0.04304858390241861
+          }
+        ],
+        "cleanup_verified": true
+      },
+      {
+        "pack": "framework",
+        "commit": "0ac6e5592da1a172d9685591c5f82fb1fb8995fb",
+        "tree": "25361b2d82005d6f74b1bb1657c0d7a4d7965fb1",
+        "diagnostics": {
+          "status": "ready",
+          "keyword_index_ready": true,
+          "body_index_available": true,
+          "body_index_ready": true,
+          "body_indexed_files": 2873,
+          "keyword_indexed_files": 2873,
+          "body_index_coverage": 1.0,
+          "vector_status": "idle",
+          "vector_coverage": 0.0,
+          "warmup_stage": "ready",
+          "warmup_reused_asts": 0,
+          "warmup_seconds": 7.531,
+          "keyword_seconds": 5.664,
+          "importance_seconds": 0.0,
+          "body_seconds": 1.867
+        },
+        "queries": [
+          {
+            "id": "framework:1",
+            "query": "Dispatch a request to the matching route",
+            "depth": 24,
+            "labeled_files": [
+              "src/Illuminate/Routing/Router.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Routing/Router.php": 2
+              },
+              "body": {
+                "src/Illuminate/Routing/Router.php": 1
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Routing/Router.php": 1
+              },
+              "fused": {
+                "src/Illuminate/Routing/Router.php": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 48,
+              "body": 35,
+              "file_bm25": 0,
+              "chunk_fused": 69,
+              "fused": 69
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Routing/Router.php": 1
+            },
+            "ranked_files": [
+              "src/Illuminate/Routing/Router.php",
+              "src/Illuminate/Routing/CompiledRouteCollection.php",
+              "src/Illuminate/Http/Client/PendingRequest.php",
+              "src/Illuminate/Http/Request.php",
+              "src/Illuminate/Routing/Matching/ValidatorInterface.php",
+              "src/Illuminate/Routing/Matching/HostValidator.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Matching.php",
+              "src/Illuminate/Routing/Matching/MethodValidator.php",
+              "src/Illuminate/Routing/Route.php",
+              "src/Illuminate/Routing/Matching/SchemeValidator.php",
+              "src/Illuminate/Routing/AbstractRouteCollection.php",
+              "src/Illuminate/Routing/Matching/UriValidator.php",
+              "src/Illuminate/Routing/RouteCollection.php",
+              "src/Illuminate/Http/Middleware/HandleCors.php",
+              "src/Illuminate/Routing/CallableDispatcher.php",
+              "src/Illuminate/Foundation/helpers.php",
+              "src/Illuminate/Routing/RouteCollectionInterface.php",
+              "src/Illuminate/Support/Facades/Request.php",
+              "src/Illuminate/Routing/ControllerDispatcher.php",
+              "src/Illuminate/Support/Facades/Route.php",
+              "src/Illuminate/Http/Client/Request.php",
+              "src/Illuminate/Console/Concerns/CreatesMatchingTest.php",
+              "src/Illuminate/Routing/Contracts/CallableDispatcher.php",
+              "src/Illuminate/Foundation/Bus/Dispatchable.php"
+            ],
+            "seconds": 0.034690167056396604
+          },
+          {
+            "id": "framework:1",
+            "query": "Dispatch a request to the matching route",
+            "depth": 96,
+            "labeled_files": [
+              "src/Illuminate/Routing/Router.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Routing/Router.php": 2
+              },
+              "body": {
+                "src/Illuminate/Routing/Router.php": 1
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Routing/Router.php": 1
+              },
+              "fused": {
+                "src/Illuminate/Routing/Router.php": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 130,
+              "body": 117,
+              "file_bm25": 0,
+              "chunk_fused": 196,
+              "fused": 196
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Routing/Router.php": 1
+            },
+            "ranked_files": [
+              "src/Illuminate/Routing/Router.php",
+              "src/Illuminate/Routing/CompiledRouteCollection.php",
+              "src/Illuminate/Http/Client/PendingRequest.php",
+              "src/Illuminate/Http/Request.php",
+              "src/Illuminate/Routing/AbstractRouteCollection.php",
+              "src/Illuminate/Routing/Matching/ValidatorInterface.php",
+              "src/Illuminate/Routing/Matching/HostValidator.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Matching.php",
+              "src/Illuminate/Routing/Matching/MethodValidator.php",
+              "src/Illuminate/Routing/Route.php",
+              "src/Illuminate/Routing/RouteCollection.php",
+              "src/Illuminate/Routing/Matching/SchemeValidator.php",
+              "src/Illuminate/Routing/CallableDispatcher.php",
+              "src/Illuminate/Routing/RouteCollectionInterface.php",
+              "src/Illuminate/Routing/Matching/UriValidator.php",
+              "src/Illuminate/Foundation/helpers.php",
+              "src/Illuminate/Http/Middleware/HandleCors.php",
+              "src/Illuminate/Routing/ControllerDispatcher.php",
+              "src/Illuminate/Foundation/Http/Kernel.php",
+              "src/Illuminate/Console/Concerns/CreatesMatchingTest.php",
+              "src/Illuminate/Routing/Contracts/CallableDispatcher.php",
+              "src/Illuminate/Support/Facades/Request.php",
+              "src/Illuminate/Routing/Contracts/ControllerDispatcher.php",
+              "src/Illuminate/Support/Facades/Route.php",
+              "src/Illuminate/Routing/RouteUrlGenerator.php",
+              "src/Illuminate/Http/Client/Request.php",
+              "src/Illuminate/Foundation/Routing/PrecognitionCallableDispatcher.php",
+              "src/Illuminate/Foundation/Bus/Dispatchable.php",
+              "src/Illuminate/Foundation/Bus/PendingDispatch.php",
+              "src/Illuminate/Routing/Events/RouteMatched.php",
+              "src/Illuminate/Bus/Dispatcher.php",
+              "src/Illuminate/Foundation/Bus/PendingClosureDispatch.php",
+              "src/Illuminate/Foundation/Events/Dispatchable.php",
+              "src/Illuminate/Contracts/Events/ShouldDispatchAfterCommit.php",
+              "src/Illuminate/Contracts/Bus/Dispatcher.php",
+              "src/Illuminate/Session/Middleware/StartSession.php",
+              "src/Illuminate/Bus/PendingBatch.php",
+              "src/Illuminate/Foundation/Routing/PrecognitionControllerDispatcher.php",
+              "src/Illuminate/Auth/RequestGuard.php",
+              "src/Illuminate/Routing/ImplicitRouteBinding.php",
+              "src/Illuminate/Routing/Middleware/ThrottleRequests.php",
+              "src/Illuminate/Foundation/Bus/DispatchesJobs.php",
+              "src/Illuminate/Routing/RouteParameterBinder.php",
+              "src/Illuminate/Foundation/Bootstrap/SetRequestForConsole.php",
+              "src/Illuminate/Routing/RouteUri.php",
+              "src/Illuminate/Foundation/Auth/EmailVerificationRequest.php",
+              "src/Illuminate/Http/Client/StrayRequestException.php",
+              "src/Illuminate/Foundation/Bus/PendingChain.php",
+              "src/Illuminate/Http/Client/RequestException.php",
+              "src/Illuminate/Contracts/Events/Dispatcher.php",
+              "src/Illuminate/Routing/RouteRegistrar.php",
+              "src/Illuminate/Foundation/Http/Events/RequestHandled.php",
+              "src/Illuminate/Routing/UrlGenerator.php",
+              "src/Illuminate/Http/Client/Events/RequestSending.php",
+              "src/Illuminate/Routing/RouteBinding.php",
+              "src/Illuminate/Console/Scheduling/Schedule.php",
+              "src/Illuminate/Routing/Middleware/SubstituteBindings.php",
+              "src/Illuminate/Events/NullDispatcher.php",
+              "src/Illuminate/Http/Resources/JsonApi/JsonApiRequest.php",
+              "src/Illuminate/Foundation/Console/RouteListCommand.php",
+              "src/Illuminate/Http/Resources/JsonApi/Concerns/ResolvesJsonApiRequest.php",
+              "src/Illuminate/Http/Client/Factory.php",
+              "src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php",
+              "src/Illuminate/Foundation/Console/stubs/api-routes.stub",
+              "src/Illuminate/Foundation/Console/RouteCacheCommand.php",
+              "src/Illuminate/Routing/RouteSignatureParameters.php",
+              "src/Illuminate/Support/Testing/Fakes/BusFake.php",
+              "src/Illuminate/Foundation/Console/RouteClearCommand.php",
+              "src/Illuminate/Auth/Middleware/EnsureEmailIsVerified.php",
+              "src/Illuminate/Support/Testing/Fakes/EventFake.php",
+              "src/Illuminate/Routing/RouteGroup.php",
+              "src/Illuminate/Routing/RedirectController.php",
+              "src/Illuminate/Support/Facades/Bus.php",
+              "src/Illuminate/Foundation/Console/RequestMakeCommand.php",
+              "src/Illuminate/Events/Dispatcher.php",
+              "src/Illuminate/Support/Testing/Fakes/PendingBatchFake.php",
+              "src/Illuminate/Auth/Middleware/RequirePassword.php",
+              "src/Illuminate/Support/Testing/Fakes/PendingChainFake.php",
+              "src/Illuminate/Container/Attributes/RouteParameter.php",
+              "src/Illuminate/Database/Console/MonitorCommand.php",
+              "src/Illuminate/Queue/Console/MonitorCommand.php",
+              "src/Illuminate/Routing/RouteAction.php",
+              "src/Illuminate/Foundation/Providers/FormRequestServiceProvider.php",
+              "src/Illuminate/Routing/RouteFileRegistrar.php",
+              "types/Http/Request.php",
+              "src/Illuminate/Foundation/Exceptions/Renderer/Exception.php",
+              "src/Illuminate/Queue/CallQueuedHandler.php",
+              "src/Illuminate/Bus/Queueable.php",
+              "src/Illuminate/Routing/RouteDependencyResolverTrait.php",
+              "src/Illuminate/Database/DatabaseManager.php",
+              "src/Illuminate/Contracts/Bus/QueueingDispatcher.php",
+              "src/Illuminate/Mail/Mailer.php",
+              "src/Illuminate/Routing/ResolvesRouteDependencies.php",
+              "src/Illuminate/Foundation/Http/FormRequest.php",
+              "src/Illuminate/Queue/Queue.php",
+              "src/Illuminate/Foundation/Exceptions/Handler.php"
+            ],
+            "seconds": 0.04876024997793138
+          },
+          {
+            "id": "framework:2",
+            "query": "Resolve a dependency from the service container",
+            "depth": 24,
+            "labeled_files": [
+              "src/Illuminate/Container/Container.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Container/Container.php": 5
+              },
+              "body": {
+                "src/Illuminate/Container/Container.php": 1
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Container/Container.php": 1
+              },
+              "fused": {
+                "src/Illuminate/Container/Container.php": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 55,
+              "body": 34,
+              "file_bm25": 0,
+              "chunk_fused": 76,
+              "fused": 76
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Container/Container.php": 1
+            },
+            "ranked_files": [
+              "src/Illuminate/Container/Container.php",
+              "src/Illuminate/Http/Resources/JsonApi/JsonApiResource.php",
+              "src/Illuminate/Http/Resources/JsonApi/AnonymousResourceCollection.php",
+              "src/Illuminate/Http/Resources/Json/JsonResource.php",
+              "src/Illuminate/Contracts/Container/CircularDependencyException.php",
+              "src/Illuminate/Container/Attributes/Give.php",
+              "src/Illuminate/Container/BoundMethod.php",
+              "src/Illuminate/Foundation/helpers.php",
+              "src/Illuminate/Routing/ResolvesRouteDependencies.php",
+              "src/Illuminate/View/ViewServiceProvider.php",
+              "src/Illuminate/Foundation/Application.php",
+              "src/Illuminate/Routing/RouteDependencyResolverTrait.php",
+              "src/Illuminate/Contracts/Container/Container.php",
+              "src/Illuminate/Contracts/Foundation/Application.php",
+              "src/Illuminate/Bus/BusServiceProvider.php",
+              "src/Illuminate/Queue/Jobs/Job.php",
+              "src/Illuminate/Http/Middleware/HandleCors.php",
+              "src/Illuminate/Container/Util.php",
+              "src/Illuminate/Console/Scheduling/Schedule.php",
+              "src/Illuminate/Testing/Concerns/AssertsStatusCodes.php",
+              "src/Illuminate/Cache/CacheServiceProvider.php",
+              "src/Illuminate/Support/AggregateServiceProvider.php",
+              "src/Illuminate/Log/Context/ContextServiceProvider.php",
+              "src/Illuminate/Translation/TranslationServiceProvider.php"
+            ],
+            "seconds": 0.029629374970681965
+          },
+          {
+            "id": "framework:2",
+            "query": "Resolve a dependency from the service container",
+            "depth": 96,
+            "labeled_files": [
+              "src/Illuminate/Container/Container.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Container/Container.php": 5
+              },
+              "body": {
+                "src/Illuminate/Container/Container.php": 1
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Container/Container.php": 1
+              },
+              "fused": {
+                "src/Illuminate/Container/Container.php": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 189,
+              "body": 146,
+              "file_bm25": 0,
+              "chunk_fused": 242,
+              "fused": 242
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Container/Container.php": 1
+            },
+            "ranked_files": [
+              "src/Illuminate/Container/Container.php",
+              "src/Illuminate/Http/Resources/JsonApi/JsonApiResource.php",
+              "src/Illuminate/Http/Resources/JsonApi/AnonymousResourceCollection.php",
+              "src/Illuminate/Http/Resources/Json/JsonResource.php",
+              "src/Illuminate/Contracts/Container/CircularDependencyException.php",
+              "src/Illuminate/Container/Attributes/Give.php",
+              "src/Illuminate/Container/BoundMethod.php",
+              "src/Illuminate/Foundation/helpers.php",
+              "src/Illuminate/Routing/ResolvesRouteDependencies.php",
+              "src/Illuminate/View/ViewServiceProvider.php",
+              "src/Illuminate/Contracts/Container/Container.php",
+              "src/Illuminate/Bus/BusServiceProvider.php",
+              "src/Illuminate/Foundation/Application.php",
+              "src/Illuminate/Container/Util.php",
+              "src/Illuminate/Testing/Concerns/AssertsStatusCodes.php",
+              "src/Illuminate/Routing/RouteDependencyResolverTrait.php",
+              "src/Illuminate/Support/AggregateServiceProvider.php",
+              "src/Illuminate/Cookie/CookieServiceProvider.php",
+              "src/Illuminate/Contracts/Foundation/Application.php",
+              "src/Illuminate/Log/LogServiceProvider.php",
+              "src/Illuminate/Queue/Jobs/Job.php",
+              "src/Illuminate/Container/Attributes/Tag.php",
+              "src/Illuminate/Container/Attributes/Config.php",
+              "src/Illuminate/Http/Middleware/HandleCors.php",
+              "src/Illuminate/Console/Scheduling/Schedule.php",
+              "src/Illuminate/Container/Attributes/Auth.php",
+              "src/Illuminate/Pagination/PaginationServiceProvider.php",
+              "src/Illuminate/Container/Attributes/Cache.php",
+              "src/Illuminate/Container/Attributes/Database.php",
+              "src/Illuminate/Database/Seeder.php",
+              "src/Illuminate/Foundation/Providers/ConsoleSupportServiceProvider.php",
+              "src/Illuminate/Container/Attributes/Log.php",
+              "src/Illuminate/Notifications/NotificationServiceProvider.php",
+              "src/Illuminate/Container/Attributes/Storage.php",
+              "src/Illuminate/Cache/CacheServiceProvider.php",
+              "src/Illuminate/Container/Attributes/RouteParameter.php",
+              "src/Illuminate/Console/ContainerCommandLoader.php",
+              "src/Illuminate/Log/Context/ContextServiceProvider.php",
+              "src/Illuminate/Translation/TranslationServiceProvider.php",
+              "src/Illuminate/Database/DatabaseServiceProvider.php",
+              "src/Illuminate/Http/Resources/JsonApi/Concerns/ResolvesJsonApiElements.php",
+              "src/Illuminate/Testing/ParallelTestingServiceProvider.php",
+              "src/Illuminate/Foundation/Support/Providers/AuthServiceProvider.php",
+              "src/Illuminate/Events/EventServiceProvider.php",
+              "src/Illuminate/Filesystem/FilesystemServiceProvider.php",
+              "src/Illuminate/Routing/RoutingServiceProvider.php",
+              "src/Illuminate/Foundation/Providers/FoundationServiceProvider.php",
+              "src/Illuminate/Container/Attributes/Authenticated.php",
+              "src/Illuminate/Auth/AuthServiceProvider.php",
+              "src/Illuminate/Session/SessionServiceProvider.php",
+              "src/Illuminate/Auth/Access/Gate.php",
+              "src/Illuminate/Container/Attributes/Context.php",
+              "src/Illuminate/Queue/SyncQueue.php",
+              "src/Illuminate/Broadcasting/BroadcastServiceProvider.php",
+              "src/Illuminate/Support/ServiceProvider.php",
+              "src/Illuminate/Concurrency/ConcurrencyServiceProvider.php",
+              "src/Illuminate/Database/MigrationServiceProvider.php",
+              "src/Illuminate/Hashing/HashServiceProvider.php",
+              "src/Illuminate/Notifications/ChannelManager.php",
+              "src/Illuminate/Pipeline/PipelineServiceProvider.php",
+              "src/Illuminate/Redis/RedisServiceProvider.php",
+              "src/Illuminate/Mail/MailServiceProvider.php",
+              "src/Illuminate/Events/Dispatcher.php",
+              "src/Illuminate/Foundation/Providers/ComposerServiceProvider.php",
+              "src/Illuminate/Encryption/EncryptionServiceProvider.php",
+              "src/Illuminate/Validation/ValidationServiceProvider.php",
+              "src/Illuminate/Foundation/Providers/FormRequestServiceProvider.php",
+              "src/Illuminate/Auth/Passwords/PasswordResetServiceProvider.php",
+              "src/Illuminate/Routing/ImplicitRouteBinding.php",
+              "src/Illuminate/Foundation/Support/Providers/RouteServiceProvider.php",
+              "src/Illuminate/Foundation/Testing/Concerns/InteractsWithContainer.php",
+              "src/Illuminate/Queue/Capsule/Manager.php",
+              "src/Illuminate/Foundation/Support/Providers/EventServiceProvider.php",
+              "src/Illuminate/Pipeline/Pipeline.php",
+              "src/Illuminate/Http/Client/Promises/FluentPromise.php",
+              "src/Illuminate/Foundation/Concerns/ResolvesDumpSource.php",
+              "src/Illuminate/Queue/QueueServiceProvider.php",
+              "src/Illuminate/Support/Facades/Date.php",
+              "src/Illuminate/Support/Facades/Facade.php",
+              "src/Illuminate/Console/Application.php",
+              "src/Illuminate/Validation/Factory.php",
+              "src/Illuminate/View/Component.php",
+              "src/Illuminate/Console/Command.php",
+              "src/Illuminate/Auth/AuthManager.php",
+              "src/Illuminate/Events/QueuedClosure.php",
+              "src/Illuminate/Filesystem/FilesystemManager.php",
+              "src/Illuminate/Queue/QueueManager.php",
+              "src/Illuminate/Redis/RedisManager.php",
+              "src/Illuminate/Database/Eloquent/Model.php",
+              "src/Illuminate/Support/DefaultProviders.php",
+              "src/Illuminate/Routing/MiddlewareNameResolver.php",
+              "src/Illuminate/Routing/Router.php",
+              "src/Illuminate/Support/MultipleInstanceManager.php",
+              "src/Illuminate/Queue/Jobs/JobName.php",
+              "src/Illuminate/View/Engines/EngineResolver.php",
+              "src/Illuminate/Auth/Passwords/PasswordBrokerManager.php"
+            ],
+            "seconds": 0.039715500082820654
+          },
+          {
+            "id": "framework:3",
+            "query": "Start a database transaction",
+            "depth": 24,
+            "labeled_files": [
+              "src/Illuminate/Database/Concerns/ManagesTransactions.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Database/Concerns/ManagesTransactions.php": 18
+              },
+              "body": {
+                "src/Illuminate/Database/Concerns/ManagesTransactions.php": 24
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Database/Concerns/ManagesTransactions.php": 15
+              },
+              "fused": {
+                "src/Illuminate/Database/Concerns/ManagesTransactions.php": 14
+              }
+            },
+            "stage_counts": {
+              "keyword": 41,
+              "body": 65,
+              "file_bm25": 0,
+              "chunk_fused": 95,
+              "fused": 95
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Database/Concerns/ManagesTransactions.php": 14
+            },
+            "ranked_files": [
+              "src/Illuminate/Database/Migrations/DatabaseMigrationRepository.php",
+              "src/Illuminate/Database/Schema/SchemaState.php",
+              "src/Illuminate/Queue/Console/TableCommand.php",
+              "src/Illuminate/Queue/Console/BatchesTableCommand.php",
+              "src/Illuminate/Database/Schema/PostgresSchemaState.php",
+              "src/Illuminate/Database/Migrations/Migration.php",
+              "src/Illuminate/Queue/Console/FailedTableCommand.php",
+              "src/Illuminate/Session/Console/SessionTableCommand.php",
+              "src/Illuminate/Cache/Console/CacheTableCommand.php",
+              "src/Illuminate/Database/Migrations/stubs/migration.update.stub",
+              "src/Illuminate/Database/Migrations/stubs/migration.create.stub",
+              "src/Illuminate/Foundation/Testing/Concerns/InteractsWithDatabase.php",
+              "src/Illuminate/Database/ConnectionInterface.php",
+              "src/Illuminate/Database/Concerns/ManagesTransactions.php",
+              "src/Illuminate/Notifications/Console/NotificationTableCommand.php",
+              "src/Illuminate/Database/Console/DumpCommand.php",
+              "src/Illuminate/Console/MigrationGeneratorCommand.php",
+              "src/Illuminate/Database/Migrations/Migrator.php",
+              "src/Illuminate/Database/DatabaseTransactionRecord.php",
+              "src/Illuminate/Notifications/Console/stubs/notifications.stub",
+              "src/Illuminate/Support/Facades/Schema.php",
+              "src/Illuminate/Queue/Console/stubs/failed_jobs.stub",
+              "src/Illuminate/Cache/Console/stubs/cache.stub",
+              "src/Illuminate/Database/DatabaseTransactionsManager.php"
+            ],
+            "seconds": 0.07572887500282377
+          },
+          {
+            "id": "framework:3",
+            "query": "Start a database transaction",
+            "depth": 96,
+            "labeled_files": [
+              "src/Illuminate/Database/Concerns/ManagesTransactions.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Database/Concerns/ManagesTransactions.php": 18
+              },
+              "body": {
+                "src/Illuminate/Database/Concerns/ManagesTransactions.php": 24
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Database/Concerns/ManagesTransactions.php": 15
+              },
+              "fused": {
+                "src/Illuminate/Database/Concerns/ManagesTransactions.php": 14
+              }
+            },
+            "stage_counts": {
+              "keyword": 143,
+              "body": 204,
+              "file_bm25": 0,
+              "chunk_fused": 281,
+              "fused": 281
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Database/Concerns/ManagesTransactions.php": 14
+            },
+            "ranked_files": [
+              "src/Illuminate/Database/Migrations/DatabaseMigrationRepository.php",
+              "src/Illuminate/Database/Schema/SchemaState.php",
+              "src/Illuminate/Queue/Console/TableCommand.php",
+              "src/Illuminate/Queue/Console/BatchesTableCommand.php",
+              "src/Illuminate/Database/Schema/PostgresSchemaState.php",
+              "src/Illuminate/Database/Migrations/Migration.php",
+              "src/Illuminate/Queue/Console/FailedTableCommand.php",
+              "src/Illuminate/Session/Console/SessionTableCommand.php",
+              "src/Illuminate/Foundation/Testing/Concerns/InteractsWithDatabase.php",
+              "src/Illuminate/Cache/Console/CacheTableCommand.php",
+              "src/Illuminate/Database/Migrations/stubs/migration.update.stub",
+              "src/Illuminate/Database/Migrations/stubs/migration.create.stub",
+              "src/Illuminate/Database/ConnectionInterface.php",
+              "src/Illuminate/Database/Concerns/ManagesTransactions.php",
+              "src/Illuminate/Notifications/Console/NotificationTableCommand.php",
+              "src/Illuminate/Database/Migrations/Migrator.php",
+              "src/Illuminate/Database/Console/DumpCommand.php",
+              "src/Illuminate/Database/DatabaseTransactionRecord.php",
+              "src/Illuminate/Console/MigrationGeneratorCommand.php",
+              "src/Illuminate/Notifications/Console/stubs/notifications.stub",
+              "src/Illuminate/Database/Eloquent/Model.php",
+              "src/Illuminate/Support/Facades/Schema.php",
+              "src/Illuminate/Queue/Console/stubs/failed_jobs.stub",
+              "src/Illuminate/Cache/Console/stubs/cache.stub",
+              "src/Illuminate/Database/Events/MigrationEvent.php",
+              "src/Illuminate/Database/DatabaseTransactionsManager.php",
+              "src/Illuminate/Session/Middleware/StartSession.php",
+              "src/Illuminate/Database/Console/Migrations/TableGuesser.php",
+              "src/Illuminate/Queue/Console/stubs/jobs.stub",
+              "src/Illuminate/Database/Schema/SqliteSchemaState.php",
+              "src/Illuminate/Session/Console/stubs/database.stub",
+              "src/Illuminate/Mail/resources/views/html/themes/default.css",
+              "src/Illuminate/Validation/Rules/DatabaseRule.php",
+              "src/Illuminate/Database/Schema/Builder.php",
+              "src/Illuminate/Database/Events/MigrationSkipped.php",
+              "src/Illuminate/Support/Facades/DB.php",
+              "src/Illuminate/Database/Events/TransactionBeginning.php",
+              "src/Illuminate/Queue/Console/stubs/batches.stub",
+              "src/Illuminate/Database/Events/TransactionCommitted.php",
+              "src/Illuminate/Database/Connection.php",
+              "src/Illuminate/Database/Events/TransactionCommitting.php",
+              "src/Illuminate/Foundation/Testing/DatabaseTransactions.php",
+              "src/Illuminate/Foundation/Testing/RefreshDatabase.php",
+              "src/Illuminate/Database/Query/Grammars/SQLiteGrammar.php",
+              "src/Illuminate/Queue/SerializesAndRestoresModelIdentifiers.php",
+              "src/Illuminate/Database/Console/TableCommand.php",
+              "src/Illuminate/Database/Events/TransactionRolledBack.php",
+              "src/Illuminate/Foundation/Console/ModelMakeCommand.php",
+              "src/Illuminate/Database/Migrations/MigrationResult.php",
+              "src/Illuminate/Validation/DatabasePresenceVerifier.php",
+              "src/Illuminate/Database/Eloquent/Relations/BelongsTo.php",
+              "src/Illuminate/Database/Eloquent/Relations/BelongsToMany.php",
+              "src/Illuminate/Database/Eloquent/Relations/HasOneOrMany.php",
+              "src/Illuminate/Database/Eloquent/Relations/HasOneOrManyThrough.php",
+              "src/Illuminate/Database/Schema/MySqlSchemaState.php",
+              "src/Illuminate/Database/Console/Migrations/ResetCommand.php",
+              "src/Illuminate/Queue/Jobs/Job.php",
+              "src/Illuminate/Auth/Passwords/DatabaseTokenRepository.php",
+              "src/Illuminate/Database/Events/MigrationEnded.php",
+              "src/Illuminate/Database/SQLiteConnection.php",
+              "src/Illuminate/Database/Events/MigrationStarted.php",
+              "src/Illuminate/Database/Migrations/stubs/migration.stub",
+              "src/Illuminate/Support/Str.php",
+              "src/Illuminate/Database/MigrationServiceProvider.php",
+              "src/Illuminate/Queue/Failed/DatabaseFailedJobProvider.php",
+              "src/Illuminate/Database/Migrations/MigrationCreator.php",
+              "src/Illuminate/Contracts/Database/Events/MigrationEvent.php",
+              "src/Illuminate/Testing/Concerns/TestDatabases.php",
+              "src/Illuminate/Queue/Failed/DatabaseUuidFailedJobProvider.php",
+              "src/Illuminate/Database/Migrations/MigrationRepositoryInterface.php",
+              "src/Illuminate/Queue/DatabaseQueue.php",
+              "src/Illuminate/Database/Console/Migrations/MigrateCommand.php",
+              "src/Illuminate/Bus/DatabaseBatchRepository.php",
+              "src/Illuminate/Database/Eloquent/Relations/Concerns/InteractsWithPivotTable.php",
+              "src/Illuminate/Auth/EloquentUserProvider.php",
+              "src/Illuminate/Process/Pool.php",
+              "src/Illuminate/Database/Eloquent/HasBuilder.php",
+              "src/Illuminate/Support/Stringable.php",
+              "src/Illuminate/Database/Eloquent/Builder.php",
+              "src/Illuminate/Process/PendingProcess.php",
+              "src/Illuminate/Foundation/Testing/Traits/CanConfigureMigrationCommands.php",
+              "src/Illuminate/Contracts/Session/Session.php",
+              "src/Illuminate/Session/SymfonySessionDecorator.php",
+              "src/Illuminate/Database/PostgresConnection.php",
+              "src/Illuminate/Pagination/UrlWindow.php",
+              "src/Illuminate/Database/Console/Migrations/MigrateMakeCommand.php",
+              "src/Illuminate/Session/Store.php",
+              "src/Illuminate/Database/ConcurrencyErrorDetector.php",
+              "src/Illuminate/Foundation/Console/ServeCommand.php",
+              "src/Illuminate/View/Concerns/ManagesComponents.php",
+              "src/Illuminate/Database/Schema/Grammars/SqlServerGrammar.php",
+              "src/Illuminate/View/Concerns/ManagesFragments.php",
+              "src/Illuminate/View/Concerns/ManagesLayouts.php",
+              "src/Illuminate/View/Concerns/ManagesStacks.php",
+              "src/Illuminate/Console/Scheduling/Event.php",
+              "src/Illuminate/View/ComponentAttributeBag.php"
+            ],
+            "seconds": 0.16305112501140684
+          },
+          {
+            "id": "framework:4",
+            "query": "Read a configuration option using dot notation",
+            "depth": 24,
+            "labeled_files": [
+              "src/Illuminate/Config/Repository.php"
+            ],
+            "stage_ranks": {
+              "keyword": {},
+              "body": {
+                "src/Illuminate/Config/Repository.php": 26
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Config/Repository.php": 38
+              },
+              "fused": {
+                "src/Illuminate/Config/Repository.php": 32
+              }
+            },
+            "stage_counts": {
+              "keyword": 49,
+              "body": 56,
+              "file_bm25": 0,
+              "chunk_fused": 93,
+              "fused": 93
+            },
+            "returned_labeled_ranks": {},
+            "ranked_files": [
+              "src/Illuminate/Collections/Arr.php",
+              "src/Illuminate/Support/Fluent.php",
+              "config/hashing.php",
+              "src/Illuminate/Support/Env.php",
+              "src/Illuminate/Testing/Fluent/AssertableJson.php",
+              "src/Illuminate/Support/helpers.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Debugging.php",
+              "src/Illuminate/Foundation/Bootstrap/LoadConfiguration.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Has.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Interaction.php",
+              "src/Illuminate/Contracts/Foundation/CachesConfiguration.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Matching.php",
+              "src/Illuminate/Database/ConfigurationUrlParser.php",
+              "src/Illuminate/Collections/helpers.php",
+              "src/Illuminate/Log/ParsesLogConfiguration.php",
+              "src/Illuminate/Support/ConfigurationUrlParser.php",
+              "src/Illuminate/Collections/Collection.php",
+              "src/Illuminate/Collections/Enumerable.php",
+              "src/Illuminate/Collections/LazyCollection.php",
+              "src/Illuminate/Database/Console/DbCommand.php",
+              "src/Illuminate/Hashing/ArgonHasher.php",
+              "src/Illuminate/Hashing/BcryptHasher.php",
+              "src/Illuminate/Database/Connectors/ConnectionFactory.php",
+              "src/Illuminate/Foundation/Console/EnvironmentDecryptCommand.php"
+            ],
+            "seconds": 0.03573374997358769
+          },
+          {
+            "id": "framework:4",
+            "query": "Read a configuration option using dot notation",
+            "depth": 96,
+            "labeled_files": [
+              "src/Illuminate/Config/Repository.php"
+            ],
+            "stage_ranks": {
+              "keyword": {},
+              "body": {
+                "src/Illuminate/Config/Repository.php": 26
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Config/Repository.php": 45
+              },
+              "fused": {
+                "src/Illuminate/Config/Repository.php": 37
+              }
+            },
+            "stage_counts": {
+              "keyword": 162,
+              "body": 155,
+              "file_bm25": 0,
+              "chunk_fused": 252,
+              "fused": 252
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Config/Repository.php": 37
+            },
+            "ranked_files": [
+              "src/Illuminate/Collections/Arr.php",
+              "src/Illuminate/Support/Env.php",
+              "src/Illuminate/Support/helpers.php",
+              "src/Illuminate/Support/Fluent.php",
+              "config/hashing.php",
+              "src/Illuminate/Testing/Fluent/AssertableJson.php",
+              "src/Illuminate/Collections/Collection.php",
+              "src/Illuminate/Contracts/Foundation/CachesConfiguration.php",
+              "src/Illuminate/Support/ConfigurationUrlParser.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Debugging.php",
+              "src/Illuminate/Foundation/Bootstrap/LoadConfiguration.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Has.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Interaction.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Matching.php",
+              "src/Illuminate/Collections/LazyCollection.php",
+              "src/Illuminate/Database/ConfigurationUrlParser.php",
+              "src/Illuminate/Collections/helpers.php",
+              "src/Illuminate/Log/ParsesLogConfiguration.php",
+              "src/Illuminate/Collections/Enumerable.php",
+              "src/Illuminate/Console/Application.php",
+              "src/Illuminate/Notifications/DatabaseNotification.php",
+              "src/Illuminate/Validation/Validator.php",
+              "src/Illuminate/Database/Console/DbCommand.php",
+              "src/Illuminate/Hashing/ArgonHasher.php",
+              "src/Illuminate/Hashing/BcryptHasher.php",
+              "src/Illuminate/Database/Connection.php",
+              "src/Illuminate/Database/Connectors/ConnectionFactory.php",
+              "src/Illuminate/Foundation/Console/EnvironmentDecryptCommand.php",
+              "src/Illuminate/Process/PendingProcess.php",
+              "config/mail.php",
+              "src/Illuminate/Session/NullSessionHandler.php",
+              "src/Illuminate/Queue/Console/WorkCommand.php",
+              "src/Illuminate/Database/Connectors/PostgresConnector.php",
+              "src/Illuminate/Filesystem/LockableFile.php",
+              "src/Illuminate/Filesystem/FilesystemAdapter.php",
+              "src/Illuminate/Database/Console/Migrations/BaseCommand.php",
+              "src/Illuminate/Config/Repository.php",
+              "src/Illuminate/Session/ArraySessionHandler.php",
+              "src/Illuminate/Notifications/HasDatabaseNotifications.php",
+              "src/Illuminate/Notifications/DatabaseNotificationCollection.php",
+              "src/Illuminate/Session/CookieSessionHandler.php",
+              "src/Illuminate/Foundation/Console/ServeCommand.php",
+              "src/Illuminate/Session/DatabaseSessionHandler.php",
+              "src/Illuminate/Contracts/Filesystem/Filesystem.php",
+              "src/Illuminate/Session/FileSessionHandler.php",
+              "src/Illuminate/Foundation/Bootstrap/LoadEnvironmentVariables.php",
+              "config/session.php",
+              "src/Illuminate/Queue/Console/ListenCommand.php",
+              "config/app.php",
+              "src/Illuminate/Foundation/Console/TestMakeCommand.php",
+              "src/Illuminate/Foundation/Console/ViewMakeCommand.php",
+              "src/Illuminate/View/Compilers/Concerns/CompilesConditionals.php",
+              "src/Illuminate/Session/Store.php",
+              "src/Illuminate/Redis/Connectors/PhpRedisConnector.php",
+              "src/Illuminate/Hashing/HashManager.php",
+              "src/Illuminate/Testing/ParallelTesting.php",
+              "config-stubs/app.php",
+              "src/Illuminate/Session/CacheBasedSessionHandler.php",
+              "src/Illuminate/Foundation/Console/ConfigMakeCommand.php",
+              "src/Illuminate/Queue/Failed/FileFailedJobProvider.php",
+              "config/database.php",
+              "src/Illuminate/Console/Parser.php",
+              "src/Illuminate/Foundation/Console/EnvironmentEncryptCommand.php",
+              "src/Illuminate/Foundation/Application.php",
+              "src/Illuminate/Http/JsonResponse.php",
+              "src/Illuminate/Database/DatabaseManager.php",
+              "src/Illuminate/Console/Concerns/InteractsWithIO.php",
+              "src/Illuminate/Foundation/Console/ConfigPublishCommand.php",
+              "src/Illuminate/Database/Console/Migrations/RollbackCommand.php",
+              "src/Illuminate/Foundation/Console/BroadcastingInstallCommand.php",
+              "src/Illuminate/Foundation/Console/VendorPublishCommand.php",
+              "src/Illuminate/Foundation/Configuration/ApplicationBuilder.php",
+              "src/Illuminate/Bus/PendingBatch.php",
+              "config/cors.php",
+              "src/Illuminate/Log/LogManager.php",
+              "src/Illuminate/Testing/Concerns/TestDatabases.php",
+              "src/Illuminate/Database/Capsule/Manager.php",
+              "src/Illuminate/Redis/RedisManager.php",
+              "src/Illuminate/Broadcasting/Broadcasters/PusherBroadcaster.php",
+              "src/Illuminate/Support/Str.php",
+              "src/Illuminate/Queue/Capsule/Manager.php",
+              "src/Illuminate/Auth/CreatesUserProviders.php",
+              "src/Illuminate/Queue/Connectors/SqsConnector.php",
+              "src/Illuminate/Support/Facades/Storage.php",
+              "src/Illuminate/Foundation/Console/ConfigCacheCommand.php",
+              "src/Illuminate/Database/Eloquent/Builder.php",
+              "src/Illuminate/Filesystem/Filesystem.php",
+              "src/Illuminate/Mail/MailManager.php",
+              "config/auth.php",
+              "src/Illuminate/Routing/Middleware/ThrottleRequests.php",
+              "src/Illuminate/Auth/Middleware/Authenticate.php",
+              "src/Illuminate/Auth/Middleware/Authorize.php",
+              "src/Illuminate/Mail/Mailables/Envelope.php",
+              "config/cache.php",
+              "src/Illuminate/Auth/Middleware/RedirectIfAuthenticated.php",
+              "src/Illuminate/Auth/Middleware/RequirePassword.php"
+            ],
+            "seconds": 0.05887645808979869
+          }
+        ],
+        "cleanup_verified": true
+      }
+    ]
+  },
+  "fresh_replay": {
+    "scope": "Local lexical replay; depth 96 reruns candidate generation, not a stable cursor. Development labels unchanged. No models, downloads, or agent runs.",
+    "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+    "questions_sha256": "151b3fd09520f9d3181fe493f0f1c7c46c608889bd0705bc062e2cfdb3988e9e",
+    "repositories": [
+      {
+        "pack": "fastapi",
+        "commit": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+        "tree": "ed4cc219ce1c8f8bddd88a60c52a701fef3b5f64",
+        "diagnostics": {
+          "status": "ready",
+          "keyword_index_ready": true,
+          "body_index_available": true,
+          "body_index_ready": true,
+          "body_indexed_files": 2642,
+          "keyword_indexed_files": 2643,
+          "body_index_coverage": 1.0,
+          "vector_status": "idle",
+          "vector_coverage": 0.0,
+          "warmup_stage": "ready",
+          "warmup_reused_asts": 0,
+          "warmup_seconds": 2.701,
+          "keyword_seconds": 1.447,
+          "importance_seconds": 0.0,
+          "body_seconds": 1.254
+        },
+        "queries": [
+          {
+            "id": "fastapi:fresh-1",
+            "query": "Retrieve an API key from a request cookie",
+            "depth": 24,
+            "labeled_files": [
+              "fastapi/security/api_key.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/security/api_key.py": 2
+              },
+              "body": {
+                "fastapi/security/api_key.py": 13
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/security/api_key.py": 1
+              },
+              "fused": {
+                "fastapi/security/api_key.py": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 33,
+              "body": 44,
+              "file_bm25": 0,
+              "chunk_fused": 62,
+              "fused": 62
+            },
+            "returned_labeled_ranks": {
+              "fastapi/security/api_key.py": 1
+            },
+            "ranked_files": [
+              "fastapi/security/api_key.py",
+              "docs_src/custom_request_and_route/tutorial001_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial001_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_py310.py",
+              "docs_src/custom_request_and_route/tutorial003_py310.py",
+              "fastapi/routing.py",
+              "fastapi/applications.py",
+              "fastapi/openapi/models.py",
+              "docs/ko/docs/how-to/custom-request-and-route.md",
+              "docs/ja/docs/how-to/custom-request-and-route.md",
+              "docs/uk/docs/how-to/custom-request-and-route.md",
+              "docs/zh-hant/docs/how-to/custom-request-and-route.md",
+              "docs/zh/docs/how-to/custom-request-and-route.md",
+              "docs_src/handling_errors/tutorial006_py310.py",
+              "docs/ru/docs/how-to/custom-request-and-route.md",
+              "fastapi/security/__init__.py",
+              "docs/en/docs/how-to/custom-request-and-route.md",
+              "docs_src/websockets_/tutorial002_an_py310.py",
+              "docs_src/websockets_/tutorial002_py310.py",
+              "docs/tr/docs/how-to/custom-request-and-route.md",
+              "docs/en/docs/_llm-test.md",
+              "docs/zh/docs/_llm-test.md",
+              "docs/tr/docs/_llm-test.md"
+            ],
+            "seconds": 0.055028832983225584
+          },
+          {
+            "id": "fastapi:fresh-1",
+            "query": "Retrieve an API key from a request cookie",
+            "depth": 96,
+            "labeled_files": [
+              "fastapi/security/api_key.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/security/api_key.py": 2
+              },
+              "body": {
+                "fastapi/security/api_key.py": 13
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/security/api_key.py": 1
+              },
+              "fused": {
+                "fastapi/security/api_key.py": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 100,
+              "body": 180,
+              "file_bm25": 0,
+              "chunk_fused": 222,
+              "fused": 222
+            },
+            "returned_labeled_ranks": {
+              "fastapi/security/api_key.py": 1
+            },
+            "ranked_files": [
+              "fastapi/security/api_key.py",
+              "docs_src/custom_request_and_route/tutorial001_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial001_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_an_py310.py",
+              "docs_src/custom_request_and_route/tutorial002_py310.py",
+              "docs_src/custom_request_and_route/tutorial003_py310.py",
+              "fastapi/routing.py",
+              "fastapi/applications.py",
+              "fastapi/openapi/models.py",
+              "docs/ko/docs/how-to/custom-request-and-route.md",
+              "docs/ja/docs/how-to/custom-request-and-route.md",
+              "docs/uk/docs/how-to/custom-request-and-route.md",
+              "fastapi/security/__init__.py",
+              "docs/zh-hant/docs/how-to/custom-request-and-route.md",
+              "docs/zh/docs/how-to/custom-request-and-route.md",
+              "docs_src/handling_errors/tutorial006_py310.py",
+              "docs/ru/docs/how-to/custom-request-and-route.md",
+              "fastapi/exception_handlers.py",
+              "docs/en/docs/how-to/custom-request-and-route.md",
+              "docs_src/websockets_/tutorial002_an_py310.py",
+              "docs_src/websockets_/tutorial002_py310.py",
+              "docs/tr/docs/how-to/custom-request-and-route.md",
+              "fastapi/openapi/utils.py",
+              "docs_src/handling_errors/tutorial005_py310.py",
+              "docs_src/handling_errors/tutorial004_py310.py",
+              "docs/en/docs/_llm-test.md",
+              "docs/zh/docs/_llm-test.md",
+              "docs_src/handling_errors/tutorial003_py310.py",
+              "docs_src/response_cookies/tutorial002_py310.py",
+              "docs/tr/docs/_llm-test.md",
+              "fastapi/params.py",
+              "fastapi/dependencies/utils.py",
+              "docs_src/response_cookies/tutorial001_py310.py",
+              "docs/es/docs/how-to/custom-request-and-route.md",
+              "docs/pt/docs/how-to/custom-request-and-route.md",
+              "docs/zh-hant/docs/tutorial/first-steps.md",
+              "docs/de/docs/how-to/custom-request-and-route.md",
+              "docs/fr/docs/how-to/custom-request-and-route.md",
+              "fastapi/param_functions.py",
+              "docs/tr/docs/tutorial/handling-errors.md",
+              "docs_src/dependencies/tutorial006_an_py310.py",
+              "docs_src/dependencies/tutorial006_py310.py",
+              "docs_src/dependencies/tutorial012_an_py310.py",
+              "docs_src/dependencies/tutorial012_py310.py",
+              "fastapi/exceptions.py",
+              "docs/ko/docs/_llm-test.md",
+              "docs/en/docs/tutorial/handling-errors.md",
+              "docs_src/path_operation_advanced_configuration/tutorial002_py310.py",
+              "docs/en/docs/reference/security/index.md",
+              "docs/ru/docs/deployment/concepts.md",
+              "docs/zh/docs/deployment/concepts.md",
+              "docs/ru/docs/tutorial/handling-errors.md",
+              "docs/zh/docs/tutorial/handling-errors.md",
+              "docs/ko/docs/tutorial/handling-errors.md",
+              "docs_src/websockets_/tutorial001_py310.py",
+              "docs/uk/docs/tutorial/handling-errors.md",
+              "docs/zh-hant/docs/tutorial/handling-errors.md",
+              "docs_src/websockets_/tutorial003_py310.py",
+              "fastapi/dependencies/models.py",
+              "docs/ja/docs/tutorial/handling-errors.md",
+              "docs/ko/docs/deployment/concepts.md",
+              "docs/uk/docs/deployment/concepts.md",
+              "docs/zh-hant/docs/deployment/concepts.md",
+              "docs/en/docs/reference/parameters.md",
+              "docs_src/wsgi/tutorial001_py310.py",
+              "docs/ja/docs/deployment/concepts.md",
+              "docs/en/docs/tutorial/first-steps.md",
+              "docs/zh/docs/tutorial/security/index.md",
+              "docs/ru/docs/tutorial/security/index.md",
+              "docs_src/dependencies/tutorial005_an_py310.py",
+              "docs_src/dependencies/tutorial005_py310.py",
+              "docs/ru/docs/advanced/using-request-directly.md",
+              "docs/de/docs/tutorial/handling-errors.md",
+              "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/fr/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/ja/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/ko/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/ru/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/tr/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/uk/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/zh-hant/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/zh/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/zh-hant/docs/tutorial/security/index.md",
+              "scripts/contributors.py",
+              "fastapi/security/oauth2.py",
+              "docs/es/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs_src/generate_clients/tutorial004.js",
+              "docs/en/docs/tutorial/security/oauth2-jwt.md",
+              "docs/tr/docs/tutorial/first-steps.md",
+              "docs/tr/docs/advanced/events.md",
+              "docs/en/docs/tutorial/cookie-param-models.md",
+              "docs/de/docs/tutorial/cookie-param-models.md",
+              "docs/en/docs/tutorial/middleware.md",
+              "docs/tr/docs/advanced/websockets.md",
+              "docs_src/generate_clients/tutorial003_py310.py",
+              "docs/de/docs/tutorial/dependencies/sub-dependencies.md"
+            ],
+            "seconds": 0.07913466601166874
+          },
+          {
+            "id": "fastapi:fresh-2",
+            "query": "Convert a Python object into JSON compatible data",
+            "depth": 24,
+            "labeled_files": [
+              "fastapi/encoders.py"
+            ],
+            "stage_ranks": {
+              "keyword": {},
+              "body": {
+                "fastapi/encoders.py": 7
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/encoders.py": 9
+              },
+              "fused": {
+                "fastapi/encoders.py": 9
+              }
+            },
+            "stage_counts": {
+              "keyword": 38,
+              "body": 56,
+              "file_bm25": 0,
+              "chunk_fused": 90,
+              "fused": 90
+            },
+            "returned_labeled_ranks": {
+              "fastapi/encoders.py": 9
+            },
+            "ranked_files": [
+              "docs/en/docs/tutorial/encoder.md",
+              "docs/en/docs/how-to/general.md",
+              "docs/en/docs/js/termynal.js",
+              "docs_src/response_directly/tutorial001_py310.py",
+              "fastapi/_compat/v2.py",
+              "docs_src/encoder/tutorial001_py310.py",
+              "docs/en/docs/css/termynal.css",
+              "docs/en/docs/alternatives.md",
+              "fastapi/encoders.py",
+              "scripts/deploy_docs_status.py",
+              "fastapi/applications.py",
+              "scripts/notify_translations.py",
+              "docs_src/security/tutorial004_an_py310.py",
+              "docs_src/security/tutorial004_py310.py",
+              "docs_src/security/tutorial005_an_py310.py",
+              "docs_src/security/tutorial005_py310.py",
+              "fastapi/routing.py",
+              "scripts/contributors.py",
+              "scripts/people.py",
+              "scripts/sponsors.py",
+              "docs/en/docs/css/custom.css",
+              "docs/en/docs/python-types.md",
+              "docs/en/docs/advanced/response-directly.md",
+              "docs/ru/docs/how-to/general.md"
+            ],
+            "seconds": 0.03714912501163781
+          },
+          {
+            "id": "fastapi:fresh-2",
+            "query": "Convert a Python object into JSON compatible data",
+            "depth": 96,
+            "labeled_files": [
+              "fastapi/encoders.py"
+            ],
+            "stage_ranks": {
+              "keyword": {},
+              "body": {
+                "fastapi/encoders.py": 7
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/encoders.py": 9
+              },
+              "fused": {
+                "fastapi/encoders.py": 9
+              }
+            },
+            "stage_counts": {
+              "keyword": 130,
+              "body": 247,
+              "file_bm25": 0,
+              "chunk_fused": 352,
+              "fused": 352
+            },
+            "returned_labeled_ranks": {
+              "fastapi/encoders.py": 9
+            },
+            "ranked_files": [
+              "docs/en/docs/js/termynal.js",
+              "docs/en/docs/tutorial/encoder.md",
+              "docs/en/docs/how-to/general.md",
+              "docs_src/response_directly/tutorial001_py310.py",
+              "fastapi/_compat/v2.py",
+              "docs_src/encoder/tutorial001_py310.py",
+              "docs/en/docs/css/termynal.css",
+              "docs/en/docs/alternatives.md",
+              "fastapi/encoders.py",
+              "scripts/deploy_docs_status.py",
+              "fastapi/applications.py",
+              "scripts/notify_translations.py",
+              "docs_src/security/tutorial004_an_py310.py",
+              "docs_src/security/tutorial004_py310.py",
+              "docs_src/security/tutorial005_an_py310.py",
+              "docs_src/security/tutorial005_py310.py",
+              "fastapi/routing.py",
+              "scripts/contributors.py",
+              "fastapi/sse.py",
+              "scripts/people.py",
+              "docs_src/json_base64_bytes/tutorial001_py310.py",
+              "scripts/sponsors.py",
+              "docs/en/docs/css/custom.css",
+              "docs/en/docs/python-types.md",
+              "docs/en/docs/advanced/response-directly.md",
+              "docs/ru/docs/how-to/general.md",
+              "docs/uk/docs/how-to/general.md",
+              "docs/zh/docs/how-to/general.md",
+              "docs/ko/docs/how-to/general.md",
+              "docs/zh-hant/docs/how-to/general.md",
+              "docs_src/request_form_models/tutorial001_an_py310.py",
+              "docs/uk/docs/tutorial/testing.md",
+              "docs_src/request_form_models/tutorial001_py310.py",
+              "docs/en/docs/tutorial/query-params-str-validations.md",
+              "docs/ja/docs/how-to/general.md",
+              "docs_src/request_form_models/tutorial002_an_py310.py",
+              "README.md",
+              "docs_src/request_form_models/tutorial002_py310.py",
+              "docs/en/docs/tutorial/path-params.md",
+              "scripts/translate.py",
+              "docs/en/docs/features.md",
+              "fastapi/datastructures.py",
+              "docs/ko/docs/tutorial/testing.md",
+              "fastapi/dependencies/utils.py",
+              "docs/en/docs/index.md",
+              "fastapi/openapi/docs.py",
+              "docs/uk/docs/tutorial/header-param-models.md",
+              "docs/ja/docs/tutorial/header-param-models.md",
+              "docs/ko/docs/tutorial/header-param-models.md",
+              "docs/zh-hant/docs/tutorial/header-param-models.md",
+              "scripts/docs.py",
+              "docs/ru/docs/tutorial/header-param-models.md",
+              "docs/en/docs/tutorial/request-files.md",
+              "docs/ja/docs/tutorial/header-params.md",
+              "docs/en/docs/tutorial/testing.md",
+              "docs/es/docs/how-to/general.md",
+              "docs/uk/docs/tutorial/header-params.md",
+              "docs/zh-hant/docs/tutorial/header-params.md",
+              "docs/zh/docs/tutorial/header-param-models.md",
+              "docs/en/docs/advanced/response-change-status-code.md",
+              "docs/ru/docs/tutorial/header-params.md",
+              "docs/zh/docs/tutorial/header-params.md",
+              "docs/fr/docs/how-to/general.md",
+              "fastapi/security/api_key.py",
+              "fastapi/openapi/models.py",
+              "docs/de/docs/how-to/general.md",
+              "docs/en/docs/tutorial/extra-models.md",
+              "docs/ja/docs/virtual-environments.md",
+              "docs/en/docs/advanced/settings.md",
+              "docs/en/docs/tutorial/body.md",
+              "docs_src/path_operation_advanced_configuration/tutorial006_py310.py",
+              "fastapi/params.py",
+              "docs/en/docs/tutorial/security/oauth2-jwt.md",
+              "docs_src/response_directly/tutorial002_py310.py",
+              "docs/ja/docs/tutorial/encoder.md",
+              "docs/ru/docs/tutorial/encoder.md",
+              "docs/uk/docs/tutorial/encoder.md",
+              "fastapi/param_functions.py",
+              "docs/zh-hant/docs/tutorial/encoder.md",
+              "docs/zh/docs/tutorial/encoder.md",
+              "docs/en/docs/tutorial/query-params.md",
+              "docs/en/docs/tutorial/body-updates.md",
+              "docs/en/docs/reference/request.md",
+              "docs/en/docs/tutorial/security/simple-oauth2.md",
+              "docs/es/docs/tutorial/encoder.md",
+              "docs_src/response_model/tutorial005_py310.py",
+              "docs/en/docs/advanced/json-base64-bytes.md",
+              "docs_src/response_model/tutorial006_py310.py",
+              "docs/ru/docs/tutorial/body.md",
+              "docs/zh/docs/tutorial/body.md",
+              "fastapi/responses.py",
+              "docs/en/docs/advanced/stream-data.md",
+              "docs/ja/docs/tutorial/body.md",
+              "docs/zh-hant/docs/tutorial/body.md",
+              "docs/en/docs/tutorial/body-nested-models.md",
+              "docs/ko/docs/tutorial/request-files.md"
+            ],
+            "seconds": 0.07207237498369068
+          },
+          {
+            "id": "fastapi:fresh-3",
+            "query": "Schedule a task to run after sending the response",
+            "depth": 24,
+            "labeled_files": [
+              "fastapi/background.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/background.py": 16
+              },
+              "body": {
+                "fastapi/background.py": 4
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/background.py": 1
+              },
+              "fused": {
+                "fastapi/background.py": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 44,
+              "body": 55,
+              "file_bm25": 0,
+              "chunk_fused": 89,
+              "fused": 89
+            },
+            "returned_labeled_ranks": {
+              "fastapi/background.py": 1
+            },
+            "ranked_files": [
+              "fastapi/background.py",
+              "docs_src/response_change_status_code/tutorial001_py310.py",
+              "docs/en/docs/tutorial/background-tasks.md",
+              "docs/en/docs/reference/background.md",
+              "scripts/contributors.py",
+              "scripts/sponsors.py",
+              "docs/en/docs/advanced/advanced-dependencies.md",
+              "scripts/people.py",
+              "scripts/notify_translations.py",
+              "scripts/playwright/cookie_param_models/image01.py",
+              "docs/en/docs/advanced/stream-data.md",
+              "scripts/playwright/header_param_models/image01.py",
+              "docs/ko/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/json_base64_bytes/image01.py",
+              "docs/zh-hant/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/query_param_models/image01.py",
+              "docs/zh/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/request_form_models/image01.py",
+              "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/separate_openapi_schemas/image01.py",
+              "fastapi/routing.py",
+              "docs/uk/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/separate_openapi_schemas/image02.py",
+              "scripts/playwright/separate_openapi_schemas/image03.py"
+            ],
+            "seconds": 0.03297870792448521
+          },
+          {
+            "id": "fastapi:fresh-3",
+            "query": "Schedule a task to run after sending the response",
+            "depth": 96,
+            "labeled_files": [
+              "fastapi/background.py"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "fastapi/background.py": 16
+              },
+              "body": {
+                "fastapi/background.py": 4
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "fastapi/background.py": 1
+              },
+              "fused": {
+                "fastapi/background.py": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 127,
+              "body": 233,
+              "file_bm25": 0,
+              "chunk_fused": 321,
+              "fused": 321
+            },
+            "returned_labeled_ranks": {
+              "fastapi/background.py": 1
+            },
+            "ranked_files": [
+              "fastapi/background.py",
+              "docs_src/response_change_status_code/tutorial001_py310.py",
+              "docs/en/docs/tutorial/background-tasks.md",
+              "docs/en/docs/reference/background.md",
+              "scripts/contributors.py",
+              "scripts/sponsors.py",
+              "docs/en/docs/advanced/advanced-dependencies.md",
+              "scripts/people.py",
+              "scripts/notify_translations.py",
+              "scripts/playwright/cookie_param_models/image01.py",
+              "docs/en/docs/advanced/stream-data.md",
+              "scripts/playwright/header_param_models/image01.py",
+              "docs/ko/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "fastapi/routing.py",
+              "scripts/playwright/json_base64_bytes/image01.py",
+              "docs/zh-hant/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/query_param_models/image01.py",
+              "docs/zh/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/request_form_models/image01.py",
+              "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/separate_openapi_schemas/image01.py",
+              "docs/uk/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "scripts/playwright/separate_openapi_schemas/image02.py",
+              "scripts/playwright/separate_openapi_schemas/image03.py",
+              "scripts/playwright/separate_openapi_schemas/image04.py",
+              "docs/ja/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/en/docs/css/termynal.css",
+              "scripts/playwright/separate_openapi_schemas/image05.py",
+              "scripts/playwright/sql_databases/image01.py",
+              "scripts/playwright/sql_databases/image02.py",
+              "docs/en/docs/tutorial/middleware.md",
+              "docs/en/docs/advanced/async-tests.md",
+              "docs/en/docs/css/custom.css",
+              "fastapi/openapi/models.py",
+              "docs/en/docs/tutorial/security/first-steps.md",
+              "docs/tr/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/fr/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "docs/ru/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "fastapi/responses.py",
+              "docs/en/docs/tutorial/response-model.md",
+              "docs_src/extra_data_types/tutorial001_py310.py",
+              "docs_src/extra_data_types/tutorial001_an_py310.py",
+              "docs/zh/docs/tutorial/background-tasks.md",
+              "fastapi/sse.py",
+              "docs/zh-hant/docs/tutorial/background-tasks.md",
+              "docs/ru/docs/tutorial/background-tasks.md",
+              "docs_src/stream_data/tutorial002_py310.py",
+              "docs/uk/docs/tutorial/background-tasks.md",
+              "docs/ko/docs/tutorial/background-tasks.md",
+              "docs/en/docs/_llm-test.md",
+              "docs/ko/docs/_llm-test.md",
+              "docs/zh/docs/_llm-test.md",
+              "docs/tr/docs/_llm-test.md",
+              "fastapi/security/oauth2.py",
+              "docs/es/docs/tutorial/dependencies/dependencies-with-yield.md",
+              "fastapi/exceptions.py",
+              "docs/ja/docs/tutorial/background-tasks.md",
+              "docs_src/custom_response/tutorial009c_py310.py",
+              "docs/en/docs/advanced/custom-response.md",
+              "docs/en/docs/virtual-environments.md",
+              "docs/tr/docs/advanced/advanced-dependencies.md",
+              "docs/ja/docs/virtual-environments.md",
+              "docs/en/docs/deployment/https.md",
+              "docs_src/generate_clients/tutorial001_py310.py",
+              "docs_src/generate_clients/tutorial002_py310.py",
+              "docs_src/generate_clients/tutorial003_py310.py",
+              "docs/en/docs/tutorial/header-params.md",
+              "docs/en/docs/deployment/concepts.md",
+              "SECURITY.md",
+              "docs/en/docs/tutorial/testing.md",
+              "docs/en/docs/advanced/response-cookies.md",
+              "docs/zh-hant/docs/advanced/async-tests.md",
+              "docs_src/background_tasks/tutorial002_an_py310.py",
+              "docs_src/background_tasks/tutorial002_py310.py",
+              "docs/uk/docs/advanced/async-tests.md",
+              "docs/zh/docs/advanced/async-tests.md",
+              "fastapi/param_functions.py",
+              "docs/ja/docs/advanced/async-tests.md",
+              "docs/ko/docs/advanced/async-tests.md",
+              "docs/ru/docs/advanced/async-tests.md",
+              "pyproject.toml",
+              "docs_src/custom_response/tutorial004_py310.py",
+              "docs/en/docs/contributing.md",
+              "docs_src/background_tasks/tutorial001_py310.py",
+              "docs/en/docs/async.md",
+              "docs/en/docs/tutorial/server-sent-events.md",
+              "docs/ko/docs/deployment/concepts.md",
+              "docs/en/docs/advanced/openapi-callbacks.md",
+              "fastapi/applications.py",
+              "docs/en/docs/advanced/json-base64-bytes.md",
+              "docs/en/docs/advanced/strict-content-type.md",
+              "docs/tr/docs/virtual-environments.md",
+              "docs/en/docs/advanced/events.md",
+              "docs/zh/docs/deployment/concepts.md",
+              "scripts/translate.py",
+              "docs/tr/docs/tutorial/background-tasks.md"
+            ],
+            "seconds": 0.05418258300051093
+          }
+        ],
+        "cleanup_verified": true
+      },
+      {
+        "pack": "framework",
+        "commit": "0ac6e5592da1a172d9685591c5f82fb1fb8995fb",
+        "tree": "25361b2d82005d6f74b1bb1657c0d7a4d7965fb1",
+        "diagnostics": {
+          "status": "ready",
+          "keyword_index_ready": true,
+          "body_index_available": true,
+          "body_index_ready": true,
+          "body_indexed_files": 2873,
+          "keyword_indexed_files": 2873,
+          "body_index_coverage": 1.0,
+          "vector_status": "idle",
+          "vector_coverage": 0.0,
+          "warmup_stage": "ready",
+          "warmup_reused_asts": 0,
+          "warmup_seconds": 6.791,
+          "keyword_seconds": 5.187,
+          "importance_seconds": 0.0,
+          "body_seconds": 1.605
+        },
+        "queries": [
+          {
+            "id": "framework:fresh-1",
+            "query": "Encrypt a value and authenticate the ciphertext",
+            "depth": 24,
+            "labeled_files": [
+              "src/Illuminate/Encryption/Encrypter.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Encryption/Encrypter.php": 38
+              },
+              "body": {},
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Encryption/Encrypter.php": 54
+              },
+              "fused": {
+                "src/Illuminate/Encryption/Encrypter.php": 46
+              }
+            },
+            "stage_counts": {
+              "keyword": 40,
+              "body": 29,
+              "file_bm25": 0,
+              "chunk_fused": 55,
+              "fused": 55
+            },
+            "returned_labeled_ranks": {},
+            "ranked_files": [
+              "src/Illuminate/Auth/Passwords/PasswordBroker.php",
+              "src/Illuminate/Session/Middleware/AuthenticateSession.php",
+              "src/Illuminate/Auth/SessionGuard.php",
+              "src/Illuminate/Support/Facades/Password.php",
+              "src/Illuminate/Broadcasting/BroadcastController.php",
+              "src/Illuminate/Contracts/Session/Session.php",
+              "src/Illuminate/Auth/Middleware/Authenticate.php",
+              "src/Illuminate/Auth/Events/Login.php",
+              "src/Illuminate/Auth/Passwords/CacheTokenRepository.php",
+              "src/Illuminate/Auth/Passwords/DatabaseTokenRepository.php",
+              "src/Illuminate/Foundation/helpers.php",
+              "src/Illuminate/Auth/Passwords/CanResetPassword.php",
+              "src/Illuminate/Auth/Passwords/TokenRepositoryInterface.php",
+              "src/Illuminate/Contracts/Auth/CanResetPassword.php",
+              "src/Illuminate/Validation/Rules/Password.php",
+              "src/Illuminate/Foundation/Http/Middleware/VerifyCsrfToken.php",
+              "src/Illuminate/Support/Facades/Session.php",
+              "src/Illuminate/Auth/Passwords/PasswordBrokerManager.php",
+              "src/Illuminate/Foundation/Console/EnvironmentEncryptCommand.php",
+              "src/Illuminate/Foundation/Configuration/Middleware.php",
+              "src/Illuminate/Auth/Middleware/AuthenticateWithBasicAuth.php",
+              "src/Illuminate/Contracts/Encryption/EncryptException.php",
+              "src/Illuminate/Cookie/Middleware/EncryptCookies.php",
+              "src/Illuminate/Auth/TokenGuard.php"
+            ],
+            "seconds": 0.02695829200092703
+          },
+          {
+            "id": "framework:fresh-1",
+            "query": "Encrypt a value and authenticate the ciphertext",
+            "depth": 96,
+            "labeled_files": [
+              "src/Illuminate/Encryption/Encrypter.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Encryption/Encrypter.php": 38
+              },
+              "body": {
+                "src/Illuminate/Encryption/Encrypter.php": 55
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Encryption/Encrypter.php": 40
+              },
+              "fused": {
+                "src/Illuminate/Encryption/Encrypter.php": 34
+              }
+            },
+            "stage_counts": {
+              "keyword": 89,
+              "body": 124,
+              "file_bm25": 0,
+              "chunk_fused": 152,
+              "fused": 152
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Encryption/Encrypter.php": 34
+            },
+            "ranked_files": [
+              "src/Illuminate/Auth/Passwords/PasswordBroker.php",
+              "src/Illuminate/Session/Middleware/AuthenticateSession.php",
+              "src/Illuminate/Auth/SessionGuard.php",
+              "src/Illuminate/Support/Facades/Password.php",
+              "src/Illuminate/Broadcasting/BroadcastController.php",
+              "src/Illuminate/Contracts/Session/Session.php",
+              "src/Illuminate/Foundation/helpers.php",
+              "src/Illuminate/Auth/Middleware/Authenticate.php",
+              "src/Illuminate/Auth/Events/Login.php",
+              "src/Illuminate/Auth/Passwords/CacheTokenRepository.php",
+              "src/Illuminate/Foundation/Console/EnvironmentEncryptCommand.php",
+              "src/Illuminate/Auth/Passwords/DatabaseTokenRepository.php",
+              "src/Illuminate/Auth/Passwords/CanResetPassword.php",
+              "src/Illuminate/Auth/Passwords/TokenRepositoryInterface.php",
+              "src/Illuminate/Contracts/Auth/CanResetPassword.php",
+              "src/Illuminate/Validation/Rules/Password.php",
+              "src/Illuminate/Foundation/Http/Middleware/VerifyCsrfToken.php",
+              "src/Illuminate/Support/Facades/Session.php",
+              "src/Illuminate/Auth/Passwords/PasswordBrokerManager.php",
+              "src/Illuminate/Contracts/Auth/PasswordBroker.php",
+              "src/Illuminate/Foundation/Configuration/Middleware.php",
+              "src/Illuminate/Auth/Middleware/AuthenticateWithBasicAuth.php",
+              "src/Illuminate/Contracts/Encryption/EncryptException.php",
+              "src/Illuminate/Session/Store.php",
+              "src/Illuminate/Cookie/Middleware/EncryptCookies.php",
+              "src/Illuminate/Auth/Authenticatable.php",
+              "src/Illuminate/Session/SessionManager.php",
+              "src/Illuminate/Auth/Notifications/ResetPassword.php",
+              "src/Illuminate/Auth/TokenGuard.php",
+              "config/hashing.php",
+              "src/Illuminate/Auth/Middleware/RequirePassword.php",
+              "src/Illuminate/Support/Stringable.php",
+              "src/Illuminate/Translation/lang/en/passwords.php",
+              "src/Illuminate/Encryption/Encrypter.php",
+              "src/Illuminate/Auth/GuardHelpers.php",
+              "src/Illuminate/Session/Middleware/StartSession.php",
+              "src/Illuminate/Contracts/Auth/Authenticatable.php",
+              "src/Illuminate/Contracts/Auth/StatefulGuard.php",
+              "src/Illuminate/Session/TokenMismatchException.php",
+              "src/Illuminate/Foundation/Testing/Concerns/InteractsWithSession.php",
+              "src/Illuminate/Auth/Events/PasswordReset.php",
+              "src/Illuminate/Auth/Passwords/PasswordResetServiceProvider.php",
+              "src/Illuminate/Foundation/Http/Middleware/ValidateCsrfToken.php",
+              "src/Illuminate/Foundation/Testing/Concerns/MakesHttpRequests.php",
+              "src/Illuminate/Contracts/Encryption/Encrypter.php",
+              "src/Illuminate/Contracts/Auth/PasswordBrokerFactory.php",
+              "src/Illuminate/Contracts/Encryption/StringEncrypter.php",
+              "src/Illuminate/Database/Eloquent/Concerns/HasAttributes.php",
+              "src/Illuminate/Testing/ParallelTesting.php",
+              "src/Illuminate/Session/SessionServiceProvider.php",
+              "src/Illuminate/Http/Client/PendingRequest.php",
+              "src/Illuminate/Auth/Events/PasswordResetLinkSent.php",
+              "src/Illuminate/Session/SymfonySessionDecorator.php",
+              "src/Illuminate/Auth/EloquentUserProvider.php",
+              "src/Illuminate/Auth/DatabaseUserProvider.php",
+              "src/Illuminate/Contracts/Auth/UserProvider.php",
+              "src/Illuminate/Database/Schema/Blueprint.php",
+              "src/Illuminate/Auth/GenericUser.php",
+              "src/Illuminate/Auth/AuthManager.php",
+              "src/Illuminate/View/Compilers/BladeCompiler.php",
+              "src/Illuminate/Session/NullSessionHandler.php",
+              "config/session.php",
+              "src/Illuminate/Session/FileSessionHandler.php",
+              "src/Illuminate/Session/CookieSessionHandler.php",
+              "src/Illuminate/Session/ArraySessionHandler.php",
+              "src/Illuminate/View/Middleware/ShareErrorsFromSession.php",
+              "src/Illuminate/Session/Console/SessionTableCommand.php",
+              "src/Illuminate/Cache/SessionStore.php",
+              "src/Illuminate/Routing/Redirector.php",
+              "src/Illuminate/Session/CacheBasedSessionHandler.php",
+              "src/Illuminate/Http/RedirectResponse.php",
+              "src/Illuminate/Testing/TestResponse.php",
+              "src/Illuminate/Http/Request.php",
+              "src/Illuminate/Support/Facades/Facade.php",
+              "src/Illuminate/Cache/CacheManager.php",
+              "src/Illuminate/Support/Str.php",
+              "src/Illuminate/Auth/composer.json",
+              "config/database.php",
+              "src/Illuminate/Auth/Recaller.php",
+              "config/auth.php",
+              "src/Illuminate/Session/DatabaseSessionHandler.php",
+              "src/Illuminate/Support/Facades/Auth.php",
+              "src/Illuminate/Broadcasting/BroadcastManager.php",
+              "src/Illuminate/Support/Uri.php",
+              "src/Illuminate/Http/Concerns/InteractsWithInput.php",
+              "src/Illuminate/Translation/lang/en/auth.php",
+              "src/Illuminate/Database/Connectors/SqlServerConnector.php",
+              "src/Illuminate/Broadcasting/Broadcasters/AblyBroadcaster.php",
+              "src/Illuminate/View/Compilers/ComponentTagCompiler.php",
+              "src/Illuminate/Auth/AuthServiceProvider.php",
+              "src/Illuminate/Validation/Concerns/ValidatesAttributes.php",
+              "types/Foundation/Configuration/Middleware.php",
+              "src/Illuminate/Console/Parser.php",
+              "src/Illuminate/Foundation/Exceptions/Handler.php",
+              "src/Illuminate/Routing/UrlGenerator.php",
+              "src/Illuminate/View/Compilers/Concerns/CompilesSessions.php"
+            ],
+            "seconds": 0.03331691597122699
+          },
+          {
+            "id": "framework:fresh-2",
+            "query": "Determine whether a key exceeded the allowed attempt count",
+            "depth": 24,
+            "labeled_files": [
+              "src/Illuminate/Cache/RateLimiter.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Cache/RateLimiter.php": 8
+              },
+              "body": {},
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Cache/RateLimiter.php": 21
+              },
+              "fused": {
+                "src/Illuminate/Cache/RateLimiter.php": 21
+              }
+            },
+            "stage_counts": {
+              "keyword": 56,
+              "body": 53,
+              "file_bm25": 0,
+              "chunk_fused": 97,
+              "fused": 97
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Cache/RateLimiter.php": 21
+            },
+            "ranked_files": [
+              "src/Illuminate/Queue/TimeoutExceededException.php",
+              "src/Illuminate/Database/Eloquent/Concerns/HasAttributes.php",
+              "src/Illuminate/Cache/Lock.php",
+              "src/Illuminate/Queue/Listener.php",
+              "src/Illuminate/Queue/Worker.php",
+              "src/Illuminate/Foundation/Console/ChannelListCommand.php",
+              "src/Illuminate/Auth/Access/Response.php",
+              "src/Illuminate/Foundation/Console/RouteListCommand.php",
+              "src/Illuminate/Foundation/Console/stubs/policy.stub",
+              "src/Illuminate/Contracts/Database/Eloquent/SupportsPartialRelations.php",
+              "src/Illuminate/Queue/MaxAttemptsExceededException.php",
+              "src/Illuminate/Database/Connection.php",
+              "src/Illuminate/Support/Lottery.php",
+              "src/Illuminate/Database/Eloquent/Relations/Concerns/CanBeOneOfMany.php",
+              "src/Illuminate/Foundation/Console/EventListCommand.php",
+              "src/Illuminate/Database/Eloquent/Concerns/HasRelationships.php",
+              "src/Illuminate/Pagination/Cursor.php",
+              "src/Illuminate/Process/PendingProcess.php",
+              "src/Illuminate/Testing/Constraints/CountInDatabase.php",
+              "src/Illuminate/Testing/AssertableJsonString.php",
+              "src/Illuminate/Cache/RateLimiter.php",
+              "src/Illuminate/Database/Eloquent/Relations/HasOneOrManyThrough.php",
+              "src/Illuminate/Translation/Translator.php",
+              "src/Illuminate/Console/Concerns/InteractsWithIO.php"
+            ],
+            "seconds": 0.03731729194987565
+          },
+          {
+            "id": "framework:fresh-2",
+            "query": "Determine whether a key exceeded the allowed attempt count",
+            "depth": 96,
+            "labeled_files": [
+              "src/Illuminate/Cache/RateLimiter.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Cache/RateLimiter.php": 8
+              },
+              "body": {
+                "src/Illuminate/Cache/RateLimiter.php": 61
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Cache/RateLimiter.php": 9
+              },
+              "fused": {
+                "src/Illuminate/Cache/RateLimiter.php": 9
+              }
+            },
+            "stage_counts": {
+              "keyword": 144,
+              "body": 191,
+              "file_bm25": 0,
+              "chunk_fused": 267,
+              "fused": 267
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Cache/RateLimiter.php": 9
+            },
+            "ranked_files": [
+              "src/Illuminate/Queue/TimeoutExceededException.php",
+              "src/Illuminate/Foundation/Console/ChannelListCommand.php",
+              "src/Illuminate/Database/Eloquent/Concerns/HasAttributes.php",
+              "src/Illuminate/Foundation/Console/RouteListCommand.php",
+              "src/Illuminate/Cache/Lock.php",
+              "src/Illuminate/Queue/Listener.php",
+              "src/Illuminate/Queue/Worker.php",
+              "src/Illuminate/Auth/Access/Response.php",
+              "src/Illuminate/Cache/RateLimiter.php",
+              "src/Illuminate/Foundation/Console/stubs/policy.stub",
+              "src/Illuminate/Contracts/Database/Eloquent/SupportsPartialRelations.php",
+              "src/Illuminate/Queue/MaxAttemptsExceededException.php",
+              "src/Illuminate/Database/Connection.php",
+              "src/Illuminate/Support/Lottery.php",
+              "src/Illuminate/Database/Eloquent/Relations/Concerns/CanBeOneOfMany.php",
+              "src/Illuminate/Contracts/Auth/StatefulGuard.php",
+              "src/Illuminate/Foundation/Console/EventListCommand.php",
+              "src/Illuminate/Database/Eloquent/Concerns/HasRelationships.php",
+              "src/Illuminate/Pagination/Cursor.php",
+              "src/Illuminate/Process/PendingProcess.php",
+              "src/Illuminate/Testing/Constraints/CountInDatabase.php",
+              "src/Illuminate/Testing/AssertableJsonString.php",
+              "src/Illuminate/Database/Eloquent/Relations/HasOneOrManyThrough.php",
+              "src/Illuminate/Auth/SessionGuard.php",
+              "src/Illuminate/Translation/Translator.php",
+              "src/Illuminate/Console/Concerns/InteractsWithIO.php",
+              "src/Illuminate/Console/MigrationGeneratorCommand.php",
+              "src/Illuminate/Foundation/Vite.php",
+              "src/Illuminate/Queue/Console/BatchesTableCommand.php",
+              "src/Illuminate/Queue/Console/FailedTableCommand.php",
+              "src/Illuminate/Routing/AbstractRouteCollection.php",
+              "src/Illuminate/Foundation/Console/VendorPublishCommand.php",
+              "src/Illuminate/Queue/Console/TableCommand.php",
+              "src/Illuminate/Validation/Validator.php",
+              "src/Illuminate/Http/Client/PendingRequest.php",
+              "src/Illuminate/Session/Console/SessionTableCommand.php",
+              "src/Illuminate/Http/Resources/JsonApi/Exceptions/ResourceIdentificationException.php",
+              "src/Illuminate/Validation/Rules/File.php",
+              "src/Illuminate/Database/Eloquent/Relations/Concerns/InteractsWithPivotTable.php",
+              "src/Illuminate/Testing/Concerns/AssertsStatusCodes.php",
+              "src/Illuminate/Foundation/Console/AboutCommand.php",
+              "src/Illuminate/Routing/Route.php",
+              "src/Illuminate/Support/helpers.php",
+              "src/Illuminate/Cache/FailoverStore.php",
+              "src/Illuminate/Cookie/Middleware/EncryptCookies.php",
+              "src/Illuminate/Queue/FailoverQueue.php",
+              "src/Illuminate/Support/Testing/Fakes/EventFake.php",
+              "src/Illuminate/Validation/Concerns/ValidatesAttributes.php",
+              "src/Illuminate/JsonSchema/Types/ObjectType.php",
+              "src/Illuminate/Database/Query/Grammars/MariaDbGrammar.php",
+              "src/Illuminate/Database/Query/Grammars/MySqlGrammar.php",
+              "src/Illuminate/Queue/Middleware/ThrottlesExceptions.php",
+              "src/Illuminate/Foundation/Console/KeyGenerateCommand.php",
+              "src/Illuminate/Redis/Limiters/DurationLimiter.php",
+              "src/Illuminate/Console/Scheduling/Schedule.php",
+              "src/Illuminate/Testing/TestResponse.php",
+              "src/Illuminate/Conditionable/HigherOrderWhenProxy.php",
+              "src/Illuminate/Collections/LazyCollection.php",
+              "src/Illuminate/Database/Concerns/ManagesTransactions.php",
+              "src/Illuminate/Cache/Events/KeyWritten.php",
+              "src/Illuminate/Cache/Events/WritingKey.php",
+              "src/Illuminate/Auth/Access/Gate.php",
+              "src/Illuminate/Cache/Events/KeyWriteFailed.php",
+              "src/Illuminate/Cache/Events/ForgettingKey.php",
+              "src/Illuminate/Cache/Events/KeyForgotten.php",
+              "src/Illuminate/Testing/Fluent/Concerns/Has.php",
+              "src/Illuminate/Cache/Events/RetrievingKey.php",
+              "src/Illuminate/Cache/RateLimiting/Limit.php",
+              "src/Illuminate/Encryption/MissingAppKeyException.php",
+              "src/Illuminate/Cache/Events/KeyForgetFailed.php",
+              "src/Illuminate/Collections/Collection.php",
+              "src/Illuminate/Database/Schema/ForeignKeyDefinition.php",
+              "src/Illuminate/Support/Str.php",
+              "src/Illuminate/Collections/Arr.php",
+              "src/Illuminate/Container/RewindableGenerator.php",
+              "src/Illuminate/Support/MessageBag.php",
+              "src/Illuminate/Database/Eloquent/Model.php",
+              "src/Illuminate/Process/InvokedProcessPool.php",
+              "src/Illuminate/Support/ViewErrorBag.php",
+              "src/Illuminate/Database/Schema/Blueprint.php",
+              "src/Illuminate/Collections/Traits/EnumeratesValues.php",
+              "src/Illuminate/Collections/Enumerable.php",
+              "src/Illuminate/Queue/Middleware/RateLimited.php",
+              "src/Illuminate/Foundation/Exceptions/Handler.php",
+              "src/Illuminate/Database/Query/Builder.php",
+              "src/Illuminate/Database/Eloquent/Factories/Sequence.php",
+              "src/Illuminate/Http/Resources/Json/ResourceCollection.php",
+              "src/Illuminate/Database/Eloquent/Concerns/GuardsAttributes.php",
+              "src/Illuminate/Log/Context/Repository.php",
+              "src/Illuminate/Support/Defer/DeferredCallbackCollection.php",
+              "src/Illuminate/Pagination/AbstractCursorPaginator.php",
+              "src/Illuminate/Pagination/AbstractPaginator.php",
+              "src/Illuminate/Support/Stringable.php",
+              "src/Illuminate/Queue/Failed/DatabaseFailedJobProvider.php",
+              "src/Illuminate/Queue/Failed/FileFailedJobProvider.php",
+              "src/Illuminate/Contracts/Support/MessageBag.php"
+            ],
+            "seconds": 0.04449920798651874
+          },
+          {
+            "id": "framework:fresh-3",
+            "query": "Run a queue worker continuously until it should stop",
+            "depth": 24,
+            "labeled_files": [
+              "src/Illuminate/Queue/Worker.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Queue/Worker.php": 1
+              },
+              "body": {
+                "src/Illuminate/Queue/Worker.php": 3
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Queue/Worker.php": 1
+              },
+              "fused": {
+                "src/Illuminate/Queue/Worker.php": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 47,
+              "body": 26,
+              "file_bm25": 0,
+              "chunk_fused": 59,
+              "fused": 59
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Queue/Worker.php": 1
+            },
+            "ranked_files": [
+              "src/Illuminate/Queue/Worker.php",
+              "src/Illuminate/Queue/WorkerOptions.php",
+              "src/Illuminate/Queue/Console/WorkCommand.php",
+              "src/Illuminate/Contracts/Queue/ShouldBeUniqueUntilProcessing.php",
+              "src/Illuminate/Process/FakeInvokedProcess.php",
+              "src/Illuminate/Events/CallQueuedListener.php",
+              "src/Illuminate/Queue/CallQueuedHandler.php",
+              "src/Illuminate/Queue/Events/WorkerStopping.php",
+              "src/Illuminate/Queue/Events/WorkerStarting.php",
+              "src/Illuminate/Contracts/Queue/ShouldQueue.php",
+              "src/Illuminate/Validation/Validator.php",
+              "src/Illuminate/Queue/Queue.php",
+              "src/Illuminate/Foundation/Exceptions/ReportableHandler.php",
+              "src/Illuminate/Contracts/Queue/ShouldQueueAfterCommit.php",
+              "src/Illuminate/Console/Scheduling/ScheduleRunCommand.php",
+              "src/Illuminate/Queue/QueueServiceProvider.php",
+              "src/Illuminate/Console/Scheduling/Schedule.php",
+              "src/Illuminate/Database/Migrations/Migration.php",
+              "src/Illuminate/Support/Facades/Queue.php",
+              "src/Illuminate/Contracts/Queue/Queue.php",
+              "src/Illuminate/Queue/ListenerOptions.php",
+              "src/Illuminate/Queue/Listener.php",
+              "src/Illuminate/Process/InvokedProcess.php",
+              "src/Illuminate/Process/InvokedProcessPool.php"
+            ],
+            "seconds": 0.035849542007781565
+          },
+          {
+            "id": "framework:fresh-3",
+            "query": "Run a queue worker continuously until it should stop",
+            "depth": 96,
+            "labeled_files": [
+              "src/Illuminate/Queue/Worker.php"
+            ],
+            "stage_ranks": {
+              "keyword": {
+                "src/Illuminate/Queue/Worker.php": 1
+              },
+              "body": {
+                "src/Illuminate/Queue/Worker.php": 3
+              },
+              "file_bm25": {},
+              "chunk_fused": {
+                "src/Illuminate/Queue/Worker.php": 1
+              },
+              "fused": {
+                "src/Illuminate/Queue/Worker.php": 1
+              }
+            },
+            "stage_counts": {
+              "keyword": 166,
+              "body": 148,
+              "file_bm25": 0,
+              "chunk_fused": 254,
+              "fused": 254
+            },
+            "returned_labeled_ranks": {
+              "src/Illuminate/Queue/Worker.php": 1
+            },
+            "ranked_files": [
+              "src/Illuminate/Queue/Worker.php",
+              "src/Illuminate/Queue/WorkerOptions.php",
+              "src/Illuminate/Queue/Console/WorkCommand.php",
+              "src/Illuminate/Contracts/Queue/ShouldBeUniqueUntilProcessing.php",
+              "src/Illuminate/Process/FakeInvokedProcess.php",
+              "src/Illuminate/Events/CallQueuedListener.php",
+              "src/Illuminate/Queue/CallQueuedHandler.php",
+              "src/Illuminate/Queue/Events/WorkerStopping.php",
+              "src/Illuminate/Console/Scheduling/ScheduleRunCommand.php",
+              "src/Illuminate/Queue/Events/WorkerStarting.php",
+              "src/Illuminate/Contracts/Queue/ShouldQueue.php",
+              "src/Illuminate/Database/Migrations/Migration.php",
+              "src/Illuminate/Validation/Validator.php",
+              "src/Illuminate/Queue/Queue.php",
+              "src/Illuminate/Foundation/Exceptions/ReportableHandler.php",
+              "src/Illuminate/Contracts/Queue/ShouldQueueAfterCommit.php",
+              "src/Illuminate/Queue/QueueServiceProvider.php",
+              "src/Illuminate/Console/Scheduling/Schedule.php",
+              "src/Illuminate/Queue/Listener.php",
+              "src/Illuminate/Process/InvokedProcess.php",
+              "src/Illuminate/Foundation/Configuration/Exceptions.php",
+              "src/Illuminate/Process/InvokedProcessPool.php",
+              "src/Illuminate/Support/Facades/Queue.php",
+              "src/Illuminate/View/Compilers/Concerns/CompilesLayouts.php",
+              "src/Illuminate/Contracts/Queue/Queue.php",
+              "src/Illuminate/Mail/SendQueuedMailable.php",
+              "src/Illuminate/Notifications/SendQueuedNotifications.php",
+              "src/Illuminate/Queue/ListenerOptions.php",
+              "src/Illuminate/Collections/Collection.php",
+              "src/Illuminate/Queue/Jobs/Job.php",
+              "src/Illuminate/Queue/Console/RetryCommand.php",
+              "src/Illuminate/Contracts/Events/Dispatcher.php",
+              "src/Illuminate/Bus/PendingBatch.php",
+              "src/Illuminate/Events/NullDispatcher.php",
+              "src/Illuminate/View/Concerns/ManagesFragments.php",
+              "src/Illuminate/View/Concerns/ManagesLayouts.php",
+              "src/Illuminate/View/Concerns/ManagesStacks.php",
+              "src/Illuminate/Contracts/Queue/Job.php",
+              "src/Illuminate/Foundation/Exceptions/Handler.php",
+              "src/Illuminate/Queue/BeanstalkdQueue.php",
+              "src/Illuminate/Collections/Enumerable.php",
+              "src/Illuminate/Contracts/Broadcasting/ShouldBroadcast.php",
+              "src/Illuminate/Contracts/Broadcasting/ShouldBeUnique.php",
+              "src/Illuminate/Contracts/Broadcasting/ShouldRescue.php",
+              "src/Illuminate/Queue/composer.json",
+              "src/Illuminate/Contracts/Queue/ShouldBeEncrypted.php",
+              "src/Illuminate/Contracts/Queue/ShouldBeUnique.php",
+              "src/Illuminate/Mail/Mailer.php",
+              "src/Illuminate/Notifications/NotificationSender.php",
+              "src/Illuminate/Queue/Console/ListenCommand.php",
+              "src/Illuminate/Testing/ParallelRunner.php",
+              "src/Illuminate/Contracts/Broadcasting/ShouldBroadcastNow.php",
+              "src/Illuminate/Console/Scheduling/Event.php",
+              "src/Illuminate/Foundation/Providers/ArtisanServiceProvider.php",
+              "src/Illuminate/Contracts/Events/ShouldDispatchAfterCommit.php",
+              "src/Illuminate/Queue/InteractsWithQueue.php",
+              "src/Illuminate/Support/InteractsWithTime.php",
+              "src/Illuminate/Support/Testing/Fakes/QueueFake.php",
+              "src/Illuminate/Support/Testing/Fakes/EventFake.php",
+              "src/Illuminate/Bus/Queueable.php",
+              "src/Illuminate/Database/Migrations/Migrator.php",
+              "src/Illuminate/Events/Dispatcher.php",
+              "src/Illuminate/Support/Sleep.php",
+              "src/Illuminate/Contracts/Events/ShouldHandleEventsAfterCommit.php",
+              "src/Illuminate/Foundation/Bus/PendingDispatch.php",
+              "src/Illuminate/Bus/Dispatcher.php",
+              "src/Illuminate/Contracts/Process/InvokedProcess.php",
+              "src/Illuminate/Console/Scheduling/ManagesAttributes.php",
+              "src/Illuminate/Collections/LazyCollection.php",
+              "src/Illuminate/Console/Concerns/ConfiguresPrompts.php",
+              "src/Illuminate/Routing/Router.php",
+              "src/Illuminate/Contracts/Mail/MailQueue.php",
+              "src/Illuminate/Console/Command.php",
+              "src/Illuminate/Queue/Middleware/RateLimited.php",
+              "src/Illuminate/Queue/Middleware/ThrottlesExceptions.php",
+              "src/Illuminate/Routing/Middleware/ThrottleRequests.php",
+              "src/Illuminate/Queue/Middleware/RateLimitedWithRedis.php",
+              "src/Illuminate/Routing/Middleware/ThrottleRequestsWithRedis.php",
+              "src/Illuminate/Queue/Console/Concerns/ParsesQueue.php",
+              "src/Illuminate/Foundation/Http/FormRequest.php",
+              "src/Illuminate/Process/Pipe.php",
+              "src/Illuminate/Process/Pool.php",
+              "src/Illuminate/Foundation/Testing/Concerns/InteractsWithExceptionHandling.php",
+              "src/Illuminate/Queue/SqsQueue.php",
+              "src/Illuminate/Database/Connection.php",
+              "src/Illuminate/Process/PendingProcess.php",
+              "src/Illuminate/Routing/Route.php",
+              "src/Illuminate/Queue/QueueManager.php",
+              "src/Illuminate/Concurrency/ProcessDriver.php",
+              "src/Illuminate/Foundation/Console/OptimizeCommand.php",
+              "src/Illuminate/Console/Scheduling/CallbackEvent.php",
+              "src/Illuminate/Support/Lottery.php",
+              "src/Illuminate/Queue/BackgroundQueue.php",
+              "src/Illuminate/Queue/DeferredQueue.php",
+              "src/Illuminate/Contracts/Queue/ClearableQueue.php",
+              "src/Illuminate/Queue/Events/QueueBusy.php"
+            ],
+            "seconds": 0.05062066693790257
+          }
+        ],
+        "cleanup_verified": true
+      }
+    ]
+  },
+  "development_supervision": {
+    "status": "passed",
+    "peak_rss_bytes": 146505728,
+    "peak_disk_bytes": 177803264,
+    "log_truncated": false,
+    "seconds": 13.734,
+    "wall_seconds": 13.734,
+    "exit_code": 0,
+    "cleanup_verified": true,
+    "cleanup_errors": []
+  },
+  "fresh_supervision": {
+    "status": "passed",
+    "peak_rss_bytes": 160088064,
+    "peak_disk_bytes": 121876480,
+    "log_truncated": false,
+    "seconds": 12.622,
+    "wall_seconds": 12.622,
+    "exit_code": 0,
+    "cleanup_verified": true,
+    "cleanup_errors": []
+  }
+}

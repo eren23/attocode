@@ -1,0 +1,90 @@
+{
+  "frozen_at": "2026-10-15T16:13:44.550977+00:00",
+  "scope": "Six fresh queries on previously used repositories, native source labels frozen before replay; non-exhaustive descriptive check, not an independent held-out repository study. No ranking tuning or model runs.",
+  "repositories": [
+    {
+      "pack": "fastapi",
+      "commit": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+      "queries": [
+        {
+          "id": "fastapi:fresh-1",
+          "query": "Retrieve an API key from a request cookie",
+          "evidence": [
+            {
+              "file": "fastapi/security/api_key.py",
+              "line": 233,
+              "quote": "class APIKeyCookie(APIKeyBase):",
+              "source_sha256": "d817af2a2b5201a14a69a61e2450b89d780a38d8bdfe8cd4fc1857fb4719e9c3"
+            }
+          ]
+        },
+        {
+          "id": "fastapi:fresh-2",
+          "query": "Convert a Python object into JSON compatible data",
+          "evidence": [
+            {
+              "file": "fastapi/encoders.py",
+              "line": 112,
+              "quote": "def jsonable_encoder(",
+              "source_sha256": "5cfb185964b4018bf3ef0ff05cfb225ed53c3af3f7f19bef21cc12c3d5b38c56"
+            }
+          ]
+        },
+        {
+          "id": "fastapi:fresh-3",
+          "query": "Schedule a task to run after sending the response",
+          "evidence": [
+            {
+              "file": "fastapi/background.py",
+              "line": 40,
+              "quote": "def add_task(",
+              "source_sha256": "4c00f301eb613806aaa55bdc918b934f77383bd3751da150cac1423edd0cb205"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "framework",
+      "commit": "0ac6e5592da1a172d9685591c5f82fb1fb8995fb",
+      "queries": [
+        {
+          "id": "framework:fresh-1",
+          "query": "Encrypt a value and authenticate the ciphertext",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Encryption/Encrypter.php",
+              "line": 104,
+              "quote": "public function encrypt(#[\\SensitiveParameter] $value, $serialize = true)",
+              "source_sha256": "2b8aca6c7503bf0e0849409e0f6b9a7ef7186854b85e3e9a3c9a5e10f8f853d9"
+            }
+          ]
+        },
+        {
+          "id": "framework:fresh-2",
+          "query": "Determine whether a key exceeded the allowed attempt count",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Cache/RateLimiter.php",
+              "line": 127,
+              "quote": "public function tooManyAttempts($key, $maxAttempts)",
+              "source_sha256": "9d5010518c9634a698bf6261c1808c6c54d6992075a077fe9bf480417fa48a77"
+            }
+          ]
+        },
+        {
+          "id": "framework:fresh-3",
+          "query": "Run a queue worker continuously until it should stop",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Queue/Worker.php",
+              "line": 154,
+              "quote": "public function daemon($connectionName, $queue, WorkerOptions $options)",
+              "source_sha256": "054d2bb165a7db96875a34c6ea015a108b335ee739cd3f7cd2d78a40edce0d4c"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

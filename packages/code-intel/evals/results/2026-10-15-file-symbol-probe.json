@@ -1,0 +1,76 @@
+{
+  "baseline_commit": "d5a596e34449e29ded613862772f1548dc4e326e",
+  "baseline_source_sha256": "53b527ec3dc8d34ce2bbaa6e7564d41b21f1fa6f8e3b8511bded76173c413b42",
+  "candidate_source_sha256": "7307b0ecfbeda7524106fb94cc5f06e2805fa63ed0cfc871432b5ea6992d2bfa",
+  "candidate_index_sha256": "a01d77bb91db6aab02f6bf50c5264839da7b67027d89f6bf02685956762e4405",
+  "cases": [
+    {
+      "files": 160,
+      "symbols_per_file": 32,
+      "lookup_seconds": {
+        "baseline": [
+          0.0020799170015379786,
+          0.0015125420177355409,
+          0.0016394589329138398,
+          0.0016319999704137444
+        ],
+        "candidate": [
+          0.00027891702484339476,
+          0.00022012495901435614,
+          0.00026354193687438965,
+          0.00022612500470131636
+        ]
+      },
+      "median_lookup_seconds": {
+        "baseline": 0.0016357294516637921,
+        "candidate": 0.000244833470787853
+      },
+      "returned_locations": {
+        "baseline": 819200,
+        "candidate": 5120
+      },
+      "local_evidence_sha256": "2e26937b64d5cc3fd550e4ea47c5e34d2f6e8780353b09c08167de016a7a25c9",
+      "test_ranking_seconds": {
+        "baseline": 0.01274254103191197,
+        "candidate": 0.004942125058732927
+      },
+      "test_ranking_sha256": "afcccd4f56d4dad78cd80b334039183e95e7b3117e5b744ab486ac1b2ab90ac5",
+      "added_container_bytes": 587008
+    },
+    {
+      "files": 640,
+      "symbols_per_file": 32,
+      "lookup_seconds": {
+        "baseline": [
+          0.04268891701940447,
+          0.01828987500630319,
+          0.018541292054578662,
+          0.018149540992453694
+        ],
+        "candidate": [
+          0.001160500105470419,
+          0.0011164590250700712,
+          0.0010457910830155015,
+          0.0010097919730469584
+        ]
+      },
+      "median_lookup_seconds": {
+        "baseline": 0.018415583530440927,
+        "candidate": 0.0010811250540427864
+      },
+      "returned_locations": {
+        "baseline": 13107200,
+        "candidate": 20480
+      },
+      "local_evidence_sha256": "2ff0db5061a4e05a1cab749d88eafa36975a9d95d8bd680ff1393991c6e4fb9d",
+      "test_ranking_seconds": {
+        "baseline": 0.14522737509105355,
+        "candidate": 0.019012999953702092
+      },
+      "test_ranking_sha256": "acd98aecfcbca46de425ddfbc88d29de4f742b88b3b11a212d1fd6ad63856cf6",
+      "added_container_bytes": 2347776
+    }
+  ],
+  "cleanup_verified": true,
+  "scope": "Generated repeated-name lookup and test-ranking components; no Cockroach wall-time claim."
+}

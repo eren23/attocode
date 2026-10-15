@@ -1,0 +1,12 @@
+{
+  "selected_at": "2026-10-15T16:27:53.412005+00:00",
+  "development_sha256": "0139cb34b285ed0a9e76d568784b118eb0de3e4954a307bd7b1998d08abdb277",
+  "arm": "literal",
+  "mode": "metrics",
+  "baseline": {
+    "hit5": 9,
+    "hit24": 12
+  },
+  "validation_not_run": true,
+  "default_change_authorized_by_evidence": false
+}

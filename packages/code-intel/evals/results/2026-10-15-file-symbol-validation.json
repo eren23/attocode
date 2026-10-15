@@ -1,0 +1,82 @@
+{
+  "budget_bytes": 5368709120,
+  "budget_seconds": 600,
+  "checks": [
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "lint",
+      "peak_disk_bytes": 237568,
+      "peak_rss_bytes": 425984,
+      "seconds": 0.216,
+      "status": "passed",
+      "wall_seconds": 0.216
+    },
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "contracts",
+      "peak_disk_bytes": 40072751,
+      "peak_rss_bytes": 831602688,
+      "seconds": 26.607,
+      "status": "passed",
+      "wall_seconds": 26.607
+    },
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "scale",
+      "peak_disk_bytes": 128132655,
+      "peak_rss_bytes": 243204096,
+      "seconds": 8.653,
+      "status": "passed",
+      "wall_seconds": 8.653
+    },
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "lifecycle",
+      "peak_disk_bytes": 39581231,
+      "peak_rss_bytes": 130400256,
+      "seconds": 3.223,
+      "status": "passed",
+      "wall_seconds": 3.223
+    }
+  ],
+  "cleanup_verified": true,
+  "ending_fixture_sha256": "01e3f5826e703c3cc40054579931ae88380ceb3a75ae2074086d9a161fd387b8",
+  "ending_source_sha256": "3bc9537b3701b9970f3417480a3e5f6492e0a69cbf5410db738f73dae566992b",
+  "finished_at": 1792081094.748076,
+  "fixture_sha256": "01e3f5826e703c3cc40054579931ae88380ceb3a75ae2074086d9a161fd387b8",
+  "full_tier": true,
+  "harness_sha256": "4e846fe69f4cc2d1f8767f06beee72ec1983418e3992894f9a337e3a977a1973",
+  "model_runs": 0,
+  "owner": "attocode-quality-v1",
+  "platform": "darwin",
+  "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
+  "remaining_bytes": 454656,
+  "remaining_checks": [],
+  "run_id": "20261015T181735-2c14d451",
+  "selection": {
+    "packs": [],
+    "resume": null,
+    "shard": null,
+    "suite": "all"
+  },
+  "source_sha256": "3bc9537b3701b9970f3417480a3e5f6492e0a69cbf5410db738f73dae566992b",
+  "started_at": 1792081055.755743,
+  "status": "passed",
+  "tier": "local",
+  "contracts": {
+    "passed": 615,
+    "skipped": 8
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "frozen_at": "2026-10-15T16:26:33.448336+00:00",
+  "scope": "Source-bound non-exhaustive file labels; development previously observed, validation questions unqueried when frozen; repositories used in prior studies.",
+  "repositories": [
+    {
+      "pack": "requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "queries": [
+        {
+          "id": "requests:validation-1",
+          "query": "Serialize a JSON request body",
+          "evidence": [
+            {
+              "file": "src/requests/models.py",
+              "line": 512,
+              "quote": "body = complexjson.dumps(json, allow_nan=False)",
+              "source_sha256": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc"
+            }
+          ]
+        },
+        {
+          "id": "requests:validation-2",
+          "query": "Choose a connection adapter for a URL",
+          "evidence": [
+            {
+              "file": "src/requests/sessions.py",
+              "line": 784,
+              "quote": "def get_adapter(self, url):",
+              "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2"
+            }
+          ]
+        },
+        {
+          "id": "requests:validation-3",
+          "query": "Decode streaming response bytes into text",
+          "evidence": [
+            {
+              "file": "src/requests/models.py",
+              "line": 855,
+              "quote": "chunks = stream_decode_response_unicode(chunks, self)",
+              "source_sha256": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc"
+            },
+            {
+              "file": "src/requests/utils.py",
+              "line": 552,
+              "quote": "def stream_decode_response_unicode(iterator, r):",
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309"
+            }
+          ]
+        },
+        {
+          "id": "requests:validation-4",
+          "query": "Extract proxy credentials from a URL",
+          "evidence": [
+            {
+              "file": "src/requests/utils.py",
+              "line": 1006,
+              "quote": "def get_auth_from_url(url):",
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309"
+            },
+            {
+              "file": "src/requests/adapters.py",
+              "line": 571,
+              "quote": "def proxy_headers(self, proxy):",
+              "source_sha256": "5aecc78b49b5c39fbf7c4a5ba18ca4195b44ed26b34d91e1039359605e97f06e"
+            }
+          ]
+        },
+        {
+          "id": "requests:validation-5",
+          "query": "Raise an exception for an unsuccessful HTTP status",
+          "evidence": [
+            {
+              "file": "src/requests/models.py",
+              "line": 1001,
+              "quote": "def raise_for_status(self):",
+              "source_sha256": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc"
+            }
+          ]
+        },
+        {
+          "id": "requests:validation-6",
+          "query": "Resolve authentication from a netrc file",
+          "evidence": [
+            {
+              "file": "src/requests/utils.py",
+              "line": 205,
+              "quote": "def get_netrc_auth(url, raise_errors=False):",
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309"
+            },
+            {
+              "file": "src/requests/sessions.py",
+              "line": 484,
+              "quote": "auth = get_netrc_auth(request.url)",
+              "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "gh-cli",
+      "commit": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+      "queries": [
+        {
+          "id": "gh-cli:validation-1",
+          "query": "Create a pull request from the current branch",
+          "evidence": [
+            {
+              "file": "pkg/cmd/pr/create/create.go",
+              "line": 376,
+              "quote": "func createRun(opts *CreateOptions) error {",
+              "source_sha256": "8cd01086d4a0e5bfce624279e9a1c0034f0dad11ea0c54cd167505efcd00f350"
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:validation-2",
+          "query": "List issues matching filters",
+          "evidence": [
+            {
+              "file": "pkg/cmd/issue/list/list.go",
+              "line": 130,
+              "quote": "func listRun(opts *ListOptions) error {",
+              "source_sha256": "0605ba315eccd4dce7316ef3c4a63bf92f7c2e5c4321f12e1524d60b26902d32"
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:validation-3",
+          "query": "Clone a repository to a local directory",
+          "evidence": [
+            {
+              "file": "pkg/cmd/repo/clone/clone.go",
+              "line": 111,
+              "quote": "func cloneRun(opts *CloneOptions) error {",
+              "source_sha256": "bc12634b951841474820cb4ada93bdf322efeeca926ae53054cb415633daa879"
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:validation-4",
+          "query": "Watch a workflow run until completion",
+          "evidence": [
+            {
+              "file": "pkg/cmd/run/watch/watch.go",
+              "line": 94,
+              "quote": "func watchRun(opts *WatchOptions) error {",
+              "source_sha256": "fda81ada144e919a10f32fe68a47a46a3ed894d6ccc702755bd4644e53d7f0fd"
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:validation-5",
+          "query": "Download release assets to disk",
+          "evidence": [
+            {
+              "file": "pkg/cmd/release/download/download.go",
+              "line": 136,
+              "quote": "func downloadRun(opts *DownloadOptions) error {",
+              "source_sha256": "3406157e2d413228d6bb6d0ff0b414bd3ff78dfd5706efe76088b34b0e0644aa"
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:validation-6",
+          "query": "Encrypt and upload a repository secret",
+          "evidence": [
+            {
+              "file": "pkg/cmd/secret/set/set.go",
+              "line": 203,
+              "quote": "func setRun(opts *SetOptions) error {",
+              "source_sha256": "4829e49b2bf1935385d58bb75138bf2370f16d4d6c653a6f7b518d2b3ce548f6"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

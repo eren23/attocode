@@ -925,11 +925,7 @@ class ASTService:
         """Return all symbols defined in *path*."""
         self._ensure_initialized()
         rel = self._to_rel(path)
-        result: list[SymbolLocation] = []
-        with self._index._lock:  # Background hydration adds to these sets.
-            for qn in self._index.file_symbols.get(rel, set()):
-                result.extend(self._index.definitions.get(qn, []))
-        return result
+        return self._index.get_file_definitions(rel)
 
     def find_symbol(self, name: str, *, include_shadowed: bool = False) -> list[SymbolLocation]:
         """Find definitions for *name* (exact or suffix match)."""
