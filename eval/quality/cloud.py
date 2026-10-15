@@ -324,14 +324,43 @@ def worker_command(command, seconds):
     seconds = int(seconds)
     if not 0 < seconds <= CONTROLLER_SECONDS:
         raise ValueError("Worker timeout must be positive and within the controller budget")
+    unit = "attocode-quality-" + uuid.uuid4().hex
     return shlex.join([
         "systemd-run", "--quiet", "--wait", "--pipe", "--collect",
         "--service-type=exec", "--expand-environment=no",
-        "--unit=attocode-quality-" + uuid.uuid4().hex,
+        "--unit=" + unit,
+        # Package maintenance may explicitly restart even Restart=no units.
+        # A second activation must fail instead of rerunning work/resetting its clock.
+        "--property=ExecStartPre=/usr/bin/mkdir /run/" + unit + ".started",
         f"--property=RuntimeMaxSec={seconds}s", "--property=TimeoutStopSec=10s",
         "--property=KillMode=control-group", "--property=SendSIGKILL=yes",
         "/bin/sh", "-c", command,
     ])
+
+
+def wait_for_bootstrap(ssh, env, directory, *, deadline, wall_deadline):
+    """SSH readiness precedes cloud-init completion and is not safe test admission."""
+    while (remaining := min(deadline - time.monotonic(), wall_deadline - time.time())) > 0:
+        result = subprocess.run([*ssh, "cloud-init status --format=json"], env=env,
+                                capture_output=True, text=True, timeout=min(15, remaining))
+        if result.returncode == 255:  # SSH is not ready yet.
+            time.sleep(min(2, remaining))
+            continue
+        try:
+            if len(result.stdout) > 65536:
+                raise ValueError("Oversized bootstrap status")
+            status = json.loads(result.stdout)
+            if not isinstance(status, dict):
+                raise ValueError("Expected bootstrap status object")
+        except ValueError as exc:
+            raise RuntimeError("Invalid cloud-init status; refusing worker setup") from exc
+        write_json(directory / "bootstrap.json", {"exit_code": result.returncode, **status})
+        if result.returncode == 0 and status.get("extended_status") == "done" and not status.get("errors"):
+            return
+        if result.returncode != 0 or status.get("status") not in {"running", "not started"}:
+            raise RuntimeError("Cloud-init did not finish cleanly; see bootstrap.json")
+        time.sleep(min(2, remaining))
+    raise TimeoutError("Cloud-init did not complete within the worker setup budget")
 
 
 def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, suite="all", resume=False,
@@ -361,15 +390,8 @@ def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, s
                "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"]
     ssh = ["ssh", *options, "root@" + host]
     env = environment(root)
-    ready = False
-    while time.monotonic() < start + 480 and remaining() > 0:
-        if subprocess.run([*ssh, "true"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                          timeout=max(.01, min(15, remaining()))).returncode == 0:
-            ready = True
-            break
-        time.sleep(2)
-    if not ready:
-        raise TimeoutError("SSH was not ready within setup budget")
+    wait_for_bootstrap(ssh, env, directory, deadline=min(deadline, start + 480),
+                       wall_deadline=wall_deadline)
     commands = [
         ("upload", ["scp", *options, str(directory / "source.tar.gz"), "root@" + host + ":/root/source.tar.gz"]),
         ("setup", [*ssh, "set -eu; " + WORKER_DNS_PREFLIGHT +
