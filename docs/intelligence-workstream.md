@@ -28,6 +28,10 @@ remains unused and cannot run without a passing target. Prior reservations remai
 retained under the $19 cap. The [local repair](../packages/code-intel/evals/results/2026-10-15-discovery-body-repair.md)
 and required CI passed, but they do not supersede the incomplete target.
 
+The [bounded restart-summary candidate](../packages/code-intel/evals/results/2026-10-15-ast-restart.md)
+now preserves complete AST summaries with source/parser identity checks. Local
+fixtures measure the tradeoff between faster restarts and added cold-write cost;
+no new cloud validation or release is implied.
 The entries below are historical evidence.
 
 ## Milestones

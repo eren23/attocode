@@ -25,6 +25,7 @@ SCHEMA_VERSION = "7"
 # Bump the suffix when a change alters the saved graph edges, for example import resolution.
 # Stores keep their tables, and the next start rebuilds the index once.
 SNAPSHOT_KEY = "structural_snapshot_v4"
+AST_SNAPSHOT_KEY = "structural_ast_summaries_v1"
 SQLITE_BUSY_TIMEOUT_MS = 30_000
 INDEX_INIT_LOCK_TIMEOUT_SECONDS = 30
 
@@ -307,11 +308,12 @@ class IndexStore:
     # Metadata
     # ------------------------------------------------------------------
 
-    def get_meta(self, key: str) -> str | None:
+    def get_meta(self, key: str, *, max_bytes: int | None = None) -> str | None:
         conn = self._get_conn()
         with self._lock:
             row = conn.execute(
-                "SELECT value FROM metadata WHERE key = ?", (key,)
+                "SELECT value FROM metadata WHERE key = ? AND (? IS NULL OR length(CAST(value AS BLOB)) <= ?)",
+                (key, max_bytes, max_bytes)
             ).fetchone()
         return row[0] if row else None
 
@@ -561,7 +563,7 @@ class IndexStore:
                 DELETE FROM symbols;
                 DELETE FROM dependencies;
                 DELETE FROM files;
-                DELETE FROM metadata WHERE key = '{SNAPSHOT_KEY}';
+                DELETE FROM metadata WHERE key IN ('{SNAPSHOT_KEY}', '{AST_SNAPSHOT_KEY}');
             """)
             conn.commit()
 

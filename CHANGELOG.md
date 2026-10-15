@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Cold indexing cost
 
+- Structural restarts can reuse bounded JSON AST summaries after checking exact
+  source digests and installed parser/grammar identities. Missing, invalid,
+  unsupported or oversized entries retain normal parsing; complete-index and
+  offline-edit repair checks still apply. The cache payload is capped at 32 MiB
+  per workspace and 1 MiB per file. Generated fixtures show lower restart cost
+  with an added cold-write cost; the CockroachDB deadline remains unverified.
+
 - Lexical warmup can reuse a validated immutable structural discovery inventory,
   preserving its own cap and original freshness age, with normal discovery on any
   mismatch. Body tokenization memoizes exact repeated displayed lines within a
