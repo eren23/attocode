@@ -9,11 +9,11 @@
         "exit_code": 0,
         "log_truncated": false,
         "name": "lint",
-        "peak_disk_bytes": 12288,
-        "peak_rss_bytes": 1130496,
-        "seconds": 0.221,
+        "peak_disk_bytes": 241664,
+        "peak_rss_bytes": 311296,
+        "seconds": 0.217,
         "status": "passed",
-        "wall_seconds": 0.221
+        "wall_seconds": 0.217
       },
       {
         "cleanup_errors": [],
@@ -21,11 +21,11 @@
         "exit_code": 0,
         "log_truncated": false,
         "name": "contracts",
-        "peak_disk_bytes": 40179082,
-        "peak_rss_bytes": 879378432,
-        "seconds": 28.341,
+        "peak_disk_bytes": 40408458,
+        "peak_rss_bytes": 642695168,
+        "seconds": 27.971,
         "status": "passed",
-        "wall_seconds": 28.341
+        "wall_seconds": 27.971
       },
       {
         "cleanup_errors": [],
@@ -33,11 +33,11 @@
         "exit_code": 0,
         "log_truncated": false,
         "name": "scale",
-        "peak_disk_bytes": 128337290,
-        "peak_rss_bytes": 274841600,
-        "seconds": 9.637,
+        "peak_disk_bytes": 128480650,
+        "peak_rss_bytes": 276316160,
+        "seconds": 9.732,
         "status": "passed",
-        "wall_seconds": 9.637
+        "wall_seconds": 9.732
       },
       {
         "cleanup_errors": [],
@@ -45,38 +45,38 @@
         "exit_code": 0,
         "log_truncated": false,
         "name": "lifecycle",
-        "peak_disk_bytes": 39646602,
-        "peak_rss_bytes": 130482176,
-        "seconds": 3.187,
+        "peak_disk_bytes": 39609738,
+        "peak_rss_bytes": 130301952,
+        "seconds": 3.356,
         "status": "passed",
-        "wall_seconds": 3.187
+        "wall_seconds": 3.356
       }
     ],
     "cleanup_verified": true,
-    "ending_fixture_sha256": "d5b7bd7966bbe9ffe32a7fcbc92343a256fd63f1255260a6957930be2f692ff9",
-    "ending_source_sha256": "0a92db72d7414b6c8a4d4d12b5aa02e24bd3e65d08142e2ce0e5fbde9cc1de9f",
-    "finished_at": 1792089808.243239,
-    "fixture_sha256": "d5b7bd7966bbe9ffe32a7fcbc92343a256fd63f1255260a6957930be2f692ff9",
+    "ending_fixture_sha256": "10cffe45a9ca77d69c6a5e1a3560d654c3bef87183e99e9121abfaf30b784531",
+    "ending_source_sha256": "7b21ff3d5d76b0bf466e5dc369399a4156727dfd826ee23136b3347c1852dd64",
+    "finished_at": 1792090036.755734,
+    "fixture_sha256": "10cffe45a9ca77d69c6a5e1a3560d654c3bef87183e99e9121abfaf30b784531",
     "full_tier": true,
     "harness_sha256": "4e846fe69f4cc2d1f8767f06beee72ec1983418e3992894f9a337e3a977a1973",
     "model_runs": 0,
     "owner": "attocode-quality-v1",
     "platform": "darwin",
     "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
-    "remaining_bytes": 233472,
+    "remaining_bytes": 462848,
     "remaining_checks": [],
-    "run_id": "20261015T204246-1269fc4f",
+    "run_id": "20261015T204635-3498fb92",
     "selection": {
       "packs": [],
       "resume": null,
       "shard": null,
       "suite": "all"
     },
-    "source_sha256": "0a92db72d7414b6c8a4d4d12b5aa02e24bd3e65d08142e2ce0e5fbde9cc1de9f",
-    "started_at": 1792089766.578142,
+    "source_sha256": "7b21ff3d5d76b0bf466e5dc369399a4156727dfd826ee23136b3347c1852dd64",
+    "started_at": 1792089995.173669,
     "status": "passed",
     "tier": "local",
-    "elapsed_seconds": 41.66509699821472,
+    "elapsed_seconds": 41.58206486701965,
     "tests": [
       {
         "name": "pytest",
@@ -84,7 +84,7 @@
         "failures": "0",
         "skipped": "8",
         "tests": "656",
-        "time": "27.459"
+        "time": "27.259"
       }
     ]
   },
@@ -98,38 +98,38 @@
         "exit_code": 0,
         "log_truncated": false,
         "name": "ranking",
-        "peak_disk_bytes": 237084672,
-        "peak_rss_bytes": 219922432,
-        "seconds": 41.968,
+        "peak_disk_bytes": 252760064,
+        "peak_rss_bytes": 219725824,
+        "seconds": 41.167,
         "status": "passed",
-        "wall_seconds": 41.968
+        "wall_seconds": 41.167
       }
     ],
     "cleanup_verified": true,
-    "ending_fixture_sha256": "d5b7bd7966bbe9ffe32a7fcbc92343a256fd63f1255260a6957930be2f692ff9",
-    "ending_source_sha256": "0a92db72d7414b6c8a4d4d12b5aa02e24bd3e65d08142e2ce0e5fbde9cc1de9f",
-    "finished_at": 1792089807.4671948,
-    "fixture_sha256": "d5b7bd7966bbe9ffe32a7fcbc92343a256fd63f1255260a6957930be2f692ff9",
+    "ending_fixture_sha256": "10cffe45a9ca77d69c6a5e1a3560d654c3bef87183e99e9121abfaf30b784531",
+    "ending_source_sha256": "7b21ff3d5d76b0bf466e5dc369399a4156727dfd826ee23136b3347c1852dd64",
+    "finished_at": 1792090037.745981,
+    "fixture_sha256": "10cffe45a9ca77d69c6a5e1a3560d654c3bef87183e99e9121abfaf30b784531",
     "full_tier": false,
     "harness_sha256": "4e846fe69f4cc2d1f8767f06beee72ec1983418e3992894f9a337e3a977a1973",
     "model_runs": 0,
     "owner": "attocode-quality-v1",
     "platform": "darwin",
     "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
-    "remaining_bytes": 32768,
+    "remaining_bytes": 61440,
     "remaining_checks": [],
-    "run_id": "20261015T204245-83a8908e",
+    "run_id": "20261015T204636-ce3c5556",
     "selection": {
       "packs": [],
       "resume": null,
       "shard": null,
       "suite": "ranking"
     },
-    "source_sha256": "0a92db72d7414b6c8a4d4d12b5aa02e24bd3e65d08142e2ce0e5fbde9cc1de9f",
-    "started_at": 1792089765.498121,
+    "source_sha256": "7b21ff3d5d76b0bf466e5dc369399a4156727dfd826ee23136b3347c1852dd64",
+    "started_at": 1792089996.577729,
     "status": "passed",
     "tier": "broad",
-    "elapsed_seconds": 41.96907377243042,
+    "elapsed_seconds": 41.16825199127197,
     "ranking": {
       "cleanup_verified": true,
       "exit_code": 0,
@@ -846,7 +846,7 @@
             "16.0"
           ]
         ],
-        "fixture_sha256": "ebb347d095cbc84dda1f3a2876a280ce0e3cce3355520cb18186387d745f5484",
+        "fixture_sha256": "3c3d2a7da51d1cb45fcb3cab2dec6c8386c33e026cd4e0db5c2f2b35c1cc8266",
         "harness_sha256": "18654d562600c83ffb344c43c8a467d28b5f88408125227e42a31b7009db729d",
         "optional_grammars": {
           "cache_sha256": "33de365f463f920ff46a0712f884df77a0b7637517c492de1a9f896bddb3008d",
@@ -876,7 +876,7 @@
           "ATTOCODE_LOCAL_ONLY": "1",
           "ATTOCODE_NL_EMBEDDING_MODE": "none"
         },
-        "source_sha256": "e28c7d0b488cb46d140d64998958fb55dbb514e161118a53263b64d5cf195362"
+        "source_sha256": "53149d154a3f775c79193adb51b430f2d26ff8d3fca6abfeb45d146bfc066801"
       },
       "manifest_packs": [
         "Nim",
@@ -965,7 +965,7 @@
   "product_change": {
     "file": "packages/code-intel/src/attocode_intel/_internal/integrations/lsp/client.py",
     "before_sha256": "f4ab5506abbaf9942181092f66e8773a70a715e1322a89b353d243678e8db02e",
-    "after_sha256": "a54a92af407e5a9aaf69b91a856c825a268a0cf4e0d14d64e0dc756a2f360758",
+    "after_sha256": "826c8e2c5269d064f08177a5875d55e499cfc6ebaf050fd4f3279db166fb1d7f",
     "body_file_candidate_ast_unchanged": true
   }
 }

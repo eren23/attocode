@@ -41,6 +41,7 @@ async def test_shared_document_notifications_are_balanced_and_versions_increase(
     server.write_text(SERVER)
     client = _LSPClient(LanguageServerConfig(command=sys.executable, args=[str(server)], language_id='rust'), tmp_path.as_uri())
     uri = (tmp_path / 'first.rs').as_uri()
+    payload = 'π🙂\ud800'  # JSON can carry an unpaired UTF-16 code unit too.
     await client.start()
     try:
         client.notify_document_open(uri, 'first')
@@ -56,10 +57,12 @@ async def test_shared_document_notifications_are_balanced_and_versions_increase(
         assert state['events'].count('textDocument/didChange') == 3
         client.notify_document_close(uri)
         client.notify_document_close(uri)
-        client.notify_document_change(uri, 'new session', 7)
+        client.notify_document_change(uri, payload, 7)
+        client.notify_document_open(uri, payload)
+        client.notify_document_change(uri, payload + 'changed', 7)
         state = await client._request('quality/state', {})
         assert state['errors'] == []
-        assert state['states'][uri]['text'] == 'new session'
+        assert state['states'][uri]['text'] == payload + 'changed'
         assert state['events'].count('textDocument/didClose') == 1
         assert state['events'].count('textDocument/didOpen') == 2
     finally:
@@ -67,7 +70,7 @@ async def test_shared_document_notifications_are_balanced_and_versions_increase(
     # Reusing the client after a process restart must send a new open.
     await client.start()
     try:
-        client.notify_document_open(uri, 'new session')
+        client.notify_document_open(uri, payload)
         state = await client._request('quality/state', {})
         assert state['errors'] == [] and uri in state['states']
         assert state['events'] == ['textDocument/didOpen']

@@ -33,7 +33,10 @@ weakened. No source-text copy is retained in this new map.
 A strict subprocess regression failed before the repair with duplicate opens
 and non-increasing versions. It now covers shared callers, stale caller-local
 versions, changed content delivered through open, repeated close, reopen and
-server restart. The protocol/streaming suite passed **192 tests**. Six fresh
+server restart. The final compatibility review also caught and corrected a
+digest-encoding regression for unpaired UTF-16 code units accepted by the
+existing JSON transport; the subprocess fixture covers Unicode open/change
+and reopen. The protocol/streaming suite passed **192 tests**. Six fresh
 real-Rust checks passed with three wire opens and one change per fixture,
 without duplicate notifications. This proves the lifecycle correction, not
 that every cause of the earlier CI failure is eliminated.

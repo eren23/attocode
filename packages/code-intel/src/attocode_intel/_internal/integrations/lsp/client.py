@@ -592,7 +592,7 @@ class _LSPClient:
         if uri in self._documents:
             self.notify_document_change(uri, text)
             return
-        self._documents[uri] = (1, hashlib.sha256(text.encode()).digest())
+        self._documents[uri] = (1, hashlib.sha256(text.encode("utf-8", errors="surrogatepass")).digest())
         self._notify("textDocument/didOpen", {
             "textDocument": {
                 "uri": uri,
@@ -615,7 +615,7 @@ class _LSPClient:
         if previous is None:
             self.notify_document_open(uri, text)
             return
-        digest = hashlib.sha256(text.encode()).digest()
+        digest = hashlib.sha256(text.encode("utf-8", errors="surrogatepass")).digest()
         if digest == previous[1]:
             return
         # Versions supplied by separate callers can overlap or go backwards.
