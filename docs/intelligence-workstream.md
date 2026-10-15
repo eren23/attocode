@@ -4,31 +4,30 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current status, 2026-10-15:** follow-up implementation through PR #198
-(`19beb72`) passed required CI, but both additional full cloud gates failed:
-35/36 packs passed, CockroachDB body warmup incomplete, ranking not run.
-The latest run passed 532 contracts with 22 skips and finished in 23.93 minutes,
-within the 90-minute controller limit. Keyword indexing took 57.280 seconds;
-body indexing was unfinished at 132.860 seconds of warmup. **0.1.6 is unpublished.**
+**Current status, 2026-10-15:** the [unprofiled CockroachDB confirmation](../packages/code-intel/evals/results/2026-10-15-discovery-validation.md)
+reached a ready body index and passed scoped search, but the final restart check
+was unfinished when the unchanged 180-second pack deadline hit. Keyword indexing
+was 29.936 seconds, body indexing 75.702 seconds, index-reported total warmup
+123.790 seconds. These are one targeted observation, not a controlled speedup.
+**The target failed; 0.1.6 remains unpublished.** The conditional full-matrix
+rental was not launched. The latest complete full attempt remains 35/36 packs,
+with 532 contracts passed, 22 skips and ranking not run.
 
-The subsequent [Cockroach mechanism diagnostic](../packages/code-intel/evals/results/2026-10-15-cockroach-index-probe.md)
-ran both normal and prehydrated startup on one worker. Both body indexes remained
-incomplete. Prehydration reduced keyword time from 51.028 to 14.206 seconds but
-added a 56.273-second wait; observation elapsed before failure rose from 161.532
-to 182.592 seconds. Body construction/SQL remain substantial, and hot-loop probe
-overhead needs calibration. These instrumented partial workloads are not an
-uninstrumented speedup or successful cold start.
+All four Cockroach retrieval questions were observed: 0/4 labeled hits at five,
+1/4 at 24. Labels are non-exhaustive development targets; this is not an agent
+outcome or ranking-improvement claim. Completed checks and retrieval consumed
+about 171.5 seconds before startup/transition overhead and the unfinished restart.
+Next local investigation should isolate repeated restart/freshness work while
+preserving existing deadlines and exact navigation/edit behavior.
 
-All 17 workers are deleted. The diagnostic cost $0.0243 estimated compute; the
-cumulative estimate is $0.8063 (not an invoice). The $17 reservation allowance is
-exhausted. Only 24,761 report/log bytes came back from the diagnostic; no corpora
-or indexes were downloaded to the Mac. The [local follow-up repair](../packages/code-intel/evals/results/2026-10-15-discovery-body-repair.md)
-now samples hot profiler calls, reuses a validated immutable discovery inventory,
-and memoizes repeated displayed line terms within each file. Exact-result controls
-and the bounded local gate pass (583 tests, 8 skips); the small generated probes
-show component gains, not CockroachDB confirmation. Next is an uninstrumented
-pinned target check, then the full gate only if it succeeds. A new cloud allowance
-is required for those runs.
+All 18 workers are deleted. The target added $0.0158 estimated compute, bringing
+the cumulative estimate to $0.8221 before tax (not an invoice). Only 41,004 report/
+log bytes came back; no corpora or indexes were downloaded to the Mac. The
+approved two-worker sequence stops on this target failure: its second rental
+remains unused and cannot run without a passing target. Prior reservations remain
+retained under the $19 cap. The [local repair](../packages/code-intel/evals/results/2026-10-15-discovery-body-repair.md)
+and required CI passed, but they do not supersede the incomplete target.
+
 The entries below are historical evidence.
 
 ## Milestones

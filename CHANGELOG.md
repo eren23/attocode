@@ -40,8 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lexical warmup can reuse a validated immutable structural discovery inventory,
   preserving its own cap and original freshness age, with normal discovery on any
   mismatch. Body tokenization memoizes exact repeated displayed lines within a
-  bounded per-file cache. Local parity and component checks pass; CockroachDB
-  confirmation and the full release gate remain pending.
+  bounded per-file cache. Local parity and component checks pass. Unprofiled CockroachDB
+  confirmation reached ready body search, but the final restart check was unfinished
+  at the unchanged 180-second pack deadline; the target and release remain blocked.
 - Opt-in probe schema 2 samples hot tokenizer/serializer timings every 64 calls
   while retaining exact call counts; sampled durations are explicitly not total
   phase estimates. Profiling remains off by default.
