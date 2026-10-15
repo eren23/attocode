@@ -324,8 +324,17 @@ def main():
         observations = []
         def checkpoint(checks, retrieval):
             write_json(args.output, {"checks": checks, "retrieval": retrieval})
-        checks = asyncio.run(evaluate(args.worker, json.loads(args.spec.read_text()),
-                                      observations=observations, checkpoint=checkpoint))
+        try:
+            checks = asyncio.run(evaluate(args.worker, json.loads(args.spec.read_text()),
+                                          observations=observations, checkpoint=checkpoint))
+        except Exception as exc:
+            # Preserve diagnostics even before the parent log reader reaches EOF.
+            result = json.loads(args.output.read_text()) if args.output.is_file() else {
+                "checks": [], "retrieval": observations,
+            }
+            result["worker_error"] = {"type": type(exc).__name__, "message": str(exc)[:4000]}
+            write_json(args.output, result)
+            raise
         write_json(args.output, {"checks": checks, "retrieval": observations})
         return 0
     if args.ranking and (args.pack or args.shard or args.resume):

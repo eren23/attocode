@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import psutil
@@ -31,6 +32,28 @@ def test_deadline_stops_child_and_caps_log(tmp_path):
     assert row["status"] == "incomplete" and row["reason"] == "deadline"
     assert row["seconds"] < 5 and row["cleanup_verified"]
     assert row["log_truncated"] and (root / "test.log").stat().st_size == 1024
+
+
+def test_small_progress_is_visible_before_the_child_exits(tmp_path):
+    root = managed_root(tmp_path / "managed")
+    log, release = root / "live.log", root / "release"
+    command = [sys.executable, "-c",
+               "import pathlib,sys,time; print('progress',flush=True); "
+               "release=pathlib.Path(sys.argv[1]); "
+               "exec('while not release.exists(): time.sleep(.02)')", str(release)]
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        result = pool.submit(supervise, command, cwd=tmp_path, env=environment(root),
+                             root=root, log=log, deadline=time.monotonic() + 8, max_bytes=GIB)
+        try:
+            deadline = time.monotonic() + 5
+            while (not log.exists() or not log.read_bytes()) and time.monotonic() < deadline:
+                time.sleep(.02)
+            assert log.read_text() == "progress\n"
+            assert not result.done()  # EOF must not be required to publish the record.
+        finally:
+            release.touch()
+        row = result.result(timeout=10)
+    assert row["status"] == "passed" and row["cleanup_verified"]
 
 
 def test_disk_admission_does_not_start_process(tmp_path):

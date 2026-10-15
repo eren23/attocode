@@ -167,6 +167,30 @@ def test_source_scoping_copies_only_selected_git_blobs(tmp_path):
     assert [e[0] for e in tree["entries"]] == ["main.py"]
 
 
+@pytest.mark.parametrize("checkpointed", [False, True])
+def test_worker_error_preserves_checkpoint_and_bounded_diagnostic(tmp_path, monkeypatch, checkpointed):
+    from eval.quality import corpus
+
+    spec, output = tmp_path / "spec.json", tmp_path / "worker.json"
+    spec.write_text('{"id":"fixture"}')
+    monkeypatch.setattr(sys, "argv", ["corpus", "--worker", str(tmp_path),
+                                    "--spec", str(spec), "--output", str(output)])
+    checks = [{"name": "definition", "outcome": "passed"}]
+    async def fail(*args, observations, checkpoint):
+        if checkpointed:
+            observations.append({"id": "question"})
+            checkpoint(checks, observations)
+        raise TimeoutError("warming: " + "x" * 5000)
+    monkeypatch.setattr(corpus, "evaluate", fail)
+    with pytest.raises(TimeoutError, match="warming"):
+        corpus.main()
+    result = json.loads(output.read_text())
+    assert result["checks"] == (checks if checkpointed else [])
+    assert result["retrieval"] == ([{"id": "question"}] if checkpointed else [])
+    assert result["worker_error"]["type"] == "TimeoutError"
+    assert len(result["worker_error"]["message"]) == 4000
+
+
 def test_interrupted_pack_preserves_completed_checks_and_stops_its_worker(tmp_path, monkeypatch):
     import subprocess
 
