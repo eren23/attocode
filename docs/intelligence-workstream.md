@@ -44,8 +44,10 @@ process-tree RSS at 4 GiB, with a 2 GiB free-space floor. Broad worker tests hav
 60 minutes and the controller has 90 minutes. One worker at a time; $1 reservation
 per batch. The separately approved repair cycle raised the monthly reservation
 cap from $10 to $14 and allowed four additional batches; all four are now used.
-These reservations are admission limits, not actual charges. Read the live ledger
-before admission; no further rental or budget increase is authorized.
+The approved structural-write follow-up allows at most two additional batches,
+raising the monthly reservation cap to $16, with one worker at a time and early
+stop on success. Reservations are admission limits, not actual charges. Preserve
+the existing 14 ledger rows; no further increase is authorized by this follow-up.
 Temporary tools and optional grammars belong on disposable workers or CI.
 
 Preserve shared caches, evaluation artifacts and frozen studies. No model calls,
