@@ -10,6 +10,10 @@ batches are used and all workers deleted. See the
 [repair-cycle evidence](../packages/code-intel/evals/results/2026-10-15-cold-repair-cycle.md).
 The local candidate upgrade check is not a PyPI publication check.
 
+A subsequent [structural persistence fix](../packages/code-intel/evals/results/2026-10-15-structural-write-contention.md)
+reduces SQL statement count and passed local regression checks. Its small contention
+probe does not replace the failed full cloud gate or authorize publication.
+
 ## Changes
 
 - Shared discovery/parser language identities; explicit static module ownership for

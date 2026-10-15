@@ -1,0 +1,151 @@
+{
+  "baseline_commit": "5851c7ca3cc9e54b8b7691d0decb0cbb518dfa85",
+  "baseline_source_sha256": "fe42f27b8c5c216fec79a7993b10da2290c60b253c3c639686efe55c707143c5",
+  "candidate_source_sha256": "6013e6db9973e27be723bfc8a9bdcdc0fba2fce1f4e31e33b7b5a4d3f8212dc8",
+  "python": "3.12.12",
+  "platform": "macOS-26.2-arm64-arm-64bit",
+  "fixture": {
+    "files": 40,
+    "symbols_per_file": 32,
+    "references_per_file": 32
+  },
+  "scope": "One observation per case; synthetic CPU contention, not cloud latency or an agent study",
+  "results": [
+    {
+      "method": "legacy",
+      "cpu_thread": false,
+      "seconds": 0.005100417067296803,
+      "competitor_active_at_end": null,
+      "rows": [
+        1280,
+        1280
+      ],
+      "row_sha256": "900dab3d31a808579f5d96f252662acd58a966bc2ae21bdfbddc403fa4fb0cbe"
+    },
+    {
+      "method": "batched",
+      "cpu_thread": false,
+      "seconds": 0.008496209047734737,
+      "competitor_active_at_end": null,
+      "rows": [
+        1280,
+        1280
+      ],
+      "row_sha256": "900dab3d31a808579f5d96f252662acd58a966bc2ae21bdfbddc403fa4fb0cbe"
+    },
+    {
+      "method": "legacy",
+      "cpu_thread": true,
+      "seconds": 4.089172084000893,
+      "competitor_active_at_end": true,
+      "rows": [
+        1280,
+        1280
+      ],
+      "row_sha256": "900dab3d31a808579f5d96f252662acd58a966bc2ae21bdfbddc403fa4fb0cbe"
+    },
+    {
+      "method": "batched",
+      "cpu_thread": true,
+      "seconds": 0.5094699170440435,
+      "competitor_active_at_end": true,
+      "rows": [
+        1280,
+        1280
+      ],
+      "row_sha256": "900dab3d31a808579f5d96f252662acd58a966bc2ae21bdfbddc403fa4fb0cbe"
+    }
+  ],
+  "cleanup_verified": true,
+  "exploratory_observations": [
+    {
+      "method": "legacy",
+      "cpu_thread": false,
+      "seconds": 0.0051712499698624015,
+      "rows": [
+        1280,
+        1280
+      ],
+      "row_hash": "900dab3d31a808579f5d96f252662acd58a966bc2ae21bdfbddc403fa4fb0cbe"
+    },
+    {
+      "method": "batched",
+      "cpu_thread": false,
+      "seconds": 0.004680375102907419,
+      "rows": [
+        1280,
+        1280
+      ],
+      "row_hash": "900dab3d31a808579f5d96f252662acd58a966bc2ae21bdfbddc403fa4fb0cbe"
+    },
+    {
+      "method": "legacy",
+      "cpu_thread": true,
+      "seconds": 13.241611292003654,
+      "rows": [
+        1280,
+        1280
+      ],
+      "row_hash": "900dab3d31a808579f5d96f252662acd58a966bc2ae21bdfbddc403fa4fb0cbe"
+    },
+    {
+      "method": "batched",
+      "cpu_thread": true,
+      "seconds": 0.8476217909483239,
+      "rows": [
+        1280,
+        1280
+      ],
+      "row_hash": "900dab3d31a808579f5d96f252662acd58a966bc2ae21bdfbddc403fa4fb0cbe"
+    }
+  ],
+  "probe_sha256": "a10d1f42833abde224390c17e18b547a6fd78cf8ec5a3c482dc2f873a68fbe75",
+  "release_gate_passed": false,
+  "cloud_rentals_started": 0,
+  "local_gate": {
+    "run_id": "20261015T113931-b905addf",
+    "status": "passed",
+    "source_sha256": "2142f72b837fd77d9c7315931945c3b8b1cbb4d3cfabf2eb854bb5700bf82a70",
+    "fixture_sha256": "c55c4ed5ec9e07b1b1226b6fcb68f430d7c44d4f1e55a044517daf8007c2c523",
+    "harness_sha256": "4e846fe69f4cc2d1f8767f06beee72ec1983418e3992894f9a337e3a977a1973",
+    "cleanup_verified": true,
+    "checks": [
+      {
+        "name": "lint",
+        "status": "passed",
+        "seconds": 0.235,
+        "peak_disk_bytes": 78311424,
+        "peak_rss_bytes": 442368,
+        "cleanup_verified": true
+      },
+      {
+        "name": "contracts",
+        "status": "passed",
+        "seconds": 26.684,
+        "peak_disk_bytes": 111695379,
+        "peak_rss_bytes": 849264640,
+        "cleanup_verified": true
+      },
+      {
+        "name": "scale",
+        "status": "passed",
+        "seconds": 12.649,
+        "peak_disk_bytes": 180966931,
+        "peak_rss_bytes": 188268544,
+        "cleanup_verified": true
+      },
+      {
+        "name": "lifecycle",
+        "status": "passed",
+        "seconds": 2.763,
+        "peak_disk_bytes": 111093267,
+        "peak_rss_bytes": 137281536,
+        "cleanup_verified": true
+      }
+    ],
+    "contracts": {
+      "passed": 537,
+      "skipped": 8
+    }
+  }
+}

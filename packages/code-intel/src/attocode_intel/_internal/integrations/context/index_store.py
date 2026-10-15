@@ -14,6 +14,7 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass, field
+from itertools import islice
 from typing import Any
 
 from filelock import FileLock
@@ -26,6 +27,22 @@ SCHEMA_VERSION = "7"
 SNAPSHOT_KEY = "structural_snapshot_v4"
 SQLITE_BUSY_TIMEOUT_MS = 30_000
 INDEX_INIT_LOCK_TIMEOUT_SECONDS = 30
+
+
+def _insert_analysis_rows(conn, statement: str, rows, columns: int) -> None:
+    """Insert bounded groups without one SQLite step per evidence row.
+
+    At most 64 rows / 576 parameters, below SQLite's legacy 999-variable limit.
+    The caller owns the transaction; iteration and SQL errors propagate so all
+    replacements roll back together. Input order (and generated IDs) is retained.
+    """
+    rows = iter(rows)
+    placeholder = "(" + ",".join(["?"] * columns) + ")"
+    while batch := list(islice(rows, 64)):
+        conn.execute(
+            statement + " VALUES " + ",".join([placeholder] * len(batch)),
+            tuple(value for row in batch for value in row),
+        )
 
 
 class IndexSchemaVersionError(RuntimeError):
@@ -407,25 +424,27 @@ class IndexStore:
             for file_path, symbols, refs in files:
                 if symbols is not None:
                     conn.execute("DELETE FROM symbols WHERE file_path = ?", (file_path,))
-                    conn.executemany(
+                    _insert_analysis_rows(
+                        conn,
                         """INSERT INTO symbols
-                           (file_path, name, qualified_name, kind, line, end_line, source)
-                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                        [(file_path, s["name"], s["qualified_name"], s["kind"],
+                           (file_path, name, qualified_name, kind, line, end_line, source)""",
+                        ((file_path, s["name"], s["qualified_name"], s["kind"],
                           s.get("line", 0), s.get("end_line", 0), s.get("source", "tree-sitter"))
-                         for s in symbols],
+                         for s in symbols),
+                        7,
                     )
                 if refs is not None:
                     conn.execute("DELETE FROM refs WHERE file_path = ?", (file_path,))
-                    conn.executemany(
+                    _insert_analysis_rows(
+                        conn,
                         """INSERT INTO refs
                            (file_path, symbol_name, ref_kind, line, col, source,
-                            syntax_name, caller_qualified_name, definition_key)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        [(file_path, r["symbol_name"], r.get("ref_kind", "call"),
+                            syntax_name, caller_qualified_name, definition_key)""",
+                        ((file_path, r["symbol_name"], r.get("ref_kind", "call"),
                           r.get("line", 0), r.get("column", 0), r.get("source", "tree-sitter"),
                           r.get("syntax_name", ""), r.get("caller_qualified_name", ""),
-                          r.get("definition_key", "")) for r in refs],
+                          r.get("definition_key", "")) for r in refs),
+                        9,
                     )
 
     def load_symbols(self, file_path: str | None = None) -> list[StoredSymbol]:
