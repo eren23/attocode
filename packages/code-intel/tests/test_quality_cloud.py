@@ -109,8 +109,16 @@ def test_worker_apt_lock_wait_with_isolated_package_database(tmp_path, release):
     command = ['sudo', '-n', args[0], *options, *args[1:], '--no-download', '--no-upgrade']
     with (tmp_path / 'dpkg/lock-frontend').open('w') as lock:
         fcntl.lockf(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        environment = {**os.environ, 'LC_ALL': 'C'}
+        immediate = subprocess.run(
+            [arg.replace('DPkg::Lock::Timeout=2', 'DPkg::Lock::Timeout=0') for arg in command],
+            capture_output=True, text=True, env=environment, timeout=8,
+        )
+        assert immediate.returncode == 100, immediate.stdout + immediate.stderr
+        assert 'Unable to acquire the dpkg frontend lock' in immediate.stderr
+        started = time.monotonic()
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                   text=True, env={**os.environ, 'LC_ALL': 'C'})
+                                   text=True, env=environment)
         try:
             if release:
                 # A default no-wait install exits here with 100, proving the
@@ -121,6 +129,7 @@ def test_worker_apt_lock_wait_with_isolated_package_database(tmp_path, release):
             output, _ = process.communicate(timeout=8)
             assert process.returncode == (0 if release else 100), output
             if not release:
+                assert time.monotonic() - started >= 1
                 assert 'Unable to acquire the dpkg frontend lock' in output
             assert status.read_text().count('Package:') == 1
         finally:
