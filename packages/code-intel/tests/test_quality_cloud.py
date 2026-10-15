@@ -494,3 +494,42 @@ def test_report_export_compacts_json_losslessly_and_rejects_oversize(tmp_path):
     source.write_text(json.dumps({'large':'x' * (2**21)}))
     with pytest.raises(ValueError, match='export exceeds'):
         export_reports(root, target)
+
+
+def test_index_probe_uses_existing_budget_and_deletion_but_cannot_be_release_gate(tmp_path):
+    from eval.quality.cloud import probe_arguments
+    assert probe_arguments(['cockroach']) == ['--pack', 'cockroach', '--seconds', '600']
+    api = FakeAPI()
+    result = batch(api, tmp_path/'managed', packs=['cockroach'], diagnostic=True, execute=lambda *a: None)
+    assert result['cleanup_verified'] and api.deleted == [42]
+    assert result['selection'] == {'packs':['cockroach'], 'shard':None, 'suite':'index-probe'}
+    assert result['reserved_usd'] == 1
+
+
+@pytest.mark.parametrize('selection', [dict(packs=[]), dict(packs=['cockroach','pandas']),
+    dict(packs=['cockroach'], shard='1/1'), dict(packs=['cockroach'], suite='workflows'),
+    dict(packs=['cockroach'], resume='report.json'), dict(packs=['unknown'])])
+def test_invalid_diagnostic_refused_before_creating_managed_state(tmp_path, selection):
+    with pytest.raises(ValueError):
+        batch(FakeAPI(), tmp_path/'absent', diagnostic=True, **selection)
+    assert not (tmp_path/'absent').exists()
+
+
+def test_remote_probe_runs_supervised_diagnostic_and_bounded_export(tmp_path, monkeypatch):
+    from eval.quality import cloud
+    commands = []
+    monkeypatch.setattr(cloud, 'wait_for_bootstrap', lambda *a, **kw: None)
+    def supervised(command, **kwargs):
+        commands.append(command)
+        assert kwargs['wall_deadline'] > time.time()
+        assert kwargs['max_bytes'] == 5*1024**3
+        return {'status':'passed', 'seconds':0, 'cleanup_verified':True}
+    monkeypatch.setattr(cloud, 'supervise', supervised)
+    api = SimpleNamespace(request=lambda *a: {'droplet':{'status':'active',
+        'networks':{'v4':[{'type':'public','ip_address':'192.0.2.1'}]}}})
+    execute_batch(api, 42, tmp_path, tmp_path, tmp_path/'key', packs=['cockroach'], diagnostic=True)
+    remote = [c[-1] for c in commands if c[0]=='ssh']
+    test = next(c for c in remote if 'eval.quality.index_probe' in c)
+    assert '--property=RuntimeMaxSec=660s' in test
+    assert '--pack cockroach --seconds 600' in test and 'eval.quality broad' not in test
+    assert any('eval.quality.export' in c for c in remote)

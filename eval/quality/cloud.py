@@ -225,6 +225,14 @@ def workflow_arguments(packs=(), shard=None, suite="all", *, resume=False):
     return arguments
 
 
+def probe_arguments(packs=(), shard=None, suite="all", resume=None):
+    """A diagnostic selects exactly one pinned corpus and is never a release gate."""
+    if len(packs) != 1 or shard or resume or suite != "all":
+        raise ValueError("Index probe requires exactly one pack, no shard/resume/suite override")
+    workflow_arguments(packs, None, "all")
+    return ["--pack", packs[0], "--seconds", "600"]
+
+
 def validated_resume(path):
     """Reject wrong source inputs before spending; the worker checks its environment."""
     if path is None:
@@ -243,9 +251,9 @@ def validated_resume(path):
     return data
 
 
-def batch(api, root, *, execute=None, packs=(), shard=None, suite="all", resume=None):
+def batch(api, root, *, execute=None, packs=(), shard=None, suite="all", resume=None, diagnostic=False):
     """One controller owns the ledger; tests inject execution, never a cloud key."""
-    workflow_arguments(packs, shard, suite, resume=bool(resume))
+    probe_arguments(packs, shard, suite, resume) if diagnostic else workflow_arguments(packs, shard, suite, resume=bool(resume))
     resume_data = validated_resume(resume)  # Validate before provisioning or reservation.
     root = managed_root(root)
     cloud = root / "cloud"
@@ -275,7 +283,7 @@ def batch(api, root, *, execute=None, packs=(), shard=None, suite="all", resume=
             key, key_id, commit = Path("injected"), "injected", "injected"
         row = reserve(ledger, run_id, price, time.time())
         row.update(owner=MARKER, run_tag=run_tag, source_commit=commit,
-                   selection={"packs": list(packs), "shard": shard, "suite": suite})
+                   selection={"packs": list(packs), "shard": shard, "suite": "index-probe" if diagnostic else suite})
         if resume_data is not None:
             row['selection']['resume_sha256'] = hashlib.sha256((directory / 'resume.json').read_bytes()).hexdigest()
         write_json(ledger_path, ledger)
@@ -291,7 +299,7 @@ def batch(api, root, *, execute=None, packs=(), shard=None, suite="all", resume=
                 execute(api, node_id, directory, root, key)
             else:
                 execute_batch(api, node_id, directory, root, key, packs=packs, shard=shard, suite=suite,
-                              resume=resume_data is not None,
+                              resume=resume_data is not None, diagnostic=diagnostic,
                               wall_deadline=row["created_at"] + CONTROLLER_SECONDS)
             row["status"] = "completed"
         except BaseException as exc:
@@ -364,8 +372,10 @@ def wait_for_bootstrap(ssh, env, directory, *, deadline, wall_deadline):
 
 
 def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, suite="all", resume=False,
-                  wall_deadline=None):
-    arguments = shlex.join(workflow_arguments(packs, shard, suite, resume=resume))
+                  wall_deadline=None, diagnostic=False):
+    arguments = shlex.join(probe_arguments(packs, shard, suite, resume) if diagnostic
+                           else workflow_arguments(packs, shard, suite, resume=resume))
+    test_module = "eval.quality.index_probe" if diagnostic else "eval.quality broad"
     start = time.monotonic()
     deadline = start + CONTROLLER_SECONDS
     if wall_deadline is None:
@@ -401,7 +411,7 @@ def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, s
                    "cd /root/job; mkdir -p .attocode/quality; printf %s attocode-quality-v1 > .attocode/quality/.owner; "
                    "UV_CACHE_DIR=/root/job/.attocode/quality/cache/uv /root/bootstrap/bin/uv sync "
                    "--locked --package attocode-code-intel --extra dev --extra service"]),
-        ("tests", [*ssh, "cd /root/job; QUALITY_ALLOW_DOWNLOADS=1 .venv/bin/python -m eval.quality broad " + arguments]),
+        ("tests", [*ssh, "cd /root/job; QUALITY_ALLOW_DOWNLOADS=1 .venv/bin/python -m " + test_module + " " + arguments]),
     ]
     if resume:
         commands.insert(2, ('resume', ['scp', *options, str(directory / 'resume.json'),
@@ -413,7 +423,7 @@ def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, s
                 raise TimeoutError("Controller wall or monotonic deadline expired")
             if name in {"setup", "tests"}:
                 # Leave ten seconds for systemd's SIGKILL escalation.
-                seconds = min(600 if name == "setup" else 3600, int(remaining()) - 10)
+                seconds = min(600 if name == "setup" else 660 if diagnostic else 3600, int(remaining()) - 10)
                 if seconds <= 0:
                     raise TimeoutError("Insufficient controller time for remote work")
                 command = [*command[:-1], worker_command(command[-1], seconds)]
@@ -450,14 +460,15 @@ def main(command="quote", *, root=None, packs=(), shard=None, suite="all", resum
         api = API()
         if command == "quote":
             result = quote(api)
-        elif command == "run":
-            result = batch(api, root or REPO / ".attocode/quality", packs=packs, shard=shard, suite=suite, resume=resume)
+        elif command in {"run", "probe"}:
+            result = batch(api, root or REPO / ".attocode/quality", packs=packs, shard=shard, suite=suite, resume=resume,
+                           diagnostic=command == "probe")
         elif command == "reconcile":
             result = reconcile(api, root or REPO / ".attocode/quality")
         elif command in {"reap", "reap-apply"}:
             result = reap(api, apply=command == "reap-apply")
         else:
-            raise ValueError("Cloud command must be quote, run, reconcile, reap, or reap-apply")
+            raise ValueError("Cloud command must be quote, run, probe, reconcile, reap, or reap-apply")
         print(json.dumps(result, indent=2))
         return 0 if result.get("cleanup_verified", True) else 1
     except (ValueError, RuntimeError, urllib.error.URLError) as exc:
