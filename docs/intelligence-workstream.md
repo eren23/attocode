@@ -11,19 +11,21 @@ The latest run passed 532 contracts with 22 skips and finished in 23.93 minutes,
 within the 90-minute controller limit. Keyword indexing took 57.280 seconds;
 body indexing was unfinished at 132.860 seconds of warmup. **0.1.6 is unpublished.**
 
-Both approved follow-up rentals are used and all workers are deleted. They cost
-$0.1333 estimated compute; all 16 ledger rentals total $0.7820 estimated compute
-(not an invoice). The $16 reservation cap is not spending. See the
-[complete follow-up evidence and next diagnostic](../packages/code-intel/evals/results/2026-10-15-cold-followup.md).
+The subsequent [Cockroach mechanism diagnostic](../packages/code-intel/evals/results/2026-10-15-cockroach-index-probe.md)
+ran both normal and prehydrated startup on one worker. Both body indexes remained
+incomplete. Prehydration reduced keyword time from 51.028 to 14.206 seconds but
+added a 56.273-second wait; observation elapsed before failure rose from 161.532
+to 182.592 seconds. Body construction/SQL remain substantial, and hot-loop probe
+overhead needs calibration. These instrumented partial workloads are not an
+uninstrumented speedup or successful cold start.
 
-The [structural persistence](../packages/code-intel/evals/results/2026-10-15-structural-write-contention.md)
-and [lexical SQL](../packages/code-intel/evals/results/2026-10-15-lexical-sql-contention.md)
-changes preserve stored results and improve some small contention observations;
-they did not resolve the full cold gate. The second worker used Amsterdam after
-Frankfurt capacity became unavailable, so timings are not a controlled comparison.
-The next useful step is bounded subphase/progress instrumentation and an isolated
-Cockroach mechanism diagnostic before another optimization/full matrix. Additional
-cloud execution needs a new allowance. The entries below are historical evidence.
+All 17 workers are deleted. The diagnostic cost $0.0243 estimated compute; the
+cumulative estimate is $0.8063 (not an invoice). The $17 reservation allowance is
+exhausted. Only 24,761 report/log bytes came back from the diagnostic; no corpora
+or indexes were downloaded to the Mac. Next: calibrate probe overhead, test safe
+reuse of discovery snapshots, then target body cost with exact-result controls.
+A new cloud allowance is needed for targeted confirmation and any later full gate.
+The entries below are historical evidence.
 
 ## Milestones
 
