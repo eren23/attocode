@@ -21,8 +21,8 @@ def main():
     selected = args.pack or args.shard or args.resume or args.suite != "all"
     if selected and args.command not in {"broad", "cloud"}:
         parser.error("Workflow selection requires broad or cloud run")
-    if args.command == "cloud" and selected and args.target != "run":
-        parser.error("Cloud selection requires run")
+    if args.command == "cloud" and selected and args.target not in {"run", "probe"}:
+        parser.error("Cloud selection requires run or probe")
     if args.merge and args.command != "report":
         parser.error("--merge requires the report command")
     if args.command == "broad" or (args.command == "cloud" and args.target == "run"):

@@ -289,3 +289,14 @@ do not stand in for those unexecuted hosted checks.
 Do not automatically start another agent/model study. R7's reviewed STOP remains
 in force. The [small follow-up design](../packages/code-intel/evals/designs/2026-10-14-workflow-pilot.md)
 requires separate authorization, frozen inputs and passing offline gates first.
+
+### Opt-in cold-index diagnostic
+
+The bounded [stage probe](../packages/code-intel/evals/results/2026-10-15-index-probe-readiness.md)
+records inclusive wall/thread-CPU timings and partial work counters without
+changing search ranking or the release gate. Run `python -m eval.quality.index_probe`
+for tiny local wiring. `python -m eval.quality cloud probe --pack cockroach` selects
+one pinned corpus on a future authorized worker, with fresh source/index directories
+for normal concurrent and prehydrated startup. Its result is diagnostic evidence;
+it cannot pass the full quality gate. The existing exhausted cloud allowance and
+all admission/deletion guards still apply.

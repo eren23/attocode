@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Cold indexing cost
 
+- Opt-in bounded indexing diagnostics separate inclusive wall/thread-CPU phase
+  times and partial work counters. A supervised two-mode, one-pack probe compares
+  ordinary startup with structural prehydration; it is not a release gate or
+  evidence that the unresolved CockroachDB timeout is fixed.
 - Keyword-cache inserts and stale/deleted body rows use bounded SQL statements
   with exact-row/replacement-order and rollback controls. Two full follow-up runs
   still failed CockroachDB warmup; 0.1.6 remains blocked, despite passing component

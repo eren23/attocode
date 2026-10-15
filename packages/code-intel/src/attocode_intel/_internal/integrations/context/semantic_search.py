@@ -22,6 +22,15 @@ from dataclasses import dataclass, field, replace
 from itertools import islice
 from typing import Any
 
+from attocode_intel._internal.integrations.context.index_probe import (
+    IndexProbe,
+    activate,
+    count,
+    instrument,
+    measure,
+    measured_call,
+    measured_lock,
+)
 from attocode_intel.query_ranking import demote_tests, hit_evidence, rerank_broad_candidates
 from attocode_intel.search_evidence import search_snippet
 
@@ -355,6 +364,7 @@ class SemanticSearchManager:
     nl_mode: str = ""  # "none" or "heuristic"; "" = read ATTOCODE_NL_EMBEDDING_MODE env var
     scoring_config: SearchScoringConfig = field(default_factory=SearchScoringConfig)
     ast_lookup: Any = field(default=None, repr=False)
+    index_probe: IndexProbe | None = field(default=None, repr=False)
     _warmup_reused_asts: int = field(default=0, repr=False)
     _provider: Any = field(default=None, repr=False)
     _store: Any = field(default=None, repr=False)
@@ -393,6 +403,8 @@ class SemanticSearchManager:
     _dep_graph: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        if self.index_probe is None and os.environ.get("ATTOCODE_INTEL_INDEX_PROBE") == "1":
+            self.index_probe = IndexProbe()
         # Defer provider creation to first use (_ensure_provider) to avoid
         # 5-15s model-load latency on construction.
         self._provider = None
@@ -1252,30 +1264,33 @@ class SemanticSearchManager:
         """Share one file read and line tokens across overlapping windows and whole-file FTS."""
         from attocode_intel._internal.integrations.context.codebase_ast import parse_file
 
+        tokenize = instrument("body.tokenize", _tokenize)
         try:
-            with open(abs_path, encoding="utf-8", errors="replace") as source:
+            with measure('body.read'), open(abs_path, encoding="utf-8", errors="replace") as source:
                 content = source.read()
                 lines = content.splitlines()
         except OSError:
             return [], ""
+        count("body.read_chars", len(content))
         if not lines:
             return [], ""
 
-        symbol_spans, class_spans = [], []
-        try:
-            cached = body_spans.take(rel_path, content) if body_spans is not None else None
-            if cached is not None:
-                symbol_spans, class_spans = cached
-            else:
-                ast = None
-                if ast_lookup is not None:
-                    try:
-                        ast = ast_lookup(rel_path, hashlib.sha256(content.encode()).hexdigest())
-                    except Exception:
-                        logger.debug("Existing AST lookup failed for %s", rel_path, exc_info=True)
-                symbol_spans, class_spans = _source_spans(ast or parse_file(abs_path, content))
-        except Exception:
-            logger.debug("Source window AST parse failed for %s", rel_path, exc_info=True)
+        with measure('body.spans'):
+            symbol_spans, class_spans = [], []
+            try:
+                cached = body_spans.take(rel_path, content) if body_spans is not None else None
+                if cached is not None:
+                    symbol_spans, class_spans = cached
+                else:
+                    ast = None
+                    if ast_lookup is not None:
+                        try:
+                            ast = ast_lookup(rel_path, hashlib.sha256(content.encode()).hexdigest())
+                        except Exception:
+                            logger.debug("Existing AST lookup failed for %s", rel_path, exc_info=True)
+                    symbol_spans, class_spans = _source_spans(ast or parse_file(abs_path, content))
+            except Exception:
+                logger.debug("Source window AST parse failed for %s", rel_path, exc_info=True)
 
         chunks: list[tuple[str, str, int, int, str, str]] = []
         # Bound retention to this one source file (body discovery caps it at
@@ -1285,10 +1300,10 @@ class SemanticSearchManager:
 
         def terms_for_line(index: int, shown: str) -> str:
             if shown != lines[index]:
-                return " ".join(_tokenize(shown))
+                return " ".join(tokenize(shown))
             terms = tokenized_lines[index]
             if terms is None:
-                terms = " ".join(_tokenize(shown))
+                terms = " ".join(tokenize(shown))
                 tokenized_lines[index] = terms
             return terms
 
@@ -1352,10 +1367,10 @@ class SemanticSearchManager:
         if self._closed:
             return
         generation = self._body_generation
-        revision = self._source_revision()
+        revision = measured_call("body.revision", self._source_revision)
         if self._body_index_built and revision == self._body_revision:
             return
-        conn = self._open_body_db()
+        conn = measured_call("body.open", self._open_body_db)
         if conn is None:
             return
         from attocode_intel._internal.integrations.context.codebase_context import (
@@ -1363,82 +1378,93 @@ class SemanticSearchManager:
             CodebaseContextManager,
         )
 
+        execute = instrument("body.sql", conn.execute)
         try:
             ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
-            ctx._ensure_fresh()
-            if not ctx._files:
-                ctx.discover_files()
+            with measure('body.discovery'):
+                ctx._ensure_fresh()
+                if not ctx._files:
+                    ctx.discover_files()
             current: dict[str, tuple[str, int, int]] = {}
             root_real = os.path.realpath(self.root_dir)
-            for file_info in ctx._files:
-                if self._closed:
-                    return
-                try:
-                    # Discovery can include symlinks. Never read or persist
-                    # source from outside the selected workspace.
-                    if os.path.commonpath((root_real, os.path.realpath(file_info.path))) != root_real:
+            with measure('body.stat'):
+                for file_info in ctx._files:
+                    if self._closed:
+                        return
+                    try:
+                        # Discovery can include symlinks. Never read or persist
+                        # source from outside the selected workspace.
+                        if os.path.commonpath((root_real, os.path.realpath(file_info.path))) != root_real:
+                            continue
+                        stat = os.stat(file_info.path)
+                    except (OSError, ValueError):
                         continue
-                    stat = os.stat(file_info.path)
-                except (OSError, ValueError):
-                    continue
-                # Avoid loading generated or giant files into the interactive index.
-                if stat.st_size <= 512 * 1024:
-                    current[file_info.relative_path] = (
-                        file_info.path, stat.st_mtime_ns, stat.st_size,
-                    )
-            with self._kw_cache_lock:
-                cached = {
-                    path: (mtime, size)
-                    for path, mtime, size in conn.execute(
-                        "SELECT file_path, mtime_ns, size FROM body_files",
-                    )
-                }
+                    # Avoid loading generated or giant files into the interactive index.
+                    if stat.st_size <= 512 * 1024:
+                        current[file_info.relative_path] = (
+                            file_info.path, stat.st_mtime_ns, stat.st_size,
+                        )
+            with measured_lock(self._kw_cache_lock, "body.lock"):
+                with measure('body.cache_load'):
+                    cached = {
+                        path: (mtime, size)
+                        for path, mtime, size in execute(
+                            "SELECT file_path, mtime_ns, size FROM body_files",
+                        )
+                    }
                 deleted = set(cached) - set(current)
                 stale = {
                     path for path, (_abs, mtime, size) in current.items()
                     if cached.get(path) != (mtime, size)
                 }
-                for paths in _sql_batches(sorted(deleted | stale)):
-                    if self._closed:
-                        return
-                    placeholders = ",".join(["?"] * len(paths))
-                    for table in ("body_fts", "body_file_fts", "body_files"):
-                        conn.execute(f"DELETE FROM {table} WHERE file_path IN ({placeholders})", paths)
-                for path in sorted(stale):
-                    if self._closed:
-                        return
-                    abs_path, mtime, size = current[path]
-                    ext = os.path.splitext(path)[1].lower()
-                    chunks, file_terms = self._body_document(
-                        path, abs_path, body_spans, ast_lookup=self.ast_lookup,
-                        include_file_terms=ext in EXTENSION_LANGUAGES and ext not in _NON_CODE_EXTS,
-                    )
-                    # One SQLite step per bounded batch avoids releasing and
-                    # reacquiring the GIL for every window during AST hydration.
-                    # Keep row order and the surrounding atomic transaction.
-                    for offset in range(0, len(chunks), 64):
+                with measure('body.delete'):
+                    for paths in _sql_batches(sorted(deleted | stale)):
                         if self._closed:
                             return
-                        batch = chunks[offset:offset + 64]
-                        conn.execute(
-                            "INSERT INTO body_fts "
-                            "(file_path, chunk_type, name, start_line, end_line, body, terms) "
-                            "VALUES " + ",".join(["(?, ?, ?, ?, ?, ?, ?)"] * len(batch)),
-                            tuple(value for chunk in batch for value in (path, *chunk)),
+                        placeholders = ",".join(["?"] * len(paths))
+                        for table in ("body_fts", "body_file_fts", "body_files"):
+                            execute(f"DELETE FROM {table} WHERE file_path IN ({placeholders})", paths)
+                with measure('body.files'):
+                    for path in sorted(stale):
+                        if self._closed:
+                            return
+                        count("body.files_started")
+                        abs_path, mtime, size = current[path]
+                        ext = os.path.splitext(path)[1].lower()
+                        with measure('body.document', path):
+                            chunks, file_terms = self._body_document(
+                                path, abs_path, body_spans, ast_lookup=self.ast_lookup,
+                                include_file_terms=ext in EXTENSION_LANGUAGES and ext not in _NON_CODE_EXTS,
+                            )
+                        count("body.windows", len(chunks))
+                        # One SQLite step per bounded batch avoids releasing and
+                        # reacquiring the GIL for every window during AST hydration.
+                        # Keep row order and the surrounding atomic transaction.
+                        for offset in range(0, len(chunks), 64):
+                            if self._closed:
+                                return
+                            batch = chunks[offset:offset + 64]
+                            execute(
+                                "INSERT INTO body_fts "
+                                "(file_path, chunk_type, name, start_line, end_line, body, terms) "
+                                "VALUES " + ",".join(["(?, ?, ?, ?, ?, ?, ?)"] * len(batch)),
+                                tuple(value for chunk in batch for value in (path, *chunk)),
+                            )
+                        # Source files only: docs and data stay in the chunk search.
+                        if file_terms:
+                            execute(
+                                "INSERT INTO body_file_fts (file_path, terms) VALUES (?, ?)",
+                                (path, file_terms),
+                            )
+                        execute(
+                            "INSERT INTO body_files (file_path, mtime_ns, size) VALUES (?, ?, ?)",
+                            (path, mtime, size),
                         )
-                    # Source files only: docs and data stay in the chunk search.
-                    if file_terms:
-                        conn.execute(
-                            "INSERT INTO body_file_fts (file_path, terms) VALUES (?, ?)",
-                            (path, file_terms),
-                        )
-                    conn.execute(
-                        "INSERT INTO body_files (file_path, mtime_ns, size) VALUES (?, ?, ?)",
-                        (path, mtime, size),
-                    )
+                        count("body.files_completed")
                 if self._closed:
                     return  # Closing the connection rolls back this partial refresh.
-                conn.commit()
+                measured_call("body.commit", conn.commit)
+                count("body.commits")
             self._body_index_built = generation == self._body_generation
             self._body_revision = revision
         except Exception:
@@ -1470,6 +1496,13 @@ class SemanticSearchManager:
             self._schedule_body_index()
 
     def _warm_candidate_indexes(self) -> None:
+        # One fresh profile per attempt; ordinary clients retain no diagnostics.
+        if self.index_probe is not None:
+            self.index_probe = IndexProbe()
+        with activate(self.index_probe):
+            self._warm_candidate_indexes_impl()
+
+    def _warm_candidate_indexes_impl(self) -> None:
         """Build AST and optional body indexes, honoring mid-build invalidation."""
         generation = self._body_generation
         self._warmup_finished = 0.0
@@ -2129,14 +2162,16 @@ class SemanticSearchManager:
         conn = self._open_kw_cache_db()
         if conn is None:
             return
+        execute = instrument("keyword.sql", conn.execute)
+        encode = instrument("keyword.serialize", json.dumps)
         try:
             with self._kw_cache_lock:
-                conn.execute("DELETE FROM kw_files")
-                conn.execute("DELETE FROM kw_docs")
+                execute("DELETE FROM kw_files")
+                execute("DELETE FROM kw_docs")
                 for batch in _sql_batches(file_mtimes.items()):
                     if self._closed:
                         return
-                    conn.execute(
+                    execute(
                         "INSERT INTO kw_files (file_path, mtime) VALUES "
                         + ",".join(["(?, ?)"] * len(batch)),
                         tuple(value for row in batch for value in row),
@@ -2144,13 +2179,13 @@ class SemanticSearchManager:
                 rows = (
                     (doc.id, doc.file_path, doc.chunk_type, doc.name,
                      doc.text, int(doc.is_config), int(doc.is_test),
-                     json.dumps(doc.term_freqs), doc.doc_len)
+                     encode(doc.term_freqs), doc.doc_len)
                     for doc in docs
                 )
                 for batch in _sql_batches(rows):
                     if self._closed:
                         return
-                    conn.execute(
+                    execute(
                         "INSERT OR REPLACE INTO kw_docs "
                         "(id, file_path, chunk_type, name, text, is_config, "
                         "is_test, term_freqs, doc_len) VALUES "
@@ -2159,7 +2194,8 @@ class SemanticSearchManager:
                     )
                 if self._closed:
                     return
-                conn.commit()
+                measured_call("keyword.commit", conn.commit)
+                count("keyword.commits")
         except Exception:
             logger.debug("Failed to save kw cache", exc_info=True)
         finally:
@@ -2244,9 +2280,11 @@ class SemanticSearchManager:
         )
 
         ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
-        ctx._ensure_fresh()
-        if not ctx._files:
-            ctx.discover_files()
+        tokenize = instrument("keyword.tokenize", _tokenize)
+        with measure('keyword.discovery'):
+            ctx._ensure_fresh()
+            if not ctx._files:
+                ctx.discover_files()
 
         _CONFIG_EXTS = frozenset({".toml", ".json", ".yaml", ".yml", ".cfg", ".ini", ".md", ".rst", ".txt"})  # noqa: N806
         _CONFIG_NAMES = frozenset({  # noqa: N806
@@ -2257,21 +2295,22 @@ class SemanticSearchManager:
         # Discover current files with mtimes
         current_files: dict[str, tuple[str, float]] = {}
         file_meta: dict[str, tuple[bool, bool]] = {}  # rel -> (is_config, is_test)
-        for f in ctx._files:
-            if self._closed:
-                return
-            try:
-                mtime = os.path.getmtime(f.path)
-            except OSError:
-                continue
-            current_files[f.relative_path] = (f.path, mtime)
-            basename = os.path.basename(f.relative_path).lower()
-            ext = os.path.splitext(basename)[1]
-            is_config = ext in _CONFIG_EXTS or basename in _CONFIG_NAMES
-            file_meta[f.relative_path] = (is_config, f.is_test)
+        with measure('keyword.stat'):
+            for f in ctx._files:
+                if self._closed:
+                    return
+                try:
+                    mtime = os.path.getmtime(f.path)
+                except OSError:
+                    continue
+                current_files[f.relative_path] = (f.path, mtime)
+                basename = os.path.basename(f.relative_path).lower()
+                ext = os.path.splitext(basename)[1]
+                is_config = ext in _CONFIG_EXTS or basename in _CONFIG_NAMES
+                file_meta[f.relative_path] = (is_config, f.is_test)
 
         # Try incremental update from cache
-        cache_result = self._load_kw_cache(current_files)
+        cache_result = measured_call("keyword.cache_load", self._load_kw_cache, current_files)
 
         if cache_result is not None:
             docs, files_to_parse = cache_result
@@ -2285,172 +2324,179 @@ class SemanticSearchManager:
             logger.debug("kw_index full rebuild: %d files", len(files_to_parse))
 
         # Parse only files that need updating
-        for rel in files_to_parse:
-            if self._closed:
-                return
-            entry = current_files.get(rel)
-            if entry is None:
-                continue
-            abs_path, _ = entry
-            is_config, is_test = file_meta.get(rel, (False, False))
+        with measure('keyword.files'):
+            for rel in files_to_parse:
+                if self._closed:
+                    return
+                count("keyword.files_started")
+                entry = current_files.get(rel)
+                if entry is None:
+                    continue
+                abs_path, _ = entry
+                is_config, is_test = file_meta.get(rel, (False, False))
 
-            try:
-                if body_spans is None and self.ast_lookup is None:
-                    ast = parse_file(abs_path)
-                else:
-                    with open(abs_path, encoding="utf-8", errors="replace") as source:
-                        content = source.read()
-                    ast = self.ast_lookup(rel, hashlib.sha256(content.encode()).hexdigest()) if self.ast_lookup else None
-                    if ast is None:
-                        ast = parse_file(abs_path, content)
+                try:
+                    if body_spans is None and self.ast_lookup is None:
+                        ast = measured_call("keyword.parse", parse_file, abs_path)
                     else:
-                        self._warmup_reused_asts += 1
-                    if body_spans is not None:
-                        body_spans.put(rel, content, ast)
-            except Exception:
-                continue
+                        with measure('keyword.read'), open(abs_path, encoding="utf-8", errors="replace") as source:
+                            content = source.read()
+                        count("keyword.read_chars", len(content))
+                        with measure("keyword.hash_lookup"):
+                            ast = self.ast_lookup(rel, hashlib.sha256(content.encode()).hexdigest()) if self.ast_lookup else None
+                        if ast is None:
+                            ast = measured_call("keyword.parse", parse_file, abs_path, content)
+                        else:
+                            self._warmup_reused_asts += 1
+                        if body_spans is not None:
+                            measured_call("keyword.spans", body_spans.put, rel, content, ast)
+                except Exception:
+                    continue
 
-            # File-level doc
-            file_text_parts = list(re.split(r"[/\\]", rel))
-            file_text_parts.extend(imp.module for imp in ast.imports[:30])
-            file_text_parts.extend(ast.get_symbols()[:30])
-            file_text = " ".join(file_text_parts)
-            file_tokens = _tokenize(file_text)
+                with measure('keyword.documents', rel):
+                    # File-level doc
+                    file_text_parts = list(re.split(r"[/\\]", rel))
+                    file_text_parts.extend(imp.module for imp in ast.imports[:30])
+                    file_text_parts.extend(ast.get_symbols()[:30])
+                    file_text = " ".join(file_text_parts)
+                    file_tokens = tokenize(file_text)
 
-            file_tf: dict[str, int] = {}
-            for t in file_tokens:
-                file_tf[t] = file_tf.get(t, 0) + 1
-
-            docs.append(_KeywordDoc(
-                id=f"file:{rel}",
-                file_path=rel,
-                chunk_type="file",
-                name=os.path.basename(rel),
-                text=file_text[:200],
-                is_config=is_config,
-                is_test=is_test,
-                term_freqs=file_tf,
-                doc_len=len(file_tokens),
-            ))
-
-            # Function-level docs
-            for func in ast.functions:
-                parts: list[str] = []
-                parts.extend([func.name] * 3)
-                # Add NL summary of the function name for better query matching
-                nl_summary = _summarize_code_to_nl(func.name, "function", "")
-                parts.append(nl_summary)
-                if func.docstring:
-                    parts.append(func.docstring[:300])
-                parts.extend(p.name for p in func.parameters[:10])
-                parts.extend(p.type_annotation for p in func.parameters[:10] if p.type_annotation)
-                if func.return_type:
-                    parts.append(func.return_type)
-                parts.extend(func.decorators[:5])
-                text = " ".join(parts)
-                tokens = _tokenize(text)
-
-                tf: dict[str, int] = {}
-                for t in tokens:
-                    tf[t] = tf.get(t, 0) + 1
-
-                preview_parts = [f"function {func.name}"]
-                if func.docstring:
-                    preview_parts.append(func.docstring[:100])
-                params_str = ", ".join(p.name for p in func.parameters[:6])
-                if params_str:
-                    preview_parts.append(f"({params_str})")
-
-                docs.append(_KeywordDoc(
-                    id=f"func:{rel}:{func.name}",
-                    file_path=rel,
-                    chunk_type="function",
-                    name=func.name,
-                    text=" | ".join(preview_parts),
-                    is_config=False,
-                    is_test=is_test,
-                    term_freqs=tf,
-                    doc_len=len(tokens),
-                ))
-
-            # Class + method-level docs
-            for cls in ast.classes:
-                cls_parts: list[str] = [cls.name] * 3
-                # Add NL summary of the class name
-                cls_nl = _summarize_code_to_nl(cls.name, "class", "")
-                cls_parts.append(cls_nl)
-                if cls.bases:
-                    cls_parts.extend(cls.bases)
-                if cls.docstring:
-                    cls_parts.append(cls.docstring[:300])
-                cls_parts.extend(m.name for m in cls.methods[:15])
-                cls_text = " ".join(cls_parts)
-                cls_tokens = _tokenize(cls_text)
-
-                cls_tf: dict[str, int] = {}
-                for t in cls_tokens:
-                    cls_tf[t] = cls_tf.get(t, 0) + 1
-
-                cls_preview = f"class {cls.name}"
-                if cls.bases:
-                    cls_preview += f"({', '.join(cls.bases[:3])})"
-                if cls.docstring:
-                    cls_preview += f" | {cls.docstring[:100]}"
-
-                docs.append(_KeywordDoc(
-                    id=f"cls:{rel}:{cls.name}",
-                    file_path=rel,
-                    chunk_type="class",
-                    name=cls.name,
-                    text=cls_preview,
-                    is_config=False,
-                    is_test=is_test,
-                    term_freqs=cls_tf,
-                    doc_len=len(cls_tokens),
-                ))
-
-                for method in cls.methods:
-                    m_parts: list[str] = [method.name] * 3
-                    m_parts.append(cls.name)
-                    if method.docstring:
-                        m_parts.append(method.docstring[:300])
-                    m_parts.extend(p.name for p in method.parameters[:10])
-                    m_parts.extend(p.type_annotation for p in method.parameters[:10] if p.type_annotation)
-                    if method.return_type:
-                        m_parts.append(method.return_type)
-                    m_text = " ".join(m_parts)
-                    m_tokens = _tokenize(m_text)
-
-                    m_tf: dict[str, int] = {}
-                    for t in m_tokens:
-                        m_tf[t] = m_tf.get(t, 0) + 1
-
-                    m_preview = f"method {cls.name}.{method.name}"
-                    if method.docstring:
-                        m_preview += f" | {method.docstring[:100]}"
+                    file_tf: dict[str, int] = {}
+                    for t in file_tokens:
+                        file_tf[t] = file_tf.get(t, 0) + 1
 
                     docs.append(_KeywordDoc(
-                        id=f"method:{rel}:{cls.name}.{method.name}",
+                        id=f"file:{rel}",
                         file_path=rel,
-                        chunk_type="method",
-                        name=f"{cls.name}.{method.name}",
-                        text=m_preview,
-                        is_config=False,
+                        chunk_type="file",
+                        name=os.path.basename(rel),
+                        text=file_text[:200],
+                        is_config=is_config,
                         is_test=is_test,
-                        term_freqs=m_tf,
-                        doc_len=len(m_tokens),
+                        term_freqs=file_tf,
+                        doc_len=len(file_tokens),
                     ))
 
-        # Build document frequencies (always recomputed from full doc list)
-        df: dict[str, int] = {}
-        for doc in docs:
-            if self._closed:
-                return
-            for term in doc.term_freqs:
-                df[term] = df.get(term, 0) + 1
+                    # Function-level docs
+                    for func in ast.functions:
+                        parts: list[str] = []
+                        parts.extend([func.name] * 3)
+                        # Add NL summary of the function name for better query matching
+                        nl_summary = _summarize_code_to_nl(func.name, "function", "")
+                        parts.append(nl_summary)
+                        if func.docstring:
+                            parts.append(func.docstring[:300])
+                        parts.extend(p.name for p in func.parameters[:10])
+                        parts.extend(p.type_annotation for p in func.parameters[:10] if p.type_annotation)
+                        if func.return_type:
+                            parts.append(func.return_type)
+                        parts.extend(func.decorators[:5])
+                        text = " ".join(parts)
+                        tokens = tokenize(text)
 
-        total_len = sum(doc.doc_len for doc in docs)
-        avg_dl = total_len / len(docs) if docs else 1.0
+                        tf: dict[str, int] = {}
+                        for t in tokens:
+                            tf[t] = tf.get(t, 0) + 1
+
+                        preview_parts = [f"function {func.name}"]
+                        if func.docstring:
+                            preview_parts.append(func.docstring[:100])
+                        params_str = ", ".join(p.name for p in func.parameters[:6])
+                        if params_str:
+                            preview_parts.append(f"({params_str})")
+
+                        docs.append(_KeywordDoc(
+                            id=f"func:{rel}:{func.name}",
+                            file_path=rel,
+                            chunk_type="function",
+                            name=func.name,
+                            text=" | ".join(preview_parts),
+                            is_config=False,
+                            is_test=is_test,
+                            term_freqs=tf,
+                            doc_len=len(tokens),
+                        ))
+
+                    # Class + method-level docs
+                    for cls in ast.classes:
+                        cls_parts: list[str] = [cls.name] * 3
+                        # Add NL summary of the class name
+                        cls_nl = _summarize_code_to_nl(cls.name, "class", "")
+                        cls_parts.append(cls_nl)
+                        if cls.bases:
+                            cls_parts.extend(cls.bases)
+                        if cls.docstring:
+                            cls_parts.append(cls.docstring[:300])
+                        cls_parts.extend(m.name for m in cls.methods[:15])
+                        cls_text = " ".join(cls_parts)
+                        cls_tokens = tokenize(cls_text)
+
+                        cls_tf: dict[str, int] = {}
+                        for t in cls_tokens:
+                            cls_tf[t] = cls_tf.get(t, 0) + 1
+
+                        cls_preview = f"class {cls.name}"
+                        if cls.bases:
+                            cls_preview += f"({', '.join(cls.bases[:3])})"
+                        if cls.docstring:
+                            cls_preview += f" | {cls.docstring[:100]}"
+
+                        docs.append(_KeywordDoc(
+                            id=f"cls:{rel}:{cls.name}",
+                            file_path=rel,
+                            chunk_type="class",
+                            name=cls.name,
+                            text=cls_preview,
+                            is_config=False,
+                            is_test=is_test,
+                            term_freqs=cls_tf,
+                            doc_len=len(cls_tokens),
+                        ))
+
+                        for method in cls.methods:
+                            m_parts: list[str] = [method.name] * 3
+                            m_parts.append(cls.name)
+                            if method.docstring:
+                                m_parts.append(method.docstring[:300])
+                            m_parts.extend(p.name for p in method.parameters[:10])
+                            m_parts.extend(p.type_annotation for p in method.parameters[:10] if p.type_annotation)
+                            if method.return_type:
+                                m_parts.append(method.return_type)
+                            m_text = " ".join(m_parts)
+                            m_tokens = tokenize(m_text)
+
+                            m_tf: dict[str, int] = {}
+                            for t in m_tokens:
+                                m_tf[t] = m_tf.get(t, 0) + 1
+
+                            m_preview = f"method {cls.name}.{method.name}"
+                            if method.docstring:
+                                m_preview += f" | {method.docstring[:100]}"
+
+                            docs.append(_KeywordDoc(
+                                id=f"method:{rel}:{cls.name}.{method.name}",
+                                file_path=rel,
+                                chunk_type="method",
+                                name=f"{cls.name}.{method.name}",
+                                text=m_preview,
+                                is_config=False,
+                                is_test=is_test,
+                                term_freqs=m_tf,
+                                doc_len=len(m_tokens),
+                            ))
+                count("keyword.files_completed")
+
+        # Build document frequencies (always recomputed from full doc list)
+        with measure('keyword.frequencies'):
+            df: dict[str, int] = {}
+            for doc in docs:
+                if self._closed:
+                    return
+                for term in doc.term_freqs:
+                    df[term] = df.get(term, 0) + 1
+
+            total_len = sum(doc.doc_len for doc in docs)
+            avg_dl = total_len / len(docs) if docs else 1.0
 
         self._kw_docs = docs
         self._kw_df = df
@@ -2459,7 +2505,8 @@ class SemanticSearchManager:
 
         # Persist to cache
         file_mtimes = {rel: mt for rel, (_, mt) in current_files.items()}
-        self._save_kw_cache(docs, file_mtimes)
+        count("keyword.documents", len(docs))
+        measured_call("keyword.cache_save", self._save_kw_cache, docs, file_mtimes)
 
         logger.debug(
             "BM25 keyword index built: %d docs, %d terms (%d files parsed)",
