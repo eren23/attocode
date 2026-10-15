@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Shared language-server document lifecycle
+
+- Track open documents and sent versions in the language-server client so
+  warmup, inspection and edit callers cannot send duplicate opens or repeated
+  edit versions. Identical content is not resent; close/restart resets state.
+  Strict protocol and real Rust fixtures pass. The earlier intermittent Rust
+  CI failure is not proven resolved.
+- A frozen body-file retrieval candidate improved development and held-out
+  aggregates but failed the complete held-out gate; no ranking policy changed.
+  Two bounded indexing prototypes were not adopted. See
+  `packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md`.
+
 ### Added — Frozen retrieval cycle and Cockroach revalidation
 
 - Added a bounded development/validation runner with fixed dual-query fusion,

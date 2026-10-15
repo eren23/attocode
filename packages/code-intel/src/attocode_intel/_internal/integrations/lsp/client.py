@@ -8,6 +8,7 @@ and diagnostics via the LSP JSON-RPC protocol.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -185,6 +186,9 @@ class _LSPClient:
         self._pending: dict[int, asyncio.Future[Any]] = {}
         self._buffer = b""
         self._notifications: set[asyncio.Task] = set()
+        # One protocol owner even when warmup, precision and editor callers overlap.
+        # Retain digests, not another copy of every open document's source.
+        self._documents: dict[str, tuple[int, bytes]] = {}
         self._initialized = False
         self._reader_task: asyncio.Task[None] | None = None
         self._stderr_task: asyncio.Task[None] | None = None
@@ -205,6 +209,7 @@ class _LSPClient:
 
     async def start(self) -> None:
         """Start the language server and initialize it."""
+        self._documents.clear()
         self._process = await asyncio.create_subprocess_exec(  # noqa: S603
             self._config.command,
             *self._config.args,
@@ -348,6 +353,7 @@ class _LSPClient:
                 self._stderr_task = None
             self._process = None
             self._initialized = False
+            self._documents.clear()
             self._reader_task = None
             self._is_stopping = False
 
@@ -583,6 +589,10 @@ class _LSPClient:
         """Notify server about file open."""
         if not self._initialized:
             return
+        if uri in self._documents:
+            self.notify_document_change(uri, text)
+            return
+        self._documents[uri] = (1, hashlib.sha256(text.encode("utf-8", errors="surrogatepass")).digest())
         self._notify("textDocument/didOpen", {
             "textDocument": {
                 "uri": uri,
@@ -601,6 +611,16 @@ class _LSPClient:
         """Notify server about file change."""
         if not self._initialized:
             return
+        previous = self._documents.get(uri)
+        if previous is None:
+            self.notify_document_open(uri, text)
+            return
+        digest = hashlib.sha256(text.encode("utf-8", errors="surrogatepass")).digest()
+        if digest == previous[1]:
+            return
+        # Versions supplied by separate callers can overlap or go backwards.
+        version = max(version, previous[0] + 1)
+        self._documents[uri] = (version, digest)
         self._notify("textDocument/didChange", {
             "textDocument": {"uri": uri, "version": version},
             "contentChanges": [{"text": text}],
@@ -609,6 +629,8 @@ class _LSPClient:
     def notify_document_close(self, uri: str) -> None:
         """Notify server about file close."""
         if not self._initialized:
+            return
+        if self._documents.pop(uri, None) is None:
             return
         self._notify("textDocument/didClose", {
             "textDocument": {"uri": uri},
