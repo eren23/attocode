@@ -204,7 +204,7 @@ The optional controller uses DigitalOcean's API and SSH. It selects one
 `s-8vcpu-16gb-amd` shared CPU worker in `ams3`, with at least 8 vCPUs and
 16 GiB memory, and verifies the
 live provider quote before provisioning. The admission budget is $1 per batch
-and $21 per UTC month, before tax. A reservation is retained for the whole month;
+and $23 per UTC month, before tax. A reservation is retained for the whole month;
 runtime estimates are not refunds or invoices. Keep one controller and preserve
 its ledger at `.attocode/quality/cloud/ledger.json`.
 
@@ -366,3 +366,20 @@ verified the actual PyPI package. All 21 workers are deleted. The three-worker
 allowance is used; cumulative estimated compute is $0.9119 before tax, not an
 invoice. All $21 reservations remain retained; no additional rental is included.
 The Cockroach pack passed with a narrow timing margin, not a performance guarantee.
+
+## Approved post-0.1.6 validation and retrieval cycle
+
+The 2026-10-15 follow-up retains all 21 prior reservations and allows at most
+two additional $1 reservations under a $23 monthly cap. Run one unprofiled
+Cockroach workflow on published main; use the second only after a failed target
+and a diagnosed, tested, merged repair. A passing target ends cloud execution,
+even if its timing margin is narrow. No full release gate or package release is
+included. The private cycle operator binds the baseline ledger, approval month,
+source identity, live quote and reaper heartbeat, and holds a cycle lock.
+
+Existing 180-second pack, 90-minute controller and two-hour TTL bounds remain.
+A complete passing observation at or below 150 seconds is classified as useful
+observed headroom; a slower pass remains narrow. This is descriptive and not a
+new gate or reliability guarantee. Collect reports and verify worker deletion
+after every attempt. The subsequent local retrieval benchmark and opt-in
+candidate gate are specified in the dedicated cycle design.
