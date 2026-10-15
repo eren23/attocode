@@ -204,7 +204,7 @@ The optional controller uses DigitalOcean's API and SSH. It selects one
 `s-8vcpu-16gb-amd` shared CPU worker in `ams3`, with at least 8 vCPUs and
 16 GiB memory, and verifies the
 live provider quote before provisioning. The admission budget is $1 per batch
-and $17 per UTC month, before tax. A reservation is retained for the whole month;
+and $19 per UTC month, before tax. A reservation is retained for the whole month;
 runtime estimates are not refunds or invoices. Keep one controller and preserve
 its ledger at `.attocode/quality/cloud/ledger.json`.
 
@@ -315,3 +315,10 @@ must not be summed as full-phase cost or extrapolated. Outer phases still includ
 probe overhead. Fresh discovery snapshots require metadata/policy validation before
 reuse; invalid snapshots fall back to discovery. Local checks do not replace the
 pending uninstrumented target and full release gates.
+
+The next approved validation extension permits at most two additional workers,
+retaining all 17 previous reservations under a $19 monthly cap. Run uninstrumented
+`cloud run --pack cockroach --suite workflows` first; run the unchanged full
+`cloud run --suite all` only if that target passes on coherent inputs. Collect
+results and verify deletion after each. No blind retry or third rental is included;
+0.1.6 publication still requires a complete passing full gate.
