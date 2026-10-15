@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Importance available when keyword results become ready
+
+- Publish a complete importance snapshot before exposing the keyword index, so
+  overlapping queries reuse discovery instead of reparsing the workspace.
+  Rebuilds remove deleted paths; interrupted inventory reads preserve the prior
+  complete snapshot. Scoring weights and ranking defaults are unchanged.
+- A bounded expansion/fusion comparison found a development gain that did not
+  transfer to fresh validation. No candidate policy was enabled; see
+  `packages/code-intel/evals/results/2026-10-15-expansion-importance.md`.
+
+### Fixed — File-scoped symbol navigation
+
+- File symbol listings now retain only definitions from the requested file when
+  multiple files share a qualified name. File lookup and structural persistence
+  reuse a per-file index maintained across edits, restarts and LSP replacement.
+- Saved retrieval-page auditing and bounded local candidate tracing distinguish
+  deeper hits, unresolved page misses and incomplete labels. Ranking defaults
+  are unchanged; see `packages/code-intel/evals/results/2026-10-15-retrieval-file-symbol.md`.
+
 ### Added — Broader bounded intelligence validation
 
 - Standalone `attocode-code-intel` 0.1.6 published after a complete 36-pack,

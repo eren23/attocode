@@ -96,6 +96,11 @@ class CrossRefIndex:
     references: dict[str, list[SymbolRef]] = field(default_factory=dict)
     # file path -> set of qualified symbol names defined in that file
     file_symbols: dict[str, set[str]] = field(default_factory=dict)
+    # References to the same locations, grouped by file and qualified name.
+    # File navigation must not scan every workspace definition of common names.
+    _file_definitions: dict[str, dict[str, list[SymbolLocation]]] = field(
+        default_factory=dict, init=False, repr=False, compare=False,
+    )
     # file path -> set of file paths it imports from
     file_dependencies: dict[str, set[str]] = field(default_factory=dict)
     # file path -> set of file paths that import it
@@ -126,6 +131,19 @@ class CrossRefIndex:
     _lock: threading.RLock = field(
         default_factory=threading.RLock, repr=False, compare=False,
     )
+
+    def __post_init__(self) -> None:
+        for locations in self.definitions.values():
+            for loc in locations:
+                self._file_definitions.setdefault(loc.file_path, {}).setdefault(loc.qualified_name, []).append(loc)
+                self.file_symbols.setdefault(loc.file_path, set()).add(loc.qualified_name)
+
+    def get_file_definitions(self, file_path: str) -> list[SymbolLocation]:
+        """Return only this file's definitions, preserving within-name order."""
+        with self._lock:
+            grouped = self._file_definitions.get(file_path, {})
+            return [loc for name in self.file_symbols.get(file_path, ())
+                    for loc in grouped.get(name, ())]
 
     def set_store(self, store: IndexStore) -> None:
         """Attach an IndexStore for write-through persistence."""
@@ -163,17 +181,15 @@ class CrossRefIndex:
     def _file_evidence_locked(self, file_path: str, references=None):
         # Collect symbols for this file
         sym_dicts: list[dict[str, Any]] = []
-        for qname in self.file_symbols.get(file_path, set()):
-            for loc in self.definitions.get(qname, []):
-                if loc.file_path == file_path:
-                    sym_dicts.append({
-                        "name": loc.name,
-                        "qualified_name": loc.qualified_name,
-                        "kind": loc.kind,
-                        "line": loc.start_line,
-                        "end_line": loc.end_line,
-                        "source": loc.source,
-                    })
+        for loc in self.get_file_definitions(file_path):
+            sym_dicts.append({
+                "name": loc.name,
+                "qualified_name": loc.qualified_name,
+                "kind": loc.kind,
+                "line": loc.start_line,
+                "end_line": loc.end_line,
+                "source": loc.source,
+            })
 
         # Collect references originating from this file
         ref_dicts: list[dict[str, Any]] = []
@@ -288,6 +304,11 @@ class CrossRefIndex:
                 if ex.file_path == lsp_loc.file_path and ex.start_line == lsp_loc.start_line:
                     # LSP wins: replace tree-sitter entry
                     existing[i] = lsp_loc
+                    local = self._file_definitions[lsp_loc.file_path][lsp_loc.qualified_name]
+                    for j, prior in enumerate(local):
+                        if prior is ex:
+                            local[j] = lsp_loc
+                            break
                     dup = True
                     break
             if not dup:
@@ -354,6 +375,7 @@ class CrossRefIndex:
         with self._lock:
             self.definitions.setdefault(loc.qualified_name, []).append(loc)
             self.file_symbols.setdefault(loc.file_path, set()).add(loc.qualified_name)
+            self._file_definitions.setdefault(loc.file_path, {}).setdefault(loc.qualified_name, []).append(loc)
             # Populate inverted indexes
             bare = loc.qualified_name.rsplit(".", 1)[-1]
             if bare not in self._name_to_qnames:
@@ -426,6 +448,7 @@ class CrossRefIndex:
                         if not s:
                             del self._tokens_to_qnames[token]
         self.file_symbols.pop(file_path, None)
+        self._file_definitions.pop(file_path, None)
 
         # Remove references originating from this file
         for name, refs in list(self.references.items()):

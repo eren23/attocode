@@ -1,0 +1,192 @@
+{
+  "frozen_at": "2026-10-15T16:26:33.447376+00:00",
+  "scope": "Source-bound non-exhaustive file labels; development previously observed, validation questions unqueried when frozen; repositories used in prior studies.",
+  "repositories": [
+    {
+      "pack": "fastapi",
+      "commit": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+      "queries": [
+        {
+          "id": "fastapi:1",
+          "query": "Serialize and validate the outgoing response",
+          "evidence": [
+            {
+              "file": "fastapi/routing.py",
+              "line": 273,
+              "quote": "async def serialize_response(",
+              "source_sha256": "07c7a5bdf12fa7b0c8cdca6f72d532eebb12d0554060c7827af7b692f4fdb827"
+            }
+          ]
+        },
+        {
+          "id": "fastapi:2",
+          "query": "Resolve dependencies for an incoming request",
+          "evidence": [
+            {
+              "file": "fastapi/dependencies/utils.py",
+              "line": 595,
+              "quote": "async def solve_dependencies(",
+              "source_sha256": "434b0b2ade506c141727f9e91082093cbcc68e6b1417a417d7f9875dc5e56e9f"
+            }
+          ]
+        },
+        {
+          "id": "fastapi:3",
+          "query": "Generate an OpenAPI schema for routes",
+          "evidence": [
+            {
+              "file": "fastapi/openapi/utils.py",
+              "line": 517,
+              "quote": "def get_openapi(",
+              "source_sha256": "575ede6885766494c4403cf64db94307c9c89a675d515ada1194a8b2c3c03a67"
+            }
+          ]
+        },
+        {
+          "id": "fastapi:4",
+          "query": "Extract a bearer token from the authorization header",
+          "evidence": [
+            {
+              "file": "fastapi/security/oauth2.py",
+              "line": 433,
+              "quote": "class OAuth2PasswordBearer(OAuth2):",
+              "source_sha256": "a2c6302589904a961bb055d67c8931bccdb5c1ee2eaa45f019b35426539d68e8"
+            },
+            {
+              "file": "fastapi/security/http.py",
+              "line": 222,
+              "quote": "class HTTPBearer(HTTPBase):",
+              "source_sha256": "1e8f6a16e45f15e2c9a23f745185728de288cc67d8d39261505cbb21f679f69c"
+            }
+          ]
+        },
+        {
+          "id": "fastapi:fresh-1",
+          "query": "Retrieve an API key from a request cookie",
+          "evidence": [
+            {
+              "file": "fastapi/security/api_key.py",
+              "line": 233,
+              "quote": "class APIKeyCookie(APIKeyBase):",
+              "source_sha256": "d817af2a2b5201a14a69a61e2450b89d780a38d8bdfe8cd4fc1857fb4719e9c3"
+            }
+          ]
+        },
+        {
+          "id": "fastapi:fresh-2",
+          "query": "Convert a Python object into JSON compatible data",
+          "evidence": [
+            {
+              "file": "fastapi/encoders.py",
+              "line": 112,
+              "quote": "def jsonable_encoder(",
+              "source_sha256": "5cfb185964b4018bf3ef0ff05cfb225ed53c3af3f7f19bef21cc12c3d5b38c56"
+            }
+          ]
+        },
+        {
+          "id": "fastapi:fresh-3",
+          "query": "Schedule a task to run after sending the response",
+          "evidence": [
+            {
+              "file": "fastapi/background.py",
+              "line": 40,
+              "quote": "def add_task(",
+              "source_sha256": "4c00f301eb613806aaa55bdc918b934f77383bd3751da150cac1423edd0cb205"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "framework",
+      "commit": "0ac6e5592da1a172d9685591c5f82fb1fb8995fb",
+      "queries": [
+        {
+          "id": "framework:1",
+          "query": "Dispatch a request to the matching route",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Routing/Router.php",
+              "line": 753,
+              "quote": "        return $this->dispatchToRoute($request);",
+              "source_sha256": "778dcd6d4e189b433198ea1cda502fb2399bc7d2621ca1f741f99e4c79fdfa14"
+            }
+          ]
+        },
+        {
+          "id": "framework:2",
+          "query": "Resolve a dependency from the service container",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Container/Container.php",
+              "line": 901,
+              "quote": "    protected function resolve($abstract, $parameters = [], $raiseEvents = true)",
+              "source_sha256": "d28f83f1219b4fada990ceaed856fdf3290f0026a3c420341138d7e8842b5011"
+            }
+          ]
+        },
+        {
+          "id": "framework:3",
+          "query": "Start a database transaction",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Database/Concerns/ManagesTransactions.php",
+              "line": 124,
+              "quote": "    public function beginTransaction()",
+              "source_sha256": "bb71e1cbe34f3f88a65e7ad192ade967a0f5b8c360e480197ed054ba8f11419c"
+            }
+          ]
+        },
+        {
+          "id": "framework:4",
+          "query": "Read a configuration option using dot notation",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Config/Repository.php",
+              "line": 51,
+              "quote": "    public function get($key, $default = null)",
+              "source_sha256": "724814f955454e3fd0b6ca31203dd02c8d28d62afcbbbcbed108cc74bae6ea10"
+            }
+          ]
+        },
+        {
+          "id": "framework:fresh-1",
+          "query": "Encrypt a value and authenticate the ciphertext",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Encryption/Encrypter.php",
+              "line": 104,
+              "quote": "public function encrypt(#[\\SensitiveParameter] $value, $serialize = true)",
+              "source_sha256": "2b8aca6c7503bf0e0849409e0f6b9a7ef7186854b85e3e9a3c9a5e10f8f853d9"
+            }
+          ]
+        },
+        {
+          "id": "framework:fresh-2",
+          "query": "Determine whether a key exceeded the allowed attempt count",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Cache/RateLimiter.php",
+              "line": 127,
+              "quote": "public function tooManyAttempts($key, $maxAttempts)",
+              "source_sha256": "9d5010518c9634a698bf6261c1808c6c54d6992075a077fe9bf480417fa48a77"
+            }
+          ]
+        },
+        {
+          "id": "framework:fresh-3",
+          "query": "Run a queue worker continuously until it should stop",
+          "evidence": [
+            {
+              "file": "src/Illuminate/Queue/Worker.php",
+              "line": 154,
+              "quote": "public function daemon($connectionName, $queue, WorkerOptions $options)",
+              "source_sha256": "054d2bb165a7db96875a34c6ea015a108b335ee739cd3f7cd2d78a40edce0d4c"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

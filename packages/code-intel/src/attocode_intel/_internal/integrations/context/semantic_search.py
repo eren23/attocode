@@ -430,11 +430,10 @@ class SemanticSearchManager:
             )
             ctx = context_manager or CodebaseContextManager(self.root_dir)
             ctx._ensure_fresh()
-            for fi in ctx._files:
-                self._importance_scores[fi.relative_path] = fi.importance
-            # Use sentinel to avoid reload if genuinely empty
-            if not self._importance_scores:
-                self._importance_scores["__empty__"] = 0.0
+            # Publish one complete generation, dropping deleted paths. A failed
+            # inventory read must not leave a mixture of old and new weights.
+            scores = {fi.relative_path: fi.importance for fi in ctx._files}
+            self._importance_scores = scores or {"__empty__": 0.0}
         except Exception:
             logger.debug("Failed to load importance scores", exc_info=True)
 
@@ -1535,7 +1534,12 @@ class SemanticSearchManager:
             try:
                 operation()
             finally:
-                self._warmup_seconds = {**self._warmup_seconds, stage: time.monotonic() - started}
+                elapsed = time.monotonic() - started
+                if stage == "keyword":
+                    # Importance is now published inside the keyword builder;
+                    # keep the reported phase times exclusive as before.
+                    elapsed -= self._warmup_seconds.get("importance", 0.0)
+                self._warmup_seconds = {**self._warmup_seconds, stage: max(0.0, elapsed)}
 
         try:
             from attocode_intel._internal.integrations.context.codebase_context import (
@@ -1564,9 +1568,8 @@ class SemanticSearchManager:
                 if self._closed or generation != self._body_generation:
                     self._kw_index_built = False
                     return
-            # Importance is used in first-query scoring; trigram mmap files
-            # remain lazy to avoid holding descriptors in idle workspaces.
-            timed("importance", lambda: self._load_importance_scores(ctx))
+            else:
+                timed("importance", lambda: self._load_importance_scores(ctx))
             if self._closed:
                 return
             if self._body_index_available and not self._body_index_built:
@@ -2531,6 +2534,14 @@ class SemanticSearchManager:
         self._kw_docs = docs
         self._kw_df = df
         self._kw_avg_dl = avg_dl
+        # Keyword queries can run while persistence/body indexing continues.
+        # Their weights must already exist, or _get_importance creates another
+        # context and rediscovers/reparses the workspace on the request thread.
+        # Warmup subtracts this subphase from the reported keyword duration.
+        importance_started = time.monotonic()
+        self._load_importance_scores(ctx)
+        self._warmup_seconds = {**self._warmup_seconds,
+                                "importance": time.monotonic() - importance_started}
         self._kw_index_built = True
 
         # Persist to cache
