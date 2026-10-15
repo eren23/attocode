@@ -1,5 +1,9 @@
 # Body-indexing diagnostic and bounded reuse
 
+This records the second rental's diagnostic. The subsequent
+[completed four-rental cycle](2026-10-15-cold-repair-cycle.md) exhausted the
+allowance and still failed the unprofiled cold-index gate.
+
 Batch `fa9080220f974141` on `776a9adffb6c50707db1aa357927545e9c2673a4`
 waited for clean cloud-init completion and produced one report. CockroachDB
 still failed search warmup: keyword indexing reported 46.72 seconds with
