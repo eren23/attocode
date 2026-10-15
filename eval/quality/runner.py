@@ -336,13 +336,14 @@ def run(tier, root, *, max_bytes=5 * GIB, seconds=None, packs=(), shard=None, re
         output = directory / "report.json"
         write_json(output, report)
         deadline = time.monotonic() + report["budget_seconds"]
+        wall_deadline = report["started_at"] + report["budget_seconds"]
         sequence = commands(tier, directory, packs=packs, shard=shard, resume=resume, suite=suite)
         try:
             for name, command in sequence:
-                if time.monotonic() >= deadline:
+                if time.monotonic() >= deadline or time.time() >= wall_deadline:
                     break
                 row = supervise(command, cwd=REPO, env=env, root=root, log=directory / (name + ".log"),
-                                deadline=deadline, max_bytes=max_bytes)
+                                deadline=deadline, wall_deadline=wall_deadline, max_bytes=max_bytes)
                 row["name"] = name
                 report["checks"].append(row)
                 write_json(output, report)

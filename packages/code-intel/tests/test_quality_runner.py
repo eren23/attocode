@@ -65,6 +65,25 @@ def test_expired_wall_deadline_refuses_launch(tmp_path):
     assert row['reason'] == 'admission_budget'
 
 
+def test_tier_does_not_reset_wall_budget_between_phases(tmp_path, monkeypatch):
+    from eval.quality import runner
+
+    wall = [1000.0]
+    monkeypatch.setattr(runner, 'time', SimpleNamespace(
+        time=lambda: wall[0], monotonic=lambda: 10.0, strftime=time.strftime))
+    monkeypatch.setattr(runner, 'commands', lambda *a, **kw: [('first', ['one']), ('second', ['two'])])
+    calls = []
+    def finished(command, **kwargs):
+        calls.append(command)
+        assert kwargs['wall_deadline'] == 1002
+        wall[0] += 3
+        return {'status': 'passed', 'seconds': 0, 'cleanup_verified': True}
+    monkeypatch.setattr(runner, 'supervise', finished)
+    _, report = runner.run('quick', tmp_path / 'managed', seconds=2)
+    assert calls == [['one']]
+    assert report['status'] == 'incomplete' and report['remaining_checks'] == ['second']
+
+
 def test_completed_failure_is_not_pass_or_timeout(tmp_path):
     root = managed_root(tmp_path / "managed")
     row = supervise([sys.executable, "-c", "raise SystemExit(7)"], cwd=tmp_path,
