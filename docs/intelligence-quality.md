@@ -194,6 +194,11 @@ the original execution bound. Linux CI checks this with a real service restart.
 Search warmup reports `warmup_reused_asts` for content-hash-verified structural
 AST reuse; it adds no second AST cache and does not initialize structural indexing
 just to attempt reuse. Stage durations describe observed work, not an ETA.
+Body indexing shares line tokens between overlapping windows and whole-file
+search, preserving separately tokenized truncated lines. It retains this data
+for one bounded file only, reuses matching published ASTs if the span cache misses,
+and inserts at most 64 windows per SQL statement in the existing atomic refresh.
+Equivalence checks cover window/file terms, row order, BM25 and failed-refresh rollback.
 
 The optional controller uses DigitalOcean's API and SSH. It selects one
 `s-8vcpu-16gb-amd` shared CPU worker in `fra1`, with at least 8 vCPUs and

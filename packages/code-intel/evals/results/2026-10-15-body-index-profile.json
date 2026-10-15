@@ -1,0 +1,83 @@
+{
+  "batch": "fa9080220f974141",
+  "source_commit": "776a9adffb6c50707db1aa357927545e9c2673a4",
+  "status": "failed",
+  "cleanup_verified": true,
+  "active_quality_workers": 0,
+  "estimated_usd": 0.0146,
+  "controller_seconds": 315.45460295677185,
+  "cycle_used": 2,
+  "cycle_remaining": 2,
+  "profile": {
+    "version": "py-spy 0.4.2",
+    "status": 0,
+    "requested_seconds": 180,
+    "rate_hz": 25,
+    "pid": "3785",
+    "note": "Diagnostic nonblocking sampling; final full validation must be unprofiled.",
+    "duration_seconds": 134.330321079,
+    "profile_bytes": 205426
+  },
+  "profile_sha256": "7711851be6ab19c5210ecad291aa6e0fdaf5d44e9937b04cbece8a2551e572fa",
+  "samples": 4181,
+  "sample_errors": 86,
+  "warmup": {
+    "stage": "body",
+    "body_ready": false,
+    "elapsed_seconds": 123.797,
+    "keyword_seconds": 46.72,
+    "reused_asts": 4980
+  },
+  "body_sampled_thread_weight_seconds": 54.91999999999901,
+  "body_self_frames": [
+    {
+      "name": "_tokenize",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "line": 102,
+      "weight": 17.68
+    },
+    {
+      "name": "_sync_body_index",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "line": 1381,
+      "weight": 12.84
+    },
+    {
+      "name": "bounded_parse",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/ts_parser.py",
+      "line": 47,
+      "weight": 4.88
+    },
+    {
+      "name": "_tokenize",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "line": 103,
+      "weight": 3.92
+    },
+    {
+      "name": "_sync_body_index",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "line": 1395,
+      "weight": 2.12
+    },
+    {
+      "name": "<genexpr>",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "line": 102,
+      "weight": 1.24
+    },
+    {
+      "name": "_body_chunks",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "line": 1242,
+      "weight": 1.24
+    },
+    {
+      "name": "emit",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "line": 1278,
+      "weight": 1.08
+    }
+  ],
+  "scope": "Profiled diagnostic. Sample weights across threads are not CPU attribution or end-to-end wall durations. No ranking or release pass."
+}
