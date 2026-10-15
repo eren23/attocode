@@ -4,24 +4,29 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current status, 2026-10-15:** the first [restart validation target and follow-up
-audit](../packages/code-intel/evals/results/2026-10-15-restart-discovery-repair.md)
-still failed the unchanged 180-second Cockroach deadline during restart. Search
-was ready; three checks passed and four relationship checks were limited. All
-four retrieval questions were observed (0 hits at five, 1 at 24). The latest full
-attempt remains 35/36 packs; **0.1.6 is still unpublished**.
+**Current status, 2026-10-15:** [0.1.6 is released and verified](../packages/code-intel/evals/results/2026-10-15-release-016.md).
+The full gate passed all 36 pinned packs, 144 retrieval observations, ranking,
+591 contract tests (22 skips), lint, scale and lifecycle. The controller finished
+in 21.368 minutes under its unchanged 90-minute limit. All 11 release jobs and
+11 actual-PyPI clean-install/upgrade checks passed; the wheel's 268 Python files
+match the validated source commit `c3624b2`.
 
-The audit found that discovery reparsed files before restoring cached ASTs. The
-earlier zero-parse counter missed that path; its full-restart claim is corrected.
-The repair supplies source-validated summaries before discovery and passes the
-strengthened two-path and separate-process controls. Local validation passed
-605 tests, 8 skips, plus lint/scale/lifecycle; this is not a cloud gate pass.
+Cockroach keyword/body indexing took 28.037/68.810 seconds, with a ready index
+and 19.691-second restart. Measured checks and queries totaled 177.579 seconds;
+the margin under the unchanged 180-second pack deadline is narrow. Discovery
+now receives validated cached ASTs before building imports. The earlier full-path
+no-reparse claim was corrected because its counter omitted discovery parsing.
 
-All 19 workers are deleted; cumulative estimated compute is $0.8371 before tax,
-not an invoice. The revised approved cycle has one target retry remaining after
-this repair and at most one full gate only after a coherent target pass. All prior
-reservations remain retained under the $21 cap. No further model experiment,
-Claude usage check, protected-cache cleanup or global-tool upgrade is included.
+The full gate distinguishes 127 passed assertions, 124 label limitations and
+37 unsupported checks. Retrieval yielded 99/144 labeled hits at five, 128/144
+at 24; labels are non-exhaustive development targets, not agent-benefit evidence.
+No ranking or model default changed.
+
+All 21 workers are deleted; baseline ledger rows and reservations are retained.
+The three-worker cycle added $0.0898 estimated compute, cumulative $0.9119 before
+tax (not an invoice). All three approved reservations are used under the $21 cap;
+no further rental is authorized. Only 1,601,899 report/log bytes returned to the
+Mac. Protected studies/caches, global tools and the running host MCP are unchanged.
 
 The entries below are historical evidence.
 
@@ -30,11 +35,11 @@ The entries below are historical evidence.
 | Milestone | Status | Required evidence |
 | --- | --- | --- |
 | Coverage foundation | Validated locally and in CI | Frozen source-backed manifest; honest outcomes; bounded selection, shards and resume; complete baseline |
-| Python, JS/TS, Go, Rust | Implemented; final gates pending | Module/alias/re-export and negative controls; real language-server checks |
-| C/C++, Java, C# | Implemented; final gates pending | Include/package/namespace resolution, ambiguity and selected-definition identity |
-| Ruby, PHP, Kotlin, Swift, Scala, Elixir, Lua, Bash, Zig | Implemented; final gates pending | Explicit module bindings, qualified references and dynamic-case limitations |
-| Protocol and operation coverage | Implemented; final gates pending | Catalog-to-test inventory, real MCP/HTTP, profiles, isolation and failure cases |
-| Release and final matrix | Implemented; final gates pending | Coherent candidate hashes, required CI, clean install/upgrade, verified cleanup |
+| Python, JS/TS, Go, Rust | Implemented; bounded gate passed | Module/alias/re-export and negative controls; real language-server checks |
+| C/C++, Java, C# | Implemented; bounded gate passed | Include/package/namespace resolution, ambiguity and selected-definition identity |
+| Ruby, PHP, Kotlin, Swift, Scala, Elixir, Lua, Bash, Zig | Implemented; bounded gate passed | Explicit module bindings, qualified references and dynamic-case limitations |
+| Protocol and operation coverage | Implemented; bounded gate passed | Catalog-to-test inventory, real MCP/HTTP, profiles, isolation and failure cases |
+| Release and final matrix | 0.1.6 released and verified | Coherent full 36-pack gate, required release CI, actual PyPI clean install/upgrade, verified cleanup |
 
 The existing six source packs and frozen ranking baseline remain evidence inputs.
 New labels must be frozen before evaluating product changes. Missing labels,

@@ -359,3 +359,10 @@ The [restart-discovery audit](../packages/code-intel/evals/results/2026-10-15-re
 corrects the earlier no-reparse claim: its counter omitted discovery before
 restoration. The repair supplies validated summaries to that graph-building
 pass too. Generated component parity is not a passing cloud release gate.
+
+The [completed 0.1.6 cycle](../packages/code-intel/evals/results/2026-10-15-release-016.md)
+passed the repaired target and full 36-pack/ranking gate, then published and
+verified the actual PyPI package. All 21 workers are deleted. The three-worker
+allowance is used; cumulative estimated compute is $0.9119 before tax, not an
+invoice. All $21 reservations remain retained; no additional rental is included.
+The Cockroach pack passed with a narrow timing margin, not a performance guarantee.

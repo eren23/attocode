@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — Broader bounded intelligence validation
 
+- Standalone `attocode-code-intel` 0.1.6 published after a complete 36-pack,
+  144-question, ranking and install/upgrade gate. Controller elapsed was
+  21.368 minutes under the 90-minute cap; all 21 cloud workers are deleted.
+  See `packages/code-intel/evals/results/2026-10-15-release-016.md` for
+  measured limits, unsupported checks, source hashes and cost estimates.
+
 - A frozen 36-repository source matrix with 144 unscoped retrieval questions,
   deterministic shards, compatible resume/aggregation and separate passed,
   failed, limited, unsupported and incomplete outcomes. Labels are development
@@ -46,7 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unsupported or oversized entries retain normal parsing; complete-index and
   offline-edit repair checks still apply. The cache payload is capped at 32 MiB
   per workspace and 1 MiB per file. Generated fixtures show lower restart cost
-  with an added cold-write cost; the CockroachDB deadline remains unverified.
+  with an added cold-write cost. The final CockroachDB target and full gate
+  passed, with a narrow margin under the unchanged 180-second deadline.
 
 - Lexical warmup can reuse a validated immutable structural discovery inventory,
   preserving its own cap and original freshness age, with normal discovery on any
