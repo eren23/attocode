@@ -1432,8 +1432,8 @@ class SemanticSearchManager:
     def _warm_candidate_indexes(self) -> None:
         """Build AST and optional body indexes, honoring mid-build invalidation."""
         generation = self._body_generation
-        self._warmup_started = time.monotonic()
         self._warmup_finished = 0.0
+        self._warmup_started = time.monotonic()
         self._warmup_seconds = {}
 
         def timed(stage, operation):
