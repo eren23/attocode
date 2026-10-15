@@ -204,7 +204,7 @@ The optional controller uses DigitalOcean's API and SSH. It selects one
 `s-8vcpu-16gb-amd` shared CPU worker in `ams3`, with at least 8 vCPUs and
 16 GiB memory, and verifies the
 live provider quote before provisioning. The admission budget is $1 per batch
-and $19 per UTC month, before tax. A reservation is retained for the whole month;
+and $21 per UTC month, before tax. A reservation is retained for the whole month;
 runtime estimates are not refunds or invoices. Keep one controller and preserve
 its ledger at `.attocode/quality/cloud/ledger.json`.
 
@@ -346,3 +346,11 @@ The [local restart comparison](../packages/code-intel/evals/results/2026-10-15-a
 includes the added cold-write cost, process restart and exact-evidence controls.
 It does not establish a passing CockroachDB target or full release gate. The
 previous target failure still blocks the conditional second cloud rental.
+
+The revised approved cycle retains all 18 existing reservations and permits at
+most three additional $1 reservations under a $21 monthly cap: one unprofiled
+Cockroach target, one evidence-driven fix and target retry if needed, then one
+unchanged full gate only after a passing target on coherent inputs. Only one
+worker may exist at a time; collect and verify deletion after each. Stop after
+a second failed target or the full attempt. Publication of 0.1.6 still requires
+a complete passing full gate and publication checks.
