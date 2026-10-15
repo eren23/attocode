@@ -19,12 +19,20 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, field, replace
+from itertools import islice
 from typing import Any
 
 from attocode_intel.query_ranking import demote_tests, hit_evidence, rerank_broad_candidates
 from attocode_intel.search_evidence import search_snippet
 
 logger = logging.getLogger(__name__)
+
+
+def _sql_batches(rows):
+    """Bound SQL parameters and temporary row materialization, retaining order."""
+    rows = iter(rows)
+    while batch := list(islice(rows, 64)):
+        yield batch
 
 # ---------------------------------------------------------------------------
 # BM25 keyword search support types
@@ -1390,12 +1398,12 @@ class SemanticSearchManager:
                     path for path, (_abs, mtime, size) in current.items()
                     if cached.get(path) != (mtime, size)
                 }
-                for path in sorted(deleted | stale):
+                for paths in _sql_batches(sorted(deleted | stale)):
                     if self._closed:
                         return
-                    conn.execute("DELETE FROM body_fts WHERE file_path = ?", (path,))
-                    conn.execute("DELETE FROM body_file_fts WHERE file_path = ?", (path,))
-                    conn.execute("DELETE FROM body_files WHERE file_path = ?", (path,))
+                    placeholders = ",".join(["?"] * len(paths))
+                    for table in ("body_fts", "body_file_fts", "body_files"):
+                        conn.execute(f"DELETE FROM {table} WHERE file_path IN ({placeholders})", paths)
                 for path in sorted(stale):
                     if self._closed:
                         return
@@ -2125,26 +2133,29 @@ class SemanticSearchManager:
             with self._kw_cache_lock:
                 conn.execute("DELETE FROM kw_files")
                 conn.execute("DELETE FROM kw_docs")
-                for fpath, mtime in file_mtimes.items():
+                for batch in _sql_batches(file_mtimes.items()):
                     if self._closed:
                         return
                     conn.execute(
-                        "INSERT INTO kw_files (file_path, mtime) VALUES (?, ?)",
-                        (fpath, mtime),
+                        "INSERT INTO kw_files (file_path, mtime) VALUES "
+                        + ",".join(["(?, ?)"] * len(batch)),
+                        tuple(value for row in batch for value in row),
                     )
-                for doc in docs:
+                rows = (
+                    (doc.id, doc.file_path, doc.chunk_type, doc.name,
+                     doc.text, int(doc.is_config), int(doc.is_test),
+                     json.dumps(doc.term_freqs), doc.doc_len)
+                    for doc in docs
+                )
+                for batch in _sql_batches(rows):
                     if self._closed:
                         return
                     conn.execute(
                         "INSERT OR REPLACE INTO kw_docs "
                         "(id, file_path, chunk_type, name, text, is_config, "
-                        "is_test, term_freqs, doc_len) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (
-                            doc.id, doc.file_path, doc.chunk_type, doc.name,
-                            doc.text, int(doc.is_config), int(doc.is_test),
-                            json.dumps(doc.term_freqs), doc.doc_len,
-                        ),
+                        "is_test, term_freqs, doc_len) VALUES "
+                        + ",".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(batch)),
+                        tuple(value for row in batch for value in row),
                     )
                 if self._closed:
                     return

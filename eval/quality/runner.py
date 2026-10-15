@@ -25,7 +25,7 @@ QUICK_TESTS = ["test_search_evidence.py", "test_focused_inspection.py", "test_la
 LOCAL_TESTS = QUICK_TESTS + ["test_product.py", "test_query_ranking.py", "test_ranking_intent.py",
                            "test_compact_inspection.py", "test_lean_profile.py", "test_daily_workflows.py",
                            "test_index_reuse.py", "test_edit_restart.py", "test_navigation_evidence.py",
-                           "test_cold_index_cost.py", "test_structural_write_cost.py",
+                           "test_cold_index_cost.py", "test_structural_write_cost.py", "test_lexical_sql_cost.py",
                            "test_index_sequences.py", "test_mixed_workspace.py", "test_index_processes.py",
                            "test_structural_evidence.py", "test_search_evidence_audit.py", "test_remote.py",
                            "test_module_ownership.py", "test_real_language_server.py", "test_precision_protocol.py",
@@ -45,7 +45,7 @@ LINT_PATHS = ["eval/quality", *["packages/code-intel/src/attocode_intel/" + p fo
     *["packages/code-intel/tests/" + p for p in (
         "test_index_sequences.py", "test_mixed_workspace.py", "test_index_processes.py",
         "test_module_ownership.py", "test_real_language_server.py", "test_source_exclusions.py",
-        "test_operation_contracts.py", "test_structural_write_cost.py")]]
+        "test_operation_contracts.py", "test_structural_write_cost.py", "test_lexical_sql_cost.py")]]
 
 
 def write_json(path, value):

@@ -1,0 +1,220 @@
+{
+  "baseline_commit": "4f33254130fb2817c44cfa7a57e3e213822b9560",
+  "baseline_source_sha256": "d866454cedf0b9d1db814b6b8d1a6cd5d41f68b09e8cee497a55c1c1a177ee12",
+  "candidate_source_sha256": "407bb0f4cab1dae3a269029d501b91c628756d19338c8930045fa503e3c84347",
+  "probe_sha256": "c05dabdd387aa7d231faaf0cfd4e5c4ee5346857b05c129c272ee3da90289ad7",
+  "python": "3.12.12",
+  "platform": "macOS-26.2-arm64-arm-64bit",
+  "fixture": {
+    "keyword_docs": 2048,
+    "keyword_files": 256,
+    "body_files": 133,
+    "body_files_deleted": 132
+  },
+  "scope": "Single observations, synthetic CPU contention; not cloud latency or release evidence",
+  "results": [
+    {
+      "task": "keyword",
+      "arm": "legacy",
+      "cpu_thread": false,
+      "seconds": 0.006004041992127895,
+      "competitor_active_at_end": null,
+      "row_counts": [
+        256,
+        2048
+      ],
+      "row_sha256": "c6bb56246f383580c1e215badbcdb0b53f2e8ddf8feb3613850a3af69be3fb87"
+    },
+    {
+      "task": "keyword",
+      "arm": "batched",
+      "cpu_thread": false,
+      "seconds": 0.005409582983702421,
+      "competitor_active_at_end": null,
+      "row_counts": [
+        256,
+        2048
+      ],
+      "row_sha256": "c6bb56246f383580c1e215badbcdb0b53f2e8ddf8feb3613850a3af69be3fb87"
+    },
+    {
+      "task": "keyword",
+      "arm": "legacy",
+      "cpu_thread": true,
+      "seconds": 4.2535385000519454,
+      "competitor_active_at_end": true,
+      "row_counts": [
+        256,
+        2048
+      ],
+      "row_sha256": "c6bb56246f383580c1e215badbcdb0b53f2e8ddf8feb3613850a3af69be3fb87"
+    },
+    {
+      "task": "keyword",
+      "arm": "batched",
+      "cpu_thread": true,
+      "seconds": 0.6098729169461876,
+      "competitor_active_at_end": true,
+      "row_counts": [
+        256,
+        2048
+      ],
+      "row_sha256": "c6bb56246f383580c1e215badbcdb0b53f2e8ddf8feb3613850a3af69be3fb87"
+    },
+    {
+      "task": "body_delete",
+      "arm": "legacy",
+      "cpu_thread": false,
+      "seconds": 0.011230624979361892,
+      "competitor_active_at_end": null,
+      "row_counts": [
+        1,
+        1,
+        1
+      ],
+      "row_sha256": "8774b36e4587d64f84c4a7c016571e0847287fc76fe26220c6f728eb45c6bf08"
+    },
+    {
+      "task": "body_delete",
+      "arm": "batched",
+      "cpu_thread": false,
+      "seconds": 0.010619542095810175,
+      "competitor_active_at_end": null,
+      "row_counts": [
+        1,
+        1,
+        1
+      ],
+      "row_sha256": "8774b36e4587d64f84c4a7c016571e0847287fc76fe26220c6f728eb45c6bf08"
+    },
+    {
+      "task": "body_delete",
+      "arm": "legacy",
+      "cpu_thread": true,
+      "seconds": 2.4554690420627594,
+      "competitor_active_at_end": true,
+      "row_counts": [
+        1,
+        1,
+        1
+      ],
+      "row_sha256": "8774b36e4587d64f84c4a7c016571e0847287fc76fe26220c6f728eb45c6bf08"
+    },
+    {
+      "task": "body_delete",
+      "arm": "batched",
+      "cpu_thread": true,
+      "seconds": 0.5626229579793289,
+      "competitor_active_at_end": true,
+      "row_counts": [
+        1,
+        1,
+        1
+      ],
+      "row_sha256": "8774b36e4587d64f84c4a7c016571e0847287fc76fe26220c6f728eb45c6bf08"
+    }
+  ],
+  "cleanup_verified": true,
+  "exploratory": [
+    {
+      "task": "keyword",
+      "arm": "legacy",
+      "cpu_thread": false,
+      "seconds": 0.005442208028398454,
+      "competitor_active_at_end": null,
+      "row_counts": [
+        256,
+        2048
+      ],
+      "row_sha256": "c6bb56246f383580c1e215badbcdb0b53f2e8ddf8feb3613850a3af69be3fb87"
+    },
+    {
+      "task": "keyword",
+      "arm": "batched",
+      "cpu_thread": false,
+      "seconds": 0.00686366599984467,
+      "competitor_active_at_end": null,
+      "row_counts": [
+        256,
+        2048
+      ],
+      "row_sha256": "c6bb56246f383580c1e215badbcdb0b53f2e8ddf8feb3613850a3af69be3fb87"
+    },
+    {
+      "task": "keyword",
+      "arm": "legacy",
+      "cpu_thread": true,
+      "seconds": 4.860837542102672,
+      "competitor_active_at_end": true,
+      "row_counts": [
+        256,
+        2048
+      ],
+      "row_sha256": "c6bb56246f383580c1e215badbcdb0b53f2e8ddf8feb3613850a3af69be3fb87"
+    },
+    {
+      "task": "keyword",
+      "arm": "batched",
+      "cpu_thread": true,
+      "seconds": 0.47226741700433195,
+      "competitor_active_at_end": true,
+      "row_counts": [
+        256,
+        2048
+      ],
+      "row_sha256": "c6bb56246f383580c1e215badbcdb0b53f2e8ddf8feb3613850a3af69be3fb87"
+    },
+    {
+      "task": "body_delete",
+      "arm": "legacy",
+      "cpu_thread": false,
+      "seconds": 0.011107750004157424,
+      "competitor_active_at_end": null,
+      "row_counts": [
+        1,
+        1,
+        1
+      ],
+      "row_sha256": "8774b36e4587d64f84c4a7c016571e0847287fc76fe26220c6f728eb45c6bf08"
+    },
+    {
+      "task": "body_delete",
+      "arm": "batched",
+      "cpu_thread": false,
+      "seconds": 0.007823582971468568,
+      "competitor_active_at_end": null,
+      "row_counts": [
+        1,
+        1,
+        1
+      ],
+      "row_sha256": "8774b36e4587d64f84c4a7c016571e0847287fc76fe26220c6f728eb45c6bf08"
+    },
+    {
+      "task": "body_delete",
+      "arm": "legacy",
+      "cpu_thread": true,
+      "seconds": 2.28538987506181,
+      "competitor_active_at_end": true,
+      "row_counts": [
+        1,
+        1,
+        1
+      ],
+      "row_sha256": "8774b36e4587d64f84c4a7c016571e0847287fc76fe26220c6f728eb45c6bf08"
+    },
+    {
+      "task": "body_delete",
+      "arm": "batched",
+      "cpu_thread": true,
+      "seconds": 0.4443993750028312,
+      "competitor_active_at_end": true,
+      "row_counts": [
+        1,
+        1,
+        1
+      ],
+      "row_sha256": "8774b36e4587d64f84c4a7c016571e0847287fc76fe26220c6f728eb45c6bf08"
+    }
+  ]
+}
