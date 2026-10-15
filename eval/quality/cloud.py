@@ -35,7 +35,7 @@ from eval.quality.runner import (
 
 TAG = "attocode-quality-v1"
 SIZE = "s-8vcpu-16gb-amd"
-REGION = "fra1"
+REGION = "ams3"
 BATCH_USD = 1.0
 MONTH_USD = 16.0
 TTL_SECONDS = 7200
