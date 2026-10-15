@@ -1,6 +1,7 @@
 """Cold optimizations preserve extraction and never reuse stale source."""
 import hashlib
 import os
+import sqlite3
 import sys
 from dataclasses import asdict
 from types import SimpleNamespace
@@ -8,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from attocode_intel._internal.integrations.context import codebase_ast, ts_parser
+from attocode_intel._internal.integrations.context import semantic_search as search
 from attocode_intel._internal.integrations.context.ast_service import ASTService
 from attocode_intel._internal.integrations.context.semantic_search import (
     SemanticSearchManager,
@@ -95,6 +97,11 @@ def test_lexical_reuses_only_matching_structural_ast_and_keeps_documents(tmp_pat
         with patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('redundant parse')):
             reused._build_keyword_index(ctx, spans)
             assert reused._body_chunks('sample.py', str(source), spans) == expected_chunks
+            chunks, terms = reused._body_document(
+                'sample.py', str(source), _BodySpanCache(0),
+                ast_lookup=structural.cached_file_ast, include_file_terms=True,
+            )
+            assert chunks == expected_chunks and terms == ' '.join(search._tokenize(content))
         assert [asdict(doc) for doc in reused._kw_docs] == expected
         assert reused._warmup_reused_asts == 1
         stat = source.stat()
@@ -118,5 +125,101 @@ def test_search_lookup_does_not_initialize_structural_service(tmp_path):
     try:
         assert manager.ast_lookup('missing.py', 'digest') is None
         assert service._ast_service is None
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize('content', [
+    'class Outer:\n    def method(self):\n' + '        HTTPServer = camelCase_42\n' * 90,
+    'prefix ' + 'LongIdentifier' * 300 + '\n' + 'Kİ unicode_HTTP2Response\r\n' * 40,
+    'alpha\vBeta\fHTTPServer\x1cfooBar\x85otherValue\u2028lastToken\u2029endValue',
+])
+def test_shared_line_tokens_equal_original_window_and_whole_file_tokens(tmp_path, content):
+    source = tmp_path / 'sample.py'
+    source.write_text(content)
+    chunks, file_terms = SemanticSearchManager._body_document(
+        'sample.py', str(source), include_file_terms=True,
+    )
+    assert chunks
+    assert file_terms == ' '.join(search._tokenize(source.read_text()))
+    for _kind, _name, start, end, body, terms in chunks:
+        assert 1 <= start <= end <= len(source.read_text().splitlines())
+        assert terms == ' '.join(search._tokenize(body))
+
+
+def test_overlapping_windows_and_file_search_tokenize_each_complete_line_once(tmp_path, monkeypatch):
+    content = 'def useful_method():\n' + '    value = meaningfulHTTPResponse\n' * 100
+    source = tmp_path / 'sample.py'
+    source.write_text(content)
+    original = search._tokenize
+    scanned = []
+    def counted(text):
+        scanned.append(len(text))
+        return original(text)
+    monkeypatch.setattr(search, '_tokenize', counted)
+    chunks, _ = SemanticSearchManager._body_document('sample.py', str(source), include_file_terms=True)
+    assert len(chunks) >= 4
+    assert len(scanned) == len(content.splitlines())
+    assert sum(scanned) <= len(content)
+
+
+def test_body_batches_preserve_rows_bm25_and_rollback_after_mid_refresh_failure(tmp_path, monkeypatch):
+    source = tmp_path / 'sample.py'
+    source.write_text(''.join(f'def func_{i}():\n    return "NeedleToken {i}"\n' for i in range(200)))
+    manager = SemanticSearchManager(str(tmp_path))
+    original_open = SemanticSearchManager._open_body_db
+    inserts = []
+    fail = [False]
+    class Connection:
+        def __init__(self, conn):
+            self.conn = conn
+        def __getattr__(self, name):
+            return getattr(self.conn, name)
+        def execute(self, sql, parameters=()):
+            if sql.startswith('INSERT INTO body_fts '):
+                inserts.append(len(parameters) // 7)
+                assert len(parameters) <= 64 * 7
+                if fail[0] and len(inserts) == 2:
+                    raise sqlite3.OperationalError('injected second batch failure')
+            return self.conn.execute(sql, parameters)
+    monkeypatch.setattr(SemanticSearchManager, '_open_body_db', lambda self: Connection(original_open(self)))
+    ctx = SimpleNamespace(_ensure_fresh=lambda: None, _files=[SimpleNamespace(
+        path=str(source), relative_path='sample.py')])
+    try:
+        manager._sync_body_index(ctx)
+        assert manager._body_index_built
+        assert len(inserts) == 4 and sum(inserts) == 200
+        with original_open(manager) as conn:
+            before = conn.execute('SELECT rowid,* FROM body_fts ORDER BY rowid').fetchall()
+            metadata = conn.execute('SELECT * FROM body_files').fetchall()
+            schema = conn.execute("SELECT sql FROM sqlite_master WHERE name='body_fts'").fetchone()[0]
+            query = "SELECT rowid,bm25(body_fts) FROM body_fts WHERE body_fts MATCH 'needle' ORDER BY rowid"
+            scores = conn.execute(query).fetchall()
+        conn.close()
+        with sqlite3.connect(':memory:') as reference:
+            reference.execute(schema)
+            chunks, _ = manager._body_document('sample.py', str(source))
+            for chunk in chunks:
+                reference.execute('INSERT INTO body_fts VALUES (?,?,?,?,?,?,?)', ('sample.py', *chunk))
+            assert reference.execute('SELECT rowid,* FROM body_fts ORDER BY rowid').fetchall() == before
+            assert reference.execute(query).fetchall() == scores
+        reference.close()
+        source.write_text(source.read_text().replace('NeedleToken', 'DifferentToken'))
+        manager._body_index_built = False
+        inserts.clear()
+        fail[0] = True
+        manager._sync_body_index(ctx)
+        assert not manager._body_index_built and len(inserts) == 2
+        with original_open(manager) as conn:
+            assert conn.execute('SELECT rowid,* FROM body_fts ORDER BY rowid').fetchall() == before
+            assert conn.execute('SELECT * FROM body_files').fetchall() == metadata
+        conn.close()
+        inserts.clear()
+        fail[0] = False
+        manager._sync_body_index(ctx)
+        assert manager._body_index_built and len(inserts) == 4
+        with original_open(manager) as conn:
+            assert conn.execute(query).fetchall() == []
+        conn.close()
     finally:
         manager.close()

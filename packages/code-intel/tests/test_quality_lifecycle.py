@@ -67,16 +67,16 @@ def test_close_cancels_body_refresh_and_rolls_back_partial_changes(tmp_path, mon
     manager._body_index_built = False
     source.write_text("def changed(): return 12345\n")
     entered = threading.Event()
-    original = SemanticSearchManager._body_chunks
+    original = SemanticSearchManager._body_document
 
-    def blocked_chunks(self, *args):
+    def blocked_chunks(self, *args, **kwargs):
         entered.set()
         deadline = time.monotonic() + 2
         while not self._closed and time.monotonic() < deadline:
             time.sleep(.001)
-        yield from original(*args)
+        return original(*args, **kwargs)
 
-    monkeypatch.setattr(SemanticSearchManager, "_body_chunks", blocked_chunks)
+    monkeypatch.setattr(SemanticSearchManager, "_body_document", blocked_chunks)
     worker = threading.Thread(target=manager._sync_body_index)
     manager._body_thread = worker
     worker.start()

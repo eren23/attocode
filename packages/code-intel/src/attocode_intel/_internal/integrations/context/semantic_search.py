@@ -1236,6 +1236,12 @@ class SemanticSearchManager:
     @staticmethod
     def _body_chunks(rel_path: str, abs_path: str, body_spans=None) -> list[tuple[str, str, int, int, str, str]]:
         """Produce bounded, line-accurate source windows with enclosing symbols."""
+        return SemanticSearchManager._body_document(rel_path, abs_path, body_spans)[0]
+
+    @staticmethod
+    def _body_document(rel_path: str, abs_path: str, body_spans=None, *, ast_lookup=None,
+                       include_file_terms=False) -> tuple[list[tuple[str, str, int, int, str, str]], str]:
+        """Share one file read and line tokens across overlapping windows and whole-file FTS."""
         from attocode_intel._internal.integrations.context.codebase_ast import parse_file
 
         try:
@@ -1243,18 +1249,40 @@ class SemanticSearchManager:
                 content = source.read()
                 lines = content.splitlines()
         except OSError:
-            return []
+            return [], ""
         if not lines:
-            return []
+            return [], ""
 
         symbol_spans, class_spans = [], []
         try:
             cached = body_spans.take(rel_path, content) if body_spans is not None else None
-            symbol_spans, class_spans = cached if cached is not None else _source_spans(parse_file(abs_path, content))
+            if cached is not None:
+                symbol_spans, class_spans = cached
+            else:
+                ast = None
+                if ast_lookup is not None:
+                    try:
+                        ast = ast_lookup(rel_path, hashlib.sha256(content.encode()).hexdigest())
+                    except Exception:
+                        logger.debug("Existing AST lookup failed for %s", rel_path, exc_info=True)
+                symbol_spans, class_spans = _source_spans(ast or parse_file(abs_path, content))
         except Exception:
             logger.debug("Source window AST parse failed for %s", rel_path, exc_info=True)
 
         chunks: list[tuple[str, str, int, int, str, str]] = []
+        # Bound retention to this one source file (body discovery caps it at
+        # 512 KiB). Truncated lines must be tokenized separately: cutting an
+        # identifier can change its final token and camel-case boundaries.
+        tokenized_lines: list[str | None] = [None] * len(lines)
+
+        def terms_for_line(index: int, shown: str) -> str:
+            if shown != lines[index]:
+                return " ".join(_tokenize(shown))
+            terms = tokenized_lines[index]
+            if terms is None:
+                terms = " ".join(_tokenize(shown))
+                tokenized_lines[index] = terms
+            return terms
 
         def emit(first: int, last: int, chunk_type: str, name: str) -> None:
             """Emit windows within one owner span (1-based inclusive)."""
@@ -1275,7 +1303,7 @@ class SemanticSearchManager:
                     break
                 end = start + len(shown)
                 body = "\n".join(shown)
-                terms = " ".join(_tokenize(body))
+                terms = " ".join(filter(None, (terms_for_line(start + i, line) for i, line in enumerate(shown))))
                 if terms:
                     chunks.append((chunk_type, name, start + 1, end, body, terms))
                 # Four-line overlap catches matches near a window boundary.
@@ -1308,7 +1336,8 @@ class SemanticSearchManager:
             else:
                 chunk_type, name = "file", os.path.basename(rel_path)
             emit(first + 1, cursor, chunk_type, name)
-        return chunks
+        file_terms = " ".join(filter(None, (terms_for_line(i, line) for i, line in enumerate(lines)))) if include_file_terms else ""
+        return chunks, file_terms
 
     def _sync_body_index(self, context_manager: Any = None, body_spans=None) -> None:
         """Refresh changed/deleted discovered files, including branch changes."""
@@ -1371,24 +1400,25 @@ class SemanticSearchManager:
                     if self._closed:
                         return
                     abs_path, mtime, size = current[path]
-                    for chunk_type, name, start, end, body, terms in self._body_chunks(path, abs_path, body_spans):
+                    ext = os.path.splitext(path)[1].lower()
+                    chunks, file_terms = self._body_document(
+                        path, abs_path, body_spans, ast_lookup=self.ast_lookup,
+                        include_file_terms=ext in EXTENSION_LANGUAGES and ext not in _NON_CODE_EXTS,
+                    )
+                    # One SQLite step per bounded batch avoids releasing and
+                    # reacquiring the GIL for every window during AST hydration.
+                    # Keep row order and the surrounding atomic transaction.
+                    for offset in range(0, len(chunks), 64):
                         if self._closed:
                             return
+                        batch = chunks[offset:offset + 64]
                         conn.execute(
                             "INSERT INTO body_fts "
                             "(file_path, chunk_type, name, start_line, end_line, body, terms) "
-                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (path, chunk_type, name, start, end, body, terms),
+                            "VALUES " + ",".join(["(?, ?, ?, ?, ?, ?, ?)"] * len(batch)),
+                            tuple(value for chunk in batch for value in (path, *chunk)),
                         )
                     # Source files only: docs and data stay in the chunk search.
-                    ext = os.path.splitext(path)[1].lower()
-                    file_terms = ""
-                    if ext in EXTENSION_LANGUAGES and ext not in _NON_CODE_EXTS:
-                        try:
-                            with open(abs_path, encoding="utf-8", errors="replace") as source:
-                                file_terms = " ".join(_tokenize(source.read()))
-                        except OSError:
-                            pass
                     if file_terms:
                         conn.execute(
                             "INSERT INTO body_file_fts (file_path, terms) VALUES (?, ?)",
