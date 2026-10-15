@@ -266,7 +266,7 @@ class FakeAPI:
 
     def list(self, resource, query=""):
         if resource == "sizes":
-            return [{"slug": "s-8vcpu-16gb-amd", "available": True, "regions": ["fra1"], "vcpus": 8,
+            return [{"slug": "s-8vcpu-16gb-amd", "available": True, "regions": ["ams3"], "vcpus": 8,
                      "memory": 16384, "price_hourly": self.rate}]
         return self.nodes[:]
 
@@ -297,7 +297,7 @@ def test_quote_rejects_price_over_budget():
 
 
 @pytest.mark.parametrize("change", [
-    {"slug": "c-8"}, {"regions": ["nyc1"]}, {"available": False},
+    {"slug": "c-8"}, {"regions": ["nyc1"]}, {"regions": ["fra1"]}, {"available": False},
     {"vcpus": 4}, {"memory": 8192},
 ])
 def test_quote_rejects_unapproved_or_insufficient_capacity(change):

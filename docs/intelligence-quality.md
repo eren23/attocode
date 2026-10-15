@@ -201,7 +201,7 @@ and inserts at most 64 windows per SQL statement in the existing atomic refresh.
 Equivalence checks cover window/file terms, row order, BM25 and failed-refresh rollback.
 
 The optional controller uses DigitalOcean's API and SSH. It selects one
-`s-8vcpu-16gb-amd` shared CPU worker in `fra1`, with at least 8 vCPUs and
+`s-8vcpu-16gb-amd` shared CPU worker in `ams3`, with at least 8 vCPUs and
 16 GiB memory, and verifies the
 live provider quote before provisioning. The admission budget is $1 per batch
 and $16 per UTC month, before tax. A reservation is retained for the whole month;
@@ -223,6 +223,13 @@ The user approved the available shared CPU size instead, quoted at $0.16667/hour
 before tax. Shared CPU contention can affect timing, so reports from this worker
 are not dedicated-CPU latency measurements. The live quote must still pass;
 no worker size or region is automatically substituted.
+
+On 2026-10-15 Frankfurt (`fra1`) became unavailable before the final follow-up
+batch was reserved. The controller explicitly moved to Amsterdam (`ams3`) for
+the same size and quoted rate within the existing batch allowance. Earlier
+Frankfurt timings and later Amsterdam timings are separate environments, not a
+controlled latency comparison. Admission still refuses if this configured
+region is unavailable; it does not choose another region automatically.
 
 ```sh
 .venv/bin/python -m eval.quality cloud quote
