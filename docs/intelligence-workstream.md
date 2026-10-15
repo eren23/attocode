@@ -4,6 +4,15 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
+**Current status, 2026-10-15:** implementation and cold-index follow-ups are merged
+through PR #186 (`deaa836`). Required implementation CI passed. The final full cloud
+gate failed: 35/36 packs completed, CockroachDB search warmup incomplete, ranking
+not run. 0.1.6 remains unpublished. All six permitted workstream batches are used,
+all workers deleted, total estimated compute $0.4487. The final controller also
+recorded a wall duration exceeding its configured bound; cause is unestablished.
+See the [final six-run evidence](../packages/code-intel/evals/results/2026-10-15-breadth-cloud.md).
+The progress entries below are historical observations, not a passing release gate.
+
 ## Milestones
 
 | Milestone | Status | Required evidence |
@@ -75,9 +84,10 @@ hash, corrected examples, limitations, runtime/storage and cleanup here.
 
 ### Remaining delivery gates
 
-Finalize coherent matrix/results, required CI and clean final wheel. Publish the
-reviewed implementation, run bounded remote validation within the unchanged ledger,
-verify deletion, then publish 0.1.6 after its release gates. Keep failures, unsupported
+Implementation is merged, required CI passed and remote results/cleanup are recorded.
+The remaining gate is a passing full cold matrix after resolving the CockroachDB
+indexing delay. The six-batch allowance is exhausted; no further rental or release
+will start automatically. Keep failures, unsupported
 cases, missing relationship labels and untested advanced operations visible. No
 model benefit, ranking improvement or universal reference resolution is claimed.
 
