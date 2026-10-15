@@ -4,8 +4,8 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current status, 2026-10-15:** implementation and cold-index follow-ups are merged
-through PR #192 (`9d3574e`). Required implementation CI passed. The latest full cloud
+**Current status, 2026-10-15:** the implementation and cold-index follow-ups through
+PR #192 (`9d3574e`) passed required CI. The latest full cloud
 gate failed: 35/36 packs passed, CockroachDB search warmup incomplete, ranking
 not run. 0.1.6 remains unpublished. The controller finished within its 90-minute
 limit at 26.1 minutes; that does not establish a universal deadline guarantee.
@@ -15,6 +15,11 @@ Their estimated compute cost was $0.1221; all 14 ledger rentals total $0.6487
 [repair-cycle evidence](../packages/code-intel/evals/results/2026-10-15-cold-repair-cycle.md)
 and the historical [six-run evidence](../packages/code-intel/evals/results/2026-10-15-breadth-cloud.md).
 The progress entries below are historical observations, not a passing release gate.
+
+The subsequent [structural persistence change](../packages/code-intel/evals/results/2026-10-15-structural-write-contention.md)
+uses bounded SQL statements and passed 537 local contracts with 8 skips, scale and
+lifecycle. A small CPU-contention probe reproduced a persistence slowdown, but no
+new full cloud gate was run and the release remains blocked.
 
 ## Milestones
 

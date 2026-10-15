@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Cold indexing cost
 
+- Structural symbol/reference writes use at most 64 rows per SQL statement,
+  reducing interpreter handoffs during concurrent indexing while preserving row
+  order and atomic rollback. The CockroachDB release gate still needs a passing
+  full run; the small contention fixture is not end-to-end performance evidence.
 - Reuse bounded content-verified symbol spans between keyword and source-window
   indexing, and persist symbols/references atomically in batches of up to 100
   files. Same-metadata edits invalidate reused spans; failed writes roll back.
