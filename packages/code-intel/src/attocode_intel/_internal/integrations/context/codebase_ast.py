@@ -7,6 +7,7 @@ tree-sitter is not available.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -115,6 +116,7 @@ class FileAST:
     line_count: int = 0
     namespaces: list[str] = field(default_factory=list)
     parsing_tier: str = ""  # "tree_sitter", "regex", "generic_ts", "ctags", "minimal"
+    content_sha256: str = field(default="", repr=False, compare=False)
 
     @property
     def symbol_count(self) -> int:
@@ -1203,6 +1205,13 @@ def parse_file(file_path: str, content: str | None = None) -> FileAST:
         except OSError:
             return FileAST(path=file_path, language="unknown")
 
+    result = _parse_content(file_path, content)
+    # Bind reuse to the exact decoded input, including same-size/mtime edits.
+    result.content_sha256 = hashlib.sha256(content.encode()).hexdigest()
+    return result
+
+
+def _parse_content(file_path: str, content: str) -> FileAST:
     lang = detect_language(file_path)
 
     # Tier 1: Tree-sitter with per-language config (25 languages)

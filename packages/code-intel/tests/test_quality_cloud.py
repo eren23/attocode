@@ -2,14 +2,108 @@
 import datetime as dt
 import json
 import os
+import shlex
+import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 from types import SimpleNamespace
 
+import psutil
 import pytest
 
 from eval.quality.cloud import TAG, batch, execute_batch, quote, reap, reconcile, reserve
+
+
+@pytest.mark.parametrize('seconds', [0, -1, 5401])
+def test_worker_timeout_cannot_be_disabled(seconds):
+    from eval.quality.cloud import worker_command
+    with pytest.raises(ValueError, match='positive'):
+        worker_command('true', seconds)
+
+
+def test_worker_timeout_kills_term_resistant_detached_descendant(tmp_path):
+    from eval.quality.cloud import worker_command
+
+    if os.environ.get('QUALITY_TEST_SYSTEMD') != '1':
+        pytest.skip('Dedicated Linux CI enables the systemd worker test')
+    assert sys.platform == 'linux' and shutil.which('systemd-run') and shutil.which('sudo')
+    # Single-quote the value so the worker shell, not systemd, owns expansion.
+    successful = worker_command("value='literal $dollar'; printf '%s' \"$value\"", 5)
+    completed = subprocess.run(['sudo', '-n', '/bin/sh', '-c', successful],
+                               capture_output=True, text=True, timeout=10)
+    assert completed.returncode == 0 and completed.stdout == 'literal $dollar', completed.stderr
+    record = tmp_path / 'worker.json'
+    child = 'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'
+    script = (
+        'import json,os,signal,subprocess,sys,time; from pathlib import Path; '
+        'signal.signal(signal.SIGTERM, signal.SIG_IGN); '
+        f'p=subprocess.Popen([sys.executable,"-c",{child!r}], start_new_session=True); '
+        f'Path({str(record)!r}).write_text(json.dumps([os.getpid(), p.pid])); '
+        'time.sleep(60)'
+    )
+    command = worker_command('exec ' + shlex.join([sys.executable, '-c', script]), 1)
+    unit = next(a.split('=', 1)[1] for a in shlex.split(command) if a.startswith('--unit='))
+    try:
+        result = subprocess.run(['sudo', '-n', '/bin/sh', '-c', command],
+                                capture_output=True, text=True, timeout=18)
+        assert result.returncode != 0, result.stdout + result.stderr
+        assert record.exists(), result.stderr
+        pids = json.loads(record.read_text())
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and any(psutil.pid_exists(pid) for pid in pids):
+            time.sleep(.05)
+        for pid in pids:
+            try:
+                assert psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
+            except psutil.NoSuchProcess:
+                pass
+    finally:
+        subprocess.run(['sudo', '-n', 'systemctl', 'stop', unit], capture_output=True, timeout=15)
+
+
+def test_worker_command_uses_independent_cgroup_and_preserves_shell_text():
+    from eval.quality.cloud import worker_command
+    script = 'printf "%s" "$literal"; echo "quoted text"'
+    command = shlex.split(worker_command(script, 60))
+    assert command[-3:] == ['/bin/sh', '-c', script]
+    assert '--expand-environment=no' in command
+    for setting in ['RuntimeMaxSec=60s', 'TimeoutStopSec=10s', 'KillMode=control-group', 'SendSIGKILL=yes']:
+        assert '--property=' + setting in command
+
+
+def test_controller_resume_past_wall_deadline_does_not_start_tests(tmp_path, monkeypatch):
+    from eval.quality import cloud
+
+    api = FakeAPI()
+    original = api.request
+    def request(method, path, data=None):
+        result = original(method, path, data)
+        if method == 'GET':
+            result['droplet'].update(status='active', networks={'v4': [
+                {'type': 'public', 'ip_address': '192.0.2.1'}]})
+        return result
+    api.request = request
+    wall = [1000.0]
+    monkeypatch.setattr(cloud, 'time', SimpleNamespace(
+        time=lambda: wall[0], monotonic=lambda: 10.0, sleep=lambda _: None))
+    monkeypatch.setattr(cloud.subprocess, 'run', lambda *a, **kw: SimpleNamespace(returncode=0))
+    started = []
+    def supervise(command, **kwargs):
+        if wall[0] >= kwargs['wall_deadline']:
+            return {'status': 'incomplete', 'reason': 'admission_budget'}
+        started.append((kwargs['log'].stem, command))
+        if kwargs['log'].stem == 'setup':
+            wall[0] += cloud.CONTROLLER_SECONDS + 1
+        return {'status': 'passed'}
+    monkeypatch.setattr(cloud, 'supervise', supervise)
+    with pytest.raises(TimeoutError, match='deadline'):
+        batch(api, tmp_path / 'managed', execute=execute_batch)
+    assert [name for name, _ in started] == ['upload', 'setup']
+    assert '--property=RuntimeMaxSec=600s' in started[1][1][-1]
+    assert 'ServerAliveInterval=15' in started[1][1]
+    assert api.deleted == [42]
 
 
 @pytest.mark.parametrize("command", ["quote", "reap", "reap-apply", "reconcile"])

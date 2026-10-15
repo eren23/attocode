@@ -34,6 +34,7 @@ jobs:
           --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql+asyncpg://postgres:test@localhost:5432/intelligence
+      QUALITY_TEST_SYSTEMD: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
