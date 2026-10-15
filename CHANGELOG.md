@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Cold indexing cost
 
+- Keyword-cache inserts and stale/deleted body rows use bounded SQL statements
+  with exact-row/replacement-order and rollback controls. Two full follow-up runs
+  still failed CockroachDB warmup; 0.1.6 remains blocked, despite passing component
+  tests and small contention probes.
+- Bounded quality logs stream progress before child exit, and worker checkpoints
+  preserve a bounded exception message alongside completed observations.
 - Structural symbol/reference writes use at most 64 rows per SQL statement,
   reducing interpreter handoffs during concurrent indexing while preserving row
   order and atomic rollback. The CockroachDB release gate still needs a passing

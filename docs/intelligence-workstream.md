@@ -4,22 +4,26 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current status, 2026-10-15:** the implementation and cold-index follow-ups through
-PR #192 (`9d3574e`) passed required CI. The latest full cloud
-gate failed: 35/36 packs passed, CockroachDB search warmup incomplete, ranking
-not run. 0.1.6 remains unpublished. The controller finished within its 90-minute
-limit at 26.1 minutes; that does not establish a universal deadline guarantee.
-All four additionally approved repair batches are used and all workers deleted.
-Their estimated compute cost was $0.1221; all 14 ledger rentals total $0.6487
-(controller estimates, not an invoice). See the
-[repair-cycle evidence](../packages/code-intel/evals/results/2026-10-15-cold-repair-cycle.md)
-and the historical [six-run evidence](../packages/code-intel/evals/results/2026-10-15-breadth-cloud.md).
-The progress entries below are historical observations, not a passing release gate.
+**Current status, 2026-10-15:** follow-up implementation through PR #198
+(`19beb72`) passed required CI, but both additional full cloud gates failed:
+35/36 packs passed, CockroachDB body warmup incomplete, ranking not run.
+The latest run passed 532 contracts with 22 skips and finished in 23.93 minutes,
+within the 90-minute controller limit. Keyword indexing took 57.280 seconds;
+body indexing was unfinished at 132.860 seconds of warmup. **0.1.6 is unpublished.**
 
-The subsequent [structural persistence change](../packages/code-intel/evals/results/2026-10-15-structural-write-contention.md)
-uses bounded SQL statements and passed 537 local contracts with 8 skips, scale and
-lifecycle. A small CPU-contention probe reproduced a persistence slowdown, but no
-new full cloud gate was run and the release remains blocked.
+Both approved follow-up rentals are used and all workers are deleted. They cost
+$0.1333 estimated compute; all 16 ledger rentals total $0.7820 estimated compute
+(not an invoice). The $16 reservation cap is not spending. See the
+[complete follow-up evidence and next diagnostic](../packages/code-intel/evals/results/2026-10-15-cold-followup.md).
+
+The [structural persistence](../packages/code-intel/evals/results/2026-10-15-structural-write-contention.md)
+and [lexical SQL](../packages/code-intel/evals/results/2026-10-15-lexical-sql-contention.md)
+changes preserve stored results and improve some small contention observations;
+they did not resolve the full cold gate. The second worker used Amsterdam after
+Frankfurt capacity became unavailable, so timings are not a controlled comparison.
+The next useful step is bounded subphase/progress instrumentation and an isolated
+Cockroach mechanism diagnostic before another optimization/full matrix. Additional
+cloud execution needs a new allowance. The entries below are historical evidence.
 
 ## Milestones
 
