@@ -1,0 +1,45 @@
+{
+  "batch": "7b6d17ef54f5425c",
+  "status": "failed",
+  "source_commit": "aeb1f7ba291ebeb81f1ee3e7a8e9fd512fd555f8",
+  "cleanup_verified": true,
+  "active_quality_workers": 0,
+  "estimated_usd": 0.01,
+  "controller_seconds": 77.59139800071716,
+  "product_tests_started": false,
+  "failure": "dpkg frontend lock held by another apt-get process",
+  "phases": [
+    {
+      "name": "upload",
+      "status": "passed",
+      "seconds": 3.048,
+      "wall_seconds": 3.048,
+      "exit_code": 0
+    },
+    {
+      "name": "setup",
+      "status": "failed",
+      "seconds": 22.396,
+      "wall_seconds": 22.396,
+      "exit_code": 100
+    },
+    {
+      "name": "collect",
+      "status": "passed",
+      "seconds": 0.661,
+      "wall_seconds": 0.661,
+      "exit_code": 0
+    },
+    {
+      "name": "download",
+      "status": "passed",
+      "seconds": 0.659,
+      "wall_seconds": 0.659,
+      "exit_code": 0
+    }
+  ],
+  "workstream_rentals": 7,
+  "workstream_estimated_usd": 0.4587,
+  "monthly_reserved_usd": 10,
+  "release_gate": "blocked"
+}

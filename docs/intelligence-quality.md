@@ -241,6 +241,10 @@ resolver. If it fails, the disposable Ubuntu worker temporarily uses public
 resolvers `1.1.1.1` and `8.8.8.8` on `eth0`, logs the intervention, and retries
 for at most 15 seconds. Continued failure aborts setup. This changes neither
 the account's VPC settings nor the Mac's DNS; healthy worker DNS is preserved.
+Package installation waits up to 120 seconds for an existing dpkg lock, within
+the unchanged 600-second setup limit. It never removes lock files or terminates
+another package-manager process. Linux CI exercises lock release and expiry
+against an isolated package database using the actual apt executable.
 The controller always attempts deletion and verifies provider absence, including
 lost create responses and collection failures. Unknown provisioning/deletion
 state blocks another launch. `reconcile` verifies external cleanup without
