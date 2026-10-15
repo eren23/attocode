@@ -307,3 +307,11 @@ used that one additional reservation. Both body indexes remained incomplete;
 prehydration shortened keyword work but increased total observation elapsed.
 All 17 workers are deleted and the allowance is exhausted. The raw profiles guide
 follow-up work; they do not authorize another rental or clear the release gate.
+
+The [local discovery/body follow-up](../packages/code-intel/evals/results/2026-10-15-discovery-body-repair.md)
+adds probe schema 2: tokenizer/serializer timings sample every 64th call while
+`sampling.observed_calls` retains the exact attempted call count. Sampled durations
+must not be summed as full-phase cost or extrapolated. Outer phases still include
+probe overhead. Fresh discovery snapshots require metadata/policy validation before
+reuse; invalid snapshots fall back to discovery. Local checks do not replace the
+pending uninstrumented target and full release gates.

@@ -159,7 +159,7 @@ def test_overlapping_windows_and_file_search_tokenize_each_complete_line_once(tm
     monkeypatch.setattr(search, '_tokenize', counted)
     chunks, _ = SemanticSearchManager._body_document('sample.py', str(source), include_file_terms=True)
     assert len(chunks) >= 4
-    assert len(scanned) == len(content.splitlines())
+    assert len(scanned) == len(set(content.splitlines()))
     assert sum(scanned) <= len(content)
 
 
@@ -223,3 +223,27 @@ def test_body_batches_preserve_rows_bm25_and_rollback_after_mid_refresh_failure(
         conn.close()
     finally:
         manager.close()
+
+
+def test_line_memo_is_per_file_bounded_and_preserves_truncated_unicode_terms(tmp_path, monkeypatch):
+    original = search._tokenize
+    calls = []
+    def counted(text):
+        calls.append(text)
+        return original(text)
+    monkeypatch.setattr(search, '_tokenize', counted)
+    # Fill the entry/character budget, then repeat a late line: no unbounded memo.
+    content = '\n'.join(f'uniqueIdentifier_{i} = someHTTPValue_{i}' for i in range(1500))
+    content += '\n' + 'veryLateUnique = LastHTTPValue\n' * 20
+    content += ('LongHTTPIdentifier' * 200 + ' Kİ\n') * 3
+    source = tmp_path / 'data.txt'
+    source.write_text(content)
+    def build():
+        return SemanticSearchManager._body_document('data.txt', str(source), include_file_terms=True)
+    first = build()
+    first_calls = list(calls)
+    assert first_calls.count('veryLateUnique = LastHTTPValue') == 20
+    assert first[1] == ' '.join(original(content))
+    assert all(terms == ' '.join(original(body)) for *_, body, terms in first[0])
+    calls.clear()
+    assert build() == first and calls == first_calls  # No cross-file/global retention.

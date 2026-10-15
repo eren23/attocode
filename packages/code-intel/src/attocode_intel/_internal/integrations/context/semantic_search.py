@@ -364,6 +364,7 @@ class SemanticSearchManager:
     nl_mode: str = ""  # "none" or "heuristic"; "" = read ATTOCODE_NL_EMBEDDING_MODE env var
     scoring_config: SearchScoringConfig = field(default_factory=SearchScoringConfig)
     ast_lookup: Any = field(default=None, repr=False)
+    discovery_snapshot: Any = field(default=None, repr=False)
     index_probe: IndexProbe | None = field(default=None, repr=False)
     _warmup_reused_asts: int = field(default=0, repr=False)
     _provider: Any = field(default=None, repr=False)
@@ -1298,12 +1299,30 @@ class SemanticSearchManager:
         # identifier can change its final token and camel-case boundaries.
         tokenized_lines: list[str | None] = [None] * len(lines)
 
+        # Generated source repeats identical lines across different windows/spans.
+        # Reuse exact displayed text only, within one file. Bound both entries and
+        # retained characters; long/unique lines continue through the original path.
+        line_terms: dict[str, str] = {}
+        remaining_chars = 32_768
+
+        def tokenize_line(shown: str) -> str:
+            nonlocal remaining_chars
+            cached = line_terms.get(shown)
+            if cached is not None:
+                return cached
+            terms = " ".join(tokenize(shown))
+            size = len(shown) + len(terms)
+            if len(line_terms) < 1024 and len(shown) <= 512 and size <= remaining_chars:
+                line_terms[shown] = terms
+                remaining_chars -= size
+            return terms
+
         def terms_for_line(index: int, shown: str) -> str:
             if shown != lines[index]:
-                return " ".join(tokenize(shown))
+                return tokenize_line(shown)
             terms = tokenized_lines[index]
             if terms is None:
-                terms = " ".join(tokenize(shown))
+                terms = tokenize_line(shown)
                 tokenized_lines[index] = terms
             return terms
 
@@ -1526,6 +1545,17 @@ class SemanticSearchManager:
             # One file discovery serves all three steps. A new context per step
             # discovered the files and built the dependency graph three times.
             ctx = CodebaseContextManager(root_dir=self.root_dir, cancelled=lambda: self._closed)
+            if self.discovery_snapshot is not None:
+                with measure("keyword.discovery_reuse"):
+                    try:
+                        reused = ctx.reuse_discovery(self.discovery_snapshot())
+                    except InterruptedError:
+                        raise
+                    except Exception:
+                        logger.debug("Discovery handoff unavailable; using fresh discovery", exc_info=True)
+                        reused = False
+                    if reused:
+                        count("keyword.discovery_reused")
             if self._closed:
                 return
             body_spans = _BodySpanCache()

@@ -801,6 +801,7 @@ class CodebaseContextManager:
     _ignored_checkout_dirs: list[str] = field(default_factory=list, repr=False)
     _ignored_checkout_dirs_capped: bool = field(default=False, repr=False)
     cancelled: Callable[[], bool] | None = field(default=None, repr=False, compare=False)
+    _discovery_snapshot: Any = field(default=None, repr=False, compare=False)
 
     def _check_cancelled(self) -> None:
         if self.cancelled is not None and self.cancelled():
@@ -847,6 +848,23 @@ class CodebaseContextManager:
                         self.excluded_checkout_roots_truncated = True
         self.excluded_checkout_roots.sort()
 
+    def reuse_discovery(self, snapshot) -> bool:
+        """Adopt a validated inventory with this consumer's cap, without shared mutation.
+
+        The donor publishes only complete, untruncated discoveries. Every relevant
+        directory/file and the ignore-file identity must still match. A failed
+        validation leaves this context empty so its normal fresh discovery runs.
+        """
+        if snapshot is None or not snapshot.valid_for(self):
+            return False
+        files = [FileInfo(*row) for row in snapshot.files]
+        cap = _compute_dynamic_cap(files, self.max_files)
+        self.discovered_file_count = len(files)
+        self.discovery_truncated = len(files) > cap
+        self._files = files[:cap]
+        self._last_refresh_time = snapshot.refreshed_at  # Do not extend freshness.
+        return True
+
     def discover_files(self) -> list[FileInfo]:
         """Discover all relevant files in the repository.
 
@@ -860,8 +878,37 @@ class CodebaseContextManager:
         """
         root = Path(self.root_dir)
         resolved_root = root.resolve()
+        from attocode_intel._internal.integrations.context.discovery_snapshot import (
+            MAX_GUARDS,
+            DiscoverySnapshot,
+            path_signature,
+        )
         from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
 
+        self._discovery_snapshot = None
+        guards = {}
+        snapshot_safe = True
+        def guard(path, *, missing_ok=False):
+            nonlocal snapshot_safe
+            if not snapshot_safe:
+                return
+            if len(guards) >= MAX_GUARDS:
+                snapshot_safe = False
+                guards.clear()
+                return
+            try:
+                signature = path_signature(str(path))
+                if signature is None and not missing_ok:
+                    snapshot_safe = False
+                if str(path) in guards and guards[str(path)] != signature:
+                    snapshot_safe = False
+                guards.setdefault(str(path), signature)
+            except (OSError, RuntimeError):
+                snapshot_safe = False
+
+        # Record before reading rules/content; validation catches intervening edits.
+        guard(root)  # Before os.walk enumerates this directory.
+        guard(root / ".gitignore", missing_ok=True)
         ignore = IgnoreManager(root, default_dirs=self.ignore_patterns)
         files: list[FileInfo] = []
         _SAFETY_CEILING = 50_000  # noqa: N806  # OOM guard for massive repos
@@ -870,6 +917,7 @@ class CodebaseContextManager:
 
         for dirpath, dirnames, filenames in os.walk(root):
             self._check_cancelled()
+            guard(dirpath)
             # Filter ignored directories (in-place to prevent os.walk descent)
             kept_dirs = []
             for directory in dirnames:
@@ -884,6 +932,7 @@ class CodebaseContextManager:
                         else:
                             self._ignored_checkout_dirs_capped = True
                 else:
+                    guard(path)  # Before os.walk descends/enumerates.
                     kept_dirs.append(directory)
             # Sorted names: the file system order differs between macOS and Linux, and files of
             # equal importance keep the walk order through the sort and the cap below.
@@ -900,6 +949,7 @@ class CodebaseContextManager:
                     continue
 
                 full_path = os.path.join(dirpath, filename)
+                guard(full_path)
                 # os.walk does not descend through directory links, but file
                 # links still appear in filenames. Do not read outside source.
                 if os.path.islink(full_path):
@@ -989,6 +1039,14 @@ class CodebaseContextManager:
         self._files = files
         self.refresh_excluded_checkout_roots()
         self._last_refresh_time = time.monotonic()
+        if snapshot_safe and not self.discovery_truncated and self.discovered_file_count < _SAFETY_CEILING:
+            self._discovery_snapshot = DiscoverySnapshot(
+                os.path.abspath(self.root_dir), frozenset(self.ignore_patterns),
+                self._last_refresh_time,
+                tuple((f.path, f.relative_path, f.size, f.language, f.importance,
+                       f.is_test, f.is_config, f.line_count) for f in files),
+                tuple(guards.items()),
+            )
         return files
 
     @property
@@ -1322,6 +1380,7 @@ class CodebaseContextManager:
         Args:
             file_path: Absolute or relative path of the edited file.
         """
+        self._discovery_snapshot = None
         # Normalize to relative path
         try:
             rel = os.path.relpath(file_path, self.root_dir) if os.path.isabs(file_path) else os.path.normpath(file_path)

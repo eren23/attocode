@@ -22,9 +22,13 @@ uninstrumented speedup or successful cold start.
 All 17 workers are deleted. The diagnostic cost $0.0243 estimated compute; the
 cumulative estimate is $0.8063 (not an invoice). The $17 reservation allowance is
 exhausted. Only 24,761 report/log bytes came back from the diagnostic; no corpora
-or indexes were downloaded to the Mac. Next: calibrate probe overhead, test safe
-reuse of discovery snapshots, then target body cost with exact-result controls.
-A new cloud allowance is needed for targeted confirmation and any later full gate.
+or indexes were downloaded to the Mac. The [local follow-up repair](../packages/code-intel/evals/results/2026-10-15-discovery-body-repair.md)
+now samples hot profiler calls, reuses a validated immutable discovery inventory,
+and memoizes repeated displayed line terms within each file. Exact-result controls
+and the bounded local gate pass (583 tests, 8 skips); the small generated probes
+show component gains, not CockroachDB confirmation. Next is an uninstrumented
+pinned target check, then the full gate only if it succeeds. A new cloud allowance
+is required for those runs.
 The entries below are historical evidence.
 
 ## Milestones

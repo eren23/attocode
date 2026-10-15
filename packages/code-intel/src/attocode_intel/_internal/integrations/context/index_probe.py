@@ -10,9 +10,14 @@ from dataclasses import dataclass, field
 
 _CURRENT: ContextVar[IndexProbe | None] = ContextVar("index_probe", default=None)
 _DISABLED = nullcontext()
+# Exact call counts, but only one in 64 hot calls reads clocks. Sampled durations
+# are reported as observations, never extrapolated into full-phase totals.
+SAMPLED_PHASES = frozenset({"body.tokenize", "keyword.tokenize", "keyword.serialize"})
+SAMPLE_EVERY = 64
 PHASES = frozenset(
     {
         "keyword.discovery",
+        "keyword.discovery_reuse",
         "keyword.stat",
         "keyword.cache_load",
         "keyword.files",
@@ -46,6 +51,7 @@ PHASES = frozenset(
 COUNTERS = frozenset(
     {
         "keyword.files_started",
+        "keyword.discovery_reused",
         "keyword.files_completed",
         "keyword.read_chars",
         "keyword.documents",
@@ -73,6 +79,7 @@ class IndexProbe:
     _counts: dict = field(default_factory=dict, repr=False)
     _active: list = field(default_factory=list, repr=False)
     _slow: list = field(default_factory=list, repr=False)
+    _observed_calls: dict = field(default_factory=dict, repr=False)
 
     @contextmanager
     def measure(self, phase, file=None):
@@ -107,10 +114,24 @@ class IndexProbe:
         with self._lock:
             self._counts[name] = self._counts.get(name, 0) + amount
 
+    def sample_call(self, phase):
+        if phase not in SAMPLED_PHASES:
+            raise ValueError("Unknown sampled phase")
+        with self._lock:
+            seen = self._observed_calls.get(phase, 0) + 1
+            self._observed_calls[phase] = seen
+        return (seen - 1) % SAMPLE_EVERY == 0
+
     def snapshot(self):
         with self._lock:
             return {
-                "schema": 1,
+                "schema": 2,
+                "sampling": {
+                    "every": SAMPLE_EVERY,
+                    "phases": sorted(SAMPLED_PHASES),
+                    "observed_calls": dict(self._observed_calls),
+                    "timing": "sampled calls only; no extrapolation; phases.calls counts timed scopes",
+                },
                 "timing": "inclusive; completed scopes only; indexing-thread CPU",
                 "counts_semantics": "attempted work, not committed rows; commits counted separately",
                 "phases": {k: dict(v) for k, v in self._phases.items()},
@@ -149,8 +170,18 @@ def measured_call(phase, function, *args, **kwargs):
 
 
 def instrument(phase, function):
-    if _CURRENT.get() is None:
+    probe = _CURRENT.get()
+    if probe is None:
         return function
+    if phase not in PHASES:
+        raise ValueError("Unknown index phase")
+    if phase in SAMPLED_PHASES:
+        def sampled(*args, **kwargs):
+            if probe.sample_call(phase):
+                with probe.measure(phase):
+                    return function(*args, **kwargs)
+            return function(*args, **kwargs)
+        return sampled
     from functools import partial
 
     return partial(measured_call, phase, function)
