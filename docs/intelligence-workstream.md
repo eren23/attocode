@@ -4,7 +4,15 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Latest follow-up, 2026-10-15:** [Cockroach and fresh retrieval cycle](../packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).
+**Latest follow-up, 2026-10-15:** [document lifecycle and body-file trial](../packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md).
+Shared LSP document state prevents duplicate opens and edit versions across
+callers; strict protocol and six fresh Rust fixtures pass. The intermittent CI
+failure's cause is not proven. Body-file fusion improved consumed development
+33→40/48 at five, then fresh validation 18→20/24, but lost one existing top-24
+hit and failed the full gate. Ranking remains unchanged. Two local Cockroach
+component prototypes were not adopted; no new cloud rental or release occurred.
+
+**Previous follow-up, 2026-10-15:** [Cockroach and fresh retrieval cycle](../packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).
 The merged fixes passed Cockroach at 167.970/180 seconds, still a narrow margin.
 All 48 new source-backed retrieval questions are complete: baseline 33/48 at
 five and 44/48 at 24. Neither fixed candidate improved development Hit@5;

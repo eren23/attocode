@@ -388,3 +388,10 @@ The cycle is complete: Cockroach passed in 167.970 seconds (narrow margin),
 using one worker with verified deletion. Neither retrieval candidate qualified
 on development; baseline-only validation completed all 48 questions. No ranking
 policy or release changed. See the [results](../packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).
+
+
+The subsequent [protocol/body-file follow-up](../packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md)
+adds document-lifecycle regression coverage and one evaluation-only body-file
+candidate. Its held-out gate failed despite higher aggregate hits; defaults
+remain unchanged. Bounded local Cockroach component trials did not establish
+additional headroom, and no further cloud reservation was used.

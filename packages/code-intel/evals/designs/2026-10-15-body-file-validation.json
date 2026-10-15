@@ -1,0 +1,427 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-15T18:37:16.513218+00:00",
+  "scope": "24 new questions; native pinned source reviewed before retrieval. Non-exhaustive labels. Express mounted-child behavior crosses router and parent/child boundaries but only its in-repository glue is labeled. Repositories and some files overlap prior development.",
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "category": "intent",
+          "query": "Serialize a signed browser cookie and convert its lifetime from milliseconds to seconds",
+          "id": "express:body-validation-1",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 742,
+              "quote": "res.cookie = function",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da"
+            }
+          ]
+        },
+        {
+          "category": "cross_file",
+          "query": "Restore the parent request and response behavior after a mounted child application returns",
+          "id": "express:body-validation-2",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "line": 230,
+              "quote": "router.use(path, function mounted_app(req, res, next)",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab"
+            }
+          ]
+        },
+        {
+          "category": "configuration",
+          "query": "Apply configured JSON replacement, indentation and HTML-character escaping when sending an object",
+          "id": "express:body-validation-3",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 235,
+              "quote": "var escape = app.get('json escape')",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da"
+            },
+            {
+              "file": "lib/response.js",
+              "line": 1023,
+              "quote": "function stringify (value, replacer, spaces, escape)",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da"
+            }
+          ]
+        },
+        {
+          "category": "ambiguous_terms",
+          "query": "Encode an outgoing destination header without sending the redirect response itself",
+          "id": "express:body-validation-4",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 795,
+              "quote": "return this.set('Location', encodeUrl(url));",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "category": "intent",
+          "query": "Detect an input byte-order mark and transcode the source before searching it",
+          "id": "ripgrep:body-validation-1",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "crates/searcher/src/searcher/mod.rs",
+              "line": 553,
+              "quote": "pub fn bom_sniffing(",
+              "source_sha256": "1b7b8c4cb60ce6ed74f26edc5b9ef04998a64ee9bad15acdc1ace1f3c66ef654"
+            }
+          ]
+        },
+        {
+          "category": "cross_file",
+          "query": "Wrap printed file locations in terminal hyperlinks when the output writer supports them",
+          "id": "ripgrep:body-validation-2",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "crates/printer/src/standard.rs",
+              "line": 1454,
+              "quote": "fn start_hyperlink(",
+              "source_sha256": "8fc94a8cba6add7dbe8394cd2c6f24dffb773b9f85852ee6d4e97747d40e7460"
+            },
+            {
+              "file": "crates/printer/src/hyperlink/mod.rs",
+              "line": 646,
+              "quote": "pub(crate) fn begin<W: WriteColor>(",
+              "source_sha256": "8887b066987643638d822ec53ebd44f10b9d1a1bab00d9152579a56dfad284fb"
+            }
+          ]
+        },
+        {
+          "category": "configuration",
+          "query": "Limit directory traversal depth and choose whether symbolic links are followed",
+          "id": "ripgrep:body-validation-3",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "crates/ignore/src/walk.rs",
+              "line": 657,
+              "quote": "pub fn max_depth(",
+              "source_sha256": "3173c55f99ac90119eb00b615fbd9f5532a27c7a969e7ba0a369aba7ba71f1f3"
+            },
+            {
+              "file": "crates/ignore/src/walk.rs",
+              "line": 683,
+              "quote": "pub fn follow_links(",
+              "source_sha256": "3173c55f99ac90119eb00b615fbd9f5532a27c7a969e7ba0a369aba7ba71f1f3"
+            }
+          ]
+        },
+        {
+          "category": "ambiguous_terms",
+          "query": "Report the number of individual matches instead of the number of matching lines",
+          "id": "ripgrep:body-validation-4",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "crates/printer/src/summary.rs",
+              "line": 764,
+              "quote": "SummaryKind::CountMatches =>",
+              "source_sha256": "76ac78ad878a2a6a45a19563659e710b9080678397fbcffdb68746f5eefe3655"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "redis",
+      "commit": "20f163eb3dcc1311cfe6c0dda5a3beef08ab1a5d",
+      "queries": [
+        {
+          "category": "intent",
+          "query": "Deliver a published message to subscribers whose channel patterns match its channel name",
+          "id": "redis:body-validation-1",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "src/pubsub.c",
+              "line": 517,
+              "quote": "addReplyPubsubPatMessage(c,pattern,channel,message);",
+              "source_sha256": "c32442e701432268268d7b6f5e40ba767dac3efc33d6a48a9a586c7abf2d206d"
+            }
+          ]
+        },
+        {
+          "category": "cross_file",
+          "query": "Periodically remove expired keys through the server maintenance cycle",
+          "id": "redis:body-validation-2",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "src/server.c",
+              "line": 1252,
+              "quote": "activeExpireCycle(ACTIVE_EXPIRE_CYCLE_SLOW);",
+              "source_sha256": "4439a02c16f74d6ebb81816e76df3a58a87800fb44a40f2febd02bb67bc287a4"
+            },
+            {
+              "file": "src/expire.c",
+              "line": 287,
+              "quote": "void activeExpireCycle(int type)",
+              "source_sha256": "7f2c22e1c66b335b786a8d8d12b3cee1a8cd4f68940b792dac603f48eb12adb6"
+            }
+          ]
+        },
+        {
+          "category": "configuration",
+          "query": "Choose which keys to evict when configured memory capacity is exceeded",
+          "id": "redis:body-validation-3",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "src/config.c",
+              "line": 38,
+              "quote": "configEnum maxmemory_policy_enum[]",
+              "source_sha256": "25afc65c5baea530c5817afa5a216538f4d16ec8f0e202ae1b29403721d78255"
+            },
+            {
+              "file": "src/evict.c",
+              "line": 532,
+              "quote": "int performEvictions(void)",
+              "source_sha256": "d314ea5b1c957b72a39ebae4673b00e0365af1fb8bd2cd056a6a8b5a6a459ceb"
+            }
+          ]
+        },
+        {
+          "category": "ambiguous_terms",
+          "query": "Read an ordered set range by score, with support for reverse direction and optional scores",
+          "id": "redis:body-validation-4",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "src/t_zset.c",
+              "line": 3914,
+              "quote": "void zrangeGenericCommand(zrange_result_handler",
+              "source_sha256": "727efdee49ed3652e9f72f20dcfd247e060c4170b49f24a35c58caa54c292ed3"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "queries": [
+        {
+          "category": "intent",
+          "query": "Build a follow-up request for a redirect while preserving or dropping its body according to the status code",
+          "id": "okhttp:body-validation-1",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RetryAndFollowUpInterceptor.kt",
+              "line": 296,
+              "quote": "private fun buildRedirectRequest(",
+              "source_sha256": "a0b503646f95a9634f0508e671ac4d44ff78acd07082e1db05043cf7b2ee583e"
+            }
+          ]
+        },
+        {
+          "category": "cross_file",
+          "query": "Parse response cookies and save them through the configured cookie store",
+          "id": "okhttp:body-validation-2",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/BridgeInterceptor.kt",
+              "line": 85,
+              "quote": "chain.cookieJar.receiveHeaders(networkRequest.url, networkResponse.headers)",
+              "source_sha256": "3c16015c7365fbdd48c809901fef4d652c3990f1a56e696b499912ad9f923674"
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/HttpHeaders.kt",
+              "line": 207,
+              "quote": "fun CookieJar.receiveHeaders(",
+              "source_sha256": "230c4498ab82ba41b9cb43defae760b7d84e1b2aa577950cc6a7cefd7375e0c7"
+            }
+          ]
+        },
+        {
+          "category": "configuration",
+          "query": "Override the read deadline for the next network interceptor without mutating the current chain",
+          "id": "okhttp:body-validation-3",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RealInterceptorChain.kt",
+              "line": 185,
+              "quote": "override fun withReadTimeout(",
+              "source_sha256": "4a7b7ed9990c0e7aa7a985c38a428ad552ae7ba088daedd3f68616a671157d24"
+            }
+          ]
+        },
+        {
+          "category": "ambiguous_terms",
+          "query": "Select idle pooled connections for eviction and calculate when the next cleanup should run",
+          "id": "okhttp:body-validation-4",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnectionPool.kt",
+              "line": 188,
+              "quote": "fun closeConnections(now: Long)",
+              "source_sha256": "bc55a48f9688c2ce65d7aa9ba4f64d70874d7d59b564654ae0e9844fe5c65cda"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "cats-effect",
+      "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "queries": [
+        {
+          "category": "intent",
+          "query": "Cancel an operation that exceeds its duration, await cancellation, and run a fallback",
+          "id": "cats-effect:body-validation-1",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IO.scala",
+              "line": 850,
+              "quote": "def timeoutTo[A2 >: A](duration: Duration",
+              "source_sha256": "144fd9851777e594c389aca4cd8fd2455459dd221742906433a6bfa49e89c827"
+            }
+          ]
+        },
+        {
+          "category": "cross_file",
+          "query": "Release a group of waiting tasks together when the last participant arrives, then reset for the next group",
+          "id": "cats-effect:body-validation-2",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/CyclicBarrier.scala",
+              "line": 74,
+              "quote": "State(capacity, epoch + 1, gate) -> unblock.complete(()).void",
+              "source_sha256": "f0941fe2123687fae15a78fd45279d3ea57e73eb96356a9ac4057c258400280e"
+            },
+            {
+              "file": "kernel/shared/src/main/scala/cats/effect/kernel/Deferred.scala",
+              "line": 157,
+              "quote": "def complete(a: A): F[Boolean]",
+              "source_sha256": "63968fe4dfae51a8158c3fc4bbedc77f8eac0f3f48d4835699fcbdf025e02626"
+            }
+          ]
+        },
+        {
+          "category": "configuration",
+          "query": "Decode a line read from standard input with either the default or a supplied character set",
+          "id": "cats-effect:body-validation-3",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "std/jvm-native/src/main/scala/cats/effect/std/Console.scala",
+              "line": 82,
+              "quote": "def readLineWithCharset(charset: Charset)",
+              "source_sha256": "b3f07231341f00545520eb4a48255ffb7cfa1cb07e8b55dc59f4564ffdffaa2c"
+            }
+          ]
+        },
+        {
+          "category": "ambiguous_terms",
+          "query": "Randomly reorder a list or vector inside an effect",
+          "id": "cats-effect:body-validation-4",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Random.scala",
+              "line": 522,
+              "quote": "def shuffleList[A](l: List[A]): F[List[A]] =",
+              "source_sha256": "17ea3f870737470d71a8e4a9166d11fca88c4ba98161f85c63ffb1eb2e0cb2d5"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "phoenix",
+      "commit": "850162d618cf4e31be82fb53ad6e259095fa6126",
+      "queries": [
+        {
+          "category": "intent",
+          "query": "Accept or reject a channel join according to the application callback result",
+          "id": "phoenix:body-validation-1",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "lib/phoenix/channel/server.ex",
+              "line": 400,
+              "quote": "defp channel_join(channel, topic, auth_payload, socket)",
+              "source_sha256": "dad607f8dde9a6f35a9ad8d6e03a874eb13921e75cd7d9d3b6c5feb14fce9b93"
+            }
+          ]
+        },
+        {
+          "category": "cross_file",
+          "query": "Serialize development code recompilation requests through a server while supporting synchronization",
+          "id": "phoenix:body-validation-2",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "lib/phoenix/code_reloader.ex",
+              "line": 63,
+              "quote": "defdelegate reload!(endpoint, opts), to: Phoenix.CodeReloader.Server",
+              "source_sha256": "26ca438d5464a0ee492e4031e17cd7cfaaf3637ab8f2c7b64123ab9ff82de2cc"
+            },
+            {
+              "file": "lib/phoenix/code_reloader/server.ex",
+              "line": 62,
+              "quote": "def handle_call({:reload!, endpoint, opts}, from, state)",
+              "source_sha256": "6e10f9f095158a2dba35da9e6a5e0756c9e72bf7d292c0ab7d73baab3c8efca7"
+            }
+          ]
+        },
+        {
+          "category": "configuration",
+          "query": "Load configured static asset digest mappings and decide whether generated paths include a version marker",
+          "id": "phoenix:body-validation-3",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "lib/phoenix/endpoint/supervisor.ex",
+              "line": 418,
+              "quote": "defp warmup_static(endpoint, %{\"latest\" => latest, \"digests\" => digests})",
+              "source_sha256": "5b7aacc63838e62b4d4bb574eb28895afab3aa442b9cc506561c5b56d5dacf94"
+            }
+          ]
+        },
+        {
+          "category": "ambiguous_terms",
+          "query": "Convert a route parameter to text and escape it as one URL path segment",
+          "id": "phoenix:body-validation-4",
+          "split": "validation",
+          "evidence": [
+            {
+              "file": "lib/phoenix/verified_routes.ex",
+              "line": 752,
+              "quote": "defp encode_segment(data)",
+              "source_sha256": "444382e35737bbc9e82396d4de7e1c828e8490e1c7740edab0896642c899893e"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

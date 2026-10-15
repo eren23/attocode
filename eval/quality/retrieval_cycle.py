@@ -22,6 +22,7 @@ from attocode_intel.query_ranking import demote_tests
 from eval.quality import sources
 from eval.quality.corpus import PACK, materialize
 from eval.quality.retrieval_ablation import metrics
+from eval.quality.retrieval_body_trial import body_file_fusion
 from eval.quality.runner import REPO, fingerprint
 
 
@@ -107,6 +108,15 @@ def check_choice(choice, question_hash, source_hash):
         raise ValueError('Choice does not match frozen inputs')
 
 
+def check_body_choice(choice, question_hash, source_hash):
+    if (choice['questions_sha256'] != question_hash or choice['source_sha256'] != source_hash
+            or choice['candidate'] != 'body_file' or not choice['development']['passed']
+            or len(choice['development']['checks']) != 5
+            or not all(choice['development']['checks'].values())
+            or choice['development']['baseline']['queries'] != 48):
+        raise ValueError('Body-file choice does not match qualified frozen inputs')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--questions', type=Path, required=True)
@@ -114,6 +124,7 @@ def main():
     parser.add_argument('--split', choices=['development', 'validation'], required=True)
     parser.add_argument('--pack', action='append', required=True)
     parser.add_argument('--choice', type=Path)
+    parser.add_argument('--body-file-choice', type=Path)
     args = parser.parse_args()
     if not 1 <= len(args.pack) <= 2 or len(set(args.pack)) != len(args.pack):
         parser.error('Select one or two distinct packs')
@@ -121,7 +132,13 @@ def main():
     question_hash, source_hash = hashlib.sha256(raw).hexdigest(), identity()
     questions = json.loads(raw)
     candidate = 'both'
-    if args.split == 'validation':
+    if args.body_file_choice:
+        if args.split != 'validation' or args.choice:
+            parser.error('Body-file trial requires validation and its own choice')
+        choice = json.loads(args.body_file_choice.read_bytes())
+        check_body_choice(choice, question_hash, source_hash)
+        candidate = 'body_file'
+    elif args.split == 'validation':
         if not args.choice:
             parser.error('Validation requires a frozen development choice')
         choice = json.loads(args.choice.read_bytes())
@@ -169,10 +186,10 @@ def main():
                                 or label['quote'] not in content):
                             raise ValueError('Label source mismatch')
                     queries = {'expanded': _expand_query(q['query'])}
-                    if candidate != 'none':
+                    if candidate not in ('none', 'body_file'):
                         queries['literal'] = q['query']
                     samples = {a: [] for a in queries}
-                    outputs, dual_samples = {}, []
+                    outputs, dual_samples, body_samples = {}, [], []
                     for repeat in range(3):
                         order = list(queries)
                         if (repeat + number) % 2:
@@ -193,6 +210,13 @@ def main():
                             paths = dual_fusion(outputs['expanded']['files'], outputs['literal']['files'], q['query'])
                             dual_samples.append(sum(times.values()) + time.perf_counter() - start)
                             outputs['dual'] = {'files': paths}
+                        if candidate == 'body_file':
+                            start = time.perf_counter()
+                            paths = body_file_fusion(outputs['expanded']['stages'], q['query'])
+                            body_samples.append(times['expanded'] + time.perf_counter() - start)
+                            outputs['body_file'] = {'files': paths}
+                    if body_samples:
+                        samples['body_file'] = body_samples
                     if dual_samples:
                         samples['dual'] = dual_samples
                     arms = {}

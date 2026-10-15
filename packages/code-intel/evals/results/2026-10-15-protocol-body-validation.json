@@ -1,0 +1,971 @@
+{
+  "local": {
+    "budget_bytes": 5368709120,
+    "budget_seconds": 600,
+    "checks": [
+      {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "exit_code": 0,
+        "log_truncated": false,
+        "name": "lint",
+        "peak_disk_bytes": 12288,
+        "peak_rss_bytes": 1130496,
+        "seconds": 0.221,
+        "status": "passed",
+        "wall_seconds": 0.221
+      },
+      {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "exit_code": 0,
+        "log_truncated": false,
+        "name": "contracts",
+        "peak_disk_bytes": 40179082,
+        "peak_rss_bytes": 879378432,
+        "seconds": 28.341,
+        "status": "passed",
+        "wall_seconds": 28.341
+      },
+      {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "exit_code": 0,
+        "log_truncated": false,
+        "name": "scale",
+        "peak_disk_bytes": 128337290,
+        "peak_rss_bytes": 274841600,
+        "seconds": 9.637,
+        "status": "passed",
+        "wall_seconds": 9.637
+      },
+      {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "exit_code": 0,
+        "log_truncated": false,
+        "name": "lifecycle",
+        "peak_disk_bytes": 39646602,
+        "peak_rss_bytes": 130482176,
+        "seconds": 3.187,
+        "status": "passed",
+        "wall_seconds": 3.187
+      }
+    ],
+    "cleanup_verified": true,
+    "ending_fixture_sha256": "d5b7bd7966bbe9ffe32a7fcbc92343a256fd63f1255260a6957930be2f692ff9",
+    "ending_source_sha256": "0a92db72d7414b6c8a4d4d12b5aa02e24bd3e65d08142e2ce0e5fbde9cc1de9f",
+    "finished_at": 1792089808.243239,
+    "fixture_sha256": "d5b7bd7966bbe9ffe32a7fcbc92343a256fd63f1255260a6957930be2f692ff9",
+    "full_tier": true,
+    "harness_sha256": "4e846fe69f4cc2d1f8767f06beee72ec1983418e3992894f9a337e3a977a1973",
+    "model_runs": 0,
+    "owner": "attocode-quality-v1",
+    "platform": "darwin",
+    "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
+    "remaining_bytes": 233472,
+    "remaining_checks": [],
+    "run_id": "20261015T204246-1269fc4f",
+    "selection": {
+      "packs": [],
+      "resume": null,
+      "shard": null,
+      "suite": "all"
+    },
+    "source_sha256": "0a92db72d7414b6c8a4d4d12b5aa02e24bd3e65d08142e2ce0e5fbde9cc1de9f",
+    "started_at": 1792089766.578142,
+    "status": "passed",
+    "tier": "local",
+    "elapsed_seconds": 41.66509699821472,
+    "tests": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "8",
+        "tests": "656",
+        "time": "27.459"
+      }
+    ]
+  },
+  "ranking": {
+    "budget_bytes": 5368709120,
+    "budget_seconds": 180,
+    "checks": [
+      {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "exit_code": 0,
+        "log_truncated": false,
+        "name": "ranking",
+        "peak_disk_bytes": 237084672,
+        "peak_rss_bytes": 219922432,
+        "seconds": 41.968,
+        "status": "passed",
+        "wall_seconds": 41.968
+      }
+    ],
+    "cleanup_verified": true,
+    "ending_fixture_sha256": "d5b7bd7966bbe9ffe32a7fcbc92343a256fd63f1255260a6957930be2f692ff9",
+    "ending_source_sha256": "0a92db72d7414b6c8a4d4d12b5aa02e24bd3e65d08142e2ce0e5fbde9cc1de9f",
+    "finished_at": 1792089807.4671948,
+    "fixture_sha256": "d5b7bd7966bbe9ffe32a7fcbc92343a256fd63f1255260a6957930be2f692ff9",
+    "full_tier": false,
+    "harness_sha256": "4e846fe69f4cc2d1f8767f06beee72ec1983418e3992894f9a337e3a977a1973",
+    "model_runs": 0,
+    "owner": "attocode-quality-v1",
+    "platform": "darwin",
+    "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
+    "remaining_bytes": 32768,
+    "remaining_checks": [],
+    "run_id": "20261015T204245-83a8908e",
+    "selection": {
+      "packs": [],
+      "resume": null,
+      "shard": null,
+      "suite": "ranking"
+    },
+    "source_sha256": "0a92db72d7414b6c8a4d4d12b5aa02e24bd3e65d08142e2ce0e5fbde9cc1de9f",
+    "started_at": 1792089765.498121,
+    "status": "passed",
+    "tier": "broad",
+    "elapsed_seconds": 41.96907377243042,
+    "ranking": {
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "frozen_local_snapshot": true,
+      "git_version": "git version 2.50.1 (Apple Git-155)",
+      "identity": {
+        "dependencies": [
+          [
+            "aiosqlite",
+            "0.22.1"
+          ],
+          [
+            "alembic",
+            "1.18.4"
+          ],
+          [
+            "annotated-doc",
+            "0.0.4"
+          ],
+          [
+            "annotated-types",
+            "0.7.0"
+          ],
+          [
+            "anthropic",
+            "0.84.0"
+          ],
+          [
+            "anyio",
+            "4.12.1"
+          ],
+          [
+            "arq",
+            "0.27.0"
+          ],
+          [
+            "asyncpg",
+            "0.31.0"
+          ],
+          [
+            "attocode",
+            "0.2.30"
+          ],
+          [
+            "attocode-code-intel",
+            "0.1.4"
+          ],
+          [
+            "attrs",
+            "25.4.0"
+          ],
+          [
+            "babel",
+            "2.18.0"
+          ],
+          [
+            "backrefs",
+            "6.2"
+          ],
+          [
+            "bcrypt",
+            "5.0.0"
+          ],
+          [
+            "bracex",
+            "2.6"
+          ],
+          [
+            "bump-my-version",
+            "1.2.7"
+          ],
+          [
+            "certifi",
+            "2026.2.25"
+          ],
+          [
+            "cffi",
+            "2.0.0"
+          ],
+          [
+            "charset-normalizer",
+            "3.4.4"
+          ],
+          [
+            "click",
+            "8.3.1"
+          ],
+          [
+            "colorama",
+            "0.4.6"
+          ],
+          [
+            "contourpy",
+            "1.3.3"
+          ],
+          [
+            "coverage",
+            "7.13.4"
+          ],
+          [
+            "cryptography",
+            "46.0.5"
+          ],
+          [
+            "cycler",
+            "0.12.1"
+          ],
+          [
+            "distro",
+            "1.9.0"
+          ],
+          [
+            "docstring_parser",
+            "0.17.0"
+          ],
+          [
+            "ecdsa",
+            "0.19.1"
+          ],
+          [
+            "einops",
+            "0.8.2"
+          ],
+          [
+            "fastapi",
+            "0.135.1"
+          ],
+          [
+            "filelock",
+            "3.25.0"
+          ],
+          [
+            "fonttools",
+            "4.61.1"
+          ],
+          [
+            "fsspec",
+            "2026.2.0"
+          ],
+          [
+            "ghp-import",
+            "2.1.0"
+          ],
+          [
+            "greenlet",
+            "3.3.2"
+          ],
+          [
+            "h11",
+            "0.16.0"
+          ],
+          [
+            "hf-xet",
+            "1.3.2"
+          ],
+          [
+            "hiredis",
+            "3.3.0"
+          ],
+          [
+            "httpcore",
+            "1.0.9"
+          ],
+          [
+            "httptools",
+            "0.7.1"
+          ],
+          [
+            "httpx",
+            "0.28.1"
+          ],
+          [
+            "httpx-oauth",
+            "0.16.1"
+          ],
+          [
+            "httpx-sse",
+            "0.4.3"
+          ],
+          [
+            "huggingface_hub",
+            "1.5.0"
+          ],
+          [
+            "idna",
+            "3.11"
+          ],
+          [
+            "iniconfig",
+            "2.3.0"
+          ],
+          [
+            "jinja2",
+            "3.1.6"
+          ],
+          [
+            "jiter",
+            "0.13.0"
+          ],
+          [
+            "joblib",
+            "1.5.3"
+          ],
+          [
+            "jsonschema",
+            "4.26.0"
+          ],
+          [
+            "jsonschema-specifications",
+            "2025.9.1"
+          ],
+          [
+            "kiwisolver",
+            "1.4.9"
+          ],
+          [
+            "librt",
+            "0.8.1"
+          ],
+          [
+            "linkify-it-py",
+            "2.0.3"
+          ],
+          [
+            "mako",
+            "1.3.10"
+          ],
+          [
+            "markdown",
+            "3.10.2"
+          ],
+          [
+            "markdown-it-py",
+            "4.0.0"
+          ],
+          [
+            "markupsafe",
+            "3.0.3"
+          ],
+          [
+            "matplotlib",
+            "3.10.8"
+          ],
+          [
+            "mcp",
+            "1.26.0"
+          ],
+          [
+            "mdit-py-plugins",
+            "0.5.0"
+          ],
+          [
+            "mdurl",
+            "0.1.2"
+          ],
+          [
+            "mergedeep",
+            "1.3.4"
+          ],
+          [
+            "mkdocs",
+            "1.6.1"
+          ],
+          [
+            "mkdocs-get-deps",
+            "0.2.0"
+          ],
+          [
+            "mkdocs-material",
+            "9.7.3"
+          ],
+          [
+            "mkdocs-material-extensions",
+            "1.3.1"
+          ],
+          [
+            "mpmath",
+            "1.3.0"
+          ],
+          [
+            "mypy",
+            "1.19.1"
+          ],
+          [
+            "mypy_extensions",
+            "1.1.0"
+          ],
+          [
+            "networkx",
+            "3.6.1"
+          ],
+          [
+            "numpy",
+            "2.4.2"
+          ],
+          [
+            "openai",
+            "2.24.0"
+          ],
+          [
+            "packaging",
+            "26.0"
+          ],
+          [
+            "paginate",
+            "0.5.7"
+          ],
+          [
+            "pathspec",
+            "1.0.4"
+          ],
+          [
+            "pgvector",
+            "0.4.2"
+          ],
+          [
+            "pillow",
+            "12.1.1"
+          ],
+          [
+            "platformdirs",
+            "4.9.2"
+          ],
+          [
+            "pluggy",
+            "1.6.0"
+          ],
+          [
+            "prompt_toolkit",
+            "3.0.52"
+          ],
+          [
+            "psutil",
+            "7.2.2"
+          ],
+          [
+            "pyasn1",
+            "0.6.2"
+          ],
+          [
+            "pycparser",
+            "3.0"
+          ],
+          [
+            "pydantic",
+            "2.12.5"
+          ],
+          [
+            "pydantic-settings",
+            "2.13.1"
+          ],
+          [
+            "pydantic_core",
+            "2.41.5"
+          ],
+          [
+            "pygit2",
+            "1.19.1"
+          ],
+          [
+            "pygments",
+            "2.19.2"
+          ],
+          [
+            "pyjwt",
+            "2.11.0"
+          ],
+          [
+            "pymdown-extensions",
+            "10.21"
+          ],
+          [
+            "pyparsing",
+            "3.3.2"
+          ],
+          [
+            "pytest",
+            "9.0.2"
+          ],
+          [
+            "pytest-asyncio",
+            "1.3.0"
+          ],
+          [
+            "pytest-cov",
+            "7.0.0"
+          ],
+          [
+            "pytest-mock",
+            "3.15.1"
+          ],
+          [
+            "pytest-textual-snapshot",
+            "1.0.0"
+          ],
+          [
+            "python-dateutil",
+            "2.9.0.post0"
+          ],
+          [
+            "python-dotenv",
+            "1.2.1"
+          ],
+          [
+            "python-jose",
+            "3.5.0"
+          ],
+          [
+            "python-multipart",
+            "0.0.22"
+          ],
+          [
+            "pyyaml",
+            "6.0.3"
+          ],
+          [
+            "pyyaml_env_tag",
+            "1.1"
+          ],
+          [
+            "questionary",
+            "2.1.1"
+          ],
+          [
+            "redis",
+            "5.3.1"
+          ],
+          [
+            "referencing",
+            "0.37.0"
+          ],
+          [
+            "regex",
+            "2026.2.28"
+          ],
+          [
+            "requests",
+            "2.32.5"
+          ],
+          [
+            "respx",
+            "0.22.0"
+          ],
+          [
+            "rich",
+            "14.3.3"
+          ],
+          [
+            "rich-click",
+            "1.9.7"
+          ],
+          [
+            "rpds-py",
+            "0.30.0"
+          ],
+          [
+            "rsa",
+            "4.9.1"
+          ],
+          [
+            "ruff",
+            "0.15.4"
+          ],
+          [
+            "safetensors",
+            "0.7.0"
+          ],
+          [
+            "scikit-learn",
+            "1.8.0"
+          ],
+          [
+            "scipy",
+            "1.17.1"
+          ],
+          [
+            "sentence-transformers",
+            "5.2.3"
+          ],
+          [
+            "setuptools",
+            "82.0.0"
+          ],
+          [
+            "shellingham",
+            "1.5.4"
+          ],
+          [
+            "six",
+            "1.17.0"
+          ],
+          [
+            "sniffio",
+            "1.3.1"
+          ],
+          [
+            "sqlalchemy",
+            "2.0.48"
+          ],
+          [
+            "sse-starlette",
+            "3.3.2"
+          ],
+          [
+            "starlette",
+            "0.52.1"
+          ],
+          [
+            "structlog",
+            "25.5.0"
+          ],
+          [
+            "sympy",
+            "1.14.0"
+          ],
+          [
+            "syrupy",
+            "5.1.0"
+          ],
+          [
+            "tenacity",
+            "9.1.4"
+          ],
+          [
+            "textual",
+            "8.0.0"
+          ],
+          [
+            "threadpoolctl",
+            "3.6.0"
+          ],
+          [
+            "tiktoken",
+            "0.12.0"
+          ],
+          [
+            "tokenizers",
+            "0.22.2"
+          ],
+          [
+            "tomli_w",
+            "1.2.0"
+          ],
+          [
+            "tomlkit",
+            "0.14.0"
+          ],
+          [
+            "torch",
+            "2.10.0"
+          ],
+          [
+            "tqdm",
+            "4.67.3"
+          ],
+          [
+            "transformers",
+            "5.2.0"
+          ],
+          [
+            "tree-sitter",
+            "0.25.2"
+          ],
+          [
+            "tree-sitter-bash",
+            "0.25.1"
+          ],
+          [
+            "tree-sitter-c",
+            "0.24.1"
+          ],
+          [
+            "tree-sitter-c-sharp",
+            "0.23.1"
+          ],
+          [
+            "tree-sitter-cpp",
+            "0.23.4"
+          ],
+          [
+            "tree-sitter-css",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-elixir",
+            "0.3.5"
+          ],
+          [
+            "tree-sitter-go",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-hcl",
+            "1.2.0"
+          ],
+          [
+            "tree-sitter-html",
+            "0.23.2"
+          ],
+          [
+            "tree-sitter-java",
+            "0.23.5"
+          ],
+          [
+            "tree-sitter-javascript",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-json",
+            "0.24.8"
+          ],
+          [
+            "tree-sitter-kotlin",
+            "1.1.0"
+          ],
+          [
+            "tree-sitter-language-pack",
+            "1.1.2"
+          ],
+          [
+            "tree-sitter-lua",
+            "0.5.0"
+          ],
+          [
+            "tree-sitter-php",
+            "0.24.1"
+          ],
+          [
+            "tree-sitter-python",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-ruby",
+            "0.23.1"
+          ],
+          [
+            "tree-sitter-rust",
+            "0.24.0"
+          ],
+          [
+            "tree-sitter-scala",
+            "0.24.0"
+          ],
+          [
+            "tree-sitter-swift",
+            "0.0.1"
+          ],
+          [
+            "tree-sitter-toml",
+            "0.7.0"
+          ],
+          [
+            "tree-sitter-typescript",
+            "0.23.2"
+          ],
+          [
+            "tree-sitter-yaml",
+            "0.7.2"
+          ],
+          [
+            "tree-sitter-zig",
+            "1.1.2"
+          ],
+          [
+            "typer",
+            "0.24.1"
+          ],
+          [
+            "typer-slim",
+            "0.24.0"
+          ],
+          [
+            "typing-inspection",
+            "0.4.2"
+          ],
+          [
+            "typing_extensions",
+            "4.15.0"
+          ],
+          [
+            "uc-micro-py",
+            "1.0.3"
+          ],
+          [
+            "urllib3",
+            "2.6.3"
+          ],
+          [
+            "uvicorn",
+            "0.41.0"
+          ],
+          [
+            "uvloop",
+            "0.22.1"
+          ],
+          [
+            "watchdog",
+            "6.0.0"
+          ],
+          [
+            "watchfiles",
+            "1.1.1"
+          ],
+          [
+            "wcmatch",
+            "10.1"
+          ],
+          [
+            "wcwidth",
+            "0.6.0"
+          ],
+          [
+            "websockets",
+            "16.0"
+          ]
+        ],
+        "fixture_sha256": "ebb347d095cbc84dda1f3a2876a280ce0e3cce3355520cb18186387d745f5484",
+        "harness_sha256": "18654d562600c83ffb344c43c8a467d28b5f88408125227e42a31b7009db729d",
+        "optional_grammars": {
+          "cache_sha256": "33de365f463f920ff46a0712f884df77a0b7637517c492de1a9f896bddb3008d",
+          "languages": [
+            "clojure",
+            "dart",
+            "erlang",
+            "fsharp",
+            "haskell",
+            "julia",
+            "nim",
+            "objc",
+            "ocaml",
+            "perl",
+            "r"
+          ]
+        },
+        "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+        "platform": "macOS-26.2-arm64-arm-64bit",
+        "python": "3.12.12 (main, Oct  9 2025, 11:07:00) [Clang 17.0.0 (clang-1700.6.3.2)]",
+        "settings": {
+          "ATTOCODE_EMBEDDING_MODEL": "",
+          "ATTOCODE_INTEL_BROAD_RERANK": "0",
+          "ATTOCODE_INTEL_PRECISION": "off",
+          "ATTOCODE_INTEL_RANKING_ALLOW_REMOTE": "0",
+          "ATTOCODE_INTEL_RANKING_PROVIDER": "off",
+          "ATTOCODE_LOCAL_ONLY": "1",
+          "ATTOCODE_NL_EMBEDDING_MODE": "none"
+        },
+        "source_sha256": "e28c7d0b488cb46d140d64998958fb55dbb514e161118a53263b64d5cf195362"
+      },
+      "manifest_packs": [
+        "Nim",
+        "SwiftFormat",
+        "acme-sh",
+        "aspnetcore",
+        "cats-effect",
+        "cockroach",
+        "crystal",
+        "dart-sdk",
+        "deno",
+        "express",
+        "fastapi",
+        "framework",
+        "frontend",
+        "fsharp",
+        "ggplot2",
+        "gh-cli",
+        "gson",
+        "iTerm2",
+        "julia",
+        "luarocks",
+        "ocaml",
+        "okhttp",
+        "otp",
+        "pandas",
+        "perl5",
+        "phoenix",
+        "postgrest",
+        "prisma",
+        "rails",
+        "redis",
+        "requests",
+        "ring",
+        "ripgrep",
+        "spdlog",
+        "starship",
+        "zls"
+      ],
+      "model_runs": 0,
+      "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+      "passed": true,
+      "repositories": [],
+      "schema_version": 2,
+      "scope": "Development evidence anchors, not exhaustive recall or agent benefit",
+      "selected_packs": [
+        "Nim",
+        "SwiftFormat",
+        "acme-sh",
+        "aspnetcore",
+        "cats-effect",
+        "cockroach",
+        "crystal",
+        "dart-sdk",
+        "deno",
+        "express",
+        "fastapi",
+        "framework",
+        "frontend",
+        "fsharp",
+        "ggplot2",
+        "gh-cli",
+        "gson",
+        "iTerm2",
+        "julia",
+        "luarocks",
+        "ocaml",
+        "okhttp",
+        "otp",
+        "pandas",
+        "perl5",
+        "phoenix",
+        "postgrest",
+        "prisma",
+        "rails",
+        "redis",
+        "requests",
+        "ring",
+        "ripgrep",
+        "spdlog",
+        "starship",
+        "zls"
+      ]
+    }
+  },
+  "product_change": {
+    "file": "packages/code-intel/src/attocode_intel/_internal/integrations/lsp/client.py",
+    "before_sha256": "f4ab5506abbaf9942181092f66e8773a70a715e1322a89b353d243678e8db02e",
+    "after_sha256": "a54a92af407e5a9aaf69b91a856c825a268a0cf4e0d14d64e0dc756a2f360758",
+    "body_file_candidate_ast_unchanged": true
+  }
+}
