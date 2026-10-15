@@ -346,6 +346,8 @@ class SemanticSearchManager:
     root_dir: str
     nl_mode: str = ""  # "none" or "heuristic"; "" = read ATTOCODE_NL_EMBEDDING_MODE env var
     scoring_config: SearchScoringConfig = field(default_factory=SearchScoringConfig)
+    ast_lookup: Any = field(default=None, repr=False)
+    _warmup_reused_asts: int = field(default=0, repr=False)
     _provider: Any = field(default=None, repr=False)
     _store: Any = field(default=None, repr=False)
     _indexed: bool = field(default=False, repr=False)
@@ -1435,6 +1437,7 @@ class SemanticSearchManager:
         self._warmup_finished = 0.0
         self._warmup_started = time.monotonic()
         self._warmup_seconds = {}
+        self._warmup_reused_asts = 0
 
         def timed(stage, operation):
             self._warmup_stage = stage
@@ -1684,6 +1687,7 @@ class SemanticSearchManager:
             "vector_status": self._index_progress.status,
             "vector_coverage": self._index_progress.coverage,
             "warmup_stage": self._warmup_stage,
+            "warmup_reused_asts": self._warmup_reused_asts,
             "warmup_seconds": round((self._warmup_finished or time.monotonic()) - self._warmup_started, 3)
                 if self._warmup_started else 0.0,
         }
@@ -2250,13 +2254,18 @@ class SemanticSearchManager:
             is_config, is_test = file_meta.get(rel, (False, False))
 
             try:
-                if body_spans is None:
+                if body_spans is None and self.ast_lookup is None:
                     ast = parse_file(abs_path)
                 else:
                     with open(abs_path, encoding="utf-8", errors="replace") as source:
                         content = source.read()
-                    ast = parse_file(abs_path, content)
-                    body_spans.put(rel, content, ast)
+                    ast = self.ast_lookup(rel, hashlib.sha256(content.encode()).hexdigest()) if self.ast_lookup else None
+                    if ast is None:
+                        ast = parse_file(abs_path, content)
+                    else:
+                        self._warmup_reused_asts += 1
+                    if body_spans is not None:
+                        body_spans.put(rel, content, ast)
             except Exception:
                 continue
 

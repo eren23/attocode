@@ -39,6 +39,7 @@ REGION = "fra1"
 BATCH_USD = 1.0
 MONTH_USD = 10.0
 TTL_SECONDS = 7200
+CONTROLLER_SECONDS = 90 * 60
 # This applies only to the disposable Ubuntu worker, never the account's VPC
 # or the controller. Keep DNS failure bounded before apt's long retry cycle.
 WORKER_DNS_PREFLIGHT = (
@@ -286,7 +287,8 @@ def batch(api, root, *, execute=None, packs=(), shard=None, suite="all", resume=
                 execute(api, node_id, directory, root, key)
             else:
                 execute_batch(api, node_id, directory, root, key, packs=packs, shard=shard, suite=suite,
-                              resume=resume_data is not None)
+                              resume=resume_data is not None,
+                              wall_deadline=row["created_at"] + CONTROLLER_SECONDS)
             row["status"] = "completed"
         except BaseException as exc:
             row.update(status="failed", error=f"{type(exc).__name__}: {exc}")
@@ -313,12 +315,26 @@ def batch(api, root, *, execute=None, packs=(), shard=None, suite="all", resume=
         return row
 
 
-def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, suite="all", resume=False):
+def worker_command(command, seconds):
+    """Bound remote work on the worker even if the SSH controller disappears."""
+    seconds = int(seconds)
+    if not 0 < seconds <= CONTROLLER_SECONDS:
+        raise ValueError("Worker timeout must be positive and within the controller budget")
+    return f"timeout --signal=TERM --kill-after=10s {seconds}s sh -c {shlex.quote(command)}"
+
+
+def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, suite="all", resume=False,
+                  wall_deadline=None):
     arguments = shlex.join(workflow_arguments(packs, shard, suite, resume=resume))
     start = time.monotonic()
-    deadline = start + 90 * 60
+    deadline = start + CONTROLLER_SECONDS
+    if wall_deadline is None:
+        wall_deadline = time.time() + CONTROLLER_SECONDS
+
+    def remaining():
+        return min(deadline - time.monotonic(), wall_deadline - time.time())
     host = None
-    while time.monotonic() < start + 300:
+    while time.monotonic() < start + 300 and remaining() > 0:
         node = api.request("GET", f"/droplets/{node_id}")["droplet"]
         if node["status"] == "active":
             host = next((n["ip_address"] for n in node["networks"]["v4"] if n["type"] == "public"), None)
@@ -330,12 +346,14 @@ def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, s
         raise TimeoutError("Droplet did not become active within five minutes")
     options = ["-F", "/dev/null", "-i", str(key), "-o", "BatchMode=yes", "-o", "ForwardAgent=no",
                "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new",
-               "-o", "UserKnownHostsFile=" + str(directory / "known_hosts"), "-o", "ConnectTimeout=10"]
+               "-o", "UserKnownHostsFile=" + str(directory / "known_hosts"), "-o", "ConnectTimeout=10",
+               "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"]
     ssh = ["ssh", *options, "root@" + host]
     env = environment(root)
     ready = False
-    while time.monotonic() < start + 480:
-        if subprocess.run([*ssh, "true"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15).returncode == 0:
+    while time.monotonic() < start + 480 and remaining() > 0:
+        if subprocess.run([*ssh, "true"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                          timeout=max(.01, min(15, remaining()))).returncode == 0:
             ready = True
             break
         time.sleep(2)
@@ -358,22 +376,36 @@ def execute_batch(api, node_id, directory, root, key, *, packs=(), shard=None, s
     rows = []
     try:
         for name, command in commands:
+            if remaining() <= 0:
+                raise TimeoutError("Controller wall or monotonic deadline expired")
+            if name in {"setup", "tests"}:
+                # Leave ten seconds for GNU timeout's SIGKILL escalation.
+                seconds = min(600 if name == "setup" else 3600, int(remaining()) - 10)
+                if seconds <= 0:
+                    raise TimeoutError("Insufficient controller time for remote work")
+                command = [*command[:-1], worker_command(command[-1], seconds)]
             limit = min(deadline, time.monotonic() + (600 if name in {"upload", "setup"} else 3660))
             result = supervise(command, cwd=REPO, env=env, root=root, log=directory / (name + ".log"),
-                               deadline=limit, max_bytes=5 * GIB)
+                               deadline=limit, wall_deadline=wall_deadline, max_bytes=5 * GIB)
             rows.append({"name": name, **result})
             if result["status"] != "passed":
                 raise RuntimeError(f"Remote {name} failed; see bounded controller log")
     finally:
         # Reports/logs only: no cloning the remote corpora or indexes to the Mac.
-        collect = [*ssh, "cd /root/job; python3 -m eval.quality.export"]
-        result = supervise(collect, cwd=REPO, env=env, root=root, log=directory / "collect.log",
-                           deadline=min(deadline, time.monotonic() + 120), max_bytes=5 * GIB)
+        collect_seconds = min(110, int(remaining()) - 10)
+        if collect_seconds <= 0:
+            result = {"status": "incomplete", "reason": "admission_budget", "seconds": 0}
+        else:
+            collect = [*ssh, worker_command("cd /root/job; python3 -m eval.quality.export", collect_seconds)]
+            result = supervise(collect, cwd=REPO, env=env, root=root, log=directory / "collect.log",
+                               deadline=min(deadline, time.monotonic() + 120),
+                               wall_deadline=wall_deadline, max_bytes=5 * GIB)
         rows.append({"name": "collect", **result})
         if result["status"] == "passed":
             result = supervise(["scp", *options, "root@" + host + ":/root/results.tar.gz", str(directory / "results.tar.gz")],
                                cwd=REPO, env=env, root=root, log=directory / "download.log",
-                               deadline=min(deadline, time.monotonic() + 120), max_bytes=5 * GIB)
+                               deadline=min(deadline, time.monotonic() + 120),
+                               wall_deadline=wall_deadline, max_bytes=5 * GIB)
             rows.append({"name": "download", **result})
         write_json(directory / "phases.json", rows)
     if any(r["status"] != "passed" for r in rows):

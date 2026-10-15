@@ -287,11 +287,17 @@ class CodeIntelService:
                         SemanticSearchManager,
                     )
 
-                    kwargs: dict[str, object] = {"root_dir": self._project_dir}
+                    kwargs: dict[str, object] = {"root_dir": self._project_dir,
+                                                 "ast_lookup": self._cached_search_ast}
                     if self._scoring_config is not None:
                         kwargs["scoring_config"] = self._scoring_config
                     self._semantic_search = SemanticSearchManager(**kwargs)
         return self._semantic_search
+
+    def _cached_search_ast(self, path: str, digest: str):
+        # Search must not initialize structural indexing just to attempt reuse.
+        ast = self._ast_service
+        return ast.cached_file_ast(path, digest) if ast is not None else None
 
     def _task_file_scores(self, task_hint: str, top_k: int = 80) -> dict[str, float]:
         """Rank files by source-aware local candidates without requiring vectors.

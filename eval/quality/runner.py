@@ -25,6 +25,7 @@ QUICK_TESTS = ["test_search_evidence.py", "test_focused_inspection.py", "test_la
 LOCAL_TESTS = QUICK_TESTS + ["test_product.py", "test_query_ranking.py", "test_ranking_intent.py",
                            "test_compact_inspection.py", "test_lean_profile.py", "test_daily_workflows.py",
                            "test_index_reuse.py", "test_edit_restart.py", "test_navigation_evidence.py",
+                           "test_cold_index_cost.py",
                            "test_index_sequences.py", "test_mixed_workspace.py", "test_index_processes.py",
                            "test_structural_evidence.py", "test_search_evidence_audit.py", "test_remote.py",
                            "test_module_ownership.py", "test_real_language_server.py", "test_precision_protocol.py",
@@ -139,11 +140,17 @@ def stop_group(process):
     process.wait(timeout=5)
 
 
-def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * GIB, log_cap=2**21):
+def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * GIB, log_cap=2**21,
+              wall_deadline=None):
     started = time.monotonic()
+    wall_started = time.time()
+    if wall_deadline is None:
+        wall_deadline = wall_started + max(0, deadline - started)
+    else:
+        wall_deadline = min(wall_deadline, wall_started + max(0, deadline - started))
     row = {"command": command, "status": "incomplete", "peak_rss_bytes": 0,
            "peak_disk_bytes": disk_bytes(root), "log_truncated": False}
-    if row["peak_disk_bytes"] >= max_bytes or started >= deadline:
+    if row["peak_disk_bytes"] >= max_bytes or started >= deadline or wall_started >= wall_deadline:
         return {**row, "reason": "admission_budget", "seconds": 0}
     try:
         psutil.Process().children(recursive=True)
@@ -186,7 +193,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
             except (psutil.Error, PermissionError):
                 row["reason"] = "process_inspection_unavailable"
             row["peak_disk_bytes"] = max(row["peak_disk_bytes"], disk_bytes(root))
-            if time.monotonic() >= deadline:
+            if time.monotonic() >= deadline or time.time() >= wall_deadline:
                 row["reason"] = "deadline"
             elif row["peak_disk_bytes"] >= max_bytes:
                 row["reason"] = "disk_budget"
@@ -198,6 +205,10 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
                 break
             time.sleep(.2)
     finally:
+        # A child may finish while the controller is suspended. Do not report
+        # that as an on-time pass merely because poll() skipped the loop.
+        if time.monotonic() >= deadline or time.time() >= wall_deadline:
+            row.setdefault("reason", "deadline")
         try:
             stop_group(process)
         except (OSError, subprocess.TimeoutExpired, psutil.Error) as exc:
@@ -216,7 +227,8 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
         reader.join(timeout=3)
         if not reader.is_alive():
             process.stdout.close()
-    row.update(seconds=round(time.monotonic() - started, 3), exit_code=process.returncode,
+    row.update(seconds=round(time.monotonic() - started, 3),
+               wall_seconds=round(time.time() - wall_started, 3), exit_code=process.returncode,
                cleanup_verified=not reader.is_alive() and not cleanup_errors,
                cleanup_errors=cleanup_errors)
     row["peak_disk_bytes"] = max(row["peak_disk_bytes"], disk_bytes(root))

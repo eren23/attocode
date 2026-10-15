@@ -1327,6 +1327,41 @@ def _cpp_header_tree(source_bytes, file_path, language, tree):
     return "cpp", (bounded_parse(parser, bytes(masked)) or candidate) if changed else candidate
 
 
+@functools.lru_cache(maxsize=8)
+def _go_declaration_query(grammar):
+    from tree_sitter import Query
+
+    config = LANGUAGE_CONFIGS["go"]
+    kinds = (*config.function_types, *config.class_types, *config.import_types, *config.var_types)
+    return Query(grammar, "[" + " ".join(f"({kind})" for kind in kinds) + "] @declaration")
+
+
+def _go_declaration_paths(root, grammar):
+    """Keep the existing extractor's paths, locating declarations in native code.
+
+    Go bodies can contain local types/consts/vars, including in function literals.
+    Skipping bodies would lose those. Capture their ancestor paths instead of
+    visiting every expression and punctuation node in Python. A query failure
+    falls back to the complete traversal, including on older bindings.
+    """
+    try:
+        import tree_sitter
+
+        query = _go_declaration_query(grammar)
+        captures = (tree_sitter.QueryCursor(query).captures(root)
+                    if hasattr(tree_sitter, "QueryCursor") else query.captures(root))
+        nodes = captures.get("declaration", []) if isinstance(captures, dict) else [n for n, _ in captures]
+        paths = set()
+        for node in nodes:
+            while node is not None and node.id not in paths:
+                paths.add(node.id)
+                node = node.parent
+        return paths
+    except Exception:
+        logger.debug("Go declaration query unavailable; using full traversal", exc_info=True)
+        return None
+
+
 def ts_parse_file(file_path: str, content: str | None = None, language: str = "") -> dict | None:
     """Parse a file using tree-sitter and return structured AST data.
 
@@ -1370,6 +1405,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
 
     config = LANGUAGE_CONFIGS[language]
     root = tree.root_node
+    declaration_paths = _go_declaration_paths(root, parser.language) if language == "go" else None
 
     functions: list[dict] = []
     classes: list[dict] = []
@@ -1378,6 +1414,8 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
 
     def _process_node(node, parent_class: str = "", parent_function: str = "") -> None:
         """Recursively process tree-sitter nodes."""
+        if declaration_paths is not None and node.id not in declaration_paths:
+            return
         ntype = node.type
 
         # A CommonJS assignment names its function through the left-hand side.

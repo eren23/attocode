@@ -40,6 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reuse bounded content-verified symbol spans between keyword and source-window
   indexing, and persist symbols/references atomically in batches of up to 100
   files. Same-metadata edits invalidate reused spans; failed writes roll back.
+- Lexical indexing can reuse already-published structural ASTs only when their
+  source digest matches. Go extraction visits declaration ancestor paths using
+  a native query, preserving local declarations and falling back to full traversal.
+  Neither change establishes a passing CockroachDB cold gate until revalidated.
+- Quality supervision checks wall and monotonic deadlines and records both clocks.
+  Remote setup/tests/export have worker-side TERM/KILL deadlines, independent of
+  the controller connection. Worker deletion still requires the controller or
+  the independent TTL reaper.
 
 ### Fixed — Workspace indexing boundaries
 

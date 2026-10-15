@@ -1214,6 +1214,15 @@ class ASTService:
             return []
         return ast.get_symbols()
 
+    def cached_file_ast(self, rel_path: str, content_sha256: str) -> FileAST | None:
+        """Read an already-published AST only when its source digest matches.
+
+        No initialization, parsing or waiting for hydration. Published ASTs are
+        replaced on edits; callers must treat the returned snapshot as read-only.
+        """
+        ast = self._ast_cache.get(rel_path)
+        return ast if ast is not None and content_sha256 and ast.content_sha256 == content_sha256 else None
+
     # Internals
     # ------------------------------------------------------------------
 

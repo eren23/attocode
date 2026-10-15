@@ -2,6 +2,8 @@
 import datetime as dt
 import json
 import os
+import shlex
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -10,6 +12,57 @@ from types import SimpleNamespace
 import pytest
 
 from eval.quality.cloud import TAG, batch, execute_batch, quote, reap, reconcile, reserve
+
+
+@pytest.mark.parametrize('seconds', [0, -1, 5401])
+def test_worker_timeout_cannot_be_disabled(seconds):
+    from eval.quality.cloud import worker_command
+    with pytest.raises(ValueError, match='positive'):
+        worker_command('true', seconds)
+
+
+def test_worker_timeout_kills_term_resistant_command_without_controller():
+    from eval.quality.cloud import worker_command
+
+    if not shutil.which('timeout'):
+        pytest.skip('GNU timeout is installed on the Linux worker and Linux CI')
+    script = 'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); print("started",flush=True); time.sleep(60)'
+    command = worker_command('exec ' + shlex.join([sys.executable, '-c', script]), 1)
+    result = subprocess.run(['/bin/sh', '-c', command], capture_output=True, text=True, timeout=15)
+    assert result.returncode in {137, -9} and 'started' in result.stdout
+
+
+def test_controller_resume_past_wall_deadline_does_not_start_tests(tmp_path, monkeypatch):
+    from eval.quality import cloud
+
+    api = FakeAPI()
+    original = api.request
+    def request(method, path, data=None):
+        result = original(method, path, data)
+        if method == 'GET':
+            result['droplet'].update(status='active', networks={'v4': [
+                {'type': 'public', 'ip_address': '192.0.2.1'}]})
+        return result
+    api.request = request
+    wall = [1000.0]
+    monkeypatch.setattr(cloud, 'time', SimpleNamespace(
+        time=lambda: wall[0], monotonic=lambda: 10.0, sleep=lambda _: None))
+    monkeypatch.setattr(cloud.subprocess, 'run', lambda *a, **kw: SimpleNamespace(returncode=0))
+    started = []
+    def supervise(command, **kwargs):
+        if wall[0] >= kwargs['wall_deadline']:
+            return {'status': 'incomplete', 'reason': 'admission_budget'}
+        started.append((kwargs['log'].stem, command))
+        if kwargs['log'].stem == 'setup':
+            wall[0] += cloud.CONTROLLER_SECONDS + 1
+        return {'status': 'passed'}
+    monkeypatch.setattr(cloud, 'supervise', supervise)
+    with pytest.raises(TimeoutError, match='deadline'):
+        batch(api, tmp_path / 'managed', execute=execute_batch)
+    assert [name for name, _ in started] == ['upload', 'setup']
+    assert 'timeout --signal=TERM --kill-after=10s 600s sh -c' in started[1][1][-1]
+    assert 'ServerAliveInterval=15' in started[1][1]
+    assert api.deleted == [42]
 
 
 @pytest.mark.parametrize("command", ["quote", "reap", "reap-apply", "reconcile"])

@@ -176,6 +176,18 @@ local tier's time/storage limits; they are not a long-running contention benchma
 
 ## DigitalOcean batches
 
+The controller checks both wall and monotonic deadlines, including after a host
+suspension. Phase reports expose `wall_seconds` separately from `seconds`.
+Remote setup, tests and export also run under worker-side GNU `timeout`, with
+TERM followed by KILL after ten seconds. Expired controllers refuse new work and
+attempt deletion. A suspended/offline controller cannot itself delete a worker:
+the independent TTL reaper remains the billing cleanup backstop. These limits
+are not a guarantee that provider deletion finishes at exactly 90 minutes.
+
+Search warmup reports `warmup_reused_asts` for content-hash-verified structural
+AST reuse; it adds no second AST cache and does not initialize structural indexing
+just to attempt reuse. Stage durations describe observed work, not an ETA.
+
 The optional controller uses DigitalOcean's API and SSH. It selects one
 `s-8vcpu-16gb-amd` shared CPU worker in `fra1`, with at least 8 vCPUs and
 16 GiB memory, and verifies the
