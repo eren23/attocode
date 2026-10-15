@@ -73,6 +73,62 @@ def test_worker_command_uses_independent_cgroup_and_preserves_shell_text():
         assert '--property=' + setting in command
 
 
+@pytest.mark.parametrize('release', [True, False])
+def test_worker_apt_lock_wait_with_isolated_package_database(tmp_path, release):
+    """Use actual apt/fcntl contention without touching the host package database."""
+    import fcntl
+
+    from eval.quality.cloud import WORKER_APT_INSTALL
+
+    if os.environ.get('QUALITY_TEST_SYSTEMD') != '1':
+        pytest.skip('Dedicated Linux CI enables worker package-manager checks')
+    assert shutil.which('apt-get') and shutil.which('sudo')
+    for name in ('dpkg', 'lists/partial', 'archives/partial', 'config'):
+        (tmp_path / name).mkdir(parents=True)
+    status = tmp_path / 'dpkg/status'
+    status.write_text('Package: quality-already-installed\nStatus: install ok installed\n'
+                      'Priority: optional\nSection: misc\nArchitecture: all\nVersion: 1.0\n'
+                      'Maintainer: Quality Test\nDescription: isolated fixture\n\n')
+    (tmp_path / 'sources.list').write_text('')
+    args = list(WORKER_APT_INSTALL[:-3]) + ['quality-already-installed']
+    assert args[2] == 'DPkg::Lock::Timeout=120'
+    args[2] = 'DPkg::Lock::Timeout=2'  # Exercise the same apt option without a two-minute test.
+    settings = {
+        'Dir::State::status': status,
+        'Dir::State::lists': tmp_path / 'lists',
+        'Dir::State::extended_states': tmp_path / 'extended_states',
+        'Dir::Cache': tmp_path,
+        'Dir::Cache::archives': tmp_path / 'archives',
+        'Dir::Etc::parts': tmp_path / 'config',
+        'Dir::Etc::main': tmp_path / 'absent.conf',
+        'Dir::Etc::sourcelist': tmp_path / 'sources.list',
+        'Dir::Etc::sourceparts': tmp_path / 'config',
+        'Dir::Log': tmp_path,
+    }
+    options = [arg for key, value in settings.items() for arg in ('-o', f'{key}={value}')]
+    command = ['sudo', '-n', args[0], *options, *args[1:], '--no-download', '--no-upgrade']
+    with (tmp_path / 'dpkg/lock-frontend').open('w') as lock:
+        fcntl.lockf(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, env={**os.environ, 'LC_ALL': 'C'})
+        try:
+            if release:
+                # A default no-wait install exits here with 100, proving the
+                # control distinguishes a bounded wait from immediate failure.
+                with pytest.raises(subprocess.TimeoutExpired):
+                    process.communicate(timeout=.3)
+                fcntl.lockf(lock, fcntl.LOCK_UN)
+            output, _ = process.communicate(timeout=8)
+            assert process.returncode == (0 if release else 100), output
+            if not release:
+                assert 'Unable to acquire the dpkg frontend lock' in output
+            assert status.read_text().count('Package:') == 1
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.communicate(timeout=3)
+
+
 def test_controller_resume_past_wall_deadline_does_not_start_tests(tmp_path, monkeypatch):
     from eval.quality import cloud
 
