@@ -2,10 +2,12 @@
 
 This candidate extends static navigation across more language/module layouts and
 adds a bounded, inspectable quality matrix. The implementation is merged and its
-required CI passed, but publication is blocked: the final cold cloud run completed
-35 of 36 source packs and CockroachDB search indexing timed out. All six authorized
+required CI passed, but publication is blocked: the latest full cold cloud run
+passed 35 of 36 source packs and CockroachDB search indexing timed out. Repairs
+through PR #192 did not resolve that blocker. The controller finished in 26.1
+minutes, within its 90-minute limit. All four additionally authorized repair
 batches are used and all workers deleted. See the
-[final cloud evidence](../packages/code-intel/evals/results/2026-10-15-breadth-cloud.md).
+[repair-cycle evidence](../packages/code-intel/evals/results/2026-10-15-cold-repair-cycle.md).
 The local candidate upgrade check is not a PyPI publication check.
 
 ## Changes

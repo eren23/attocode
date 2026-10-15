@@ -5,12 +5,15 @@ retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
 **Current status, 2026-10-15:** implementation and cold-index follow-ups are merged
-through PR #186 (`deaa836`). Required implementation CI passed. The final full cloud
-gate failed: 35/36 packs completed, CockroachDB search warmup incomplete, ranking
-not run. 0.1.6 remains unpublished. All six permitted workstream batches are used,
-all workers deleted, total estimated compute $0.4487. The final controller also
-recorded a wall duration exceeding its configured bound; cause is unestablished.
-See the [final six-run evidence](../packages/code-intel/evals/results/2026-10-15-breadth-cloud.md).
+through PR #192 (`9d3574e`). Required implementation CI passed. The latest full cloud
+gate failed: 35/36 packs passed, CockroachDB search warmup incomplete, ranking
+not run. 0.1.6 remains unpublished. The controller finished within its 90-minute
+limit at 26.1 minutes; that does not establish a universal deadline guarantee.
+All four additionally approved repair batches are used and all workers deleted.
+Their estimated compute cost was $0.1221; all 14 ledger rentals total $0.6487
+(controller estimates, not an invoice). See the
+[repair-cycle evidence](../packages/code-intel/evals/results/2026-10-15-cold-repair-cycle.md)
+and the historical [six-run evidence](../packages/code-intel/evals/results/2026-10-15-breadth-cloud.md).
 The progress entries below are historical observations, not a passing release gate.
 
 ## Milestones
@@ -34,8 +37,10 @@ All mutations of source packs happen in disposable copies, never cached inputs.
 Quick/local remain capped at 120/600 seconds. Managed disk is capped at 5 GiB,
 process-tree RSS at 4 GiB, with a 2 GiB free-space floor. Broad worker tests have
 60 minutes and the controller has 90 minutes. One worker at a time; $1 reservation
-per batch, $10 per UTC month, at most six additional batches for this workstream.
-Read the live ledger before admission. No budget increase or automatic paid runs.
+per batch. The separately approved repair cycle raised the monthly reservation
+cap from $10 to $14 and allowed four additional batches; all four are now used.
+These reservations are admission limits, not actual charges. Read the live ledger
+before admission; no further rental or budget increase is authorized.
 Temporary tools and optional grammars belong on disposable workers or CI.
 
 Preserve shared caches, evaluation artifacts and frozen studies. No model calls,
