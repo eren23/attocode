@@ -337,7 +337,7 @@ resolvectl() { printf '%s\\n' "$*" >> "$DNS_TRACE"; }
 
 
 def test_monthly_admission_and_unresolved_cleanup_block():
-    ledger = [{"month": "2026-01", "reserved_usd": 1, "estimated_usd": 16.5, "cleanup_verified": True}]
+    ledger = [{"month": "2026-01", "reserved_usd": 1, "estimated_usd": 18.5, "cleanup_verified": True}]
     now = dt.datetime(2026, 1, 2, tzinfo=dt.UTC).timestamp()
     with pytest.raises(ValueError, match="Monthly"):
         reserve(ledger, "new", {"hourly_usd": .25}, now)
@@ -346,20 +346,20 @@ def test_monthly_admission_and_unresolved_cleanup_block():
         reserve(ledger, "new", {"hourly_usd": .25}, now)
 
 
-def test_one_more_reservation_preserves_sixteen_existing_and_then_refuses():
+def test_two_more_reservations_preserve_seventeen_existing_and_then_refuse():
     ledger = [{"id": str(i), "month": "2026-10", "reserved_usd": 1,
-               "estimated_usd": .01, "cleanup_verified": True} for i in range(16)]
+               "estimated_usd": .01, "cleanup_verified": True} for i in range(17)]
     original = [dict(row) for row in ledger]
     now = dt.datetime(2026, 10, 15, tzinfo=dt.UTC).timestamp()
-    for i in range(1):
+    for i in range(2):
         row = reserve(ledger, f"additional-{i}", {"hourly_usd": .16667}, now)
         with pytest.raises(ValueError, match="cleanup"):
             reserve(ledger, "concurrent", {"hourly_usd": .16667}, now)
         row.update(cleanup_verified=True, estimated_usd=.01)
     with pytest.raises(ValueError, match="Monthly"):
-        reserve(ledger, "second", {"hourly_usd": .16667}, now)
-    assert ledger[:16] == original
-    assert len(ledger) == 17
+        reserve(ledger, "third", {"hourly_usd": .16667}, now)
+    assert ledger[:17] == original
+    assert len(ledger) == 19
 
 
 @pytest.mark.parametrize("failure", ["execution", "create_response", "interrupt"])
