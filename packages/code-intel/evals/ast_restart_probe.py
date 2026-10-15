@@ -12,7 +12,7 @@ from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import patch
 
-from attocode_intel._internal.integrations.context import ast_service, ast_snapshot
+from attocode_intel._internal.integrations.context import ast_service, ast_snapshot, codebase_ast
 from attocode_intel._internal.integrations.context.index_store import AST_SNAPSHOT_KEY
 
 BASELINE = 'b3501b9d7ae016572d77ceae1289026d23719694'
@@ -23,7 +23,7 @@ def run():
     source = subprocess.check_output(['git', 'show', f'{BASELINE}:{SOURCE}'], timeout=10)
     cls = next(n for n in ast.parse(source).body if isinstance(n, ast.ClassDef) and n.name == 'ASTService')
     methods, scopes = {}, []
-    for name in ('_save_snapshot', '_restore_snapshot'):
+    for name in ('initialize_skeleton', '_save_snapshot', '_restore_snapshot'):
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)
         scope = dict(vars(ast_service))
         exec(compile(ast.Module(body=[method], type_ignores=[]), '<frozen restart>', 'exec'), scope)
@@ -60,7 +60,8 @@ def run():
                     first._store.close()
                 second = ast_service.ASTService(str(project))
                 try:
-                    with patch.object(ast_service, 'parse_file', wraps=ast_service.parse_file) as parse:
+                    with (patch.object(ast_service, 'parse_file', wraps=ast_service.parse_file) as parse,
+                          patch.object(codebase_ast, 'parse_file', parse)):
                         for scope in scopes:
                             scope['parse_file'] = parse
                         wall, cpu = time.monotonic(), time.thread_time()
@@ -68,7 +69,7 @@ def run():
                         restart, thread_cpu = time.monotonic()-wall, time.thread_time()-cpu
                         calls = parse.call_count
                     assert state.phase == 'ready' and state.parsed_files == 160
-                    assert calls == (160 if mode == 'baseline' else 0)
+                    assert calls == (320 if mode == 'baseline' else 0)
                     summaries = {key: {**asdict(value), 'path': key} for key, value in second._ast_cache.items()}
                     evidence = {'asts': summaries, 'definitions': {
                         key: [asdict(v) for v in value] for key, value in second._index.definitions.items()},

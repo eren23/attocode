@@ -4,34 +4,25 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current status, 2026-10-15:** the [unprofiled CockroachDB confirmation](../packages/code-intel/evals/results/2026-10-15-discovery-validation.md)
-reached a ready body index and passed scoped search, but the final restart check
-was unfinished when the unchanged 180-second pack deadline hit. Keyword indexing
-was 29.936 seconds, body indexing 75.702 seconds, index-reported total warmup
-123.790 seconds. These are one targeted observation, not a controlled speedup.
-**The target failed; 0.1.6 remains unpublished.** The conditional full-matrix
-rental was not launched. The latest complete full attempt remains 35/36 packs,
-with 532 contracts passed, 22 skips and ranking not run.
+**Current status, 2026-10-15:** the first [restart validation target and follow-up
+audit](../packages/code-intel/evals/results/2026-10-15-restart-discovery-repair.md)
+still failed the unchanged 180-second Cockroach deadline during restart. Search
+was ready; three checks passed and four relationship checks were limited. All
+four retrieval questions were observed (0 hits at five, 1 at 24). The latest full
+attempt remains 35/36 packs; **0.1.6 is still unpublished**.
 
-All four Cockroach retrieval questions were observed: 0/4 labeled hits at five,
-1/4 at 24. Labels are non-exhaustive development targets; this is not an agent
-outcome or ranking-improvement claim. Completed checks and retrieval consumed
-about 171.5 seconds before startup/transition overhead and the unfinished restart.
-Next local investigation should isolate repeated restart/freshness work while
-preserving existing deadlines and exact navigation/edit behavior.
+The audit found that discovery reparsed files before restoring cached ASTs. The
+earlier zero-parse counter missed that path; its full-restart claim is corrected.
+The repair supplies source-validated summaries before discovery and passes the
+strengthened two-path and separate-process controls. Local validation passed
+605 tests, 8 skips, plus lint/scale/lifecycle; this is not a cloud gate pass.
 
-All 18 workers are deleted. The target added $0.0158 estimated compute, bringing
-the cumulative estimate to $0.8221 before tax (not an invoice). Only 41,004 report/
-log bytes came back; no corpora or indexes were downloaded to the Mac. The
-approved two-worker sequence stops on this target failure: its second rental
-remains unused and cannot run without a passing target. Prior reservations remain
-retained under the $19 cap. The [local repair](../packages/code-intel/evals/results/2026-10-15-discovery-body-repair.md)
-and required CI passed, but they do not supersede the incomplete target.
+All 19 workers are deleted; cumulative estimated compute is $0.8371 before tax,
+not an invoice. The revised approved cycle has one target retry remaining after
+this repair and at most one full gate only after a coherent target pass. All prior
+reservations remain retained under the $21 cap. No further model experiment,
+Claude usage check, protected-cache cleanup or global-tool upgrade is included.
 
-The [bounded restart-summary candidate](../packages/code-intel/evals/results/2026-10-15-ast-restart.md)
-now preserves complete AST summaries with source/parser identity checks. Local
-fixtures measure the tradeoff between faster restarts and added cold-write cost;
-no new cloud validation or release is implied.
 The entries below are historical evidence.
 
 ## Milestones

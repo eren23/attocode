@@ -1,0 +1,287 @@
+{
+  "scope": "First target failed; local discovery-before-restore repair; cloud retest pending",
+  "failed_target": {
+    "active_quality_workers": 0,
+    "archive_sha256": "f3869fbd31cb9d7dbf9cc02bd58d33d9e77208fdb9755192bc2232e3c2fe671b",
+    "batch": "e7003de3c3e440ea",
+    "checks": [
+      {
+        "cleanup_verified": true,
+        "name": "workflows",
+        "peak_disk_bytes": 1573249178,
+        "peak_rss_bytes": 813875200,
+        "seconds": 202.078,
+        "status": "failed"
+      }
+    ],
+    "cleanup_verified": true,
+    "controller_passed": false,
+    "controller_seconds": 323.89241218566895,
+    "controller_status": "failed",
+    "estimated_usd": 0.015,
+    "exported_bytes": 41024,
+    "monthly_reserved_usd": 19.0,
+    "outcomes": {
+      "failed": 0,
+      "incomplete": 0,
+      "limited": 4,
+      "passed": 3,
+      "unsupported": 0
+    },
+    "packs": [
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed",
+            "seconds": 35.35314149199999
+          },
+          {
+            "name": "source",
+            "outcome": "passed",
+            "seconds": 35.517462056
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed",
+            "seconds": 86.70737718000001
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited",
+            "seconds": 0.13787473400003591
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited",
+            "seconds": 0.12124815299995362
+          },
+          {
+            "name": "impact",
+            "outcome": "limited",
+            "seconds": 0.12281396800000266
+          },
+          {
+            "name": "tests",
+            "outcome": "limited",
+            "seconds": 6.803130429000021
+          }
+        ],
+        "error": "Workflow pack exceeded 180 seconds",
+        "id": "cockroach",
+        "status": "incomplete"
+      }
+    ],
+    "passed": false,
+    "phase_timing": [
+      {
+        "name": "upload",
+        "seconds": 3.151,
+        "status": "passed",
+        "wall_seconds": 3.151
+      },
+      {
+        "name": "setup",
+        "seconds": 22.478,
+        "status": "passed",
+        "wall_seconds": 22.478
+      },
+      {
+        "name": "tests",
+        "seconds": 206.264,
+        "status": "failed",
+        "wall_seconds": 206.268
+      },
+      {
+        "name": "collect",
+        "seconds": 0.7,
+        "status": "passed",
+        "wall_seconds": 0.7
+      },
+      {
+        "name": "download",
+        "seconds": 0.922,
+        "status": "passed",
+        "wall_seconds": 0.922
+      }
+    ],
+    "ranking_present": false,
+    "report_run": "20261015T144849-f43ab479",
+    "retrieval": {
+      "labeled_hit_at_24": 1,
+      "labeled_hit_at_5": 0,
+      "missing_questions": [],
+      "observed_questions": 4,
+      "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+    },
+    "scope": "Clean Linux worker; optional grammars unavailable. Separate environment from local matrix; non-exhaustive development labels, no agent-quality claim.",
+    "selection": {
+      "packs": [
+        "cockroach"
+      ],
+      "shard": null,
+      "suite": "workflows"
+    },
+    "source_commit": "e97f986532a3612542326ae21c0360e0b83fc2bc",
+    "source_matrix_identity": {
+      "source_sha256": "9ea4fdd219b3ed3e5f5a1b2f02e7a798d1662152904b89649b0ad9ccfc919f24",
+      "harness_sha256": "7ae5b98c6ca6f1811accfc2a4a28e0091608b24d6dbc45924c68187dd7a876fc",
+      "fixture_sha256": "b837ba35a0aea85a4110567ba8cb9f183368c5088b91f4b5c98794964f6382f3",
+      "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a"
+    },
+    "status": "failed"
+  },
+  "component": {
+    "scope": "Generated 160-file/5120-function Go cold+restart; both parse entry points counted; no Cockroach or cloud speed claim",
+    "baseline_commit": "e97f986532a3612542326ae21c0360e0b83fc2bc",
+    "baseline_source_sha256": "7a87cf39f93bd9e203c1ff435b13773d93e20d381897f7b554347a6d034b2a3a",
+    "candidate_source_sha256": "53b527ec3dc8d34ce2bbaa6e7564d41b21f1fa6f8e3b8511bded76173c413b42",
+    "cache_source_sha256": "807d39db5d4ed61de5e74587a3087b887b4b238e6ffde3ec6ecaa2badad7fc30",
+    "probe_sha256": "c02ee2cc4007dd8e27f8b1fc291a1d9806f8102f67cf4acb6c267f49b4686762",
+    "python": "3.12.12",
+    "platform": "macOS-26.2-arm64-arm-64bit",
+    "source_bytes": {
+      "short_body": 663040,
+      "long_body": 2352640
+    },
+    "final_owned_disk_bytes": 34394112,
+    "observations": [
+      {
+        "mode": "baseline",
+        "workload": "short_body",
+        "cold_seconds": 0.5047120830276981,
+        "restart_seconds": 0.20708037505391985,
+        "cold_plus_restart_seconds": 0.711792458081618,
+        "restart_thread_cpu_seconds": 0.18347079200000005,
+        "restart_parse_calls": 160,
+        "cache_payload_bytes": 1996493,
+        "evidence_sha256": "1c7feb50a179256a1ce1467f3ad9ff980f01187ec8c05413d2c191a1fe6e4d6f"
+      },
+      {
+        "mode": "candidate",
+        "workload": "short_body",
+        "cold_seconds": 0.45483745797537267,
+        "restart_seconds": 0.0629952090093866,
+        "cold_plus_restart_seconds": 0.5178326669847593,
+        "restart_thread_cpu_seconds": 0.062164499999999956,
+        "restart_parse_calls": 0,
+        "cache_payload_bytes": 1996493,
+        "evidence_sha256": "1c7feb50a179256a1ce1467f3ad9ff980f01187ec8c05413d2c191a1fe6e4d6f"
+      },
+      {
+        "mode": "candidate",
+        "workload": "short_body",
+        "cold_seconds": 0.42918233294039965,
+        "restart_seconds": 0.0936622089939192,
+        "cold_plus_restart_seconds": 0.5228445419343188,
+        "restart_thread_cpu_seconds": 0.09118141699999982,
+        "restart_parse_calls": 0,
+        "cache_payload_bytes": 1996493,
+        "evidence_sha256": "1c7feb50a179256a1ce1467f3ad9ff980f01187ec8c05413d2c191a1fe6e4d6f"
+      },
+      {
+        "mode": "baseline",
+        "workload": "short_body",
+        "cold_seconds": 0.4836504999548197,
+        "restart_seconds": 0.20252845901995897,
+        "cold_plus_restart_seconds": 0.6861789589747787,
+        "restart_thread_cpu_seconds": 0.17959979199999987,
+        "restart_parse_calls": 160,
+        "cache_payload_bytes": 1996493,
+        "evidence_sha256": "1c7feb50a179256a1ce1467f3ad9ff980f01187ec8c05413d2c191a1fe6e4d6f"
+      },
+      {
+        "mode": "baseline",
+        "workload": "long_body",
+        "cold_seconds": 1.2702940829331055,
+        "restart_seconds": 0.4660719999810681,
+        "cold_plus_restart_seconds": 1.7363660829141736,
+        "restart_thread_cpu_seconds": 0.42754820800000015,
+        "restart_parse_calls": 160,
+        "cache_payload_bytes": 2000973,
+        "evidence_sha256": "29ff52e57ab68352cf19337c71edc190dc1437e461d0e57a1df283844b5214bf"
+      },
+      {
+        "mode": "candidate",
+        "workload": "long_body",
+        "cold_seconds": 1.5687016249867156,
+        "restart_seconds": 0.2068065000930801,
+        "cold_plus_restart_seconds": 1.7755081250797957,
+        "restart_thread_cpu_seconds": 0.1561086249999999,
+        "restart_parse_calls": 0,
+        "cache_payload_bytes": 2000973,
+        "evidence_sha256": "29ff52e57ab68352cf19337c71edc190dc1437e461d0e57a1df283844b5214bf"
+      },
+      {
+        "mode": "candidate",
+        "workload": "long_body",
+        "cold_seconds": 1.4802300829906017,
+        "restart_seconds": 0.11968504101969302,
+        "cold_plus_restart_seconds": 1.5999151240102947,
+        "restart_thread_cpu_seconds": 0.10654829100000018,
+        "restart_parse_calls": 0,
+        "cache_payload_bytes": 2000973,
+        "evidence_sha256": "29ff52e57ab68352cf19337c71edc190dc1437e461d0e57a1df283844b5214bf"
+      },
+      {
+        "mode": "baseline",
+        "workload": "long_body",
+        "cold_seconds": 1.3714330000802875,
+        "restart_seconds": 0.48235016595572233,
+        "cold_plus_restart_seconds": 1.8537831660360098,
+        "restart_thread_cpu_seconds": 0.44254604200000003,
+        "restart_parse_calls": 160,
+        "cache_payload_bytes": 2000973,
+        "evidence_sha256": "29ff52e57ab68352cf19337c71edc190dc1437e461d0e57a1df283844b5214bf"
+      }
+    ],
+    "cleanup_verified": true
+  },
+  "local": {
+    "run_id": "20261015T170423-55a2ea39",
+    "status": "passed",
+    "checks": [
+      {
+        "name": "lint",
+        "status": "passed",
+        "seconds": 0.226,
+        "peak_disk_bytes": 233472,
+        "peak_rss_bytes": 163840,
+        "cleanup_verified": true
+      },
+      {
+        "name": "contracts",
+        "status": "passed",
+        "seconds": 34.665,
+        "peak_disk_bytes": 39917136,
+        "peak_rss_bytes": 729579520,
+        "cleanup_verified": true
+      },
+      {
+        "name": "scale",
+        "status": "passed",
+        "seconds": 14.674,
+        "peak_disk_bytes": 127972944,
+        "peak_rss_bytes": 239190016,
+        "cleanup_verified": true
+      },
+      {
+        "name": "lifecycle",
+        "status": "passed",
+        "seconds": 4.473,
+        "peak_disk_bytes": 39343696,
+        "peak_rss_bytes": 132907008,
+        "cleanup_verified": true
+      }
+    ],
+    "contracts": {
+      "passed": 605,
+      "skipped": 8
+    }
+  },
+  "source_sha256": {
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/ast_service.py": "53b527ec3dc8d34ce2bbaa6e7564d41b21f1fa6f8e3b8511bded76173c413b42",
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/codebase_context.py": "061b9c9077921c3d1e957c2fa6095bd6024d8603d5c2b37650091d390f74f559",
+    "packages/code-intel/tests/test_ast_snapshot.py": "bc5bcac105e430b6e4b90405ccc9edac8ca178f404f8d8ef9b39f7d2b45d1c9f"
+  }
+}

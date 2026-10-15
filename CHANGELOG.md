@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Cold indexing cost
 
+- Load source-validated restart summaries before discovery builds imports,
+  avoiding a hidden earlier parse pass. Restart controls now intercept both
+  parsing entry points and reject source edits during discovery.
+
 - Structural restarts can reuse bounded JSON AST summaries after checking exact
   source digests and installed parser/grammar identities. Missing, invalid,
   unsupported or oversized entries retain normal parsing; complete-index and
