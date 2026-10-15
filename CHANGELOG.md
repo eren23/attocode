@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Cold indexing cost
 
+- The pinned two-mode CockroachDB diagnostic reproduced incomplete body indexing
+  in both modes. Structural prehydration shortened keyword work but added earlier
+  waiting; no scheduling default changed. Partial profiles identify body
+  construction/SQL costs and the need to calibrate instrumentation overhead.
 - Opt-in bounded indexing diagnostics separate inclusive wall/thread-CPU phase
   times and partial work counters. A supervised two-mode, one-pack probe compares
   ordinary startup with structural prehydration; it is not a release gate or

@@ -1,0 +1,2107 @@
+{
+  "batch": "4169fd3304ce43ef",
+  "source_commit": "fa4f69def7a55a14e38e4c17c966ef2c4eb23a00",
+  "report_run": "index-probe-6558a497f249",
+  "status": "incomplete",
+  "diagnostic_only": true,
+  "release_gate": false,
+  "archive_sha256": "d6ac7a7d7ac64beb4e20f79eed76014d9a2ccf34f736bef76630321cf61a6fe5",
+  "exported_bytes": 24761,
+  "cleanup_verified": true,
+  "active_quality_workers": 0,
+  "estimated_usd": 0.0243,
+  "cumulative_estimated_usd": 0.8063,
+  "monthly_reserved_usd": 17.0,
+  "controller_status": "failed",
+  "controller_seconds": 524.0894229412079,
+  "worker": {
+    "size": "s-8vcpu-16gb-amd",
+    "region": "ams3",
+    "hourly_usd": 0.16667
+  },
+  "scope": "One fixed-order instrumented mechanism pair; partial body transactions; no full release gate or causal speedup estimate.",
+  "phase_timing": [
+    {
+      "name": "upload",
+      "seconds": 2.88,
+      "wall_seconds": 2.88,
+      "status": "passed",
+      "cleanup_verified": true
+    },
+    {
+      "name": "setup",
+      "seconds": 25.424,
+      "wall_seconds": 25.424,
+      "status": "passed",
+      "cleanup_verified": true
+    },
+    {
+      "name": "tests",
+      "seconds": 400.119,
+      "wall_seconds": 400.122,
+      "status": "failed",
+      "cleanup_verified": true
+    },
+    {
+      "name": "collect",
+      "seconds": 0.657,
+      "wall_seconds": 0.657,
+      "status": "passed",
+      "cleanup_verified": true
+    },
+    {
+      "name": "download",
+      "seconds": 0.889,
+      "wall_seconds": 0.889,
+      "status": "passed",
+      "cleanup_verified": true
+    }
+  ],
+  "report": {
+    "budget_seconds": 600,
+    "cleanup_verified": true,
+    "identity": {
+      "dependencies": [
+        [
+          "aiosqlite",
+          "0.22.1"
+        ],
+        [
+          "alembic",
+          "1.18.4"
+        ],
+        [
+          "annotated-doc",
+          "0.0.4"
+        ],
+        [
+          "annotated-types",
+          "0.7.0"
+        ],
+        [
+          "anyio",
+          "4.12.1"
+        ],
+        [
+          "arq",
+          "0.27.0"
+        ],
+        [
+          "asyncpg",
+          "0.31.0"
+        ],
+        [
+          "attocode-code-intel",
+          "0.1.6"
+        ],
+        [
+          "attrs",
+          "25.4.0"
+        ],
+        [
+          "bcrypt",
+          "5.0.0"
+        ],
+        [
+          "bracex",
+          "2.6"
+        ],
+        [
+          "bump-my-version",
+          "1.2.7"
+        ],
+        [
+          "certifi",
+          "2026.2.25"
+        ],
+        [
+          "cffi",
+          "2.0.0"
+        ],
+        [
+          "charset-normalizer",
+          "3.4.4"
+        ],
+        [
+          "click",
+          "8.3.1"
+        ],
+        [
+          "coverage",
+          "7.13.4"
+        ],
+        [
+          "cryptography",
+          "46.0.5"
+        ],
+        [
+          "ecdsa",
+          "0.19.1"
+        ],
+        [
+          "fastapi",
+          "0.135.1"
+        ],
+        [
+          "filelock",
+          "3.25.0"
+        ],
+        [
+          "greenlet",
+          "3.3.2"
+        ],
+        [
+          "h11",
+          "0.16.0"
+        ],
+        [
+          "hiredis",
+          "3.3.0"
+        ],
+        [
+          "httpcore",
+          "1.0.9"
+        ],
+        [
+          "httptools",
+          "0.7.1"
+        ],
+        [
+          "httpx",
+          "0.28.1"
+        ],
+        [
+          "httpx-oauth",
+          "0.16.1"
+        ],
+        [
+          "httpx-sse",
+          "0.4.3"
+        ],
+        [
+          "idna",
+          "3.11"
+        ],
+        [
+          "iniconfig",
+          "2.3.0"
+        ],
+        [
+          "jsonschema",
+          "4.26.0"
+        ],
+        [
+          "jsonschema-specifications",
+          "2025.9.1"
+        ],
+        [
+          "librt",
+          "0.8.1"
+        ],
+        [
+          "mako",
+          "1.3.10"
+        ],
+        [
+          "markdown-it-py",
+          "4.0.0"
+        ],
+        [
+          "markupsafe",
+          "3.0.3"
+        ],
+        [
+          "mcp",
+          "1.26.0"
+        ],
+        [
+          "mdurl",
+          "0.1.2"
+        ],
+        [
+          "mypy",
+          "1.19.1"
+        ],
+        [
+          "mypy_extensions",
+          "1.1.0"
+        ],
+        [
+          "networkx",
+          "3.6.1"
+        ],
+        [
+          "numpy",
+          "2.4.2"
+        ],
+        [
+          "packaging",
+          "26.0"
+        ],
+        [
+          "pathspec",
+          "1.0.4"
+        ],
+        [
+          "pgvector",
+          "0.4.2"
+        ],
+        [
+          "pluggy",
+          "1.6.0"
+        ],
+        [
+          "prompt_toolkit",
+          "3.0.52"
+        ],
+        [
+          "psutil",
+          "7.2.2"
+        ],
+        [
+          "pyasn1",
+          "0.6.2"
+        ],
+        [
+          "pycparser",
+          "3.0"
+        ],
+        [
+          "pydantic",
+          "2.12.5"
+        ],
+        [
+          "pydantic-settings",
+          "2.13.1"
+        ],
+        [
+          "pydantic_core",
+          "2.41.5"
+        ],
+        [
+          "pygit2",
+          "1.19.1"
+        ],
+        [
+          "pygments",
+          "2.19.2"
+        ],
+        [
+          "pyjwt",
+          "2.11.0"
+        ],
+        [
+          "pytest",
+          "9.0.2"
+        ],
+        [
+          "pytest-asyncio",
+          "1.3.0"
+        ],
+        [
+          "pytest-cov",
+          "7.0.0"
+        ],
+        [
+          "pytest-mock",
+          "3.15.1"
+        ],
+        [
+          "python-dotenv",
+          "1.2.1"
+        ],
+        [
+          "python-jose",
+          "3.5.0"
+        ],
+        [
+          "python-multipart",
+          "0.0.22"
+        ],
+        [
+          "pyyaml",
+          "6.0.3"
+        ],
+        [
+          "questionary",
+          "2.1.1"
+        ],
+        [
+          "redis",
+          "5.3.1"
+        ],
+        [
+          "referencing",
+          "0.37.0"
+        ],
+        [
+          "regex",
+          "2026.2.28"
+        ],
+        [
+          "requests",
+          "2.32.5"
+        ],
+        [
+          "respx",
+          "0.22.0"
+        ],
+        [
+          "rich",
+          "14.3.3"
+        ],
+        [
+          "rich-click",
+          "1.9.7"
+        ],
+        [
+          "rpds-py",
+          "0.30.0"
+        ],
+        [
+          "rsa",
+          "4.9.1"
+        ],
+        [
+          "ruff",
+          "0.15.4"
+        ],
+        [
+          "six",
+          "1.17.0"
+        ],
+        [
+          "sqlalchemy",
+          "2.0.48"
+        ],
+        [
+          "sse-starlette",
+          "3.3.2"
+        ],
+        [
+          "starlette",
+          "0.52.1"
+        ],
+        [
+          "structlog",
+          "25.5.0"
+        ],
+        [
+          "tenacity",
+          "9.1.4"
+        ],
+        [
+          "tiktoken",
+          "0.12.0"
+        ],
+        [
+          "tomli_w",
+          "1.2.0"
+        ],
+        [
+          "tomlkit",
+          "0.14.0"
+        ],
+        [
+          "tree-sitter",
+          "0.25.2"
+        ],
+        [
+          "tree-sitter-bash",
+          "0.25.1"
+        ],
+        [
+          "tree-sitter-c",
+          "0.24.1"
+        ],
+        [
+          "tree-sitter-c-sharp",
+          "0.23.1"
+        ],
+        [
+          "tree-sitter-cpp",
+          "0.23.4"
+        ],
+        [
+          "tree-sitter-css",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-elixir",
+          "0.3.5"
+        ],
+        [
+          "tree-sitter-go",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-hcl",
+          "1.2.0"
+        ],
+        [
+          "tree-sitter-html",
+          "0.23.2"
+        ],
+        [
+          "tree-sitter-java",
+          "0.23.5"
+        ],
+        [
+          "tree-sitter-javascript",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-json",
+          "0.24.8"
+        ],
+        [
+          "tree-sitter-kotlin",
+          "1.1.0"
+        ],
+        [
+          "tree-sitter-lua",
+          "0.5.0"
+        ],
+        [
+          "tree-sitter-php",
+          "0.24.1"
+        ],
+        [
+          "tree-sitter-python",
+          "0.25.0"
+        ],
+        [
+          "tree-sitter-ruby",
+          "0.23.1"
+        ],
+        [
+          "tree-sitter-rust",
+          "0.24.0"
+        ],
+        [
+          "tree-sitter-scala",
+          "0.24.0"
+        ],
+        [
+          "tree-sitter-swift",
+          "0.0.1"
+        ],
+        [
+          "tree-sitter-toml",
+          "0.7.0"
+        ],
+        [
+          "tree-sitter-typescript",
+          "0.23.2"
+        ],
+        [
+          "tree-sitter-yaml",
+          "0.7.2"
+        ],
+        [
+          "tree-sitter-zig",
+          "1.1.2"
+        ],
+        [
+          "typing-inspection",
+          "0.4.2"
+        ],
+        [
+          "typing_extensions",
+          "4.15.0"
+        ],
+        [
+          "urllib3",
+          "2.6.3"
+        ],
+        [
+          "uvicorn",
+          "0.41.0"
+        ],
+        [
+          "uvloop",
+          "0.22.1"
+        ],
+        [
+          "watchfiles",
+          "1.1.1"
+        ],
+        [
+          "wcmatch",
+          "10.1"
+        ],
+        [
+          "wcwidth",
+          "0.6.0"
+        ],
+        [
+          "websockets",
+          "16.0"
+        ]
+      ],
+      "fixture_sha256": "e9d2fcbd7d37e89094ded6cfd89d650de90fd8003e17e0a652feeece61248c63",
+      "harness_sha256": "8edaa1734d59121c7a1898ed1b5077ef22b83d96a3a2a57b4a8998176ba23d10",
+      "optional_grammars": null,
+      "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+      "platform": "Linux-6.8.0-142-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "settings": {
+        "ATTOCODE_EMBEDDING_MODEL": null,
+        "ATTOCODE_INTEL_BROAD_RERANK": null,
+        "ATTOCODE_INTEL_PRECISION": null,
+        "ATTOCODE_INTEL_RANKING_ALLOW_REMOTE": null,
+        "ATTOCODE_INTEL_RANKING_PROVIDER": null,
+        "ATTOCODE_LOCAL_ONLY": null,
+        "ATTOCODE_NL_EMBEDDING_MODE": null
+      },
+      "source_sha256": "3dc84a6e97fb754c9f63fab2e7828c69fc6e38bea087a6482fd74191fc9967ca"
+    },
+    "inputs_unchanged": true,
+    "model_runs": 0,
+    "pack": "cockroach",
+    "release_gate": false,
+    "same_source": true,
+    "status": "incomplete",
+    "worker_inputs_match": true,
+    "arms": [
+      {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "exit_code": 1,
+        "log_truncated": false,
+        "mode": "concurrent",
+        "peak_disk_bytes": 1016184986,
+        "peak_rss_bytes": 612032512,
+        "seconds": 186.857,
+        "status": "failed",
+        "wall_seconds": 186.857
+      },
+      {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "exit_code": 1,
+        "log_truncated": false,
+        "mode": "prehydrated",
+        "peak_disk_bytes": 1376796980,
+        "peak_rss_bytes": 596967424,
+        "seconds": 206.274,
+        "status": "failed",
+        "wall_seconds": 206.274
+      }
+    ]
+  },
+  "observations": [
+    {
+      "elapsed_seconds": 161.532305884,
+      "error": {
+        "message": "Search index still warming after 90 seconds; index={\"status\": \"warming\", \"keyword_index_ready\": true, \"body_index_available\": true, \"body_index_ready\": false, \"body_indexed_files\": 0, \"keyword_indexed_files\": 0, \"body_index_coverage\": 0.0, \"vector_status\": \"idle\", \"vector_coverage\": 0.0, \"warmup_stage\": \"body\", \"warmup_reused_asts\": 4980, \"warmup_seconds\": 125.081, \"keyword_seconds\": 51.028, \"importance_seconds\": 0.002}",
+        "type": "TimeoutError"
+      },
+      "identity": {
+        "dependencies": [
+          [
+            "aiosqlite",
+            "0.22.1"
+          ],
+          [
+            "alembic",
+            "1.18.4"
+          ],
+          [
+            "annotated-doc",
+            "0.0.4"
+          ],
+          [
+            "annotated-types",
+            "0.7.0"
+          ],
+          [
+            "anyio",
+            "4.12.1"
+          ],
+          [
+            "arq",
+            "0.27.0"
+          ],
+          [
+            "asyncpg",
+            "0.31.0"
+          ],
+          [
+            "attocode-code-intel",
+            "0.1.6"
+          ],
+          [
+            "attrs",
+            "25.4.0"
+          ],
+          [
+            "bcrypt",
+            "5.0.0"
+          ],
+          [
+            "bracex",
+            "2.6"
+          ],
+          [
+            "bump-my-version",
+            "1.2.7"
+          ],
+          [
+            "certifi",
+            "2026.2.25"
+          ],
+          [
+            "cffi",
+            "2.0.0"
+          ],
+          [
+            "charset-normalizer",
+            "3.4.4"
+          ],
+          [
+            "click",
+            "8.3.1"
+          ],
+          [
+            "coverage",
+            "7.13.4"
+          ],
+          [
+            "cryptography",
+            "46.0.5"
+          ],
+          [
+            "ecdsa",
+            "0.19.1"
+          ],
+          [
+            "fastapi",
+            "0.135.1"
+          ],
+          [
+            "filelock",
+            "3.25.0"
+          ],
+          [
+            "greenlet",
+            "3.3.2"
+          ],
+          [
+            "h11",
+            "0.16.0"
+          ],
+          [
+            "hiredis",
+            "3.3.0"
+          ],
+          [
+            "httpcore",
+            "1.0.9"
+          ],
+          [
+            "httptools",
+            "0.7.1"
+          ],
+          [
+            "httpx",
+            "0.28.1"
+          ],
+          [
+            "httpx-oauth",
+            "0.16.1"
+          ],
+          [
+            "httpx-sse",
+            "0.4.3"
+          ],
+          [
+            "idna",
+            "3.11"
+          ],
+          [
+            "iniconfig",
+            "2.3.0"
+          ],
+          [
+            "jsonschema",
+            "4.26.0"
+          ],
+          [
+            "jsonschema-specifications",
+            "2025.9.1"
+          ],
+          [
+            "librt",
+            "0.8.1"
+          ],
+          [
+            "mako",
+            "1.3.10"
+          ],
+          [
+            "markdown-it-py",
+            "4.0.0"
+          ],
+          [
+            "markupsafe",
+            "3.0.3"
+          ],
+          [
+            "mcp",
+            "1.26.0"
+          ],
+          [
+            "mdurl",
+            "0.1.2"
+          ],
+          [
+            "mypy",
+            "1.19.1"
+          ],
+          [
+            "mypy_extensions",
+            "1.1.0"
+          ],
+          [
+            "networkx",
+            "3.6.1"
+          ],
+          [
+            "numpy",
+            "2.4.2"
+          ],
+          [
+            "packaging",
+            "26.0"
+          ],
+          [
+            "pathspec",
+            "1.0.4"
+          ],
+          [
+            "pgvector",
+            "0.4.2"
+          ],
+          [
+            "pluggy",
+            "1.6.0"
+          ],
+          [
+            "prompt_toolkit",
+            "3.0.52"
+          ],
+          [
+            "psutil",
+            "7.2.2"
+          ],
+          [
+            "pyasn1",
+            "0.6.2"
+          ],
+          [
+            "pycparser",
+            "3.0"
+          ],
+          [
+            "pydantic",
+            "2.12.5"
+          ],
+          [
+            "pydantic-settings",
+            "2.13.1"
+          ],
+          [
+            "pydantic_core",
+            "2.41.5"
+          ],
+          [
+            "pygit2",
+            "1.19.1"
+          ],
+          [
+            "pygments",
+            "2.19.2"
+          ],
+          [
+            "pyjwt",
+            "2.11.0"
+          ],
+          [
+            "pytest",
+            "9.0.2"
+          ],
+          [
+            "pytest-asyncio",
+            "1.3.0"
+          ],
+          [
+            "pytest-cov",
+            "7.0.0"
+          ],
+          [
+            "pytest-mock",
+            "3.15.1"
+          ],
+          [
+            "python-dotenv",
+            "1.2.1"
+          ],
+          [
+            "python-jose",
+            "3.5.0"
+          ],
+          [
+            "python-multipart",
+            "0.0.22"
+          ],
+          [
+            "pyyaml",
+            "6.0.3"
+          ],
+          [
+            "questionary",
+            "2.1.1"
+          ],
+          [
+            "redis",
+            "5.3.1"
+          ],
+          [
+            "referencing",
+            "0.37.0"
+          ],
+          [
+            "regex",
+            "2026.2.28"
+          ],
+          [
+            "requests",
+            "2.32.5"
+          ],
+          [
+            "respx",
+            "0.22.0"
+          ],
+          [
+            "rich",
+            "14.3.3"
+          ],
+          [
+            "rich-click",
+            "1.9.7"
+          ],
+          [
+            "rpds-py",
+            "0.30.0"
+          ],
+          [
+            "rsa",
+            "4.9.1"
+          ],
+          [
+            "ruff",
+            "0.15.4"
+          ],
+          [
+            "six",
+            "1.17.0"
+          ],
+          [
+            "sqlalchemy",
+            "2.0.48"
+          ],
+          [
+            "sse-starlette",
+            "3.3.2"
+          ],
+          [
+            "starlette",
+            "0.52.1"
+          ],
+          [
+            "structlog",
+            "25.5.0"
+          ],
+          [
+            "tenacity",
+            "9.1.4"
+          ],
+          [
+            "tiktoken",
+            "0.12.0"
+          ],
+          [
+            "tomli_w",
+            "1.2.0"
+          ],
+          [
+            "tomlkit",
+            "0.14.0"
+          ],
+          [
+            "tree-sitter",
+            "0.25.2"
+          ],
+          [
+            "tree-sitter-bash",
+            "0.25.1"
+          ],
+          [
+            "tree-sitter-c",
+            "0.24.1"
+          ],
+          [
+            "tree-sitter-c-sharp",
+            "0.23.1"
+          ],
+          [
+            "tree-sitter-cpp",
+            "0.23.4"
+          ],
+          [
+            "tree-sitter-css",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-elixir",
+            "0.3.5"
+          ],
+          [
+            "tree-sitter-go",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-hcl",
+            "1.2.0"
+          ],
+          [
+            "tree-sitter-html",
+            "0.23.2"
+          ],
+          [
+            "tree-sitter-java",
+            "0.23.5"
+          ],
+          [
+            "tree-sitter-javascript",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-json",
+            "0.24.8"
+          ],
+          [
+            "tree-sitter-kotlin",
+            "1.1.0"
+          ],
+          [
+            "tree-sitter-lua",
+            "0.5.0"
+          ],
+          [
+            "tree-sitter-php",
+            "0.24.1"
+          ],
+          [
+            "tree-sitter-python",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-ruby",
+            "0.23.1"
+          ],
+          [
+            "tree-sitter-rust",
+            "0.24.0"
+          ],
+          [
+            "tree-sitter-scala",
+            "0.24.0"
+          ],
+          [
+            "tree-sitter-swift",
+            "0.0.1"
+          ],
+          [
+            "tree-sitter-toml",
+            "0.7.0"
+          ],
+          [
+            "tree-sitter-typescript",
+            "0.23.2"
+          ],
+          [
+            "tree-sitter-yaml",
+            "0.7.2"
+          ],
+          [
+            "tree-sitter-zig",
+            "1.1.2"
+          ],
+          [
+            "typing-inspection",
+            "0.4.2"
+          ],
+          [
+            "typing_extensions",
+            "4.15.0"
+          ],
+          [
+            "urllib3",
+            "2.6.3"
+          ],
+          [
+            "uvicorn",
+            "0.41.0"
+          ],
+          [
+            "uvloop",
+            "0.22.1"
+          ],
+          [
+            "watchfiles",
+            "1.1.1"
+          ],
+          [
+            "wcmatch",
+            "10.1"
+          ],
+          [
+            "wcwidth",
+            "0.6.0"
+          ],
+          [
+            "websockets",
+            "16.0"
+          ]
+        ],
+        "fixture_sha256": "e9d2fcbd7d37e89094ded6cfd89d650de90fd8003e17e0a652feeece61248c63",
+        "harness_sha256": "8edaa1734d59121c7a1898ed1b5077ef22b83d96a3a2a57b4a8998176ba23d10",
+        "optional_grammars": null,
+        "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+        "platform": "Linux-6.8.0-142-generic-x86_64-with-glibc2.39",
+        "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+        "settings": {
+          "ATTOCODE_EMBEDDING_MODEL": null,
+          "ATTOCODE_INTEL_BROAD_RERANK": null,
+          "ATTOCODE_INTEL_PRECISION": "off",
+          "ATTOCODE_INTEL_RANKING_ALLOW_REMOTE": null,
+          "ATTOCODE_INTEL_RANKING_PROVIDER": "off",
+          "ATTOCODE_LOCAL_ONLY": "1",
+          "ATTOCODE_NL_EMBEDDING_MODE": "none"
+        },
+        "source_sha256": "3dc84a6e97fb754c9f63fab2e7828c69fc6e38bea087a6482fd74191fc9967ca"
+      },
+      "index": {
+        "body_index_available": true,
+        "body_index_coverage": 0.0,
+        "body_index_ready": false,
+        "body_indexed_files": 0,
+        "importance_seconds": 0.002,
+        "keyword_index_ready": true,
+        "keyword_indexed_files": 0,
+        "keyword_seconds": 51.028,
+        "status": "warming",
+        "vector_coverage": 0.0,
+        "vector_status": "idle",
+        "warmup_reused_asts": 4980,
+        "warmup_seconds": 125.306,
+        "warmup_stage": "body"
+      },
+      "mode": "concurrent",
+      "pack": "cockroach",
+      "prehydration_error": null,
+      "prehydration_seconds": 0.0,
+      "probe_enabled": true,
+      "profile": {
+        "active": [
+          {
+            "phase": "body.files",
+            "wall_seconds": 71.87034747100003
+          },
+          {
+            "phase": "body.document",
+            "wall_seconds": 0.023607517000016287
+          }
+        ],
+        "counts": {
+          "body.files_completed": 5699,
+          "body.files_started": 5700,
+          "body.read_chars": 80140490,
+          "body.windows": 127931,
+          "keyword.commits": 1,
+          "keyword.documents": 81734,
+          "keyword.files_completed": 9736,
+          "keyword.files_started": 9736,
+          "keyword.read_chars": 131447954
+        },
+        "counts_semantics": "attempted work, not committed rows; commits counted separately",
+        "phases": {
+          "body.cache_load": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.00016177000000006103,
+            "wall_seconds": 0.00021556899997676737
+          },
+          "body.delete": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.034029790000001725,
+            "wall_seconds": 0.04437473000001546
+          },
+          "body.discovery": {
+            "calls": 1,
+            "thread_cpu_seconds": 1.2659999999442562e-05,
+            "wall_seconds": 1.345000001151675e-05
+          },
+          "body.document": {
+            "calls": 5699,
+            "thread_cpu_seconds": 41.58805808000029,
+            "wall_seconds": 49.917685131999264
+          },
+          "body.lock": {
+            "calls": 1,
+            "thread_cpu_seconds": 4.449999998712428e-06,
+            "wall_seconds": 4.639999986011389e-06
+          },
+          "body.open": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.002985830000000078,
+            "wall_seconds": 0.012902566000008164
+          },
+          "body.read": {
+            "calls": 5700,
+            "thread_cpu_seconds": 1.3783656099997579,
+            "wall_seconds": 6.373315158998679
+          },
+          "body.revision": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.0006762299999998334,
+            "wall_seconds": 0.003334303000002592
+          },
+          "body.spans": {
+            "calls": 5689,
+            "thread_cpu_seconds": 0.5101835599999447,
+            "wall_seconds": 1.7380118499987987
+          },
+          "body.sql": {
+            "calls": 15939,
+            "thread_cpu_seconds": 12.338637110000356,
+            "wall_seconds": 21.117088714000772
+          },
+          "body.stat": {
+            "calls": 1,
+            "thread_cpu_seconds": 1.1469906099999996,
+            "wall_seconds": 2.337872688999994
+          },
+          "body.tokenize": {
+            "calls": 2273516,
+            "thread_cpu_seconds": 20.925867379996237,
+            "wall_seconds": 21.9095116089768
+          },
+          "keyword.cache_load": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.004087090000000071,
+            "wall_seconds": 0.021770336999992423
+          },
+          "keyword.cache_save": {
+            "calls": 1,
+            "thread_cpu_seconds": 3.325872740000001,
+            "wall_seconds": 3.8618244070000003
+          },
+          "keyword.commit": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.2318298299999988,
+            "wall_seconds": 0.29196936200000323
+          },
+          "keyword.discovery": {
+            "calls": 1,
+            "thread_cpu_seconds": 3.28816737,
+            "wall_seconds": 36.793772034
+          },
+          "keyword.documents": {
+            "calls": 9736,
+            "thread_cpu_seconds": 5.2135831800000885,
+            "wall_seconds": 5.229743450997745
+          },
+          "keyword.files": {
+            "calls": 1,
+            "thread_cpu_seconds": 7.907007800000001,
+            "wall_seconds": 9.899511217999986
+          },
+          "keyword.frequencies": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.17862722000000097,
+            "wall_seconds": 0.18478672200001256
+          },
+          "keyword.hash_lookup": {
+            "calls": 9736,
+            "thread_cpu_seconds": 0.3149305499999646,
+            "wall_seconds": 0.40970928000032814
+          },
+          "keyword.parse": {
+            "calls": 4756,
+            "thread_cpu_seconds": 0.6762723100000678,
+            "wall_seconds": 1.0292040860002487
+          },
+          "keyword.read": {
+            "calls": 9736,
+            "thread_cpu_seconds": 0.8778992999999775,
+            "wall_seconds": 2.3435490560004553
+          },
+          "keyword.serialize": {
+            "calls": 81734,
+            "thread_cpu_seconds": 0.7881089000003776,
+            "wall_seconds": 0.7853732440023578
+          },
+          "keyword.spans": {
+            "calls": 9736,
+            "thread_cpu_seconds": 0.3249649499999885,
+            "wall_seconds": 0.3777421910003511
+          },
+          "keyword.sql": {
+            "calls": 1433,
+            "thread_cpu_seconds": 1.633357240000029,
+            "wall_seconds": 2.106949414999974
+          },
+          "keyword.stat": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.1247575099999998,
+            "wall_seconds": 0.2572867510000094
+          },
+          "keyword.tokenize": {
+            "calls": 81734,
+            "thread_cpu_seconds": 3.4723390200000677,
+            "wall_seconds": 3.4812337819969628
+          }
+        },
+        "schema": 1,
+        "slow_files": [
+          {
+            "file": "pkg/sql/colexec/colexecbuiltins/range_stats.go",
+            "phase": "keyword.documents",
+            "wall_seconds": 0.6405129689999853
+          },
+          {
+            "file": "pkg/sql/colexec/pdqsort.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.42024736999999845
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_rightouter.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.4002405440000132
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_inner.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.3755943470000034
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_fullouter.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.33573264599999675
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_exceptall.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.25522436700001094
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_leftouter.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.23493001299999605
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_leftanti.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.23383525200000577
+          }
+        ],
+        "timing": "inclusive; completed scopes only; indexing-thread CPU"
+      },
+      "revision": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+      "scope": "Instrumented mechanism diagnostic, not full quality gate or performance claim",
+      "source": {
+        "bytes": 134387784,
+        "files": 9758,
+        "sha256": "ea14ffbe7909899749be3b3d413453ee117f8552e409aa5267e5474b80b6654c"
+      },
+      "status": "incomplete",
+      "structural": {
+        "dep_graph_files": 0,
+        "discovered_files": 9736,
+        "discovery_truncated": false,
+        "elapsed_ms": 158541.4,
+        "embedding_coverage": 0.0,
+        "excluded_checkout_roots": [],
+        "excluded_checkout_roots_truncated": false,
+        "parse_coverage": 1.0,
+        "parsed_files": 4980,
+        "phase": "ready",
+        "reference_coverage": 1.0,
+        "reference_indexed_files": 4980,
+        "snapshot_repair": null,
+        "tier": "medium",
+        "total_files": 4980
+      }
+    },
+    {
+      "elapsed_seconds": 182.59216664599995,
+      "error": {
+        "message": "Search index still warming after 90 seconds; index={\"status\": \"warming\", \"keyword_index_ready\": true, \"body_index_available\": true, \"body_index_ready\": false, \"body_indexed_files\": 0, \"keyword_indexed_files\": 0, \"body_index_coverage\": 0.0, \"vector_status\": \"idle\", \"vector_coverage\": 0.0, \"warmup_stage\": \"body\", \"warmup_reused_asts\": 4980, \"warmup_seconds\": 92.459, \"keyword_seconds\": 14.206, \"importance_seconds\": 0.002}",
+        "type": "TimeoutError"
+      },
+      "identity": {
+        "dependencies": [
+          [
+            "aiosqlite",
+            "0.22.1"
+          ],
+          [
+            "alembic",
+            "1.18.4"
+          ],
+          [
+            "annotated-doc",
+            "0.0.4"
+          ],
+          [
+            "annotated-types",
+            "0.7.0"
+          ],
+          [
+            "anyio",
+            "4.12.1"
+          ],
+          [
+            "arq",
+            "0.27.0"
+          ],
+          [
+            "asyncpg",
+            "0.31.0"
+          ],
+          [
+            "attocode-code-intel",
+            "0.1.6"
+          ],
+          [
+            "attrs",
+            "25.4.0"
+          ],
+          [
+            "bcrypt",
+            "5.0.0"
+          ],
+          [
+            "bracex",
+            "2.6"
+          ],
+          [
+            "bump-my-version",
+            "1.2.7"
+          ],
+          [
+            "certifi",
+            "2026.2.25"
+          ],
+          [
+            "cffi",
+            "2.0.0"
+          ],
+          [
+            "charset-normalizer",
+            "3.4.4"
+          ],
+          [
+            "click",
+            "8.3.1"
+          ],
+          [
+            "coverage",
+            "7.13.4"
+          ],
+          [
+            "cryptography",
+            "46.0.5"
+          ],
+          [
+            "ecdsa",
+            "0.19.1"
+          ],
+          [
+            "fastapi",
+            "0.135.1"
+          ],
+          [
+            "filelock",
+            "3.25.0"
+          ],
+          [
+            "greenlet",
+            "3.3.2"
+          ],
+          [
+            "h11",
+            "0.16.0"
+          ],
+          [
+            "hiredis",
+            "3.3.0"
+          ],
+          [
+            "httpcore",
+            "1.0.9"
+          ],
+          [
+            "httptools",
+            "0.7.1"
+          ],
+          [
+            "httpx",
+            "0.28.1"
+          ],
+          [
+            "httpx-oauth",
+            "0.16.1"
+          ],
+          [
+            "httpx-sse",
+            "0.4.3"
+          ],
+          [
+            "idna",
+            "3.11"
+          ],
+          [
+            "iniconfig",
+            "2.3.0"
+          ],
+          [
+            "jsonschema",
+            "4.26.0"
+          ],
+          [
+            "jsonschema-specifications",
+            "2025.9.1"
+          ],
+          [
+            "librt",
+            "0.8.1"
+          ],
+          [
+            "mako",
+            "1.3.10"
+          ],
+          [
+            "markdown-it-py",
+            "4.0.0"
+          ],
+          [
+            "markupsafe",
+            "3.0.3"
+          ],
+          [
+            "mcp",
+            "1.26.0"
+          ],
+          [
+            "mdurl",
+            "0.1.2"
+          ],
+          [
+            "mypy",
+            "1.19.1"
+          ],
+          [
+            "mypy_extensions",
+            "1.1.0"
+          ],
+          [
+            "networkx",
+            "3.6.1"
+          ],
+          [
+            "numpy",
+            "2.4.2"
+          ],
+          [
+            "packaging",
+            "26.0"
+          ],
+          [
+            "pathspec",
+            "1.0.4"
+          ],
+          [
+            "pgvector",
+            "0.4.2"
+          ],
+          [
+            "pluggy",
+            "1.6.0"
+          ],
+          [
+            "prompt_toolkit",
+            "3.0.52"
+          ],
+          [
+            "psutil",
+            "7.2.2"
+          ],
+          [
+            "pyasn1",
+            "0.6.2"
+          ],
+          [
+            "pycparser",
+            "3.0"
+          ],
+          [
+            "pydantic",
+            "2.12.5"
+          ],
+          [
+            "pydantic-settings",
+            "2.13.1"
+          ],
+          [
+            "pydantic_core",
+            "2.41.5"
+          ],
+          [
+            "pygit2",
+            "1.19.1"
+          ],
+          [
+            "pygments",
+            "2.19.2"
+          ],
+          [
+            "pyjwt",
+            "2.11.0"
+          ],
+          [
+            "pytest",
+            "9.0.2"
+          ],
+          [
+            "pytest-asyncio",
+            "1.3.0"
+          ],
+          [
+            "pytest-cov",
+            "7.0.0"
+          ],
+          [
+            "pytest-mock",
+            "3.15.1"
+          ],
+          [
+            "python-dotenv",
+            "1.2.1"
+          ],
+          [
+            "python-jose",
+            "3.5.0"
+          ],
+          [
+            "python-multipart",
+            "0.0.22"
+          ],
+          [
+            "pyyaml",
+            "6.0.3"
+          ],
+          [
+            "questionary",
+            "2.1.1"
+          ],
+          [
+            "redis",
+            "5.3.1"
+          ],
+          [
+            "referencing",
+            "0.37.0"
+          ],
+          [
+            "regex",
+            "2026.2.28"
+          ],
+          [
+            "requests",
+            "2.32.5"
+          ],
+          [
+            "respx",
+            "0.22.0"
+          ],
+          [
+            "rich",
+            "14.3.3"
+          ],
+          [
+            "rich-click",
+            "1.9.7"
+          ],
+          [
+            "rpds-py",
+            "0.30.0"
+          ],
+          [
+            "rsa",
+            "4.9.1"
+          ],
+          [
+            "ruff",
+            "0.15.4"
+          ],
+          [
+            "six",
+            "1.17.0"
+          ],
+          [
+            "sqlalchemy",
+            "2.0.48"
+          ],
+          [
+            "sse-starlette",
+            "3.3.2"
+          ],
+          [
+            "starlette",
+            "0.52.1"
+          ],
+          [
+            "structlog",
+            "25.5.0"
+          ],
+          [
+            "tenacity",
+            "9.1.4"
+          ],
+          [
+            "tiktoken",
+            "0.12.0"
+          ],
+          [
+            "tomli_w",
+            "1.2.0"
+          ],
+          [
+            "tomlkit",
+            "0.14.0"
+          ],
+          [
+            "tree-sitter",
+            "0.25.2"
+          ],
+          [
+            "tree-sitter-bash",
+            "0.25.1"
+          ],
+          [
+            "tree-sitter-c",
+            "0.24.1"
+          ],
+          [
+            "tree-sitter-c-sharp",
+            "0.23.1"
+          ],
+          [
+            "tree-sitter-cpp",
+            "0.23.4"
+          ],
+          [
+            "tree-sitter-css",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-elixir",
+            "0.3.5"
+          ],
+          [
+            "tree-sitter-go",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-hcl",
+            "1.2.0"
+          ],
+          [
+            "tree-sitter-html",
+            "0.23.2"
+          ],
+          [
+            "tree-sitter-java",
+            "0.23.5"
+          ],
+          [
+            "tree-sitter-javascript",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-json",
+            "0.24.8"
+          ],
+          [
+            "tree-sitter-kotlin",
+            "1.1.0"
+          ],
+          [
+            "tree-sitter-lua",
+            "0.5.0"
+          ],
+          [
+            "tree-sitter-php",
+            "0.24.1"
+          ],
+          [
+            "tree-sitter-python",
+            "0.25.0"
+          ],
+          [
+            "tree-sitter-ruby",
+            "0.23.1"
+          ],
+          [
+            "tree-sitter-rust",
+            "0.24.0"
+          ],
+          [
+            "tree-sitter-scala",
+            "0.24.0"
+          ],
+          [
+            "tree-sitter-swift",
+            "0.0.1"
+          ],
+          [
+            "tree-sitter-toml",
+            "0.7.0"
+          ],
+          [
+            "tree-sitter-typescript",
+            "0.23.2"
+          ],
+          [
+            "tree-sitter-yaml",
+            "0.7.2"
+          ],
+          [
+            "tree-sitter-zig",
+            "1.1.2"
+          ],
+          [
+            "typing-inspection",
+            "0.4.2"
+          ],
+          [
+            "typing_extensions",
+            "4.15.0"
+          ],
+          [
+            "urllib3",
+            "2.6.3"
+          ],
+          [
+            "uvicorn",
+            "0.41.0"
+          ],
+          [
+            "uvloop",
+            "0.22.1"
+          ],
+          [
+            "watchfiles",
+            "1.1.1"
+          ],
+          [
+            "wcmatch",
+            "10.1"
+          ],
+          [
+            "wcwidth",
+            "0.6.0"
+          ],
+          [
+            "websockets",
+            "16.0"
+          ]
+        ],
+        "fixture_sha256": "e9d2fcbd7d37e89094ded6cfd89d650de90fd8003e17e0a652feeece61248c63",
+        "harness_sha256": "8edaa1734d59121c7a1898ed1b5077ef22b83d96a3a2a57b4a8998176ba23d10",
+        "optional_grammars": null,
+        "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+        "platform": "Linux-6.8.0-142-generic-x86_64-with-glibc2.39",
+        "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+        "settings": {
+          "ATTOCODE_EMBEDDING_MODEL": null,
+          "ATTOCODE_INTEL_BROAD_RERANK": null,
+          "ATTOCODE_INTEL_PRECISION": "off",
+          "ATTOCODE_INTEL_RANKING_ALLOW_REMOTE": null,
+          "ATTOCODE_INTEL_RANKING_PROVIDER": "off",
+          "ATTOCODE_LOCAL_ONLY": "1",
+          "ATTOCODE_NL_EMBEDDING_MODE": "none"
+        },
+        "source_sha256": "3dc84a6e97fb754c9f63fab2e7828c69fc6e38bea087a6482fd74191fc9967ca"
+      },
+      "index": {
+        "body_index_available": true,
+        "body_index_coverage": 0.0,
+        "body_index_ready": false,
+        "body_indexed_files": 0,
+        "importance_seconds": 0.002,
+        "keyword_index_ready": true,
+        "keyword_indexed_files": 0,
+        "keyword_seconds": 14.206,
+        "status": "warming",
+        "vector_coverage": 0.0,
+        "vector_status": "idle",
+        "warmup_reused_asts": 4980,
+        "warmup_seconds": 92.663,
+        "warmup_stage": "body"
+      },
+      "mode": "prehydrated",
+      "pack": "cockroach",
+      "prehydration_error": null,
+      "prehydration_seconds": 56.27261216799997,
+      "probe_enabled": true,
+      "profile": {
+        "active": [
+          {
+            "phase": "body.files",
+            "wall_seconds": 77.50454389200002
+          },
+          {
+            "phase": "body.document",
+            "wall_seconds": 0.00033705900000313704
+          },
+          {
+            "phase": "body.read",
+            "wall_seconds": 0.00031339899999238696
+          }
+        ],
+        "counts": {
+          "body.files_completed": 6366,
+          "body.files_started": 6367,
+          "body.read_chars": 91595319,
+          "body.windows": 142653,
+          "keyword.commits": 1,
+          "keyword.documents": 81734,
+          "keyword.files_completed": 9736,
+          "keyword.files_started": 9736,
+          "keyword.read_chars": 131447954
+        },
+        "counts_semantics": "attempted work, not committed rows; commits counted separately",
+        "phases": {
+          "body.cache_load": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.00011656999999942741,
+            "wall_seconds": 0.00011610999996491955
+          },
+          "body.delete": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.022600329999999502,
+            "wall_seconds": 0.02260175000003528
+          },
+          "body.discovery": {
+            "calls": 1,
+            "thread_cpu_seconds": 1.0450000001327453e-05,
+            "wall_seconds": 1.051999998935571e-05
+          },
+          "body.document": {
+            "calls": 6366,
+            "thread_cpu_seconds": 46.54634691999985,
+            "wall_seconds": 54.58499856499765
+          },
+          "body.lock": {
+            "calls": 1,
+            "thread_cpu_seconds": 5.129999999908819e-06,
+            "wall_seconds": 5.199999975502578e-06
+          },
+          "body.open": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.003382540000000489,
+            "wall_seconds": 0.00585654099995736
+          },
+          "body.read": {
+            "calls": 6366,
+            "thread_cpu_seconds": 1.47983659999964,
+            "wall_seconds": 6.435182457000849
+          },
+          "body.revision": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.000682449999999335,
+            "wall_seconds": 0.002994556000032844
+          },
+          "body.spans": {
+            "calls": 6355,
+            "thread_cpu_seconds": 0.5457822499995757,
+            "wall_seconds": 1.4929327869988356
+          },
+          "body.sql": {
+            "calls": 17656,
+            "thread_cpu_seconds": 13.336074719999823,
+            "wall_seconds": 21.99703581600562
+          },
+          "body.stat": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.9124333799999995,
+            "wall_seconds": 0.9155280749999974
+          },
+          "body.tokenize": {
+            "calls": 2568084,
+            "thread_cpu_seconds": 23.54924028999875,
+            "wall_seconds": 24.623305631034043
+          },
+          "keyword.cache_load": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.0037025299999999817,
+            "wall_seconds": 0.0209433619999686
+          },
+          "keyword.cache_save": {
+            "calls": 1,
+            "thread_cpu_seconds": 3.1416904300000006,
+            "wall_seconds": 3.2044710529999634
+          },
+          "keyword.commit": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.25260730999999836,
+            "wall_seconds": 0.3076318669999978
+          },
+          "keyword.discovery": {
+            "calls": 1,
+            "thread_cpu_seconds": 2.26947411,
+            "wall_seconds": 3.526233618000049
+          },
+          "keyword.documents": {
+            "calls": 9736,
+            "thread_cpu_seconds": 4.724511950000025,
+            "wall_seconds": 4.72490361600245
+          },
+          "keyword.files": {
+            "calls": 1,
+            "thread_cpu_seconds": 7.159596990000001,
+            "wall_seconds": 7.1802902369999515
+          },
+          "keyword.frequencies": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.1659643399999986,
+            "wall_seconds": 0.16598270499997625
+          },
+          "keyword.hash_lookup": {
+            "calls": 9736,
+            "thread_cpu_seconds": 0.2974961900000177,
+            "wall_seconds": 0.3001567099981344
+          },
+          "keyword.parse": {
+            "calls": 4756,
+            "thread_cpu_seconds": 0.6289937799999716,
+            "wall_seconds": 0.6271898899994994
+          },
+          "keyword.read": {
+            "calls": 9736,
+            "thread_cpu_seconds": 0.7029948200000504,
+            "wall_seconds": 0.7134489970000573
+          },
+          "keyword.serialize": {
+            "calls": 81734,
+            "thread_cpu_seconds": 0.7576667099998602,
+            "wall_seconds": 0.7553243119908757
+          },
+          "keyword.spans": {
+            "calls": 9736,
+            "thread_cpu_seconds": 0.3280353000000029,
+            "wall_seconds": 0.32695412000049373
+          },
+          "keyword.sql": {
+            "calls": 1433,
+            "thread_cpu_seconds": 1.4869395099999867,
+            "wall_seconds": 1.49297682599979
+          },
+          "keyword.stat": {
+            "calls": 1,
+            "thread_cpu_seconds": 0.10176146000000008,
+            "wall_seconds": 0.10175837299999557
+          },
+          "keyword.tokenize": {
+            "calls": 81734,
+            "thread_cpu_seconds": 2.93005663999998,
+            "wall_seconds": 2.9291337079950495
+          }
+        },
+        "schema": 1,
+        "slow_files": [
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_leftouter.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.4915285929999982
+          },
+          {
+            "file": "pkg/kv/kvserver/allocator/allocatorimpl/allocator_test.go",
+            "phase": "body.document",
+            "wall_seconds": 0.3045301939999945
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_rightanti.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.2982037379999838
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_fullouter.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.28466653600003156
+          },
+          {
+            "file": "pkg/sql/colexec/colexecbase/cast.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.2648080900000309
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_exceptall.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.25919173099998716
+          },
+          {
+            "file": "pkg/sql/colexec/colexecjoin/mergejoiner_leftsemi.eg.go",
+            "phase": "body.document",
+            "wall_seconds": 0.25565409399996497
+          },
+          {
+            "file": "pkg/kv/kvclient/kvcoord/dist_sender_test.go",
+            "phase": "body.document",
+            "wall_seconds": 0.25558223299998417
+          }
+        ],
+        "timing": "inclusive; completed scopes only; indexing-thread CPU"
+      },
+      "revision": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+      "scope": "Instrumented mechanism diagnostic, not full quality gate or performance claim",
+      "source": {
+        "bytes": 134387784,
+        "files": 9758,
+        "sha256": "ea14ffbe7909899749be3b3d413453ee117f8552e409aa5267e5474b80b6654c"
+      },
+      "status": "incomplete",
+      "structural": {
+        "dep_graph_files": 0,
+        "discovered_files": 9736,
+        "discovery_truncated": false,
+        "elapsed_ms": 179229.2,
+        "embedding_coverage": 0.0,
+        "excluded_checkout_roots": [],
+        "excluded_checkout_roots_truncated": false,
+        "parse_coverage": 1.0,
+        "parsed_files": 4980,
+        "phase": "ready",
+        "reference_coverage": 1.0,
+        "reference_indexed_files": 4980,
+        "snapshot_repair": null,
+        "tier": "medium",
+        "total_files": 4980
+      }
+    }
+  ]
+}

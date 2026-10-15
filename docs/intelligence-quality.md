@@ -301,3 +301,9 @@ for normal concurrent and prehydrated startup. Its result is diagnostic evidence
 it cannot pass the full quality gate. The approved extension permits one diagnostic worker after the 16 existing
 reservations, with a $17 monthly reservation cap. It does not authorize another
 full-matrix retry. All admission/deletion guards still apply.
+
+The [first pinned diagnostic](../packages/code-intel/evals/results/2026-10-15-cockroach-index-probe.md)
+used that one additional reservation. Both body indexes remained incomplete;
+prehydration shortened keyword work but increased total observation elapsed.
+All 17 workers are deleted and the allowance is exhausted. The raw profiles guide
+follow-up work; they do not authorize another rental or clear the release gate.
