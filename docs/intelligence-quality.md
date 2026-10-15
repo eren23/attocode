@@ -382,4 +382,9 @@ A complete passing observation at or below 150 seconds is classified as useful
 observed headroom; a slower pass remains narrow. This is descriptive and not a
 new gate or reliability guarantee. Collect reports and verify worker deletion
 after every attempt. The subsequent local retrieval benchmark and opt-in
-candidate gate are specified in the dedicated cycle design.
+candidate gate are specified in the [cycle design](../packages/code-intel/evals/designs/2026-10-15-headroom-retrieval.md).
+
+The cycle is complete: Cockroach passed in 167.970 seconds (narrow margin),
+using one worker with verified deletion. Neither retrieval candidate qualified
+on development; baseline-only validation completed all 48 questions. No ranking
+policy or release changed. See the [results](../packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).

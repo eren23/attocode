@@ -28,7 +28,7 @@ LOCAL_TESTS = QUICK_TESTS + ["test_product.py", "test_query_ranking.py", "test_r
                            "test_cold_index_cost.py", "test_structural_write_cost.py", "test_lexical_sql_cost.py", "test_index_probe.py", "test_discovery_reuse.py", "test_ast_snapshot.py",
                            "test_index_sequences.py", "test_mixed_workspace.py", "test_index_processes.py",
                            "test_file_symbol_scope.py", "test_retrieval_audit.py",
-                           "test_importance_publication.py", "test_retrieval_ablation.py",
+                           "test_importance_publication.py", "test_retrieval_ablation.py", "test_retrieval_cycle.py",
                            "test_structural_evidence.py", "test_search_evidence_audit.py", "test_remote.py",
                            "test_module_ownership.py", "test_real_language_server.py", "test_precision_protocol.py",
                            "test_source_exclusions.py", "test_operation_contracts.py"]
@@ -50,7 +50,7 @@ LINT_PATHS = ["eval/quality", *["packages/code-intel/src/attocode_intel/" + p fo
     *["packages/code-intel/tests/" + p for p in (
         "test_index_sequences.py", "test_mixed_workspace.py", "test_index_processes.py",
         "test_file_symbol_scope.py", "test_retrieval_audit.py",
-        "test_importance_publication.py", "test_retrieval_ablation.py",
+        "test_importance_publication.py", "test_retrieval_ablation.py", "test_retrieval_cycle.py",
         "test_module_ownership.py", "test_real_language_server.py", "test_source_exclusions.py",
         "test_operation_contracts.py", "test_structural_write_cost.py", "test_lexical_sql_cost.py", "test_index_probe.py", "test_discovery_reuse.py", "test_ast_snapshot.py")]]
 

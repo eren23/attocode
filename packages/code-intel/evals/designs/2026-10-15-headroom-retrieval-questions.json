@@ -1,0 +1,859 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-15T18:08:21.103325+00:00",
+  "source_review": "Native pinned source reviewed before retrieval; non-exhaustive relevance anchors. Previously used repositories, new questions and distinct behavior families by split.",
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "split": "development",
+          "category": "intent",
+          "query": "Choose a template renderer from a filename suffix, loading its module when necessary",
+          "id": "express:headroom-1",
+          "evidence": [
+            {
+              "file": "lib/view.js",
+              "line": 81,
+              "quote": "var fn = require(mod).__express",
+              "source_sha256": "74f4171b66263e22481820bc5975708f7dd8a61484f570aac7c5b4ab77ecbd79"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "cross_file",
+          "query": "Turn trusted proxy settings into the rule used to interpret a forwarded request protocol",
+          "id": "express:headroom-2",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "line": 371,
+              "quote": "this.set('trust proxy fn', compileTrust(val));",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab"
+            },
+            {
+              "file": "lib/utils.js",
+              "line": 194,
+              "quote": "exports.compileTrust = function(val)",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112"
+            },
+            {
+              "file": "lib/request.js",
+              "line": 297,
+              "quote": "defineGetter(req, 'protocol', function protocol()",
+              "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "configuration",
+          "query": "Translate strong or weak response validators from an application setting into a callable generator",
+          "id": "express:headroom-3",
+          "evidence": [
+            {
+              "file": "lib/utils.js",
+              "line": 130,
+              "quote": "exports.compileETag = function(val)",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112"
+            },
+            {
+              "file": "lib/application.js",
+              "line": 365,
+              "quote": "this.set('etag fn', compileETag(val));",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "ambiguous_terms",
+          "query": "Suppress an outgoing body when the client already has a fresh cached representation",
+          "id": "express:headroom-4",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 192,
+              "quote": "if (req.fresh) this.status(304);",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da"
+            },
+            {
+              "file": "lib/request.js",
+              "line": 469,
+              "quote": "defineGetter(req, 'fresh', function()",
+              "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "intent",
+          "query": "Send a file as an attachment with a chosen download filename",
+          "id": "express:headroom-5",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 433,
+              "quote": "res.download = function download",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "cross_file",
+          "query": "Build a callable application whose request and response prototypes point back to that application",
+          "id": "express:headroom-6",
+          "evidence": [
+            {
+              "file": "lib/express.js",
+              "line": 36,
+              "quote": "function createApplication()",
+              "source_sha256": "4f35e8273a5e78c35e778d14e4a8c80a81ca3e1fc8047dc87d2077b860404572"
+            },
+            {
+              "file": "lib/application.js",
+              "line": 59,
+              "quote": "app.init = function init()",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "configuration",
+          "query": "Control how many hostname components are removed before exposing subdomains",
+          "id": "express:headroom-7",
+          "evidence": [
+            {
+              "file": "lib/request.js",
+              "line": 383,
+              "quote": "defineGetter(req, 'subdomains', function subdomains()",
+              "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "ambiguous_terms",
+          "query": "Select a response representation from offered types, using a fallback or rejecting the negotiation",
+          "id": "express:headroom-8",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 569,
+              "quote": "res.format = function(obj)",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "split": "development",
+          "category": "intent",
+          "query": "Stop a search when a configured byte reveals binary input",
+          "id": "ripgrep:headroom-1",
+          "evidence": [
+            {
+              "file": "crates/searcher/src/searcher/core.rs",
+              "line": 215,
+              "quote": "pub(crate) fn detect_binary(",
+              "source_sha256": "7f3fd0976fc91e8aca2eaa07b423ab2a6ad919984b261604d35d715fa02ab3ef"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "cross_file",
+          "query": "Read compressed input through an external decompressor and report its standard error if it fails",
+          "id": "ripgrep:headroom-2",
+          "evidence": [
+            {
+              "file": "crates/cli/src/decompress.rs",
+              "line": 221,
+              "quote": "pub fn build<P: AsRef<Path>>(",
+              "source_sha256": "eaceb58ab4c650f0f9f62de1181fd6611b9e6b5b162816546760d49514045b37"
+            },
+            {
+              "file": "crates/cli/src/process.rs",
+              "line": 218,
+              "quote": "pub fn close(&mut self)",
+              "source_sha256": "1452fb92570a07c3c5135dc9efc293a30edd3322580cc93d0b342107c2593e3f"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "configuration",
+          "query": "Compile command line path overrides with separate case-sensitive and case-insensitive patterns",
+          "id": "ripgrep:headroom-3",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 1210,
+              "quote": "fn globs(",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519"
+            },
+            {
+              "file": "crates/ignore/src/overrides.rs",
+              "line": 153,
+              "quote": "pub fn case_insensitive(",
+              "source_sha256": "4283fd4dc169476a580ea1e393b1b125a357cda4c1862293800097bd91acb69e"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "ambiguous_terms",
+          "query": "Substitute numbered and named captured text into replacement bytes while preserving escaped dollar signs",
+          "id": "ripgrep:headroom-4",
+          "evidence": [
+            {
+              "file": "crates/matcher/src/interpolate.rs",
+              "line": 14,
+              "quote": "pub fn interpolate<A, N>(",
+              "source_sha256": "00b130d37cf2ca685e25f10201f37aa332f5d4cdfe04fe59b00df24a3be1e3a4"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "intent",
+          "query": "Emit nonmatching lines together with their surrounding context when matching is inverted",
+          "id": "ripgrep:headroom-5",
+          "evidence": [
+            {
+              "file": "crates/searcher/src/searcher/core.rs",
+              "line": 430,
+              "quote": "fn match_by_line_fast_invert(",
+              "source_sha256": "7f3fd0976fc91e8aca2eaa07b423ab2a6ad919984b261604d35d715fa02ab3ef"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "cross_file",
+          "query": "Write machine-readable search events without losing input bytes that are not valid text",
+          "id": "ripgrep:headroom-6",
+          "evidence": [
+            {
+              "file": "crates/printer/src/json.rs",
+              "line": 744,
+              "quote": "let msg = jsont::Message::Match",
+              "source_sha256": "310471057be8d646754ff073c75607050ae2f3b355554c59631089ab6223ad74"
+            },
+            {
+              "file": "crates/printer/src/jsont.rs",
+              "line": 178,
+              "quote": "Data::Bytes { bytes }",
+              "source_sha256": "bf5de4c4a28b53cf66b8a2d5f30eb5878abe120b4a72a4465633821d7635379e"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "configuration",
+          "query": "Make lowercase patterns ignore case while uppercase patterns remain case-sensitive",
+          "id": "ripgrep:headroom-7",
+          "evidence": [
+            {
+              "file": "crates/regex/src/config.rs",
+              "line": 84,
+              "quote": "fn is_case_insensitive(",
+              "source_sha256": "8af11cac22616a5227542beead8d7ee9fb62c208a5cfc9923c07186eae1fd9cb"
+            },
+            {
+              "file": "crates/regex/src/ast.rs",
+              "line": 39,
+              "quote": "pub(crate) fn any_uppercase",
+              "source_sha256": "9e45d49f5a06afc87a492b86845a32055e4a7e448474f98990c8d27fb034a9b8"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "ambiguous_terms",
+          "query": "Include or exclude named file types using their associated filename patterns",
+          "id": "ripgrep:headroom-8",
+          "evidence": [
+            {
+              "file": "crates/ignore/src/types.rs",
+              "line": 381,
+              "quote": "pub fn select(&mut self",
+              "source_sha256": "a8d515917dbcf21f6d92f42d9dacb75013a71c91394dfd68677c5d1c15cda706"
+            },
+            {
+              "file": "crates/ignore/src/types.rs",
+              "line": 395,
+              "quote": "pub fn negate(&mut self",
+              "source_sha256": "a8d515917dbcf21f6d92f42d9dacb75013a71c91394dfd68677c5d1c15cda706"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "redis",
+      "commit": "20f163eb3dcc1311cfe6c0dda5a3beef08ab1a5d",
+      "queries": [
+        {
+          "split": "development",
+          "category": "intent",
+          "query": "Reject a command when the authenticated user cannot access one of its key patterns",
+          "id": "redis:headroom-1",
+          "evidence": [
+            {
+              "file": "src/acl.c",
+              "line": 1853,
+              "quote": "int ACLCheckAllUserCommandPerm(",
+              "source_sha256": "2f28deaaba063bac4842f0db72971b7355a05acfd01888d612cc2be4773dee28"
+            },
+            {
+              "file": "src/server.c",
+              "line": 4425,
+              "quote": "int acl_retval = ACLCheckAllPerm",
+              "source_sha256": "4439a02c16f74d6ebb81816e76df3a58a87800fb44a40f2febd02bb67bc287a4"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "cross_file",
+          "query": "Queue commands inside a transaction and execute the queued operations together when it is committed",
+          "id": "redis:headroom-2",
+          "evidence": [
+            {
+              "file": "src/server.c",
+              "line": 4674,
+              "quote": "queueMultiCommand(c, cmd_flags);",
+              "source_sha256": "4439a02c16f74d6ebb81816e76df3a58a87800fb44a40f2febd02bb67bc287a4"
+            },
+            {
+              "file": "src/multi.c",
+              "line": 127,
+              "quote": "void execCommand(client *c)",
+              "source_sha256": "f86a81362476565f104f3bc30017523ae47339cb3e7dd84156f1826d33d41a50"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "configuration",
+          "query": "Flush append-only persistence according to the once-per-second synchronization policy",
+          "id": "redis:headroom-3",
+          "evidence": [
+            {
+              "file": "src/aof.c",
+              "line": 1147,
+              "quote": "void flushAppendOnlyFile(int force)",
+              "source_sha256": "098d7f276d6fd0aecdc1051c67848399dbf4cd202202d860bdfbde5a3cee9785"
+            },
+            {
+              "file": "src/config.c",
+              "line": 82,
+              "quote": "configEnum aof_fsync_enum[]",
+              "source_sha256": "25afc65c5baea530c5817afa5a216538f4d16ec8f0e202ae1b29403721d78255"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "ambiguous_terms",
+          "query": "Remember keys a client reads and invalidate its cached copies when those keys change",
+          "id": "redis:headroom-4",
+          "evidence": [
+            {
+              "file": "src/tracking.c",
+              "line": 202,
+              "quote": "void trackingRememberKeys(",
+              "source_sha256": "b6d3a7f73455a77ea7ccf3cf06269b922dcbf0ebce15d81b8d4a842ac0f60984"
+            },
+            {
+              "file": "src/tracking.c",
+              "line": 372,
+              "quote": "void trackingInvalidateKey(",
+              "source_sha256": "b6d3a7f73455a77ea7ccf3cf06269b922dcbf0ebce15d81b8d4a842ac0f60984"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "intent",
+          "query": "Resume a replica using only missing history when its requested offset is still in the backlog",
+          "id": "redis:headroom-5",
+          "evidence": [
+            {
+              "file": "src/replication.c",
+              "line": 943,
+              "quote": "int masterTryPartialResynchronization(",
+              "source_sha256": "3382308200ff8a654fa7560d2e2aa3f17ba8c7351acda1cd7a1549eabaa762de"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "cross_file",
+          "query": "Wake consumers waiting for new stream entries when a write makes the key ready",
+          "id": "redis:headroom-6",
+          "evidence": [
+            {
+              "file": "src/t_stream.c",
+              "line": 2552,
+              "quote": "signalKeyAsReady(c->db, c->argv[1], OBJ_STREAM);",
+              "source_sha256": "416daf4f4d2ba4289be6586d2e6d64bdd4808fc5fe7e6f5876ad03b2b8e82643"
+            },
+            {
+              "file": "src/blocked.c",
+              "line": 590,
+              "quote": "static void handleClientsBlockedOnKey(readyList *rl) {",
+              "source_sha256": "4d7a3afffe7efe9da3867e3ff3491ba886435ecec5d3bad2e68c84e53b83f460"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "configuration",
+          "query": "Rename or disable a built-in command while loading server configuration",
+          "id": "redis:headroom-7",
+          "evidence": [
+            {
+              "file": "src/config.c",
+              "line": 543,
+              "quote": "!strcasecmp(argv[0],\"rename-command\")",
+              "source_sha256": "25afc65c5baea530c5817afa5a216538f4d16ec8f0e202ae1b29403721d78255"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "ambiguous_terms",
+          "query": "Detect corrupted persisted snapshot contents by comparing the stored checksum during loading",
+          "id": "redis:headroom-8",
+          "evidence": [
+            {
+              "file": "src/rdb.c",
+              "line": 4015,
+              "quote": "/* Verify the checksum if RDB version is >= 5 */",
+              "source_sha256": "ef7e2b9f504b507b31cb1cde53b0d1d86701cd7d7bed3b1b3d7bdde15fbb3712"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "queries": [
+        {
+          "split": "development",
+          "category": "intent",
+          "query": "Revalidate a stored response using its entity tag or last-modified timestamp",
+          "id": "okhttp:headroom-1",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/cache/CacheStrategy.kt",
+              "line": 203,
+              "quote": "conditionName = \"If-None-Match\"",
+              "source_sha256": "fae3543b9a35e2917d533264b48dd0899a33568fee6957c3fa42b3bfd50c3b4e"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "cross_file",
+          "query": "Request compressed responses automatically and expose a decompressed body with corrected headers",
+          "id": "okhttp:headroom-2",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/BridgeInterceptor.kt",
+              "line": 67,
+              "quote": "var transparentGzip = false",
+              "source_sha256": "3c16015c7365fbdd48c809901fef4d652c3990f1a56e696b499912ad9f923674"
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RealResponseBody.kt",
+              "line": 23,
+              "quote": "class RealResponseBody(",
+              "source_sha256": "49015d5f1ae1838e0f47b24afa12b07975fdf649b7f8db281310f01fa069328a"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "configuration",
+          "query": "Restrict a secure socket to supported cipher suites and protocol versions, adding a fallback signal when needed",
+          "id": "okhttp:headroom-3",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/ConnectionSpec.kt",
+              "line": 116,
+              "quote": "private fun supportedSpec(",
+              "source_sha256": "7f9da8fd0acb3ef9a3ea1654fdf6039c5ac5d07fbf1537ea418da3571aaae29b"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "ambiguous_terms",
+          "query": "Pause writes on an individual multiplexed stream until its flow-control window permits more bytes",
+          "id": "okhttp:headroom-4",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Stream.kt",
+              "line": 601,
+              "quote": "while (writeBytesTotal >= writeBytesMaximum",
+              "source_sha256": "54e4b16d63117739b4b50e1490e92f997fbc998416dad14e9e72f44c3b40bf8a"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "intent",
+          "query": "Reject a peer certificate chain when none of its public keys matches the configured host pins",
+          "id": "okhttp:headroom-5",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/CertificatePinner.kt",
+              "line": 157,
+              "quote": "internal fun check(",
+              "source_sha256": "f28ef71d77352a9a1b2905c6689a03ce269c8225eb729d98602410e191bce0a6"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "cross_file",
+          "query": "Recover a disk response cache after interrupted edits and hide subsequent journal write failures",
+          "id": "okhttp:headroom-6",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/cache/DiskLruCache.kt",
+              "line": 384,
+              "quote": "private fun processJournal()",
+              "source_sha256": "3af757e80c53a415b73db5f33adce5ee2ee708abfac65cab56cd3996b9ec2d5c"
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/cache/FaultHidingSink.kt",
+              "line": 24,
+              "quote": "internal open class FaultHidingSink(",
+              "source_sha256": "3582c4c8d4ad1da6eda2bfb5ea6e0bc972f5397e719ebbad0ff56ca965701953"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "configuration",
+          "query": "Delegate a proxy password challenge to the platform authenticator and attach the resulting credential header",
+          "id": "okhttp:headroom-7",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/authenticator/JavaNetAuthenticator.kt",
+              "line": 45,
+              "quote": "val proxyAuthorization = response.code == 407",
+              "source_sha256": "f63e04ea750ea962ff0c111687d7e4a81c6d4ee0825b4906dc2bb1fbe69986d9"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "ambiguous_terms",
+          "query": "Try alternate network addresses while an earlier connection attempt is pending, then cancel losing attempts",
+          "id": "okhttp:headroom-8",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/FastFallbackExchangeFinder.kt",
+              "line": 172,
+              "quote": "private fun cancelInFlightConnects()",
+              "source_sha256": "e4d8f0a5735a324028fcd21ce6d28d25651386815145115fd207356267e969d0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "cats-effect",
+      "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "queries": [
+        {
+          "split": "development",
+          "category": "intent",
+          "query": "Suspend readers until a value is supplied once, then wake all readers without blocking operating-system threads",
+          "id": "cats-effect:headroom-1",
+          "evidence": [
+            {
+              "file": "kernel/shared/src/main/scala/cats/effect/kernel/Deferred.scala",
+              "line": 157,
+              "quote": "def complete(a: A): F[Boolean]",
+              "source_sha256": "63968fe4dfae51a8158c3fc4bbedc77f8eac0f3f48d4835699fcbdf025e02626"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "cross_file",
+          "query": "Own spawned child tasks in a resource scope and cancel or await them when that scope closes",
+          "id": "cats-effect:headroom-2",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Supervisor.scala",
+              "line": 166,
+              "quote": "state <- Resource.makeCase(mkState(doneR))",
+              "source_sha256": "be345d33d90e1c68476d38069a5edbca90b8bc4789e88a841b036597e0286023"
+            },
+            {
+              "file": "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala",
+              "line": 905,
+              "quote": "def makeCase",
+              "source_sha256": "be4ebfb1dc6e6753cb3512cfe910368a706811232793611474988c1a26c581a6"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "configuration",
+          "query": "Choose serial or concurrent execution for effects submitted by external callbacks",
+          "id": "cats-effect:headroom-3",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Dispatcher.scala",
+              "line": 201,
+              "quote": "def sequential[F[_]: Async](await: Boolean)",
+              "source_sha256": "727335b2449be0a2baede8a0d5932a93a35541b92ed93abf757713cb85093b2a"
+            },
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Dispatcher.scala",
+              "line": 165,
+              "quote": "def parallel[F[_]: Async](await: Boolean)",
+              "source_sha256": "727335b2449be0a2baede8a0d5932a93a35541b92ed93abf757713cb85093b2a"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "ambiguous_terms",
+          "query": "Update entries through per-key atomic references, sharding keys to reduce contention",
+          "id": "cats-effect:headroom-4",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/MapRef.scala",
+              "line": 72,
+              "quote": "def ofShardedImmutableMap[F[_]: Concurrent, K, V](",
+              "source_sha256": "d6a7f3b261490dbf998b8253724d2314a3abcff4e125ce8151ec6e7cd804aecc"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "intent",
+          "query": "Limit concurrent work with permits that are returned even when the protected operation is canceled",
+          "id": "cats-effect:headroom-5",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Semaphore.scala",
+              "line": 109,
+              "quote": "def permit: Resource[F, Unit]",
+              "source_sha256": "0f7922073b822d3483d123f1c8e224752e8ce68c7049acac5cbaef64a86380b9"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "cross_file",
+          "query": "Replace an acquired resource while preventing its release until current borrowers finish",
+          "id": "cats-effect:headroom-6",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/NonEmptyHotswap.scala",
+              "line": 121,
+              "quote": "override def swap(next: Resource[F, R])",
+              "source_sha256": "ac850c87dc5edf8eaffa4478aab062518da70ea3e506699e1be7ed5c1658af40"
+            },
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Semaphore.scala",
+              "line": 71,
+              "quote": "def acquireN(n: Long)",
+              "source_sha256": "0f7922073b822d3483d123f1c8e224752e8ce68c7049acac5cbaef64a86380b9"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "configuration",
+          "query": "Choose whether excess work should be dropped or wait until capacity becomes available",
+          "id": "cats-effect:headroom-7",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Backpressure.scala",
+              "line": 67,
+              "quote": "case Strategy.Lossy =>",
+              "source_sha256": "8a39ef9373d7c740496cb79c6a4b916338c426f5009d29088a428ac6de73cbc5"
+            },
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Backpressure.scala",
+              "line": 80,
+              "quote": "case Strategy.Lossless =>",
+              "source_sha256": "8a39ef9373d7c740496cb79c6a4b916338c426f5009d29088a428ac6de73cbc5"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "ambiguous_terms",
+          "query": "Suspend producers when a bounded queue is full and remove canceled waiters safely",
+          "id": "cats-effect:headroom-8",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/Queue.scala",
+              "line": 74,
+              "quote": "def bounded[F[_], A](capacity: Int)",
+              "source_sha256": "e9d218cd1420ef5b1cea3950aea7b5575cc576bc46c704dea7812a11fd0d1356"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "phoenix",
+      "commit": "850162d618cf4e31be82fb53ad6e259095fa6126",
+      "queries": [
+        {
+          "split": "development",
+          "category": "intent",
+          "query": "Track who is online in a topic and publish grouped join and leave metadata",
+          "id": "phoenix:headroom-1",
+          "evidence": [
+            {
+              "file": "lib/phoenix/presence.ex",
+              "line": 446,
+              "quote": "def handle_diff(diff, state)",
+              "source_sha256": "b854fd2a4a977686ed0b20b323d230083e0b2fac4b8ba7f1da45e265fa52b8e2"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "cross_file",
+          "query": "Decode incoming socket frames into messages and route them to the channel for their topic",
+          "id": "phoenix:headroom-2",
+          "evidence": [
+            {
+              "file": "lib/phoenix/socket.ex",
+              "line": 543,
+              "quote": "message = socket.serializer.decode!(payload, opts)",
+              "source_sha256": "b6608bc26243633fad40234df5544e99e205a19d17856caa5a836c791bdc5ca2"
+            },
+            {
+              "file": "lib/phoenix/socket/serializers/v2_json_serializer.ex",
+              "line": 105,
+              "quote": "def decode!(raw_message, opts)",
+              "source_sha256": "a1396be90eef3bf28451b04a09d00c2e644519596333832b89cd5e885fda3ab2"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "configuration",
+          "query": "Start configured external watcher commands under supervision and handle a missing executable",
+          "id": "phoenix:headroom-3",
+          "evidence": [
+            {
+              "file": "lib/phoenix/endpoint/supervisor.ex",
+              "line": 202,
+              "quote": "defp watcher_children(",
+              "source_sha256": "5b7aacc63838e62b4d4bb574eb28895afab3aa442b9cc506561c5b56d5dacf94"
+            },
+            {
+              "file": "lib/phoenix/endpoint/watcher.ex",
+              "line": 31,
+              "quote": "def watch(cmd, args) when is_list(args)",
+              "source_sha256": "101bbb846e183fadb3b1b39120ac04181872694b64c14c87156cf6b26913bfbc"
+            }
+          ]
+        },
+        {
+          "split": "development",
+          "category": "ambiguous_terms",
+          "query": "Derive member and collection route paths while treating singleton resources differently",
+          "id": "phoenix:headroom-4",
+          "evidence": [
+            {
+              "file": "lib/phoenix/router/resource.ex",
+              "line": 44,
+              "quote": "member_path = if singleton",
+              "source_sha256": "23987d2f54161acb70d352c0b47311e39039b6134ba1e20d4d5ee492b4595079"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "intent",
+          "query": "Reject unsafe local redirect destinations while allowing explicitly external destinations",
+          "id": "phoenix:headroom-5",
+          "evidence": [
+            {
+              "file": "lib/phoenix/controller.ex",
+              "line": 508,
+              "quote": "defp validate_local_url(\"//\"",
+              "source_sha256": "34823b0a9f9bdb9db312836c04b6567989da4fd77297c27bdefeaafe246c39bc"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "cross_file",
+          "query": "Reject a socket connection from an untrusted origin using endpoint defaults or transport-specific overrides",
+          "id": "phoenix:headroom-6",
+          "evidence": [
+            {
+              "file": "lib/phoenix/socket/transport.ex",
+              "line": 572,
+              "quote": "defp check_origin_config(",
+              "source_sha256": "b68e8e3f9d73269af2602bef5d77264fc03741dd851d2ef3ccdbfde957c1f472"
+            },
+            {
+              "file": "lib/phoenix/endpoint.ex",
+              "line": 124,
+              "quote": "check_origin",
+              "source_sha256": "5194a8a5efbb278fe6801761f5f1d3f95082bd59993206acce6be94c7ccca0c4"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "configuration",
+          "query": "Select the error-rendering view from configured formats and fall back when content negotiation fails",
+          "id": "phoenix:headroom-7",
+          "evidence": [
+            {
+              "file": "lib/phoenix/endpoint/render_errors.ex",
+              "line": 156,
+              "quote": "defp put_formats(conn, formats)",
+              "source_sha256": "d507f0be3d50e07aba372827487803fc816e05c4f94678f3710af9e1f3929216"
+            }
+          ]
+        },
+        {
+          "split": "validation",
+          "category": "ambiguous_terms",
+          "query": "Reuse encoded broadcasts for subscribers sharing a serializer while respecting intercepted events",
+          "id": "phoenix:headroom-8",
+          "evidence": [
+            {
+              "file": "lib/phoenix/channel/server.ex",
+              "line": 94,
+              "quote": "def dispatch(subscribers, from, %Broadcast{event: event} = msg)",
+              "source_sha256": "dad607f8dde9a6f35a9ad8d6e03a874eb13921e75cd7d9d3b6c5feb14fce9b93"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
