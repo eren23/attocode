@@ -187,6 +187,9 @@ are not a guarantee that provider deletion finishes at exactly 90 minutes.
 The service properties follow the upstream [systemd execution](https://github.com/systemd/systemd/blob/main/man/systemd-run.xml)
 and [control-group cleanup](https://github.com/systemd/systemd/blob/main/man/systemd.kill.xml)
 contracts; Linux CI checks a TERM-resistant detached child with the actual service manager.
+Each transient service also creates a unique activation marker under `/run`.
+An explicit maintenance restart fails before running its payload again, preserving
+the original execution bound. Linux CI checks this with a real service restart.
 
 Search warmup reports `warmup_reused_asts` for content-hash-verified structural
 AST reuse; it adds no second AST cache and does not initialize structural indexing
@@ -241,6 +244,13 @@ resolver. If it fails, the disposable Ubuntu worker temporarily uses public
 resolvers `1.1.1.1` and `8.8.8.8` on `eth0`, logs the intervention, and retries
 for at most 15 seconds. Continued failure aborts setup. This changes neither
 the account's VPC settings nor the Mac's DNS; healthy worker DNS is preserved.
+SSH readiness alone does not admit setup: the controller polls
+[`cloud-init status --format=json`](https://docs.cloud-init.io/en/latest/reference/cli.html#status)
+until first-boot initialization finishes cleanly, within the original eight-minute
+readiness budget and controller deadline. Failed, degraded, disabled, malformed or
+unfinished initialization prevents setup. This avoids competing with initial
+package updates and their service restarts. The final status is retained in
+`bootstrap.json` on the controller.
 Package installation waits up to 120 seconds for an existing dpkg lock, within
 the unchanged 600-second setup limit. It never removes lock files or terminates
 another package-manager process. Linux CI exercises lock release and expiry

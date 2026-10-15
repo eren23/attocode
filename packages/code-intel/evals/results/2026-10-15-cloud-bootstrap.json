@@ -1,0 +1,62 @@
+{
+  "batch": "c3b32953922f469d",
+  "source_commit": "80e62df0838d5c1f5866c969d41ea2b231942d95",
+  "passed": false,
+  "status": "failed",
+  "reason": "First-boot maintenance restarted the test service; later Cockroach body warmup still timed out.",
+  "cleanup_verified": true,
+  "active_quality_workers": 0,
+  "estimated_usd": 0.0203,
+  "controller_seconds": 437.8588020801544,
+  "archive_sha256": "1afe13a0de8dc2cd1e62419c6b331acdcac0f90bf78644f673c0c9cd9f2b35f3",
+  "warmup": {
+    "stage": "body",
+    "reused_asts": 4980,
+    "keyword_seconds": 40.535,
+    "elapsed_seconds": 119.335,
+    "body_ready": false
+  },
+  "cycle_used": 1,
+  "cycle_remaining": 3,
+  "reports": [
+    {
+      "run_id": "20261015T074534-6e7da64d",
+      "status": "running",
+      "cleanup_verified": null,
+      "retrieval": null,
+      "packs": [
+        {
+          "id": "cockroach",
+          "status": "incomplete"
+        }
+      ]
+    },
+    {
+      "run_id": "20261015T074620-1810152e",
+      "status": "failed",
+      "cleanup_verified": true,
+      "retrieval": {
+        "labeled_hit_at_24": 4,
+        "labeled_hit_at_5": 4,
+        "missing_questions": [
+          "cockroach:1",
+          "cockroach:2",
+          "cockroach:3",
+          "cockroach:4"
+        ],
+        "observed_questions": 4,
+        "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+      },
+      "packs": [
+        {
+          "id": "cockroach",
+          "status": "incomplete"
+        },
+        {
+          "id": "pandas",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

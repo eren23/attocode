@@ -33,6 +33,8 @@ def test_worker_timeout_kills_term_resistant_detached_descendant(tmp_path):
     successful = worker_command("value='literal $dollar'; printf '%s' \"$value\"", 5)
     completed = subprocess.run(['sudo', '-n', '/bin/sh', '-c', successful],
                                capture_output=True, text=True, timeout=10)
+    successful_unit = next(a.split('=', 1)[1] for a in shlex.split(successful) if a.startswith('--unit='))
+    subprocess.run(['sudo', '-n', 'rmdir', '/run/' + successful_unit + '.started'], check=True)
     assert completed.returncode == 0 and completed.stdout == 'literal $dollar', completed.stderr
     record = tmp_path / 'worker.json'
     child = 'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'
@@ -61,6 +63,34 @@ def test_worker_timeout_kills_term_resistant_detached_descendant(tmp_path):
                 pass
     finally:
         subprocess.run(['sudo', '-n', 'systemctl', 'stop', unit], capture_output=True, timeout=15)
+        subprocess.run(['sudo', '-n', 'rmdir', '/run/' + unit + '.started'], check=True)
+
+
+def test_worker_manual_restart_cannot_run_payload_twice(tmp_path):
+    from eval.quality.cloud import worker_command
+
+    if os.environ.get('QUALITY_TEST_SYSTEMD') != '1':
+        pytest.skip('Dedicated Linux CI enables the systemd restart test')
+    record = tmp_path / 'starts'
+    command = worker_command(f'echo started >> {shlex.quote(str(record))}; exec sleep 30', 20)
+    unit = next(a.split('=', 1)[1] for a in shlex.split(command) if a.startswith('--unit='))
+    process = subprocess.Popen(['sudo', '-n', '/bin/sh', '-c', command],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        deadline = time.monotonic() + 8
+        while not record.exists() and time.monotonic() < deadline:
+            time.sleep(.05)
+        assert record.exists()
+        restart = subprocess.run(['sudo', '-n', 'systemctl', 'restart', unit],
+                                 capture_output=True, text=True, timeout=8)
+        assert restart.returncode != 0, restart.stdout + restart.stderr
+        output, _ = process.communicate(timeout=8)
+        assert process.returncode != 0, output
+        assert record.read_text().splitlines() == ['started']
+    finally:
+        subprocess.run(['sudo', '-n', 'systemctl', 'stop', unit], capture_output=True, timeout=15)
+        subprocess.run(['sudo', '-n', 'rmdir', '/run/' + unit + '.started'], check=True)
+        process.communicate(timeout=3)
 
 
 def test_worker_command_uses_independent_cgroup_and_preserves_shell_text():
@@ -153,7 +183,8 @@ def test_controller_resume_past_wall_deadline_does_not_start_tests(tmp_path, mon
     wall = [1000.0]
     monkeypatch.setattr(cloud, 'time', SimpleNamespace(
         time=lambda: wall[0], monotonic=lambda: 10.0, sleep=lambda _: None))
-    monkeypatch.setattr(cloud.subprocess, 'run', lambda *a, **kw: SimpleNamespace(returncode=0))
+    monkeypatch.setattr(cloud.subprocess, 'run', lambda *a, **kw: SimpleNamespace(
+        returncode=0, stdout='{"status":"done","extended_status":"done"}'))
     started = []
     def supervise(command, **kwargs):
         if wall[0] >= kwargs['wall_deadline']:
@@ -169,6 +200,34 @@ def test_controller_resume_past_wall_deadline_does_not_start_tests(tmp_path, mon
     assert '--property=RuntimeMaxSec=600s' in started[1][1][-1]
     assert 'ServerAliveInterval=15' in started[1][1]
     assert api.deleted == [42]
+
+
+@pytest.mark.parametrize('final', ['done', 'degraded done', 'disabled', 'invalid', 'timeout'])
+def test_bootstrap_wait_requires_clean_completion_within_original_deadline(tmp_path, monkeypatch, final):
+    from eval.quality import cloud
+
+    clock = [100.0]
+    monkeypatch.setattr(cloud, 'time', SimpleNamespace(
+        monotonic=lambda: clock[0], time=lambda: clock[0],
+        sleep=lambda seconds: clock.__setitem__(0, clock[0] + seconds)))
+    calls = []
+    def probe(command, **kwargs):
+        calls.append(command)
+        assert kwargs['timeout'] <= 6
+        if len(calls) == 1:
+            return SimpleNamespace(returncode=255, stdout='')
+        status = 'running' if len(calls) == 2 or final == 'timeout' else final
+        body = 'invalid' if status == 'invalid' else json.dumps({'status': status, 'extended_status': status})
+        return SimpleNamespace(returncode=2 if status == 'degraded done' else 0, stdout=body)
+    monkeypatch.setattr(cloud.subprocess, 'run', probe)
+    if final == 'done':
+        cloud.wait_for_bootstrap(['ssh', 'fixture'], {}, tmp_path, deadline=106, wall_deadline=110)
+        assert len(calls) == 3 and clock[0] == 104
+    else:
+        with pytest.raises(TimeoutError if final == 'timeout' else RuntimeError):
+            cloud.wait_for_bootstrap(['ssh', 'fixture'], {}, tmp_path, deadline=106, wall_deadline=110)
+    assert all(c[-1] == 'cloud-init status --format=json' for c in calls)
+    assert clock[0] <= 106
 
 
 @pytest.mark.parametrize("command", ["quote", "reap", "reap-apply", "reconcile"])
@@ -360,7 +419,8 @@ def test_collection_failure_still_deletes_worker(tmp_path, monkeypatch):
             result["droplet"].update(status="active", networks={"v4": [{"type": "public", "ip_address": "192.0.2.1"}]})
         return result
     api.request = request
-    monkeypatch.setattr(cloud.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=0))
+    monkeypatch.setattr(cloud.subprocess, "run", lambda *a, **kw: SimpleNamespace(
+        returncode=0, stdout='{"status":"done","extended_status":"done"}'))
     commands = []
     def supervise(command, **kw):
         commands.append(command)
