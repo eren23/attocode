@@ -45,6 +45,7 @@ _NON_CODE_EXTS = frozenset({
 })
 
 _CAMEL_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+_ASCII_WORD_RE = re.compile(r"[a-zA-Z0-9]+")
 
 # Mapping from common query terms to code construct types for query expansion
 _CONSTRUCT_HINTS: dict[str, list[str]] = {
@@ -94,17 +95,12 @@ class _BodySpanCache:
 
 def _tokenize(text: str) -> list[str]:
     """Tokenize text: split camelCase/snake_case, lowercase, remove stop words."""
-    # Split on non-alphanumeric first
-    parts = re.split(r"[^a-zA-Z0-9]+", text)
-    tokens: list[str] = []
-    for part in parts:
-        # Split camelCase
-        sub_parts = _CAMEL_RE.sub("_", part).split("_")
-        for sp in sub_parts:
-            sp_lower = sp.lower()
-            if len(sp_lower) >= 2 and sp_lower not in _STOP_WORDS:
-                tokens.append(sp_lower)
-    return tokens
+    # Camel boundaries use adjacent ASCII letters, so they cannot cross any
+    # separator the old per-word loop split on. One substitution over the input
+    # avoids a regex call and temporary split list for every source word.
+    # Extract ASCII words BEFORE lowercasing: Unicode case folds may add ASCII.
+    parts = (part.lower() for part in _ASCII_WORD_RE.findall(_CAMEL_RE.sub("_", text)))
+    return [part for part in parts if len(part) >= 2 and part not in _STOP_WORDS]
 
 
 def _expand_query(query: str, language: str = "") -> str:
@@ -373,6 +369,10 @@ class SemanticSearchManager:
     _body_failed_at: float = field(default=0.0, repr=False)
     _body_thread: threading.Thread | None = field(default=None, repr=False)
     _body_state_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _warmup_stage: str = field(default="idle", repr=False)
+    _warmup_started: float = field(default=0.0, repr=False)
+    _warmup_finished: float = field(default=0.0, repr=False)
+    _warmup_seconds: dict[str, float] = field(default_factory=dict, repr=False)
     _trigram_index: Any = field(default=None, repr=False)
     _bg_indexer: Any = field(default=None, repr=False)
     _bg_thread: Any = field(default=None, repr=False)
@@ -1432,6 +1432,18 @@ class SemanticSearchManager:
     def _warm_candidate_indexes(self) -> None:
         """Build AST and optional body indexes, honoring mid-build invalidation."""
         generation = self._body_generation
+        self._warmup_finished = 0.0
+        self._warmup_started = time.monotonic()
+        self._warmup_seconds = {}
+
+        def timed(stage, operation):
+            self._warmup_stage = stage
+            started = time.monotonic()
+            try:
+                operation()
+            finally:
+                self._warmup_seconds = {**self._warmup_seconds, stage: time.monotonic() - started}
+
         try:
             from attocode_intel._internal.integrations.context.codebase_context import (
                 CodebaseContextManager,
@@ -1444,22 +1456,29 @@ class SemanticSearchManager:
                 return
             body_spans = _BodySpanCache()
             if not self._kw_index_built:
-                self._build_keyword_index(ctx, body_spans)
+                timed("keyword", lambda: self._build_keyword_index(ctx, body_spans))
                 if self._closed or generation != self._body_generation:
                     self._kw_index_built = False
                     return
             # Importance is used in first-query scoring; trigram mmap files
             # remain lazy to avoid holding descriptors in idle workspaces.
-            self._load_importance_scores(ctx)
+            timed("importance", lambda: self._load_importance_scores(ctx))
             if self._closed:
                 return
             if self._body_index_available and not self._body_index_built:
-                self._sync_body_index(ctx, body_spans)
+                timed("body", lambda: self._sync_body_index(ctx, body_spans))
         except InterruptedError:
             return
         except Exception:
             logger.warning("Lexical candidate warm-up failed", exc_info=True)
         finally:
+            self._warmup_finished = time.monotonic()
+            if self._closed:
+                self._warmup_stage = "cancelled"
+            elif generation != self._body_generation:
+                self._warmup_stage = "invalidated"
+            elif self._kw_index_built and (self._body_index_built or not self._body_index_available):
+                self._warmup_stage = "ready"
             if not self._closed and generation == self._body_generation and not (
                 self._kw_index_built
                 and (self._body_index_built or not self._body_index_available)
@@ -1664,7 +1683,12 @@ class SemanticSearchManager:
             "body_index_coverage": 0.0,
             "vector_status": self._index_progress.status,
             "vector_coverage": self._index_progress.coverage,
+            "warmup_stage": self._warmup_stage,
+            "warmup_seconds": round((self._warmup_finished or time.monotonic()) - self._warmup_started, 3)
+                if self._warmup_started else 0.0,
         }
+        snapshot.update({f"{stage}_seconds": round(seconds, 3)
+                         for stage, seconds in self._warmup_seconds.items()})
         if not self._body_index_built:
             return snapshot
         conn = self._open_body_db()

@@ -82,7 +82,8 @@ async def ready_search(gateway, arguments, *, timeout=90):
                               "warmup_seconds": time.monotonic() - started if warming else 0}
         warming += 1
         if time.monotonic() - started >= timeout:
-            raise TimeoutError(f"Search index still warming after {timeout} seconds")
+            index = decoded.get("data", {}).get("ranking", {}).get("index", {})
+            raise TimeoutError(f"Search index still warming after {timeout} seconds; index={json.dumps(index)}")
         await asyncio.sleep(.1)
 
 
