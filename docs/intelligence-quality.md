@@ -204,7 +204,7 @@ The optional controller uses DigitalOcean's API and SSH. It selects one
 `s-8vcpu-16gb-amd` shared CPU worker in `ams3`, with at least 8 vCPUs and
 16 GiB memory, and verifies the
 live provider quote before provisioning. The admission budget is $1 per batch
-and $16 per UTC month, before tax. A reservation is retained for the whole month;
+and $17 per UTC month, before tax. A reservation is retained for the whole month;
 runtime estimates are not refunds or invoices. Keep one controller and preserve
 its ledger at `.attocode/quality/cloud/ledger.json`.
 
@@ -296,7 +296,8 @@ The bounded [stage probe](../packages/code-intel/evals/results/2026-10-15-index-
 records inclusive wall/thread-CPU timings and partial work counters without
 changing search ranking or the release gate. Run `python -m eval.quality.index_probe`
 for tiny local wiring. `python -m eval.quality cloud probe --pack cockroach` selects
-one pinned corpus on a future authorized worker, with fresh source/index directories
+one pinned corpus on an authorized worker, with fresh source/index directories
 for normal concurrent and prehydrated startup. Its result is diagnostic evidence;
-it cannot pass the full quality gate. The existing exhausted cloud allowance and
-all admission/deletion guards still apply.
+it cannot pass the full quality gate. The approved extension permits one diagnostic worker after the 16 existing
+reservations, with a $17 monthly reservation cap. It does not authorize another
+full-matrix retry. All admission/deletion guards still apply.
