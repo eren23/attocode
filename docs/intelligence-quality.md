@@ -322,3 +322,11 @@ retaining all 17 previous reservations under a $19 monthly cap. Run uninstrument
 `cloud run --suite all` only if that target passes on coherent inputs. Collect
 results and verify deletion after each. No blind retry or third rental is included;
 0.1.6 publication still requires a complete passing full gate.
+
+The [uninstrumented target result](../packages/code-intel/evals/results/2026-10-15-discovery-validation.md)
+reached ready body search but exceeded the unchanged 180-second pack deadline
+before the final restart check completed. The target failed; the conditional full
+run was not launched. All 18 workers are deleted, with $0.8221 cumulative estimated
+compute (not an invoice). One reservation remains unused, but the failed target
+blocks using it for the full gate. Next work is local restart/freshness analysis;
+no release or further rental follows from this incomplete result.
