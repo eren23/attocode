@@ -167,9 +167,10 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
     def drain():
         written = 0
         with Path(log).open("wb") as stream:
-            while block := process.stdout.read(8192):
+            while block := process.stdout.read1(8192):
                 remaining = max(0, log_cap - written)
                 stream.write(block[:remaining])
+                stream.flush()  # Small progress/failure records must be visible before EOF.
                 written += min(len(block), remaining)
                 if len(block) > remaining:
                     row["log_truncated"] = True
