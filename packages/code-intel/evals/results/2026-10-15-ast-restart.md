@@ -31,6 +31,12 @@ was performed for this local change.
   use the existing structural repair path. Ranking weights and the 180/90-second
   workflow/search limits are unchanged.
 
+**Correction:** the parse counter below covered the structural restore entry
+point, but omitted parsing during discovery before restoration. The claim that
+the entire restart avoided parsing was incorrect. See the [follow-up audit and
+repair](2026-10-15-restart-discovery-repair.md), which counts both entry points.
+The recorded historical timings and raw data are preserved.
+
 ## Measured tradeoff
 
 `packages/code-intel/evals/ast_restart_probe.py` generates 160 Go files with 5,120

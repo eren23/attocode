@@ -4,7 +4,12 @@ from dataclasses import asdict
 from unittest.mock import patch
 
 import pytest
-from attocode_intel._internal.integrations.context import ast_service, ast_snapshot
+from attocode_intel._internal.integrations.context import (
+    ast_service,
+    ast_snapshot,
+    codebase_ast,
+    codebase_context,
+)
 from attocode_intel._internal.integrations.context.ast_service import ASTService
 from attocode_intel._internal.integrations.context.index_store import AST_SNAPSHOT_KEY, SNAPSHOT_KEY
 
@@ -40,7 +45,8 @@ def test_restart_preserves_complete_ast_and_symbols_without_parse(tmp_path, name
     close(first)
     second = ASTService(str(tmp_path))
     try:
-        with patch.object(ast_service, 'parse_file', side_effect=AssertionError('restart reparsed')):
+        with (patch.object(ast_service, 'parse_file', side_effect=AssertionError('restart reparsed')),
+              patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('discovery reparsed'))):
             assert second.initialize_skeleton().phase == 'ready'
         assert {k: asdict(v) for k, v in second._ast_cache.items()} == expected
         assert second._index.definitions == definitions
@@ -179,10 +185,11 @@ def test_summaries_survive_a_fresh_process(tmp_path):
     result = subprocess.run([sys.executable, '-c', '''
 import json,sys
 from unittest.mock import patch
-from attocode_intel._internal.integrations.context import ast_service
+from attocode_intel._internal.integrations.context import ast_service, codebase_ast
 svc=ast_service.ASTService(sys.argv[1])
 try:
- with patch.object(ast_service, 'parse_file', side_effect=AssertionError('child reparsed')):
+ with (patch.object(ast_service, 'parse_file', side_effect=AssertionError('child reparsed')),
+       patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('child discovery reparsed'))):
   state=svc.initialize_skeleton()
  assert state.phase=='ready'
  print(json.dumps(svc._store.stats()))
@@ -237,5 +244,64 @@ def test_summary_write_failure_leaves_no_complete_snapshot(tmp_path):
     try:
         assert second.initialize_skeleton().phase == 'ready'
         assert second.find_symbol('example')
+    finally:
+        close(second)
+
+
+def test_restart_discovery_preserves_inventory_order_scores_and_import_graph(tmp_path):
+    (tmp_path / 'helper.py').write_text('def helper(): return 1\n')
+    (tmp_path / 'client.py').write_text('from helper import helper\ndef client(): return helper()\n')
+    first = ASTService(str(tmp_path))
+    try:
+        first.initialize_skeleton(indexing_depth='eager')
+        inventory = [asdict(fi) for fi in first._context_mgr._files]
+        graph = asdict(first._context_mgr.dependency_graph)
+    finally:
+        close(first)
+    second = ASTService(str(tmp_path))
+    try:
+        with patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('discovery reparsed')):
+            assert second.initialize_skeleton().phase == 'ready'
+        assert [asdict(fi) for fi in second._context_mgr._files] == inventory
+        assert asdict(second._context_mgr.dependency_graph) == graph
+    finally:
+        close(second)
+
+
+def test_edit_during_discovery_rejects_preloaded_summaries(tmp_path, monkeypatch):
+    first = seed(tmp_path, count=1)
+    close(first)
+    original = codebase_context.CodebaseContextManager.discover_files
+    def edit_after_discovery(self, **kwargs):
+        files = original(self, **kwargs)
+        (tmp_path / 'file0.py').write_text('def changed_after_summary(): return 3\n')
+        return files
+    monkeypatch.setattr(codebase_context.CodebaseContextManager, 'discover_files', edit_after_discovery)
+    second = ASTService(str(tmp_path))
+    try:
+        second.initialize_skeleton()
+        assert second.find_symbol('changed_after_summary')
+        assert not second.find_symbol('Sample0')
+        assert not second._store.get_meta(SNAPSHOT_KEY)  # Concurrent edit cannot bless a snapshot.
+    finally:
+        close(second)
+
+
+def test_completion_change_revalidates_preloaded_cache_binding(tmp_path, monkeypatch):
+    first = seed(tmp_path, count=1)
+    close(first)
+    second = ASTService(str(tmp_path))
+    original = codebase_context.CodebaseContextManager.discover_files
+    def change_completion(self, **kwargs):
+        files = original(self, **kwargs)
+        raw = second._store.get_meta(SNAPSHOT_KEY)
+        second._store.set_meta(SNAPSHOT_KEY, raw + ' ')
+        return files
+    monkeypatch.setattr(codebase_context.CodebaseContextManager, 'discover_files', change_completion)
+    try:
+        with patch.object(ast_service, 'parse_file', wraps=ast_service.parse_file) as parse:
+            second.initialize_skeleton()
+        assert parse.call_count == 1
+        assert second.find_symbol('Sample0')
     finally:
         close(second)

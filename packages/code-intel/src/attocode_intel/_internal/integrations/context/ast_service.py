@@ -20,6 +20,7 @@ import re
 import sqlite3
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from attocode_intel._internal.integrations.context.codebase_ast import (
@@ -359,8 +360,18 @@ class ASTService:
         """
         from attocode_intel.telemetry import measure
         self._snapshot_start = self._snapshot_identity()
+        # Discovery builds imports for smaller repositories before _restore_snapshot.
+        # Give it the same source-validated summaries so that restart does not parse
+        # every file there and then discard that work before restoring the index.
+        from .ast_snapshot import restore_summaries
+
+        snapshot = self._store.get_meta(SNAPSHOT_KEY)
+        summaries = restore_summaries(self._store, snapshot, (
+            SimpleNamespace(relative_path=rel, path=os.path.join(self._root_dir, rel))
+            for rel in self._snapshot_start["files"]
+        )) if snapshot else None
         with measure("discovery"):
-            files = self._context_mgr.discover_files()
+            files = self._context_mgr.discover_files(ast_cache=summaries)
         self._index = CrossRefIndex()
         self._index.set_store(self._store)
         self._ast_cache.clear()
@@ -404,7 +415,7 @@ class ASTService:
         )
         self._hydration_state = state
 
-        if self._restore_snapshot(files, parseable, state):
+        if self._restore_snapshot(files, parseable, state, summaries=summaries, snapshot=snapshot):
             self._initialized = True
             return state
         # A partial or interrupted rebuild must never be restored as complete.
@@ -469,7 +480,7 @@ class ASTService:
             "ignore": list(self._snapshot_tracker._ignore_identity or ()),
         }
 
-    def _restore_snapshot(self, files, parseable, state) -> bool:
+    def _restore_snapshot(self, files, parseable, state, *, summaries=None, snapshot=None) -> bool:
         """Restore a completed index and repair offline edits when necessary.
 
         Bounded summaries reuse unchanged ASTs with exact source/parser identity;
@@ -485,7 +496,11 @@ class ASTService:
                 return False
             from .ast_snapshot import restore_summaries
 
-            summaries = restore_summaries(self._store, raw, parseable)
+            if summaries is None or snapshot != raw:
+                summaries = restore_summaries(self._store, raw, parseable)
+            else:
+                eligible = {fi.relative_path for fi in parseable}
+                summaries = {path: ast for path, ast in summaries.items() if path in eligible}
             cached = summaries if summaries is not None else {}
             for fi in parseable:
                 if fi.relative_path not in cached:

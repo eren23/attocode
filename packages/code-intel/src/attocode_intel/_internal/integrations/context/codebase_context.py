@@ -865,7 +865,7 @@ class CodebaseContextManager:
         self._last_refresh_time = snapshot.refreshed_at  # Do not extend freshness.
         return True
 
-    def discover_files(self) -> list[FileInfo]:
+    def discover_files(self, *, ast_cache: dict | None = None) -> list[FileInfo]:
         """Discover all relevant files in the repository.
 
         Two-pass approach: collect all files (with safety ceiling), then
@@ -1015,7 +1015,8 @@ class CodebaseContextManager:
         # skeleton init; full dep graph is built during background hydration.
         source_count = sum(1 for f in files if f.language)
         if source_count < 5_000:
-            self._dep_graph = build_dependency_graph(files, self.root_dir, check_cancelled=self._check_cancelled)
+            self._dep_graph = build_dependency_graph(files, self.root_dir, ast_cache=ast_cache,
+                                                     check_cancelled=self._check_cancelled)
             pr_scores = self._dep_graph.pagerank()
             for f in files:
                 pr = pr_scores.get(f.relative_path, 0.0)

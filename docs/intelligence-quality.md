@@ -354,3 +354,8 @@ unchanged full gate only after a passing target on coherent inputs. Only one
 worker may exist at a time; collect and verify deletion after each. Stop after
 a second failed target or the full attempt. Publication of 0.1.6 still requires
 a complete passing full gate and publication checks.
+
+The [restart-discovery audit](../packages/code-intel/evals/results/2026-10-15-restart-discovery-repair.md)
+corrects the earlier no-reparse claim: its counter omitted discovery before
+restoration. The repair supplies validated summaries to that graph-building
+pass too. Generated component parity is not a passing cloud release gate.
