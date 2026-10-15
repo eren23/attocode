@@ -196,7 +196,7 @@ The optional controller uses DigitalOcean's API and SSH. It selects one
 `s-8vcpu-16gb-amd` shared CPU worker in `fra1`, with at least 8 vCPUs and
 16 GiB memory, and verifies the
 live provider quote before provisioning. The admission budget is $1 per batch
-and $10 per UTC month, before tax. A reservation is retained for the whole month;
+and $14 per UTC month, before tax. A reservation is retained for the whole month;
 runtime estimates are not refunds or invoices. Keep one controller and preserve
 its ledger at `.attocode/quality/cloud/ledger.json`.
 
