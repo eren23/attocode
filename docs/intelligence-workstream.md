@@ -4,7 +4,15 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current status, 2026-10-15:** [0.1.6 is released and verified](../packages/code-intel/evals/results/2026-10-15-release-016.md).
+**Latest follow-up, 2026-10-15:** [Cockroach and fresh retrieval cycle](../packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).
+The merged fixes passed Cockroach at 167.970/180 seconds, still a narrow margin.
+All 48 new source-backed retrieval questions are complete: baseline 33/48 at
+five and 44/48 at 24. Neither fixed candidate improved development Hit@5;
+no ranking policy was added. All 22 workers are deleted, cumulative estimated
+compute is $0.9264 before tax. The unused conditional retry is not launchable
+after the passing target. No additional release or model study was performed.
+
+**Release status, 2026-10-15:** [0.1.6 is released and verified](../packages/code-intel/evals/results/2026-10-15-release-016.md).
 The full gate passed all 36 pinned packs, 144 retrieval observations, ranking,
 591 contract tests (22 skips), lint, scale and lifecycle. The controller finished
 in 21.368 minutes under its unchanged 90-minute limit. All 11 release jobs and
@@ -22,10 +30,11 @@ The full gate distinguishes 127 passed assertions, 124 label limitations and
 at 24; labels are non-exhaustive development targets, not agent-benefit evidence.
 No ranking or model default changed.
 
-All 21 workers are deleted; baseline ledger rows and reservations are retained.
+At the release checkpoint, all 21 workers were deleted; baseline ledger rows
+and reservations are retained.
 The three-worker cycle added $0.0898 estimated compute, cumulative $0.9119 before
 tax (not an invoice). All three approved reservations are used under the $21 cap;
-no further rental is authorized. Only 1,601,899 report/log bytes returned to the
+the separately approved follow-up is reported above. Only 1,601,899 report/log bytes returned to the
 Mac. Protected studies/caches, global tools and the running host MCP are unchanged.
 
 **Local follow-up:** [retrieval audit and file-scoped navigation repair](../packages/code-intel/evals/results/2026-10-15-retrieval-file-symbol.md).
@@ -33,9 +42,8 @@ All 144 saved pages are classified; bounded FastAPI/Laravel tracing shows a
 candidate present below the page cutoff and a relevant file omitted by the
 original labels. Six fresh questions yielded 3/6 at five, 5/6 at 24 and 6/6 at 96.
 File symbol lookups now exclude same-named definitions in other files and avoid
-scanning their global name lists. This repair is local and not part of published
-0.1.6. Search ranking and the narrow Cockroach timing margin remain open; no new
-cloud rental or model study was started.
+scanning their global name lists. This repair merged in PR #210 and is not part of published
+0.1.6. Search ranking and the narrow Cockroach timing margin remain open.
 
 **Second local follow-up:** [expansion comparison and importance publication](../packages/code-intel/evals/results/2026-10-15-expansion-importance.md).
 Disabling expansion improved development hits at five from 9/14 to 11/14, but
@@ -45,8 +53,8 @@ race: queries could rediscover and reparse the workspace while keyword cache
 persistence was still running. Publishing importance first removes that extra
 work; a controlled 128-file overlap retained identical scores and order while
 reducing query time from 49–55 ms to about 7 ms. This is component evidence,
-not a new Cockroach timing result. These follow-up repairs are prepared for
-upstream integration and do not change the published 0.1.6 artifact.
+not a new Cockroach timing result. These follow-up repairs merged in PR #210 and do not change the published
+0.1.6 artifact.
 
 The entries below are historical evidence.
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Frozen retrieval cycle and Cockroach revalidation
+
+- Added a bounded development/validation runner with fixed dual-query fusion,
+  source-backed questions, coverage diagnostics and guarded selection rules.
+  Neither candidate qualified on 24 development questions; baseline-only
+  validation completed the 48-question benchmark. Ranking defaults are unchanged.
+- Revalidated Cockroach on merged fixes: 167.970 seconds under the unchanged
+  180-second pack deadline, still a narrow margin. The worker was deleted.
+  See `packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md`.
+
 ### Fixed — Importance available when keyword results become ready
 
 - Publish a complete importance snapshot before exposing the keyword index, so

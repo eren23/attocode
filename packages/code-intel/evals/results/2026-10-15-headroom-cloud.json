@@ -1,0 +1,788 @@
+{
+  "active_quality_workers": 0,
+  "archive_sha256": "3c031a7136fd4ffebe5b12d2bf89ff248c1e1ad144999cd62d047a9e7b84f93c",
+  "batch": "35e13f37256140a6",
+  "checks": [
+    {
+      "cleanup_verified": true,
+      "name": "workflows",
+      "peak_disk_bytes": 1576288410,
+      "peak_rss_bytes": 849014784,
+      "seconds": 189.393,
+      "status": "passed"
+    }
+  ],
+  "cleanup_verified": true,
+  "estimated_usd": 0.0145,
+  "exported_bytes": 47307,
+  "monthly_reserved_usd": 22.0,
+  "outcomes": {
+    "failed": 0,
+    "incomplete": 0,
+    "limited": 4,
+    "passed": 4,
+    "unsupported": 0
+  },
+  "packs": [
+    {
+      "checks": [
+        {
+          "name": "definition",
+          "outcome": "passed",
+          "seconds": 35.42091808999999
+        },
+        {
+          "name": "source",
+          "outcome": "passed",
+          "seconds": 32.111346274
+        },
+        {
+          "name": "scoped_search",
+          "outcome": "passed",
+          "seconds": 77.32605977099999
+        },
+        {
+          "name": "caller_syntax",
+          "outcome": "limited",
+          "seconds": 0.13641513600001076
+        },
+        {
+          "name": "dependencies",
+          "outcome": "limited",
+          "seconds": 0.12761779199999523
+        },
+        {
+          "name": "impact",
+          "outcome": "limited",
+          "seconds": 0.11212551500000245
+        },
+        {
+          "name": "tests",
+          "outcome": "limited",
+          "seconds": 0.48326949200000513
+        },
+        {
+          "name": "restart",
+          "outcome": "passed",
+          "seconds": 19.604799082000028
+        }
+      ],
+      "error": null,
+      "id": "cockroach",
+      "status": "passed"
+    }
+  ],
+  "passed": true,
+  "ranking_present": false,
+  "report_run": "20261015T175934-5bda2e3f",
+  "retrieval": {
+    "labeled_hit_at_24": 1,
+    "labeled_hit_at_5": 0,
+    "missing_questions": [],
+    "observed_questions": 4,
+    "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+  },
+  "scope": "Clean Linux worker; optional grammars unavailable. Separate environment from local matrix; non-exhaustive development labels, no agent-quality claim.",
+  "selection": {
+    "packs": [
+      "cockroach"
+    ],
+    "shard": null,
+    "suite": "workflows"
+  },
+  "source_commit": "8f420546b83d1d724257717baf62b679d7ef2ef8",
+  "source_matrix_identity": {
+    "dependencies": [
+      [
+        "aiosqlite",
+        "0.22.1"
+      ],
+      [
+        "alembic",
+        "1.18.4"
+      ],
+      [
+        "annotated-doc",
+        "0.0.4"
+      ],
+      [
+        "annotated-types",
+        "0.7.0"
+      ],
+      [
+        "anyio",
+        "4.12.1"
+      ],
+      [
+        "arq",
+        "0.27.0"
+      ],
+      [
+        "asyncpg",
+        "0.31.0"
+      ],
+      [
+        "attocode-code-intel",
+        "0.1.6"
+      ],
+      [
+        "attrs",
+        "25.4.0"
+      ],
+      [
+        "bcrypt",
+        "5.0.0"
+      ],
+      [
+        "bracex",
+        "2.6"
+      ],
+      [
+        "bump-my-version",
+        "1.2.7"
+      ],
+      [
+        "certifi",
+        "2026.2.25"
+      ],
+      [
+        "cffi",
+        "2.0.0"
+      ],
+      [
+        "charset-normalizer",
+        "3.4.4"
+      ],
+      [
+        "click",
+        "8.3.1"
+      ],
+      [
+        "coverage",
+        "7.13.4"
+      ],
+      [
+        "cryptography",
+        "46.0.5"
+      ],
+      [
+        "ecdsa",
+        "0.19.1"
+      ],
+      [
+        "fastapi",
+        "0.135.1"
+      ],
+      [
+        "filelock",
+        "3.25.0"
+      ],
+      [
+        "greenlet",
+        "3.3.2"
+      ],
+      [
+        "h11",
+        "0.16.0"
+      ],
+      [
+        "hiredis",
+        "3.3.0"
+      ],
+      [
+        "httpcore",
+        "1.0.9"
+      ],
+      [
+        "httptools",
+        "0.7.1"
+      ],
+      [
+        "httpx",
+        "0.28.1"
+      ],
+      [
+        "httpx-oauth",
+        "0.16.1"
+      ],
+      [
+        "httpx-sse",
+        "0.4.3"
+      ],
+      [
+        "idna",
+        "3.11"
+      ],
+      [
+        "iniconfig",
+        "2.3.0"
+      ],
+      [
+        "jsonschema",
+        "4.26.0"
+      ],
+      [
+        "jsonschema-specifications",
+        "2025.9.1"
+      ],
+      [
+        "librt",
+        "0.8.1"
+      ],
+      [
+        "mako",
+        "1.3.10"
+      ],
+      [
+        "markdown-it-py",
+        "4.0.0"
+      ],
+      [
+        "markupsafe",
+        "3.0.3"
+      ],
+      [
+        "mcp",
+        "1.26.0"
+      ],
+      [
+        "mdurl",
+        "0.1.2"
+      ],
+      [
+        "mypy",
+        "1.19.1"
+      ],
+      [
+        "mypy_extensions",
+        "1.1.0"
+      ],
+      [
+        "networkx",
+        "3.6.1"
+      ],
+      [
+        "numpy",
+        "2.4.2"
+      ],
+      [
+        "packaging",
+        "26.0"
+      ],
+      [
+        "pathspec",
+        "1.0.4"
+      ],
+      [
+        "pgvector",
+        "0.4.2"
+      ],
+      [
+        "pluggy",
+        "1.6.0"
+      ],
+      [
+        "prompt_toolkit",
+        "3.0.52"
+      ],
+      [
+        "psutil",
+        "7.2.2"
+      ],
+      [
+        "pyasn1",
+        "0.6.2"
+      ],
+      [
+        "pycparser",
+        "3.0"
+      ],
+      [
+        "pydantic",
+        "2.12.5"
+      ],
+      [
+        "pydantic-settings",
+        "2.13.1"
+      ],
+      [
+        "pydantic_core",
+        "2.41.5"
+      ],
+      [
+        "pygit2",
+        "1.19.1"
+      ],
+      [
+        "pygments",
+        "2.19.2"
+      ],
+      [
+        "pyjwt",
+        "2.11.0"
+      ],
+      [
+        "pytest",
+        "9.0.2"
+      ],
+      [
+        "pytest-asyncio",
+        "1.3.0"
+      ],
+      [
+        "pytest-cov",
+        "7.0.0"
+      ],
+      [
+        "pytest-mock",
+        "3.15.1"
+      ],
+      [
+        "python-dotenv",
+        "1.2.1"
+      ],
+      [
+        "python-jose",
+        "3.5.0"
+      ],
+      [
+        "python-multipart",
+        "0.0.22"
+      ],
+      [
+        "pyyaml",
+        "6.0.3"
+      ],
+      [
+        "questionary",
+        "2.1.1"
+      ],
+      [
+        "redis",
+        "5.3.1"
+      ],
+      [
+        "referencing",
+        "0.37.0"
+      ],
+      [
+        "regex",
+        "2026.2.28"
+      ],
+      [
+        "requests",
+        "2.32.5"
+      ],
+      [
+        "respx",
+        "0.22.0"
+      ],
+      [
+        "rich",
+        "14.3.3"
+      ],
+      [
+        "rich-click",
+        "1.9.7"
+      ],
+      [
+        "rpds-py",
+        "0.30.0"
+      ],
+      [
+        "rsa",
+        "4.9.1"
+      ],
+      [
+        "ruff",
+        "0.15.4"
+      ],
+      [
+        "six",
+        "1.17.0"
+      ],
+      [
+        "sqlalchemy",
+        "2.0.48"
+      ],
+      [
+        "sse-starlette",
+        "3.3.2"
+      ],
+      [
+        "starlette",
+        "0.52.1"
+      ],
+      [
+        "structlog",
+        "25.5.0"
+      ],
+      [
+        "tenacity",
+        "9.1.4"
+      ],
+      [
+        "tiktoken",
+        "0.12.0"
+      ],
+      [
+        "tomli_w",
+        "1.2.0"
+      ],
+      [
+        "tomlkit",
+        "0.14.0"
+      ],
+      [
+        "tree-sitter",
+        "0.25.2"
+      ],
+      [
+        "tree-sitter-bash",
+        "0.25.1"
+      ],
+      [
+        "tree-sitter-c",
+        "0.24.1"
+      ],
+      [
+        "tree-sitter-c-sharp",
+        "0.23.1"
+      ],
+      [
+        "tree-sitter-cpp",
+        "0.23.4"
+      ],
+      [
+        "tree-sitter-css",
+        "0.25.0"
+      ],
+      [
+        "tree-sitter-elixir",
+        "0.3.5"
+      ],
+      [
+        "tree-sitter-go",
+        "0.25.0"
+      ],
+      [
+        "tree-sitter-hcl",
+        "1.2.0"
+      ],
+      [
+        "tree-sitter-html",
+        "0.23.2"
+      ],
+      [
+        "tree-sitter-java",
+        "0.23.5"
+      ],
+      [
+        "tree-sitter-javascript",
+        "0.25.0"
+      ],
+      [
+        "tree-sitter-json",
+        "0.24.8"
+      ],
+      [
+        "tree-sitter-kotlin",
+        "1.1.0"
+      ],
+      [
+        "tree-sitter-lua",
+        "0.5.0"
+      ],
+      [
+        "tree-sitter-php",
+        "0.24.1"
+      ],
+      [
+        "tree-sitter-python",
+        "0.25.0"
+      ],
+      [
+        "tree-sitter-ruby",
+        "0.23.1"
+      ],
+      [
+        "tree-sitter-rust",
+        "0.24.0"
+      ],
+      [
+        "tree-sitter-scala",
+        "0.24.0"
+      ],
+      [
+        "tree-sitter-swift",
+        "0.0.1"
+      ],
+      [
+        "tree-sitter-toml",
+        "0.7.0"
+      ],
+      [
+        "tree-sitter-typescript",
+        "0.23.2"
+      ],
+      [
+        "tree-sitter-yaml",
+        "0.7.2"
+      ],
+      [
+        "tree-sitter-zig",
+        "1.1.2"
+      ],
+      [
+        "typing-inspection",
+        "0.4.2"
+      ],
+      [
+        "typing_extensions",
+        "4.15.0"
+      ],
+      [
+        "urllib3",
+        "2.6.3"
+      ],
+      [
+        "uvicorn",
+        "0.41.0"
+      ],
+      [
+        "uvloop",
+        "0.22.1"
+      ],
+      [
+        "watchfiles",
+        "1.1.1"
+      ],
+      [
+        "wcmatch",
+        "10.1"
+      ],
+      [
+        "wcwidth",
+        "0.6.0"
+      ],
+      [
+        "websockets",
+        "16.0"
+      ]
+    ],
+    "fixture_sha256": "d7593520fa6c3d6c67c2b813e330355b9f2476cdb4f5832acbd50c0278812079",
+    "harness_sha256": "1c8299a988febf1a5d77d6c4fdb27f0fa746f25b062a5ca4d9917e44a6774eff",
+    "optional_grammars": null,
+    "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+    "platform": "Linux-6.8.0-142-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "settings": {
+      "ATTOCODE_EMBEDDING_MODEL": "",
+      "ATTOCODE_INTEL_BROAD_RERANK": "0",
+      "ATTOCODE_INTEL_PRECISION": "off",
+      "ATTOCODE_INTEL_RANKING_ALLOW_REMOTE": "0",
+      "ATTOCODE_INTEL_RANKING_PROVIDER": "off",
+      "ATTOCODE_LOCAL_ONLY": "1",
+      "ATTOCODE_NL_EMBEDDING_MODE": "none"
+    },
+    "source_sha256": "2a1e017d66dc6fe01e9ba42e939c5529a7bda038d31b59be50da2bb2fb032ba8"
+  },
+  "status": "passed",
+  "workflow_seconds": 167.96977332100002,
+  "index": {
+    "body_index_available": true,
+    "body_index_coverage": 0.998,
+    "body_index_ready": true,
+    "body_indexed_files": 9718,
+    "body_seconds": 66.615,
+    "importance_seconds": 0.002,
+    "keyword_index_ready": true,
+    "keyword_indexed_files": 9736,
+    "keyword_seconds": 26.582,
+    "status": "ready",
+    "vector_coverage": 0.0,
+    "vector_status": "idle",
+    "warmup_reused_asts": 4980,
+    "warmup_seconds": 109.024,
+    "warmup_stage": "ready"
+  },
+  "retrieval_queries": [
+    {
+      "delivered_files": 24,
+      "first_labeled_rank": 13,
+      "hit_at_24": true,
+      "hit_at_5": false,
+      "id": "cockroach:1",
+      "labeled_files": [
+        "pkg/server/server.go"
+      ],
+      "query": "Construct a distributed database server",
+      "ranked_files": [
+        "pkg/server/tenant_migration.go",
+        "pkg/server/testserver.go",
+        "pkg/sql/catalog/systemschema/system.go",
+        "pkg/sql/crdb_internal.go",
+        "pkg/sql/opt/cat/table.go",
+        "pkg/server/api_v2_sql_schema.go",
+        "pkg/server/admin.go",
+        "pkg/sql/plan.go",
+        "pkg/kv/kvserver/batcheval/cmd_migrate.go",
+        "pkg/server/migration.go",
+        "pkg/sql/doc.go",
+        "pkg/sql/opt/cat/schema.go",
+        "pkg/server/server.go",
+        "pkg/sql/conn_executor_exec.go",
+        "pkg/sql/schemachanger/rel/database.go",
+        "pkg/sql/schemachanger/rel/doc.go",
+        "pkg/sql/schemachanger/rel/query.go",
+        "pkg/sql/logictest/testdata/logic_test/drop_database",
+        "pkg/kv/kvserver/stores_server.go",
+        "pkg/sql/opt_exec_factory.go",
+        "pkg/sql/schemachanger/scpb/state.go",
+        "pkg/sql/schema_changer.go",
+        "pkg/sql/backfill/distributed_merge_mode.go",
+        "pkg/sql/exec_util.go"
+      ],
+      "seconds": 0.8589575670000045,
+      "warming_responses": 0,
+      "warmup_seconds": 0
+    },
+    {
+      "delivered_files": 24,
+      "first_labeled_rank": null,
+      "hit_at_24": false,
+      "hit_at_5": false,
+      "id": "cockroach:2",
+      "labeled_files": [
+        "pkg/cli/cli.go"
+      ],
+      "query": "Find the command selected by command line arguments",
+      "ranked_files": [
+        "pkg/cli/exit/codes.go",
+        "pkg/sql/sem/tree/run_control.go",
+        "pkg/cli/clisqlshell/editor_bimodal.go",
+        "pkg/sql/vecindex/cspann/testutils/testutils.go",
+        "pkg/sql/logictest/logic.go",
+        "pkg/sql/distsql_spec_exec_factory.go",
+        "pkg/sql/sem/tree/placeholders.go",
+        "pkg/sql/colexec/execgen/cmd/execgen/overloads_gen_util.go",
+        "pkg/sql/conn_io.go",
+        "pkg/sql/catalog/seqexpr/sequence.go",
+        "pkg/sql/sem/tree/function_definition.go",
+        "pkg/kv/kvserver/batcheval/command.go",
+        "pkg/sql/sem/tree/overload.go",
+        "pkg/kv/kvserver/apply/cmd.go",
+        "pkg/kv/kvserver/batcheval/declare.go",
+        "pkg/sql/colexec/execgen/cmd/execgen/main.go",
+        "pkg/sql/sem/tree/pretty.go",
+        "pkg/cli/clisqlshell/scan_local_cmd.go",
+        "pkg/sql/colcontainer/partitionedqueue.go",
+        "pkg/sql/catalog/bootstrap/testdata/testdata",
+        "pkg/sql/opt/memo/typing.go",
+        "pkg/sql/execinfra/execagg/base.go",
+        "pkg/sql/opt/norm/comp_funcs.go",
+        "pkg/sql/distsql_physical_planner.go"
+      ],
+      "seconds": 0.3901646749999941,
+      "warming_responses": 0,
+      "warmup_seconds": 0
+    },
+    {
+      "delivered_files": 24,
+      "first_labeled_rank": null,
+      "hit_at_24": false,
+      "hit_at_5": false,
+      "id": "cockroach:3",
+      "labeled_files": [
+        "pkg/sql/conn_executor_exec.go"
+      ],
+      "query": "Execute SQL statements in a connection executor",
+      "ranked_files": [
+        "pkg/sql/internal.go",
+        "pkg/sql/conn_executor.go",
+        "pkg/sql/opt/optbuilder/plpgsql.go",
+        "pkg/sql/isession/internal_session.go",
+        "pkg/sql/isql/isql_db.go",
+        "pkg/sql/exec_log.go",
+        "pkg/sql/exec_util.go",
+        "pkg/sql/sem/plpgsqltree/statements.go",
+        "pkg/sql/logictest/testdata/logic_test/cluster_settings",
+        "pkg/sql/prep/statement.go",
+        "pkg/server/testdata/api_v2_sql",
+        "pkg/sql/compact_sql_stats.go",
+        "pkg/sql/opt/exec/execbuilder/testdata/execute_internally_builtin",
+        "pkg/sql/catalog/schematelemetry/scheduled_job_executor.go",
+        "pkg/sql/ttl/ttlschedule/ttlschedule.go",
+        "pkg/sql/opt/exec/execbuilder/testdata/canary_stats",
+        "pkg/sql/show_statement_hints.go",
+        "pkg/cli/cliflags/flags.go",
+        "pkg/sql/sem/tree/prepare.go",
+        "pkg/server/api_v2_sql.go",
+        "pkg/sql/sqlstats/sslocal/sql_stats_ingestor.go",
+        "pkg/sql/statement.go",
+        "pkg/sql/logictest/testdata/logic_test/prepare",
+        "pkg/sql/event_log.go"
+      ],
+      "seconds": 0.6866179740000007,
+      "warming_responses": 0,
+      "warmup_seconds": 0
+    },
+    {
+      "delivered_files": 24,
+      "first_labeled_rank": null,
+      "hit_at_24": false,
+      "hit_at_5": false,
+      "id": "cockroach:4",
+      "labeled_files": [
+        "pkg/kv/txn.go"
+      ],
+      "query": "Retry a transaction after a serialization error",
+      "ranked_files": [
+        "pkg/kv/kvpb/errors.go",
+        "pkg/sql/conn_executor_exec.go",
+        "pkg/sql/routine.go",
+        "pkg/sql/pgwire/pgerror/flatten.go",
+        "pkg/sql/opt/optbuilder/plpgsql.go",
+        "pkg/sql/plpgsql/parser/testdata/stmt_raise",
+        "pkg/sql/sem/plpgsqltree/statements.go",
+        "pkg/sql/sem/plpgsqltree/exception.go",
+        "pkg/sql/pgwire/pgcode/plpgsql_codenames.go",
+        "pkg/sql/plpgsql/parser/testdata/stmt_block",
+        "pkg/sql/plpgsql/parser/plpgsql.y",
+        "pkg/sql/logictest/testdata/logic_test/plpgsql_builtins",
+        "pkg/sql/pgwire/pgerror/pgcode.go",
+        "pkg/kv/kvclient/kvcoord/txn_interceptor_span_refresher.go",
+        "pkg/kv/kvpb/data.go",
+        "pkg/sql/isql/isql_session.go",
+        "pkg/sql/opt/optbuilder/select.go",
+        "pkg/sql/schemachanger/scerrors/errors.go",
+        "pkg/sql/logictest/testdata/logic_test/row_level_security",
+        "pkg/kv/kvserver/batcheval/cmd_end_transaction.go",
+        "pkg/sql/conn_fsm.go",
+        "pkg/sql/opt/optbuilder/testdata/procedure_plpgsql",
+        "pkg/kv/kvserver/rangefeed/unbuffered_registration.go",
+        "pkg/sql/logictest/testdata/logic_test/txn_retry"
+      ],
+      "seconds": 0.7114819530000034,
+      "warming_responses": 0,
+      "warmup_seconds": 0
+    }
+  ],
+  "controller_seconds": 313.137296,
+  "headroom_classification": "narrow; above descriptive 150-second target",
+  "prior_workflow_seconds": 177.579,
+  "inventory": {
+    "checked_at": 1792087973.622918,
+    "active_quality_workers": 0,
+    "ledger_rows": 22,
+    "all_cleanup_verified": true,
+    "cumulative_estimated_compute_usd": 0.9264,
+    "cycle_batch": "35e13f37256140a6",
+    "cycle_batches_used": 1,
+    "second_reservation_unused": true,
+    "second_reservation_launchable": false,
+    "ledger_sha256": "394edcc584b24090735762d665813eb0c56632fdd2af1edd5a4b3a60d6825cb8",
+    "baseline_sha256": "0290eb7522f265938002f653fa17c585d7f0dca117236e0b415d470770a7811b"
+  },
+  "prior_ledger_unchanged": true
+}
