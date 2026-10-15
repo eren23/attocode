@@ -37,7 +37,7 @@ TAG = "attocode-quality-v1"
 SIZE = "s-8vcpu-16gb-amd"
 REGION = "ams3"
 BATCH_USD = 1.0
-MONTH_USD = 21.0
+MONTH_USD = 23.0
 TTL_SECONDS = 7200
 CONTROLLER_SECONDS = 90 * 60
 WORKER_APT_INSTALL = (
@@ -146,6 +146,39 @@ def reserve(ledger, run_id, price, now):
            "hourly_usd": price["hourly_usd"], "created_at": now, "cleanup_verified": False}
     ledger.append(row)
     return row
+
+
+def target_retest_attempt(baseline, ledger, *, source_commit, identity,
+                          previous=None, repair=None):
+    """Admit one Cockroach target and one evidence-backed repair retest.
+
+    The operator binds approval, month, live quote and published source, and
+    holds its cycle lock through execution. This pure check never edits history.
+    """
+    if ledger[:len(baseline)] != baseline:
+        raise ValueError("Baseline ledger changed")
+    if any(not row.get("cleanup_verified") for row in ledger):
+        raise ValueError("Previous cleanup unresolved")
+    added = ledger[len(baseline):]
+    if len(added) >= 2:
+        raise ValueError("Target/retest allowance exhausted")
+    target = {"packs": ["cockroach"], "shard": None, "suite": "workflows"}
+    if any(row.get("selection") != target for row in added):
+        raise ValueError("Unexpected cycle selection")
+    if added:
+        row = added[0]
+        if (not previous or previous.get("batch") != row["id"]
+                or previous.get("passed") is not False
+                or not previous.get("cleanup_verified")):
+            raise ValueError("Retest requires verified failed target")
+        if (not repair or repair.get("failed_batch") != row["id"]
+                or repair.get("source_commit") != source_commit
+                or not all(repair.get(k) for k in ("diagnosis", "validation", "merged_pr"))):
+            raise ValueError("Retest requires diagnosed, tested, published repair")
+        old = previous["source_matrix_identity"]
+        if not any(identity[k] != old[k] for k in ("source_sha256", "harness_sha256")):
+            raise ValueError("Retest source is unchanged")
+    return len(added) + 1
 
 
 def reconcile(api, root):
