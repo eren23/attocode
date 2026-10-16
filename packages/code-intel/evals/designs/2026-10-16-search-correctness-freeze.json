@@ -1,0 +1,348 @@
+{
+  "frozen_at": "2026-10-16T16:08:33.754088+00:00",
+  "accepted_engine_sha256": "d1b308e4cc91474fe2cd880cd941db7ae0879c6f8deb5e56c09a12b6c6f3a52c",
+  "selected": [
+    "identity",
+    "boundaries"
+  ],
+  "rejected_before_validation": [
+    "negation",
+    "expansion",
+    "combined"
+  ],
+  "reason": "Broader behavioral query parsing loses scoped visible evidence and a deep-page file; its combined arm also fails. Expansion with behavioral scope parsing failed the latency bound. Narrow whole-token matching passes development. No validation outputs have been opened.",
+  "development_decisions": {
+    "identity": {
+      "passed": true,
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 2,
+        "visible_5": 1,
+        "files_24": 12,
+        "ranges_24": 3,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.06867779209278524
+      },
+      "candidate": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 4,
+        "visible_5": 3,
+        "files_24": 13,
+        "ranges_24": 5,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.026230207993648946
+      },
+      "individual_losses": []
+    },
+    "negation": {
+      "passed": false,
+      "checks": {
+        "file_totals_no_loss": false,
+        "visible_totals_no_loss": false,
+        "scoped_no_individual_loss": false,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 2,
+        "visible_5": 1,
+        "files_24": 12,
+        "ranges_24": 3,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.06867779209278524
+      },
+      "candidate": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 4,
+        "visible_5": 1,
+        "files_24": 11,
+        "ranges_24": 4,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 4,
+        "inspection_visible": 2,
+        "p95_seconds": 0.05821658403147012
+      },
+      "individual_losses": [
+        {
+          "id": "express:correctness-development-1",
+          "page": "24",
+          "metric": "files",
+          "labels": [
+            1
+          ]
+        },
+        {
+          "id": "ripgrep:correctness-development-1",
+          "page": "5",
+          "metric": "files",
+          "labels": [
+            1
+          ]
+        },
+        {
+          "id": "ripgrep:correctness-development-1",
+          "page": "24",
+          "metric": "files",
+          "labels": [
+            1
+          ]
+        },
+        {
+          "id": "ripgrep:correctness-development-1",
+          "page": "scoped",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        },
+        {
+          "id": "requests:correctness-development-1",
+          "page": "5",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        },
+        {
+          "id": "requests:correctness-development-1",
+          "page": "scoped",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        }
+      ]
+    },
+    "expansion": {
+      "passed": false,
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": false
+      },
+      "baseline": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 2,
+        "visible_5": 1,
+        "files_24": 12,
+        "ranges_24": 3,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.06867779209278524
+      },
+      "candidate": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 2,
+        "visible_5": 1,
+        "files_24": 12,
+        "ranges_24": 3,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.1153123329859227
+      },
+      "individual_losses": []
+    },
+    "combined": {
+      "passed": false,
+      "checks": {
+        "file_totals_no_loss": false,
+        "visible_totals_no_loss": false,
+        "scoped_no_individual_loss": false,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 2,
+        "visible_5": 1,
+        "files_24": 12,
+        "ranges_24": 3,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.06867779209278524
+      },
+      "candidate": {
+        "questions": 8,
+        "files_5": 10,
+        "ranges_5": 5,
+        "visible_5": 2,
+        "files_24": 11,
+        "ranges_24": 5,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 4,
+        "inspection_visible": 2,
+        "p95_seconds": 0.0273933750577271
+      },
+      "individual_losses": [
+        {
+          "id": "express:correctness-development-1",
+          "page": "24",
+          "metric": "files",
+          "labels": [
+            1
+          ]
+        },
+        {
+          "id": "ripgrep:correctness-development-1",
+          "page": "5",
+          "metric": "files",
+          "labels": [
+            1
+          ]
+        },
+        {
+          "id": "ripgrep:correctness-development-1",
+          "page": "24",
+          "metric": "files",
+          "labels": [
+            1
+          ]
+        },
+        {
+          "id": "ripgrep:correctness-development-1",
+          "page": "scoped",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        },
+        {
+          "id": "requests:correctness-development-1",
+          "page": "5",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        },
+        {
+          "id": "requests:correctness-development-1",
+          "page": "scoped",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        }
+      ]
+    },
+    "boundaries": {
+      "passed": true,
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 2,
+        "visible_5": 1,
+        "files_24": 12,
+        "ranges_24": 3,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.06867779209278524
+      },
+      "candidate": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 2,
+        "visible_5": 1,
+        "files_24": 12,
+        "ranges_24": 3,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.06043166702147573
+      },
+      "individual_losses": []
+    },
+    "accepted": {
+      "passed": true,
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 2,
+        "visible_5": 1,
+        "files_24": 12,
+        "ranges_24": 3,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.06867779209278524
+      },
+      "candidate": {
+        "questions": 8,
+        "files_5": 9,
+        "ranges_5": 4,
+        "visible_5": 3,
+        "files_24": 13,
+        "ranges_24": 5,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 5,
+        "inspection_visible": 0,
+        "p95_seconds": 0.025266041047871113
+      },
+      "individual_losses": []
+    }
+  }
+}

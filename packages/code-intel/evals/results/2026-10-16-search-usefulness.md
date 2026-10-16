@@ -1,5 +1,17 @@
 # Search usefulness: test-page diversity rejected
 
+**Audit correction:** this is a historical lexical-engine trial, not an MCP
+delivery measurement. MCP retrieves at least 24 candidates even for a five-hit
+request, then hydrates and budgets the output. Replaying the consumed depth-24
+pools sliced to five gives development **16/24 → 16/24**, held-out
+**18/24 → 18/24**; both gates still reject. The original raw observations below
+are retained unchanged. Engine range losses are not necessarily visible MCP
+losses: a compact 2,000-token replay of two consumed questions retained only one
+of the two alleged range losses, and neither response displayed the exact frozen
+quotes. All 24 questions remain consumed. See the
+[corrected consumer-path evaluation](2026-10-16-search-correctness.md) for new
+judgments and separate file, range and visible-evidence measurements.
+
 The single candidate is **rejected**. It produced more distinct files in some
 explicit-test searches, but no extra judged relevant files in the first five
 slots on either set, and displaced a relevant code range from each set's larger
@@ -29,7 +41,7 @@ leaves production and scoped queries unchanged. No second candidate, sweep or
 post-observation tuning was permitted. After development failed, the predeclared
 held-out diagnostic ran once; it could not authorize adoption.
 
-## Actual page results
+## Historical engine page results
 
 Five-slot and 24-slot lexical-engine searches were executed separately, using their actual
 candidate depths. The comparison invokes `search_candidates` with the normal query

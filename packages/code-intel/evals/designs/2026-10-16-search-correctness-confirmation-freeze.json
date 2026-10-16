@@ -1,0 +1,7 @@
+{
+  "frozen_at": "2026-10-16T16:18:44.561270+00:00",
+  "engine_sha256": "e6407d6872697c317cf1424dafd8e9d2cc6f2a1598b94c17acab8cda863b1f0f",
+  "questions_sha256": "e80572ef370afb4f57a92711cf49f5f1dfda723bbc0b6d6f4b650692360d9e5c",
+  "reason": "Prior small-set candidate passed its authored judgments but failed the unchanged older ranking gate (product MRR@5 .537 to .459, net recall losses). Preserve owner navigation ranks separately from distinct window identities. Revised owners arm passes the old gate before opening these further fresh judgments. Original ranking baseline unchanged.",
+  "no_further_product_tuning": true
+}

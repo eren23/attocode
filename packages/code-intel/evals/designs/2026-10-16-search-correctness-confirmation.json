@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T16:18:44.348988+00:00",
+  "split": "confirmation",
+  "baseline_commit": "54f0e80a5e60144acee53b3b0d0f7c0e899a6419",
+  "budget": 2000,
+  "scope": "Eight further new authored questions frozen after the previous candidate failed the old ranking gate. Previous development and validation are consumed. Same offline MCP budgets and acceptance rules. Three arms: baseline, owner-order identity fix alone, owner-order identity plus whole-token boundaries. No further product tuning after confirmation.",
+  "acceptance": {
+    "correctness": "Regression fixtures must pass; old ranking gate unchanged. Compare identity, negation, expansion separately and combined to baseline. No aggregate file/visible/inspection loss in either split, no scoped individual loss. Report all unscoped individual losses. p95 <= max(100ms, 1.5x baseline). No required gain for correctness, no usefulness claim from a pass. Reject unsupported expansion changes.",
+    "resources": "One pack at a time, cached sources only, 512MiB managed storage, 1.5GiB RSS, 180 seconds per process; no models/cloud/downloads. Validation inspected once candidate frozen; no tuning after validation."
+  },
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "id": "express:correctness-confirmation-1",
+          "category": "implementation",
+          "query": "Generate response ETags and decide whether cached request content is fresh",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "quote": "var etagFn = app.get('etag fn')",
+              "line": 161,
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            },
+            {
+              "file": "lib/request.js",
+              "quote": "defineGetter(req, 'fresh', function",
+              "line": 469,
+              "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            }
+          ]
+        },
+        {
+          "id": "express:correctness-confirmation-2",
+          "category": "implementation",
+          "query": "Cache rendered application views and resolve a template filename",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "quote": "renderOptions.cache = this.enabled('view cache')",
+              "line": 540,
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            },
+            {
+              "file": "lib/view.js",
+              "quote": "function View(name, options)",
+              "line": 52,
+              "source_sha256": "74f4171b66263e22481820bc5975708f7dd8a61484f570aac7c5b4ab77ecbd79",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "queries": [
+        {
+          "id": "requests:correctness-confirmation-1",
+          "category": "implementation",
+          "query": "Dispatch response hooks and let a hook replace the response object",
+          "evidence": [
+            {
+              "file": "src/requests/sessions.py",
+              "quote": "r = dispatch_hook(\"response\", hooks, r, **kwargs)",
+              "line": 713,
+              "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            },
+            {
+              "file": "src/requests/hooks.py",
+              "quote": "def dispatch_hook(key, hooks, hook_data, **kwargs):",
+              "line": 23,
+              "source_sha256": "f5fad88402ec2c19071fbe86f8762abc0becb1296ed42d5becbebc700b3e1398",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            }
+          ]
+        },
+        {
+          "id": "requests:correctness-confirmation-2",
+          "category": "implementation",
+          "query": "Translate an exhausted transport retry into the public retry exception",
+          "evidence": [
+            {
+              "file": "src/requests/adapters.py",
+              "quote": "raise RetryError(e, request=request)",
+              "line": 670,
+              "source_sha256": "5aecc78b49b5c39fbf7c4a5ba18ca4195b44ed26b34d91e1039359605e97f06e",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            },
+            {
+              "file": "src/requests/exceptions.py",
+              "quote": "class RetryError(RequestException):",
+              "line": 132,
+              "source_sha256": "9de3a402478aedebd939faa1b48495b0714894e888267e65071b52d014c56a50",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:correctness-confirmation-1",
+          "category": "implementation",
+          "query": "Enable multiline searching and decide when the matcher needs a full input buffer",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "quote": ".multi_line(",
+              "line": 415,
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            },
+            {
+              "file": "crates/searcher/src/searcher/mod.rs",
+              "quote": "pub fn multi_line_with_matcher",
+              "line": 896,
+              "source_sha256": "1b7b8c4cb60ce6ed74f26edc5b9ef04998a64ee9bad15acdc1ace1f3c66ef654",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:correctness-confirmation-2",
+          "category": "implementation",
+          "query": "Match gitignore patterns while honoring the directory ignore setting",
+          "evidence": [
+            {
+              "file": "crates/ignore/src/dir.rs",
+              "quote": "pub(crate) fn git_ignore(",
+              "line": 801,
+              "source_sha256": "d98c23cc2119721048d5135f24ac3bd0c0223780b438b070deffddd8b6429d25",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            },
+            {
+              "file": "crates/ignore/src/gitignore.rs",
+              "quote": "pub fn matched_path_or_any_parents",
+              "line": 223,
+              "source_sha256": "f089d28ba4b07fd9fdb627d49f6d98084d5de55aefbdfdeda71a96468f485097",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "gson",
+      "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+      "queries": [
+        {
+          "id": "gson:correctness-confirmation-1",
+          "category": "implementation",
+          "query": "Read alternative serialized names for enum constants and define the name annotation",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+              "quote": "SerializedName annotation = constantField.getAnnotation(SerializedName.class)",
+              "line": 787,
+              "source_sha256": "213ffab65bdb8aeacd088bdc25ae7cacb0ef2e109ef54af59c0cc9f0051a30e8",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            },
+            {
+              "file": "gson/src/main/java/com/google/gson/annotations/SerializedName.java",
+              "quote": "public @interface SerializedName",
+              "line": 83,
+              "source_sha256": "35d85d8c405d9eee0ef4d79487744cc8b26650e21827469bdc6ef595c71f02e9",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            }
+          ]
+        },
+        {
+          "id": "gson:correctness-confirmation-2",
+          "category": "implementation",
+          "query": "Configure a date format pattern and create the corresponding date type adapter",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/GsonBuilder.java",
+              "quote": "public GsonBuilder setDateFormat(String pattern)",
+              "line": 466,
+              "source_sha256": "0c4eeb8f6f74fd43a39cbf5ac1ecef132653f7fcc0d77863df13c618a024042f",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            },
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/bind/DefaultDateTypeAdapter.java",
+              "quote": "class DefaultDateTypeAdapter",
+              "line": 48,
+              "source_sha256": "5cc546eae3287b3de39209c1c730942c1a2bde53eea59583a8baba03bcfd8435",
+              "relevance": "Implements the requested behavior; non-exhaustive source judgment."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

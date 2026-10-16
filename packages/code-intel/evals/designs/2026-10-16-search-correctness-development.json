@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T15:56:25.416068+00:00",
+  "split": "development",
+  "baseline_commit": "54f0e80a5e60144acee53b3b0d0f7c0e899a6419",
+  "budget": 2000,
+  "scope": "New wording/behavior judgments frozen before search output inspection. Previously exposed repositories; implementer-authored and non-exhaustive. No independent reviewer, model or agent outcome. Eight questions, two distinct source files each. All auto mode, daily MCP, 2000 tokens; 5/24/scoped pages, fixed first-named-hit inspection.",
+  "acceptance": {
+    "correctness": "Regression fixtures must pass; old ranking gate unchanged. Compare identity, negation, expansion separately and combined to baseline. No aggregate file/visible/inspection loss in either split, no scoped individual loss. Report all unscoped individual losses. p95 <= max(100ms, 1.5x baseline). No required gain for correctness, no usefulness claim from a pass. Reject unsupported expansion changes.",
+    "resources": "One pack at a time, cached sources only, 512MiB managed storage, 1.5GiB RSS, 180 seconds per process; no models/cloud/downloads. Validation inspected once candidate frozen; no tuning after validation."
+  },
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "id": "express:correctness-development-1",
+          "category": "behavior",
+          "query": "Set signed cookies without accepting a missing signing secret",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 748,
+              "quote": "required for signed cookies",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            },
+            {
+              "file": "test/res.cookie.js",
+              "line": 246,
+              "quote": "should generate a signed JSON cookie",
+              "source_sha256": "97604da5a7e511d981121189bce161d4112557da9d7c26cbf33155330c7ca137",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            }
+          ]
+        },
+        {
+          "id": "express:correctness-development-2",
+          "category": "scope",
+          "query": "Compile and invoke the query parser excluding tests and examples",
+          "evidence": [
+            {
+              "file": "lib/utils.js",
+              "line": 162,
+              "quote": "exports.compileQueryParser = function",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            },
+            {
+              "file": "lib/request.js",
+              "line": 231,
+              "quote": "var queryparse = this.app.get('query parser fn')",
+              "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "queries": [
+        {
+          "id": "requests:correctness-development-1",
+          "category": "behavior",
+          "query": "Replay a redirected request body without losing its original stream position",
+          "evidence": [
+            {
+              "file": "src/requests/utils.py",
+              "line": 1069,
+              "quote": "def rewind_body(prepared_request):",
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            },
+            {
+              "file": "src/requests/sessions.py",
+              "line": 258,
+              "quote": "rewind_body(prepared_request)",
+              "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            }
+          ]
+        },
+        {
+          "id": "requests:correctness-development-2",
+          "category": "tests",
+          "query": "Locate cookie conflict lookup behavior and tests for duplicate cookie names",
+          "evidence": [
+            {
+              "file": "src/requests/cookies.py",
+              "line": 386,
+              "quote": "def _find_no_duplicates(",
+              "source_sha256": "6cd8be8aa123e0d3d9d34fa86feac7bf392f39bccdde5129830de0ea9692dd7c",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            },
+            {
+              "file": "tests/test_requests.py",
+              "line": 1382,
+              "quote": "CookieConflictError",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:correctness-development-1",
+          "category": "behavior",
+          "query": "Limit directory traversal depth without following symbolic links",
+          "evidence": [
+            {
+              "file": "crates/ignore/src/walk.rs",
+              "line": 657,
+              "quote": "pub fn max_depth(",
+              "source_sha256": "3173c55f99ac90119eb00b615fbd9f5532a27c7a969e7ba0a369aba7ba71f1f3",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            },
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 888,
+              "quote": ".follow_links(self.follow)",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:correctness-development-2",
+          "category": "scope",
+          "query": "Find override glob matching implementation excluding examples",
+          "evidence": [
+            {
+              "file": "crates/ignore/src/overrides.rs",
+              "line": 97,
+              "quote": "pub fn matched<'a",
+              "source_sha256": "4283fd4dc169476a580ea1e393b1b125a357cda4c1862293800097bd91acb69e",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            },
+            {
+              "file": "crates/ignore/src/walk.rs",
+              "line": 760,
+              "quote": "pub fn overrides(",
+              "source_sha256": "3173c55f99ac90119eb00b615fbd9f5532a27c7a969e7ba0a369aba7ba71f1f3",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "gson",
+      "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+      "queries": [
+        {
+          "id": "gson:correctness-development-1",
+          "category": "behavior",
+          "query": "Serialize maps with object keys without converting every key to a string",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/GsonBuilder.java",
+              "line": 284,
+              "quote": "public GsonBuilder enableComplexMapKeySerialization()",
+              "source_sha256": "0c4eeb8f6f74fd43a39cbf5ac1ecef132653f7fcc0d77863df13c618a024042f",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            },
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java",
+              "line": 204,
+              "quote": "if (!complexMapKeySerialization)",
+              "source_sha256": "817186806c55c753737338fda84b5ce1cc2197ae6f2392446e9749e5480a32e4",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            }
+          ]
+        },
+        {
+          "id": "gson:correctness-development-2",
+          "category": "implementation",
+          "query": "Locate duplicate map key rejection and its syntax exception type",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java",
+              "line": 177,
+              "quote": "throw new JsonSyntaxException(\"duplicate key: \" + key)",
+              "source_sha256": "817186806c55c753737338fda84b5ce1cc2197ae6f2392446e9749e5480a32e4",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            },
+            {
+              "file": "gson/src/main/java/com/google/gson/JsonSyntaxException.java",
+              "line": 25,
+              "quote": "public final class JsonSyntaxException",
+              "source_sha256": "84e3e8a72229fd5ff0675b474dac7c410113c0365f3c163f6389473c202a22c3",
+              "relevance": "Implements or directly exercises the requested behavior; source anchor, not exhaustive relevance."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
