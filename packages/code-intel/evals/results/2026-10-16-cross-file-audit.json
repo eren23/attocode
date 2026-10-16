@@ -1,0 +1,1271 @@
+{
+  "scope": "Frozen six-question diagnostic; no candidate comparison, no ranking change, no agent outcome measurement.",
+  "questions_sha256": "8d75705738819f73c530f4410a92f4183bf5366a9355ebe32108df386e7bce34",
+  "source_sha256": "7ad815cb0ff0007fa73be51af096b67c2286e660300cae83146fc2a9befe53ea",
+  "head": "7974210f085d5a832a053d82c91e116f0e815318",
+  "pack_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+  "summary": [
+    {
+      "requested_hits": 24,
+      "unique_file_cutoff": 5,
+      "questions": 6,
+      "any_label_hit": 6,
+      "all_labels_hit": 1,
+      "retrieved_label_pairs": 7,
+      "total_label_pairs": 13,
+      "macro_labeled_recall": 0.5555555555555556
+    },
+    {
+      "requested_hits": 24,
+      "unique_file_cutoff": 24,
+      "questions": 6,
+      "any_label_hit": 6,
+      "all_labels_hit": 5,
+      "retrieved_label_pairs": 11,
+      "total_label_pairs": 13,
+      "macro_labeled_recall": 0.8888888888888888
+    },
+    {
+      "requested_hits": 96,
+      "unique_file_cutoff": 96,
+      "questions": 6,
+      "any_label_hit": 6,
+      "all_labels_hit": 5,
+      "retrieved_label_pairs": 12,
+      "total_label_pairs": 13,
+      "macro_labeled_recall": 0.9444444444444444
+    }
+  ],
+  "repositories": [
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "tree": "0e1c3a9e3e85a65799d9dbf15aa4743ad18cbc3f",
+      "diagnostics": {
+        "status": "ready",
+        "keyword_index_ready": true,
+        "body_index_available": true,
+        "body_index_ready": true,
+        "body_indexed_files": 204,
+        "keyword_indexed_files": 204,
+        "body_index_coverage": 1.0,
+        "vector_status": "idle",
+        "vector_coverage": 0.0,
+        "warmup_stage": "ready",
+        "warmup_reused_asts": 0,
+        "warmup_seconds": 0.884,
+        "importance_seconds": 0.0,
+        "keyword_seconds": 0.578,
+        "body_seconds": 0.306
+      },
+      "queries": [
+        {
+          "id": "ripgrep:cross-file-audit-1",
+          "query": "Trace how enabling matches across newline boundaries reaches the whole-input search strategy for a stream",
+          "depth": 24,
+          "labeled_files": [
+            "crates/core/flags/hiargs.rs",
+            "crates/searcher/src/searcher/glue.rs",
+            "crates/searcher/src/searcher/mod.rs"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "crates/searcher/src/searcher/mod.rs": 13,
+              "crates/core/flags/hiargs.rs": 16
+            },
+            "body": {
+              "crates/searcher/src/searcher/mod.rs": 3,
+              "crates/core/flags/hiargs.rs": 25
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "crates/searcher/src/searcher/mod.rs": 5,
+              "crates/core/flags/hiargs.rs": 31
+            },
+            "fused": {
+              "crates/searcher/src/searcher/mod.rs": 5,
+              "crates/core/flags/hiargs.rs": 30
+            }
+          },
+          "stage_counts": {
+            "keyword": 19,
+            "body": 28,
+            "file_bm25": 0,
+            "chunk_fused": 32,
+            "fused": 32
+          },
+          "returned_labeled_ranks": {
+            "crates/searcher/src/searcher/mod.rs": 5
+          },
+          "ranked_files": [
+            "crates/core/flags/defs.rs",
+            "crates/cli/src/wtr.rs",
+            "crates/globset/src/glob.rs",
+            "crates/core/search.rs",
+            "crates/searcher/src/searcher/mod.rs",
+            "crates/globset/src/lib.rs",
+            "crates/pcre2/src/matcher.rs",
+            "FAQ.md",
+            "crates/regex/src/matcher.rs",
+            "crates/core/flags/complete/rg.zsh",
+            "crates/searcher/src/line_buffer.rs",
+            "crates/core/flags/mod.rs",
+            "crates/core/main.rs",
+            "crates/grep/examples/simplegrep.rs",
+            "crates/regex/src/literal.rs",
+            "crates/regex/src/config.rs",
+            "crates/core/flags/lowargs.rs",
+            "crates/core/flags/doc/template.long.help",
+            "crates/printer/src/lib.rs",
+            "crates/printer/src/json.rs",
+            "GUIDE.md",
+            "crates/cli/src/lib.rs",
+            "crates/core/flags/doc/template.short.help",
+            "crates/searcher/src/sink.rs"
+          ],
+          "seconds": 0.015779374982230365
+        },
+        {
+          "id": "ripgrep:cross-file-audit-1",
+          "query": "Trace how enabling matches across newline boundaries reaches the whole-input search strategy for a stream",
+          "depth": 96,
+          "labeled_files": [
+            "crates/core/flags/hiargs.rs",
+            "crates/searcher/src/searcher/glue.rs",
+            "crates/searcher/src/searcher/mod.rs"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "crates/searcher/src/searcher/mod.rs": 13,
+              "crates/core/flags/hiargs.rs": 16
+            },
+            "body": {
+              "crates/searcher/src/searcher/mod.rs": 3,
+              "crates/core/flags/hiargs.rs": 25,
+              "crates/searcher/src/searcher/glue.rs": 63
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "crates/searcher/src/searcher/mod.rs": 5,
+              "crates/core/flags/hiargs.rs": 31,
+              "crates/searcher/src/searcher/glue.rs": 66
+            },
+            "fused": {
+              "crates/searcher/src/searcher/mod.rs": 5,
+              "crates/core/flags/hiargs.rs": 30,
+              "crates/searcher/src/searcher/glue.rs": 58
+            }
+          },
+          "stage_counts": {
+            "keyword": 23,
+            "body": 88,
+            "file_bm25": 0,
+            "chunk_fused": 88,
+            "fused": 88
+          },
+          "returned_labeled_ranks": {
+            "crates/searcher/src/searcher/mod.rs": 5,
+            "crates/core/flags/hiargs.rs": 30
+          },
+          "ranked_files": [
+            "crates/core/flags/defs.rs",
+            "crates/cli/src/wtr.rs",
+            "crates/globset/src/glob.rs",
+            "crates/core/search.rs",
+            "crates/searcher/src/searcher/mod.rs",
+            "crates/globset/src/lib.rs",
+            "crates/pcre2/src/matcher.rs",
+            "crates/regex/src/matcher.rs",
+            "FAQ.md",
+            "crates/core/flags/complete/rg.zsh",
+            "crates/core/main.rs",
+            "crates/core/flags/mod.rs",
+            "crates/grep/examples/simplegrep.rs",
+            "crates/regex/src/config.rs",
+            "crates/searcher/src/line_buffer.rs",
+            "crates/cli/src/lib.rs",
+            "crates/printer/src/stats.rs",
+            "crates/printer/src/json.rs",
+            "crates/searcher/src/testutil.rs",
+            "crates/regex/src/literal.rs",
+            "crates/printer/src/summary.rs",
+            "crates/printer/src/standard.rs",
+            "crates/core/flags/lowargs.rs",
+            "crates/core/flags/doc/template.long.help",
+            "crates/printer/src/lib.rs",
+            "crates/printer/src/util.rs",
+            "GUIDE.md",
+            "crates/core/flags/doc/template.short.help",
+            "crates/searcher/src/sink.rs",
+            "crates/core/flags/hiargs.rs"
+          ],
+          "seconds": 0.020211499999277294
+        },
+        {
+          "id": "ripgrep:cross-file-audit-2",
+          "query": "Trace how the requested match limit stops scanning only after the remaining trailing context has been emitted",
+          "depth": 24,
+          "labeled_files": [
+            "crates/core/flags/hiargs.rs",
+            "crates/searcher/src/searcher/core.rs"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "crates/searcher/src/searcher/core.rs": 3,
+              "crates/core/flags/hiargs.rs": 14
+            },
+            "body": {
+              "crates/searcher/src/searcher/core.rs": 1,
+              "crates/core/flags/hiargs.rs": 3
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "crates/searcher/src/searcher/core.rs": 3,
+              "crates/core/flags/hiargs.rs": 7
+            },
+            "fused": {
+              "crates/searcher/src/searcher/core.rs": 3,
+              "crates/core/flags/hiargs.rs": 7
+            }
+          },
+          "stage_counts": {
+            "keyword": 25,
+            "body": 22,
+            "file_bm25": 0,
+            "chunk_fused": 32,
+            "fused": 32
+          },
+          "returned_labeled_ranks": {
+            "crates/searcher/src/searcher/core.rs": 3,
+            "crates/core/flags/hiargs.rs": 7
+          },
+          "ranked_files": [
+            "crates/core/flags/defs.rs",
+            "crates/core/flags/lowargs.rs",
+            "crates/searcher/src/searcher/core.rs",
+            "crates/matcher/src/lib.rs",
+            "crates/printer/src/standard.rs",
+            "crates/searcher/src/searcher/mod.rs",
+            "crates/core/flags/hiargs.rs",
+            "crates/searcher/src/searcher/glue.rs",
+            "crates/printer/src/json.rs",
+            "crates/searcher/src/testutil.rs",
+            "crates/printer/src/jsont.rs",
+            "crates/core/flags/complete/rg.zsh",
+            "crates/searcher/src/line_buffer.rs",
+            "crates/ignore/src/dir.rs",
+            "crates/ignore/src/lib.rs",
+            "GUIDE.md",
+            "crates/globset/src/lib.rs",
+            "crates/core/search.rs",
+            "crates/globset/src/glob.rs",
+            "crates/printer/src/summary.rs",
+            "crates/cli/src/decompress.rs",
+            "crates/cli/src/process.rs",
+            "crates/printer/src/path.rs",
+            "crates/regex/src/config.rs"
+          ],
+          "seconds": 0.017301084008067846
+        },
+        {
+          "id": "ripgrep:cross-file-audit-2",
+          "query": "Trace how the requested match limit stops scanning only after the remaining trailing context has been emitted",
+          "depth": 96,
+          "labeled_files": [
+            "crates/core/flags/hiargs.rs",
+            "crates/searcher/src/searcher/core.rs"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "crates/searcher/src/searcher/core.rs": 3,
+              "crates/core/flags/hiargs.rs": 14
+            },
+            "body": {
+              "crates/searcher/src/searcher/core.rs": 1,
+              "crates/core/flags/hiargs.rs": 3
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "crates/searcher/src/searcher/core.rs": 3,
+              "crates/core/flags/hiargs.rs": 7
+            },
+            "fused": {
+              "crates/searcher/src/searcher/core.rs": 3,
+              "crates/core/flags/hiargs.rs": 7
+            }
+          },
+          "stage_counts": {
+            "keyword": 35,
+            "body": 77,
+            "file_bm25": 0,
+            "chunk_fused": 77,
+            "fused": 77
+          },
+          "returned_labeled_ranks": {
+            "crates/searcher/src/searcher/core.rs": 3,
+            "crates/core/flags/hiargs.rs": 7
+          },
+          "ranked_files": [
+            "crates/core/flags/defs.rs",
+            "crates/core/flags/lowargs.rs",
+            "crates/searcher/src/searcher/core.rs",
+            "crates/matcher/src/lib.rs",
+            "crates/printer/src/standard.rs",
+            "crates/searcher/src/searcher/mod.rs",
+            "crates/core/flags/hiargs.rs",
+            "crates/printer/src/json.rs",
+            "crates/printer/src/jsont.rs",
+            "crates/searcher/src/searcher/glue.rs",
+            "crates/searcher/src/testutil.rs",
+            "crates/ignore/src/dir.rs",
+            "crates/core/flags/complete/rg.zsh",
+            "crates/searcher/src/line_buffer.rs",
+            "crates/core/search.rs",
+            "crates/printer/src/summary.rs",
+            "crates/globset/src/glob.rs",
+            "crates/ignore/src/lib.rs",
+            "GUIDE.md",
+            "crates/globset/src/lib.rs",
+            "crates/regex/src/config.rs",
+            "crates/ignore/src/overrides.rs",
+            "crates/pcre2/src/matcher.rs",
+            "crates/regex/src/literal.rs",
+            "crates/cli/src/decompress.rs",
+            "crates/searcher/src/sink.rs",
+            "crates/ignore/src/gitignore.rs",
+            "crates/regex/src/matcher.rs",
+            "crates/cli/src/process.rs",
+            "crates/printer/src/path.rs",
+            "crates/ignore/src/walk.rs"
+          ],
+          "seconds": 0.029452541028149426
+        }
+      ],
+      "cleanup_verified": true
+    },
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "tree": "fac74a5545e4cb1862d74328b36d1f16fba7e795",
+      "diagnostics": {
+        "status": "ready",
+        "keyword_index_ready": true,
+        "body_index_available": true,
+        "body_index_ready": true,
+        "body_indexed_files": 761,
+        "keyword_indexed_files": 762,
+        "body_index_coverage": 0.999,
+        "vector_status": "idle",
+        "vector_coverage": 0.0,
+        "warmup_stage": "ready",
+        "warmup_reused_asts": 0,
+        "warmup_seconds": 1.718,
+        "importance_seconds": 0.0,
+        "keyword_seconds": 1.022,
+        "body_seconds": 0.697
+      },
+      "queries": [
+        {
+          "id": "okhttp:cross-file-audit-1",
+          "query": "Trace how queued asynchronous requests respect host concurrency limits and release their running slot when the executor rejects work",
+          "depth": 24,
+          "labeled_files": [
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 3,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 6
+            },
+            "body": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 2,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 19
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 11
+            },
+            "fused": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 8
+            }
+          },
+          "stage_counts": {
+            "keyword": 48,
+            "body": 46,
+            "file_bm25": 0,
+            "chunk_fused": 81,
+            "fused": 81
+          },
+          "returned_labeled_ranks": {
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 1,
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 8
+          },
+          "ranked_files": [
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/OkHttpClientTestRule.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Platform.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/AsynchronousGet.java",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/AsynchronousGet.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/Dispatcher.kt",
+            "okhttp/api/android/okhttp.api",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt",
+            "okhttp/api/jvm/okhttp.api",
+            "CONTRIBUTING.md",
+            "docs/contribute/contributing.md",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/Android10Platform.kt",
+            "mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/MockWebServer.kt",
+            "docs/changelogs/changelog_2x.md",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/FakeDns.kt",
+            "docs/recipes.md",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/SpecificHostSocketFactory.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Request.kt",
+            "docs/features/calls.md",
+            "okhttp-dnsoverhttps/src/main/kotlin/okhttp3/dnsoverhttps/DnsOverHttps.kt",
+            "samples/crawler/src/main/java/okhttp3/sample/Crawler.java",
+            "mockwebserver/src/main/kotlin/mockwebserver3/MockWebServer.kt",
+            "CHANGELOG.md",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/internal/http/RecordingProxySelector.kt"
+          ],
+          "seconds": 0.027605207986198366
+        },
+        {
+          "id": "okhttp:cross-file-audit-1",
+          "query": "Trace how queued asynchronous requests respect host concurrency limits and release their running slot when the executor rejects work",
+          "depth": 96,
+          "labeled_files": [
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 3,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 6
+            },
+            "body": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 2,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 19
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 13
+            },
+            "fused": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 10
+            }
+          },
+          "stage_counts": {
+            "keyword": 114,
+            "body": 150,
+            "file_bm25": 0,
+            "chunk_fused": 207,
+            "fused": 207
+          },
+          "returned_labeled_ranks": {
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt": 1,
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt": 10
+          },
+          "ranked_files": [
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/OkHttpClientTestRule.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Platform.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/AsynchronousGet.java",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/AsynchronousGet.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/Android10Platform.kt",
+            "mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/MockWebServer.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/Dispatcher.kt",
+            "okhttp/api/android/okhttp.api",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt",
+            "okhttp/api/jvm/okhttp.api",
+            "CONTRIBUTING.md",
+            "docs/contribute/contributing.md",
+            "mockwebserver/src/main/kotlin/mockwebserver3/MockWebServer.kt",
+            "docs/changelogs/changelog_2x.md",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/FakeDns.kt",
+            "docs/recipes.md",
+            "samples/crawler/src/main/java/okhttp3/sample/Crawler.java",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/SpecificHostSocketFactory.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/RequestBody.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Request.kt",
+            "docs/features/calls.md",
+            "okhttp-dnsoverhttps/src/main/kotlin/okhttp3/dnsoverhttps/DnsOverHttps.kt",
+            "CHANGELOG.md",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/internal/http/RecordingProxySelector.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/android/AndroidLog.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/internal/concurrent/TaskFaker.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/-UtilJvm.kt",
+            "docs/changelogs/changelog_4x.md",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/-HostnamesCommon.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/internal/RecordedRequestFactory.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/HttpUrl.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/RecordedRequest.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnection.kt",
+            "okhttp/src/jvmTest/kotlin/okhttp3/RecordingExecutor.kt",
+            "docs/changelogs/changelog_1x.md",
+            "docs/changelogs/changelog_3x.md",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Address.kt",
+            "docs/contribute/concurrency.md",
+            "okhttp-tls/src/main/kotlin/okhttp3/tls/HandshakeCertificates.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/cache/DiskLruCache.kt",
+            "LICENSE.txt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/ResponseBody.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Cookie.kt",
+            "mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/RecordedRequest.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/DelegatingSSLSession.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/YubikeyClientAuth.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/FakeSSLSession.kt",
+            "mkdocs.yml",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RequestLine.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RoutePlanner.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealRoutePlanner.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/idn/Punycode.kt",
+            "okhttp-tls/src/main/kotlin/okhttp3/tls/internal/der/DerReader.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/UploadProgress.java",
+            "okhttp-sse/src/main/kotlin/okhttp3/sse/EventSource.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/UppercaseRequestInterceptor.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/QueueDispatcher.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/CallEvent.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/OkHttpClient.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/ClientRuleEventListener.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/WebSocket.kt",
+            "okhttp-logging-interceptor/src/main/kotlin/okhttp3/logging/LoggingEventListener.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/RequestBodyCompression.java",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/Exchange.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Call.kt",
+            "okhttp-logging-interceptor/src/main/kotlin/okhttp3/logging/HttpLoggingInterceptor.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/cache/CacheRequest.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/idn/IdnaMappingTable.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Cache.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/UploadProgress.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/-UtilCommon.kt",
+            "okcurl/src/main/kotlin/okhttp3/curl/internal/-MainCommon.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/CertificatePinner.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/ForwardingRequestBody.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Interceptor.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Connection.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/GzipRequestBody.kt",
+            "docs/features/events.md",
+            "mockwebserver/README.md",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/internal/duplex/AsyncRequestBody.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/MultipartReader.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/EventListener.kt",
+            "okhttp/build.gradle.kts",
+            "okhttp/src/jvmTest/resources/okhttp3/internal/publicsuffix/public_suffix_list.dat",
+            "docs/releasing.md",
+            "docs/changelogs/upgrading_to_okhttp_4.md",
+            "samples/guide/src/main/java/okhttp3/recipes/WebSocketEcho.java",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/cache/CacheInterceptor.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/concurrent/TaskRunner.kt",
+            "maven-tests/mvnw",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/tls/OkHostnameVerifier.kt",
+            "gradlew",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Stream.kt",
+            "okhttp/src/androidMain/baseline-prof.txt",
+            "okhttp/src/jvmTest/kotlin/okhttp3/SocksProxy.kt"
+          ],
+          "seconds": 0.0489413330797106
+        },
+        {
+          "id": "okhttp:cross-file-audit-2",
+          "query": "Trace the transition from validating a successful socket upgrade response to delivering incoming message and control frames",
+          "depth": 24,
+          "labeled_files": [
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 4
+            },
+            "body": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 6
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 3
+            },
+            "fused": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 2
+            }
+          },
+          "stage_counts": {
+            "keyword": 37,
+            "body": 28,
+            "file_bm25": 0,
+            "chunk_fused": 52,
+            "fused": 52
+          },
+          "returned_labeled_ranks": {
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 2
+          },
+          "ranked_files": [
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Response.kt",
+            "okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/MockHttp2Peer.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketWriter.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/Exchange.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/MockWebServer.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/RewriteResponseCacheControl.java",
+            "docs/changelogs/changelog_4x.md",
+            "samples/guide/src/main/java/okhttp3/recipes/WebSocketEcho.java",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Stream.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/WebSocketListener.kt",
+            "mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/MockResponse.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Platform.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/MockResponse.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Connection.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Reader.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/Android10Platform.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/OkHttpClient.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/JsseDebugLogging.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/MessageInflater.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/MessageDeflater.kt",
+            "okcurl/src/main/kotlin/okhttp3/curl/logging/MessageFormatter.kt"
+          ],
+          "seconds": 0.034228208009153605
+        },
+        {
+          "id": "okhttp:cross-file-audit-2",
+          "query": "Trace the transition from validating a successful socket upgrade response to delivering incoming message and control frames",
+          "depth": 96,
+          "labeled_files": [
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 4
+            },
+            "body": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 6
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 3
+            },
+            "fused": {
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+              "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 2
+            }
+          },
+          "stage_counts": {
+            "keyword": 99,
+            "body": 123,
+            "file_bm25": 0,
+            "chunk_fused": 169,
+            "fused": 169
+          },
+          "returned_labeled_ranks": {
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt": 1,
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt": 2
+          },
+          "ranked_files": [
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Response.kt",
+            "okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/MockHttp2Peer.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketWriter.kt",
+            "mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/MockResponse.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/WebSocketEcho.java",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/Exchange.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/MockWebServer.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/MockResponse.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/RewriteResponseCacheControl.java",
+            "docs/changelogs/changelog_4x.md",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/WebSocketListener.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Stream.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/Android10Platform.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Platform.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/OkHttpClient.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketProtocol.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Connection.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Reader.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Writer.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Request.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/CacheControl.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/DelegatingSSLSocketFactory.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/JsseDebugLogging.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/MessageInflater.kt",
+            "samples/slack/src/main/java/okhttp3/slack/RtmSession.java",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/MessageDeflater.kt",
+            "okcurl/src/main/kotlin/okhttp3/curl/logging/MessageFormatter.kt",
+            "okhttp/src/jvmTest/kotlin/okhttp3/internal/ws/WebSocketRecorder.kt",
+            "docs/changelogs/changelog_3x.md",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/DelegatingSocketFactory.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/FlowControlListener.kt",
+            "okhttp/src/jvmTest/kotlin/okhttp3/RecordedResponse.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/AsynchronousGet.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/CallServerInterceptor.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/-UtilCommon.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/internal/duplex/MockSocketHandler.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/ResponseBody.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/EventListener.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/WebSocket.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/DelegatingServerSocketFactory.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/SocketEffect.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/Dispatcher.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2.kt",
+            "mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/SocketPolicy.kt",
+            "docs/recipes.md",
+            "samples/guide/src/main/java/okhttp3/recipes/PrintEvents.java",
+            "mockwebserver-deprecated/src/main/kotlin/okhttp3/mockwebserver/DeprecationBridge.kt",
+            "docs/contribute/concurrency.md",
+            "samples/guide/src/main/java/okhttp3/recipes/AsynchronousGet.java",
+            "samples/unixdomainsockets/src/main/java/okhttp3/unixdomainsockets/UnixDomainSocketFactory.java",
+            "samples/guide/src/main/java/okhttp3/recipes/CustomCipherSuites.java",
+            "okcurl/src/main/kotlin/okhttp3/curl/logging/OneLineLogFormat.kt",
+            "samples/unixdomainsockets/src/main/java/okhttp3/unixdomainsockets/UnixDomainServerSocketFactory.java",
+            "samples/guide/src/main/java/okhttp3/recipes/CacheResponse.java",
+            "okhttp/src/jvmTest/kotlin/okhttp3/AutobahnTester.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/Progress.java",
+            "CHANGELOG.md",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/UppercaseResponseInterceptor.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/CallEvent.kt",
+            "docs/changelogs/changelog_2x.md",
+            "samples/unixdomainsockets/src/main/java/okhttp3/unixdomainsockets/TunnelingUnixSocket.java",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/android/AndroidLog.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/cache/CacheStrategy.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/CacheResponse.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnection.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/BufferedSocket.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/YubikeyClientAuth.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/SpecificHostSocketFactory.kt",
+            "okhttp/api/jvm/okhttp.api",
+            "okhttp/api/android/okhttp.api",
+            "samples/guide/src/main/java/okhttp3/recipes/ParseResponseWithMoshi.java",
+            "mockwebserver/src/main/kotlin/mockwebserver3/MockResponseBody.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnectionPool.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/ErrorCode.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/ParseResponseWithMoshi.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/android/ConscryptSocketAdapter.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/UnreadableResponseBody.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/android/BouncyCastleSocketAdapter.kt",
+            "samples/slack/src/main/java/okhttp3/slack/RtmStartResponse.java",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Cache.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/android/SocketAdapter.kt",
+            "docs/changelogs/upgrading_to_okhttp_4.md",
+            "mockwebserver/src/main/kotlin/mockwebserver3/SocketHandler.kt",
+            "okhttp-testing-support/src/main/kotlin/okhttp3/ForwardingResponseBody.kt",
+            "okhttp-dnsoverhttps/src/main/kotlin/okhttp3/dnsoverhttps/DnsOverHttps.kt",
+            "mockwebserver/src/main/kotlin/mockwebserver3/internal/BufferMockResponseBody.kt",
+            "build-logic/src/main/kotlin/okhttp.base-conventions.gradle.kts",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RealResponseBody.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/android/AndroidSocketAdapter.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/android/DeferredSocketAdapter.kt",
+            "okhttp/src/androidMain/kotlin/okhttp3/internal/platform/android/StandardAndroidSocketAdapter.kt",
+            "samples/guide/src/main/java/okhttp3/recipes/kt/PostStreaming.kt",
+            "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/-UtilJvm.kt"
+          ],
+          "seconds": 0.051603166037239134
+        }
+      ],
+      "cleanup_verified": true
+    },
+    {
+      "pack": "cats-effect",
+      "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "tree": "f3e56f3d1c8031f78753a57cd4bbc97f0d201544",
+      "diagnostics": {
+        "status": "ready",
+        "keyword_index_ready": true,
+        "body_index_available": true,
+        "body_index_ready": true,
+        "body_indexed_files": 538,
+        "keyword_indexed_files": 538,
+        "body_index_coverage": 1.0,
+        "vector_status": "idle",
+        "vector_coverage": 0.0,
+        "warmup_stage": "ready",
+        "warmup_reused_asts": 0,
+        "warmup_seconds": 1.298,
+        "importance_seconds": 0.0,
+        "keyword_seconds": 0.976,
+        "body_seconds": 0.322
+      },
+      "queries": [
+        {
+          "id": "cats-effect:cross-file-audit-1",
+          "query": "Trace how moving an effect to a supplied execution context restores its previous context when the effect finishes",
+          "depth": 24,
+          "labeled_files": [
+            "core/shared/src/main/scala/cats/effect/IO.scala",
+            "core/shared/src/main/scala/cats/effect/IOFiber.scala"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "core/shared/src/main/scala/cats/effect/IO.scala": 2,
+              "core/shared/src/main/scala/cats/effect/IOFiber.scala": 10
+            },
+            "body": {
+              "core/shared/src/main/scala/cats/effect/IO.scala": 14,
+              "core/shared/src/main/scala/cats/effect/IOFiber.scala": 34
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "core/shared/src/main/scala/cats/effect/IO.scala": 4,
+              "core/shared/src/main/scala/cats/effect/IOFiber.scala": 16
+            },
+            "fused": {
+              "core/shared/src/main/scala/cats/effect/IO.scala": 4,
+              "core/shared/src/main/scala/cats/effect/IOFiber.scala": 13
+            }
+          },
+          "stage_counts": {
+            "keyword": 38,
+            "body": 39,
+            "file_bm25": 0,
+            "chunk_fused": 59,
+            "fused": 59
+          },
+          "returned_labeled_ranks": {
+            "core/shared/src/main/scala/cats/effect/IO.scala": 4,
+            "core/shared/src/main/scala/cats/effect/IOFiber.scala": 13
+          },
+          "ranked_files": [
+            "core/jvm/src/main/scala/cats/effect/unsafe/IORuntimeCompanionPlatform.scala",
+            "core/native/src/main/scala/cats/effect/unsafe/IORuntimeCompanionPlatform.scala",
+            "core/shared/src/main/scala/cats/effect/Trace.scala",
+            "core/shared/src/main/scala/cats/effect/IO.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala",
+            "core/js/src/main/scala/cats/effect/unsafe/IORuntimeCompanionPlatform.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Async.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/AsyncLaws.scala",
+            "docs/thread-model.md",
+            "docs/typeclasses/async.md",
+            "docs/core/io-local.md",
+            "docs/tutorial.md",
+            "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+            "core/shared/src/main/scala/cats/effect/unsafe/IORuntimeBuilder.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestInstances.scala",
+            "core/shared/src/main/scala/cats/effect/unsafe/IORuntime.scala",
+            "kernel-testkit/shared/src/main/scala/cats/effect/kernel/testkit/TestContext.scala",
+            "core/shared/src/main/scala/cats/effect/tracing/TracingEvent.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/WorkStealingThreadPool.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/PollingSystem.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/WorkerThread.scala",
+            "std/shared/src/main/scala/cats/effect/std/Supervisor.scala",
+            "core/shared/src/main/scala/cats/effect/tracing/Tracing.scala",
+            "docs/tracing.md"
+          ],
+          "seconds": 0.020616707974113524
+        },
+        {
+          "id": "cats-effect:cross-file-audit-1",
+          "query": "Trace how moving an effect to a supplied execution context restores its previous context when the effect finishes",
+          "depth": 96,
+          "labeled_files": [
+            "core/shared/src/main/scala/cats/effect/IO.scala",
+            "core/shared/src/main/scala/cats/effect/IOFiber.scala"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "core/shared/src/main/scala/cats/effect/IO.scala": 2,
+              "core/shared/src/main/scala/cats/effect/IOFiber.scala": 10
+            },
+            "body": {
+              "core/shared/src/main/scala/cats/effect/IO.scala": 14,
+              "core/shared/src/main/scala/cats/effect/IOFiber.scala": 34
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "core/shared/src/main/scala/cats/effect/IO.scala": 4,
+              "core/shared/src/main/scala/cats/effect/IOFiber.scala": 18
+            },
+            "fused": {
+              "core/shared/src/main/scala/cats/effect/IO.scala": 4,
+              "core/shared/src/main/scala/cats/effect/IOFiber.scala": 15
+            }
+          },
+          "stage_counts": {
+            "keyword": 167,
+            "body": 117,
+            "file_bm25": 0,
+            "chunk_fused": 210,
+            "fused": 210
+          },
+          "returned_labeled_ranks": {
+            "core/shared/src/main/scala/cats/effect/IO.scala": 4,
+            "core/shared/src/main/scala/cats/effect/IOFiber.scala": 15
+          },
+          "ranked_files": [
+            "core/jvm/src/main/scala/cats/effect/unsafe/IORuntimeCompanionPlatform.scala",
+            "core/native/src/main/scala/cats/effect/unsafe/IORuntimeCompanionPlatform.scala",
+            "core/shared/src/main/scala/cats/effect/Trace.scala",
+            "core/shared/src/main/scala/cats/effect/IO.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala",
+            "core/js/src/main/scala/cats/effect/unsafe/IORuntimeCompanionPlatform.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Async.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/AsyncLaws.scala",
+            "docs/thread-model.md",
+            "core/shared/src/main/scala/cats/effect/unsafe/IORuntimeBuilder.scala",
+            "docs/typeclasses/async.md",
+            "kernel-testkit/shared/src/main/scala/cats/effect/kernel/testkit/TestContext.scala",
+            "docs/core/io-local.md",
+            "docs/tutorial.md",
+            "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestInstances.scala",
+            "core/shared/src/main/scala/cats/effect/unsafe/IORuntime.scala",
+            "core/shared/src/main/scala/cats/effect/tracing/Tracing.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/WorkerThread.scala",
+            "core/shared/src/main/scala/cats/effect/tracing/TracingEvent.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/WorkStealingThreadPool.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/PollingSystem.scala",
+            "std/shared/src/main/scala/cats/effect/std/Supervisor.scala",
+            "core/shared/src/main/scala/cats/effect/unsafe/IORuntimeConfig.scala",
+            "core/jvm/src/main/scala/cats/effect/IOApp.scala",
+            "core/shared/src/main/scala/cats/effect/FiberInfo.scala",
+            "std/shared/src/main/scala/cats/effect/std/ConsoleCrossPlatform.scala",
+            "core/jvm-native/src/main/scala/cats/effect/IOCompanionMultithreadedPlatform.scala",
+            "docs/tracing.md",
+            "scalafix/v3_0_0/input/src/main/scala/fix/ContextShiftRewrites.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Ref.scala",
+            "core/native/src/main/scala/cats/effect/IOApp.scala",
+            "benchmarks/src/main/scala/cats/effect/benchmarks/ThreadLocalBenchmark.scala",
+            "std/js/src/main/scala/cats/effect/std/Console.scala",
+            "std/jvm-native/src/main/scala/cats/effect/std/Console.scala",
+            "std/shared/src/main/scala/cats/effect/std/Dispatcher.scala",
+            "core/js/src/main/scala/cats/effect/unsafe/BatchingMacrotaskExecutor.scala",
+            "core/js/src/main/scala/cats/effect/unsafe/WorkStealingThreadPool.scala",
+            "core/js/src/main/scala/cats/effect/tracing/TracingPlatform.scala",
+            "core/jvm/src/main/scala/cats/effect/tracing/TracingPlatform.scala",
+            "core/js/src/main/scala/cats/effect/unsafe/FiberMonitor.scala",
+            "core/native/src/main/scala/cats/effect/tracing/TracingPlatform.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/BatchingMacrotaskExecutor.scala",
+            "benchmarks/src/main/scala/cats/effect/benchmarks/WorkStealingBenchmark.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/FiberMonitor.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Sync.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/AsyncTests.scala",
+            "core/native/src/main/resources/scala-native/signal_helper.c",
+            "docs/migration-guide.md",
+            "kernel/shared/src/main/scala/cats/effect/kernel/GenSpawn.scala",
+            "core/native/src/main/scala/cats/effect/Signal.scala",
+            "core/shared/src/main/scala/cats/effect/LiftIO.scala",
+            "core/js/src/main/scala/cats/effect/unsafe/metrics/IORuntimeMetricsCompanionPlatform.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/metrics/IORuntimeMetricsCompanionPlatform.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/syntax/AsyncSyntax.scala",
+            "scalafix/v3_0_0/input/src/main/scala/fix/BlockerRewrites.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/syntax/ResourceSyntax.scala",
+            "docs/schedulers.md",
+            "std/shared/src/main/scala/cats/effect/std/AtomicCell.scala",
+            "core/js/src/main/scala/cats/effect/IOApp.scala",
+            "docs/std/resource.md",
+            "docs/typeclasses/monadcancel.md",
+            "std/shared/src/main/scala/cats/effect/std/NonEmptyHotswap.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Deferred.scala",
+            "std/shared/src/main/scala/cats/effect/std/Hotswap.scala",
+            "build.sbt",
+            "docs/concepts.md",
+            "std/shared/src/main/scala/cats/effect/std/Backpressure.scala",
+            "std/shared/src/main/scala/cats/effect/std/Semaphore.scala",
+            "kernel-testkit/shared/src/main/scala/cats/effect/kernel/testkit/Generators.scala",
+            "core/shared/src/main/scala/cats/effect/unsafe/implicits.scala",
+            "core/shared/src/main/scala/cats/effect/implicits.scala",
+            "docs/core/starvation-and-tuning.md",
+            "core/shared/src/main/scala/cats/effect/unsafe/FiberMonitorShared.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/metrics/WorkStealingThreadPoolMetrics.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/package.scala",
+            "core/jvm/src/main/scala/cats/effect/IOLocalPlatform.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/GenTemporal.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestConsole.scala",
+            "core/shared/src/main/scala/cats/effect/CpuStarvationCheck.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestControl.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/implicits.scala",
+            "core/js/src/main/scala/cats/effect/syntax/DispatcherSyntax.scala",
+            "core/shared/src/main/scala/cats/effect/IOLocal.scala",
+            "core/jvm/src/main/scala/cats/effect/metrics/JvmCpuStarvationMetrics.scala",
+            "scalafix/rules/src/main/scala/fix/v3_0_0.scala",
+            "core/shared/src/main/scala/cats/effect/package.scala",
+            "core/js/src/main/scala/cats/effect/IOCompanionPlatform.scala",
+            "docs/std/atomic-cell.md",
+            "core/js/src/main/scala/cats/effect/process.scala",
+            "core/shared/src/main/scala/cats/effect/ContState.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/SleepSystem.scala",
+            "docs/core/fiber-dumps.md",
+            "core/shared/src/main/scala/cats/effect/unsafe/metrics/CpuStarvationSampler.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/LocalQueue.scala"
+          ],
+          "seconds": 0.031595250009559095
+        },
+        {
+          "id": "cats-effect:cross-file-audit-2",
+          "query": "Trace how using an acquired resource invokes its release action with the correct success, error or cancellation outcome",
+          "depth": 24,
+          "labeled_files": [
+            "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 9,
+              "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 26
+            },
+            "body": {
+              "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 9,
+              "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 13
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 3,
+              "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 16
+            },
+            "fused": {
+              "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 3,
+              "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 12
+            }
+          },
+          "stage_counts": {
+            "keyword": 32,
+            "body": 38,
+            "file_bm25": 0,
+            "chunk_fused": 61,
+            "fused": 61
+          },
+          "returned_labeled_ranks": {
+            "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 3,
+            "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 12
+          },
+          "ranked_files": [
+            "core/shared/src/main/scala/cats/effect/Trace.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Outcome.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/SyncLaws.scala",
+            "std/shared/src/main/scala/cats/effect/std/Semaphore.scala",
+            "core/js/src/main/scala/cats/effect/IOApp.scala",
+            "core/shared/src/main/scala/cats/effect/SyncIO.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestInstances.scala",
+            "std/shared/src/main/scala/cats/effect/std/NonEmptyHotswap.scala",
+            "core/shared/src/main/scala/cats/effect/IO.scala",
+            "core/native/src/main/scala/cats/effect/IOApp.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala",
+            "core/jvm/src/main/scala/cats/effect/IOApp.scala",
+            "std/shared/src/main/scala/cats/effect/std/Supervisor.scala",
+            "core/shared/src/main/scala/cats/effect/ResourceApp.scala",
+            "core/shared/src/main/scala/cats/effect/syntax/package.scala",
+            "std/shared/src/main/scala/cats/effect/std/CountDownLatch.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/MiniSemaphore.scala",
+            "std/shared/src/main/scala/cats/effect/std/LockQueue.scala",
+            "docs/typeclasses/spawn.md",
+            "core/shared/src/main/scala/cats/effect/tracing/TracingEvent.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/GenSpawnLaws.scala",
+            "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/IsEq.scala"
+          ],
+          "seconds": 0.021181500051170588
+        },
+        {
+          "id": "cats-effect:cross-file-audit-2",
+          "query": "Trace how using an acquired resource invokes its release action with the correct success, error or cancellation outcome",
+          "depth": 96,
+          "labeled_files": [
+            "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala"
+          ],
+          "stage_ranks": {
+            "keyword": {
+              "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 9,
+              "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 26
+            },
+            "body": {
+              "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 9,
+              "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 13
+            },
+            "file_bm25": {},
+            "chunk_fused": {
+              "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 3,
+              "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 17
+            },
+            "fused": {
+              "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 3,
+              "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 13
+            }
+          },
+          "stage_counts": {
+            "keyword": 90,
+            "body": 128,
+            "file_bm25": 0,
+            "chunk_fused": 160,
+            "fused": 160
+          },
+          "returned_labeled_ranks": {
+            "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala": 3,
+            "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala": 13
+          },
+          "ranked_files": [
+            "core/shared/src/main/scala/cats/effect/Trace.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Outcome.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/SyncLaws.scala",
+            "std/shared/src/main/scala/cats/effect/std/Semaphore.scala",
+            "core/js/src/main/scala/cats/effect/IOApp.scala",
+            "core/shared/src/main/scala/cats/effect/SyncIO.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestInstances.scala",
+            "std/shared/src/main/scala/cats/effect/std/NonEmptyHotswap.scala",
+            "core/shared/src/main/scala/cats/effect/IO.scala",
+            "core/shared/src/main/scala/cats/effect/ResourceApp.scala",
+            "core/native/src/main/scala/cats/effect/IOApp.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala",
+            "core/jvm/src/main/scala/cats/effect/IOApp.scala",
+            "std/shared/src/main/scala/cats/effect/std/LockQueue.scala",
+            "std/shared/src/main/scala/cats/effect/std/Supervisor.scala",
+            "core/shared/src/main/scala/cats/effect/syntax/package.scala",
+            "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+            "std/shared/src/main/scala/cats/effect/std/CountDownLatch.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/MiniSemaphore.scala",
+            "kernel-testkit/shared/src/main/scala/cats/effect/kernel/testkit/pure.scala",
+            "docs/typeclasses/spawn.md",
+            "kernel-testkit/shared/src/main/scala/cats/effect/kernel/testkit/freeEval.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/GenSpawnLaws.scala",
+            "core/shared/src/main/scala/cats/effect/tracing/TracingEvent.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/IsEq.scala",
+            "std/js/src/main/scala/cats/effect/std/Console.scala",
+            "kernel-testkit/shared/src/main/scala/cats/effect/kernel/testkit/Generators.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestControl.scala",
+            "std/shared/src/main/scala/cats/effect/std/Queue.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Async.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/AsyncLaws.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/WorkerThread.scala",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestConsole.scala",
+            "std/shared/src/main/scala/cats/effect/std/Dispatcher.scala",
+            "core/shared/src/main/scala/cats/effect/tracing/Tracing.scala",
+            "std/jvm-native/src/main/scala/cats/effect/std/DispatcherPlatform.scala",
+            "core/shared/src/main/scala/cats/effect/unsafe/IORuntimeConfig.scala",
+            "docs/core/test-runtime.md",
+            "core/shared/src/main/scala/cats/effect/LiftIO.scala",
+            "benchmarks/src/main/scala/cats/effect/benchmarks/HandleErrorBenchmark.scala",
+            "benchmarks/src/main/scala/cats/effect/benchmarks/MutexBenchmark.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/SyncTests.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/syntax/package.scala",
+            "core/jvm/src/main/java/cats/effect/IOFiberConstants.java",
+            "benchmarks/src/main/scala/cats/effect/benchmarks/AtomicCellBenchmark.scala",
+            "core/jvm-native/src/main/scala/cats/effect/IOFiberPlatform.scala",
+            "docs/migration-guide.md",
+            "benchmarks/src/main/scala/cats/effect/benchmarks/AttemptBenchmark.scala",
+            "benchmarks/src/main/scala/cats/effect/benchmarks/RedeemWithBenchmark.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/GenSpawn.scala",
+            "docs/std/resource.md",
+            "std/shared/src/main/scala/cats/effect/std/ConsoleCrossPlatform.scala",
+            "benchmarks/src/main/scala/cats/effect/benchmarks/RedeemBenchmark.scala",
+            "core/js/src/main/scala/cats/effect/tracing/TracingPlatform.scala",
+            "kernel/jvm/src/main/scala/cats/effect/kernel/ResourcePlatform.scala",
+            "core/jvm/src/main/scala/cats/effect/tracing/TracingPlatform.scala",
+            "core/native/src/main/scala/cats/effect/tracing/TracingPlatform.scala",
+            "core/jvm-native/src/main/scala/cats/effect/unsafe/WorkStealingThreadPool.scala",
+            "std/shared/src/main/scala/cats/effect/std/Random.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/Fiber.scala",
+            "docs/typeclasses/monadcancel.md",
+            "docs/tutorial.md",
+            "kernel-testkit/shared/src/main/scala/cats/effect/kernel/testkit/FreeSyncGenerators.scala",
+            "core/native/src/main/resources/scala-native/signal_helper.c",
+            "laws/shared/src/main/scala/cats/effect/laws/MonadCancelLaws.scala",
+            "core/jvm/src/main/java/cats/effect/Signal.java",
+            "testkit/shared/src/main/scala/cats/effect/testkit/TestException.scala",
+            "std/shared/src/main/scala/cats/effect/std/Hotswap.scala",
+            "std/shared/src/main/scala/cats/effect/std/Backpressure.scala",
+            "docs/core/io-local.md",
+            "kernel/shared/src/main/scala/cats/effect/kernel/GenConcurrent.scala",
+            "core/native/src/main/scala/cats/effect/unsafe/EpollSystem.scala",
+            "std/jvm-native/src/main/scala/cats/effect/std/Console.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/syntax/MonadCancelSyntax.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/syntax/ResourceSyntax.scala",
+            "core/native/src/main/scala/cats/effect/Signal.scala",
+            "scalafix/v3_0_0/input/src/main/scala/fix/ResourceRewrites.scala",
+            "kernel/js/src/main/scala/cats/effect/kernel/ResourcePlatform.scala",
+            "kernel/native/src/main/scala/cats/effect/kernel/ResourcePlatform.scala",
+            "docs/concepts.md",
+            "kernel/shared/src/main/scala/cats/effect/kernel/syntax/GenSpawnSyntax.scala",
+            "core/js/src/main/scala/cats/effect/unsafe/BatchingMacrotaskExecutor.scala",
+            "core/js/src/main/scala/cats/effect/unsafe/FiberMonitor.scala",
+            "docs/tracing.md",
+            "std/shared/src/main/scala/cats/effect/std/MapRef.scala",
+            "docs/std/semaphore.md",
+            "core/js/src/main/scala/cats/effect/CallbackStack.scala",
+            "core/jvm-native/src/main/scala/cats/effect/CallbackStack.scala",
+            "kernel/shared/src/main/scala/cats/effect/kernel/GenTemporal.scala",
+            "core/jvm/src/main/scala/cats/effect/unsafe/IORuntimeCompanionPlatform.scala",
+            "core/shared/src/main/scala/cats/effect/ExitCode.scala",
+            "laws/shared/src/main/scala/cats/effect/laws/AsyncTests.scala",
+            "core/native/src/main/scala/cats/effect/unsafe/KqueueSystem.scala",
+            "core/jvm-native/src/main/scala/cats/effect/ByteStack.scala",
+            "core/jvm-native/src/main/scala/cats/effect/IOCompanionMultithreadedPlatform.scala"
+          ],
+          "seconds": 0.03668591706082225
+        }
+      ],
+      "cleanup_verified": true
+    }
+  ],
+  "supervision": [
+    {
+      "status": "passed",
+      "peak_rss_bytes": 101908480,
+      "peak_disk_bytes": 16248832,
+      "log_truncated": false,
+      "seconds": 1.69,
+      "wall_seconds": 1.69,
+      "exit_code": 0,
+      "cleanup_verified": true,
+      "cleanup_errors": [],
+      "pack": "ripgrep"
+    },
+    {
+      "status": "passed",
+      "peak_rss_bytes": 112574464,
+      "peak_disk_bytes": 40054784,
+      "log_truncated": false,
+      "seconds": 2.879,
+      "wall_seconds": 2.879,
+      "exit_code": 0,
+      "cleanup_verified": true,
+      "cleanup_errors": [],
+      "pack": "okhttp"
+    },
+    {
+      "status": "passed",
+      "peak_rss_bytes": 106135552,
+      "peak_disk_bytes": 16998400,
+      "log_truncated": false,
+      "seconds": 2.19,
+      "wall_seconds": 2.19,
+      "exit_code": 0,
+      "cleanup_verified": true,
+      "cleanup_errors": [],
+      "pack": "cats-effect"
+    }
+  ],
+  "seconds": 6.759,
+  "peak_managed_disk_bytes": 40054784,
+  "peak_rss_bytes": 112574464,
+  "scratch_empty": true,
+  "delivery_control": {
+    "distinct_candidate_files": 88,
+    "candidate_chunks": 207,
+    "distinct_delivered": {
+      "24": 24,
+      "96": 1
+    },
+    "explanation": "Unchanged _default_file_diversity falls back to the first requested chunks if fewer distinct files than requested exist."
+  },
+  "limitations": [
+    "Small author-judged sample, non-exhaustive labels; repositories and source files previously exposed.",
+    "Top-k requests count hits/chunks, not necessarily distinct files; metrics deduplicate returned paths in delivery order.",
+    "Depth96 reruns candidate generation and can reorder results; it is not a stable cursor.",
+    "Warmed query timings are single observations, not repeated latency estimates.",
+    "The six questions are consumed development evidence after this audit."
+  ]
+}
