@@ -1,6 +1,7 @@
 """An installed TypeScript server, not a protocol double, resolves and refreshes references."""
 import os
 import shutil
+from pathlib import Path
 
 import pytest
 from attocode_intel.gateway import OperationGateway
@@ -45,6 +46,9 @@ async def test_real_typescript_server_selected_definition_and_edits(tmp_path, mo
 async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeypatch, language):
     """Explicit opt-in on workers: bounded warmup is not a cold-latency claim."""
     import asyncio
+    from collections import deque
+
+    protocol = deque(maxlen=128)
 
     from attocode_intel._internal.errors import ToolError
     from attocode_intel._internal.integrations.lsp.client import BUILTIN_SERVERS
@@ -95,7 +99,17 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
             nonlocal process
             async with asyncio.timeout(30):
                 await manager.start_server(language, tmp_path.as_uri())
-                process = manager._clients[language]._process
+                client = manager._clients[language]
+                process = client._process
+                send, receive = client._send_message, client._handle_message
+                async def trace_send(message):
+                    protocol.append({"direction": "out", "message": message})
+                    return await send(message)
+                def trace_receive(message):
+                    protocol.append({"direction": "in", "message": message})
+                    return receive(message)
+                client._send_message = trace_send
+                client._handle_message = trace_receive
                 manager.on_result_callback = None
                 for name, content in files.items():
                     if manager._get_client_for_file(str(tmp_path / name)):
@@ -117,8 +131,10 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
             assert not response.isError
             return response.structuredContent
         selected = await inspect(target)
-        assert selected['metadata']['analysis']['precision']['status'] == 'verified', selected['metadata']['analysis']['precision']
-        assert any(r['file_path'] == caller and r['source'] == 'lsp' for r in selected['data']['references'])
+        assert selected['metadata']['analysis']['precision']['status'] == 'verified', {
+            'response': selected, 'protocol': list(protocol)}
+        assert any(r['file_path'] == caller and r['source'] == 'lsp' for r in selected['data']['references']), {
+            'response': selected, 'protocol': list(protocol)}
         wrong = await inspect(other)
         assert not any(r['file_path'] == caller for r in wrong['data']['references'])
         (tmp_path / caller).write_text(changed)
@@ -140,9 +156,17 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
         await on_workspace_loop(wait_for_edit())
         changed_result = await inspect(other)
         assert any(r['file_path'] == caller and r['line'] == call_line + 1 and r['source'] == 'lsp'
-                   for r in changed_result['data']['references'])
+                   for r in changed_result['data']['references']), {
+            'response': changed_result, 'protocol': list(protocol)}
         old = await inspect(target)
         assert not any(r['file_path'] == caller for r in old['data']['references'])
     finally:
         await gateway.close()
+        if trace_dir := os.environ.get("QUALITY_LSP_TRACE_DIR"):
+            import json
+
+            destination = Path(trace_dir)
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / f"real-server-{language}.json").write_text(
+                json.dumps(list(protocol), indent=2) + "\n")
     assert process is not None and process.returncode is not None

@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T08:06:34.130897+00:00",
+  "scope": "Six new source-reviewed cross-file questions on three previously exposed repositories. At least two relevant files per question; non-exhaustive judgments by the implementing agent, not independent annotations. Diagnostic baseline only, no candidate selection or ranking change. Query text frozen before retrieval.",
+  "repositories": [
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:cross-file-audit-1",
+          "category": "cross_file",
+          "query": "Trace how enabling matches across newline boundaries reaches the whole-input search strategy for a stream",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 725,
+              "quote": ".multi_line(self.multiline)",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Connects the configured flag to the searcher builder."
+            },
+            {
+              "file": "crates/searcher/src/searcher/mod.rs",
+              "line": 750,
+              "quote": "self.fill_multi_line_buffer_from_reader::<_, S>(decoder)?;",
+              "source_sha256": "1b7b8c4cb60ce6ed74f26edc5b9ef04998a64ee9bad15acdc1ace1f3c66ef654",
+              "relevance": "Selects and buffers the stream for multiline execution."
+            },
+            {
+              "file": "crates/searcher/src/searcher/glue.rs",
+              "line": 142,
+              "quote": "pub(crate) struct MultiLine<'s, M, S>",
+              "source_sha256": "c2a6d3055a7a2e69a7208113e837eec247d30a43e0c96029aad307f83632fb02",
+              "relevance": "Implements the multiline search strategy."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:cross-file-audit-2",
+          "category": "cross_file",
+          "query": "Trace how the requested match limit stops scanning only after the remaining trailing context has been emitted",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 721,
+              "quote": ".max_matches(self.max_count)",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Passes the requested match limit into the searcher."
+            },
+            {
+              "file": "crates/searcher/src/searcher/core.rs",
+              "line": 342,
+              "quote": "&& self.after_context_left == 0",
+              "source_sha256": "7f3fd0976fc91e8aca2eaa07b423ab2a6ad919984b261604d35d715fa02ab3ef",
+              "relevance": "Combines the exceeded-limit condition with context exhaustion."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "queries": [
+        {
+          "id": "okhttp:cross-file-audit-1",
+          "category": "cross_file",
+          "query": "Trace how queued asynchronous requests respect host concurrency limits and release their running slot when the executor rejects work",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt",
+              "line": 221,
+              "quote": "if (asyncCall.callsPerHost.get() >= this.maxRequestsPerHost) continue",
+              "source_sha256": "da36494a287ed4a975aa7dfbdb91161cd58dcb3abc661e0860b0dfad3f40becc",
+              "relevance": "Enforces the host limit while promoting queued work."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt",
+              "line": 563,
+              "quote": "client.dispatcher.finished(this) // This call is no longer running!",
+              "source_sha256": "31c344a63388ec6b08f76973e45cfb1db30a0a9f1e6ef73d882ea361f2e103a7",
+              "relevance": "Returns rejected execution to dispatcher completion and reports callback failure."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:cross-file-audit-2",
+          "category": "cross_file",
+          "query": "Trace the transition from validating a successful socket upgrade response to delivering incoming message and control frames",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt",
+              "line": 232,
+              "quote": "internal fun checkUpgradeSuccess(response: Response): Socket",
+              "source_sha256": "814cb1e1e604d5c16738224ec436d6b3ebb440c5b2d647bfbd12eaeffe1c8cc4",
+              "relevance": "Validates the upgrade and connects it to the reader loop."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt",
+              "line": 108,
+              "quote": "fun processNextFrame()",
+              "source_sha256": "75b0a0055752bff2630fd1a3f753b99182640009a08311ad9a201f4bdbadaea8",
+              "relevance": "Dispatches decoded frames to message/control handling."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "cats-effect",
+      "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "queries": [
+        {
+          "id": "cats-effect:cross-file-audit-1",
+          "category": "cross_file",
+          "query": "Trace how moving an effect to a supplied execution context restores its previous context when the effect finishes",
+          "evidence": [
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IO.scala",
+              "line": 384,
+              "quote": "def evalOn(ec: ExecutionContext): IO[A] = IO.EvalOn(this, ec)",
+              "source_sha256": "144fd9851777e594c389aca4cd8fd2455459dd221742906433a6bfa49e89c827",
+              "relevance": "Constructs the context-switch instruction."
+            },
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+              "line": 1502,
+              "quote": "private[this] def evalOnSuccessK(result: Any): IO[Any]",
+              "source_sha256": "a9da13276fc0781eb4ada950afad243192ae936298bf6be16f5bba001d44d065",
+              "relevance": "Interprets the switch and restores the prior execution context on completion."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:cross-file-audit-2",
+          "category": "cross_file",
+          "query": "Trace how using an acquired resource invokes its release action with the correct success, error or cancellation outcome",
+          "evidence": [
+            {
+              "file": "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala",
+              "line": 174,
+              "quote": "F.bracketFull(resource)",
+              "source_sha256": "be4ebfb1dc6e6753cb3512cfe910368a706811232793611474988c1a26c581a6",
+              "relevance": "Interprets acquisition/use/release and maps outcomes to release exit cases."
+            },
+            {
+              "file": "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala",
+              "line": 459,
+              "quote": "def bracketFull[A, B](acquire: Poll[F] => F[A])(use: A => F[B])",
+              "source_sha256": "b3b6fc27ff4c1f1ac5aa3837540fc2d487777dae449b839907df0e8e3460d925",
+              "relevance": "Implements uncancelable acquisition and outcome-aware finalization."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
