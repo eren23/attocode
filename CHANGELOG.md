@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Intelligence 0.1.7] - 2026-10-16
 
+### Fixed — Trigram workspace ownership
+
+- Keep scoped `fast_search` auto-built indices in their request workspace, where
+  shutdown closes them. Legacy local tools discard/close indices from another
+  project before searching, preventing false empty regex results after a workspace
+  switch. Failed index loads also release resources.
+- Add cross-workspace and scoped-to-legacy regressions, installed-wheel coverage,
+  and a combined-suite PR gate. The initial 0.1.7 tag caught this failure before
+  upload; the corrected candidate preserves that failed tag and reruns release gates.
+
 ### Added — Change investigation workflow
 
 - Local `changes` CLI and full-profile `change_context` MCP operation compare
