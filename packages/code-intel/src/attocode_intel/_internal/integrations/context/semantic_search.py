@@ -1043,8 +1043,9 @@ class SemanticSearchManager:
         ``keyword``, ``body``, ``file_bm25``, ``chunk_fused`` (before whole-file
         fusion) and ``fused`` (before the broad-query rerank).
 
-        ``tests_last`` puts test files after the other files, unless a short query
-        asks for tests (``demote_tests``). Task scores for test suggestions turn it off.
+        ``tests_last`` applies the source/test intent partition (``demote_tests``):
+        source first normally, tests first for short explicit test requests.
+        Task scores for test suggestions turn it off.
         """
         if top_k <= 0:
             return []

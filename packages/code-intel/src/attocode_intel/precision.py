@@ -6,9 +6,14 @@ import json
 import os
 import shutil
 from pathlib import Path
+from time import monotonic as _now
 
+from ._internal.errors import ToolError
 from ._internal.integrations.context.codebase_ast import detect_language
 from ._internal.integrations.context.syntax_evidence import symbol_position
+
+_RETRY_SECONDS = 1.0
+_TRANSIENT = frozenset({"not_resolved", "no_references", "timeout", "failed"})
 
 
 class PrecisionSession:
@@ -17,12 +22,14 @@ class PrecisionSession:
         self.documents = {}
         self.pending = set()
         self.completed = {}
+        self.retry_after = {}
         self.failures = {}
         self.verified_languages = set()
 
     def invalidate(self, paths):
         self.pending.update(paths)
         self.completed.clear()
+        self.retry_after.clear()
         self.failures.clear()
 
     async def enrich(self, name, file_path=None, line=None):
@@ -37,7 +44,10 @@ class PrecisionSession:
             return {"status": "ambiguous", "definitions": len(definitions)}
         key = tuple((d.file_path, d.start_line, d.qualified_name) for d in definitions)
         if key in self.completed:
-            return self.completed[key]
+            if key not in self.retry_after or _now() < self.retry_after[key]:
+                return self.completed[key]
+            self.completed.pop(key)
+            self.retry_after.pop(key)
         from ._internal.integrations.lsp.client import BUILTIN_SERVERS
         outcomes = []
         deadline = asyncio.get_running_loop().time() + 2.0
@@ -49,8 +59,11 @@ class PrecisionSession:
                 outcomes.append({"language": language, "status": "unavailable"})
                 continue
             if server_id in self.failures:
-                outcomes.append({"language": language, "status": self.failures[server_id]})
-                continue
+                failure, retry_at = self.failures[server_id]
+                if _now() < retry_at:
+                    outcomes.append({"language": language, "status": failure})
+                    continue
+                self.failures.pop(server_id)
             manager = self.service._get_lsp_manager()
             try:
                 async with asyncio.timeout_at(deadline):
@@ -84,37 +97,50 @@ class PrecisionSession:
                     callback = manager.on_result_callback
                     manager.on_result_callback = None
                     try:
-                        resolved = await manager.get_definition(path, *position)
-                        # Some servers (including rust-analyzer) return no
-                        # definition when queried on the declaration itself,
-                        # but do resolve references at that exact identifier.
-                        references = await manager.get_references(path, *position, include_declaration=False)
-                        # Some servers initially know only the opened definition. Prime a
-                        # bounded set of indexed candidates, then retry once within the same
-                        # deadline. No sleeps, background warmup, or unbounded file reads.
                         candidates = ast.get_callers(definition.qualified_name)
-                        if not references and candidates:
-                            root = Path(self.service.project_dir).resolve()
-                            remaining_bytes = 256_000
-                            for rel in sorted({ref.file_path for ref in candidates})[:8]:
-                                if asyncio.get_running_loop().time() >= deadline:
+                        resolved, references = None, []
+                        for attempt in range(4):
+                            try:
+                                resolved = await manager.get_definition(path, *position)
+                                # Some servers (including rust-analyzer) return no
+                                # definition when queried on the declaration itself,
+                                # but do resolve references at that exact identifier.
+                                references = await manager.get_references(path, *position, include_declaration=False)
+                                # Prime at most eight indexed callers once, within the
+                                # same request deadline and source-read budget.
+                                if attempt == 0 and not references and candidates:
+                                    root = Path(self.service.project_dir).resolve()
+                                    remaining_bytes = 256_000
+                                    for rel in sorted({ref.file_path for ref in candidates})[:8]:
+                                        if asyncio.get_running_loop().time() >= deadline:
+                                            break
+                                        candidate = (root / rel).resolve()
+                                        if (not candidate.is_relative_to(root) or not candidate.is_file()
+                                                or str(candidate) in self.documents
+                                                or not manager._get_client_for_file(str(candidate))):
+                                            continue
+                                        size = candidate.stat().st_size
+                                        if size > min(64_000, remaining_bytes):
+                                            continue
+                                        with candidate.open("rb") as stream:
+                                            content = stream.read(min(64_000, remaining_bytes) + 1)
+                                        if len(content) > min(64_000, remaining_bytes):
+                                            continue
+                                        manager.notify_file_opened(str(candidate), content.decode("utf-8", errors="replace"))
+                                        self.documents[str(candidate)] = 1
+                                        remaining_bytes -= len(content)
+                                    references = await manager.get_references(path, *position, include_declaration=False)
+                            except ToolError as exc:
+                                if str(exc).lower() != "content modified" or attempt == 3:
+                                    raise
+                            else:
+                                if references or not candidates:
                                     break
-                                candidate = (root / rel).resolve()
-                                if (not candidate.is_relative_to(root) or not candidate.is_file()
-                                        or str(candidate) in self.documents
-                                        or not manager._get_client_for_file(str(candidate))):
-                                    continue
-                                size = candidate.stat().st_size
-                                if size > min(64_000, remaining_bytes):
-                                    continue
-                                with candidate.open("rb") as stream:
-                                    content = stream.read(min(64_000, remaining_bytes) + 1)
-                                if len(content) > min(64_000, remaining_bytes):
-                                    continue
-                                manager.notify_file_opened(str(candidate), content.decode("utf-8", errors="replace"))
-                                self.documents[str(candidate)] = 1
-                                remaining_bytes -= len(content)
-                            references = await manager.get_references(path, *position, include_declaration=False)
+                            # A server can briefly return null after a successful
+                            # warmup or edit. Yield before retrying, never extend
+                            # the enclosing two-second deadline or loop forever.
+                            if attempt < 3:
+                                await asyncio.sleep(.05 * 2 ** attempt)
                         if resolved is None and not references:
                             outcomes.append({"language": language, "status": "not_resolved"})
                             continue
@@ -129,10 +155,14 @@ class PrecisionSession:
                                      "symbol": definition.qualified_name, "references": len(references)})
             except Exception as exc:
                 status = "timeout" if isinstance(exc, TimeoutError) or isinstance(exc.__cause__, TimeoutError) else "failed"
-                self.failures[server_id] = status
+                self.failures[server_id] = (status, _now() + _RETRY_SECONDS)
                 outcomes.append({"language": language, "status": status})
         status = "verified" if outcomes and all(o["status"] == "verified" for o in outcomes) else "partial"
         result = {"status": status, "queries": outcomes,
                   "definitions_truncated": len(definitions) > 8}
         self.completed[key] = result
+        # A server can become ready without a source edit. Retry only on a later
+        # explicit request after a short cooldown, keeping the same 2s deadline.
+        if any(o["status"] in _TRANSIENT for o in outcomes):
+            self.retry_after[key] = _now() + _RETRY_SECONDS
         return result

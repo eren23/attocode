@@ -106,7 +106,7 @@ def test_issue_search_puts_test_files_after_source_files():
     assert len(terms(issue)) > 20  # a long issue says "test" about its reproduction
     assert [row.file_path for row in demote_tests(issue, rows)] == [
         "src/parser.py", "src/lexer.py", "tests/test_parser.py", "src/test_helpers.py"]
-    assert demote_tests("parser tests", rows) == rows
+    assert demote_tests("parser tests", rows) == [rows[i] for i in (0, 2, 1, 3)]
 
 
 def test_search_puts_tests_last_but_task_scores_keep_them(tmp_path):

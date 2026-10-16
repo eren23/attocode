@@ -7,11 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Explicit test search and transient precision recovery
+
+- Short requests explicitly asking for tests now put recognized test files first,
+  retaining each group's order and scores. A frozen twelve-question trial improved
+  labeled test hits at five from 3/8 to 6/8, with four unchanged production controls.
+  These are bounded source judgments, not measured agent outcomes.
+- Retry transient language-server null replies and Content Modified errors within
+  the existing two-second request deadline. Unresolved/error results expire after
+  a short cooldown so an unchanged workspace can recover; successful results stay
+  cached until source invalidation.
+- Exercise 120 edit, rename, deletion, branch-switch and reopen checkpoints across
+  Python, JavaScript, TypeScript, Go and Rust. Keep syntax fallback and explicit
+  partial-evidence reporting when compiler precision is unavailable.
+
 ### Fixed — Kotlin test-source classification
 
 - Recognize conventional Kotlin/Android test source-set directories under `src`,
   including helpers without test filenames. Ordinary search moves them after
-  production candidates; explicit test requests retain their existing ordering.
+  production candidates. The later explicit-test change above supersedes the
+  original test-query ordering policy.
 - Share path classification across test discovery and reverse-import suggestions,
   preserving import distance and avoiding production names such as `Inspection.kt`.
   Custom source-set names still require build metadata; no model or scoring weight changed.

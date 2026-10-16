@@ -60,7 +60,7 @@ def test_search_stably_moves_helpers_without_dropping_or_rescoring():
     ranked = demote_tests("queue scheduling", rows)
     assert [id(r) for r in ranked] == [id(rows[i]) for i in (1, 3, 0, 2)]
     assert [r.score for r in ranked] == [.9, .7, 1, .8]
-    assert demote_tests("queue scheduling tests", rows) is rows
+    assert demote_tests("queue scheduling tests", rows) == [rows[i] for i in (0, 2, 1, 3)]
 
 
 def test_search_and_task_scores_use_different_test_policy(tmp_path):
@@ -79,7 +79,8 @@ def test_search_and_task_scores_use_different_test_policy(tmp_path):
         assert {r.file_path for r in ordinary} == {production, helper}
         explicit = mgr.search_candidates("queue scheduling tests", top_k=10)
         task = mgr.search_candidates("queue scheduling tests", top_k=10, tests_last=False)
-        assert explicit == task
+        assert explicit[0].file_path == helper
+        assert {r.file_path for r in explicit} == {r.file_path for r in task}
     finally:
         mgr.close()
 

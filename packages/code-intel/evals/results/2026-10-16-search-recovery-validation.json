@@ -1,0 +1,189 @@
+{
+  "run_id": "20261016T133358-fdfeafce",
+  "status": "passed",
+  "cleanup_verified": true,
+  "source_sha256": "529aaf1a8e523b32a1781124da9b36d3fe86daa4110ab7561716f6866a932a38",
+  "fixture_sha256": "54b94ab71a35810a7fe2b4da8ba17304f9d2f36a27ffe8e21716ce5eac83b000",
+  "harness_sha256": "4e846fe69f4cc2d1f8767f06beee72ec1983418e3992894f9a337e3a977a1973",
+  "checks": [
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "lint",
+      "peak_disk_bytes": 12288,
+      "peak_rss_bytes": 278528,
+      "seconds": 0.216,
+      "status": "passed",
+      "wall_seconds": 0.216
+    },
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "contracts",
+      "peak_disk_bytes": 48809365,
+      "peak_rss_bytes": 879558656,
+      "seconds": 39.477,
+      "status": "passed",
+      "wall_seconds": 39.477
+    },
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "scale",
+      "peak_disk_bytes": 136775061,
+      "peak_rss_bytes": 246038528,
+      "seconds": 9.069,
+      "status": "passed",
+      "wall_seconds": 9.069
+    },
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "lifecycle",
+      "peak_disk_bytes": 48170389,
+      "peak_rss_bytes": 131399680,
+      "seconds": 3.233,
+      "status": "passed",
+      "wall_seconds": 3.233
+    },
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "workflows",
+      "peak_disk_bytes": 1331209775,
+      "peak_rss_bytes": 729858048,
+      "seconds": 78.394,
+      "status": "passed",
+      "wall_seconds": 78.394
+    },
+    {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "exit_code": 0,
+      "log_truncated": false,
+      "name": "ranking",
+      "peak_disk_bytes": 338609575,
+      "peak_rss_bytes": 197443584,
+      "seconds": 40.692,
+      "status": "passed",
+      "wall_seconds": 40.692
+    }
+  ],
+  "outcomes": {
+    "failed": 0,
+    "incomplete": 0,
+    "limited": 20,
+    "passed": 36,
+    "unsupported": 0
+  },
+  "retrieval": {
+    "labeled_hit_at_24": 25,
+    "labeled_hit_at_5": 20,
+    "missing_questions": [],
+    "observed_questions": 28,
+    "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+  },
+  "ranking": {
+    "passed": true,
+    "cleanup_verified": true
+  },
+  "artifacts_sha256": {
+    "report.json": "a3a6b3de8e0d65410e8896f8758993251d4cfadba12001acc2ef076bc106d514",
+    "workflows.json": "68bf9cc116c822cf4d47a2208b748f04bbaf6ccb87aa185dfe9210e56dd05797",
+    "ranking.json": "044b7d90cb049d33ea12f359d8f9e3806ed6c2232c0d2f244d9fa4eb29508ee8",
+    "contracts.xml": "c9f806b47fe07207179f438043402b03e0dfb2fb2c9d0d6fad2d9943d9e35a0f"
+  },
+  "packs": [
+    {
+      "id": "cats-effect",
+      "revision": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "status": "passed",
+      "cleanup_verified": true,
+      "limited_checks": [
+        "caller_syntax",
+        "dependencies",
+        "impact",
+        "tests"
+      ],
+      "setup_seconds": 0.3313992500770837
+    },
+    {
+      "id": "cockroach",
+      "revision": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+      "status": "passed",
+      "cleanup_verified": true,
+      "limited_checks": [
+        "caller_syntax",
+        "dependencies",
+        "impact",
+        "tests"
+      ],
+      "setup_seconds": 5.935403125011362
+    },
+    {
+      "id": "express",
+      "revision": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "status": "passed",
+      "cleanup_verified": true,
+      "limited_checks": [],
+      "setup_seconds": 0.13978450000286102
+    },
+    {
+      "id": "okhttp",
+      "revision": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "status": "passed",
+      "cleanup_verified": true,
+      "limited_checks": [
+        "caller_syntax",
+        "dependencies",
+        "impact",
+        "tests"
+      ],
+      "setup_seconds": 0.4462395419832319
+    },
+    {
+      "id": "phoenix",
+      "revision": "850162d618cf4e31be82fb53ad6e259095fa6126",
+      "status": "passed",
+      "cleanup_verified": true,
+      "limited_checks": [
+        "caller_syntax",
+        "dependencies",
+        "impact",
+        "tests"
+      ],
+      "setup_seconds": 0.26152162498328835
+    },
+    {
+      "id": "redis",
+      "revision": "20f163eb3dcc1311cfe6c0dda5a3beef08ab1a5d",
+      "status": "passed",
+      "cleanup_verified": true,
+      "limited_checks": [
+        "caller_syntax",
+        "dependencies",
+        "impact",
+        "tests"
+      ],
+      "setup_seconds": 0.7074557079467922
+    },
+    {
+      "id": "ripgrep",
+      "revision": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "status": "passed",
+      "cleanup_verified": true,
+      "limited_checks": [],
+      "setup_seconds": 0.17720054101664573
+    }
+  ]
+}
