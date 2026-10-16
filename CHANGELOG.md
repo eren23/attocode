@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Idempotent database references and branch hotspot scores
+
+- Full indexing replaces references once per content hash instead of appending
+  another copy on every run or branch. Replacement repairs legacy duplicates,
+  clears a successful empty result, and uses a savepoint to retain the prior
+  complete set on insertion failure. PostgreSQL writers lock the shared content
+  row; reference-refresh failures increment the indexer's error count.
+- Database hotspot normalization combines fan-in and fan-out for the same
+  content hash, considers only edges whose endpoints are on the selected branch,
+  and calculates maxima once per request. Identical-content paths remain separate
+  displayed files; tied scores use a stable path order.
+- Regression coverage exercises tiny committed Git inputs through full indexing
+  and SQL/HTTP, including repeated and cross-branch indexing, rollback, empty
+  refreshes, asymmetric graphs and a PostgreSQL writer/reader control.
+
 ### Fixed — Service navigation contracts and evaluation admission
 
 - Repair database-backed v2 definition, references, hover and diagnostics

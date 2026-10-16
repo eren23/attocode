@@ -326,6 +326,23 @@ an enclosing function's identity.
 These service-mode response repairs are in the current source; they are not
 part of the published 0.1.6 artifact.
 
+### Database indexing and hotspot limits
+
+A full reindex refreshes the references for each content hash once, including
+content shared by multiple paths or branches. Successful replacement removes
+legacy duplicates; a failed replacement preserves the prior set and increments
+`errors` in the indexing report. A successful empty extraction removes old rows.
+The outer transaction controls commit; other branches using that same content
+observe the committed replacement. This does not change the parser's existing
+name-based reference limitations or add reference extraction to incremental updates.
+
+The database-backed v2 `hotspots` endpoint scores the selected branch's content
+graph: both endpoints of a counted dependency must occur in its manifest.
+Connectivity normalization combines the counts for the same content hash.
+Identical-content paths are displayed separately with the same content-derived
+metrics; they do not multiply the underlying content-graph edges. Scores remain
+heuristics, and line counts remain estimates from stored byte size.
+
 ### History
 
 | Method | Path | Parameters | Description |

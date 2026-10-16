@@ -12,9 +12,9 @@ an unchecked feature shipped when its old target version was reached.
 
 | Priority | Action | Completion evidence / limits |
 | --- | --- | --- |
-| Ready locally | Repair service-mode v2 navigation responses and expose persisted caller names | Real SQL → HTTP checks for schema, branch selection, declaration inclusion, ambiguity, result bounds and local/DB caller fields. PostgreSQL migration/CI verification remains an upstream step. |
-| Ready locally | Reject malformed body-file development decisions | Exact named boolean gates and complete counts for both arms; negative controls. Historical results and consumed questions stay unchanged. |
-| Next correctness work | Audit DB indexing idempotence and dependency metrics | Reindex the same content twice without duplicate references; test hotspot normalization by matching content SHA rather than pairing unrelated dictionary values. Reproduce before changing behavior. |
+| Merged #214 | Repair service-mode v2 navigation responses and expose persisted caller names | Real SQL → HTTP checks for schema, branch selection, declaration inclusion, ambiguity, result bounds and local/DB caller fields. PostgreSQL migration/product checks passed on Python 3.12 and 3.13. |
+| Merged #214 | Reject malformed body-file development decisions | Exact named boolean gates and complete counts for both arms; negative controls. Historical results and consumed questions stay unchanged. |
+| Implemented in current source | Repair DB indexing idempotence and dependency metrics | Reproduced duplicate references and a hub score of 0.60 instead of 0.70. Atomic reference replacement, branch-scoped keyed normalization, and SQL/HTTP regressions cover repair, rollback, repeated/shared-content indexing and graph limits. PostgreSQL writer serialization has a dedicated CI control. |
 | Next performance work | Find a mechanism that improves cold Cockroach headroom | Last real target: 167.970/180 seconds. Retain byte-equivalent index controls, then seek a bounded end-to-end improvement; the two tokenization prototypes were rejected. Any new cloud run needs a new approved scope. |
 | Next retrieval work | Investigate candidate misses with fresh multi-relevant labels | Expansion, dual-query and body-file trials did not pass their complete gates. Freeze new questions before evaluation; existing questions are consumed. No ranking default change. |
 | Reliability | Continue diagnosing intermittent Rust readiness | Shared document lifecycle is fixed on main and final CI passed first try; the original intermittent cause remains unproven. Preserve assertions and capture protocol evidence on recurrence. |
@@ -26,7 +26,8 @@ SQL/HTTP tests and 13 additional development-choice cases. The SQL tests ran
 with SQLite locally; the existing product CI runs them against PostgreSQL.
 A wall-clock-interrupted attempt remains recorded as incomplete.
 
-The first two rows are local, unreleased maintenance work. No new cloud rental,
+The first two rows merged in PR #214 after all required CI passed; the subsequent
+DB correctness repairs are described above. These changes remain unreleased. No new cloud rental,
 model run, model download, global tool upgrade or host MCP restart is part of
 this cleanup. Keep R7's reviewed STOP and protected study/cache directories.
 

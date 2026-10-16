@@ -35,6 +35,7 @@ LOCAL_TESTS = QUICK_TESTS + ["test_product.py", "test_query_ranking.py", "test_r
 LINT_PATHS = ["eval/quality", *["packages/code-intel/src/attocode_intel/" + p for p in (
     "search_evidence.py", "symbol_links.py", "output.py", "query_ranking.py", "gateway.py",
     "api/models.py", "api/providers/db_provider.py",
+    "indexing/full_indexer.py", "storage/symbol_store.py",
     "freshness.py", "_internal/integrations/context/codebase_context.py",
     "_internal/integrations/context/semantic_search.py",
     "_internal/integrations/context/index_probe.py",
