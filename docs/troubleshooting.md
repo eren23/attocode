@@ -153,7 +153,7 @@ If compaction isn't working, check that it's enabled:
 attocode --debug "task"   # Check debug logs for compaction events
 ```
 
-See [Context Engineering](context-engineering.md) for details on how compaction works.
+See [Context Engineering](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/context-engineering.md) for details on how compaction works.
 
 ## Sandbox Permission Errors
 
@@ -337,7 +337,7 @@ for issue in issues:
 
 Or use the built-in dashboard (`Ctrl+D` in TUI mode) to browse traces visually.
 
-See [Tracing Guide](tracing-guide.md) for full details.
+See [Tracing Guide](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/tracing-guide.md) for full details.
 
 ## Common Error Types
 
@@ -366,7 +366,7 @@ See [Tracing Guide](tracing-guide.md) for full details.
 
 ## Related Pages
 
-- [TUI Interface](tui-guide.md) — Keyboard shortcuts and panels
-- [Budget System](BUDGET.md) — Budget management details
-- [Sandbox](SANDBOX.md) — Sandbox configuration
-- [Context Engineering](context-engineering.md) — Context management
+- [TUI Interface](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/tui-guide.md) — Keyboard shortcuts and panels
+- [Budget System](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/BUDGET.md) — Budget management details
+- [Sandbox](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/SANDBOX.md) — Sandbox configuration
+- [Context Engineering](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/context-engineering.md) — Context management

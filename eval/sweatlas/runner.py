@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Ensure src/ is importable
 _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
-if os.path.join(_PROJECT_ROOT, "src") not in sys.path:
-    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "src"))
+if os.path.join(_PROJECT_ROOT, "packages", "code-intel", "src") not in sys.path:
+    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "packages", "code-intel", "src"))
 
 
 @dataclass
@@ -348,7 +348,7 @@ async def run_task(
     code_intel_context = ""
     if not baseline:
         try:
-            from attocode.code_intel.service import CodeIntelService
+            from attocode_intel.service import CodeIntelService
 
             svc = CodeIntelService.get_instance(repo_dir)
             entities = extract_entities(prompt)

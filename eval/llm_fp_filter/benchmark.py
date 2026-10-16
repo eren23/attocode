@@ -87,10 +87,10 @@ def run_filter_benchmark(
     Returns:
         FilterBenchmarkResult with accuracy, cost, and per-finding details.
     """
-    from attocode.code_intel.rules.loader import load_builtin_rules
-    from attocode.code_intel.rules.packs.pack_loader import list_example_packs, load_pack
-    from attocode.code_intel.rules.executor import execute_rules
-    from attocode.code_intel.rules.filters.pipeline import run_pipeline
+    from attocode_intel.rules.loader import load_builtin_rules
+    from attocode_intel.rules.packs.pack_loader import list_example_packs, load_pack
+    from attocode_intel.rules.executor import execute_rules
+    from attocode_intel.rules.filters.pipeline import run_pipeline
     from eval.rule_accuracy.runner import CORPUS_DIR, _parse_file_annotations, discover_corpus
 
     # Load rules

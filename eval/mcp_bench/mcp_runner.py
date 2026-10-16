@@ -179,7 +179,7 @@ def _call_tool_direct(tool_name: str, args: dict, repo_dir: str) -> str:
     """Call an attocode-code-intel tool directly (for local evaluation)."""
     # Lazy import to keep the runner generic
     try:
-        from attocode.code_intel.service import CodeIntelService
+        from attocode_intel.service import CodeIntelService
     except ImportError:
         return f"[Error: CodeIntelService not available for direct call to {tool_name}]"
 

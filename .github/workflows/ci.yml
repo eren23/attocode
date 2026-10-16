@@ -1,91 +1,79 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         python-version: ["3.12", "3.13"]
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: uv sync --locked --extra dev --extra code-intel
-
-      - name: Lint
-        run: uv run ruff check src/ tests/
-
-      - name: Type check
-        # ponytail: report-only until the strict-mode backlog (512 errors) is fixed.
-        # Remove continue-on-error to make it a gate.
-        continue-on-error: true
-        run: uv run mypy src/attocode src/attoswarm src/attocode_core --ignore-missing-imports
-
-      - name: Run tests
-        run: uv run pytest tests/unit/ -q --tb=short --cov=src/attocode --cov=src/attoswarm --cov=src/attocode_core --cov-report=xml --cov-report=term-missing
-
-      - name: Upload coverage
-        if: matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.xml
-          fail_ci_if_error: false
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
+      - name: Preserved engine tests without agent imports
         env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
+          ATTOCODE_LOCAL_ONLY: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/unit -p eval.quality.no_agent -q --junitxml=quality-artifacts/engine.xml
+      - name: Lint migrated tests and workspace checks
+        run: uv run --no-sync ruff check packages/code-intel/tests/unit packages/code-intel/tests/integration eval/quality scripts/check_pack_licenses.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: engine-${{ matrix.python-version }}
+          retention-days: 7
+          path: quality-artifacts/
   install-sanity:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
-
-      - name: Verify all extras resolve
-        run: uv sync --locked --all-extras
-
+          python-version: '3.12'
+      - name: Verify all optional groups resolve without installing models
+        run: uv lock --check
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service --extra docs
   pack-license-check:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
-
-      - name: Install dependencies (PyYAML for the script)
-        run: uv sync --locked --extra dev
-
-      - name: Verify community pack licenses
-        run: uv run python scripts/check_pack_licenses.py
-
-  research-integration:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel
+      - run: uv run --no-sync python scripts/check_pack_licenses.py
+  engine-integration:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: uv sync --locked --extra dev --extra code-intel
-
-      - name: Run research integration tests
-        run: uv run pytest tests/integration/test_research_cli.py tests/integration/test_research_orchestrator_real.py tests/integration/test_research_failure_modes.py -q -m "integration and not live_swarm and not slow"
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
+      - name: HTTP, MCP and service integration without agent imports
+        env:
+          ATTOCODE_LOCAL_ONLY: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/integration -p eval.quality.no_agent -q --junitxml=quality-artifacts/integration.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: engine-integration
+          retention-days: 7
+          path: quality-artifacts/

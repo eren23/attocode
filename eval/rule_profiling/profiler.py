@@ -14,8 +14,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from attocode.code_intel.rules.executor import execute_rules
-from attocode.code_intel.rules.model import RuleSeverity, UnifiedRule
+from attocode_intel.rules.executor import execute_rules
+from attocode_intel.rules.model import RuleSeverity, UnifiedRule
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +113,8 @@ def profile_rules(
     Returns:
         ProfilingResult with per-rule profiles.
     """
-    from attocode.code_intel.rules.loader import load_builtin_rules
-    from attocode.code_intel.rules.packs.pack_loader import list_example_packs, load_pack
+    from attocode_intel.rules.loader import load_builtin_rules
+    from attocode_intel.rules.packs.pack_loader import list_example_packs, load_pack
 
     # Load all rules
     all_rules = load_builtin_rules()

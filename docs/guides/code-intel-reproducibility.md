@@ -40,10 +40,10 @@ GC, and pin fields on search responses. The CLI layer covers just the three
 ops commands (`gc`, `verify`, `reindex`) — pin/snapshot/overlay/rotate are
 MCP-only for now.
 
-Source registrations: `src/attocode/code_intel/server.py` lines 577–584
+Source registrations: `packages/code-intel/src/attocode_intel/server.py` lines 577–584
 wire the new MCP tools into the stdio server. HTTP routes live under
-`src/attocode/code_intel/api/routes/`. CLI dispatch is in
-`src/attocode/code_intel/cli.py`.
+`packages/code-intel/src/attocode_intel/api/routes/`. CLI dispatch is in
+`packages/code-intel/src/attocode_intel/cli.py`.
 
 ---
 
@@ -66,7 +66,7 @@ You don't usually call `pin_current` yourself. Every ranked-result MCP tool
 `repo_map_ranked`, `symbols`, `search_symbols`, `cross_mode_search`,
 `frecency_search`, `get_top_results_for_query`, …) automatically appends an
 `index_pin` footer via the `@pin_stamped` decorator in
-`src/attocode/code_intel/tools/pin_tools.py`:
+`packages/code-intel/src/attocode_intel/tools/pin_tools.py`:
 
 ```
 <normal search result body>
@@ -89,9 +89,9 @@ you can hand-verify a pin without round-tripping through `pin_resolve`.
 | `pin_delete` | `pin_id: str` | Drop one pin. Idempotent. |
 | `verify_pin` | `pin_id: str` | Compare a pin's recorded state to current state. Returns a drift report (pinned vs current hash per store). |
 
-All five live in `src/attocode/code_intel/tools/pin_tools.py`. The pure
+All five live in `packages/code-intel/src/attocode_intel/tools/pin_tools.py`. The pure
 helpers (hashing, PinStore) live in
-`src/attocode/code_intel/tools/pin_store.py`, which is intentionally
+`packages/code-intel/src/attocode_intel/tools/pin_store.py`, which is intentionally
 MCP-runtime-free so HTTP providers can use it without importing `mcp`.
 
 ### Where pins are persisted
@@ -144,7 +144,7 @@ stores/
 
 SQLite stores are copied via the **live backup API** — safe to run while
 the stores are open for reads and writes. Binary trigram files are copied
-as-is. See `src/attocode/code_intel/tools/snapshot_tools.py` for the
+as-is. See `packages/code-intel/src/attocode_intel/tools/snapshot_tools.py` for the
 capture logic (`_stage_snapshot`, `_SQLITE_STORES`, `_BINARY_FILES`).
 
 ### The five snapshot tools
@@ -235,7 +235,7 @@ have different symbol layouts and don't want to reindex on every switch.
 | `overlay_activate` | `name: str`, `save_current_as: str = ""`, `confirm: bool = False` | Swap `.attocode/` to use overlay `name`. If `save_current_as` is non-empty, the current state is first saved as that overlay, so the switch is reversible. `confirm=False` = dry run. |
 | `overlay_delete` | `name: str`, `confirm: bool = False` | Remove a named overlay directory. |
 
-Implementation: `src/attocode/code_intel/tools/overlay_tools.py`.
+Implementation: `packages/code-intel/src/attocode_intel/tools/overlay_tools.py`.
 
 ### Overlays vs snapshots — which to use
 
@@ -271,7 +271,7 @@ actually wipe.
 | `clear_all` | `confirm: bool = False`, `except_stores: str = ""` | Fan-out to every clear_* tool. `except_stores="learnings,adrs"` preserves those. |
 | `cas_clear` | `confirm: bool = False`, `artifact_types: str = ""` | Server-side CAS entries (used when attocode runs in service mode). |
 
-All live in `src/attocode/code_intel/tools/maintenance_tools.py`.
+All live in `packages/code-intel/src/attocode_intel/tools/maintenance_tools.py`.
 
 **Why not just `rm -rf .attocode/`?** Three reasons:
 
@@ -299,7 +299,7 @@ shelling out to `find` + `sqlite3`:
 | `verify_all_caches` | `deep: bool = False` | Walk every store and check schema version + basic sanity. With `deep=True`, also runs per-store integrity checks (SQLite `PRAGMA integrity_check`, trigram shard CRC). |
 | `migrate_cache` | `dry_run: bool = True`, `resume: bool = True` | Backfill provenance columns on legacy rows and write/update `cache_manifest.json`. Idempotent, resumable. |
 
-All in `src/attocode/code_intel/tools/maintenance_tools.py`.
+All in `packages/code-intel/src/attocode_intel/tools/maintenance_tools.py`.
 
 **Dimension-mismatch degradation** is the sharpest edge the status tools
 help you catch. Before Phase 1 shipped, swapping embedding models would
@@ -336,8 +336,8 @@ The important invariant is that server GC **is repo-scoped** — a previous
 bug let `DELETE`s from `gc_unreferenced` / `gc_orphaned` escape their repo
 boundary because the queries were global. Phase 3a-fix Batch A gated every
 delete on `branches.repo_id` via a JOIN through `branch_files`. See
-`src/attocode/code_intel/storage/content_store.py::gc_unreferenced` and
-`src/attocode/code_intel/storage/embedding_store.py::gc_orphaned`.
+`packages/code-intel/src/attocode_intel/storage/content_store.py::gc_unreferenced` and
+`packages/code-intel/src/attocode_intel/storage/embedding_store.py::gc_orphaned`.
 
 ---
 
@@ -380,9 +380,9 @@ mid-flight reindex can't race and leave half the corpus stranded.
 | `embeddings_rotate_gc_old` | `confirm: bool = False` | Drop the archived old-model vectors table and clear rotation state. |
 | `embeddings_rotate_abort` | `confirm: bool = False` | Cancel a pre-cutover rotation. Deletes staging data only; the primary `vectors` table is untouched. |
 
-All in `src/attocode/code_intel/tools/maintenance_tools.py`. The underlying
+All in `packages/code-intel/src/attocode_intel/tools/maintenance_tools.py`. The underlying
 state machine lives in
-`src/attocode/code_intel/integrations/context/embedding_rotation.py`.
+`packages/code-intel/src/attocode_intel/_internal/integrations/context/embedding_rotation.py`.
 
 ### Cache invalidation across processes
 
@@ -396,7 +396,7 @@ polling loop.
 ### Common failure modes
 
 - **"provider for 'xxx' not available"** — you haven't installed the extras
-  for that embedding model. `uv sync --extra semantic-nomic` or similar.
+  for that embedding model. `uv sync --package attocode-code-intel --extra semantic-nomic` or similar.
 - **"rotate_cutover: state is backfilling, not ready_to_cutover"** — more
   batches remain. Call `embeddings_rotate_step` until the state advances.
 - **`VectorStoreRotationActiveError` during an unrelated indexing run** —
@@ -420,7 +420,7 @@ membership pattern.
 | `GET` | `/api/v1/orgs/{org_id}/repos/{repo_id}/snapshots/{snapshot_id}` | member | Fetch one snapshot with its full component list. |
 | `DELETE` | `/api/v1/orgs/{org_id}/repos/{repo_id}/snapshots/{snapshot_id}` | admin | Delete a snapshot record. |
 
-Implementation: `src/attocode/code_intel/api/routes/snapshots.py`. Database
+Implementation: `packages/code-intel/src/attocode_intel/api/routes/snapshots.py`. Database
 tables: `repo_snapshots`, `repo_snapshot_components` (migration 018).
 
 **Phase 3a limitation:** these routes describe the state but do **not yet**
@@ -436,7 +436,7 @@ endpoints — Phase 3b will stitch the two together.
 | `POST` | `/api/v1/orgs/{org_id}/repos/{repo_id}/gc` | admin (if `dry_run=false`), member (if `dry_run=true`) | Run GC for the repo. Body: `dry_run`, `types: list[str]` (empty = all), `min_age_minutes`, `embedding_min_age_minutes`. |
 | `GET` | `/api/v1/orgs/{org_id}/repos/{repo_id}/gc/stats` | member | Count eligible entities per type without touching anything. |
 
-Implementation: `src/attocode/code_intel/api/routes/gc.py`. Calls
+Implementation: `packages/code-intel/src/attocode_intel/api/routes/gc.py`. Calls
 `ContentStore.gc_unreferenced(repo_id=repo_id)` and
 `EmbeddingStore.gc_orphaned(repo_id=repo_id)` — both repo-scoped after
 Phase 3a-fix Batch A.
@@ -447,7 +447,7 @@ Phase 3a-fix Batch A.
 |---|---|---|---|
 | `PATCH` | `/api/v1/orgs/{org_id}/repos/{repo_id}` | admin on both orgs | Rename, retarget `clone_url`, or move a repo between orgs. |
 
-Implementation: `src/attocode/code_intel/api/routes/orgs.py::patch_repo`.
+Implementation: `packages/code-intel/src/attocode_intel/api/routes/orgs.py::patch_repo`.
 Requires membership on both source and target orgs (the latter enforced by
 Phase 3a-fix Batch F m4).
 
@@ -487,13 +487,13 @@ or degraded store.
 
 Implementation:
 
-- `src/attocode/code_intel/api/routes/_pin_helper.py::build_retrieval_pin`
+- `packages/code-intel/src/attocode_intel/api/routes/_pin_helper.py::build_retrieval_pin`
   — canonical server-side pin computation.
-- `src/attocode/code_intel/api/providers/db_provider.py::DbSearchProvider.semantic_search`
+- `packages/code-intel/src/attocode_intel/api/providers/db_provider.py::DbSearchProvider.semantic_search`
   — wires the helper into DB-mode responses.
-- `src/attocode/code_intel/api/providers/local_provider.py::LocalSearchProvider.semantic_search`
+- `packages/code-intel/src/attocode_intel/api/providers/local_provider.py::LocalSearchProvider.semantic_search`
   — uses the MCP-free
-  `attocode.code_intel.tools.pin_store.compute_and_persist_pin` so the
+  `attocode_intel.tools.pin_store.compute_and_persist_pin` so the
   provider never imports `mcp`.
 
 ---
@@ -501,7 +501,7 @@ Implementation:
 ## CLI commands
 
 The three CLI subcommands are implemented in
-`src/attocode/code_intel/cli.py`:
+`packages/code-intel/src/attocode_intel/cli.py`:
 
 ```
 attocode-code-intel gc       [--project PATH] [--dry-run]
@@ -526,7 +526,7 @@ More detail in the [CLI commands guide](cli-commands.md).
 ## Walkthrough
 
 For a copy-pasteable step-by-step procedure that exercises every tool on
-this page against `tests/fixtures/sample_project/`, see
+this page against `packages/code-intel/tests/fixtures/sample_project/`, see
 **[Reproducibility Walkthrough](reproducibility-walkthrough.md)**. That
 guide takes you from bootstrap → pin → search → snapshot → edit → drift
 verification → restore, proving each feature in under 10 minutes.

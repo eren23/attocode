@@ -1,4 +1,0 @@
-name: csharp
-version: 1.0.0
-languages: [csharp]
-description: "C# analysis pack — security, async pitfalls, idiomatic .NET style"

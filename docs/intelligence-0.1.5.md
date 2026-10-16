@@ -65,6 +65,6 @@ resource limits.
 
 These are development regression checks. They do not establish that the server
 improves agent completion, review accuracy or speed. The
-[completed R7 pilot](../packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)
+[completed R7 pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)
 did not meet its continuation rule; no additional model study is part of this
 release.

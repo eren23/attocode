@@ -28,14 +28,14 @@ from pathlib import Path
 import yaml
 
 _PROJECT_ROOT = Path(__file__).parents[3]
-if str(_PROJECT_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT / "src"))
+if str(_PROJECT_ROOT / "packages" / "code-intel" / "src") not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT / "packages" / "code-intel" / "src"))
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 logger = logging.getLogger(__name__)
 
 EXAMPLES_DIR = (
-    _PROJECT_ROOT / "src" / "attocode" / "code_intel" / "rules" / "packs" / "examples"
+    _PROJECT_ROOT / "packages" / "code-intel" / "src" / "attocode_intel" / "rules" / "packs" / "examples"
 )
 FIXTURE_ROOT = (
     _PROJECT_ROOT / "eval" / "rule_harness" / "fixtures" / "attocode"

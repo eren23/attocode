@@ -1,4 +1,0 @@
-name: kotlin
-version: 1.0.0
-languages: [kotlin]
-description: "Kotlin analysis pack — null-safety pitfalls, Android idioms, coroutine misuse"

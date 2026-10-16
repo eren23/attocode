@@ -28,15 +28,15 @@ Wave 2 roadmap is included in manifest: Kubernetes, Next.js, Airflow.
 ## Step 1: Verify MCP Setup
 
 ```bash
-uv run attocode code-intel status
+uv run attocode-code-intel status
 ```
 
 If needed:
 
 ```bash
-uv run attocode code-intel install codex --global
-uv run attocode code-intel install claude --global
-uv run attocode code-intel install cursor
+uv run attocode-code-intel install codex --global
+uv run attocode-code-intel install claude --global
+uv run attocode-code-intel install cursor
 ```
 
 ## Step 2: Generate Standardized Task Packets

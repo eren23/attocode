@@ -16,10 +16,10 @@ from typing import Any
 # Ensure project root is on sys.path for eval imports
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "src"))
+    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "packages", "code-intel", "src"))
     sys.path.insert(0, _PROJECT_ROOT)
 
-from attoswarm.research.evaluator import EvalResult
+from eval.result import EvalResult
 
 from eval.meta_harness.harness_config import HarnessConfig
 from eval.meta_harness.splits import assign_split
@@ -37,7 +37,7 @@ class CodeIntelBenchEvaluator:
     The composite metric is a weighted average (0-1 scale), suitable for
     the research orchestrator's accept/reject decision.
 
-    Implements the ``Evaluator`` protocol from attoswarm.research.evaluator.
+    Implements the ``Evaluator`` protocol from eval.result.
     """
 
     def __init__(
@@ -148,7 +148,7 @@ class CodeIntelBenchEvaluator:
         Returns dict with per-repo metrics and composite score (0-1).
         """
         try:
-            from attocode.code_intel.service import CodeIntelService
+            from attocode_intel.service import CodeIntelService
 
             from eval.search_quality import (
                 REPO_CONFIGS,

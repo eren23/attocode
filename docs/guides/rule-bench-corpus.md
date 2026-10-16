@@ -25,7 +25,7 @@ Fixtures use inline comments to mark expectations:
 | `# todoruleid: rule-id` | Known miss — informational, not scored |
 | `# ruleid: rule-id` | Semgrep alias — automatically normalized to `expect` |
 
-`//` works in place of `#` for languages with C-style comments. The annotation regex lives at `attocode.code_intel.rules.testing._ANNOTATION_RE`.
+`//` works in place of `#` for languages with C-style comments. The annotation regex lives at `attocode_intel.rules.testing._ANNOTATION_RE`.
 
 Example (`eval/rule_harness/fixtures/attocode/python/bandit-secrets.py`):
 
@@ -54,7 +54,7 @@ When `--packs` is unset, all three sources are enabled by default.
 
 ## Adding a community pack
 
-Community packs live under `src/attocode/code_intel/rules/packs/community/<pack-name>/` with their own `LICENSE` + `NOTICE` files plus a `manifest.yaml` declaring source provenance.
+Community packs live under `packages/code-intel/src/attocode_intel/rules/packs/community/<pack-name>/` with their own `LICENSE` + `NOTICE` files plus a `manifest.yaml` declaring source provenance.
 
 ### License policy
 
@@ -79,7 +79,7 @@ Use the importer to scaffold a license-compliant skeleton:
 uv run python -m eval.rule_harness.import_pack \
     --source bandit \
     --lang python \
-    --output src/attocode/code_intel/rules/packs/community/bandit-python \
+    --output packages/code-intel/src/attocode_intel/rules/packs/community/bandit-python \
     --commit <upstream-sha>
 ```
 

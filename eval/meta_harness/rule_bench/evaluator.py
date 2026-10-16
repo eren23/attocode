@@ -15,21 +15,21 @@ import time
 from collections import defaultdict
 from typing import Any
 
-from attoswarm.research.evaluator import EvalResult
+from eval.result import EvalResult
 
-from attocode.code_intel.rules.executor import execute_rules
-from attocode.code_intel.rules.filters.pipeline import run_pipeline
-from attocode.code_intel.rules.loader import load_yaml_rules
-from attocode.code_intel.rules.model import (
+from attocode_intel.rules.executor import execute_rules
+from attocode_intel.rules.filters.pipeline import run_pipeline
+from attocode_intel.rules.loader import load_yaml_rules
+from attocode_intel.rules.model import (
     RuleSource,
     UnifiedRule,
 )
-from attocode.code_intel.rules.packs.pack_loader import (
+from attocode_intel.rules.packs.pack_loader import (
     get_community_pack_dir,
     list_community_packs,
 )
-from attocode.code_intel.rules.registry import RuleRegistry
-from attocode.code_intel.rules.testing import _finding_matches_rule
+from attocode_intel.rules.registry import RuleRegistry
+from attocode_intel.rules.testing import _finding_matches_rule
 
 from eval.meta_harness.rule_bench.config import RuleBenchConfig
 from eval.meta_harness.rule_bench.corpus import CorpusLoader, LabeledSample
@@ -84,7 +84,7 @@ class RuleBenchEvaluator:
         if self._base_registry is not None:
             return self._base_registry
 
-        from attocode.code_intel.rules.packs.pack_loader import (
+        from attocode_intel.rules.packs.pack_loader import (
             _EXAMPLES_DIR,  # type: ignore[attr-defined]
             list_example_packs,
         )

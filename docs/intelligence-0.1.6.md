@@ -7,10 +7,10 @@ passed 35 of 36 source packs and CockroachDB search indexing timed out. Repairs
 through PR #192 did not resolve that blocker. The controller finished in 26.1
 minutes, within its 90-minute limit. All four additionally authorized repair
 batches are used and all workers deleted. See the
-[repair-cycle evidence](../packages/code-intel/evals/results/2026-10-15-cold-repair-cycle.md).
+[repair-cycle evidence](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-cold-repair-cycle.md).
 The local candidate upgrade check is not a PyPI publication check.
 
-A subsequent [structural persistence fix](../packages/code-intel/evals/results/2026-10-15-structural-write-contention.md)
+A subsequent [structural persistence fix](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-structural-write-contention.md)
 reduces SQL statement count and passed local regression checks. Its small contention
 probe does not replace the failed full cloud gate or authorize publication.
 
@@ -52,7 +52,7 @@ are not migrated or deleted.
 
 ## Evidence
 
-See the [development matrix](../packages/code-intel/evals/results/2026-10-14-breadth-development.md)
+See the [development matrix](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-breadth-development.md)
 and [quality guide](intelligence-quality.md) for hashes, limitations, reproducible
 commands and resource bounds. Successful execution does not turn unsupported or
 unlabeled cases into passed assertions. The R7 STOP remains: these product checks

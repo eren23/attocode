@@ -1,0 +1,1334 @@
+{
+  "archive_tag": "agent-archive-2026-10-16",
+  "archive_commit": "9518a3d7724e2d9fe3f169a0d4a9b2d9ee492500",
+  "files": [
+    {
+      "from": "tests/integration/code_intel/__init__.py",
+      "to": "packages/code-intel/tests/integration/code_intel/__init__.py",
+      "old_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test_functions_retained": 0,
+      "archived_agent_classes": [],
+      "new_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "from": "tests/integration/code_intel/conftest.py",
+      "to": "packages/code-intel/tests/integration/code_intel/conftest.py",
+      "old_sha256": "39ae2e068907b93be2f706eec396221fe9124a9914cb2169f64f79426d57d0e2",
+      "test_functions_retained": 0,
+      "archived_agent_classes": [],
+      "new_sha256": "17cb770564477ba32b39d8d753d1819323b8227b3fe1dc52d88ccd4ebd587110"
+    },
+    {
+      "from": "tests/integration/code_intel/test_http_smoke.py",
+      "to": "packages/code-intel/tests/integration/code_intel/test_http_smoke.py",
+      "old_sha256": "71d51c089687a573d2ca0a55d144942013d1053d9d75c9fbfd8ebf705aac0f1d",
+      "test_functions_retained": 5,
+      "archived_agent_classes": [],
+      "new_sha256": "4b5b279cb7db26b67c04c12aa778ebca664fb7d713b8ba17bb4926e3404ee3b6"
+    },
+    {
+      "from": "tests/integration/code_intel/test_mcp_tools_audit.py",
+      "to": "packages/code-intel/tests/integration/code_intel/test_mcp_tools_audit.py",
+      "old_sha256": "639267117e324ec53444c6287814c139604a0420756c24303c1094ecb3a7a04e",
+      "test_functions_retained": 56,
+      "archived_agent_classes": [],
+      "new_sha256": "c75c85b9a54962e63d5f112377de39b50f73b53131b854d404555d5bbfa34de1"
+    },
+    {
+      "from": "tests/integration/code_intel/test_remote_mcp_http_integration.py",
+      "to": "packages/code-intel/tests/integration/code_intel/test_remote_mcp_http_integration.py",
+      "old_sha256": "6d4b07a277d2fc432df818a0a4f5a6d86d757c5f544ba47ac2e1e31abf55fe30",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "534587c08894d70a7241f9774e998f44b3c77876cdd56e083cb9257817c17057"
+    },
+    {
+      "from": "tests/integration/code_intel/test_service_integration.py",
+      "to": "packages/code-intel/tests/integration/code_intel/test_service_integration.py",
+      "old_sha256": "76a7566b3809e8b211e7a0385476d013aefcab39f64e59cbc606c9a3ba66ec3b",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "b4e9481b5edd5bfc32443121e591e5644df47cb7f724badb45b289eafdbf551a"
+    },
+    {
+      "from": "tests/integration/test_rule_bench_floor_e2e.py",
+      "to": "packages/code-intel/tests/integration/test_rule_bench_floor_e2e.py",
+      "old_sha256": "e31078e3381124cb020fb7fb13e44c349851e26cfbf10ff84b5ea7e5653cb8e1",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "4962170c52a4cec23b0a8fe5278e838f8145f1dcbf3ccdf3bd19e4fe14650acb"
+    },
+    {
+      "from": "tests/unit/attoswarm/test_ast_service.py",
+      "to": "packages/code-intel/tests/unit/context/test_ast_service_adapter.py",
+      "old_sha256": "1e132cd9ddd850668e082e63b97d5807284c108ef42a5d3fd1926f9b133b91f6",
+      "test_functions_retained": 14,
+      "archived_agent_classes": [],
+      "new_sha256": "f8ab7eb804c4ceb47808f42e20ec05f8c4fc60aa26b0dc9abcb1195e0766581c"
+    },
+    {
+      "from": "tests/unit/code_intel/__init__.py",
+      "to": "packages/code-intel/tests/unit/code_intel/__init__.py",
+      "old_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test_functions_retained": 0,
+      "archived_agent_classes": [],
+      "new_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "from": "tests/unit/code_intel/conftest.py",
+      "to": "packages/code-intel/tests/unit/code_intel/conftest.py",
+      "old_sha256": "0dcfd61e592c39153b7fa82e81372a912907fa9772e3f42d610b59eebeae0638",
+      "test_functions_retained": 0,
+      "archived_agent_classes": [],
+      "new_sha256": "0dcfd61e592c39153b7fa82e81372a912907fa9772e3f42d610b59eebeae0638"
+    },
+    {
+      "from": "tests/unit/code_intel/test_advisory_lock.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_advisory_lock.py",
+      "old_sha256": "4f9de935e9fc7910b38fdf7b168d1ed5eb90810a7f25efb5521e4888643dba26",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "a4b10ab10d3257f613ba23bfe9558b30b429e813c30ce8f67f8e6cd1185aad1b"
+    },
+    {
+      "from": "tests/unit/code_intel/test_api.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_api.py",
+      "old_sha256": "c33147be0dd2b14f35029ec0d348f44eebe8121cc94c021393820243ef798477",
+      "test_functions_retained": 94,
+      "archived_agent_classes": [],
+      "new_sha256": "dc198ce3def0e2988443383590b8fef371feba89e119994456a96639d85888eb"
+    },
+    {
+      "from": "tests/unit/code_intel/test_api_phase3a.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_api_phase3a.py",
+      "old_sha256": "451d1c03acc37e4fe2d1bc0d3502bad3a1ff8bb010d0e32c23a2d81982bd0c61",
+      "test_functions_retained": 24,
+      "archived_agent_classes": [],
+      "new_sha256": "347750c79c76c9866e56d3f9ddbd9e53a35af59a017f776eafe1dc76e58ce437"
+    },
+    {
+      "from": "tests/unit/code_intel/test_api_v2.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_api_v2.py",
+      "old_sha256": "624a3aaf339420acaf70b84006b3b0c072543bcf44b2e6f40626627226824b9f",
+      "test_functions_retained": 41,
+      "archived_agent_classes": [],
+      "new_sha256": "a93603b6280cc93ff7b738347c07167e5da8fc3e9488a98369349bbb24f27a8f"
+    },
+    {
+      "from": "tests/unit/code_intel/test_auth.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_auth.py",
+      "old_sha256": "e97223f61bc40038e90481249737d812ebd86544069f272eeb79917f4ffdff51",
+      "test_functions_retained": 8,
+      "archived_agent_classes": [],
+      "new_sha256": "fd62c92c3a9917549d3ab8944b72fda30b71b550ee7433d9e42b7ba9930a4b21"
+    },
+    {
+      "from": "tests/unit/code_intel/test_branch_versioning.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_branch_versioning.py",
+      "old_sha256": "8f32b92b6f7abeecef0f80f78cfefd4efbea442402c09180948f3bf8003712ab",
+      "test_functions_retained": 8,
+      "archived_agent_classes": [],
+      "new_sha256": "ccfb84969fb9cf705598077ef298ad6f53b06b9ec5eec0f1d90ea765d3e3e8ce"
+    },
+    {
+      "from": "tests/unit/code_intel/test_bug_finder.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_bug_finder.py",
+      "old_sha256": "cb33961421f33761af7d5be37c2a3db9f2164525560845e072f04b71858c3990",
+      "test_functions_retained": 18,
+      "archived_agent_classes": [],
+      "new_sha256": "fb662efb8b0a030ed435941345d42f62ad22350d4a7d96cc9519cf0e2881ef5b"
+    },
+    {
+      "from": "tests/unit/code_intel/test_call_graph_tool.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_call_graph_tool.py",
+      "old_sha256": "5e08d42a076c5dc2cabdef2d54224261c23dc022f1d7d0ff05bb617811cbea08",
+      "test_functions_retained": 9,
+      "archived_agent_classes": [],
+      "new_sha256": "a122203777980768d93dca73fe2449772ffe7da28a3f2553a5ffaee81c94d778"
+    },
+    {
+      "from": "tests/unit/code_intel/test_ci_runner.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_ci_runner.py",
+      "old_sha256": "0a195332259b719cb749fa7710b087d57cf1f5d9e56b672806d044a4f217f2e8",
+      "test_functions_retained": 17,
+      "archived_agent_classes": [],
+      "new_sha256": "0607ae6846b7d60b6a8a1d480786a3c2dab1b28e9e2578bed5364195d5c4443e"
+    },
+    {
+      "from": "tests/unit/code_intel/test_cli_lifecycle.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_cli_lifecycle.py",
+      "old_sha256": "796513e1da366e5f3a732fc09382e5064a1f7dba38f4813761ceb22ae8696e98",
+      "test_functions_retained": 9,
+      "archived_agent_classes": [],
+      "new_sha256": "21b3fe6ef5d638166bae671674e873be1355ae93ef0057d356d045590c71d18f"
+    },
+    {
+      "from": "tests/unit/code_intel/test_cli_maintenance_local.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_cli_maintenance_local.py",
+      "old_sha256": "eb80eea239666a0c901d05b8e9051b60f8728aa5c5031a63997a14b714b96998",
+      "test_functions_retained": 7,
+      "archived_agent_classes": [],
+      "new_sha256": "96792fcb4d51331c7dbc2b482cb9befb3894e860b801bbcc35818cc9a3fc22f7"
+    },
+    {
+      "from": "tests/unit/code_intel/test_cli_ops.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_cli_ops.py",
+      "old_sha256": "df42bf7d92b49f4ccd3a8ccdf7d84ba154c3d97c47dd8a011df9bcf6118c085a",
+      "test_functions_retained": 7,
+      "archived_agent_classes": [],
+      "new_sha256": "c5d141754f7b9f7146faa5243b9d349d62da5b11120b086b18ed994d1b30ceea"
+    },
+    {
+      "from": "tests/unit/code_intel/test_cli_query_commands.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_cli_query_commands.py",
+      "old_sha256": "cdf2eea6f9cdaf19112bc71baaf15f09b47bd5e1029fd59dc12f8e92e69be495",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "a9befb177cfe136fd92ebe5379415bbec7e395527ea7c1339f25c5939077ecda"
+    },
+    {
+      "from": "tests/unit/code_intel/test_cli_remote.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_cli_remote.py",
+      "old_sha256": "4408afa69ee949d58366265885a8a186f704ca5832b22d90fa4d8a97bc43ba21",
+      "test_functions_retained": 11,
+      "archived_agent_classes": [],
+      "new_sha256": "b7782da104a2b05d673a302e70148d7d0e97e7184706e17cfc1d7f30a7a0bce0"
+    },
+    {
+      "from": "tests/unit/code_intel/test_codex_rereview_polish.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_codex_rereview_polish.py",
+      "old_sha256": "5703dac9decf9232c8d9939fab4f13c51d427b3c6ae99316ad773a88a1dbc358",
+      "test_functions_retained": 16,
+      "archived_agent_classes": [],
+      "new_sha256": "5faadd0d259d3bc1b52bc751580106a2145f9be50568f0fa36f2b4a7fc1d859b"
+    },
+    {
+      "from": "tests/unit/code_intel/test_combinators.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_combinators.py",
+      "old_sha256": "9715939b41746e63ba3bceb13723f117f78e9e023934049a7c9465511ec4b4f2",
+      "test_functions_retained": 25,
+      "archived_agent_classes": [],
+      "new_sha256": "9b6c5189a85672c2ba3d70b2e249535e81f7accfddcdfbea1361dd6707139f38"
+    },
+    {
+      "from": "tests/unit/code_intel/test_confidence.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_confidence.py",
+      "old_sha256": "516dc0f4fb2a8b410cd5967cc43c39dbbae415042b013669d6adc96c5496d149",
+      "test_functions_retained": 20,
+      "archived_agent_classes": [],
+      "new_sha256": "516dc0f4fb2a8b410cd5967cc43c39dbbae415042b013669d6adc96c5496d149"
+    },
+    {
+      "from": "tests/unit/code_intel/test_confidence_adoption.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_confidence_adoption.py",
+      "old_sha256": "af13f4cfc243128e8b252b31b500ed1aae7774851153ff05492b20e97a7a59b9",
+      "test_functions_retained": 13,
+      "archived_agent_classes": [],
+      "new_sha256": "af13f4cfc243128e8b252b31b500ed1aae7774851153ff05492b20e97a7a59b9"
+    },
+    {
+      "from": "tests/unit/code_intel/test_config.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_config.py",
+      "old_sha256": "3f593aaba97f841007593a4c42c1a9186159ffa3cbbb52be7c21f60e0a6e34d3",
+      "test_functions_retained": 4,
+      "archived_agent_classes": [],
+      "new_sha256": "b9cd90aff7da1a20cb67a1896566096b038260f9ee36de85a39696bd1719259c"
+    },
+    {
+      "from": "tests/unit/code_intel/test_config_remote.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_config_remote.py",
+      "old_sha256": "a5925d18f8646c0a740b0d6297c22a953b324a49e3114c4a424bd94117acac96",
+      "test_functions_retained": 15,
+      "archived_agent_classes": [],
+      "new_sha256": "271d43a68de81471fa3702ebf3a3b63e78062909e29533f049d95044e2294657"
+    },
+    {
+      "from": "tests/unit/code_intel/test_cross_mode.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_cross_mode.py",
+      "old_sha256": "c4dce2765e428128057501a50afa33dcf82595ce748177117332d5129816cf8d",
+      "test_functions_retained": 13,
+      "archived_agent_classes": [],
+      "new_sha256": "a4a73a7c26ae065218e0f6862ac15ff7f6be2b0fe48087679aa1e7453ca8e0a6"
+    },
+    {
+      "from": "tests/unit/code_intel/test_db_security_scan.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_db_security_scan.py",
+      "old_sha256": "312cb16902b566d3474733dca384977c661d728590954a4c905c8783ff6dfbc0",
+      "test_functions_retained": 8,
+      "archived_agent_classes": [],
+      "new_sha256": "8355757ed08d738a7404ce77ab4d1325b2872975e605dac320ba26848486a0da"
+    },
+    {
+      "from": "tests/unit/code_intel/test_deps.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_deps.py",
+      "old_sha256": "f4ef518205fedb68b593d5f2dddb3f2ce76331ad6342cb7e6fc1ce6cf7814019",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "4f220efcc3b47c0c1c258efd5e41010230152cbabe117221a07eb79a13e8deae"
+    },
+    {
+      "from": "tests/unit/code_intel/test_diff_engine.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_diff_engine.py",
+      "old_sha256": "6abac834a3212610b5b71b1353e897ec23269ee88c9be7a8e12348e2e0485fc2",
+      "test_functions_retained": 7,
+      "archived_agent_classes": [],
+      "new_sha256": "4abd8d44a5871b52dcf98ed0f71c7d60292771103f7fc4879e7780d56569829f"
+    },
+    {
+      "from": "tests/unit/code_intel/test_edge_cases.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_edge_cases.py",
+      "old_sha256": "42086e0b0a084ca270f9182e8f00964039d364395824b18afa5eb724a497b20c",
+      "test_functions_retained": 32,
+      "archived_agent_classes": [],
+      "new_sha256": "edd1d5ba9839bd0713b1dca7426002fd98bc54233959829ada8065b66f11ee43"
+    },
+    {
+      "from": "tests/unit/code_intel/test_frecency.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_frecency.py",
+      "old_sha256": "8f5063baa8523d72768713aba638ab1d31d54cda4a2d6ee335b17b29ed6457a5",
+      "test_functions_retained": 17,
+      "archived_agent_classes": [],
+      "new_sha256": "baf637df4542c775c40da8c448bf7fab551ac08767c3bf9d68e9974a40e0f80c"
+    },
+    {
+      "from": "tests/unit/code_intel/test_fuzzy.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_fuzzy.py",
+      "old_sha256": "aff87d04572c2eea9b708cecf183ddfd50a562c0318164a6bc19b1032ba564ed",
+      "test_functions_retained": 20,
+      "archived_agent_classes": [],
+      "new_sha256": "b4f1670227b4792438e566c15b52828b4ba4e0a9deb18eccfb42eb267d5a7d20"
+    },
+    {
+      "from": "tests/unit/code_intel/test_index_store_migration.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_index_store_migration.py",
+      "old_sha256": "4f71a722b3169591e41207a53ea11e5345ba4e4d581baefc6e96405f02fea61c",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "50e2f894a96a2e7b36935df0b26823343d46d9a2bf58d29f065a8f6d5a6ec21f"
+    },
+    {
+      "from": "tests/unit/code_intel/test_kw_index_status.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_kw_index_status.py",
+      "old_sha256": "5cecd9c2019af726e5899ce832f1386f09bdb91ea0a3dcc55825290063100f61",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "044d36f718eba6e5357a3b28dc5e730c0ffdf1eceaa8fcef0cb162932c8e6526"
+    },
+    {
+      "from": "tests/unit/code_intel/test_lsp_call_graph.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_lsp_call_graph.py",
+      "old_sha256": "f721aac20eec8b992ee2e1db69eead5836b6a1fc02ef9c4cf826a2004c4bf3eb",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "850ff01cadc2244324c3b4d659ad7b14afd8aabec41d3a3f817f7a2f6d66843b"
+    },
+    {
+      "from": "tests/unit/code_intel/test_lsp_enrichment.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_lsp_enrichment.py",
+      "old_sha256": "3d0aef15e9286bf5e08c36e404493b1ae9b3c82bf85c6bd190f696ab5e252e04",
+      "test_functions_retained": 8,
+      "archived_agent_classes": [],
+      "new_sha256": "bf803c8fc47bd2ddc623d29ea211d27f374ca69d1d2d7a8744d8dd12cccffc81"
+    },
+    {
+      "from": "tests/unit/code_intel/test_lsp_extended_models.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_lsp_extended_models.py",
+      "old_sha256": "e8f285fe4c0e0ba9c3430da45333d8f962fe0039d70dc3b8d136aaaf11d76543",
+      "test_functions_retained": 4,
+      "archived_agent_classes": [],
+      "new_sha256": "bf7d278491cf18e44b152f50052834518e7668721d1e59729d4a098d01d91db3"
+    },
+    {
+      "from": "tests/unit/code_intel/test_marketplace.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_marketplace.py",
+      "old_sha256": "a96ed2ad0ffb4fc33221dabdfa9854232614d304e5e3c7675f778139f8efe173",
+      "test_functions_retained": 18,
+      "archived_agent_classes": [],
+      "new_sha256": "0670434c365912c7b6dfe03c38a29f53e97a12ce43fb5f4bb30f1aa98423986f"
+    },
+    {
+      "from": "tests/unit/code_intel/test_metavar.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_metavar.py",
+      "old_sha256": "a82566e4a37ac81ff36d1e370aa572fcb3f6693c3bb03966fcb8ba39b5d944f9",
+      "test_functions_retained": 35,
+      "archived_agent_classes": [],
+      "new_sha256": "fe137a8d65d93830d61b2223334c7f065feb6b0c5382fcf0b0f77ae66754bd68"
+    },
+    {
+      "from": "tests/unit/code_intel/test_middleware.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_middleware.py",
+      "old_sha256": "36aa6334c7e29e89b3a3f66f4e479a5bde668cf1bf0617bdda1ea592e930e59d",
+      "test_functions_retained": 2,
+      "archived_agent_classes": [],
+      "new_sha256": "092ffd1975442c016448f23c5ffb46c6751a849ce6a661c9f6801416fd8d6037"
+    },
+    {
+      "from": "tests/unit/code_intel/test_notify_enhanced.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_notify_enhanced.py",
+      "old_sha256": "0ffa24845c8dc19ad51e797ddb68e727ac9b7a1016f9d36b7b0e0fbd948428d1",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "a8b75cf974a91fe585b009fe7152ad2554c28748b34b165dc2571fcde8b4666e"
+    },
+    {
+      "from": "tests/unit/code_intel/test_org_isolation.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_org_isolation.py",
+      "old_sha256": "946313fa785c1aca5ee8ad5bc3850c088204acc01904ad3457d5efb825402c61",
+      "test_functions_retained": 3,
+      "archived_agent_classes": [],
+      "new_sha256": "1d6680a795ab3c3d10d23a69729ce0f5175225a5335561287a6e5c22bd54351b"
+    },
+    {
+      "from": "tests/unit/code_intel/test_pack_autoload.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_pack_autoload.py",
+      "old_sha256": "8d34e8dc9eb267adc692d28e58a132c94f6af8c235ccf836e8dbfc64c08e9848",
+      "test_functions_retained": 3,
+      "archived_agent_classes": [],
+      "new_sha256": "d1eaef0f0485cf4290a1cc8e8afa875d00320e583fb14e51bcbf58077f24c191"
+    },
+    {
+      "from": "tests/unit/code_intel/test_profiling.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_profiling.py",
+      "old_sha256": "0e6aec19a917e2f301be7cce136ba71e15cfab5288cebe8fd3e2ca161b4bb671",
+      "test_functions_retained": 18,
+      "archived_agent_classes": [],
+      "new_sha256": "c19c1b1b2117f102eb02b3f0bb22f5b4fda86ca8f8d333df7027d96379d79097"
+    },
+    {
+      "from": "tests/unit/code_intel/test_project_discovery.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_project_discovery.py",
+      "old_sha256": "a884d45068c673d392f20707b2dabdaa93caf4c32bdb083e3a287ad65dc19b8d",
+      "test_functions_retained": 11,
+      "archived_agent_classes": [],
+      "new_sha256": "f83753a0d8d99d1da66c0270d9c31c1effcf1edb67a26df6036f838e7dd0cc3f"
+    },
+    {
+      "from": "tests/unit/code_intel/test_provenance_store.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_provenance_store.py",
+      "old_sha256": "245831801f8673dd92c59da2ee9331ac681848bdbd0e3bdff941567478bf3c2e",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "110a9c4b10b50be2f0127a898d0596210f47ceddfa35539f701e767a59b7d6db"
+    },
+    {
+      "from": "tests/unit/code_intel/test_pubsub_streams.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_pubsub_streams.py",
+      "old_sha256": "49cbe6c3982fee0d952f01327057727356fbd6dd89221f2fd635588f6e745ea4",
+      "test_functions_retained": 15,
+      "archived_agent_classes": [],
+      "new_sha256": "8dc98cacd4c2202d8e1a54f29b93e2994db411ca33f196b3fdff0b71f067e6e1"
+    },
+    {
+      "from": "tests/unit/code_intel/test_query_constraints.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_query_constraints.py",
+      "old_sha256": "d5f2cd13193222dfe06ce04dc6b098e9bbb18b3863d24f0c105e50db9f885d72",
+      "test_functions_retained": 20,
+      "archived_agent_classes": [],
+      "new_sha256": "7d5a52009b61316e04771afad9772538ce893099fd4cb374ce142bd75cb8fbbc"
+    },
+    {
+      "from": "tests/unit/code_intel/test_query_history.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_query_history.py",
+      "old_sha256": "8dd952515651ae2d2b8604e757a7c3ea3552544eb34615e1f06ef43c692869e8",
+      "test_functions_retained": 12,
+      "archived_agent_classes": [],
+      "new_sha256": "a39c702ec1f7dd9a1daf5474a8948840f3480601cfabd43b2f57bd62c95c1383"
+    },
+    {
+      "from": "tests/unit/code_intel/test_readiness.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_readiness.py",
+      "old_sha256": "816a0c4c73e62249536b3723d24d05000271ccc7d3cc50bfff2c2b8a4bd8a9ad",
+      "test_functions_retained": 40,
+      "archived_agent_classes": [],
+      "new_sha256": "5c9fddfe1d7c3ed1c5e93f1dcaba91717957af1f141780f26800b57520a87ebe"
+    },
+    {
+      "from": "tests/unit/code_intel/test_reindex_embeddings.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_reindex_embeddings.py",
+      "old_sha256": "6eaf1c31fbeac51348bce144d9e191761d14d34b98faff90e1a3b08051fb335f",
+      "test_functions_retained": 2,
+      "archived_agent_classes": [],
+      "new_sha256": "be8b6a11f4bc3b08d94e8e80687b07434a208456697df8e8eef37d395ea3c3e3"
+    },
+    {
+      "from": "tests/unit/code_intel/test_remote_local_fallback.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_remote_local_fallback.py",
+      "old_sha256": "28e89cbd979c3b33fcf67c636fe9e5ccd687fc77e131a6d0cec2201561844068",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "616cb874a596dfdc5bd7741cbe08f38ea3a0f20435a143fb51b8b6958ec9f2be"
+    },
+    {
+      "from": "tests/unit/code_intel/test_remote_provider.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_remote_provider.py",
+      "old_sha256": "3d1179e6165899b212a6fe804ceb64c3e8c19c302bac453703a8f24bcf02b43b",
+      "test_functions_retained": 20,
+      "archived_agent_classes": [],
+      "new_sha256": "752ea50a0286ac68b3ffc57c579cafe0dfde6d579d722794bcdde8bf7f5bbb14"
+    },
+    {
+      "from": "tests/unit/code_intel/test_remote_reliability.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_remote_reliability.py",
+      "old_sha256": "5e2682ca0d7a3ea0f5bd55b987caa78ea7bffa384b7fac7dacc84f02c557a7e3",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "88235ceb5f1f7b6e6b4ed4727055dcd8d71def24952e5102bf3fec17e44d1a3c"
+    },
+    {
+      "from": "tests/unit/code_intel/test_repo_ranker.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_repo_ranker.py",
+      "old_sha256": "7799a3279817355c420dd0eaf3b63d6b943c69e9466a666f70383837f3585b7e",
+      "test_functions_retained": 18,
+      "archived_agent_classes": [],
+      "new_sha256": "a3011884617b5b527ffa05f6273abb4c689ed3df625082decd22bd5120505240"
+    },
+    {
+      "from": "tests/unit/code_intel/test_rule_evolution.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_rule_evolution.py",
+      "old_sha256": "399dae266f7073f9c391a8c0a4dfa1c4d75c78da5c85f1ba0bb71e19f793ec31",
+      "test_functions_retained": 34,
+      "archived_agent_classes": [],
+      "new_sha256": "b5ed2b8274cec1fe32a3c91909f4c7ceaf936cc535f2d86c62d2812d26ad87ca"
+    },
+    {
+      "from": "tests/unit/code_intel/test_rule_hygiene.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_rule_hygiene.py",
+      "old_sha256": "fb856f1e3bc790e655aae76754cb3b4968836b4145936b512825acf9a653098c",
+      "test_functions_retained": 17,
+      "archived_agent_classes": [],
+      "new_sha256": "2872b1a40f2cdb76e4ea0375a44f7e6b54fa771cc654e5d606a64fffc69b127c"
+    },
+    {
+      "from": "tests/unit/code_intel/test_rule_synthesis.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_rule_synthesis.py",
+      "old_sha256": "0df3f6112fc0d2a9653980729f5cf7def178e1f195aadb56ebb2fe2aa0ec72f8",
+      "test_functions_retained": 24,
+      "archived_agent_classes": [],
+      "new_sha256": "785460f2d019bcac2c241616eee8fd620523508150e3d132ed5690932d6a7db3"
+    },
+    {
+      "from": "tests/unit/code_intel/test_rule_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_rule_tools.py",
+      "old_sha256": "3a569b1eeb23174ccd71189dee3330d35b1a633b6c3244d9fdb773aebb0911fc",
+      "test_functions_retained": 16,
+      "archived_agent_classes": [],
+      "new_sha256": "9fd320392a26f4300c6c3707ab6a528d6a2df09149f1f7be820ba1c3a6f6dff6"
+    },
+    {
+      "from": "tests/unit/code_intel/test_rule_violations.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_rule_violations.py",
+      "old_sha256": "d005cefed71505110ab85b630e465651d713a4c3566b1775edd38bce6fa75fe7",
+      "test_functions_retained": 3,
+      "archived_agent_classes": [],
+      "new_sha256": "7aa58a1cfb1e9f61ea32cc8564bfbc4c33955cdb12872b31e0ebf7f30a585164"
+    },
+    {
+      "from": "tests/unit/code_intel/test_rules_engine.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_rules_engine.py",
+      "old_sha256": "234ba1892eae2792546b14d69e1ca262fadd607e1640f43ccbd712df00d4a945",
+      "test_functions_retained": 70,
+      "archived_agent_classes": [],
+      "new_sha256": "a92f33bf4a50e2235f406196315c03e7b841c67b50d7c3209ee9a3bf5a93a448"
+    },
+    {
+      "from": "tests/unit/code_intel/test_rules_integration.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_rules_integration.py",
+      "old_sha256": "c7743d603bee191f5a51085e7780dcdeb57a4ff24218c75a555caf429d4d2ba8",
+      "test_functions_retained": 7,
+      "archived_agent_classes": [],
+      "new_sha256": "762e7b3e2c2301aa8f1c20223975d6a221b9cb8c6c90cb7aa5f7cc4565f5ed44"
+    },
+    {
+      "from": "tests/unit/code_intel/test_sarif.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_sarif.py",
+      "old_sha256": "6207061bf7013d7183d03dec173fae14a52164bd5cd6f74e874245a05a2149f4",
+      "test_functions_retained": 15,
+      "archived_agent_classes": [],
+      "new_sha256": "39559617502f83b7eaae02aaa98579fe68fb27feb5dbec6e900e902a3ab76f2d"
+    },
+    {
+      "from": "tests/unit/code_intel/test_search_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_search_tools.py",
+      "old_sha256": "2976b19a5df65a9b92d9fa12c905c4980b08be8377d75c3ed70e4d0de843b5af",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "eae596e95d3cde7e01bafa74abfc21b5d99a1fb704ec0a3e3462a65df6818561"
+    },
+    {
+      "from": "tests/unit/code_intel/test_server_startup.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_server_startup.py",
+      "old_sha256": "6c7fc595b54587d48ab956b6be66e4babcda1d0aa03ad3953daaad8a074e7c2d",
+      "test_functions_retained": 4,
+      "archived_agent_classes": [],
+      "new_sha256": "6c7fc595b54587d48ab956b6be66e4babcda1d0aa03ad3953daaad8a074e7c2d"
+    },
+    {
+      "from": "tests/unit/code_intel/test_service.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_service.py",
+      "old_sha256": "383eaf863ad9c7cd59733aca88af639a2381de6daf7c10fab71a0cea2f5ba630",
+      "test_functions_retained": 4,
+      "archived_agent_classes": [],
+      "new_sha256": "6edb78f17702b23f2f4e48be963ae8234682f06ecda3daa7979f83b92a06daf5"
+    },
+    {
+      "from": "tests/unit/code_intel/test_service_mode.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_service_mode.py",
+      "old_sha256": "d6c13a8501f7c254bafa4921ee4f05c1157b39d582bb9f8dff99991b86c9f832",
+      "test_functions_retained": 66,
+      "archived_agent_classes": [],
+      "new_sha256": "d7a993e8e27380158c59748682b253b6f23edbd605e38d964c6c6d143e45392f"
+    },
+    {
+      "from": "tests/unit/code_intel/test_status_health.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_status_health.py",
+      "old_sha256": "b878ded0aeccce8d21908bab810577cc8baf9b50ef2492b9522b7453845228d4",
+      "test_functions_retained": 2,
+      "archived_agent_classes": [],
+      "new_sha256": "1a2014b9d5980f818ce23e55504a87836f8c8cbd96eb2d7b4da1579eb8d9a8dc"
+    },
+    {
+      "from": "tests/unit/code_intel/test_structural_executor.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_structural_executor.py",
+      "old_sha256": "f20389ceb97d18fc208f48e9e39a2d2ef5e38411d1adfe6821c93219dd060a7b",
+      "test_functions_retained": 18,
+      "archived_agent_classes": [],
+      "new_sha256": "dc5be76f7ce20dd24d81713b48ed7149c13b993ffe3f4d4f4b57628eb92edee2"
+    },
+    {
+      "from": "tests/unit/code_intel/test_supply_chain_rules.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_supply_chain_rules.py",
+      "old_sha256": "2a05071c2951765a0fc2bcee1d413842209adf5e284556e99594f799558b9c18",
+      "test_functions_retained": 45,
+      "archived_agent_classes": [],
+      "new_sha256": "12f4e577c3a53c5ee7fae3b07b9cf3dd9f5645dc3877ed259d23136a8a570141"
+    },
+    {
+      "from": "tests/unit/code_intel/test_testing_framework.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_testing_framework.py",
+      "old_sha256": "8498be277ed083f215206e52b4f4757006ef94d6b88d0c6ba670531a7cb43f95",
+      "test_functions_retained": 24,
+      "archived_agent_classes": [],
+      "new_sha256": "e62d2643fbd19209694598dd6fd1773525165709e17b944a748282985fa7ec29"
+    },
+    {
+      "from": "tests/unit/code_intel/test_webhook_encryption.py",
+      "to": "packages/code-intel/tests/unit/code_intel/test_webhook_encryption.py",
+      "old_sha256": "f005c9cc788c722c5561c73c33c93a7ec2b503a45fed01cead0925a39e0c520b",
+      "test_functions_retained": 8,
+      "archived_agent_classes": [],
+      "new_sha256": "8b4d7d9e35db6920e47cdfd6179f04d2b086cb5b7af391d5e0de8e053b58be17"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/__init__.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/__init__.py",
+      "old_sha256": "cc58b091ff6b37158db2c19a753a462616e6216f47f69a6fef6f0d98748738ba",
+      "test_functions_retained": 0,
+      "archived_agent_classes": [],
+      "new_sha256": "cc58b091ff6b37158db2c19a753a462616e6216f47f69a6fef6f0d98748738ba"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/conftest.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/conftest.py",
+      "old_sha256": "c704996a145c52fe04529a5b6452800f95db6af4c32524835717b406e9dd82dd",
+      "test_functions_retained": 0,
+      "archived_agent_classes": [],
+      "new_sha256": "a65ae40fef67713b56d8235279ee8cfd279c90218b709baa502ebe93a5ec64c4"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_adr_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_adr_tools.py",
+      "old_sha256": "d2fbab451f8d678fe5fc73ea70d803ab74ce6af0e3290709ea88ea06dce6ca06",
+      "test_functions_retained": 4,
+      "archived_agent_classes": [],
+      "new_sha256": "d1f8749cef738606e19ce0dd7720e8f0ac1c3a18ad5bd82f0c581842926d11a1"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_analysis_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_analysis_tools.py",
+      "old_sha256": "e4800d8ad71cc34a7a90cf77e9dc9bf6c25993279a8f14089b64688471c27750",
+      "test_functions_retained": 12,
+      "archived_agent_classes": [],
+      "new_sha256": "011ef6db2396ee9ca8f98eee9b7e0fbcdf424e26c1aa0e7201f92b7ed199c2a3"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_dead_code_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_dead_code_tools.py",
+      "old_sha256": "c12405bff291a35556c126cb0d69bbd7c704c40482e68d6bfbed7d6ee6e8a896",
+      "test_functions_retained": 3,
+      "archived_agent_classes": [],
+      "new_sha256": "691b0bcd09df13d31a1129f1620a9b2e0e53d6d5c4f88c7ca34ee26ab64c6447"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_distill_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_distill_tools.py",
+      "old_sha256": "2354b6e8088d628ad142e2ff9db3913eaa5bf31398be20e37b06fe2947bc8f95",
+      "test_functions_retained": 3,
+      "archived_agent_classes": [],
+      "new_sha256": "341dd366d4174041a8096890ecfa30b37be9674f47845c366ad21d9f75932fa7"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_history_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_history_tools.py",
+      "old_sha256": "8e6ff2a235928a2dfd5479b05e78923e3320f43457f3a0b2259fd6d3311b2c7d",
+      "test_functions_retained": 5,
+      "archived_agent_classes": [],
+      "new_sha256": "a359e9fd25bac9def2aed0a51b4eafefd57eb33e7bdc67d746fd3a8b11098efb"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_learning_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_learning_tools.py",
+      "old_sha256": "a021052a3f92e9481cd902e2b0f6466b9cbdd9c2689dece3fe94bb7037e4a259",
+      "test_functions_retained": 4,
+      "archived_agent_classes": [],
+      "new_sha256": "22b0e0c1e093bdd26ff3084077863becc1f68a1eda0fb643167bb49a8f392e14"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_lsp_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_lsp_tools.py",
+      "old_sha256": "69f553d81110c96cfec2ffc811f06a186a4c2d3b5dbfee570cd9e6752d029b96",
+      "test_functions_retained": 9,
+      "archived_agent_classes": [],
+      "new_sha256": "40fc94c7c51924894ea77c3288ed2d1a8a0d17eb7ab4b10bc14f136b10702e80"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_maintenance_tools_phase2.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_maintenance_tools_phase2.py",
+      "old_sha256": "c13d35e1a33a905b2a6dc8f926357b19dd643b698c696176f325e7e478dde027",
+      "test_functions_retained": 23,
+      "archived_agent_classes": [],
+      "new_sha256": "3aaf7b19006909bc52c4f159a20609c7a2edf74b7c8f2e7904dd18590a5954ce"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_navigation_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_navigation_tools.py",
+      "old_sha256": "d3a32b0625208e879904cb08e50f5fcb37e0694fda457c3792cd4f4e21f8c26d",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "f04816236b24d18ef0e18b1e51d59beb31d58362897c5f7f49a5d5de18021f8f"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_phase2c_anchors_and_overlays.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_phase2c_anchors_and_overlays.py",
+      "old_sha256": "b75901d2ed50f73cf885617521ae4028487962da2bb2bf9975d39d624a903721",
+      "test_functions_retained": 19,
+      "archived_agent_classes": [],
+      "new_sha256": "28ebdff661928195c34ed74e2bad4f0192d5f3fe153860abdf453b64ea428ff4"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_readiness_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_readiness_tools.py",
+      "old_sha256": "32fc716a5f28e8c82c44eb41d92a7ba15a3001bcde8c43e329bfea2c5dc03443",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "a68a73942b27eb5cc85031de9559255fd200b7386b7cf1fb1de94ef5a0b2ded2"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_search_status_mismatch.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_search_status_mismatch.py",
+      "old_sha256": "ba5acf39609665a129f5fad1c76e62425ded784de1e691debc371474fd52e384",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "9bfe45d8557e52dde2539e8b2dc5cdca362eaf1d84246c3d0651cd3739a8c7c4"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_search_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_search_tools.py",
+      "old_sha256": "05f0a15d876a1a401221671dd04f83d24860258f09db95e8b284ef55813789e3",
+      "test_functions_retained": 11,
+      "archived_agent_classes": [],
+      "new_sha256": "a2b49a8a012c3aecda58323853669a630bb2cf55866fb068e9f4d735c4e2b2ee"
+    },
+    {
+      "from": "tests/unit/code_intel/tools/test_server_tools.py",
+      "to": "packages/code-intel/tests/unit/code_intel/tools/test_server_tools.py",
+      "old_sha256": "21b745417e7bfde3cd7974b412fd2e2bb9774f7b5589a699d3001c00c1780b8d",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "82eeb4f7c1a8767bc3ee0486faae328df5ab33e209d44dfce3838d5a322d566b"
+    },
+    {
+      "from": "tests/unit/context/test_action_hash.py",
+      "to": "packages/code-intel/tests/unit/context/test_action_hash.py",
+      "old_sha256": "94b293a3906579082baa43dab13c7c2b04f748f620aba1331103c90bc890fa7c",
+      "test_functions_retained": 12,
+      "archived_agent_classes": [],
+      "new_sha256": "4a2c13b0ce8679529aaad780737606ea2f42e403c2489cf670145658187897ce"
+    },
+    {
+      "from": "tests/unit/context/test_blob_oid.py",
+      "to": "packages/code-intel/tests/unit/context/test_blob_oid.py",
+      "old_sha256": "249a0bbfc96dab94dd039baa027012d7004a92bb394fc2423e0fc75d62bef5cb",
+      "test_functions_retained": 24,
+      "archived_agent_classes": [],
+      "new_sha256": "727ecdb6e683c2e8d857cd77391152db67ab55bb79834c0b9e0b803dc822420b"
+    },
+    {
+      "from": "tests/unit/context/test_cache_manifest.py",
+      "to": "packages/code-intel/tests/unit/context/test_cache_manifest.py",
+      "old_sha256": "fb16c0e4b3a51d4108c8cac373aefe36034110de5d915da4278b6014f899ab4b",
+      "test_functions_retained": 13,
+      "archived_agent_classes": [],
+      "new_sha256": "d52803153c4379ad7620fccb8acf6db93934e21a14cc772f0a37ab4655520baf"
+    },
+    {
+      "from": "tests/unit/context/test_cas.py",
+      "to": "packages/code-intel/tests/unit/context/test_cas.py",
+      "old_sha256": "ee35a28e6579bb2a9a2a86dd0a01da9ce3ba4cbf5374f83859c96ff0fa768280",
+      "test_functions_retained": 19,
+      "archived_agent_classes": [],
+      "new_sha256": "bcf3c7b87bbe37eebe449f3365e773b0a9f2d7abc519b1d97ccdd04678dc6d0e"
+    },
+    {
+      "from": "tests/unit/context/test_embedding_rotation.py",
+      "to": "packages/code-intel/tests/unit/context/test_embedding_rotation.py",
+      "old_sha256": "0bdb43d5b2715776c63290b63eb3460e02ee27ad79ad0891eef71d44fca146d6",
+      "test_functions_retained": 25,
+      "archived_agent_classes": [],
+      "new_sha256": "484837e88efb88b321e6554cba74d4fa4c88e1ea2f53beb50b0c6e71cf61e59c"
+    },
+    {
+      "from": "tests/unit/context/test_pagerank_restoration.py",
+      "to": "packages/code-intel/tests/unit/context/test_pagerank_restoration.py",
+      "old_sha256": "1f0243b61c44deb53d6bd571a37dcc2860e56d94bbf3dfb8e507ca43a2bdeb5d",
+      "test_functions_retained": 5,
+      "archived_agent_classes": [],
+      "new_sha256": "9b72d4c1643ab89ff1a5974d1b946ba03aad9dbfb4edea402296eb7e166ab104"
+    },
+    {
+      "from": "tests/unit/context/test_provenance.py",
+      "to": "packages/code-intel/tests/unit/context/test_provenance.py",
+      "old_sha256": "88df4169dd46f72d6019d70655a17df4156f92e5020c1c903560cdd558cee53b",
+      "test_functions_retained": 8,
+      "archived_agent_classes": [],
+      "new_sha256": "d469b9982bdff82ef3236f9429cf7772508bab9f392de9b850d8f63ec3fc27ff"
+    },
+    {
+      "from": "tests/unit/context/test_retrieval_pin.py",
+      "to": "packages/code-intel/tests/unit/context/test_retrieval_pin.py",
+      "old_sha256": "a27f41fc5c1f816c5f1575be505d831b5975f18ae9ff7c41e1ca5b92f3dd3dc7",
+      "test_functions_retained": 23,
+      "archived_agent_classes": [],
+      "new_sha256": "2898a4ea8f36de02c0933840d57bed58ad9cef54b0251ab1c146cbfd4b15efe4"
+    },
+    {
+      "from": "tests/unit/context/test_vector_store_dim_safety.py",
+      "to": "packages/code-intel/tests/unit/context/test_vector_store_dim_safety.py",
+      "old_sha256": "f0b2577c665335ba680506169829733a661bab7aa7f383061c6db4574b154dbb",
+      "test_functions_retained": 4,
+      "archived_agent_classes": [],
+      "new_sha256": "ed064a607f0693c233ff04a08e2015d6ee0c9891ef8be71aecea947919a31bac"
+    },
+    {
+      "from": "tests/unit/eval/__init__.py",
+      "to": "packages/code-intel/tests/unit/eval/__init__.py",
+      "old_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test_functions_retained": 0,
+      "archived_agent_classes": [],
+      "new_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "from": "tests/unit/eval/test_acc_at_k.py",
+      "to": "packages/code-intel/tests/unit/eval/test_acc_at_k.py",
+      "old_sha256": "78ef4ff3b9e1740a4ea89f74c6dfe4e33137aae809da23b4451265a8f4333c9b",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "78ef4ff3b9e1740a4ea89f74c6dfe4e33137aae809da23b4451265a8f4333c9b"
+    },
+    {
+      "from": "tests/unit/eval/test_broad_candidate_audit.py",
+      "to": "packages/code-intel/tests/unit/eval/test_broad_candidate_audit.py",
+      "old_sha256": "0eadfcb6e0b8758e961b7bebcf27dac41882a1ceac2237aa1caa3897b321e12d",
+      "test_functions_retained": 3,
+      "archived_agent_classes": [],
+      "new_sha256": "0eadfcb6e0b8758e961b7bebcf27dac41882a1ceac2237aa1caa3897b321e12d"
+    },
+    {
+      "from": "tests/unit/eval/test_calibration_demo.py",
+      "to": "packages/code-intel/tests/unit/eval/test_calibration_demo.py",
+      "old_sha256": "d57e0a316b5e2aca09d50570f6b9ce1548f7615c64511b3f70960928a8e4252b",
+      "test_functions_retained": 7,
+      "archived_agent_classes": [],
+      "new_sha256": "4746cf15fafdfb6b6211aa796d5b8838535aca1bd438b5f063b0a741a8c3506e"
+    },
+    {
+      "from": "tests/unit/eval/test_harness.py",
+      "to": "packages/code-intel/tests/unit/eval/test_harness.py",
+      "old_sha256": "be67209666b36e8f184b1c00c1246eb439ebb15e7efd246d5c507d87e5dde892",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "be67209666b36e8f184b1c00c1246eb439ebb15e7efd246d5c507d87e5dde892"
+    },
+    {
+      "from": "tests/unit/eval/test_matrix_agents.py",
+      "to": "packages/code-intel/tests/unit/eval/test_matrix_agents.py",
+      "old_sha256": "f4b228e6a49afe166b2325005a48a0152cd98073044dc00c4b5e1e359ac5990c",
+      "test_functions_retained": 7,
+      "archived_agent_classes": [],
+      "new_sha256": "f4b228e6a49afe166b2325005a48a0152cd98073044dc00c4b5e1e359ac5990c"
+    },
+    {
+      "from": "tests/unit/eval/test_matrix_ci.py",
+      "to": "packages/code-intel/tests/unit/eval/test_matrix_ci.py",
+      "old_sha256": "5188f58161444d75b2c4ada82541682dd2123393084e7d7d3313f13722273fd1",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "5188f58161444d75b2c4ada82541682dd2123393084e7d7d3313f13722273fd1"
+    },
+    {
+      "from": "tests/unit/eval/test_matrix_datasets.py",
+      "to": "packages/code-intel/tests/unit/eval/test_matrix_datasets.py",
+      "old_sha256": "22ee67a0f76acb593a943aabb2aa0c3342477a765c2c3aea6ec5e31ecd391401",
+      "test_functions_retained": 12,
+      "archived_agent_classes": [],
+      "new_sha256": "49032155979238362f2639d13857e0d2f12c2e0ab872f1cd8caeb03044be3ad2"
+    },
+    {
+      "from": "tests/unit/eval/test_matrix_dense.py",
+      "to": "packages/code-intel/tests/unit/eval/test_matrix_dense.py",
+      "old_sha256": "be32f267d24e1df331b8458b1382e1d9a5b272f3ca6b4e2de937df816c820f2f",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "be32f267d24e1df331b8458b1382e1d9a5b272f3ca6b4e2de937df816c820f2f"
+    },
+    {
+      "from": "tests/unit/eval/test_matrix_rerank.py",
+      "to": "packages/code-intel/tests/unit/eval/test_matrix_rerank.py",
+      "old_sha256": "ded1f1ff4f82b5d572802be2cd376003a97530a0c55b139610cff6f1cd48bc5f",
+      "test_functions_retained": 13,
+      "archived_agent_classes": [],
+      "new_sha256": "ded1f1ff4f82b5d572802be2cd376003a97530a0c55b139610cff6f1cd48bc5f"
+    },
+    {
+      "from": "tests/unit/eval/test_matrix_retrieve.py",
+      "to": "packages/code-intel/tests/unit/eval/test_matrix_retrieve.py",
+      "old_sha256": "42529dcb52ca117729395d97f84e3cee0233d37db1390eccb1a069b33dc787be",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "2eb14d8ab5f2417bfbc5ddda5167a260524031a3f7f8e2e5755aff2c3b0effcc"
+    },
+    {
+      "from": "tests/unit/eval/test_matrix_run.py",
+      "to": "packages/code-intel/tests/unit/eval/test_matrix_run.py",
+      "old_sha256": "81a18c9579b530edc2d0070b37cd7e4b19ca03ce1181c3d4639f6c8368c887d5",
+      "test_functions_retained": 3,
+      "archived_agent_classes": [],
+      "new_sha256": "81a18c9579b530edc2d0070b37cd7e4b19ca03ce1181c3d4639f6c8368c887d5"
+    },
+    {
+      "from": "tests/unit/eval/test_matrix_stats.py",
+      "to": "packages/code-intel/tests/unit/eval/test_matrix_stats.py",
+      "old_sha256": "f50e09709c2daa871058e691706b576597fc21268fd92e6bf8c128f48a80784e",
+      "test_functions_retained": 9,
+      "archived_agent_classes": [],
+      "new_sha256": "f50e09709c2daa871058e691706b576597fc21268fd92e6bf8c128f48a80784e"
+    },
+    {
+      "from": "tests/unit/eval/test_mcp_bench.py",
+      "to": "packages/code-intel/tests/unit/eval/test_mcp_bench.py",
+      "old_sha256": "ba7376643a256d85a7ae0d749f4b4dca1fd90278737ae59c12e83b59be02cda1",
+      "test_functions_retained": 18,
+      "archived_agent_classes": [],
+      "new_sha256": "ba7376643a256d85a7ae0d749f4b4dca1fd90278737ae59c12e83b59be02cda1"
+    },
+    {
+      "from": "tests/unit/eval/test_rule_accuracy.py",
+      "to": "packages/code-intel/tests/unit/eval/test_rule_accuracy.py",
+      "old_sha256": "f996ceae281caa3bef329513f09fd9ecddb612850d95c5626b581c89da47fd4f",
+      "test_functions_retained": 16,
+      "archived_agent_classes": [],
+      "new_sha256": "f996ceae281caa3bef329513f09fd9ecddb612850d95c5626b581c89da47fd4f"
+    },
+    {
+      "from": "tests/unit/eval/test_rule_bench_config.py",
+      "to": "packages/code-intel/tests/unit/eval/test_rule_bench_config.py",
+      "old_sha256": "4e86cad2f36c6f37ccdf608773485b46e1e301cbd31b3e1b87a47c3246235bf7",
+      "test_functions_retained": 16,
+      "archived_agent_classes": [],
+      "new_sha256": "f23d1eb28d013f55264c8bc174d474e37fbf9aec4651aaf88a424567b94026fd"
+    },
+    {
+      "from": "tests/unit/eval/test_rule_bench_corpus.py",
+      "to": "packages/code-intel/tests/unit/eval/test_rule_bench_corpus.py",
+      "old_sha256": "1209d2f4f5003b0663db67ef1241dcebc15da492a64faf6b9f0c64aa511378d6",
+      "test_functions_retained": 9,
+      "archived_agent_classes": [],
+      "new_sha256": "1209d2f4f5003b0663db67ef1241dcebc15da492a64faf6b9f0c64aa511378d6"
+    },
+    {
+      "from": "tests/unit/eval/test_rule_bench_evaluator.py",
+      "to": "packages/code-intel/tests/unit/eval/test_rule_bench_evaluator.py",
+      "old_sha256": "01d2c9ad50bf157433dbc840e048e3d6a75eebc5ea3ce2d354aee7e820cde0f2",
+      "test_functions_retained": 5,
+      "archived_agent_classes": [],
+      "new_sha256": "5bf1119d40b64518a088083d3148fcb3aee172b75406b6d81ac180bb5d56804f"
+    },
+    {
+      "from": "tests/unit/eval/test_rule_bench_predicate.py",
+      "to": "packages/code-intel/tests/unit/eval/test_rule_bench_predicate.py",
+      "old_sha256": "082be9005fbed3275f08453356848372780f113592a5e2fb19e9d40be2ddd133",
+      "test_functions_retained": 8,
+      "archived_agent_classes": [],
+      "new_sha256": "aa129a9057987478436f36393896630772cdf7448947c72935be984a22281119"
+    },
+    {
+      "from": "tests/unit/eval/test_rule_bench_scoring.py",
+      "to": "packages/code-intel/tests/unit/eval/test_rule_bench_scoring.py",
+      "old_sha256": "3fbf7806f45f92e6d2dabf023b917939400699be0db2a31f5783acb05ae83d00",
+      "test_functions_retained": 17,
+      "archived_agent_classes": [],
+      "new_sha256": "3fbf7806f45f92e6d2dabf023b917939400699be0db2a31f5783acb05ae83d00"
+    },
+    {
+      "from": "tests/unit/eval/test_rule_bench_template_engine.py",
+      "to": "packages/code-intel/tests/unit/eval/test_rule_bench_template_engine.py",
+      "old_sha256": "a2b1c15f236352712991cc21cfb3b720ce1a00fab13a85e348bd3a6121dba48d",
+      "test_functions_retained": 13,
+      "archived_agent_classes": [],
+      "new_sha256": "a2b1c15f236352712991cc21cfb3b720ce1a00fab13a85e348bd3a6121dba48d"
+    },
+    {
+      "from": "tests/unit/eval/test_rule_harness_import.py",
+      "to": "packages/code-intel/tests/unit/eval/test_rule_harness_import.py",
+      "old_sha256": "20f7ccfc3e20843a6773bcf309cebaf741ca5e2cbad209911b3982d3253267f3",
+      "test_functions_retained": 13,
+      "archived_agent_classes": [],
+      "new_sha256": "20f7ccfc3e20843a6773bcf309cebaf741ca5e2cbad209911b3982d3253267f3"
+    },
+    {
+      "from": "tests/unit/eval/test_search_quality_reporting.py",
+      "to": "packages/code-intel/tests/unit/eval/test_search_quality_reporting.py",
+      "old_sha256": "42f3b9d836fe6f5c3473dff9962660812460f6d21d1d70028e8e0931b7c900be",
+      "test_functions_retained": 8,
+      "archived_agent_classes": [],
+      "new_sha256": "6ca0cf56967455f8bab472b383af2c57281bd3aa5bf0aacbb5676bc6a9f653cd"
+    },
+    {
+      "from": "tests/unit/eval/test_search_readiness.py",
+      "to": "packages/code-intel/tests/unit/eval/test_search_readiness.py",
+      "old_sha256": "242569206c92fe4c029ff88e0d917ee8fc9de14004af03aa3726474594014a0e",
+      "test_functions_retained": 2,
+      "archived_agent_classes": [],
+      "new_sha256": "76f9236a582981173c3951cdc13387f19656379ca78f6c650d88294d3ed4dd0c"
+    },
+    {
+      "from": "tests/unit/eval/test_seed_attocode_fixtures.py",
+      "to": "packages/code-intel/tests/unit/eval/test_seed_attocode_fixtures.py",
+      "old_sha256": "a560b156be6ea36e21eddd19f5d128952c98329e8e869c541283609c79225580",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "a560b156be6ea36e21eddd19f5d128952c98329e8e869c541283609c79225580"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_architecture_drift.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_architecture_drift.py",
+      "old_sha256": "ebf0193d8e928e47facfe2fcfc2578db238a45748b64332680a8860638e9aebe",
+      "test_functions_retained": 23,
+      "archived_agent_classes": [],
+      "new_sha256": "df62082938df6711af67677c4beec9f16ec9a616f350666c0fc588249e005d31"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_ast_service_hydration.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_ast_service_hydration.py",
+      "old_sha256": "653d3aaa5888babcad40a0608b640d97d790a2258b3382433d926e8fddb3fdb7",
+      "test_functions_retained": 9,
+      "archived_agent_classes": [],
+      "new_sha256": "570e323438c8d1c3f390aeff18778bb29df92cd1f9b5e80c09aafa6a2f963533"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_body_chunking.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_body_chunking.py",
+      "old_sha256": "341f58053675dbbdc2c00365911740b193dded934fa59b8cc8ded024fa1f4462",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "838bfbb1fb074ed645ee333405e5b7cbb61f820d97bdbc5a5bcbeb0c95dd5101"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_call_graph.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_call_graph.py",
+      "old_sha256": "73326cf901edace65a679ffdcaa456095d791c195e1c67700eabcb7f4b5c0f69",
+      "test_functions_retained": 17,
+      "archived_agent_classes": [],
+      "new_sha256": "e24e9ec0639f2f4abf17e3911d7167247a1808e5f291a183a59975ef47e69351"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_code_analyzer.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_code_analyzer.py",
+      "old_sha256": "bb7efa6a061cf4d18e964fdea93ffe33691544c6118a5f726293f6159ef5938c",
+      "test_functions_retained": 44,
+      "archived_agent_classes": [],
+      "new_sha256": "53826f8d479923b2a399e04388c0e8c1a94b2d87e4f94731958de3a8714c2004"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_codebase_ast.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_codebase_ast.py",
+      "old_sha256": "8c88d738d516254b98beb35e0aa0a05c19863c316d0f475b28682c11b4eab150",
+      "test_functions_retained": 75,
+      "archived_agent_classes": [],
+      "new_sha256": "2a065a7eabd03d29d6daf58ef24f88f477ae9b7c92bf2ecefebb851cb52050dd"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_codebase_context.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_codebase_context.py",
+      "old_sha256": "1fd4ba7136b3a405d57d18c213d6b1e2c8f8d8e9732214e6100cf0123c346822",
+      "test_functions_retained": 78,
+      "archived_agent_classes": [],
+      "new_sha256": "4edaf074708c9ab58bc17fe69b181cbf41d2f988077efb91a4a57572f7ee2755"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_context_stores_closed.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_context_stores_closed.py",
+      "old_sha256": "af47b7d0538ffd3d3ed72a6f2dc5ecf1dcc9e88b0da0545d07be71f1ae177f24",
+      "test_functions_retained": 5,
+      "archived_agent_classes": [
+        "TestGraphStoreClosedConnection"
+      ],
+      "new_sha256": "4e908c7ba73048bb51743ad4fcd0a7ee0895b0aee1210076b9cf7077f888d46c"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_cross_ref_search.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_cross_ref_search.py",
+      "old_sha256": "ffc208dfbb6210718d1d3b4031bd18da4e1f47517de8d1536a4139ac8b97092c",
+      "test_functions_retained": 27,
+      "archived_agent_classes": [],
+      "new_sha256": "693d734c2d37116c78ca14b7bb8bf6f9a34b41f6839adfbab9befc2da02043d4"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_embedder_default.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_embedder_default.py",
+      "old_sha256": "e1b5f280b9a2f40117a39569ee1a69a263f748e154e982a746b434b4eca83ae9",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "540da58b8a54079e0bd2e1bbdb67607ce855e38ad7a327539a43b8c47736a9ee"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_embeddings.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_embeddings.py",
+      "old_sha256": "232a822ea3424369bfbf6db72db594ac620ff296168c9744c07036a977696565",
+      "test_functions_retained": 21,
+      "archived_agent_classes": [],
+      "new_sha256": "9404d4719ca022ed14a32b151e21949c4f7333c5c3616a9d1f942079c4af69ab"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_embeddings_query.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_embeddings_query.py",
+      "old_sha256": "5821fa99e9db9484e14978698964d117c1947404695e967d5b0dae4c511edd42",
+      "test_functions_retained": 2,
+      "archived_agent_classes": [],
+      "new_sha256": "fe937ec68ce569bcd2b1fa41218e4480d7dc7f52b68a6d07b6a63315457d3f78"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_go_symbols.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_go_symbols.py",
+      "old_sha256": "08fba6fa4a95b51c148a5fed9fe9f1a3ce744ebe97b26ed027e6cfb186211191",
+      "test_functions_retained": 33,
+      "archived_agent_classes": [],
+      "new_sha256": "63e7959b5029108f36cc5580613df7ef538a4bb16123ccda7ef3b5b6cd1c9532"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_hydration.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_hydration.py",
+      "old_sha256": "4c313e25138a80782f7a708b1c7553b595f87e000d2ea49e0c4dc67518ecf499",
+      "test_functions_retained": 16,
+      "archived_agent_classes": [],
+      "new_sha256": "7aa642cc9e2e6278c0dd8546ab18d518a132789f7c752fa5c3cff7334a2f0c6b"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_index_store.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_index_store.py",
+      "old_sha256": "0582e9f5eff5a93a9ab7e0aeb216d17ba6bbde567e13bce342f3a33905c49a02",
+      "test_functions_retained": 24,
+      "archived_agent_classes": [],
+      "new_sha256": "aacb947d0472d39fdeae38b08fd2230100659d95665bab7df5fe76434450e969"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_model_mismatch.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_model_mismatch.py",
+      "old_sha256": "7f2129f423fda2d670e7c2614ae38d18d5f7c8776ebaade3e7afbf12e8cbb8e1",
+      "test_functions_retained": 2,
+      "archived_agent_classes": [],
+      "new_sha256": "56c426fbf3cd60852f1900febe357b2199219e331aba4f486a66f6c827d7504e"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_path_downweight.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_path_downweight.py",
+      "old_sha256": "4c691372fb20acdae876df4aa598a2bc11b85fa6c3e71d50d8c1831f739b0338",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "661c3fe65644de7e0dc214321c8a1597e8bc0ab05f2d208a24b57e293eb4c456"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_query_routing.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_query_routing.py",
+      "old_sha256": "775c7f14bb7a2f0769e2e7cf83677aafad16161adf85ac51518fbf07aef6a2e4",
+      "test_functions_retained": 1,
+      "archived_agent_classes": [],
+      "new_sha256": "84b8fd1ebe6b22b1d933b69af4ba63b613cbaddfbfad55b92de2d16a1661df90"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_semantic_search.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_semantic_search.py",
+      "old_sha256": "5287099efc3eeb55b5adab47313dbaff795029dde964b863704c16a4289d657b",
+      "test_functions_retained": 38,
+      "archived_agent_classes": [],
+      "new_sha256": "b459e32149327d1d527958fea7ad88a67fed6bd4353c3bc14cee0609f7a0fcf2"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_supported_languages.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_supported_languages.py",
+      "old_sha256": "1e3dc746c441585f66903cedba7c24a1ac7efcbc9a196411f1a2596a5cdb3478",
+      "test_functions_retained": 3,
+      "archived_agent_classes": [],
+      "new_sha256": "295fcfd77b0858bf3a0099ca6e2b020d68493ab05f85c11d21cbf218d22722a5"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_temporal_coupling.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_temporal_coupling.py",
+      "old_sha256": "e3d570540ecf20ed270fa50b54cc8a88684526ed686947ddfb13a429ad609706",
+      "test_functions_retained": 21,
+      "archived_agent_classes": [],
+      "new_sha256": "8b2eb2cef49425b9df98a57218d2bc43009ee6a22d285a74243d99712d80e994"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_trigram_index.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_trigram_index.py",
+      "old_sha256": "c3e8aa8df027915d4be1a3cf6227cd07ba2c4bcd0fd53ed4bc21e8a7c30f31d3",
+      "test_functions_retained": 35,
+      "archived_agent_classes": [
+        "TestTrigramGrepIntegration"
+      ],
+      "new_sha256": "6d3052a74046b485aa84aeda26855204dbdf71401c581b365e14277540dd9ba3"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_trigram_regex.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_trigram_regex.py",
+      "old_sha256": "c071d979f56f21c5011b74a250178fbc47d4fafa1fa9caa3fcb73eaa83654418",
+      "test_functions_retained": 35,
+      "archived_agent_classes": [],
+      "new_sha256": "bd37c0cca05582e01fa361fd4f3713643b36c61f572a4d7d7c5790fa5f37466d"
+    },
+    {
+      "from": "tests/unit/integrations/context/test_ts_parser.py",
+      "to": "packages/code-intel/tests/unit/integrations/context/test_ts_parser.py",
+      "old_sha256": "f3287d99f16ddf4cef2909f9be56a7b2d3f929efeadb4d3ac719503a73b1d36b",
+      "test_functions_retained": 50,
+      "archived_agent_classes": [],
+      "new_sha256": "d9cd518837584db5a798d911dbc997c43fbfbf1c52d36488cbb4f8f2bf4b0c77"
+    },
+    {
+      "from": "tests/unit/integrations/test_dataflow.py",
+      "to": "packages/code-intel/tests/unit/integrations/test_dataflow.py",
+      "old_sha256": "f5f000c0d980da1cf4f6bb8c1619114b81f910188e3e28e94b0970a924820afb",
+      "test_functions_retained": 22,
+      "archived_agent_classes": [],
+      "new_sha256": "dec9642d7fdd8cac7587bb9a2aeb3d229a21d7daafc39312707426dab5a6c962"
+    },
+    {
+      "from": "tests/unit/integrations/test_feature_flags.py",
+      "to": "packages/code-intel/tests/unit/integrations/test_feature_flags.py",
+      "old_sha256": "5ce806ccf69b0cceb3ab16149fbdcc788631b26c7b00d40be17aa55419e145cf",
+      "test_functions_retained": 4,
+      "archived_agent_classes": [],
+      "new_sha256": "f891071c63563869b81aefb865edf1e5d2b306160c1155bab81a68dd1813625e"
+    },
+    {
+      "from": "tests/unit/integrations/test_new_security_rules.py",
+      "to": "packages/code-intel/tests/unit/integrations/test_new_security_rules.py",
+      "old_sha256": "9de4c67a8ece16b05c3f2c2a4071a84ab0598106cbe1597930b128f329bf2e2e",
+      "test_functions_retained": 107,
+      "archived_agent_classes": [],
+      "new_sha256": "5120126a2fcf3e7c3d0f7af0ecd2079243c6788da5ea8ed0e5c20939dd853ff3"
+    },
+    {
+      "from": "tests/unit/integrations/test_security_autofix.py",
+      "to": "packages/code-intel/tests/unit/integrations/test_security_autofix.py",
+      "old_sha256": "ffdbdbc4a916962bad3cff919dc7ade861b420355e4ab98c8b542bc9e2ef3c94",
+      "test_functions_retained": 19,
+      "archived_agent_classes": [],
+      "new_sha256": "b795a6f07aaad8a2c61715a11c71a04b3d88876f33088b7cbbb0704ae753696d"
+    },
+    {
+      "from": "tests/unit/integrations/test_security_matcher.py",
+      "to": "packages/code-intel/tests/unit/integrations/test_security_matcher.py",
+      "old_sha256": "01c0aeafedefb61cd38e22c559ffd55413e5371206c092750fd321f5d7b50666",
+      "test_functions_retained": 9,
+      "archived_agent_classes": [],
+      "new_sha256": "669fab67ca73622a5c4d7bceea16bb646eb3b5469bd46b7d423d1d9156cef00c"
+    },
+    {
+      "from": "tests/unit/integrations/test_streaming_lsp.py",
+      "to": "packages/code-intel/tests/unit/integrations/test_streaming_lsp.py",
+      "old_sha256": "6fed073ee6751858820b35faa43efbb9c95591465b1a357af2edb54bd692d26e",
+      "test_functions_retained": 85,
+      "archived_agent_classes": [
+        "TestAdaptAnthropicStream",
+        "TestAdaptOpenRouterStream",
+        "TestCommandResult",
+        "TestFormatChunkForTerminal",
+        "TestFormatShellState",
+        "TestPTYShellConfig",
+        "TestPTYShellManagerAsync",
+        "TestPTYShellManagerDetectShell",
+        "TestPTYShellManagerInit",
+        "TestShellState",
+        "TestStreamConfig",
+        "TestStreamHandlerBuffering",
+        "TestStreamHandlerEvents",
+        "TestStreamHandlerInit",
+        "TestStreamHandlerProcessStream",
+        "TestStreamState"
+      ],
+      "new_sha256": "b211f4f32cef8206c2e8a993ae1faff1ba14cff35dc93d85da6ccbecfe9b014e"
+    },
+    {
+      "from": "tests/unit/integrations/utilities/test_ignore.py",
+      "to": "packages/code-intel/tests/unit/integrations/utilities/test_ignore.py",
+      "old_sha256": "612d5125ba9f9bfaa048638ec2b26ff6a93b1e8bd8d05972ae7f63ec79f7a48a",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "decb24240d2a8b668fe97b44a62dd97a20c96affb7821f531063a208aa241731"
+    },
+    {
+      "from": "tests/unit/integrations/utilities/test_token_estimate.py",
+      "to": "packages/code-intel/tests/unit/integrations/utilities/test_token_estimate.py",
+      "old_sha256": "d356f39f8f7f697616fd0d752827e128c6f6af90f86a51e673fb6e375ff5b6e6",
+      "test_functions_retained": 10,
+      "archived_agent_classes": [],
+      "new_sha256": "8af687556424c20523178a55991d54a10c99da050442da2f7299e6ef19998836"
+    },
+    {
+      "from": "tests/unit/test_code_intel.py",
+      "to": "packages/code-intel/tests/unit/test_code_intel.py",
+      "old_sha256": "f75eadf26e1fdb853b7b51c2dcd9b4a0f5ad3b7e8c4c1ecbd9ca0d93b683c92a",
+      "test_functions_retained": 207,
+      "archived_agent_classes": [
+        "TestGraphStore",
+        "TestMainCLIDispatch"
+      ],
+      "new_sha256": "5d75e7481708baface79914938eedb48aed7c6801b506e03cfcfd3e717a18bf8"
+    },
+    {
+      "from": "tests/unit/test_code_intel_hydration.py",
+      "to": "packages/code-intel/tests/unit/test_code_intel_hydration.py",
+      "old_sha256": "b3c62df843161f56b3e5dbf35a7da7c0d91caff7364b53c13ff1c82e4026ea95",
+      "test_functions_retained": 6,
+      "archived_agent_classes": [],
+      "new_sha256": "181e6abe9145d715e8cfb37cdd20706eed86f4379ce7dce878b61eeaa46052f8"
+    },
+    {
+      "from": "tests/unit/test_errors.py",
+      "to": "packages/code-intel/tests/unit/test_errors.py",
+      "old_sha256": "7564418ecc0a14ef7650fe09704504421162548eb6c803e874bd1c4f6b81a6ea",
+      "test_functions_retained": 23,
+      "archived_agent_classes": [],
+      "new_sha256": "6f40d1c6dad17911000b2c253848ce041aff6f5336c08d913c91ecfb5168b896"
+    },
+    {
+      "from": "tests/unit/test_memory_store.py",
+      "to": "packages/code-intel/tests/unit/test_memory_store.py",
+      "old_sha256": "6730e4eda8abb5f5a40989ee6d7149f4d5bc9f1af11d1a33e51db421ace0d48b",
+      "test_functions_retained": 40,
+      "archived_agent_classes": [],
+      "new_sha256": "ca0db505cf46940f742ee5bfef63d10fc662aa7bf543b51946dace0773fab9c3"
+    }
+  ]
+}

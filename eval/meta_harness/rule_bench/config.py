@@ -19,13 +19,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from attocode.code_intel.rules.loader import _parse_yaml_rule
-from attocode.code_intel.rules.model import (
+from attocode_intel.rules.loader import _parse_yaml_rule
+from attocode_intel.rules.model import (
     RuleSeverity,
     RuleSource,
     UnifiedRule,
 )
-from attocode.code_intel.rules.registry import RuleRegistry
+from attocode_intel.rules.registry import RuleRegistry
 
 logger = logging.getLogger(__name__)
 

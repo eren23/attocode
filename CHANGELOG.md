@@ -1,11 +1,24 @@
 # Changelog
 
-All notable changes to the Attocode Python agent will be documented in this file.
+Notable changes to Attocode Intelligence are recorded here; earlier entries include the archived agent.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed — Intelligence-first repository
+
+- Archive the Python agent, swarm, TypeScript implementation, lessons and agent-only
+  tests at `agent-archive-2026-10-16`, before retiring their active source trees.
+- Move useful engine, evaluation, HTTP/MCP and service tests into the standalone
+  package. CI rejects archived agent imports and installations during these tests.
+- Make the root a development workspace for `attocode-code-intel`; remove the agent
+  dependency graph and release jobs, while retaining PostgreSQL, ranking, language
+  server, dashboard, Docker and clean-wheel checks.
+- Update development setup and documentation for the standalone package. Semantic
+  model dependencies remain optional. Existing installations and package versions
+  are unchanged; this transition does not publish a release.
 
 ### Fixed — Explicit test search and transient precision recovery
 

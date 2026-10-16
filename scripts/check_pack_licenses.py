@@ -1,6 +1,6 @@
 """License compliance check for community rule packs.
 
-Walks ``src/attocode/code_intel/rules/packs/community/`` and verifies each
+Walks ``packages/code-intel/src/attocode_intel/rules/packs/community/`` and verifies each
 pack ships with a LICENSE file, NOTICE file, and a manifest declaring an
 SPDX license from the allowlist. Exits non-zero on any error so the CI
 job fails when a contributor forgets the legal scaffold.
@@ -21,7 +21,7 @@ import yaml
 _PROJECT_ROOT = Path(__file__).parents[1]
 COMMUNITY_DIR = (
     _PROJECT_ROOT
-    / "src" / "attocode" / "code_intel" / "rules" / "packs" / "community"
+    / "packages" / "code-intel" / "src" / "attocode_intel" / "rules" / "packs" / "community"
 )
 
 # Permissive licenses only — copyleft sources are NOT shipped here.

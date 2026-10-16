@@ -66,11 +66,11 @@ Local knowledge stays private until explicitly shared. `share --learning ID --se
 
 The dashboard and native MCP use `/api/v2/operations` for shared knowledge. Historical v1/v2 project knowledge endpoints retain their formats and use the same PostgreSQL store in service mode. New consumers should use operations; existing file-sync/watch/connect commands retain their explicitly invoked legacy upload semantics and are not installed by `init`.
 
-Old `attocode.code_intel` and extracted context import paths delegate to the canonical package. The root development environment installs the workspace dependency. Agent/TUI/swarm feature development is frozen; their existing entry points and tests remain. The original README is preserved as the legacy-agent guide.
+The active package imports as `attocode_intel`. Old agent aliases and entry points are preserved only in the [agent archive](legacy-agent.md). The root is a development workspace for the standalone product; migrated engine tests reject imports from the archived agent. Existing global installations and local indexes are not changed by this repository transition.
 
 ## Release and evaluation
 
-`intel-v0.1.0` identifies the standalone release, separately from legacy `v*` tags. CI builds the wheel, checks imports without the agent distribution, tests stdio/HTTP MCP, knowledge and repository authorization against PostgreSQL, and runs synthetic 100/1,000/10,000-file daily workflows. The evaluation emits cold/warm startup latency, lookup latency, output tokens, and dependency coverage; thresholds are explicit in the script. Results are uploaded as CI artifacts.
+Standalone releases use `intel-v*` tags, separately from archived agent `v*` tags. CI builds the wheel, checks imports without the agent distribution, tests stdio/HTTP MCP, knowledge and repository authorization against PostgreSQL, and runs synthetic 100/1,000/10,000-file daily workflows. The evaluation emits cold/warm startup latency, lookup latency, output tokens, and dependency coverage; thresholds are explicit in the script. Results are uploaded as CI artifacts.
 
 To run locally:
 

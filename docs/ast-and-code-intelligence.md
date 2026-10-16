@@ -320,31 +320,31 @@ uv tool install attocode
 # or: pip install attocode
 
 # Then install the MCP server into your tool of choice
-attocode code-intel install claude           # Claude Code (project-level)
-attocode code-intel install claude --global  # Claude Code (user-level)
-attocode code-intel install cursor           # Cursor
-attocode code-intel install windsurf         # Windsurf
-attocode code-intel install vscode           # VS Code / GitHub Copilot
-attocode code-intel install codex            # OpenAI Codex CLI
-attocode code-intel install codex --global   # Codex (user-level)
-attocode code-intel install claude-desktop   # Claude Desktop
-attocode code-intel install cline            # Cline (VS Code extension)
-attocode code-intel install zed              # Zed (project-level)
-attocode code-intel install zed --global     # Zed (user-level)
-attocode code-intel install opencode         # OpenCode
-attocode code-intel install gemini-cli       # Gemini CLI
-attocode code-intel install roo-code         # Roo Code
-attocode code-intel install amazon-q         # Amazon Q Developer
-attocode code-intel install copilot-cli      # GitHub Copilot CLI
-attocode code-intel install junie            # Junie (JetBrains)
-attocode code-intel install kiro             # Kiro
-attocode code-intel install trae             # Trae
-attocode code-intel install firebase         # Firebase Studio
-attocode code-intel install amp              # Amp (Sourcegraph)
-attocode code-intel install continue         # Continue.dev
-attocode code-intel install hermes           # Hermes Agent (NousResearch)
-attocode code-intel install goose            # Goose (Block)
-attocode code-intel install intellij         # IntelliJ (prints manual steps)
+attocode-code-intel install claude           # Claude Code (project-level)
+attocode-code-intel install claude --global  # Claude Code (user-level)
+attocode-code-intel install cursor           # Cursor
+attocode-code-intel install windsurf         # Windsurf
+attocode-code-intel install vscode           # VS Code / GitHub Copilot
+attocode-code-intel install codex            # OpenAI Codex CLI
+attocode-code-intel install codex --global   # Codex (user-level)
+attocode-code-intel install claude-desktop   # Claude Desktop
+attocode-code-intel install cline            # Cline (VS Code extension)
+attocode-code-intel install zed              # Zed (project-level)
+attocode-code-intel install zed --global     # Zed (user-level)
+attocode-code-intel install opencode         # OpenCode
+attocode-code-intel install gemini-cli       # Gemini CLI
+attocode-code-intel install roo-code         # Roo Code
+attocode-code-intel install amazon-q         # Amazon Q Developer
+attocode-code-intel install copilot-cli      # GitHub Copilot CLI
+attocode-code-intel install junie            # Junie (JetBrains)
+attocode-code-intel install kiro             # Kiro
+attocode-code-intel install trae             # Trae
+attocode-code-intel install firebase         # Firebase Studio
+attocode-code-intel install amp              # Amp (Sourcegraph)
+attocode-code-intel install continue         # Continue.dev
+attocode-code-intel install hermes           # Hermes Agent (NousResearch)
+attocode-code-intel install goose            # Goose (Block)
+attocode-code-intel install intellij         # IntelliJ (prints manual steps)
 ```
 
 ### Installation Targets
@@ -451,22 +451,22 @@ The MCP server exposes 27 tools across 6 categories:
 
 ```bash
 # Install MCP server into a target
-attocode code-intel install <target> [--project <path>] [--global]
+attocode-code-intel install <target> [--project <path>] [--global]
 
 # Remove MCP server from a target
-attocode code-intel uninstall <target>
+attocode-code-intel uninstall <target>
 
 # Run the MCP server directly (stdio transport)
-attocode code-intel serve [--project <path>]
+attocode-code-intel serve [--project <path>]
 
 # Check installation status across all targets
-attocode code-intel status
+attocode-code-intel status
 ```
 
 ### Checking Status
 
 ```bash
-$ attocode code-intel status
+$ attocode-code-intel status
 attocode-code-intel status:
 
   Claude Code: installed
@@ -486,7 +486,7 @@ If you want to run the server manually (e.g. for debugging or custom integration
 attocode-code-intel --project /path/to/repo
 
 # Via Python module
-python -m attocode.code_intel.server --project /path/to/repo
+python -m attocode_intel.server --project /path/to/repo
 ```
 
 The server uses stdio transport and speaks the MCP protocol. Any MCP client can connect to it.
@@ -497,7 +497,7 @@ The same 27 tools are also available as a REST API over HTTP, supporting multi-p
 
 ```bash
 # Start the HTTP server
-attocode code-intel serve --transport http --project /path/to/repo
+attocode-code-intel serve --transport http --project /path/to/repo
 
 # Open http://localhost:8080/docs for Swagger UI
 ```
@@ -518,6 +518,6 @@ Your source code is mounted read-only; cache databases persist in a named volume
 ## Related Pages
 
 - [Code Intel HTTP API](code-intel-http-api.md) --- REST endpoints, auth, Docker, client examples
-- [Context Engineering](context-engineering.md) --- How context blocks and code context work together
+- [Context Engineering](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/context-engineering.md) --- How context blocks and code context work together
 - [Architecture](ARCHITECTURE.md) --- Overall system design
-- [Extending Attocode](extending.md) --- Adding custom tools
+- [Extending Attocode](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/extending.md) --- Adding custom tools

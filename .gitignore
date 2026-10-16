@@ -83,3 +83,6 @@ eval/sweep_out/
 
 # Bounded validation workspaces, reports and cloud ledger
 .attocode/quality/
+
+# Local outputs left by the archived TypeScript checkout stay private.
+/legacy/

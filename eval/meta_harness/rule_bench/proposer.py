@@ -17,7 +17,7 @@ from typing import Any
 
 import yaml
 
-from attocode.code_intel.rules.model import RuleSeverity
+from attocode_intel.rules.model import RuleSeverity
 
 from eval.meta_harness.rule_bench.config import (
     RuleBenchConfig,

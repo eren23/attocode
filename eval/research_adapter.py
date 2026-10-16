@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from eval.harness import BenchInstance, EvalHarness
 
-from attoswarm.research.evaluator import EvalResult
+from eval.result import EvalResult
 
 logger = logging.getLogger(__name__)
 

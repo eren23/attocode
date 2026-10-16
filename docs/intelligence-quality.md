@@ -287,12 +287,12 @@ Hosted PostgreSQL, wheel, dashboard and image checks remain in CI. Local passes
 do not stand in for those unexecuted hosted checks.
 
 Do not automatically start another agent/model study. R7's reviewed STOP remains
-in force. The [small follow-up design](../packages/code-intel/evals/designs/2026-10-14-workflow-pilot.md)
+in force. The [small follow-up design](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/designs/2026-10-14-workflow-pilot.md)
 requires separate authorization, frozen inputs and passing offline gates first.
 
 ### Opt-in cold-index diagnostic
 
-The bounded [stage probe](../packages/code-intel/evals/results/2026-10-15-index-probe-readiness.md)
+The bounded [stage probe](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-index-probe-readiness.md)
 records inclusive wall/thread-CPU timings and partial work counters without
 changing search ranking or the release gate. Run `python -m eval.quality.index_probe`
 for tiny local wiring. `python -m eval.quality cloud probe --pack cockroach` selects
@@ -302,13 +302,13 @@ it cannot pass the full quality gate. The approved extension permits one diagnos
 reservations, with a $17 monthly reservation cap. It does not authorize another
 full-matrix retry. All admission/deletion guards still apply.
 
-The [first pinned diagnostic](../packages/code-intel/evals/results/2026-10-15-cockroach-index-probe.md)
+The [first pinned diagnostic](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-cockroach-index-probe.md)
 used that one additional reservation. Both body indexes remained incomplete;
 prehydration shortened keyword work but increased total observation elapsed.
 All 17 workers are deleted and the allowance is exhausted. The raw profiles guide
 follow-up work; they do not authorize another rental or clear the release gate.
 
-The [local discovery/body follow-up](../packages/code-intel/evals/results/2026-10-15-discovery-body-repair.md)
+The [local discovery/body follow-up](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-discovery-body-repair.md)
 adds probe schema 2: tokenizer/serializer timings sample every 64th call while
 `sampling.observed_calls` retains the exact attempted call count. Sampled durations
 must not be summed as full-phase cost or extrapolated. Outer phases still include
@@ -323,7 +323,7 @@ retaining all 17 previous reservations under a $19 monthly cap. Run uninstrument
 results and verify deletion after each. No blind retry or third rental is included;
 0.1.6 publication still requires a complete passing full gate.
 
-The [uninstrumented target result](../packages/code-intel/evals/results/2026-10-15-discovery-validation.md)
+The [uninstrumented target result](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-discovery-validation.md)
 reached ready body search but exceeded the unchanged 180-second pack deadline
 before the final restart check completed. The target failed; the conditional full
 run was not launched. All 18 workers are deleted, with $0.8221 cumulative estimated
@@ -342,7 +342,7 @@ code identities guard reuse. Only direct installed tree-sitter grammars are
 eligible; optional-pack, regex and ctags paths retain normal parsing. No schema
 migration, model download, ranking change or deadline extension is required.
 
-The [local restart comparison](../packages/code-intel/evals/results/2026-10-15-ast-restart.md)
+The [local restart comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-ast-restart.md)
 includes the added cold-write cost, process restart and exact-evidence controls.
 It does not establish a passing CockroachDB target or full release gate. The
 previous target failure still blocks the conditional second cloud rental.
@@ -355,12 +355,12 @@ worker may exist at a time; collect and verify deletion after each. Stop after
 a second failed target or the full attempt. Publication of 0.1.6 still requires
 a complete passing full gate and publication checks.
 
-The [restart-discovery audit](../packages/code-intel/evals/results/2026-10-15-restart-discovery-repair.md)
+The [restart-discovery audit](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-restart-discovery-repair.md)
 corrects the earlier no-reparse claim: its counter omitted discovery before
 restoration. The repair supplies validated summaries to that graph-building
 pass too. Generated component parity is not a passing cloud release gate.
 
-The [completed 0.1.6 cycle](../packages/code-intel/evals/results/2026-10-15-release-016.md)
+The [completed 0.1.6 cycle](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-release-016.md)
 passed the repaired target and full 36-pack/ranking gate, then published and
 verified the actual PyPI package. All 21 workers are deleted. The three-worker
 allowance is used; cumulative estimated compute is $0.9119 before tax, not an
@@ -382,15 +382,15 @@ A complete passing observation at or below 150 seconds is classified as useful
 observed headroom; a slower pass remains narrow. This is descriptive and not a
 new gate or reliability guarantee. Collect reports and verify worker deletion
 after every attempt. The subsequent local retrieval benchmark and opt-in
-candidate gate are specified in the [cycle design](../packages/code-intel/evals/designs/2026-10-15-headroom-retrieval.md).
+candidate gate are specified in the [cycle design](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/designs/2026-10-15-headroom-retrieval.md).
 
 The cycle is complete: Cockroach passed in 167.970 seconds (narrow margin),
 using one worker with verified deletion. Neither retrieval candidate qualified
 on development; baseline-only validation completed all 48 questions. No ranking
-policy or release changed. See the [results](../packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).
+policy or release changed. See the [results](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).
 
 
-The subsequent [protocol/body-file follow-up](../packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md)
+The subsequent [protocol/body-file follow-up](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md)
 adds document-lifecycle regression coverage and one evaluation-only body-file
 candidate. Its held-out gate failed despite higher aggregate hits; defaults
 remain unchanged. Bounded local Cockroach component trials did not establish

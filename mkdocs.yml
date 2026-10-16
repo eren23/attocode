@@ -50,90 +50,24 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Intelligence Product: intelligence.md
-  - Intelligence Tools: intelligence-tools.md
-  - Intelligence Search: intelligence-search.md
-  - Intelligence Validation: intelligence-validation.md
-  - Intelligence Releases: intelligence-release.md
-  - Legacy Agent: legacy-agent.md
   - Getting Started: getting-started.md
-  - CLI Reference: cli-reference.md
-  - Architecture:
-      - Overview: ARCHITECTURE.md
-      - "v0.2 Service Mode": architecture-v2.md
-  - Features:
-      - TUI Interface: tui-guide.md
-      - Sessions & Persistence: sessions-guide.md
-      - Context Engineering: context-engineering.md
-      - AST & Code Intelligence: ast-and-code-intelligence.md
-      - Code Intel HTTP API: code-intel-http-api.md
-      - Advanced Features: advanced-features.md
-  - Guides:
-      - Local Development: guides/local-development.md
-      - MCP & Model Connections: guides/mcp-and-model-connections.md
-      - Repos & Branches: guides/repos-and-branches.md
-      - Fast Search: guides/fast-search.md
-      - Semantic Search: guides/semantic-search.md
-      - Code Intel Reproducibility: guides/code-intel-reproducibility.md
-      - Reproducibility Walkthrough: guides/reproducibility-walkthrough.md
-      - CLI Commands: guides/cli-commands.md
-      - Advanced Analysis: guides/advanced-analysis.md
-      - Rule Analysis Demo: guides/rule-analysis-demo.md
-      - Code History: guides/code-history.md
-      - Observability: guides/observability.md
-      - Architecture Decisions: guides/architecture-decisions.md
-      - Evaluation & Benchmarks: guides/evaluation-and-benchmarks.md
-      - Rule-Bench Corpus: guides/rule-bench-corpus.md
-      - Providers: PROVIDERS.md
-      - Provider Resilience: provider-resilience.md
-      - Sandbox: SANDBOX.md
-      - Budget System: BUDGET.md
-      - MCP Integration: MCP.md
-      - OSS Demo Playbook: code-intel-oss-demo-playbook.md
-      - Research Campaigns: research-guide.md
-      - Swarm Mode: swarm-guide.md
-      - Swarm Quality: guides/swarm-quality.md
-      - Hybrid Swarm: hybrid-swarm-operations.md
-      - Skills & Agents: skills-and-agents.md
-      - Tracing: tracing-guide.md
-      - Recording & Replay: recording-and-replay.md
-  - Extending: extending.md
-  - Internals: internals.md
-  - Troubleshooting: troubleshooting.md
+  - Intelligence Product: intelligence.md
+  - Tool Catalog: intelligence-tools.md
+  - Search: intelligence-search.md
+  - CLI: cli-reference.md
+  - Architecture: ARCHITECTURE.md
+  - Service Architecture: architecture-v2.md
+  - HTTP API: code-intel-http-api.md
+  - Quality and Validation:
+      - Quality Controller: intelligence-quality.md
+      - Validation: intelligence-validation.md
+      - Workstream: intelligence-workstream.md
+      - Releases: intelligence-release.md
   - Development:
-      - Testing: TESTING.md
       - Contributing: contributing.md
-  - Lessons:
-      - Overview: lessons/index.md
-      - "01 - Core Agent Loop": lessons/01-core-loop.md
-      - "02 - Provider Abstraction": lessons/02-provider-abstraction.md
-      - "03 - Tool System": lessons/03-tool-system.md
-      - "04 - Streaming": lessons/04-streaming.md
-      - "05 - Error Recovery": lessons/05-error-recovery.md
-      - "06 - Testing Agents": lessons/06-testing-agents.md
-      - "07 - MCP Integration": lessons/07-mcp-integration.md
-      - "08 - Cache Hitting": lessons/08-cache-hitting.md
-      - "09 - Complete Agent": lessons/09-complete-agent.md
-      - "10 - Hook System": lessons/10-hook-system.md
-      - "11 - Plugin System": lessons/11-plugin-system.md
-      - "12 - Rules System": lessons/12-rules-system.md
-      - "13 - Client/Server": lessons/13-client-server.md
-      - "14 - Memory Systems": lessons/14-memory-systems.md
-      - "15 - Planning": lessons/15-planning.md
-      - "16 - Reflection": lessons/16-reflection.md
-      - "17 - Multi-Agent": lessons/17-multi-agent.md
-      - "18 - ReAct Pattern": lessons/18-react-pattern.md
-      - "19 - Observability": lessons/19-observability.md
-      - "20 - Sandboxing": lessons/20-sandboxing.md
-      - "21 - Human-in-Loop": lessons/21-human-in-loop.md
-      - "22 - Model Routing": lessons/22-model-routing.md
-      - "23 - Execution Policies": lessons/23-execution-policies.md
-      - "24 - Advanced Patterns": lessons/24-advanced-patterns.md
-      - "25 - Production Agent": lessons/25-production-agent.md
-      - "26 - Tracing & Evaluation": lessons/26-tracing-and-evaluation.md
-  - Roadmap:
-      - Swarm: swarm-roadmap.md
-      - "Code Intel": roadmap.md
+      - Testing: TESTING.md
+      - Local Setup: guides/local-development.md
+  - Archived Agent: legacy-agent.md
 
 extra_javascript:
   - https://unpkg.com/mermaid@11/dist/mermaid.min.js
@@ -141,3 +75,7 @@ extra_javascript:
 
 plugins:
   - search
+
+# Local, ignored planning notes are never part of the documentation site.
+exclude_docs: |
+  superpowers/

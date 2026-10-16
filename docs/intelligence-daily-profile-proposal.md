@@ -19,10 +19,10 @@ only the required `suggest_tests` call. Those review studies cannot tell
 us what agents would choose without a forced call, and non-use does not
 prove a tool has no value on edits or deeper investigations.
 
-Sources: [R2](../packages/code-intel/evals/results/2026-10-10-agent-pilot.md),
-[R3](../packages/code-intel/evals/results/2026-10-10-agent-r3.md),
-[R4 Stage 1](../packages/code-intel/evals/results/2026-10-12-r4-stage1-review-agents.md),
-and [R6](../packages/code-intel/evals/results/2026-10-13-r6-review-test-note.md).
+Sources: [R2](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-10-agent-pilot.md),
+[R3](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-10-agent-r3.md),
+[R4 Stage 1](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-12-r4-stage1-review-agents.md),
+and [R6](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-13-r6-review-test-note.md).
 The R2 natural-call counts were also checked against the external
 `studies/r2-pilot/runs.jsonl` artifact.
 
@@ -131,7 +131,7 @@ print(len(lean), size(lean))
 
 ## Evaluation and default decision
 
-The [R7 pilot draft](../packages/code-intel/evals/designs/2026-10-13-r7-task-completion-pilot.md)
+The [R7 pilot draft](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/designs/2026-10-13-r7-task-completion-pilot.md)
 compares native tools with this optional seven-tool package on completed
 bug fixes. It deliberately does not isolate the effect of tool count
 from conditional instructions, or compare seven tools against sixteen.
@@ -144,5 +144,5 @@ comparison separately. The user retains the daily-list decision.
 Use this checkout with `attocode-code-intel init --client claude --profile lean`,
 then restart the client. `doctor` probes an advertised tool in each profile.
 Legacy SSE and remote lean are rejected because they cannot offer this surface.
-The [R7 design](../packages/code-intel/evals/designs/2026-10-13-r7-task-completion-pilot.md)
+The [R7 design](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/designs/2026-10-13-r7-task-completion-pilot.md)
 uses adoption descriptively; there is no minimum adoption gate.

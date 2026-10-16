@@ -1,4 +1,0 @@
-name: rust
-version: 1.0.0
-languages: [rust]
-description: "Rust analysis pack — correctness, performance, idiomatic Rust patterns"

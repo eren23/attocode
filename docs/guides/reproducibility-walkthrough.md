@@ -36,7 +36,7 @@ Open the fixture repo in a fresh MCP session:
 cd /Users/eren/Documents/AI/first-principles-agent
 uv sync
 # In a second terminal or via your MCP client:
-uv run attocode-code-intel --project tests/fixtures/sample_project --local-only
+uv run attocode-code-intel --project packages/code-intel/tests/fixtures/sample_project --local-only
 ```
 
 Then call `bootstrap` once to warm the indexes:
@@ -138,7 +138,7 @@ Empty `include` means "capture every component". You can narrow to
 **Expected output shape:**
 
 ```
-snapshot_create: /path/to/tests/fixtures/sample_project/.attocode/snapshots/walkthrough-baseline.atsnap.tar.gz
+snapshot_create: /path/to/packages/code-intel/tests/fixtures/sample_project/.attocode/snapshots/walkthrough-baseline.atsnap.tar.gz
   components: 10
   total_size_uncompressed: 45.2 MB
   archive_size: 12.8 MB
@@ -147,7 +147,7 @@ snapshot_create: /path/to/tests/fixtures/sample_project/.attocode/snapshots/walk
 **Assertion:** the archive exists on disk. In a shell:
 
 ```bash
-ls -la tests/fixtures/sample_project/.attocode/snapshots/walkthrough-baseline.atsnap.tar.gz
+ls -la packages/code-intel/tests/fixtures/sample_project/.attocode/snapshots/walkthrough-baseline.atsnap.tar.gz
 ```
 
 You should see a single file with non-zero size.
@@ -155,7 +155,7 @@ You should see a single file with non-zero size.
 **Bonus: peek at the manifest** without extracting:
 
 ```bash
-tar -xOzf tests/fixtures/sample_project/.attocode/snapshots/walkthrough-baseline.atsnap.tar.gz manifest.json | head -20
+tar -xOzf packages/code-intel/tests/fixtures/sample_project/.attocode/snapshots/walkthrough-baseline.atsnap.tar.gz manifest.json | head -20
 ```
 
 The `project_name` field should be the basename (`sample_project`), not
@@ -209,7 +209,7 @@ Pass confirm=True to actually delete.
 Check the file still exists at its original size:
 
 ```bash
-ls -la tests/fixtures/sample_project/.attocode/vectors/embeddings.db
+ls -la packages/code-intel/tests/fixtures/sample_project/.attocode/vectors/embeddings.db
 ```
 
 This step is purely a safety demonstration — it proves the `confirm=False`
@@ -223,7 +223,7 @@ default pattern protects you from accidental deletion. Do **not** pass
 In your editor, append a line to any source file in the fixture:
 
 ```bash
-echo "# walkthrough dogfood marker" >> tests/fixtures/sample_project/main.py
+echo "# walkthrough dogfood marker" >> packages/code-intel/tests/fixtures/sample_project/main.py
 ```
 
 Wait 2–3 seconds for the file watcher to notice. Then call `bootstrap`
@@ -427,8 +427,8 @@ Also revert the edit you made in Step 6:
 
 ```bash
 # Undo the appended marker line
-git -C tests/fixtures/sample_project checkout main.py 2>/dev/null \
-  || sed -i '' -e '/# walkthrough dogfood marker/d' tests/fixtures/sample_project/main.py
+git -C packages/code-intel/tests/fixtures/sample_project checkout main.py 2>/dev/null \
+  || sed -i '' -e '/# walkthrough dogfood marker/d' packages/code-intel/tests/fixtures/sample_project/main.py
 ```
 
 Stop the MCP server (`Ctrl-C` in the terminal where it's running).

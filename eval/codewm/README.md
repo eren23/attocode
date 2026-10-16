@@ -3,9 +3,9 @@
 **Status: EXPERIMENTAL** — PyTorch backend, will be replaced by compiled binary.
 
 This is the sandbox for testing VICReg/JEPA-trained code world model checkpoints
-against real Python codebases. Nothing here is wired into the production attocode
-source tree (`src/attocode/`). When the model proves useful enough and the lighter
-binary backend lands, the good parts graduate into `src/attocode/code_intel/`.
+against real Python codebases. Nothing here is wired into the production intelligence
+source tree (`packages/code-intel/src/attocode_intel/`). Any future product integration
+requires separate evidence and an explicit decision; this experiment is not a default.
 
 ## What's here
 
@@ -72,5 +72,5 @@ All numpy-in / numpy-out. When the compiled binary is ready, implement a new bac
 ## What this is NOT
 
 - Not a provider (this isn't an LLM, it's a latent-space code state predictor)
-- Not production code (nothing in `src/attocode/` imports from here)
+- Not production code (the intelligence runtime does not import this experiment)
 - Not a training harness (use crucible for training, this is inference + eval only)

@@ -11,10 +11,10 @@ from attocode_intel.confidence import jev as jev_scorer
 from attocode_intel.confidence import llm as llm_scorer
 from attocode_intel.confidence.redact import redact
 
-from attocode.code_intel.rules.enricher import enrich_findings
-from attocode.code_intel.rules.executor import execute_rules
-from attocode.code_intel.rules.loader import load_builtin_rules
-from attocode.code_intel.rules.packs.pack_loader import list_example_packs, load_pack
+from attocode_intel.rules.enricher import enrich_findings
+from attocode_intel.rules.executor import execute_rules
+from attocode_intel.rules.loader import load_builtin_rules
+from attocode_intel.rules.packs.pack_loader import list_example_packs, load_pack
 from eval.rule_accuracy.demo.scan import write_json
 
 parser = argparse.ArgumentParser(description="Explicit refresh; scoring scripts may call paid providers.")

@@ -6,6 +6,8 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+  pull_request:
+    paths: ['docs/**', 'mkdocs.yml', '.github/workflows/docs.yml']
   workflow_dispatch:
 
 permissions:
@@ -25,13 +27,14 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
-      - run: uv sync --extra docs
-      - run: uv run mkdocs build
+      - run: uv sync --locked --package attocode-code-intel --extra docs
+      - run: uv run --no-sync mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

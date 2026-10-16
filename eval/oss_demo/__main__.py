@@ -350,7 +350,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     import time
     import sys
     import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "packages", "code-intel", "src"))
 
     manifest = load_manifest(Path(args.manifest))
     output_path = Path(args.output) if args.output else Path(manifest.data.get("execution", {}).get("results_file", "eval/oss_demo/results.jsonl"))
@@ -387,7 +387,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"  Repo: {repo_id} ({repo_path})")
 
         try:
-            from attocode.code_intel.service import CodeIntelService
+            from attocode_intel.service import CodeIntelService
             svc = CodeIntelService(str(repo_path))
         except Exception as e:
             print(f"    ERROR initializing CodeIntelService: {e}")

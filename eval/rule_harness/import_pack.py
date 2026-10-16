@@ -22,7 +22,7 @@ Usage::
 
     python -m eval.rule_harness.import_pack \\
         --source bandit --lang python \\
-        --output src/attocode/code_intel/rules/packs/community/bandit-python
+        --output packages/code-intel/src/attocode_intel/rules/packs/community/bandit-python
 """
 
 from __future__ import annotations
@@ -38,8 +38,8 @@ from pathlib import Path
 import yaml
 
 _PROJECT_ROOT = Path(__file__).parents[2]
-if str(_PROJECT_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT / "src"))
+if str(_PROJECT_ROOT / "packages" / "code-intel" / "src") not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT / "packages" / "code-intel" / "src"))
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 # License templates ship under packs/community/_license_templates/
 LICENSE_TEMPLATE_DIR = (
     _PROJECT_ROOT
-    / "src" / "attocode" / "code_intel" / "rules" / "packs"
+    / "packages" / "code-intel" / "src" / "attocode_intel" / "rules" / "packs"
     / "community" / "_license_templates"
 )
 
