@@ -37,15 +37,17 @@ def _default_file_diversity(
     query: str, candidates: list[SemanticSearchResult], top_k: int,
     file_filter: str,
 ) -> list[SemanticSearchResult]:
-    """Return distinct files in original rank order when a full page exists.
+    """Put first hits from distinct files before repeated chunks.
 
     This preserves the first-hit file and the order of all first file
     occurrences. If the candidate pool cannot supply ``top_k`` distinct files,
-    retain the old page rather than silently returning fewer hits.
+    fill the remaining slots with repeated chunks in their original order.
+    The result count remains ``min(top_k, len(candidates))``.
     """
     if len(query_concepts(query)) < 2 or file_filter or re.search(r"\btests?\b", query, re.I):
         return candidates[:top_k]
     selected = []
+    repeated = []
     seen = set()
     for row in candidates:
         if row.file_path not in seen:
@@ -53,7 +55,9 @@ def _default_file_diversity(
             seen.add(row.file_path)
             if len(selected) == top_k:
                 return selected
-    return candidates[:top_k]
+        elif len(repeated) < top_k:
+            repeated.append(row)
+    return selected + repeated[:top_k - len(selected)]
 
 
 def query_concepts(query: str) -> tuple[str, ...]:

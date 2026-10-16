@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T08:42:28.988235+00:00",
+  "scope": "Six fresh source-reviewed questions, two labels each, frozen before retrieval. Repositories and some source files previously exposed; judgments by the implementing agent, non-exhaustive and not independent. Earlier queries are consumed development evidence.",
+  "contract": "Default unscoped multi-concept queries deliver first occurrences of files, then repeated chunks in original order, up to the requested count. Other query modes remain unchanged.",
+  "acceptance": {
+    "same_pool_comparison": true,
+    "depths": [
+      24,
+      96
+    ],
+    "no_labeled_file_loss_at_first_five_or_requested_depth": true,
+    "first_file_unchanged": true,
+    "hit_count_unchanged": true,
+    "all_first_occurrences_before_repeats": true,
+    "maximum_median_delivery_ms": 5,
+    "controlled_96_hit_page_unique_files": 88,
+    "no_post_validation_tuning": true
+  },
+  "repositories": [
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:deep-page-1",
+          "query": "Trace how settings read from the configuration file precede command line arguments while blank lines and comments are ignored",
+          "evidence": [
+            {
+              "file": "crates/core/flags/config.rs",
+              "line": 94,
+              "quote": "if line.is_empty() || line[0] == b'#'",
+              "source_sha256": "adb0b126590521b981db9d913091f6d564f0b142b2d024861e84538a225cf23e",
+              "relevance": "Filters blank lines and comments from the configuration input."
+            },
+            {
+              "file": "crates/core/flags/parse.rs",
+              "line": 103,
+              "quote": "final_args.extend(std::env::args_os().skip(1));",
+              "source_sha256": "c2a3375396800a6c8d8e00d98c321d5caf3c91f7938fd90eafb4e82ea95b5ca5",
+              "relevance": "Appends command line arguments after configuration arguments and reparses."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:deep-page-2",
+          "query": "Trace how literal fragments extracted from a regular expression become a faster matcher for candidate lines",
+          "evidence": [
+            {
+              "file": "crates/regex/src/matcher.rs",
+              "line": 78,
+              "quote": "let fast_line_regex = InnerLiterals::new(&chir, &regex).one_regex()?;",
+              "source_sha256": "a98966ab3326c1ff8121987222f602dc8d861b627fbb4f9fa804667ca643065f",
+              "relevance": "Connects the configured matcher to the inner-literal optimization."
+            },
+            {
+              "file": "crates/regex/src/literal.rs",
+              "line": 90,
+              "quote": "let seq = Extractor::new().extract_untagged(chir.hir());",
+              "source_sha256": "f1746f2df93ba9defed55f36ad0f7cd5dada16a7fa881f80193f8d98948c981f",
+              "relevance": "Extracts inner literals and constructs the accelerated line regex."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "queries": [
+        {
+          "id": "okhttp:deep-page-1",
+          "query": "Trace how a server settings frame changes the initial byte allowance of existing streams after acknowledgement",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Connection.kt",
+              "line": 795,
+              "quote": "stream.addBytesToWriteWindow(delta)",
+              "source_sha256": "a269d5b0d6859c7efbfda896c1b4b27a9672d65b157776360970ed96eea2247c",
+              "relevance": "Acknowledges settings and applies the initial-window delta to each existing stream."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Stream.kt",
+              "line": 691,
+              "quote": "writeBytesMaximum += delta",
+              "source_sha256": "54e4b16d63117739b4b50e1490e92f997fbc998416dad14e9e72f44c3b40bf8a",
+              "relevance": "Adjusts the stream allowance and wakes waiters when it increases."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:deep-page-2",
+          "query": "Trace how a hostname lookup through the system resolver becomes candidate socket addresses and how an empty result is rejected",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dns.kt",
+              "line": 50,
+              "quote": "return InetAddress.getAllByName(hostname).toList()",
+              "source_sha256": "627fb79b94eeed1bc6c76eaed207821ad4f4a420cbba6eaccff53ce029a9109a",
+              "relevance": "Implements the default system hostname resolver."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RouteSelector.kt",
+              "line": 170,
+              "quote": "val result = address.dns.lookup(socketHost)",
+              "source_sha256": "5c6dbf77b39a073cb4fefd1722166bb49876c6390c78370c0c8cf35a38e9c892",
+              "relevance": "Invokes the resolver, rejects an empty result and builds socket addresses."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "cats-effect",
+      "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "queries": [
+        {
+          "id": "cats-effect:deep-page-1",
+          "query": "Trace how a finite sleep request becomes a scheduled callback with a cancellation action",
+          "evidence": [
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IO.scala",
+              "line": 1693,
+              "quote": "handleDuration[IO[Unit]](delay, IO.never)(Sleep(_))",
+              "source_sha256": "144fd9851777e594c389aca4cd8fd2455459dd221742906433a6bfa49e89c827",
+              "relevance": "Creates the sleep instruction from the requested duration."
+            },
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+              "line": 972,
+              "quote": "val cancel = scheduler.sleep(delay, () => cb(RightUnit))",
+              "source_sha256": "a9da13276fc0781eb4ada950afad243192ae936298bf6be16f5bba001d44d065",
+              "relevance": "Interprets sleep, schedules completion and supplies its cancellation action."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:deep-page-2",
+          "query": "Trace how a cryptographically secure random source supplies bytes for an identifier whose version and variant bits are set",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/SecureRandom.scala",
+              "line": 123,
+              "quote": "new ScalaRandom[F](selectRandom) with SecureRandom[F] {}",
+              "source_sha256": "92eb5fee295b6860aa686f4a10dbf165c3830d8eeee048d7758b83223d69b2b7",
+              "relevance": "Builds the secure random source backed by Java secure generators."
+            },
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/UUIDGen.scala",
+              "line": 124,
+              "quote": "SecureRandom[F].nextBytes(16).map(unsafeUUIDBuilder)",
+              "source_sha256": "859e2a40cb67302e519d41e2751f3c79dc07f0cd4b6f5149075a8154e833b6b0",
+              "relevance": "Consumes secure bytes and sets UUID version and variant bits."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

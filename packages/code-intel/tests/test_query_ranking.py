@@ -39,9 +39,45 @@ def test_broad_ranker_is_off_by_default_but_file_page_is_diverse(monkeypatch):
         _hit("src/freshness.py", "refresh", "cache generation", 0.01),
     ]
     assert rerank_broad_candidates("cache generation", rows, 3) == [rows[0], rows[2], rows[3]]
-    assert rerank_broad_candidates("cache generation", rows, 4) == rows
+    assert rerank_broad_candidates("cache generation", rows, 4) == [
+        rows[0], rows[2], rows[3], rows[1],
+    ]
     assert rerank_broad_candidates("generation", rows, 3) == rows[:3]
     assert rerank_broad_candidates("cache generation", rows, 3, "src/lifecycle.py") == rows[:3]
+
+
+def test_deeper_page_keeps_available_files_before_repeated_chunks(monkeypatch):
+    monkeypatch.delenv("ATTOCODE_INTEL_BROAD_RERANK")
+    dominant = [_hit("dominant.py", f"chunk_{i}", "stream search", 1 / (i + 1))
+                for i in range(120)]
+    others = [_hit(f"file_{i}.py", "search", "stream search", 0.001)
+              for i in range(87)]
+    rows = dominant + others
+    before = list(rows)
+    shallow = rerank_broad_candidates("stream multiline search", rows, 24)
+    deep = rerank_broad_candidates("stream multiline search", rows, 96)
+    assert len(deep) == 96
+    assert deep[:24] == shallow
+    assert deep[:88] == [dominant[0], *others]
+    assert deep[88:] == dominant[1:9]
+    assert rows == before
+    assert all(any(hit is row for row in rows) for hit in deep)
+
+
+@pytest.mark.parametrize("top_k", [0, 1, 2, 3, 4, 5, 20])
+def test_file_diversity_retains_count_order_and_all_chunks_when_room(monkeypatch, top_k):
+    monkeypatch.delenv("ATTOCODE_INTEL_BROAD_RERANK")
+    rows = [_hit(path, f"chunk_{i}", "cache generation", 1.0)
+            for i, path in enumerate(["a.py", "a.py", "b.py", "b.py", "c.py"])]
+    expected = [rows[0], rows[2], rows[4], rows[1], rows[3]][:top_k]
+    result = rerank_broad_candidates("cache generation", rows, top_k)
+    assert result == expected
+    assert len(result) == min(top_k, len(rows))
+    assert rerank_broad_candidates("cache generation", [], top_k) == []
+    # Narrow and test queries still expose consecutive chunks of the same file.
+    for query, scope in [("generation", ""), ("cache generation", "*.py"),
+                         ("cache generation tests", "")]:
+        assert rerank_broad_candidates(query, rows, top_k, scope) == rows[:top_k]
 
 
 def test_concept_evidence_promotes_full_match_and_diversifies_files():

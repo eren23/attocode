@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Deeper search page file coverage
+
+- Keep available distinct files at the front of broad, unscoped search pages,
+  then fill remaining slots with repeated chunks. A larger requested page no
+  longer disables diversity when there are too few distinct files to fill it.
+  Preserve hit counts, first-occurrence file order, scores and narrow-query behavior.
+- Six fresh source-bound questions retain the same labeled-file coverage on
+  identical pools; one deep page exposes 86 distinct files instead of 37. This
+  fixes delivery, not relevance scoring; no ranking weights or model changed.
+
 ### Fixed — Incremental reference and impact workflows
 
 - Extract Python/JS/TS references during incremental updates; publish changed
