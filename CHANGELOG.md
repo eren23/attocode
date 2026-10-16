@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Evaluated — First-page navigation phrases
+
+- Rejected one query-prefix candidate after development regressions and no fresh
+  labeled-coverage gain across twelve new questions. Preserve current search
+  behavior; retain source-bound questions, stage traces and acceptance tests.
+  Eleven of twelve development label misses at five were already in the pool.
+
 ### Fixed — Deeper search page file coverage
 
 - Keep available distinct files at the front of broad, unscoped search pages,

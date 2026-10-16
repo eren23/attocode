@@ -1,0 +1,310 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T10:23:30.953535+00:00",
+  "scope": "Consumed development questions only. One candidate; fresh validation remains unobserved. No post-validation tuning.",
+  "candidate": {
+    "name": "navigation_prefix",
+    "pattern": "^\\s*(?:please\\s+)?(?:trace|explain|show)\\s+how\\s+",
+    "flags": "IGNORECASE",
+    "replacement": "",
+    "rule": "Apply once, only if remainder has at least one lexical task term. Preserve all interior words, explicit exclusions, exact symbols, scoped searches and explicit test queries. Only provider-free unscoped lexical search is eligible."
+  },
+  "gate": {
+    "development_queries": 12,
+    "fresh_validation_queries": 12,
+    "minimum_net_labeled_pairs_at_five": 2,
+    "minimum_improved_queries": 2,
+    "minimum_improved_repositories": 2,
+    "no_individual_any_hit5_loss": true,
+    "no_individual_label_loss_at_24": true,
+    "mean_labeled_recall5_not_decreased": true,
+    "p95_seconds_max_ratio": 1.5,
+    "p95_seconds_floor": 0.05,
+    "fresh_mix": "Eight eligible phrases (trace how / explain how / show how), four unprefixed controls; two relevant source files each, three cached repositories; new behaviors. If development fails, run fresh diagnostic once but do not adopt or retune."
+  },
+  "bounds": {
+    "seconds_per_pack": 180,
+    "disk_bytes": 536870912,
+    "rss_bytes": 1610612736,
+    "materialized_source_bytes": 67108864,
+    "downloads": false,
+    "models": false
+  },
+  "consumed_input_hashes": {
+    "2026-10-16-cross-file-questions.json": "8d75705738819f73c530f4410a92f4183bf5366a9355ebe32108df386e7bce34",
+    "2026-10-16-deep-page-questions.json": "51a03c476bddc3b1248875059acfd3aec6a13140786f8b44c4f18326091c3cc3"
+  },
+  "repositories": [
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:cross-file-audit-1",
+          "category": "cross_file",
+          "query": "Trace how enabling matches across newline boundaries reaches the whole-input search strategy for a stream",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 725,
+              "quote": ".multi_line(self.multiline)",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Connects the configured flag to the searcher builder."
+            },
+            {
+              "file": "crates/searcher/src/searcher/mod.rs",
+              "line": 750,
+              "quote": "self.fill_multi_line_buffer_from_reader::<_, S>(decoder)?;",
+              "source_sha256": "1b7b8c4cb60ce6ed74f26edc5b9ef04998a64ee9bad15acdc1ace1f3c66ef654",
+              "relevance": "Selects and buffers the stream for multiline execution."
+            },
+            {
+              "file": "crates/searcher/src/searcher/glue.rs",
+              "line": 142,
+              "quote": "pub(crate) struct MultiLine<'s, M, S>",
+              "source_sha256": "c2a6d3055a7a2e69a7208113e837eec247d30a43e0c96029aad307f83632fb02",
+              "relevance": "Implements the multiline search strategy."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:cross-file-audit-2",
+          "category": "cross_file",
+          "query": "Trace how the requested match limit stops scanning only after the remaining trailing context has been emitted",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 721,
+              "quote": ".max_matches(self.max_count)",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Passes the requested match limit into the searcher."
+            },
+            {
+              "file": "crates/searcher/src/searcher/core.rs",
+              "line": 342,
+              "quote": "&& self.after_context_left == 0",
+              "source_sha256": "7f3fd0976fc91e8aca2eaa07b423ab2a6ad919984b261604d35d715fa02ab3ef",
+              "relevance": "Combines the exceeded-limit condition with context exhaustion."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:deep-page-1",
+          "query": "Trace how settings read from the configuration file precede command line arguments while blank lines and comments are ignored",
+          "evidence": [
+            {
+              "file": "crates/core/flags/config.rs",
+              "line": 94,
+              "quote": "if line.is_empty() || line[0] == b'#'",
+              "source_sha256": "adb0b126590521b981db9d913091f6d564f0b142b2d024861e84538a225cf23e",
+              "relevance": "Filters blank lines and comments from the configuration input."
+            },
+            {
+              "file": "crates/core/flags/parse.rs",
+              "line": 103,
+              "quote": "final_args.extend(std::env::args_os().skip(1));",
+              "source_sha256": "c2a3375396800a6c8d8e00d98c321d5caf3c91f7938fd90eafb4e82ea95b5ca5",
+              "relevance": "Appends command line arguments after configuration arguments and reparses."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:deep-page-2",
+          "query": "Trace how literal fragments extracted from a regular expression become a faster matcher for candidate lines",
+          "evidence": [
+            {
+              "file": "crates/regex/src/matcher.rs",
+              "line": 78,
+              "quote": "let fast_line_regex = InnerLiterals::new(&chir, &regex).one_regex()?;",
+              "source_sha256": "a98966ab3326c1ff8121987222f602dc8d861b627fbb4f9fa804667ca643065f",
+              "relevance": "Connects the configured matcher to the inner-literal optimization."
+            },
+            {
+              "file": "crates/regex/src/literal.rs",
+              "line": 90,
+              "quote": "let seq = Extractor::new().extract_untagged(chir.hir());",
+              "source_sha256": "f1746f2df93ba9defed55f36ad0f7cd5dada16a7fa881f80193f8d98948c981f",
+              "relevance": "Extracts inner literals and constructs the accelerated line regex."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "queries": [
+        {
+          "id": "okhttp:cross-file-audit-1",
+          "category": "cross_file",
+          "query": "Trace how queued asynchronous requests respect host concurrency limits and release their running slot when the executor rejects work",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dispatcher.kt",
+              "line": 221,
+              "quote": "if (asyncCall.callsPerHost.get() >= this.maxRequestsPerHost) continue",
+              "source_sha256": "da36494a287ed4a975aa7dfbdb91161cd58dcb3abc661e0860b0dfad3f40becc",
+              "relevance": "Enforces the host limit while promoting queued work."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt",
+              "line": 563,
+              "quote": "client.dispatcher.finished(this) // This call is no longer running!",
+              "source_sha256": "31c344a63388ec6b08f76973e45cfb1db30a0a9f1e6ef73d882ea361f2e103a7",
+              "relevance": "Returns rejected execution to dispatcher completion and reports callback failure."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:cross-file-audit-2",
+          "category": "cross_file",
+          "query": "Trace the transition from validating a successful socket upgrade response to delivering incoming message and control frames",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/RealWebSocket.kt",
+              "line": 232,
+              "quote": "internal fun checkUpgradeSuccess(response: Response): Socket",
+              "source_sha256": "814cb1e1e604d5c16738224ec436d6b3ebb440c5b2d647bfbd12eaeffe1c8cc4",
+              "relevance": "Validates the upgrade and connects it to the reader loop."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/ws/WebSocketReader.kt",
+              "line": 108,
+              "quote": "fun processNextFrame()",
+              "source_sha256": "75b0a0055752bff2630fd1a3f753b99182640009a08311ad9a201f4bdbadaea8",
+              "relevance": "Dispatches decoded frames to message/control handling."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:deep-page-1",
+          "query": "Trace how a server settings frame changes the initial byte allowance of existing streams after acknowledgement",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Connection.kt",
+              "line": 795,
+              "quote": "stream.addBytesToWriteWindow(delta)",
+              "source_sha256": "a269d5b0d6859c7efbfda896c1b4b27a9672d65b157776360970ed96eea2247c",
+              "relevance": "Acknowledges settings and applies the initial-window delta to each existing stream."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2Stream.kt",
+              "line": 691,
+              "quote": "writeBytesMaximum += delta",
+              "source_sha256": "54e4b16d63117739b4b50e1490e92f997fbc998416dad14e9e72f44c3b40bf8a",
+              "relevance": "Adjusts the stream allowance and wakes waiters when it increases."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:deep-page-2",
+          "query": "Trace how a hostname lookup through the system resolver becomes candidate socket addresses and how an empty result is rejected",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Dns.kt",
+              "line": 50,
+              "quote": "return InetAddress.getAllByName(hostname).toList()",
+              "source_sha256": "627fb79b94eeed1bc6c76eaed207821ad4f4a420cbba6eaccff53ce029a9109a",
+              "relevance": "Implements the default system hostname resolver."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RouteSelector.kt",
+              "line": 170,
+              "quote": "val result = address.dns.lookup(socketHost)",
+              "source_sha256": "5c6dbf77b39a073cb4fefd1722166bb49876c6390c78370c0c8cf35a38e9c892",
+              "relevance": "Invokes the resolver, rejects an empty result and builds socket addresses."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "cats-effect",
+      "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "queries": [
+        {
+          "id": "cats-effect:cross-file-audit-1",
+          "category": "cross_file",
+          "query": "Trace how moving an effect to a supplied execution context restores its previous context when the effect finishes",
+          "evidence": [
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IO.scala",
+              "line": 384,
+              "quote": "def evalOn(ec: ExecutionContext): IO[A] = IO.EvalOn(this, ec)",
+              "source_sha256": "144fd9851777e594c389aca4cd8fd2455459dd221742906433a6bfa49e89c827",
+              "relevance": "Constructs the context-switch instruction."
+            },
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+              "line": 1502,
+              "quote": "private[this] def evalOnSuccessK(result: Any): IO[Any]",
+              "source_sha256": "a9da13276fc0781eb4ada950afad243192ae936298bf6be16f5bba001d44d065",
+              "relevance": "Interprets the switch and restores the prior execution context on completion."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:cross-file-audit-2",
+          "category": "cross_file",
+          "query": "Trace how using an acquired resource invokes its release action with the correct success, error or cancellation outcome",
+          "evidence": [
+            {
+              "file": "kernel/shared/src/main/scala/cats/effect/kernel/Resource.scala",
+              "line": 174,
+              "quote": "F.bracketFull(resource)",
+              "source_sha256": "be4ebfb1dc6e6753cb3512cfe910368a706811232793611474988c1a26c581a6",
+              "relevance": "Interprets acquisition/use/release and maps outcomes to release exit cases."
+            },
+            {
+              "file": "kernel/shared/src/main/scala/cats/effect/kernel/MonadCancel.scala",
+              "line": 459,
+              "quote": "def bracketFull[A, B](acquire: Poll[F] => F[A])(use: A => F[B])",
+              "source_sha256": "b3b6fc27ff4c1f1ac5aa3837540fc2d487777dae449b839907df0e8e3460d925",
+              "relevance": "Implements uncancelable acquisition and outcome-aware finalization."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:deep-page-1",
+          "query": "Trace how a finite sleep request becomes a scheduled callback with a cancellation action",
+          "evidence": [
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IO.scala",
+              "line": 1693,
+              "quote": "handleDuration[IO[Unit]](delay, IO.never)(Sleep(_))",
+              "source_sha256": "144fd9851777e594c389aca4cd8fd2455459dd221742906433a6bfa49e89c827",
+              "relevance": "Creates the sleep instruction from the requested duration."
+            },
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+              "line": 972,
+              "quote": "val cancel = scheduler.sleep(delay, () => cb(RightUnit))",
+              "source_sha256": "a9da13276fc0781eb4ada950afad243192ae936298bf6be16f5bba001d44d065",
+              "relevance": "Interprets sleep, schedules completion and supplies its cancellation action."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:deep-page-2",
+          "query": "Trace how a cryptographically secure random source supplies bytes for an identifier whose version and variant bits are set",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/SecureRandom.scala",
+              "line": 123,
+              "quote": "new ScalaRandom[F](selectRandom) with SecureRandom[F] {}",
+              "source_sha256": "92eb5fee295b6860aa686f4a10dbf165c3830d8eeee048d7758b83223d69b2b7",
+              "relevance": "Builds the secure random source backed by Java secure generators."
+            },
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/UUIDGen.scala",
+              "line": 124,
+              "quote": "SecureRandom[F].nextBytes(16).map(unsafeUUIDBuilder)",
+              "source_sha256": "859e2a40cb67302e519d41e2751f3c79dc07f0cd4b6f5149075a8154e833b6b0",
+              "relevance": "Consumes secure bytes and sets UUID version and variant bits."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
