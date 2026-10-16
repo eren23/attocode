@@ -10,6 +10,11 @@ STOP_WORDS = frozenset({"a", "an", "and", "are", "as", "at", "be", "by", "code",
 _EXCLUSION = re.compile(r"\b(?:without|excluding|exclude|except|avoid)\b", re.IGNORECASE)
 _EXCLUSION_END = re.compile(r"[,;.!?]|\b(?:but|instead|rather|while)\b", re.IGNORECASE)
 _EXCLUSION_MODIFIERS = frozenset({"unrelated", "irrelevant", "unwanted", "other"})
+_BEHAVIOR_LEAD = re.compile(
+    r"\s*(?:leaking|buffering|mutating|losing|following|overriding|accepting|"
+    r"converting|forcing|dropping|creating|reading|writing|executing|downloading|blocking)\b",
+    re.IGNORECASE,
+)
 
 
 def terms(text, fold=True):
@@ -44,6 +49,31 @@ def task_terms(text: str, fold: bool = True) -> tuple[set[str], set[str]]:
     positive = terms(" ".join(positive_parts), fold) - _EXCLUSION_MODIFIERS
     negative = terms(" ".join(negative_parts), fold) - _EXCLUSION_MODIFIERS
     return positive, negative
+
+
+def scope_exclusion_terms(text: str, fold: bool = True) -> set[str]:
+    """Soft source penalties, without penalizing recognized behavioral clauses.
+
+    Keep legacy positive retrieval terms and excerpt selection unchanged. Only
+    high-confidence action leads after ``without``/``avoid`` are neutral here;
+    ambiguous nouns and explicit scopes retain their existing interpretation.
+    This is a bounded lexical rule, not a general natural-language parser.
+    """
+    matches = list(_EXCLUSION.finditer(text))
+
+    def behavior(match):
+        return match.group().lower() in {"without", "avoid"} and _BEHAVIOR_LEAD.match(text[match.end():])
+
+    if not any(behavior(match) for match in matches):
+        return task_terms(text, fold)[1]
+    negative_parts = []
+    for index, match in enumerate(matches):
+        if behavior(match):
+            continue
+        tail = text[match.end():matches[index + 1].start() if index + 1 < len(matches) else len(text)]
+        end = _EXCLUSION_END.search(tail)
+        negative_parts.append(tail[:end.start()] if end else tail)
+    return terms(" ".join(negative_parts), fold) - _EXCLUSION_MODIFIERS
 
 
 def file_excerpt(lines: list[str], path: str, query: str) -> str:

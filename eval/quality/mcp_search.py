@@ -13,6 +13,7 @@ import json
 import math
 import statistics
 import time
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
@@ -56,9 +57,10 @@ def decode(response):
     return payload
 
 
-async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter=""):
+async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="", capture_generation=False):
     """Execute the public gateway, recording diagnostics without replacing it."""
     before_hydration = []
+    generation = []
     rank = CodeIntelService._rank_search_results
 
     def record(service, *args, **kwargs):
@@ -69,7 +71,27 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="")
 
     request = {"query": query, "top_k": top_k, "max_tokens": budget, "mode": mode, "file_filter": file_filter}
     started = time.perf_counter()
-    with patch.object(CodeIntelService, "_rank_search_results", record):
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(CodeIntelService, "_rank_search_results", record))
+        if capture_generation:
+            from attocode_intel._internal.integrations.context.semantic_search import (
+                SemanticSearchManager,
+            )
+
+            for method, stage in (("_keyword_search", "keyword"), ("_body_search", "body"), ("_file_search", "file_bm25")):
+                original = getattr(SemanticSearchManager, method)
+
+                def capture(manager, *args, _fn=original, _stage=stage, **kwargs):
+                    rows = _fn(manager, *args, **kwargs)
+                    generation.append({"stage": _stage, "arguments": list(args), "keywords": kwargs,
+                                       "results": [r if isinstance(r, str) else {
+                                           "file": r.file_path, "name": r.name, "kind": r.chunk_type, "score": r.score,
+                                           "start": r.start_line, "end": r.end_line,
+                                           "definition_start": r.definition_start_line, "definition_end": r.definition_end_line,
+                                           "text_sha256": hashlib.sha256(r.text.encode()).hexdigest()} for r in rows]})
+                    return rows
+
+                stack.enter_context(patch.object(SemanticSearchManager, method, capture))
         payload = decode(await gateway.execute_mcp("semantic_search", request))
     seconds = time.perf_counter() - started
     data = payload["data"]
@@ -77,8 +99,11 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="")
     if index.get("status") != "ready":
         raise RuntimeError(f"Incomplete search index: {index}")
     # Store the entire delivered envelope: trimming may remove metadata too.
-    return {"request": request, "response": payload, "seconds": seconds,
-            "pre_hydration_diagnostic": before_hydration}
+    result = {"request": request, "response": payload, "seconds": seconds,
+              "pre_hydration_diagnostic": before_hydration}
+    if capture_generation:
+        result["generation_diagnostic"] = generation
+    return result
 
 
 async def inspect_first_named(gateway, results, query, budget):
@@ -180,7 +205,8 @@ async def run(args):
                 for _ in range(3):
                     result = await observe(gateway, q["query"], top_k=5 if page == "scoped" else int(page),
                                            budget=design["budget"], mode=q.get("mode", "auto"),
-                                           file_filter=q["evidence"][0]["file"] if page == "scoped" else "")
+                                           file_filter=q["evidence"][0]["file"] if page == "scoped" else "",
+                                           capture_generation=args.capture_generation)
                     samples.append(result["seconds"])
                     if page in pages and pages[page]["response"]["data"]["results"] != result["response"]["data"]["results"]:
                         raise RuntimeError("Unstable warmed delivery")
@@ -208,6 +234,8 @@ def main():
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--pack", required=True)
     parser.add_argument("--arm", required=True)
+    parser.add_argument("--capture-generation", action="store_true",
+                        help="Record pre-penalty keyword/body/file candidates without changing delivery")
     args = parser.parse_args()
     asyncio.run(run(args))
 

@@ -1054,9 +1054,10 @@ class SemanticSearchManager:
         """
         if top_k <= 0:
             return []
-        from attocode_intel.focused_evidence import task_terms
+        from attocode_intel.focused_evidence import scope_exclusion_terms, task_terms
 
-        positive, negative = task_terms(query)
+        positive, _ = task_terms(query)
+        negative = scope_exclusion_terms(query)
         # The indexes keep plurals and match whole words: send "settings" as written too.
         positive |= task_terms(query, fold=False)[0]
         terms = sorted(positive) if positive else _tokenize(query)

@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T16:54:52.833936+00:00",
+  "split": "development",
+  "baseline_commit": "6d407d656da83242e70ff8a37c03ce43893cfa54",
+  "budget": 2000,
+  "scope": "New wording and behavioral constraints in previously exposed repositories. Authored, non-exhaustive labels, not independent users/agent outcomes. Four behavioral queries and four scope controls per split. Validation not opened until candidate freeze; no product tuning after validation. Old questions diagnostic only.",
+  "acceptance": {
+    "no_regression": "No aggregate file/visible/inspection losses on either split; no scoped individual file/visible loss; explicit-scope responses identical; record all unscoped individual losses; same primary candidate-stage generation. Fixed reproduction must pass.",
+    "latency": "p95 <= max(100 ms, 1.5x baseline); old 68-query/five-method ranking baseline and thresholds unchanged.",
+    "resources": "Private arm caches, cached sources only, one process at a time, max512MiB disk/1.5GiB RSS/180sec per process; no models or cloud.",
+    "limitation": "Change penalty interpretation only for high-confidence behavioral verb leads. Preserve task_terms, retrieval tokens, snippets and expansion. Unknown or noun-based requirements retain legacy interpretation."
+  },
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "id": "express:negation-development-1",
+          "category": "behavior",
+          "query": "Encode JSON responses without leaking HTML-sensitive characters",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "quote": "var escape = app.get('json escape')",
+              "line": 235,
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "test/res.json.js",
+              "quote": "describe('\"json escape\" setting'",
+              "line": 106,
+              "source_sha256": "08186aceebdb74af9f6fabe495c8c8b9334fbc6e5d53bf52145e4f86850eb046",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "express:negation-development-2",
+          "category": "scope",
+          "query": "Compile route ETag settings without examples",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "quote": "this.set('etag fn', compileETag(val))",
+              "line": 365,
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "lib/utils.js",
+              "quote": "exports.compileETag = function",
+              "line": 130,
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "queries": [
+        {
+          "id": "requests:negation-development-1",
+          "category": "behavior",
+          "query": "Refresh proxy credentials without leaking Proxy-Authorization through HTTPS redirects",
+          "evidence": [
+            {
+              "file": "src/requests/sessions.py",
+              "quote": "def rebuild_proxies(",
+              "line": 303,
+              "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/requests/adapters.py",
+              "quote": "def proxy_headers(",
+              "line": 571,
+              "source_sha256": "5aecc78b49b5c39fbf7c4a5ba18ca4195b44ed26b34d91e1039359605e97f06e",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "requests:negation-development-2",
+          "category": "scope",
+          "query": "Send prepared requests through transport adapters excluding examples",
+          "evidence": [
+            {
+              "file": "src/requests/sessions.py",
+              "quote": "adapter = self.get_adapter(url=request.url)",
+              "line": 700,
+              "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/requests/adapters.py",
+              "quote": "def send(",
+              "line": 121,
+              "source_sha256": "5aecc78b49b5c39fbf7c4a5ba18ca4195b44ed26b34d91e1039359605e97f06e",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:negation-development-1",
+          "category": "behavior",
+          "query": "Select text encoding without dropping binary detection settings",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "quote": "builder.encoding(Some(enc.clone()))",
+              "line": 741,
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "crates/searcher/src/searcher/mod.rs",
+              "quote": "pub fn binary_detection(",
+              "line": 510,
+              "source_sha256": "1b7b8c4cb60ce6ed74f26edc5b9ef04998a64ee9bad15acdc1ace1f3c66ef654",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:negation-development-2",
+          "category": "scope",
+          "query": "Resolve search text encoding settings without docs",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "quote": "builder.encoding(Some(enc.clone()))",
+              "line": 741,
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "crates/searcher/src/searcher/mod.rs",
+              "quote": "pub fn encoding(",
+              "line": 533,
+              "source_sha256": "1b7b8c4cb60ce6ed74f26edc5b9ef04998a64ee9bad15acdc1ace1f3c66ef654",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "gson",
+      "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+      "queries": [
+        {
+          "id": "gson:negation-development-1",
+          "category": "behavior",
+          "query": "Write top-level JSON without accepting multiple document values",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/stream/JsonWriter.java",
+              "quote": "JSON must have only one top-level value.",
+              "line": 632,
+              "source_sha256": "9b247089eaa9934495a7e4898f1b950523d70602e23ccaa74b06c415a1f7943f",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+              "quote": "public void testStrictWriterDoesNotPermitMultipleTopLevelValues(",
+              "line": 561,
+              "source_sha256": "1d01282d19fc04072a1d6cd88ad2cbe872dcb84eaf27384dcfcf3bb488d41400",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "gson:negation-development-2",
+          "category": "scope",
+          "query": "Find adapter factories without examples",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/Gson.java",
+              "quote": "public <T> TypeAdapter<T> getAdapter(TypeToken<T> type)",
+              "line": 473,
+              "source_sha256": "16dfef6c154e162e72bb2c95ea718bd6a4002512ce9014b1234f2fba143a5a1a",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "gson/src/main/java/com/google/gson/TypeAdapterFactory.java",
+              "quote": "public interface TypeAdapterFactory",
+              "line": 163,
+              "source_sha256": "9df16367a9ec24492e7ea71b03628892806086934f8d1d1b5b52da8aa0aa5dcd",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

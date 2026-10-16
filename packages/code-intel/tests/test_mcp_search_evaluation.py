@@ -31,13 +31,14 @@ async def test_operator_uses_gateway_depth_hydration_and_budget(tmp_path, monkey
     monkeypatch.setattr(SemanticSearchManager, "search_candidates", record)
     gateway = OperationGateway(str(tmp_path), profile="daily", watch=False)
     try:
-        result = await observe(gateway, "quota limit", top_k=5, budget=2000)
+        result = await observe(gateway, "quota limit", top_k=5, budget=2000, capture_generation=True)
         assert depths and min(depths) >= 24
         data = result["response"]["data"]
         assert data["ranking"]["delivered_count"] == len(data["results"])
         assert result["request"]["max_tokens"] == 2000
         assert any("quota limit" in h["snippet"] for h in data["results"])
         assert result["pre_hydration_diagnostic"]
+        assert {r["stage"] for r in result["generation_diagnostic"]} == {"keyword", "body", "file_bm25"}
     finally:
         await gateway.close()
 

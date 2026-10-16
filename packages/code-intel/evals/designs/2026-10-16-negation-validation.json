@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T16:54:52.835851+00:00",
+  "split": "validation",
+  "baseline_commit": "6d407d656da83242e70ff8a37c03ce43893cfa54",
+  "budget": 2000,
+  "scope": "New wording and behavioral constraints in previously exposed repositories. Authored, non-exhaustive labels, not independent users/agent outcomes. Four behavioral queries and four scope controls per split. Validation not opened until candidate freeze; no product tuning after validation. Old questions diagnostic only.",
+  "acceptance": {
+    "no_regression": "No aggregate file/visible/inspection losses on either split; no scoped individual file/visible loss; explicit-scope responses identical; record all unscoped individual losses; same primary candidate-stage generation. Fixed reproduction must pass.",
+    "latency": "p95 <= max(100 ms, 1.5x baseline); old 68-query/five-method ranking baseline and thresholds unchanged.",
+    "resources": "Private arm caches, cached sources only, one process at a time, max512MiB disk/1.5GiB RSS/180sec per process; no models or cloud.",
+    "limitation": "Change penalty interpretation only for high-confidence behavioral verb leads. Preserve task_terms, retrieval tokens, snippets and expansion. Unknown or noun-based requirements retain legacy interpretation."
+  },
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "id": "express:negation-validation-1",
+          "category": "behavior",
+          "query": "Send response buffers without overriding a caller supplied Content-Type",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "quote": "if (!this.get('Content-Type'))",
+              "line": 151,
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "test/res.send.js",
+              "quote": "should keep charset in Content-Type for Buffers",
+              "line": 125,
+              "source_sha256": "9dcbd827335442daa10f4bb99ebd26897a922700e6e149b5d1c0c9b6579afa58",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "express:negation-validation-2",
+          "category": "scope",
+          "query": "Render template views without unrelated example apps",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "quote": "view = new View(name,",
+              "line": 552,
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "lib/view.js",
+              "quote": "function View(name, options)",
+              "line": 52,
+              "source_sha256": "74f4171b66263e22481820bc5975708f7dd8a61484f570aac7c5b4ab77ecbd79",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "queries": [
+        {
+          "id": "requests:negation-validation-1",
+          "category": "behavior",
+          "query": "Prepare merged request cookies without mutating the caller cookie jar",
+          "evidence": [
+            {
+              "file": "src/requests/sessions.py",
+              "quote": "merged_cookies = merge_cookies(",
+              "line": 477,
+              "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/requests/cookies.py",
+              "quote": "def merge_cookies(",
+              "line": 542,
+              "source_sha256": "6cd8be8aa123e0d3d9d34fa86feac7bf392f39bccdde5129830de0ea9692dd7c",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "requests:negation-validation-2",
+          "category": "scope",
+          "query": "Build prepared request bodies without examples",
+          "evidence": [
+            {
+              "file": "src/requests/models.py",
+              "quote": "def prepare_body(",
+              "line": 496,
+              "source_sha256": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/requests/utils.py",
+              "quote": "def super_len(",
+              "line": 134,
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:negation-validation-1",
+          "category": "behavior",
+          "query": "Configure memory mapped search without forcing stdin into memory",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "quote": ".memory_map(self.mmap_choice.clone())",
+              "line": 726,
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "crates/searcher/src/searcher/mod.rs",
+              "quote": "pub fn memory_map(",
+              "line": 495,
+              "source_sha256": "1b7b8c4cb60ce6ed74f26edc5b9ef04998a64ee9bad15acdc1ace1f3c66ef654",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:negation-validation-2",
+          "category": "scope",
+          "query": "Set case insensitive matching flags excluding examples",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "quote": "builder.case_insensitive(true)",
+              "line": 470,
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "crates/regex/src/matcher.rs",
+              "quote": "pub fn case_insensitive(",
+              "line": 103,
+              "source_sha256": "a98966ab3326c1ff8121987222f602dc8d861b627fbb4f9fa804667ca643065f",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "gson",
+      "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+      "queries": [
+        {
+          "id": "gson:negation-validation-1",
+          "category": "behavior",
+          "query": "Skip nested JSON values without creating a tree",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/stream/JsonReader.java",
+              "quote": "public void skipValue(",
+              "line": 1227,
+              "source_sha256": "4b373e5b50986971d8743a67caba3150a829b45c3b65323f57f546abbf5cd94a",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+              "quote": "public void testSkipArray(",
+              "line": 75,
+              "source_sha256": "2f450f42673bb1999838074ce28b7397a9de5f557ba58d3a226f5f2169aef18e",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "gson:negation-validation-2",
+          "category": "scope",
+          "query": "Resolve annotated field names without unrelated examples",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+              "quote": "private List<String> getFieldNames(",
+              "line": 72,
+              "source_sha256": "1def371d22200d2d0a9ce37c09e5f4cdd911da25644b761b928542f90eb6d9f0",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "gson/src/main/java/com/google/gson/annotations/SerializedName.java",
+              "quote": "public @interface SerializedName",
+              "line": 83,
+              "source_sha256": "35d85d8c405d9eee0ef4d79487744cc8b26650e21827469bdc6ef595c71f02e9",
+              "relevance": "Implements or directly exercises the requested behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
