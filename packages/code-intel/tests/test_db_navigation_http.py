@@ -6,8 +6,10 @@ tests cover persisted parser output, branch resolution and HTTP serialization.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
+import sys
 import uuid
 from types import SimpleNamespace
 
@@ -39,8 +41,8 @@ def _sqlite_json(element, compiler, **kw):
 
 
 @pytest.fixture
-async def navigation(monkeypatch):
-    engine = create_async_engine(os.environ.get("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:"))
+async def navigation(monkeypatch, tmp_path):
+    engine = create_async_engine(os.environ.get("TEST_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'navigation.sqlite'}"))
     models = (Organization, Repository, Branch, FileContent, BranchFile, Symbol, SymbolReference, Dependency)
     async with engine.begin() as conn:
         for model in models:
@@ -85,7 +87,7 @@ async def navigation(monkeypatch):
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             yield SimpleNamespace(client=client, base=f"/api/v2/projects/{repo_id}", sessions=sessions,
-                                  shas=shas, main_id=main_id, other_id=other_id, repo_id=repo_id)
+                                  shas=shas, main_id=main_id, other_id=other_id, repo_id=repo_id, engine=engine)
     finally:
         async with sessions() as session:
             await session.execute(delete(BranchFile).where(BranchFile.branch_id.in_([main_id, other_id])))
@@ -294,7 +296,7 @@ async def test_full_reindex_replaces_shared_content_references(navigation, tmp_p
         assert await persisted_refs(navigation, navigation.shas[1]) == other
     response = await navigation.client.get(navigation.base + "/cross-refs", params={"symbol": "helper"})
     assert response.status_code == 200
-    assert response.json()["total_references"] == 2
+    assert response.json()["total_references"] == 2 * copies
 
 
 @pytest.mark.parametrize("failure", ["parse", "insert"])
@@ -435,3 +437,281 @@ async def test_postgres_reference_writers_serialize_and_readers_keep_committed_r
         assert await SymbolStore(contender).replace_references(sha, second) == 1
         await contender.commit()
     assert await persisted_refs(navigation, sha) == [("second", "call", 20, "")]
+
+
+async def apply_changes(navigation, changes, *, branch=None, base_dir=None):
+    from attocode_intel.indexing.incremental import IncrementalPipeline
+
+    for content in changes.values():
+        if content is not None:
+            navigation.shas.append(hashlib.sha256(content).hexdigest())
+    async with navigation.sessions() as session:
+        stats = await IncrementalPipeline(session).process_file_changes(
+            branch or navigation.main_id, list(changes), base_dir=base_dir,
+            file_contents={p: c for p, c in changes.items() if c is not None})
+        await session.commit()
+    return stats
+
+
+@pytest.fixture
+async def incremental(navigation):
+    return navigation
+
+
+def workflow_sources(extension, nonce, caller="entry", target="target_workflow"):
+    if extension == "py":
+        return {"api.py": f"# {nonce}\ndef target_workflow():\n    return 1\n".encode(),
+                "caller.py": (f"# {nonce}\nfrom api import {target}\ndef {caller}():\n"
+                              f"    return {target}()\n").encode()}
+    return {f"api.{extension}": f"// {nonce}\nexport function target_workflow() {{\n  return 1;\n}}\n".encode(),
+            f"caller.{extension}": (f"// {nonce}\nimport {{ {target} }} from './api';\n"
+                                    f"function {caller}() {{\n  return {target}();\n}}\n").encode()}
+
+
+async def seed_workflow(navigation, tmp_path, extension):
+    from attocode_intel.git.manager import GitRepoManager
+    from attocode_intel.indexing.full_indexer import FullIndexer
+
+    sources = workflow_sources(extension, uuid.uuid4())
+    repo = tmp_path / "workflow"
+    repo.mkdir()
+    for path, content in sources.items():
+        (repo / path).write_bytes(content)
+        navigation.shas.append(hashlib.sha256(content).hexdigest())
+    for args in (("init", "-b", "main"), ("add", "."),
+                 ("-c", "user.name=Test", "-c", "user.email=test@example.com",
+                  "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgSign=false", "commit", "-m", "fixture")):
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    manager = GitRepoManager(str(tmp_path / "unused"))
+    manager.register_path(str(navigation.repo_id), repo)
+    for branch in (navigation.main_id, navigation.other_id):
+        async with navigation.sessions() as session:
+            stats = await FullIndexer(session, manager).index(str(navigation.repo_id), branch)
+            assert stats["errors"] == 0
+    return sources
+
+
+async def caller_locations(navigation, branch="", symbol="target_workflow"):
+    response = await navigation.client.get(navigation.base + "/cross-refs", params={"symbol": symbol, "branch": branch})
+    assert response.status_code == 200, response.text
+    rows = response.json()["references"]
+    return sorted((r["file_path"], r["line"], r["caller_qualified_name"]) for r in rows)
+
+
+async def impacted(navigation, path, branch=""):
+    response = await navigation.client.get(navigation.base + "/impact", params={"files": path, "branch": branch})
+    assert response.status_code == 200, response.text
+    return response.json()["impacted_files"]
+
+
+@pytest.mark.parametrize("extension", ["py", "js", "ts"])
+async def test_incremental_caller_edit_rename_delete_branch_and_reconnect(incremental, tmp_path, extension):
+    n = incremental
+    sources = await seed_workflow(n, tmp_path, extension)
+    caller, api, moved, copy = (f"{name}.{extension}" for name in ("caller", "api", "renamed", "copy"))
+    assert await caller_locations(n) == [(caller, 4, "entry")]
+    assert await impacted(n, api) == [caller]
+    edited = workflow_sources(extension, uuid.uuid4(), caller="updated")[caller]
+    stats = await apply_changes(n, {caller: edited})
+    assert stats["errors"] == 0 and stats["processed"] == 1
+    assert await caller_locations(n) == [(caller, 4, "updated")]
+    assert await caller_locations(n, "other") == [(caller, 4, "entry")]
+    assert await impacted(n, api) == [caller]
+    stats = await apply_changes(n, {caller: edited})
+    assert stats["skipped_unchanged"] == 1
+    assert await caller_locations(n) == [(caller, 4, "updated")]
+    # Rename with unchanged content, and a second path sharing the same content.
+    assert (await apply_changes(n, {caller: None, moved: edited, copy: edited}))["errors"] == 0
+    assert await caller_locations(n) == [(copy, 4, "updated"), (moved, 4, "updated")]
+    assert await impacted(n, api) == [copy, moved]
+    # Independent interpreter/provider and a new DB pool, not an in-memory cache.
+    await n.engine.dispose()
+    restarted = subprocess.run([sys.executable, "-c", RESTART_QUERY], input=json.dumps({
+        "url": n.engine.url.render_as_string(hide_password=False),
+        "project": str(n.repo_id), "api": api,
+    }), text=True, capture_output=True, timeout=20)
+    assert restarted.returncode == 0, restarted.stderr
+    recovered = json.loads(restarted.stdout)
+    assert recovered["callers"] == [[copy, 4, "updated"], [moved, 4, "updated"]]
+    assert recovered["impact"] == [copy, moved]
+    assert await caller_locations(n) == [(copy, 4, "updated"), (moved, 4, "updated")]
+    assert (await apply_changes(n, {copy: None, moved: None}))["processed"] == 2
+    assert await caller_locations(n) == [] and await impacted(n, api) == []
+    assert await caller_locations(n, "other") == [(caller, 4, "entry")]
+    assert await impacted(n, api, "other") == [caller]
+    # Recover an earlier version from the content store without multiplying refs.
+    assert (await apply_changes(n, {caller: sources[caller]}))["errors"] == 0
+    assert await caller_locations(n) == [(caller, 4, "entry")]
+
+
+@pytest.mark.parametrize("extension", ["py", "js", "ts"])
+async def test_impact_follows_target_edit_and_removed_import(incremental, tmp_path, extension):
+    n = incremental
+    sources = await seed_workflow(n, tmp_path, extension)
+    caller, api = f"caller.{extension}", f"api.{extension}"
+    new_api = sources[api].replace(b"return 1", b"return 2")
+    assert (await apply_changes(n, {api: new_api}))["errors"] == 0
+    assert await impacted(n, api) == [caller]
+    assert await impacted(n, api, "other") == [caller]
+    no_call = (f"# {uuid.uuid4()}\ndef empty():\n    return 1\n" if extension == "py"
+               else f"// {uuid.uuid4()}\nfunction empty() {{ return 1; }}\n").encode()
+    assert (await apply_changes(n, {caller: no_call}))["errors"] == 0
+    assert await caller_locations(n) == [] and await impacted(n, api) == []
+    assert await caller_locations(n, "other") == [(caller, 4, "entry")]
+
+
+@pytest.mark.parametrize("failure", ["parse", "insert"])
+async def test_failed_incremental_refresh_preserves_manifest_and_allows_retry(incremental, monkeypatch, failure):
+    n = incremental
+    from attocode_intel.indexing import incremental as module
+    from attocode_intel.storage.branch_overlay import BranchOverlay
+
+    updated = f"# {uuid.uuid4()}\ndef changed():\n    return helper()\n".encode()
+    healthy = f"# {uuid.uuid4()}\ndef healthy():\n    return helper()\n".encode()
+    real = extract_references
+
+    def broken(content, path):
+        if path == "module.py":
+            if failure == "parse":
+                raise RuntimeError("injected extraction failure")
+            return [{"symbol_name": "helper", "ref_kind": "call", "line": None}]
+        return real(content, path)
+
+    # raising=False makes the pre-fix regression fail on its actual behavior.
+    monkeypatch.setattr(module, "extract_references", broken, raising=False)
+    stats = await apply_changes(n, {"module.py": updated, "healthy.py": healthy})
+    assert stats["errors"] == 1 and stats["processed"] == 1
+    async with n.sessions() as session:
+        manifest = await BranchOverlay(session).resolve_manifest(n.main_id)
+    assert manifest["module.py"] == n.shas[0]
+    assert "healthy.py" in manifest
+    assert len(await persisted_refs(n, n.shas[0])) == 2
+    monkeypatch.setattr(module, "extract_references", real)
+    stats = await apply_changes(n, {"module.py": updated})
+    assert stats["errors"] == 0 and stats["processed"] == 1
+    rows = await caller_locations(n, symbol="helper")
+    assert ("module.py", 3, "changed") in rows
+    assert ("healthy.py", 3, "healthy") in rows
+
+
+async def test_unreadable_existing_file_is_not_deleted(incremental, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from attocode_intel.storage.branch_overlay import BranchOverlay
+
+    path = tmp_path / "module.py"
+    path.write_text("unreadable")
+    original = Path.read_bytes
+
+    def unreadable(self):
+        if self == path:
+            raise PermissionError("injected read failure")
+        return original(self)
+
+    monkeypatch.setattr(Path, "read_bytes", unreadable)
+    stats = await apply_changes(incremental, {"module.py": None}, base_dir=str(tmp_path))
+    assert stats["errors"] == 1 and stats["processed"] == 0
+    async with incremental.sessions() as session:
+        manifest = await BranchOverlay(session).resolve_manifest(incremental.main_id)
+    assert manifest["module.py"] == incremental.shas[0]
+
+
+@pytest.mark.parametrize("extension", ["py", "js", "ts"])
+async def test_nested_import_transitive_impact_survives_target_change(incremental, extension):
+    n = incremental
+    nonce = uuid.uuid4()
+    if extension == "py":
+        sources = {"api.py": f"# {nonce}\ndef target_workflow():\n    return 1\n".encode(),
+                   "pkg/caller.py": b"from api import target_workflow\ndef entry():\n    return target_workflow()\n",
+                   "top.py": b"from pkg.caller import entry\nentry()\n"}
+    else:
+        sources = {f"api.{extension}": f"// {nonce}\nexport function target_workflow() {{ return 1; }}\n".encode(),
+                   f"pkg/caller.{extension}": b"import { target_workflow } from '../api';\nfunction entry() {\n return target_workflow();\n}\n",
+                   f"top.{extension}": b"import { entry } from './pkg/caller';\nentry();\n"}
+    # Reverse dependency order in the input, exercising complete-manifest resolution.
+    assert (await apply_changes(n, dict(reversed(list(sources.items())))))["errors"] == 0
+    api = f"api.{extension}"
+    assert await impacted(n, api) == [f"pkg/caller.{extension}", f"top.{extension}"]
+    assert (await apply_changes(n, {api: sources[api].replace(b"return 1", b"return 2")}))["errors"] == 0
+    assert await impacted(n, api) == [f"pkg/caller.{extension}", f"top.{extension}"]
+    assert (await apply_changes(n, {f"pkg/caller.{extension}": None}))["errors"] == 0
+    assert await impacted(n, api) == []
+
+
+async def test_impact_includes_importers_beyond_500_contents(incremental):
+    n = incremental
+    # Persist 513 distinct, tiny callers without a large checkout/download.
+    async with n.sessions() as session:
+        for i in range(513):
+            content = f"# {uuid.uuid4()}\nfrom module import helper\n".encode()
+            sha = hashlib.sha256(content).hexdigest()
+            n.shas.append(sha)
+            session.add(FileContent(sha256=sha, content=content, size_bytes=len(content), language="python"))
+            await session.flush()
+            session.add(BranchFile(branch_id=n.main_id, path=f"caller{i:03}.py", content_sha=sha, status="added"))
+        await session.commit()
+    assert await impacted(n, "module.py") == [f"caller{i:03}.py" for i in range(513)]
+
+
+async def test_impact_resolves_current_typescript_aliases(incremental):
+    n = incremental
+    nonce = uuid.uuid4()
+    sources = {"src/api.ts": f"// {nonce}\nexport function helper() {{ return 1; }}\n".encode(),
+               "caller.ts": b"import { helper } from '@/api';\nhelper();\n",
+               "tsconfig.json": b'{"compilerOptions":{"paths":{"@/*":["src/*"]}}}'}
+    assert (await apply_changes(n, sources))["errors"] == 0
+    assert await impacted(n, "src/api.ts") == ["caller.ts"]
+    assert (await apply_changes(n, {"src/api.ts": sources["src/api.ts"].replace(b"return 1", b"return 2")}))["errors"] == 0
+    assert await impacted(n, "src/api.ts") == ["caller.ts"]
+    assert (await apply_changes(n, {"tsconfig.json": b'{"compilerOptions":{"paths":{"@/*":["missing/*"]}}}'}))["errors"] == 0
+    assert await impacted(n, "src/api.ts") == []
+
+
+@pytest.mark.parametrize("prefix", ["export ", "export default ", "export async ", "export default async "])
+def test_exported_declaration_is_not_its_own_caller(prefix):
+    source = f"{prefix}function helper() {{\n  return 1;\n}}\nhelper();\n".encode()
+    refs = extract_references(source, "api.ts")
+    assert [(r["symbol_name"], r["line"]) for r in refs] == [("helper", 4)]
+
+
+async def test_git_missing_path_is_deletion_but_invalid_ref_is_an_error(incremental, tmp_path):
+    from attocode_intel.indexing.incremental import IncrementalPipeline
+    from attocode_intel.storage.branch_overlay import BranchOverlay
+
+    manager = await indexed_git(incremental, tmp_path)
+    with pytest.raises(FileNotFoundError):
+        manager.read_file(str(incremental.repo_id), "main", "missing.py")
+    async with incremental.sessions() as session:
+        stats = await IncrementalPipeline(session).process_file_changes(
+            incremental.main_id, ["module.py"], git_reader=manager,
+            repo_id=str(incremental.repo_id), ref="nonexistent-ref")
+        await session.commit()
+        manifest = await BranchOverlay(session).resolve_manifest(incremental.main_id)
+    assert stats["errors"] == 1 and stats["processed"] == 0
+    assert manifest["module.py"] == incremental.shas[0]
+
+
+RESTART_QUERY = """
+import asyncio, json, sys
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from attocode_intel.api.providers.db_provider import DbAnalysisProvider
+import attocode_intel.db.engine as db
+request = json.load(sys.stdin)
+async def main():
+    engine = create_async_engine(request["url"])
+    sessions = async_sessionmaker(engine)
+    async def get_session():
+        async with sessions() as session:
+            yield session
+    db.get_session = get_session
+    try:
+        provider = DbAnalysisProvider(request["project"])
+        refs = await provider.cross_references("target_workflow", "")
+        impact = await provider.impact_analysis([request["api"]], "")
+        print(json.dumps({"callers": sorted((r.file_path, r.line, r.caller_qualified_name)
+                                           for r in refs.references),
+                          "impact": impact.impacted_files}))
+    finally:
+        await engine.dispose()
+asyncio.run(main())
+"""

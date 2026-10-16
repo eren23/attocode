@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Incremental reference and impact workflows
+
+- Extract Python/JS/TS references during incremental updates; publish changed
+  manifest entries only after successful per-file SQL savepoints. Count failures,
+  keep prior versions queryable, and preserve other branches' shared content.
+  Read errors and invalid Git refs no longer masquerade as file deletions;
+  PostgreSQL branch-lock failures propagate instead of disabling serialization.
+- Resolve DB impact imports against current branch paths in bounded content batches,
+  so target edits and identical-content paths do not hide importers. Fix nested
+  JS/TS relative imports and stop counting exported declarations as self-calls.
+  Cross-reference responses preserve multiple paths sharing content.
+- Add SQL/HTTP workflows across Python, JavaScript and TypeScript covering caller
+  edits, renames, deletes, branch isolation, independent-process recovery,
+  parse/insert failures and retry, transitive imports, aliases and 513 importers.
+  Reference matching and import reachability remain syntactic, not semantic proof.
+
 ### Fixed — Idempotent database references and branch hotspot scores
 
 - Full indexing replaces references once per content hash instead of appending

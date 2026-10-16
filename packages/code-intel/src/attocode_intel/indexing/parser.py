@@ -4,10 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +182,7 @@ def extract_references(content: bytes, path: str) -> list[dict]:
         if stripped.startswith("#") or stripped.startswith("//"):
             continue
         # Skip definition lines (def/class/function/interface/type)
-        if re.match(r"^\s*(?:async\s+)?(?:def|class|function|interface|type)\s", line_text):
+        if re.match(r"^\s*(?:export\s+(?:default\s+)?)?(?:async\s+)?(?:def|class|function|interface|type)\s", line_text):
             continue
         # Skip import lines — those are tracked as dependencies
         if re.match(r"^\s*(?:from\s|import\s|export\s.*from)", line_text):

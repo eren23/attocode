@@ -1,6 +1,6 @@
 # Code Intelligence Roadmap
 
-## Current priorities — 2026-10-15
+## Current priorities — 2026-10-16
 
 The standalone package is `attocode-code-intel` **0.1.6**; the root agent has a
 separate version (`0.2.30` in this checkout). Read the
@@ -14,7 +14,8 @@ an unchecked feature shipped when its old target version was reached.
 | --- | --- | --- |
 | Merged #214 | Repair service-mode v2 navigation responses and expose persisted caller names | Real SQL → HTTP checks for schema, branch selection, declaration inclusion, ambiguity, result bounds and local/DB caller fields. PostgreSQL migration/product checks passed on Python 3.12 and 3.13. |
 | Merged #214 | Reject malformed body-file development decisions | Exact named boolean gates and complete counts for both arms; negative controls. Historical results and consumed questions stay unchanged. |
-| Implemented in current source | Repair DB indexing idempotence and dependency metrics | Reproduced duplicate references and a hub score of 0.60 instead of 0.70. Atomic reference replacement, branch-scoped keyed normalization, and SQL/HTTP regressions cover repair, rollback, repeated/shared-content indexing and graph limits. PostgreSQL writer serialization has a dedicated CI control. |
+| Merged #215 | Repair DB indexing idempotence and dependency metrics | Reproduced duplicate references and a hub score of 0.60 instead of 0.70. Atomic reference replacement, branch-scoped keyed normalization, and SQL/HTTP regressions cover repair, rollback, repeated/shared-content indexing and graph limits. PostgreSQL writer serialization has a dedicated CI control. |
+| Implemented in current source | Keep incremental callers and impact queries current | Python/JS/TS SQL/HTTP edit, rename, delete, branch and fresh-process recovery controls. Per-file rollback and current-path import reachability; existing dependency caches in other endpoints remain separate. |
 | Next performance work | Find a mechanism that improves cold Cockroach headroom | Last real target: 167.970/180 seconds. Retain byte-equivalent index controls, then seek a bounded end-to-end improvement; the two tokenization prototypes were rejected. Any new cloud run needs a new approved scope. |
 | Next retrieval work | Investigate candidate misses with fresh multi-relevant labels | Expansion, dual-query and body-file trials did not pass their complete gates. Freeze new questions before evaluation; existing questions are consumed. No ranking default change. |
 | Reliability | Continue diagnosing intermittent Rust readiness | Shared document lifecycle is fixed on main and final CI passed first try; the original intermittent cause remains unproven. Preserve assertions and capture protocol evidence on recurrence. |

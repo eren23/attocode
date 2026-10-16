@@ -192,7 +192,10 @@ class GitRepoManager:
         tree = commit.tree
 
         # Walk the tree path
-        entry = tree[file_path]
+        try:
+            entry = tree[file_path]
+        except KeyError as exc:
+            raise FileNotFoundError(f"File not found: {file_path} at {ref}") from exc
         blob = repo.get(entry.id)
         if blob is None or not isinstance(blob, pygit2.Blob):
             raise FileNotFoundError(f"File not found: {file_path} at {ref}")

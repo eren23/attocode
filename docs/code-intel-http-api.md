@@ -334,7 +334,27 @@ legacy duplicates; a failed replacement preserves the prior set and increments
 `errors` in the indexing report. A successful empty extraction removes old rows.
 The outer transaction controls commit; other branches using that same content
 observe the committed replacement. This does not change the parser's existing
-name-based reference limitations or add reference extraction to incremental updates.
+name-based reference limitations.
+
+Incremental updates now extract Python, JavaScript and TypeScript references before
+publishing each changed file's manifest entry. Extraction or insertion errors leave
+that file on its prior version and increment `errors`; other successful files in the
+batch can still commit. Unchanged bytes remain a no-op. Reindex old unchanged files
+fully to backfill references missing from earlier versions. Rename notifications
+must include both the removed and added paths; deletion removes the branch path,
+not shared content used by another branch. Read/permission errors and invalid Git
+refs are errors, not deletions. Cross-reference results retain distinct paths that
+share content, up to the existing 500-reference response bound.
+
+The DB-backed v2 `impact` endpoint resolves Python/JS/TS imports against the current
+branch manifest, including relative paths and the existing TS/JS alias resolver.
+This keeps unchanged importers connected after a target's content changes and
+preserves distinct paths sharing content. It reads supported source bodies in
+batches of 32 instead of relying on stale cached dependency SHAs or a first-500-file
+cutoff. Work scales with the branch's supported source content; this is a correctness
+tradeoff, not a latency improvement claim. Import extraction remains syntactic and
+partial (`absence_proven=false`), not semantic call resolution. Other dependency-cache
+consumers, including hotspots, do not acquire this current-path resolution here.
 
 The database-backed v2 `hotspots` endpoint scores the selected branch's content
 graph: both endpoints of a counted dependency must occur in its manifest.
