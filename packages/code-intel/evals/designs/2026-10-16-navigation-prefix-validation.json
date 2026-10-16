@@ -1,0 +1,266 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T10:28:16.858952+00:00",
+  "scope": "Twelve fresh source-reviewed cross-file questions, frozen before retrieval. Eight eligible navigation phrases and four unprefixed controls, two labels per question. Author judgments are non-exhaustive; repositories and some files were exposed before. Development candidate failed; this is the predeclared diagnostic follow-up, cannot override that failure or enable adoption.",
+  "design_sha256": "a371606cc2d324e50a464442506f5d3f57a470bb016e665b67118e47ad2920ec",
+  "repositories": [
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:prefix-fresh-1",
+          "query": "Explain how a pattern file specified as a dash consumes standard input and reports invalid pattern bytes with a line number",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 1035,
+              "quote": "for pat in grep::cli::patterns_from_stdin()?",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Dispatches the standard-input pattern source and marks it consumed."
+            },
+            {
+              "file": "crates/cli/src/pattern.rs",
+              "line": 141,
+              "quote": "pub fn patterns_from_reader<R: io::Read>(rdr: R)",
+              "source_sha256": "22b94d38be203aa3c252bf010cce238349f39cb5c494991ac57b52de1dab722f",
+              "relevance": "Reads pattern lines, decodes their bytes and annotates errors with line numbers."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:prefix-fresh-2",
+          "query": "Show how selecting the alternative regular expression engine enables optional just in time compilation and bounds its stack allocation",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 435,
+              "quote": ".max_jit_stack_size(Some(10 * (1 << 20)))",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Enables optional PCRE2 JIT with a bounded stack on 64-bit targets."
+            },
+            {
+              "file": "crates/pcre2/src/matcher.rs",
+              "line": 295,
+              "quote": "self.builder.max_jit_stack_size(bytes);",
+              "source_sha256": "4a19200e901fa165537871f1a6d6f0ea38cb86d2985ffe7de2596fb2b442f1da",
+              "relevance": "Forwards the stack bound and JIT options to the PCRE2 regex builder."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:prefix-fresh-3",
+          "query": "Trace how per-file search statistics are accumulated into an overall report during parallel traversal",
+          "evidence": [
+            {
+              "file": "crates/core/search.rs",
+              "line": 392,
+              "quote": "stats: sink.stats().map(|s| s.clone()),",
+              "source_sha256": "1ebd56cf3b1c83e522356760bbac869d6972105c454f95b579020e24a93ade7c",
+              "relevance": "Returns each search sink statistics as part of the per-file result."
+            },
+            {
+              "file": "crates/core/main.rs",
+              "line": 201,
+              "quote": "let mut stats = locked_stats.lock().unwrap();",
+              "source_sha256": "05468b2b642fb1271b40896f31d9ef0ffa54707687ecea7196fd8f94a7345d98",
+              "relevance": "Combines per-file statistics under a mutex before printing totals."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:prefix-fresh-4",
+          "query": "Convert ignore-file glob lines into rooted matching rules and apply whitelist precedence when choosing directory entries",
+          "evidence": [
+            {
+              "file": "crates/ignore/src/gitignore.rs",
+              "line": 476,
+              "quote": "glob.is_whitelist = true;",
+              "source_sha256": "f089d28ba4b07fd9fdb627d49f6d98084d5de55aefbdfdeda71a96468f485097",
+              "relevance": "Parses whitelist and rooted glob semantics from ignore-file lines."
+            },
+            {
+              "file": "crates/ignore/src/dir.rs",
+              "line": 410,
+              "quote": "let mat = self.matched_ignore(path, is_dir);",
+              "source_sha256": "d98c23cc2119721048d5135f24ac3bd0c0223780b438b070deffddd8b6429d25",
+              "relevance": "Combines ignore-file results with overrides and type filters."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "queries": [
+        {
+          "id": "okhttp:prefix-fresh-1",
+          "query": "Trace how reading a response body to completion commits its cached copy while interrupted reads abandon the cache write",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/cache/CacheInterceptor.kt",
+              "line": 206,
+              "quote": "cacheBody.close() // The cache response is complete!",
+              "source_sha256": "c450fcee0b5fe4ab049df8588ac787f40f9627b79e60e03878892fccdcf326d5",
+              "relevance": "Ties successful exhaustion to cache completion and aborts failed reads."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Cache.kt",
+              "line": 425,
+              "quote": "private inner class RealCacheRequest(",
+              "source_sha256": "0c16dd8a317ad931a96729b3cf69dba28d3492ce7e64dc6ddb4a32673a72577d",
+              "relevance": "Wraps the cache editor; closing the body commits and abort abandons the edit."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:prefix-fresh-2",
+          "query": "Explain how an existing call connection is checked for socket health before being reused for another exchange",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealRoutePlanner.kt",
+              "line": 97,
+              "quote": "val healthy = candidate.isHealthy(doExtensiveHealthChecks)",
+              "source_sha256": "abd7631383e5e578be86b9787eb6ee3e25052af49b70b5915ec78156ceb54552",
+              "relevance": "Checks reuse eligibility and closes an unsuitable existing connection."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnection.kt",
+              "line": 320,
+              "quote": "return javaNetSocket.isHealthy(socket.source)",
+              "source_sha256": "42fbe9ace113e52d9324541cd1f82a21056ccb1b6fe8cd437972b5ec9b01c98f",
+              "relevance": "Performs the extensive health check for idle sockets."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:prefix-fresh-3",
+          "query": "Show how application and network interceptors are assembled and how the network chain rejects proceeding more than once",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealCall.kt",
+              "line": 217,
+              "quote": "interceptors += client.networkInterceptors",
+              "source_sha256": "31c344a63388ec6b08f76973e45cfb1db30a0a9f1e6ef73d882ea361f2e103a7",
+              "relevance": "Assembles network and application interceptors into the request chain."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RealInterceptorChain.kt",
+              "line": 321,
+              "quote": "check(calls == 1)",
+              "source_sha256": "4a7b7ed9990c0e7aa7a985c38a428ad552ae7ba088daedd3f68616a671157d24",
+              "relevance": "Rejects repeated proceed calls once a network exchange exists."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:prefix-fresh-4",
+          "query": "Normalize an international URL hostname to its ASCII form and reject an invalid explicit port",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/HttpUrl.kt",
+              "line": 1438,
+              "quote": "port = parsePort(input, portColonOffset + 1, componentDelimiterOffset)",
+              "source_sha256": "dc026bebb8c9c43ea084a3c4e93fc3664bd34d824c79ee623acfcac8b981a289",
+              "relevance": "Parses authority components, canonicalizes the host and validates the port."
+            },
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/-HostnamesCommon.kt",
+              "line": 306,
+              "quote": "val result = idnToAscii(host) ?: return null",
+              "source_sha256": "939934bdc7ca4cc21c75b6a42a1dfabe7884b427d4b217689f3f15a91a9104c8",
+              "relevance": "Canonicalizes international hostnames through IDNA and validates the result."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "cats-effect",
+      "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "queries": [
+        {
+          "id": "cats-effect:prefix-fresh-1",
+          "query": "Trace how captured async stack trace events become user-facing frames and a printable trace",
+          "evidence": [
+            {
+              "file": "core/shared/src/main/scala/cats/effect/tracing/Tracing.scala",
+              "line": 153,
+              "quote": "@static def getFrames(events: RingBuffer): List[StackTraceElement]",
+              "source_sha256": "e56527f7247d2c94193bc40d2715b7081df5ee546cc6190764215e24d8e65478",
+              "relevance": "Converts captured events to filtered operation and call-site frames."
+            },
+            {
+              "file": "core/shared/src/main/scala/cats/effect/Trace.scala",
+              "line": 59,
+              "quote": "new Trace(Tracing.getFrames(events))",
+              "source_sha256": "3cff6dc49b4589c9e087538e4e08e16ee2179bc841e6ef9e88c31bdbda11d274",
+              "relevance": "Builds the public trace and renders its frames."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:prefix-fresh-2",
+          "query": "Explain how fiber-local values are inherited by a child while subsequent updates remain confined to that fiber",
+          "evidence": [
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IOLocal.scala",
+              "line": 159,
+              "quote": "IO.Local(state => (set(state, value), ()))",
+              "source_sha256": "ecbd7e05e3e31592e3b23aca8997e56814d93289e1a5efdfc1abb9a05982042c",
+              "relevance": "Constructs the local-state write instruction using immutable state updates."
+            },
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IOFiber.scala",
+              "line": 85,
+              "quote": "private[this] var localState: IOLocalState = initState",
+              "source_sha256": "a9da13276fc0781eb4ada950afad243192ae936298bf6be16f5bba001d44d065",
+              "relevance": "Owns per-fiber state, passes it at child construction and applies local updates."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:prefix-fresh-3",
+          "query": "Acquire a lock for one key and safely unlink a canceled waiter without blocking waiters for other keys",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/KeyedMutex.scala",
+              "line": 82,
+              "quote": "LockQueue.lock(queue = state(key))",
+              "source_sha256": "0dc942419e98a162bd1059d785cbb73abc6870e895833ade2136f69f1bb9cf12",
+              "relevance": "Selects a per-key queue before acquiring the resource-scoped lock."
+            },
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/LockQueue.scala",
+              "line": 95,
+              "quote": "cancel(ourCell, nextCell)",
+              "source_sha256": "4bfa161336ce9f5047704b95e69d2af1ba64a7c8f62b3004d2cc71e04a658d6a",
+              "relevance": "Splices a canceled wait into the queue and wakes its successor."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:prefix-fresh-4",
+          "query": "Race two effects, return the successful winner and cancel the losing computation before returning",
+          "evidence": [
+            {
+              "file": "core/shared/src/main/scala/cats/effect/IO.scala",
+              "line": 1789,
+              "quote": "asyncForIO.race(left, right)",
+              "source_sha256": "144fd9851777e594c389aca4cd8fd2455459dd221742906433a6bfa49e89c827",
+              "relevance": "Delegates the public effect race to the generic spawn implementation."
+            },
+            {
+              "file": "kernel/shared/src/main/scala/cats/effect/kernel/GenSpawn.scala",
+              "line": 406,
+              "quote": "case Outcome.Succeeded(fa) => f.cancel *> fa.map(Left(_))",
+              "source_sha256": "2c0f0c61465f6364ffbedc729e38b2e2525c5b705329d2ffcc30481bb686981c",
+              "relevance": "Cancels the losing fiber before returning the winning successful result."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
