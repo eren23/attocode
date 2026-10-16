@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Service navigation contracts and evaluation admission
+
+- Repair database-backed v2 definition, references, hover and diagnostics
+  response schemas. References accept `include_declaration`, bound delivery and
+  report name-match limitations. Declaration-only fallbacks reject ambiguous
+  names and unsupported cursor precision rather than guessing an enclosing
+  function. Local language-server behavior is unchanged.
+- Preserve caller qualified names in structured local and database cross-reference
+  responses. Real SQL/HTTP regression checks exercise the stored parser output.
+- Require the exact boolean development checks and both complete arm counts
+  before a body-file validation run. Truthy strings or renamed checks no longer
+  qualify. Historical experiments and ranking defaults are unchanged.
+- Reconcile historical roadmap counts and release gates with the current
+  evidence-backed backlog; no release or cloud run accompanies this maintenance.
+
 ### Fixed — Shared language-server document lifecycle
 
 - Track open documents and sent versions in the language-server client so

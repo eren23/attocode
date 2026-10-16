@@ -1,5 +1,11 @@
 # Attocode Roadmap
 
+This page preserves historical release notes and longer-term ideas. For current
+code-intelligence priorities, use the [maintained backlog](code-intel-roadmap.md#current-priorities--2026-10-15)
+and [validated workstream](intelligence-workstream.md). Version targets below
+are historical plans, not evidence that all listed work shipped. Standalone
+code intelligence and the root agent have separate version numbers.
+
 ## v0.2.16 -- Install Probing, Portable Bundles & Supply-Chain Hardening (Released 2026-04-05)
 
 1. ~~**Installed-target runtime probing**~~ -- DONE: `attocode code-intel probe-install` validates file-based MCP installs by launching the configured stdio command, resolving `${workspaceFolder}`, and optionally exercising `project_summary`
@@ -26,7 +32,7 @@
 5. ~~**New MCP tools**~~ -- DONE: `hydration_status` tool; `indexing_depth` param on bootstrap; `mode` param on semantic_search
 6. **Ground truth expansion** -- add YAML files for 15+ more benchmark repos (currently 5)
 7. **Go-specific search improvements** -- Go MRR 0.200 lags Python 0.725; index package docs, use module paths
-8. **ast-grep integration** -- optional structural pattern searches alongside tree-sitter parsing
+8. ~~**ast-grep integration**~~ -- Structural executor shipped in the later Phase 1 work; see `packages/code-intel/src/attocode_intel/rules/executor.py`. Accuracy-corpus expansion remains open.
 
 ## v0.2.15 -- Search Performance & New Search Modes (Released 2026-04-04)
 
@@ -46,10 +52,10 @@
 1. **Cross-repo search in org** -- aggregate embeddings across repositories, org-scoped vector queries
 2. **Better git integration** -- commit graph exploration, blame-weighted hotspots, PR-aware analysis
 3. **Cross-service analysis** -- detect API contracts (OpenAPI, gRPC), map service-to-service calls
-4. **More tests** -- integration tests for all 40 MCP tools, Playwright E2E, target 60% coverage
+4. **Behavioral test coverage** -- use the generated [operation catalog](intelligence-tools.md) and bounded quality inventory; distinguish successful behavior, rejected inputs, unsupported operations and untested paths. The historical 40-tool count is obsolete.
 5. **Full MCP feature parity** -- ensure all tools work in all modes (local, remote, service)
 6. **Better offline mode**:
-   - Offline embedding fallback (auto-switch to local model like `all-MiniLM-L6-v2`)
+   - Optional local embeddings with explicit installation and resource bounds; preserve model-free lexical defaults and avoid implicit downloads.
    - Pre-computed analysis bundles (`.attocode-bundle` export for air-gapped use)
    - Offline learning sync (queue locally, sync on reconnect)
    - Git-based offline analysis (blame, history, branches via pygit2 without DB)

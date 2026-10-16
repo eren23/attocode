@@ -300,6 +300,32 @@ curl -X POST http://localhost:8080/api/v1/projects/a1b2c3d4/lsp/definition \
 curl "http://localhost:8080/api/v1/projects/a1b2c3d4/lsp/diagnostics?file=src/auth.py"
 ```
 
+### Structured v2 navigation in service mode
+
+The same LSP paths under `/api/v2/projects/{id}/lsp` return structured responses.
+With a local language server, definition, references and hover report
+`source: "language_server"`. For database-backed repositories, they report
+`source: "symbol_index"`: only a unique declaration line with `col=0` is
+supported. Database records lack column and binding information; a cursor in a
+function body or an ambiguous declaration returns an explicit error instead of
+an enclosing function's identity.
+
+- Definition returns `location`; hover returns `content`, `file`, `line`, `col`.
+- References returns `locations` and `total` (the delivered count), honors
+  `include_declaration`, and is scoped to the selected branch. These are
+  name-matched candidates, as described in `note`, not resolved semantic links.
+  Returned columns are `0` (unknown); at most 500 locations are delivered and
+  truncation is reported in `error`.
+- Diagnostics returns the requested `file`, an empty list, `total: 0` and an
+  explicit unsupported error without a language server. Empty results are not
+  evidence that the file is clean.
+- `/api/v2/projects/{id}/cross-refs` preserves `caller_qualified_name` from both
+  local and database indexes. Empty caller names mean top-level or unattributed
+  references; they do not establish a missing call edge.
+
+These service-mode response repairs are in the current source; they are not
+part of the published 0.1.6 artifact.
+
 ### History
 
 | Method | Path | Parameters | Description |

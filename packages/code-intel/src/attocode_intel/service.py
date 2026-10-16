@@ -852,7 +852,8 @@ class CodeIntelService:
             ],
             "references": [
                 {"ref_kind": ref.ref_kind, "file_path": ref.file_path, "line": ref.line,
-                 "source": ref.source, "symbol": ref.symbol_name}
+                 "source": ref.source, "symbol": ref.symbol_name,
+                 "caller_qualified_name": ref.caller_qualified_name}
                 for ref in references
             ],
             "total_references": len(references),
