@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T10:50:19.034011+00:00",
+  "baseline_commit": "fab7fe20e0abef5df1d8a32eb25545e3ecfb4768",
+  "scope": "Six new source-reviewed questions frozen before retrieval; four production questions and two explicit test-helper controls. Same warmed index and identical candidate generation, varying only path classification. Repositories and some files previously exposed; source judgments are non-exhaustive and not agent outcomes. No tuning after measurement.",
+  "acceptance": [
+    "70 path, search, discovery and gateway checks pass",
+    "Candidate-generation stages identical for both arms",
+    "No labeled production file lost at five or 24",
+    "Explicit test queries preserve every result and score",
+    "Search p95 median <= max(1.5x baseline, 50 ms)",
+    "All required upstream checks, including PostgreSQL and ranking, pass"
+  ],
+  "repositories": [
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "queries": [
+        {
+          "id": "okhttp:kotlin-path-1",
+          "intent": "production",
+          "query": "Evict old HPACK dynamic table entries when the header table byte limit shrinks",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Hpack.kt",
+              "line": 158,
+              "quote": "evictToRecoverBytes(dynamicTableByteCount - maxDynamicTableByteCount)",
+              "relevance": "Shrinking the HPACK table evicts entries to recover excess bytes.",
+              "source_sha256": "008bba28dfe94417199ee5ea052d60a3413cb533774ee79bd3b4ad0bbcc848d1"
+            }
+          ]
+        },
+        {
+          "id": "okhttp:kotlin-path-2",
+          "intent": "production",
+          "query": "Write multipart body boundaries and compute content length when every part has a known size",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/MultipartBody.kt",
+              "line": 111,
+              "quote": "private fun writeOrCountBytes(",
+              "relevance": "Writes boundaries and counts lengths or reports an unknown part length.",
+              "source_sha256": "16ccb27c3f7a0c2ee7ce6f7243b709ec8eb9061ec63a51b0ca744506fb9448ed"
+            }
+          ]
+        },
+        {
+          "id": "okhttp:kotlin-path-3",
+          "intent": "production",
+          "query": "Choose the next scheduled task across ready queues and wait until its execution time",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/concurrent/TaskRunner.kt",
+              "line": 170,
+              "quote": "fun awaitTaskToRun(): Task?",
+              "relevance": "Chooses ready tasks or arranges the coordinator wait.",
+              "source_sha256": "2b9ecdc906b1d6aa8a58ca8b24f499b69b5b0cc204e2ab76fa8f84332e254cfc"
+            }
+          ]
+        },
+        {
+          "id": "okhttp:kotlin-path-4",
+          "intent": "production",
+          "query": "Parse authentication challenge parameters containing quoted commas and escaped characters",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/HttpHeaders.kt",
+              "line": 171,
+              "quote": "private fun Buffer.readQuotedString(): String?",
+              "relevance": "Challenge parsing delegates quoted parameter values to this escape-aware reader.",
+              "source_sha256": "230c4498ab82ba41b9cb43defae760b7d84e1b2aa577950cc6a7cefd7375e0c7"
+            }
+          ]
+        },
+        {
+          "id": "okhttp:kotlin-path-5",
+          "intent": "test",
+          "query": "Find tests helper for injecting public suffix bytes without loading a resource",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonTest/kotlin/okhttp3/internal/publicsuffix/ConfiguredPublicSuffixList.kt",
+              "line": 27,
+              "quote": "override var bytes: ByteString = ByteString.EMPTY",
+              "relevance": "Test source-set helper supplies byte strings and a no-op loader.",
+              "source_sha256": "ee293bd92b15ab76d81b4bc3d6c3871da7770fafce8b7755e5e311f843f2751e"
+            }
+          ]
+        },
+        {
+          "id": "okhttp:kotlin-path-6",
+          "intent": "test",
+          "query": "Find tests helper recording asynchronous response bodies and callback failures",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/RecordingCallback.kt",
+              "line": 41,
+              "quote": "val body = response.body.string()",
+              "relevance": "Callback helper records bodies and failures for assertions.",
+              "source_sha256": "30bbdc9b2968690c399339be75cc8f0d6cd09628d63204b8a67efb803016266a"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

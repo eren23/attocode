@@ -6,11 +6,27 @@ from pathlib import PurePosixPath
 
 from attocode_intel.focused_evidence import task_terms, terms
 
+# Conventional source sets only: arbitrary targets/flavors require build metadata.
+# Match a directory immediately under src, not a package or a *Test suffix.
+_KOTLIN_TEST_SOURCE_SETS = frozenset({
+    "commonTest", "jvmTest", "jsTest", "wasmJsTest", "wasmWasiTest",
+    "nativeTest", "appleTest", "iosTest", "macosTest", "linuxTest", "mingwTest",
+    "tvosTest", "watchosTest", "iosArm64Test", "iosX64Test", "iosSimulatorArm64Test",
+    "macosArm64Test", "macosX64Test", "linuxArm64Test", "linuxX64Test", "mingwX64Test",
+    "tvosArm64Test", "tvosX64Test", "tvosSimulatorArm64Test",
+    "watchosArm32Test", "watchosArm64Test", "watchosDeviceArm64Test",
+    "watchosX64Test", "watchosSimulatorArm64Test",
+    "androidTest", "androidAndroidTest", "androidUnitTest", "androidInstrumentedTest",
+    "androidHostTest", "androidDeviceTest",
+})
+
 
 def is_test_path(path):
     parts = PurePosixPath(path).parts
     name = parts[-1] if parts else ""
     return (any(p in {"test", "tests", "__tests__", "spec", "specs"} for p in parts)
+            or any(parent == "src" and child in _KOTLIN_TEST_SOURCE_SETS
+                   for parent, child in zip(parts[:-2], parts[1:-1], strict=True))
             # .NET test projects: UnitsNet.Tests/, Kavita.Services.Tests/
             or any(p.endswith((".Tests", ".Test", ".UnitTests", ".IntegrationTests")) for p in parts[:-1])
             or name.startswith("test_") or ".test." in name or ".spec." in name
