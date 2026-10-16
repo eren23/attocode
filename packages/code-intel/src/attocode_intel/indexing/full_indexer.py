@@ -98,7 +98,9 @@ def _resolve_import_path(
             source_dir = str(PurePosixPath(source_path).parent)
             base = str(PurePosixPath(source_dir) / import_name)
             # Normalize path (remove ../)
-            base = str(PurePosixPath(base))
+            from posixpath import normpath
+
+            base = normpath(base)
         else:
             # Try path aliases first
             base = None
@@ -122,7 +124,8 @@ def _resolve_import_path(
 
     for c in candidates:
         # Normalize: strip leading ./ if any
-        c = c.lstrip("./")
+        if c.startswith("./"):
+            c = c[2:]
         if c in known_paths:
             return c
     return None

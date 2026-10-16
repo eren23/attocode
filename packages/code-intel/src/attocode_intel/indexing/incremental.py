@@ -6,20 +6,26 @@ and only re-parses/re-indexes files whose content has actually changed.
 
 Flow:
     paths → read content → hash → compare to manifest → skip unchanged
-    → store new content → update overlay → parse symbols → queue embeddings
+    → store new content → parse symbols/references → update overlay → queue embeddings
     → publish event
 """
 
 from __future__ import annotations
 
 import logging
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from attocode_intel.indexing.parser import detect_language, extract_imports, extract_symbols
+from attocode_intel.indexing.parser import (
+    detect_language,
+    extract_imports,
+    extract_references,
+    extract_symbols,
+)
 
 if TYPE_CHECKING:
+    import uuid
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -35,8 +41,8 @@ class IncrementalPipeline:
     2. Computes SHA-256 of the content
     3. Compares to current manifest — skips if SHA matches (no-op)
     4. Stores new content in content-addressed store
-    5. Updates branch overlay (path → new SHA)
-    6. Extracts symbols (skips if SHA already has symbols — dedup)
+    5. Atomically stores symbols and references for changed content
+    6. Publishes branch overlay only after successful extraction
     7. Queues embedding generation for new content
     8. Returns stats about what changed
     """
@@ -93,14 +99,13 @@ class IncrementalPipeline:
             "skipped_too_large": 0,
             "skipped_binary": 0,
             "symbols_updated": 0,
+            "references_updated": 0,
             "errors": 0,
         }
 
         # Acquire advisory lock to prevent concurrent indexing on same branch
-        try:
+        if self._session.get_bind().dialect.name == "postgresql":
             await self.acquire_branch_lock(self._session, branch_id)
-        except Exception:
-            pass  # Non-Postgres backends (e.g. tests) — skip locking
 
         # Get current manifest for comparison
         manifest = await self._overlay.resolve_manifest(branch_id)
@@ -108,14 +113,17 @@ class IncrementalPipeline:
         # Batch: collect files to update
         overlay_updates: list[tuple[str, str, str]] = []  # (path, sha, status)
 
-        for path in paths:
+        needs_embedding = False
+        for path in dict.fromkeys(paths):
             try:
                 content = await self._read_file(path, base_dir, git_reader, repo_id, ref, file_contents=file_contents)
 
                 if content is None:
                     # File was deleted
                     if path in manifest:
-                        await self._overlay.delete_file(branch_id, path)
+                        async with self._session.begin_nested():
+                            await self._overlay.delete_file(branch_id, path)
+                        manifest.pop(path)
                         stats["processed"] += 1
                     else:
                         stats["skipped_missing"] += 1
@@ -133,56 +141,57 @@ class IncrementalPipeline:
                     stats["skipped_unchanged"] += 1
                     continue
 
-                # New or changed content
+                # Do not publish a new manifest entry after a parse/SQL failure.
+                # The savepoint also leaves the rest of the batch usable on PostgreSQL.
                 language = detect_language(path)
-                await self._content_store.store(content, language)
+                symbol_count = reference_count = dependency_count = 0
+                missing_embedding = False
+                async with self._session.begin_nested():
+                    await self._content_store.store(content, language)
+                    symbols = extract_symbols(content, path)
+                    if symbols:
+                        symbol_count = await self._symbol_store.upsert_symbols(
+                            sha, symbols, skip_if_exists=True
+                        )
+                    if language in ("python", "javascript", "typescript"):
+                        refs = extract_references(content, path)
+                        reference_count = await self._symbol_store.replace_references(sha, refs)
 
-                # Determine status
+                    # This persisted graph is a content-addressed cache. Impact
+                    # queries resolve imports against current branch paths.
+                    imports = extract_imports(content, path, language)
+                    if imports and not await self._dep_store.has_dependencies(sha):
+                        from attocode_intel.indexing.full_indexer import _resolve_import_path
+
+                        path_to_sha = {**manifest, path: sha}
+                        known_paths = set(path_to_sha)
+                        python_index = None
+                        if language == "python":
+                            from attocode_intel._internal.integrations.context.codebase_context import (
+                                python_module_index,
+                            )
+                            python_index = python_module_index(known_paths)
+                        deps = []
+                        for imp in imports:
+                            target = _resolve_import_path(imp, path, known_paths, language,
+                                                          python_index=python_index)
+                            if target and target in path_to_sha:
+                                deps.append({"target_sha": path_to_sha[target],
+                                             "dep_type": "import", "weight": 1.0})
+                        if deps:
+                            dependency_count = await self._dep_store.upsert_dependencies(sha, deps)
+
+                    if repo_id:
+                        missing_embedding = not await self._embedding_store.has_embeddings(sha)
+
+                needs_embedding = needs_embedding or missing_embedding
                 status = "added" if path not in manifest else "modified"
                 overlay_updates.append((path, sha, status))
-
-                # Extract symbols (skip if SHA already indexed — content dedup)
-                symbols = extract_symbols(content, path)
-                if symbols:
-                    count = await self._symbol_store.upsert_symbols(
-                        sha, symbols, skip_if_exists=True
-                    )
-                    stats["symbols_updated"] += count or len(symbols)
-
-                # Extract imports and resolve to dependencies
-                imports = extract_imports(content, path, language)
-                if imports and not await self._dep_store.has_dependencies(sha):
-                    from attocode_intel.indexing.full_indexer import _resolve_import_path
-
-                    known_paths = set(manifest.keys()) | {u[0] for u in overlay_updates}
-                    path_to_sha = dict(manifest)
-                    for u_path, u_sha, _ in overlay_updates:
-                        path_to_sha[u_path] = u_sha
-
-                    python_index = None
-                    if language == "python":
-                        from attocode_intel._internal.integrations.context.codebase_context import (
-                            python_module_index,
-                        )
-                        python_index = python_module_index(known_paths)
-                    deps = []
-                    for imp in imports:
-                        target = _resolve_import_path(imp, path, known_paths, language, python_index=python_index)
-                        if target and target in path_to_sha:
-                            deps.append({
-                                "target_sha": path_to_sha[target],
-                                "dep_type": "import",
-                                "weight": 1.0,
-                            })
-                    if deps:
-                        await self._dep_store.upsert_dependencies(sha, deps)
-                        stats["dependencies_extracted"] = stats.get("dependencies_extracted", 0) + len(deps)
-
-                # Queue embedding generation (dedup: skip if already embedded)
-                if not await self._embedding_store.has_embeddings(sha):
-                    if repo_id:
-                        from attocode_intel.workers.job_utils import enqueue_embedding_job
-                        await enqueue_embedding_job(repo_id, ref or "main")
+                manifest[path] = sha
+                stats["symbols_updated"] += symbol_count
+                stats["references_updated"] += reference_count
+                if dependency_count:
+                    stats["dependencies_extracted"] = stats.get("dependencies_extracted", 0) + dependency_count
 
                 stats["processed"] += 1
 
@@ -193,6 +202,10 @@ class IncrementalPipeline:
         # Batch update overlay (single version bump)
         if overlay_updates:
             await self._overlay.set_files_batch(branch_id, overlay_updates)
+
+        if needs_embedding and repo_id:
+            from attocode_intel.workers.job_utils import enqueue_embedding_job
+            await enqueue_embedding_job(repo_id, ref or "main")
 
         return stats
 
@@ -232,14 +245,14 @@ class IncrementalPipeline:
                 return None
             try:
                 return full_path.read_bytes()
-            except (OSError, PermissionError):
+            except FileNotFoundError:
                 return None
 
         # Priority 3: git reader
         if git_reader and repo_id and ref:
             try:
                 return git_reader.read_file(repo_id, ref, path)  # type: ignore[union-attr]
-            except Exception:
+            except FileNotFoundError:
                 return None
 
         # No content source — file is missing or deleted

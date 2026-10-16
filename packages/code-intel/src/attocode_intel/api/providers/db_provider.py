@@ -140,6 +140,8 @@ class DbAnalysisProvider:
         return SymbolSearchResponse(query=name, definitions=[])
 
     async def cross_references(self, symbol_name: str, branch: str) -> CrossRefResponse:
+        from itertools import islice
+
         from sqlalchemy import or_, select
 
         from attocode_intel.api.deps import get_branch_context
@@ -159,18 +161,21 @@ class DbAnalysisProvider:
                 select(Symbol).where(Symbol.content_sha.in_(content_shas))
             )
             rows = result.scalars().all()
-            sha_to_path = branch_ctx.sha_to_path
+            sha_to_paths: dict[str, list[str]] = {}
+            for path, sha in sorted(branch_ctx.manifest.items()):
+                sha_to_paths.setdefault(sha, []).append(path)
 
             definitions = [
                 SymbolItem(
                     name=s.name,
                     kind=s.kind,
-                    file_path=sha_to_path.get(s.content_sha, ""),
+                    file_path=path,
                     start_line=s.line_start or 0,
                     end_line=s.line_end or 0,
                     signature=s.signature or "",
                 )
                 for s in rows
+                for path in sha_to_paths.get(s.content_sha, [])
                 if s.name == symbol_name or s.name.endswith(f".{symbol_name}")
             ]
 
@@ -183,19 +188,21 @@ class DbAnalysisProvider:
                         SymbolReference.symbol_name.endswith(f".{symbol_name}"),
                     ),
                 )
+                .order_by(SymbolReference.content_sha, SymbolReference.line, SymbolReference.id)
                 .limit(500)
             )
             ref_rows = ref_result.scalars().all()
-            references = [
+            references = list(islice((
                 ReferenceItem(
                     ref_kind=r.ref_kind,
                     symbol=r.symbol_name,
                     caller_qualified_name=r.caller_qualified_name,
-                    file_path=sha_to_path.get(r.content_sha, ""),
+                    file_path=path,
                     line=r.line,
                 )
                 for r in ref_rows
-            ]
+                for path in sha_to_paths.get(r.content_sha, [])
+            ), 500))
 
             return CrossRefResponse(
                 symbol=symbol_name,
@@ -212,58 +219,33 @@ class DbAnalysisProvider:
         from attocode_intel.api.deps import get_branch_context
         from attocode_intel.api.models import ImpactLayer
         from attocode_intel.db.engine import get_session
-        from attocode_intel.storage.dependency_store import DependencyStore
 
         async for session in get_session():
-            repo_id = uuid.UUID(self._project_id)
-            branch_ctx = await get_branch_context(repo_id, branch, session)
-            manifest = branch_ctx.manifest
-            sha_to_path = branch_ctx.sha_to_path
-            dep_store = DependencyStore(session)
-
-            changed_shas: set[str] = set()
-            for f in files:
-                sha = manifest.get(f)
-                if sha:
-                    changed_shas.add(sha)
-
-            visited: set[str] = set(changed_shas)
-            frontier = set(changed_shas)
+            branch_ctx = await get_branch_context(uuid.UUID(self._project_id), branch, session)
+            # Content hashes identify bytes, not import destinations. An unchanged
+            # importer may target different bytes on another branch or after an edit.
+            # Resolve current branch paths rather than following stale cached SHAs.
+            edges = await self._compute_import_edges(session, branch_ctx)
+            reverse: dict[str, set[str]] = {}
+            for edge in edges:
+                reverse.setdefault(edge["target"], set()).add(edge["source"])
+            changed = set(files) & set(branch_ctx.manifest)
+            visited = set(changed)
+            frontier = set(changed)
             layers: list[ImpactLayer] = []
-            current_depth = 0
+            depth = 0
             while frontier:
-                current_depth += 1
-                next_frontier: set[str] = set()
-                for sha in frontier:
-                    reverse = await dep_store.get_reverse(sha)
-                    for r in reverse:
-                        src = r["source_sha"]
-                        if src not in visited and src in branch_ctx.content_shas:
-                            visited.add(src)
-                            next_frontier.add(src)
-                if next_frontier:
-                    layer_files = sorted(
-                        sha_to_path[sha]
-                        for sha in next_frontier
-                        if sha in sha_to_path
-                    )
-                    if layer_files:
-                        layers.append(ImpactLayer(depth=current_depth, files=layer_files))
-                frontier = next_frontier
-
-            impacted_paths = sorted(
-                sha_to_path[sha]
-                for sha in visited - changed_shas
-                if sha in sha_to_path
-            )
-
+                depth += 1
+                following = set().union(*(reverse.get(path, set()) for path in frontier)) - visited
+                if following:
+                    layers.append(ImpactLayer(depth=depth, files=sorted(following)))
+                visited.update(following)
+                frontier = following
+            impacted = sorted(visited - changed)
             return ImpactAnalysisResponse(
-                changed_files=files,
-                impacted_files=impacted_paths,
-                total_impacted=len(impacted_paths),
-                layers=layers,
+                changed_files=files, impacted_files=impacted,
+                total_impacted=len(impacted), layers=layers,
             )
-
         return ImpactAnalysisResponse(changed_files=files, impacted_files=[], total_impacted=0)
 
     async def dependency_graph(
@@ -343,66 +325,49 @@ class DbAnalysisProvider:
         return DependencyGraphResponse(nodes=[], edges=[])
 
     async def _compute_import_edges(self, session: AsyncSession, branch_ctx: BranchContext) -> list[dict]:
-        """Fallback: compute edges on-the-fly from import extraction when Dependency table is empty."""
-        import logging
+        """Resolve supported imports against current paths; read content in bounded batches.
 
+        This is syntactic Python/JS/TS import reachability, not proof of semantic
+        impact. No arbitrary first-500-file cutoff or SHA-to-single-path collapse.
+        """
         from sqlalchemy import select
 
         from attocode_intel._internal.integrations.context.codebase_context import (
             python_module_index,
         )
         from attocode_intel.db.models import FileContent
-        from attocode_intel.indexing.full_indexer import _resolve_import_path
+        from attocode_intel.indexing.full_indexer import _load_path_aliases, _resolve_import_path
         from attocode_intel.indexing.parser import detect_language, extract_imports
 
-        logger = logging.getLogger(__name__)
-        manifest = branch_ctx.manifest  # path -> sha
-        known_paths = set(manifest.keys())
+        manifest = branch_ctx.manifest
+        known_paths = set(manifest)
         python_index = python_module_index(known_paths)
-        sha_to_path = {sha: path for path, sha in manifest.items()}
-        content_shas = list(set(manifest.values()))
-
-        if not content_shas:
-            return []
-
-        # Batch-fetch file content (limit to avoid memory issues)
-        max_files = 500
-        if len(content_shas) > max_files:
-            # Only process files matching start_file prefix if too many
-            content_shas = content_shas[:max_files]
-
-        result = await session.execute(
-            select(FileContent.sha256, FileContent.content).where(
-                FileContent.sha256.in_(content_shas)
-            )
-        )
-        rows = result.all()
-
+        sha_to_paths: dict[str, list[str]] = {}
+        aliases: dict[str, str] = {}
+        for path, sha in sorted(manifest.items()):
+            if path.endswith(("tsconfig.json", "jsconfig.json")):
+                content = await session.scalar(select(FileContent.content).where(FileContent.sha256 == sha))
+                if content:
+                    aliases.update(_load_path_aliases({path}, {path: content}))
+            if detect_language(path) in ("python", "javascript", "typescript"):
+                sha_to_paths.setdefault(sha, []).append(path)
+        shas = sorted(sha_to_paths)
         edges: list[dict] = []
-        for sha, content in rows:
-            source_path = sha_to_path.get(sha)
-            if not source_path or content is None:
-                continue
-            language = detect_language(source_path)
-            if not language:
-                continue
-            try:
-                raw_content = content if isinstance(content, bytes) else content.encode("utf-8")
-                imports = extract_imports(raw_content, source_path, language)
-                for imp in imports:
-                    target = _resolve_import_path(imp, source_path, known_paths, language,
-                                                  python_index=python_index)
-                    if target and target != source_path:
-                        edges.append({
-                            "source": source_path,
-                            "target": target,
-                            "type": "import",
-                            "weight": 1.0,
-                        })
-            except Exception as e:
-                logger.debug("Import extraction failed for %s: %s", source_path, e)
-
-        logger.info("Computed %d import edges on-the-fly for %d files", len(edges), len(rows))
+        for offset in range(0, len(shas), 32):
+            # Indexed files are capped at 1 MB; do not load an entire repository's bodies.
+            result = await session.execute(select(FileContent.sha256, FileContent.content).where(
+                FileContent.sha256.in_(shas[offset:offset + 32])))
+            for sha, content in result:
+                if content is None:
+                    continue
+                for source in sha_to_paths[sha]:
+                    language = detect_language(source)
+                    imports = extract_imports(content, source, language)
+                    targets = {_resolve_import_path(imp, source, known_paths, language,
+                                                     aliases=aliases, python_index=python_index)
+                               for imp in imports}
+                    for target in sorted(t for t in targets if t and t != source):
+                        edges.append({"source": source, "target": target, "type": "import", "weight": 1.0})
         return edges
 
     async def hotspots(self, branch: str, top_n: int) -> HotspotsResponse:

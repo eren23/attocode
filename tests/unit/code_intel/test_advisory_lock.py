@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from attocode.code_intel.indexing.incremental import IncrementalPipeline
 
@@ -96,19 +99,19 @@ class TestLockKeyProperties:
 
 
 # ---------------------------------------------------------------------------
-# process_file_changes — lock failure is silently caught
+# process_file_changes — PostgreSQL lock failures must propagate
 # ---------------------------------------------------------------------------
 
 
-class TestLockFailureSilentlyCaught:
+class TestLockFailurePropagates:
     @patch.object(
         IncrementalPipeline,
         "acquire_branch_lock",
         new_callable=AsyncMock,
         side_effect=Exception("not postgres"),
     )
-    async def test_lock_failure_does_not_propagate(self, mock_lock: AsyncMock):
-        """If acquire_branch_lock raises, process_file_changes catches it and continues."""
+    async def test_lock_failure_does_propagate(self, mock_lock: AsyncMock):
+        """A failed PostgreSQL lock must not silently disable serialization."""
         session = AsyncMock()
 
         with (
@@ -122,11 +125,9 @@ class TestLockFailureSilentlyCaught:
             mock_overlay.return_value = overlay
 
             pipeline = IncrementalPipeline(session)
-            # Should not raise despite the lock failure
-            stats = await pipeline.process_file_changes(
-                branch_id=uuid.uuid4(), paths=[], base_dir="/tmp"
-            )
+            session.get_bind = Mock(return_value=SimpleNamespace(dialect=SimpleNamespace(name="postgresql")))
+            with pytest.raises(Exception, match="not postgres"):
+                await pipeline.process_file_changes(branch_id=uuid.uuid4(), paths=[], base_dir="/tmp")
 
         mock_lock.assert_awaited_once()
-        assert stats["processed"] == 0
-        assert stats["errors"] == 0
+        overlay.resolve_manifest.assert_not_awaited()
