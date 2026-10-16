@@ -1,10 +1,12 @@
 # Releasing Attocode Intelligence
 
-The standalone distribution has its own version in `packages/code-intel/pyproject.toml` and release tags named `intel-vVERSION`. The legacy agent continues to use its existing `v*` tags.
+The standalone distribution has its own version in `packages/code-intel/pyproject.toml` and release tags named `intel-vVERSION`. Historical agent `v*` tags remain preserved; the active repository publishes intelligence only.
+
+See the [0.1.7 release notes](intelligence-0.1.7.md) for the latest changes and upgrade instructions.
 
 ## Release gate
 
-A release checks quality and install health. It runs the product tests, the navigation gate, the ranking gate, and a clean install of the wheel on Linux and macOS. The wheel check starts the installed command as a stdio server, lists the daily tools and runs one search.
+A release checks quality and install health. It runs engine/product tests, PostgreSQL, bounded navigation, the ranking gate, real language servers, and clean wheel checks on Linux and macOS. The wheel check starts daily/lean stdio sessions and exercises navigation/search. It also verifies full-profile change investigation and CLI export/check/refresh from the installed package. The historical 36-pack cloud matrix is separate evidence; a standard release does not implicitly authorize a fresh cloud rental or agent study.
 
 `packages/code-intel/evals/release_gate.py` checks agent speed: 720 paired agent runs with a median speedup of 20% or more. A release does not need it. Run it before a release says that agents are faster with the server. The agent studies so far found no such gain (see `packages/code-intel/evals/results/2026-10-10-agent-pilot.md` and `2026-10-10-agent-r3.md`).
 
@@ -24,9 +26,9 @@ PyPI creates the project on the first successful upload. A pending publisher doe
 
 The 0.1.0 release created the project on 2026-10-11. The pending publisher is now an ordinary trusted publisher of the project, so later releases skip this step.
 
-## The agent package depends on this package
+## Historical agent compatibility
 
-`attocode` depends on `attocode-code-intel>=0.1.0,<0.2`. In the repository, the uv workspace installs the local source. A published `attocode` wheel gets the package from PyPI. Thus, when an `attocode` change needs new code in `attocode_intel`, release `attocode-code-intel` first. A 0.2 release of this package also needs a new upper bound in the root `pyproject.toml`.
+Previously published agent distributions depend on `attocode-code-intel>=0.1.0,<0.2`. The root is now a development workspace, with no agent package or agent release workflow. Preserve the standalone identity and existing compatibility within 0.1.x; do not repurpose the published `attocode` distribution. See [legacy agent migration](legacy-agent.md).
 
 ## Release
 

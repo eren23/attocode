@@ -36,7 +36,7 @@ Local file watchers and per-operation filesystem checks pick up edits, new files
 
 New installations and direct server invocations use the compact **daily** tool profile. `init --profile full` exposes the complete local catalog, including rules and security analysis, history, architecture, retrieval pins, snapshots, overlays, and cache maintenance. `capabilities` reports the actual catalog and optional enhancements.
 
-The source build adds a [change investigation workflow](docs/guides/change-investigation.md):
+Version 0.1.7 adds a [change investigation workflow](docs/guides/change-investigation.md):
 `attocode-code-intel changes` combines a Git diff with changed definitions,
 caller evidence, import impact and candidate tests. `attocode-code-intel trace`
 follows static caller paths. Export JSON/Markdown, check saved evidence for stale

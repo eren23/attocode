@@ -1,5 +1,9 @@
 # Attocode Intelligence 0.1.6 candidate
 
+Historical candidate checkpoint: 0.1.6 subsequently passed the full gate and was
+published. See the [completed release evidence](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-release-016.md).
+The blocker descriptions below record the earlier candidate, not current status.
+
 This candidate extends static navigation across more language/module layouts and
 adds a bounded, inspectable quality matrix. The implementation is merged and its
 required CI passed, but publication is blocked: the latest full cold cloud run

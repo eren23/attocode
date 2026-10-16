@@ -49,4 +49,4 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # The other copy is packages/code-intel/pyproject.toml. A test checks that both match.
-__version__ = "0.1.6"
+__version__ = "0.1.7"

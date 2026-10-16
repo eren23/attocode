@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.7] - 2026-10-16
+
 ### Added — Change investigation workflow
 
 - Local `changes` CLI and full-profile `change_context` MCP operation compare
@@ -20,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export complete JSON or readable Markdown, check snapshot/source freshness,
   and refresh the original request without overwriting saved reports. Collection
   disables Git executable filters and bounds source/output size and traversal.
-  Daily/lean lists, ranking defaults and the published version stay unchanged.
+  Daily/lean lists and ranking defaults stay unchanged.
 
 ### Fixed — Behavioral source-exclusion penalties
 
@@ -44,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search-to-inspection workflow. Preserve 24 new source-bound questions and replayable
   decisions. Reject the broad negation rewrite and the first fusion candidate after
   their gates fail; the final revision passes further fresh confirmation without
-  claiming a general relevance or speed gain. Behavioral negation remains open.
+  claiming a general relevance or speed gain. General behavioral negation remains limited;
+  the narrower action-lead penalty fix above is included in 0.1.7.
 
 ### Evaluated — Historical engine-page search usefulness
 
@@ -196,6 +199,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Saved retrieval-page auditing and bounded local candidate tracing distinguish
   deeper hits, unresolved page misses and incomplete labels. Ranking defaults
   are unchanged; see `packages/code-intel/evals/results/2026-10-15-retrieval-file-symbol.md`.
+
+## Historical development notes (before Intelligence 0.1.7)
 
 ### Added — Broader bounded intelligence validation
 
