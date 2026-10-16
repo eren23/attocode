@@ -54,6 +54,7 @@ nav:
   - Intelligence Product: intelligence.md
   - Tool Catalog: intelligence-tools.md
   - Search: intelligence-search.md
+  - Change Investigation: guides/change-investigation.md
   - CLI: cli-reference.md
   - Architecture: ARCHITECTURE.md
   - Service Architecture: architecture-v2.md

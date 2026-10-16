@@ -22,7 +22,7 @@ MARKER = "attocode-quality-v1"
 LIMITS = {"quick": 120, "local": 600, "broad": 3600}
 QUICK_TESTS = ["test_search_evidence.py", "test_focused_inspection.py", "test_language_capabilities.py",
                "test_quality_runner.py", "test_quality_cloud.py", "test_quality_lifecycle.py", "test_quality_evidence.py"]
-LOCAL_TESTS = QUICK_TESTS + ["test_behavioral_negation.py", "test_chunk_identity.py", "test_query_requirements.py", "test_mcp_search_evaluation.py", "test_product.py", "test_query_ranking.py", "test_ranking_intent.py",
+LOCAL_TESTS = QUICK_TESTS + ["test_change_investigation.py", "test_behavioral_negation.py", "test_chunk_identity.py", "test_query_requirements.py", "test_mcp_search_evaluation.py", "test_product.py", "test_query_ranking.py", "test_ranking_intent.py",
                            "test_compact_inspection.py", "test_lean_profile.py", "test_daily_workflows.py",
                            "test_index_reuse.py", "test_edit_restart.py", "test_navigation_evidence.py",
                            "test_cold_index_cost.py", "test_structural_write_cost.py", "test_lexical_sql_cost.py", "test_index_probe.py", "test_discovery_reuse.py", "test_ast_snapshot.py",
@@ -32,8 +32,8 @@ LOCAL_TESTS = QUICK_TESTS + ["test_behavioral_negation.py", "test_chunk_identity
                            "test_structural_evidence.py", "test_search_evidence_audit.py", "test_remote.py", "test_db_navigation_http.py",
                            "test_module_ownership.py", "test_real_language_server.py", "test_precision_protocol.py",
                            "test_source_exclusions.py", "test_operation_contracts.py", "test_navigation_prefix_trial.py", "test_kotlin_test_paths.py", "test_precision_recovery.py", "test_workflow_sequences.py", "test_test_intent_trial.py"]
-LINT_PATHS = ["eval/quality", "packages/code-intel/tests/test_behavioral_negation.py", "packages/code-intel/tests/test_chunk_identity.py", "packages/code-intel/tests/test_query_requirements.py", "packages/code-intel/tests/test_mcp_search_evaluation.py", *["packages/code-intel/src/attocode_intel/" + p for p in (
-    "focused_evidence.py", "test_ranking.py", "tools/composite_tools.py", "search_evidence.py", "symbol_links.py", "output.py", "query_ranking.py", "gateway.py",
+LINT_PATHS = ["eval/quality", "packages/code-intel/tests/test_change_investigation.py", "packages/code-intel/tests/test_behavioral_negation.py", "packages/code-intel/tests/test_chunk_identity.py", "packages/code-intel/tests/test_query_requirements.py", "packages/code-intel/tests/test_mcp_search_evaluation.py", *["packages/code-intel/src/attocode_intel/" + p for p in (
+    "change_evidence.py", "change_investigation.py", "investigation_cli.py", "focused_evidence.py", "test_ranking.py", "tools/composite_tools.py", "search_evidence.py", "symbol_links.py", "output.py", "query_ranking.py", "gateway.py",
     "api/models.py", "api/providers/db_provider.py",
     "indexing/full_indexer.py", "indexing/incremental.py", "indexing/parser.py", "storage/symbol_store.py",
     "freshness.py", "_internal/integrations/context/codebase_context.py",

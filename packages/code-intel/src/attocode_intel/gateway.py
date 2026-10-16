@@ -456,6 +456,15 @@ class OperationGateway:
                 if name in LEARNING_TOOLS:
                     payload = execute_local_knowledge(context, name, args)
                     text = json.dumps(payload)
+                elif name in {"change_context", "trace_flow"}:
+                    from attocode_intel.change_investigation import (
+                        change_context_data,
+                        trace_flow_data,
+                    )
+
+                    function = change_context_data if name == "change_context" else trace_flow_data
+                    payload = function(service, **args)
+                    text = json.dumps(payload, default=str, indent=2)
                 elif name == "review_change":
                     from attocode_intel.change_review import review
 

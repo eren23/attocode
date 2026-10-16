@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Change investigation workflow
+
+- Local `changes` CLI and full-profile `change_context` MCP operation compare
+  working, staged, unstaged or branch diffs, including renames/deletions, and
+  combine changed definitions, current caller evidence, bounded import impact
+  and candidate tests. Index-only/historical definitions never inherit current
+  callers from a different source version.
+- `trace` / `trace_flow` follow identity-scoped static caller paths with call-site
+  evidence, ambiguity, cycle/depth/node limits and unresolved overload dispatch.
+  Same-package Go calls link only within the same package directory/namespace.
+- Export complete JSON or readable Markdown, check snapshot/source freshness,
+  and refresh the original request without overwriting saved reports. Collection
+  disables Git executable filters and bounds source/output size and traversal.
+  Daily/lean lists, ranking defaults and the published version stay unchanged.
+
 ### Fixed — Behavioral source-exclusion penalties
 
 - Recognized requirements such as `without leaking credentials` no longer penalize
