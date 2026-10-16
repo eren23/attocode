@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
-from attocode_intel.focused_evidence import task_terms, terms
+from attocode_intel.focused_evidence import scope_exclusion_terms, task_terms, terms
 from attocode_intel.search_evidence import source_body
 from attocode_intel.test_ranking import is_test_path
 
@@ -146,7 +146,7 @@ def rerank_broad_candidates(
     if not broad_rank_enabled():
         return _default_file_diversity(query, candidates, top_k, file_filter)
     concepts = query_concepts(query)
-    _, negative = task_terms(query)
+    negative = scope_exclusion_terms(query)
     if len(concepts) != 2:
         return candidates[:top_k]
     concept_set = set(concepts)
@@ -214,7 +214,7 @@ def query_diagnostics(
 ) -> dict[str, object]:
     """Show ambiguity without pretending to know a user's intended subsystem."""
     concepts = query_concepts(query)
-    _, negative = task_terms(query)
+    negative = scope_exclusion_terms(query)
     components: list[str] = []
     if 2 <= len(concepts) <= 5:
         for row in candidates:

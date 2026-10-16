@@ -1,0 +1,48 @@
+{
+  "frozen_at": "2026-10-16T17:00:59.350667+00:00",
+  "engine_sha256": "da299e24afa900b3220d09abeb003a2c7c24987b99802367b4474d01d61d27c0",
+  "development": {
+    "passed": true,
+    "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true,
+      "generation_identical": true,
+      "explicit_scope_results_identical": true
+    },
+    "baseline": {
+      "questions": 8,
+      "files_5": 10,
+      "ranges_5": 3,
+      "visible_5": 1,
+      "files_24": 13,
+      "ranges_24": 3,
+      "visible_24": 1,
+      "files_scoped": 8,
+      "ranges_scoped": 6,
+      "visible_scoped": 4,
+      "inspection_visible": 1,
+      "p95_seconds": 0.04978483298327774
+    },
+    "candidate": {
+      "questions": 8,
+      "files_5": 12,
+      "ranges_5": 3,
+      "visible_5": 1,
+      "files_24": 13,
+      "ranges_24": 3,
+      "visible_24": 1,
+      "files_scoped": 8,
+      "ranges_scoped": 8,
+      "visible_scoped": 6,
+      "inspection_visible": 1,
+      "p95_seconds": 0.04913658392615616
+    },
+    "individual_losses": []
+  },
+  "validation_questions_sha256": "e04ff348c56a42e3738dc838c4c055ee4128d60a917f643121759df2f57c9a5d",
+  "no_validation_results_opened": true,
+  "no_product_tuning_after_validation": true
+}

@@ -420,3 +420,8 @@ individual label loss and the predeclared acceptance decision. These authored,
 non-exhaustive labels are not independent user or agent outcomes. The historical
 `search_usefulness` operator remains an engine-level replay, with different depth
 and delivery semantics; its timing and ranges must not be described as MCP output.
+
+Use `--capture-generation` with the MCP search operator to record the complete
+pre-penalty keyword/body/file candidate lists, source-text hashes and arguments.
+The [behavioral-negation trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-negation.md)
+uses those diagnostics to verify that a penalty-only change preserves retrieval.

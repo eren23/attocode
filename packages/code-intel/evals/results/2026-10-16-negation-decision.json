@@ -1,0 +1,107 @@
+{
+  "baseline_commit": "6d407d656da83242e70ff8a37c03ce43893cfa54",
+  "engine_sha256": "da299e24afa900b3220d09abeb003a2c7c24987b99802367b4474d01d61d27c0",
+  "artifact": {
+    "raw_bytes": 3015217,
+    "compressed_bytes": 648847,
+    "gzip_sha256": "03cc39e9998997ef0678805445e05d6184d8a64ab70e09f8c07a85b0beb10c3b",
+    "raw_sha256": "d6e2fab93f510b557e29912f888484b75aeda7f0f9c787bcfef80b97e20b0b0c",
+    "processes": 16
+  },
+  "candidate": {
+    "raw_sha256": "bec653d09ae195d2551eb5bb646483f9c37859efaea22ecdc4b023f28351385f",
+    "gzip_sha256": "badd0f381465dd949ddca75ea4876714489048d1ed3d30256d2d7d50521a77d1"
+  },
+  "splits": {
+    "development": {
+      "passed": true,
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true,
+        "generation_identical": true,
+        "explicit_scope_results_identical": true
+      },
+      "baseline": {
+        "questions": 8,
+        "files_5": 10,
+        "ranges_5": 3,
+        "visible_5": 1,
+        "files_24": 13,
+        "ranges_24": 3,
+        "visible_24": 1,
+        "files_scoped": 8,
+        "ranges_scoped": 6,
+        "visible_scoped": 4,
+        "inspection_visible": 1,
+        "p95_seconds": 0.04978483298327774
+      },
+      "candidate": {
+        "questions": 8,
+        "files_5": 12,
+        "ranges_5": 3,
+        "visible_5": 1,
+        "files_24": 13,
+        "ranges_24": 3,
+        "visible_24": 1,
+        "files_scoped": 8,
+        "ranges_scoped": 8,
+        "visible_scoped": 6,
+        "inspection_visible": 1,
+        "p95_seconds": 0.04913658392615616
+      },
+      "individual_losses": []
+    },
+    "validation": {
+      "passed": true,
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true,
+        "generation_identical": true,
+        "explicit_scope_results_identical": true
+      },
+      "baseline": {
+        "questions": 8,
+        "files_5": 10,
+        "ranges_5": 4,
+        "visible_5": 2,
+        "files_24": 13,
+        "ranges_24": 5,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 5,
+        "visible_scoped": 3,
+        "inspection_visible": 0,
+        "p95_seconds": 0.051477166009135544
+      },
+      "candidate": {
+        "questions": 8,
+        "files_5": 11,
+        "ranges_5": 5,
+        "visible_5": 3,
+        "files_24": 13,
+        "ranges_24": 5,
+        "visible_24": 0,
+        "files_scoped": 8,
+        "ranges_scoped": 4,
+        "visible_scoped": 3,
+        "inspection_visible": 0,
+        "p95_seconds": 0.049608167028054595
+      },
+      "individual_losses": []
+    }
+  },
+  "resources": {
+    "peak_managed_bytes": 110243840,
+    "peak_rss_bytes": 177422336,
+    "seconds": 25.676,
+    "all_passed": true
+  },
+  "limits": "512MiB managed disk,1.5GiB RSS,180sec/process; cached corpora only; no model/cloud",
+  "limitations": "Authored, non-exhaustive labels in exposed repositories. Candidate generation unchanged; recognized behavioral leads are neutral for penalties, not new positive retrieval terms. Unknown/noun-based clauses retain legacy interpretation. Sequential arms and cached setup do not support a speed claim. Initial untraced development probes retained privately; only traced paired observations scored."
+}

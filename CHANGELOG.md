@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Behavioral source-exclusion penalties
+
+- Recognized requirements such as `without leaking credentials` no longer penalize
+  matching source. Keep positive retrieval terms, snippets and expansion unchanged;
+  explicit source/component exclusions retain existing behavior. Unknown or noun-based
+  requirements remain outside this bounded interpretation.
+- Fresh authored MCP judgments show first-five file hits 20/32 → 23/32, no judged
+  file/visible-evidence losses, identical pre-penalty generation and identical explicit
+  scope-control result rows. Preserve exact responses, source-bound judgments and
+  acceptance replay; do not claim independent user or agent benefit.
+
 ### Fixed — Distinct search evidence and query boundaries
 
 - Preserve overloaded definitions and separate source windows across keyword cache,
