@@ -5,6 +5,8 @@ on:
 permissions:
   contents: read
 jobs:
+  engine:
+    uses: ./.github/workflows/ci.yml
   checks:
     uses: ./.github/workflows/intelligence.yml
   # The beta release checks quality and install health. The agent speed evidence of
@@ -12,7 +14,7 @@ jobs:
   ranking:
     uses: ./.github/workflows/ranking-gate.yml
   build:
-    needs: [checks, ranking]
+    needs: [checks, ranking, engine]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +30,7 @@ jobs:
           assert re.fullmatch(r"intel-v" + re.escape(version) + r"(?:-retry\.[1-9][0-9]*)?", os.environ["GITHUB_REF_NAME"])
           PY
       - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
-      - run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -q
+      - run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -p eval.quality.no_agent -q
       - run: uv build --package attocode-code-intel
       - name: Verify wheel without the agent
         run: |

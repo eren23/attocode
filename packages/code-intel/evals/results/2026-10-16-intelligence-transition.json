@@ -1,0 +1,254 @@
+{
+  "archive_tag": "agent-archive-2026-10-16",
+  "source_scope": "Post-archive local tree; final commit and upstream checks are recorded by the pull request",
+  "checks": [
+    {
+      "name": "build",
+      "status": "passed",
+      "seconds": 1.906,
+      "peak_disk_bytes": 1047576798,
+      "peak_rss_bytes": 79347712,
+      "cleanup_verified": true
+    },
+    {
+      "name": "docs",
+      "status": "passed",
+      "seconds": 1.356,
+      "peak_disk_bytes": 1026383983,
+      "peak_rss_bytes": 59113472,
+      "cleanup_verified": true
+    },
+    {
+      "name": "licenses",
+      "status": "passed",
+      "seconds": 0.816,
+      "peak_disk_bytes": 1026383983,
+      "peak_rss_bytes": 32768,
+      "cleanup_verified": true
+    },
+    {
+      "name": "lifecycle",
+      "status": "passed",
+      "seconds": 3.992,
+      "peak_disk_bytes": 1026789487,
+      "peak_rss_bytes": 146259968,
+      "cleanup_verified": true
+    },
+    {
+      "name": "lint",
+      "status": "passed",
+      "seconds": 0.829,
+      "peak_disk_bytes": 1026383983,
+      "peak_rss_bytes": 278528,
+      "cleanup_verified": true
+    },
+    {
+      "name": "product",
+      "status": "passed",
+      "seconds": 76.861,
+      "peak_disk_bytes": 1580773643,
+      "peak_rss_bytes": 812974080,
+      "cleanup_verified": true
+    },
+    {
+      "name": "ranking",
+      "status": "passed",
+      "seconds": 41.233,
+      "peak_disk_bytes": 1350439041,
+      "peak_rss_bytes": 212074496,
+      "cleanup_verified": true
+    },
+    {
+      "name": "scale",
+      "status": "passed",
+      "seconds": 9.373,
+      "peak_disk_bytes": 1115721839,
+      "peak_rss_bytes": 253673472,
+      "cleanup_verified": true
+    },
+    {
+      "name": "tests",
+      "status": "passed",
+      "seconds": 34.511,
+      "peak_disk_bytes": 1401162219,
+      "peak_rss_bytes": 305758208,
+      "cleanup_verified": true
+    },
+    {
+      "name": "wheel-check",
+      "status": "passed",
+      "seconds": 7.54,
+      "peak_disk_bytes": 1235378398,
+      "peak_rss_bytes": 226263040,
+      "cleanup_verified": true
+    },
+    {
+      "name": "wheel-env",
+      "status": "passed",
+      "seconds": 0.825,
+      "peak_disk_bytes": 1029468382,
+      "peak_rss_bytes": 9994240,
+      "cleanup_verified": true
+    },
+    {
+      "name": "wheel-install",
+      "status": "passed",
+      "seconds": 2.331,
+      "peak_disk_bytes": 1225421022,
+      "peak_rss_bytes": 140689408,
+      "cleanup_verified": true
+    }
+  ],
+  "junit": [
+    {
+      "suite": "tests",
+      "cases": 2800,
+      "skipped_or_xfailed": [
+        {
+          "name": "test_ok_annotations_not_matched[python]",
+          "reason": "No # ok: annotations in python/bad_patterns.py"
+        },
+        {
+          "name": "test_ok_annotations_not_matched[go]",
+          "reason": "No # ok: annotations in go/bad_patterns.go"
+        },
+        {
+          "name": "test_ok_annotations_not_matched[typescript]",
+          "reason": "No # ok: annotations in typescript/bad_patterns.ts"
+        },
+        {
+          "name": "test_ok_annotations_not_matched[rust]",
+          "reason": "No # ok: annotations in rust/bad_patterns.rs"
+        },
+        {
+          "name": "test_ok_annotations_not_matched[java]",
+          "reason": "No # ok: annotations in java/BadPatterns.java"
+        },
+        {
+          "name": "test_var_block",
+          "reason": "Parenthesized var blocks use var_spec_list wrapper; current code only checks direct children for var_spec"
+        }
+      ]
+    },
+    {
+      "suite": "product",
+      "cases": 1035,
+      "skipped_or_xfailed": [
+        {
+          "name": "test_postgres_reference_writers_serialize_and_readers_keep_committed_rows",
+          "reason": "PostgreSQL row-lock/MVCC control; exercised by product CI"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.hs]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.erl]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.clj]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.pl]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.dart]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.ml]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.fs]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.jl]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.nim]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.R]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.m]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_optional_definition_capability_without_acquisition[sample.cr]",
+          "reason": "Optional grammar is not installed/cached; no acquisition during navigation"
+        },
+        {
+          "name": "test_julia_where_signature_keeps_function_name_and_source_range",
+          "reason": "Optional cached Julia grammar unavailable"
+        },
+        {
+          "name": "test_optional_fsharp_mutually_recursive_type_declarations_have_distinct_names",
+          "reason": "Optional F# grammar is not cached"
+        },
+        {
+          "name": "test_worker_timeout_kills_term_resistant_detached_descendant",
+          "reason": "Dedicated Linux CI enables the systemd worker test"
+        },
+        {
+          "name": "test_worker_manual_restart_cannot_run_payload_twice",
+          "reason": "Dedicated Linux CI enables the systemd restart test"
+        },
+        {
+          "name": "test_worker_apt_lock_wait_with_isolated_package_database[True]",
+          "reason": "Dedicated Linux CI enables worker package-manager checks"
+        },
+        {
+          "name": "test_worker_apt_lock_wait_with_isolated_package_database[False]",
+          "reason": "Dedicated Linux CI enables worker package-manager checks"
+        },
+        {
+          "name": "test_real_server_warmed_selected_definition_and_edit[python]",
+          "reason": "Worker-only real server matrix; no local acquisition"
+        },
+        {
+          "name": "test_real_server_warmed_selected_definition_and_edit[go]",
+          "reason": "Worker-only real server matrix; no local acquisition"
+        },
+        {
+          "name": "test_real_server_warmed_selected_definition_and_edit[rust]",
+          "reason": "Worker-only real server matrix; no local acquisition"
+        }
+      ]
+    }
+  ],
+  "locked_packages_before": 197,
+  "locked_packages_after": 177,
+  "removed_locked_packages": [
+    "anthropic",
+    "attocode",
+    "contourpy",
+    "cycler",
+    "distro",
+    "docstring-parser",
+    "fonttools",
+    "jiter",
+    "kiwisolver",
+    "linkify-it-py",
+    "matplotlib",
+    "mdit-py-plugins",
+    "openai",
+    "pillow",
+    "pyparsing",
+    "pytest-textual-snapshot",
+    "sniffio",
+    "syrupy",
+    "textual",
+    "uc-micro-py"
+  ],
+  "model_runs": 0,
+  "release_cut": false
+}

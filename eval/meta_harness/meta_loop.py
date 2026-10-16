@@ -22,10 +22,10 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "src"))
+    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "packages", "code-intel", "src"))
     sys.path.insert(0, _PROJECT_ROOT)
 
-from attoswarm.research.evaluator import EvalResult
+from eval.result import EvalResult
 
 from eval.meta_harness.evaluator import CodeIntelBenchEvaluator
 from eval.meta_harness.harness_config import HarnessConfig

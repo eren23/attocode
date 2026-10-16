@@ -18,10 +18,10 @@ from dataclasses import dataclass
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "src"))
+    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "packages", "code-intel", "src"))
     sys.path.insert(0, _PROJECT_ROOT)
 
-from attocode.code_intel.service import CodeIntelService
+from attocode_intel.service import CodeIntelService
 
 from eval.meta_harness.harness_config import HarnessConfig
 from eval.meta_harness.paths import BASELINE_ORIGINAL_CONFIG, BEST_CONFIG_REFERENCE

@@ -8,7 +8,7 @@ Discovers labeled samples from three sources:
 
 All sources funnel through :class:`CorpusLoader.iter_samples` which yields
 :class:`LabeledSample` instances. Annotation parsing reuses
-``attocode.code_intel.rules.testing.parse_annotations`` so the harness
+``attocode_intel.rules.testing.parse_annotations`` so the harness
 respects both attocode-native ``# expect:``/``# ok:`` markers AND the
 semgrep-compat ``# ruleid:`` alias added in Step 1.
 """
@@ -20,12 +20,12 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from attocode.code_intel.rules.executor import detect_language
-from attocode.code_intel.rules.packs.pack_loader import (
+from attocode_intel.rules.executor import detect_language
+from attocode_intel.rules.packs.pack_loader import (
     get_community_pack_dir,
     list_community_packs,
 )
-from attocode.code_intel.rules.testing import parse_annotations
+from attocode_intel.rules.testing import parse_annotations
 
 # Per-pack project-relative fixture root layout under packs/community/<pack>/
 _PACK_FIXTURE_DIR = "fixtures"

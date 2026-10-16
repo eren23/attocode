@@ -1,6 +1,6 @@
 # CLI Commands Reference
 
-The `attocode code-intel` CLI exposes code intelligence features directly from the terminal. All commands work in both local mode (direct filesystem analysis) and remote mode (connected to a running code-intel server).
+The `attocode-code-intel` CLI exposes code intelligence features directly from the terminal. All commands work in both local mode (direct filesystem analysis) and remote mode (connected to a running code-intel server).
 
 ## Quick Reference
 
@@ -26,10 +26,10 @@ All commands accept `--project <path>` to specify the project directory (default
 Search across the codebase using natural language. Uses vector similarity + BM25 keyword matching with Reciprocal Rank Fusion.
 
 ```bash
-attocode code-intel query "authentication middleware"
-attocode code-intel query "error handling" --top 20
-attocode code-intel query "database connection" --filter "*.py"
-attocode code-intel query "React hooks" --project /path/to/repo
+attocode-code-intel query "authentication middleware"
+attocode-code-intel query "error handling" --top 20
+attocode-code-intel query "database connection" --filter "*.py"
+attocode-code-intel query "React hooks" --project /path/to/repo
 ```
 
 **Flags:**
@@ -63,13 +63,13 @@ List all symbols (functions, classes, methods, variables) in a file, or search f
 
 ```bash
 # List symbols in a file
-attocode code-intel symbols src/auth/middleware.py
+attocode-code-intel symbols src/auth/middleware.py
 
 # Search for a symbol by name
-attocode code-intel symbols --search "authenticate"
+attocode-code-intel symbols --search "authenticate"
 
 # Combine with project flag
-attocode code-intel symbols src/app.py --project /path/to/repo
+attocode-code-intel symbols src/app.py --project /path/to/repo
 ```
 
 **Flags:**
@@ -113,9 +113,9 @@ Search results for 'authenticate' (5 matches)
 Show the blast radius of changes to one or more files. Computes transitive dependents to reveal what might break.
 
 ```bash
-attocode code-intel impact src/auth.py
-attocode code-intel impact src/auth.py src/config.py
-attocode code-intel impact src/core/loop.py --project /path/to/repo
+attocode-code-intel impact src/auth.py
+attocode-code-intel impact src/auth.py src/config.py
+attocode-code-intel impact src/core/loop.py --project /path/to/repo
 ```
 
 **Flags:**
@@ -152,9 +152,9 @@ Total blast radius: 5 files affected
 Identify files with the highest risk/complexity scores. Scores combine cyclomatic complexity, fan-in/fan-out, file size, and change frequency.
 
 ```bash
-attocode code-intel hotspots
-attocode code-intel hotspots --top 20
-attocode code-intel hotspots --project /path/to/repo
+attocode-code-intel hotspots
+attocode-code-intel hotspots --top 20
+attocode-code-intel hotspots --project /path/to/repo
 ```
 
 **Flags:**
@@ -185,8 +185,8 @@ Code hotspots (top 15 by risk score):
 Show what a file imports and what imports it. Useful for understanding coupling and planning refactors.
 
 ```bash
-attocode code-intel deps src/auth/middleware.py
-attocode code-intel deps src/api/app.py --project /path/to/repo
+attocode-code-intel deps src/auth/middleware.py
+attocode-code-intel deps src/api/app.py --project /path/to/repo
 ```
 
 **Flags:**
@@ -226,8 +226,8 @@ Clean up orphaned embeddings, unreferenced content, and stale cache files. Behav
 - **Service mode (with database)**: Runs GC operations directly against the database
 
 ```bash
-attocode code-intel gc
-attocode code-intel gc --project /path/to/repo
+attocode-code-intel gc
+attocode-code-intel gc --project /path/to/repo
 ```
 
 **Sample output (local):**
@@ -260,8 +260,8 @@ Run integrity checks on the code-intel index. In local mode, verifies cache and 
 - Orphaned symbols referencing missing `file_contents`
 
 ```bash
-attocode code-intel verify
-attocode code-intel verify --project /path/to/repo
+attocode-code-intel verify
+attocode-code-intel verify --project /path/to/repo
 ```
 
 **Sample output (service mode, clean):**
@@ -295,8 +295,8 @@ Found 2 issue(s):
   [!] 12 embeddings reference content not in any branch manifest
   [!] 3 content SHAs in branch manifests have no embeddings
 
-Run 'attocode code-intel gc' to clean up orphaned data.
-Run 'attocode code-intel reindex' to rebuild missing embeddings.
+Run 'attocode-code-intel gc' to clean up orphaned data.
+Run 'attocode-code-intel reindex' to rebuild missing embeddings.
 ```
 
 ---
@@ -309,8 +309,8 @@ Force a complete reindex of the project. Clears all cached data and rebuilds the
 - **Remote mode**: Triggers an `index_repository` job on the server
 
 ```bash
-attocode code-intel reindex
-attocode code-intel reindex --project /path/to/repo
+attocode-code-intel reindex
+attocode-code-intel reindex --project /path/to/repo
 ```
 
 **Sample output (local):**
@@ -323,4 +323,4 @@ Reindexing /path/to/repo...
 ```
 
 !!! note "Reindex duration"
-    Full reindexing can take several minutes for large projects, depending on file count and embedding model. Use `attocode code-intel index --background` for non-blocking indexing.
+    Full reindexing can take several minutes for large projects, depending on file count and embedding model. Use `attocode-code-intel index --background` for non-blocking indexing.

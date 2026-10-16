@@ -30,10 +30,10 @@ from typing import Any
 
 import yaml
 
-from attocode.code_intel.rules.executor import execute_rules
-from attocode.code_intel.rules.loader import _parse_yaml_rule
-from attocode.code_intel.rules.model import RuleSource
-from attocode.code_intel.rules.testing import _finding_matches_rule
+from attocode_intel.rules.executor import execute_rules
+from attocode_intel.rules.loader import _parse_yaml_rule
+from attocode_intel.rules.model import RuleSource
+from attocode_intel.rules.testing import _finding_matches_rule
 
 from eval.meta_harness.rule_bench.corpus import LabeledSample
 

@@ -111,8 +111,8 @@ def evaluate_module(benchmark: dict) -> dict:
     matching keyspace before precision/recall is computed.
     """
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
-        from attocode.code_intel.service import CodeIntelService
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "packages", "code-intel", "src"))
+        from attocode_intel.service import CodeIntelService
     except ImportError:
         return {"error": "Cannot import CodeIntelService", **benchmark}
 

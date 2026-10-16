@@ -26,7 +26,7 @@ attocode-code-intel doctor --global --client codex --project /path/to/repo
 
 Global servers select the explicit `workspace`, an advertised MCP root, or the repository containing their working directory. If a client supplies multiple roots, the agent must select one. Cursor's automatic instruction file is project-scoped even when its server connection is global; run `init --client cursor` in each project where you want those rules.
 
-After publishing the standalone distribution, the installation command will be `uv tool install attocode-code-intel`. The source installation above works before that release.
+The published standalone package is available with `uv tool install attocode-code-intel`. The source installation above uses this checkout.
 
 ## Everyday use
 
@@ -62,15 +62,33 @@ attocode-code-intel share --project . --learning 12 --server https://intel.examp
 |---|---|---|
 | Intelligence engine, MCP, REST, workers | `packages/code-intel/src/attocode_intel` | Active product |
 | Dashboard | `frontend` | Active product |
-| Agent, TUI, swarm | `src/attocode`, `src/attoswarm` | Frozen legacy |
-| Old intelligence imports | `attocode.code_intel`, selected context modules | Compatibility aliases |
+| Agent, TUI, swarm and lessons | `agent-archive-2026-10-16` tag | Archived |
+| Old agent compatibility imports | Archive tag only | Use `attocode_intel` on main |
 
 ```sh
-uv sync --extra dev --extra code-intel
+uv sync --locked --package attocode-code-intel --extra dev --extra service
 uv run pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests
 uv build --package attocode-code-intel
 ```
 
-The standalone workflow tests Python 3.12/3.13, real stdio and HTTP MCP, repository isolation, PostgreSQL knowledge operations, budgets, and wheel independence. Releases use `intel-v*` tags; the legacy agent keeps its separate release workflow.
+The standalone workflow tests Python 3.12/3.13, real stdio and HTTP MCP, repository isolation, PostgreSQL knowledge operations, budgets, and wheel independence. Releases use `intel-v*` tags; the agent release workflow is retired.
 
 [Product and operations guide](intelligence.md) · [Generated tool catalog](intelligence-tools.md) · [Legacy agent documentation](legacy-agent.md) · [MIT license](https://github.com/eren23/attocode/blob/main/LICENSE)
+
+## Development and archived agent
+
+This repository develops the standalone intelligence product. The root is a
+virtual uv workspace; it does not build or publish the old `attocode` package.
+
+```sh
+uv sync --locked --package attocode-code-intel --extra dev --extra service
+uv run --no-sync python -m eval.quality local
+```
+
+See [contributing](contributing.md) for the full engine, integration and PostgreSQL
+checks. Optional embedding models are not installed by these commands.
+
+The Python agent, swarm, TypeScript implementation and teaching lessons are
+preserved at [agent-archive-2026-10-16](https://github.com/eren23/attocode/tree/agent-archive-2026-10-16).
+See the [archive and migration notes](legacy-agent.md). Existing package names,
+versions, intelligence imports and MCP tool names have not been repurposed.

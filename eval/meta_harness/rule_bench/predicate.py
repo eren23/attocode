@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from attoswarm.research.evaluator import EvalResult
+from eval.result import EvalResult
 
 # Default slack: a candidate may dip up to 5% below the per-language
 # baseline before being rejected. Tuneable via ``floor_ratio`` arg.

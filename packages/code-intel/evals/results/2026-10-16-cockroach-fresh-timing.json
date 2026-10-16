@@ -1,0 +1,35 @@
+{
+  "source_commit": "9518a3d7724e2d9fe3f169a0d4a9b2d9ee492500",
+  "batch": "b0ee9a52d40b4bee",
+  "run_id": "20261016T122528-e31b9635",
+  "scope": "Fresh targeted CockroachDB workflow check, not a full release gate",
+  "status": "passed",
+  "pack_check_query_seconds": 159.62117287000004,
+  "pack_limit_seconds": 180,
+  "workflow_phase_including_materialization_seconds": 180.441,
+  "controller_seconds": 304.2446258068085,
+  "peak_managed_bytes": 1487687834,
+  "peak_rss_bytes": 814751744,
+  "assertions": {
+    "passed": 4,
+    "limited": 4,
+    "failed": 0,
+    "incomplete": 0
+  },
+  "retrieval": {
+    "observed": 4,
+    "known_target_hit_5": 0,
+    "known_target_hit_24": 1,
+    "labels": "Legacy, non-exhaustive development anchors"
+  },
+  "new_estimated_compute_usd": 0.0141,
+  "cumulative_estimated_compute_usd": 0.9405,
+  "monthly_reserved_usd": 23,
+  "monthly_reservation_cap_usd": 23,
+  "active_quality_workers_after_independent_check": 0,
+  "all_23_batches_cleanup_verified": true,
+  "export_bytes": 48418,
+  "model_runs": 0,
+  "ranking_run": false,
+  "release_cut": false
+}

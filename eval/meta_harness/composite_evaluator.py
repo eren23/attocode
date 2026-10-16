@@ -21,7 +21,7 @@ import logging
 import time
 from typing import Any
 
-from attoswarm.research.evaluator import EvalResult
+from eval.result import EvalResult
 
 from eval.meta_harness.evaluator import CodeIntelBenchEvaluator
 from eval.meta_harness.harness_config import HarnessConfig

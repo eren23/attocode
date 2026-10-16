@@ -4,7 +4,7 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Latest batch, 2026-10-16:** [explicit test search and transient precision recovery](../packages/code-intel/evals/results/2026-10-16-search-recovery-batch.md).
+**Latest batch, 2026-10-16:** [explicit test search and transient precision recovery](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-search-recovery-batch.md).
 One frozen test-intent partition improved labeled hits at five from 3/8 to 6/8,
 with four unchanged production controls. Transient precision replies retry within
 the existing deadline, and partial caches expire. Six fresh real Rust fixtures
@@ -13,7 +13,7 @@ bounded gate passed 829 tests (nine skips), 120 repeated navigation checkpoints,
 seven source packs and frozen ranking in 171.081 seconds; scratch cleanup passed.
 PostgreSQL and full upstream CI gate merge. No new cloud rental or release.
 
-**Previous follow-up, 2026-10-15:** [document lifecycle and body-file trial](../packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md).
+**Previous follow-up, 2026-10-15:** [document lifecycle and body-file trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md).
 Shared LSP document state prevents duplicate opens and edit versions across
 callers; strict protocol and six fresh Rust fixtures pass. The intermittent CI
 failure's cause is not proven. Body-file fusion improved consumed development
@@ -21,7 +21,7 @@ failure's cause is not proven. Body-file fusion improved consumed development
 hit and failed the full gate. Ranking remains unchanged. Two local Cockroach
 component prototypes were not adopted; no new cloud rental or release occurred.
 
-**Previous follow-up, 2026-10-15:** [Cockroach and fresh retrieval cycle](../packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).
+**Previous follow-up, 2026-10-15:** [Cockroach and fresh retrieval cycle](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-headroom-retrieval.md).
 The merged fixes passed Cockroach at 167.970/180 seconds, still a narrow margin.
 All 48 new source-backed retrieval questions are complete: baseline 33/48 at
 five and 44/48 at 24. Neither fixed candidate improved development Hit@5;
@@ -29,7 +29,7 @@ no ranking policy was added. All 22 workers are deleted, cumulative estimated
 compute is $0.9264 before tax. The unused conditional retry is not launchable
 after the passing target. No additional release or model study was performed.
 
-**Release status, 2026-10-15:** [0.1.6 is released and verified](../packages/code-intel/evals/results/2026-10-15-release-016.md).
+**Release status, 2026-10-15:** [0.1.6 is released and verified](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-release-016.md).
 The full gate passed all 36 pinned packs, 144 retrieval observations, ranking,
 591 contract tests (22 skips), lint, scale and lifecycle. The controller finished
 in 21.368 minutes under its unchanged 90-minute limit. All 11 release jobs and
@@ -54,7 +54,7 @@ tax (not an invoice). All three approved reservations are used under the $21 cap
 the separately approved follow-up is reported above. Only 1,601,899 report/log bytes returned to the
 Mac. Protected studies/caches, global tools and the running host MCP are unchanged.
 
-**Local follow-up:** [retrieval audit and file-scoped navigation repair](../packages/code-intel/evals/results/2026-10-15-retrieval-file-symbol.md).
+**Local follow-up:** [retrieval audit and file-scoped navigation repair](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-retrieval-file-symbol.md).
 All 144 saved pages are classified; bounded FastAPI/Laravel tracing shows a
 candidate present below the page cutoff and a relevant file omitted by the
 original labels. Six fresh questions yielded 3/6 at five, 5/6 at 24 and 6/6 at 96.
@@ -62,7 +62,7 @@ File symbol lookups now exclude same-named definitions in other files and avoid
 scanning their global name lists. This repair merged in PR #210 and is not part of published
 0.1.6. Search ranking and the narrow Cockroach timing margin remain open.
 
-**Second local follow-up:** [expansion comparison and importance publication](../packages/code-intel/evals/results/2026-10-15-expansion-importance.md).
+**Second local follow-up:** [expansion comparison and importance publication](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-15-expansion-importance.md).
 Disabling expansion improved development hits at five from 9/14 to 11/14, but
 both arms reached 12/12 on fresh validation. The predeclared improvement rule
 failed, so no ranking policy changed. Profiling exposed a separate publication
@@ -247,7 +247,7 @@ Retained check outcomes: 123 passed, 116 limited, 37 unsupported; no failed
 assertions were observed before the two pack interruptions. Optional grammars
 were absent on this clean worker. The report's check-level incomplete count does
 not count interrupted packs; their explicit statuses and missing questions govern
-completeness. See the [remote record](../packages/code-intel/evals/results/2026-10-14-breadth-cloud-first.json).
+completeness. See the [remote record](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-breadth-cloud-first.json).
 
 The cloud worker and its scratch were deleted and an independent API query found
 zero active quality workers. Estimated compute cost: $0.0733; one of this
@@ -260,3 +260,19 @@ keyword and body indexing. It retains no ASTs or source text. Regression control
 check rollback, selected-definition keys, identical source chunks, bounded-cache
 fallback and same-size/same-mtime edits. No ranking weights, labels or timeout
 limits changed. Final performance and remote revalidation remain required.
+
+
+### 2026-10-16: fresh timing check and intelligence-first transition
+
+The fresh CockroachDB cloud run on `9518a3d` passed its unchanged 180-second
+pack check in 159.621 seconds. The independently verified worker was deleted;
+all 23 reserved batches have verified cleanup, with no active quality workers.
+Estimated cumulative compute is $0.9405, not an invoice. The $23 reservation cap
+is fully used; another rental would need new authorization.
+
+The repository transition is implemented: the complete agent is preserved at
+`agent-archive-2026-10-16`, useful tests now import the standalone engine, and the
+root workspace, CI and documentation target intelligence. See the
+[archive and migration guide](legacy-agent.md). Historical experiment artifacts,
+private client settings and shared caches remain separate from this migration.
+Final validation and merge evidence are recorded in the transition results.

@@ -1,104 +1,47 @@
-# Contributing to Attocode
+# Contributing to Attocode Intelligence
 
-## Getting Started
+Python 3.12/3.13 and Git are supported. The root `pyproject.toml` is a virtual
+workspace; `packages/code-intel` is the only publishable Python package. Keep
+`attocode_intel` imports and the `attocode-code-intel` command stable.
 
-```bash
-git clone https://github.com/eren23/attocode.git
-cd attocode
-
-uv sync --all-extras          # creates .venv, installs everything
-# or: python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
+```sh
+uv sync --locked --package attocode-code-intel --extra dev --extra service
+uv run --no-sync python -m eval.quality local
 ```
 
-## Development Workflow
+The bounded local gate checks product contracts, scale and lifecycle behavior.
+For the preserved engine and HTTP/MCP integration coverage:
 
-1. Create a feature branch from `main`
-2. Make changes, add tests
-3. Run `pytest tests/unit/ -x -q` for fast feedback
-4. Run `ruff check src/ tests/` for linting
-5. Open a pull request
-
-## Running Tests
-
-```bash
-# All tests
-pytest tests/
-
-# Unit tests only (fast, no I/O)
-pytest tests/unit/ -x -q
-
-# Specific module
-pytest tests/unit/integrations/test_agents.py -v
-
-# With coverage
-pytest tests/ --cov=src/attocode --cov-report=term-missing
-
-# Skip known pre-existing failures
-pytest tests/unit/ --ignore=tests/unit/attoswarm -x
+```sh
+uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/unit packages/code-intel/tests/integration -p eval.quality.no_agent -q
 ```
 
-## Code Style
+Run the complete package suite with `packages/code-intel/tests` instead. The
+`no_agent` guard requires a clean environment without the retired `attocode`
+distribution and rejects agent imports. Existing developer environments may still
+contain that editable distribution; create a new environment with
+`UV_PROJECT_ENVIRONMENT=/tmp/intelligence-dev uv sync --locked --package attocode-code-intel --extra dev --extra service`
+and use the same environment variable on subsequent `uv run` commands. Do not
+remove shared environments or caches to make a check pass.
 
-- **Formatter/Linter:** [Ruff](https://docs.astral.sh/ruff/)
-- **Type checker:** [mypy](https://mypy-lang.org/) (strict mode)
-- **Test framework:** [pytest](https://docs.pytest.org/) with `pytest-asyncio`
-- Use `@dataclass` for data containers
-- Use `AsyncMock` for async dependencies in tests
-- Group related tests in classes: `class TestFeatureName:`
+PostgreSQL checks use `TEST_DATABASE_URL`; CI runs the real database, migrations,
+locking and branch-isolation controls on both Python versions. The dashboard and
+Docker image have separate CI checks. Real Python/TypeScript/Go/Rust language
+servers and clean macOS/Linux wheels also gate delivery.
 
-## Project Structure
+Optional embeddings, model-backed evaluations and broad corpus acquisition must
+be explicit. Default development setup does not install model extras. The quality
+runner uses deadlines, managed storage and scratch cleanup; follow
+[the quality guide](intelligence-quality.md) before broad or cloud runs.
 
-```
-src/
-  attocode/          Main agent package
-  attoswarm/         Standalone swarm orchestration
-  attocode_core/     Shared AST indexing
-tests/
-  unit/              Fast tests, no I/O
-  integration/       Slower tests requiring I/O
-```
+Use fresh source judgments for ranking changes, retain failed results and report
+unsupported/limited evidence honestly. No agent-outcome or performance claim is
+established by a passing unit suite. Run `scripts/check_pack_licenses.py` when
+changing rule packs. Generate the tool catalog with
+`packages/code-intel/scripts/generate_catalog.py` after tool changes.
 
-See [Architecture](ARCHITECTURE.md) for detailed module documentation.
-
-## Adding a New Tool
-
-1. Create `src/attocode/tools/my_tool.py` implementing `BaseTool`
-2. Register in `src/attocode/tools/registry.py`
-3. Add tests in `tests/unit/tools/test_my_tool.py`
-4. Update the policy table in `src/attocode/integrations/safety/policy_engine.py` if the tool needs special permissions
-
-## Adding a New Provider
-
-1. Create adapter in `src/attocode/providers/adapters/`
-2. Implement `LLMProvider` base class from `providers/base.py`
-3. Register in `providers/registry.py`
-4. Add model defaults in `config.py`
-5. See [Providers](PROVIDERS.md)
-
-## Adding a New Integration
-
-1. Pick the appropriate subdirectory under `src/attocode/integrations/` (or create one)
-2. Add your module
-3. Export from the subdirectory's `__init__.py`
-4. Write tests in `tests/unit/integrations/`
-
-## Commit Messages
-
-Use conventional commit style:
-
-```
-feat(budget): add dynamic budget reallocation
-fix(sandbox): handle missing Landlock kernel support
-test(recording): add playback engine unit tests
-docs(providers): add OpenAI adapter reference
-```
-
-## Known Pre-existing Test Failures
-
-These tests fail in CI due to environment assumptions and are safe to ignore:
-
-| Test | Reason |
-|------|--------|
-| `test_mcp.py::test_empty_when_no_files` | Global MCP defaults now include context7 |
-| `test_attoswarm_smoke.py::test_two_claude_smoke_fake_worker` | Swarm integration timing |
-| `test_cli.py::test_init_interactive_minimal_existing_repo` | Attoswarm CLI change |
+Docs: `uv sync --locked --package attocode-code-intel --extra docs`, then
+`uv run --no-sync mkdocs build --strict`. Published intelligence releases use
+`intel-v*` tags and the standalone release workflow; this migration cuts no release.
+The retired agent and its development instructions are linked in
+[the archive notes](legacy-agent.md).

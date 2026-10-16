@@ -1,4 +1,0 @@
-name: ruby
-version: 1.0.0
-languages: [ruby]
-description: "Ruby analysis pack — Rails/AR pitfalls, dynamic-eval risks, idiomatic style"

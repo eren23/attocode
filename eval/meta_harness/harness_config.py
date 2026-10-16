@@ -12,7 +12,7 @@ from typing import Any
 
 import yaml
 
-from attocode.integrations.context.semantic_search import ContextAssemblyConfig, SearchScoringConfig
+from attocode_intel._internal.integrations.context.semantic_search import ContextAssemblyConfig, SearchScoringConfig
 
 
 # Valid ranges for search scoring parameters

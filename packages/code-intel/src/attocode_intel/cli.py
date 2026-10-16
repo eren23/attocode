@@ -823,7 +823,7 @@ def _bootstrap_user_and_project(
     try:
         import httpx
     except ImportError:
-        print("Error: httpx not installed. Install with: uv sync --extra service", file=sys.stderr)
+        print("Error: httpx not installed. Install with: uv sync --package attocode-code-intel --extra service", file=sys.stderr)
         sys.exit(1)
 
     # Load existing state for idempotency
@@ -2180,14 +2180,14 @@ def _cmd_setup(args: list[str]) -> None:
     Phase 1 (infra): Docker, deps, migrations — no API needed.
     Phase 2 (bootstrap): Register dev user, create org, add repo — requires running API.
 
-    To connect to an existing server, use ``attocode code-intel connect`` instead.
+    To connect to an existing server, use ``attocode-code-intel connect`` instead.
     """
 
     try:
         import httpx
     except ImportError:
         print(
-            "Error: httpx not installed. Install with: uv sync --extra service",
+            "Error: httpx not installed. Install with: uv sync --package attocode-code-intel --extra service",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -2227,7 +2227,7 @@ def _cmd_setup(args: list[str]) -> None:
     env_dev = os.path.join(project_dir, ".env.dev")
     state_path = os.path.join(project_dir, ".attocode", "dev-state.json")
     alembic_ini = os.path.join(
-        project_dir, "src", "attocode", "code_intel", "migrations", "alembic.ini",
+        project_dir, "packages", "code-intel", "src", "attocode_intel", "migrations", "alembic.ini",
     )
 
     # =========================================================
@@ -2262,7 +2262,7 @@ def _cmd_setup(args: list[str]) -> None:
 
     # 4. Install deps
     if not skip_deps:
-        _run(["uv", "sync", "--extra", "service", "--extra", "semantic"])
+        _run(["uv", "sync", "--package", "attocode-code-intel", "--extra", "service"])
 
     # 5. Load .env.dev
     env_vars = _load_env_file(env_dev)

@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "src"))
+    sys.path.insert(0, os.path.join(_PROJECT_ROOT, "packages", "code-intel", "src"))
     sys.path.insert(0, _PROJECT_ROOT)
 
 from eval.meta_harness.harness_config import HarnessConfig
@@ -71,7 +71,7 @@ def run_mcp_bench_with_config(
     The mcp_bench runner calls CodeIntelService directly. We monkey-patch
     the service factory to apply our config to each instance.
     """
-    from attocode.code_intel.service import CodeIntelService
+    from attocode_intel.service import CodeIntelService
     from eval.mcp_bench.mcp_runner import run_benchmark
     from eval.mcp_bench.schema import BenchConfig
 

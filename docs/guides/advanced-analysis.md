@@ -53,7 +53,7 @@ call needed.
 ### Custom Rules
 
 Add YAML files to `.attocode/rules/` or create plugins in `.attocode/plugins/`.
-See [Extending Attocode](../extending.md#custom-analysis-rules) for the full format.
+See [Extending Attocode](https://github.com/eren23/attocode/blob/agent-archive-2026-10-16/docs/extending.md#custom-analysis-rules) for the full format.
 
 ---
 

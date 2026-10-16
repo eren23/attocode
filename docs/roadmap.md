@@ -1,15 +1,15 @@
 # Attocode Roadmap
 
 This page preserves historical release notes and longer-term ideas. For current
-code-intelligence priorities, use the [maintained backlog](code-intel-roadmap.md#current-priorities--2026-10-15)
+code-intelligence priorities, use the [maintained backlog](code-intel-roadmap.md#current-priorities-2026-10-16)
 and [validated workstream](intelligence-workstream.md). Version targets below
 are historical plans, not evidence that all listed work shipped. Standalone
 code intelligence and the root agent have separate version numbers.
 
 ## v0.2.16 -- Install Probing, Portable Bundles & Supply-Chain Hardening (Released 2026-04-05)
 
-1. ~~**Installed-target runtime probing**~~ -- DONE: `attocode code-intel probe-install` validates file-based MCP installs by launching the configured stdio command, resolving `${workspaceFolder}`, and optionally exercising `project_summary`
-2. ~~**Portable code-intel bundles**~~ -- DONE: `attocode code-intel bundle export` / `bundle inspect` package local artifacts with metadata, hashes, and version stamping for offline transfer and debugging
+1. ~~**Installed-target runtime probing**~~ -- DONE: `attocode-code-intel probe-install` validates file-based MCP installs by launching the configured stdio command, resolving `${workspaceFolder}`, and optionally exercising `project_summary`
+2. ~~**Portable code-intel bundles**~~ -- DONE: `attocode-code-intel bundle export` / `bundle inspect` package local artifacts with metadata, hashes, and version stamping for offline transfer and debugging
 3. ~~**Shared install config resolution**~~ -- DONE: `ResolvedInstallSpec` and `resolve_install_spec()` unify JSON/TOML/YAML-backed assistant config parsing for install, status, and probe flows
 4. ~~**Supply-chain malware detection expansion**~~ -- DONE: new `security_scan` anti-patterns for invisible Unicode payloads, eval-on-decoded-data obfuscation, dynamic `require()` assembly, and string-based timer execution
 5. ~~**Install-hook auditing**~~ -- DONE: dependency audit now flags suspicious `preinstall`/`install`/`postinstall` scripts and shares matcher behavior between local and DB-backed scanners

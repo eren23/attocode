@@ -230,11 +230,11 @@ def run_accuracy_benchmark(
     Returns:
         BenchmarkResult with per-rule, per-CWE, and per-language metrics.
     """
-    from attocode.code_intel.rules.loader import load_builtin_rules
-    from attocode.code_intel.rules.packs.pack_loader import list_example_packs, load_pack
-    from attocode.code_intel.rules.executor import execute_rules
-    from attocode.code_intel.rules.enricher import enrich_findings
-    from attocode.code_intel.rules.filters.pipeline import filter_by_confidence, run_pipeline
+    from attocode_intel.rules.loader import load_builtin_rules
+    from attocode_intel.rules.packs.pack_loader import list_example_packs, load_pack
+    from attocode_intel.rules.executor import execute_rules
+    from attocode_intel.rules.enricher import enrich_findings
+    from attocode_intel.rules.filters.pipeline import filter_by_confidence, run_pipeline
     from attocode_intel import confidence
 
     # Load all rules

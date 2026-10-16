@@ -23,7 +23,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from attocode.code_intel.rules.model import RuleSeverity
+from attocode_intel.rules.model import RuleSeverity
 
 # Defaults match the brainstorming decision: critical 4x, high 3x,
 # medium 2x, low 1x, info 0.5x.

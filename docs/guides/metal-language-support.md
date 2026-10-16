@@ -121,4 +121,4 @@ The TextMate grammar (`source.metal`) provides highlighting for:
 ## Related
 
 - [AST & Code Intelligence](../ast-and-code-intelligence.md) --- full language support table and code intelligence architecture
-- [VS Code Extension README](../../extensions/vscode-metal/README.md) --- installation and feature details
+- [VS Code Extension README](https://github.com/eren23/attocode/blob/main/extensions/vscode-metal/README.md) --- installation and feature details

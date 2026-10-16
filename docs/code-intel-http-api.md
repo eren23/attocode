@@ -9,10 +9,10 @@ The HTTP API exposes the shared code-intelligence surface as REST endpoints, bac
 ```bash
 # Install attocode
 uv tool install attocode
-# or: pip install 'attocode[code-intel]'
+# or: pip install 'attocode-code-intel[service]'
 
 # Start the HTTP server for a project
-attocode code-intel serve --transport http --project /path/to/repo
+attocode-code-intel serve --transport http --project /path/to/repo
 ```
 
 The server starts at `http://127.0.0.1:8080`. Open `http://127.0.0.1:8080/docs` for interactive Swagger UI.
@@ -31,8 +31,8 @@ See [Docker Deployment](#docker-deployment) for details.
 ### Option 3: Programmatic
 
 ```python
-from attocode.code_intel.api.app import create_app
-from attocode.code_intel.config import CodeIntelConfig
+from attocode_intel.api.app import create_app
+from attocode_intel.config import CodeIntelConfig
 
 config = CodeIntelConfig(project_dir="/path/to/repo", host="0.0.0.0", port=8080)
 app = create_app(config)
@@ -57,7 +57,7 @@ The auth middleware accepts both `Bearer <key>` and the raw key in the `Authoriz
 
 ```bash
 # Start with auth
-ATTOCODE_API_KEY=my-secret-key attocode code-intel serve --transport http
+ATTOCODE_API_KEY=my-secret-key attocode-code-intel serve --transport http
 
 # Authenticated request
 curl -H "Authorization: Bearer my-secret-key" http://localhost:8080/api/v1/projects
@@ -918,10 +918,10 @@ verify_resp = stdio_mcp_client.call(
 
 ### Implementation references
 
-- Snapshots: `src/attocode/code_intel/api/routes/snapshots.py`
-- GC: `src/attocode/code_intel/api/routes/gc.py`
-- Cross-org move: `src/attocode/code_intel/api/routes/orgs.py::patch_repo`
-- Pin helper: `src/attocode/code_intel/api/routes/_pin_helper.py`
-- Providers: `src/attocode/code_intel/api/providers/db_provider.py` and
+- Snapshots: `packages/code-intel/src/attocode_intel/api/routes/snapshots.py`
+- GC: `packages/code-intel/src/attocode_intel/api/routes/gc.py`
+- Cross-org move: `packages/code-intel/src/attocode_intel/api/routes/orgs.py::patch_repo`
+- Pin helper: `packages/code-intel/src/attocode_intel/api/routes/_pin_helper.py`
+- Providers: `packages/code-intel/src/attocode_intel/api/providers/db_provider.py` and
   `local_provider.py`
-- Migration: `src/attocode/code_intel/migrations/versions/018_repo_snapshots.py`
+- Migration: `packages/code-intel/src/attocode_intel/migrations/versions/018_repo_snapshots.py`

@@ -172,8 +172,8 @@ def parse_search_results(output: str) -> list[str]:
 
 def evaluate_repo(repo: str, repo_path: str, queries: list[dict]) -> RepoEvaluation:
     """Run all queries against a repo's CodeIntelService."""
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
-    from attocode.code_intel.service import CodeIntelService
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "packages", "code-intel", "src"))
+    from attocode_intel.service import CodeIntelService
     from eval.search_quality import search_is_warming, wait_for_search_ready
 
     evaluation = RepoEvaluation(repo=repo)
