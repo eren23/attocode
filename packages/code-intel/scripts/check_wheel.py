@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -145,6 +146,7 @@ async def check():
 async def check_change_workflow(temp):
     """New workflow must work from the installed distribution, including CLI exports."""
     from attocode_intel.change_evidence import check_report
+    from attocode_intel.gateway import OperationGateway
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
@@ -203,6 +205,23 @@ async def check_change_workflow(temp):
                 "trace_flow", {"symbol_name": "helper", "file_path": "helper.py"}
             )
             assert not traced.isError and traced.structuredContent["data"]["flow"]["edges"]
+
+    # A scoped fast search must not poison a later legacy search in another root.
+    from unittest.mock import patch
+
+    from attocode_intel.tools.search_tools import regex_search
+
+    gateway = OperationGateway(str(root), "full", watch=False)
+    try:
+        result = await gateway.execute("fast_search", {"pattern": "helper"})
+        assert "helper.py" in result.content[0].text
+    finally:
+        await gateway.close()
+    legacy = temp / "legacy project"
+    legacy.mkdir()
+    (legacy / "legacy.py").write_text("# independently installed legacy needle\n")
+    with patch.dict(os.environ, {"ATTOCODE_PROJECT_DIR": str(legacy)}):
+        assert "legacy.py" in regex_search("installed legacy needle")
 
     def cli(*args, expected=0):
         result = subprocess.run(

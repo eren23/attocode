@@ -49,6 +49,10 @@ full-profile configuration to advertise the new tools. The
 - Incremental references survive edit/rename/delete and failure/retry sequences.
   Database full reindexing replaces references idempotently; branch-aware hotspot
   normalization and navigation HTTP schemas have SQL/PostgreSQL controls.
+- Scoped fast-search indices stay owned by their workspace and close on shutdown.
+  Legacy local searches discard indices from other roots instead of returning
+  false empty results. A combined-suite PR gate and clean-wheel regression cover
+  the cache leak caught by the first, unpublished 0.1.7 release attempt.
 
 The prior broad negation rewrite and several retrieval candidates remain rejected.
 Source-authored evaluation results do not establish improved agent outcomes or

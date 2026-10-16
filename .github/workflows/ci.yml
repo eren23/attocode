@@ -37,6 +37,27 @@ jobs:
           name: engine-${{ matrix.python-version }}
           retention-days: 7
           path: quality-artifacts/
+  engine-combined:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
+      - name: Combined suites catch cross-suite state leaks before release tags
+        env:
+          ATTOCODE_LOCAL_ONLY: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -p eval.quality.no_agent -q --junitxml=quality-artifacts/combined.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: engine-combined
+          retention-days: 7
+          path: quality-artifacts/
   install-sanity:
     runs-on: ubuntu-latest
     steps:

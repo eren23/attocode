@@ -10,6 +10,7 @@ import os
 import threading
 from typing import TYPE_CHECKING
 
+from attocode_intel._internal.integrations.context.frecency import FrecencyResult
 from attocode_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
@@ -19,7 +20,6 @@ from attocode_intel._shared import (
     mcp,
 )
 from attocode_intel.tools.pin_tools import pin_stamped
-from attocode_intel._internal.integrations.context.frecency import FrecencyResult
 
 if TYPE_CHECKING:
     from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
@@ -70,7 +70,9 @@ def _get_semantic_search() -> SemanticSearchManager:
     if _semantic_search is None:
         with _semantic_search_lock:
             if _semantic_search is None:
-                from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
+                from attocode_intel._internal.integrations.context.semantic_search import (
+                    SemanticSearchManager,
+                )
                 project_dir = _get_project_dir()
                 _semantic_search = SemanticSearchManager(root_dir=project_dir)
     return _semantic_search
@@ -102,25 +104,33 @@ def _get_trigram_index() -> TrigramIndex | None:
     if current_request.get() is not None:
         def build(root):
             import os
+
             from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
             index = TrigramIndex(index_dir=os.path.join(root, ".attocode", "index"))
-            return index if index.load() else None
+            if index.load():
+                return index
+            index.close()
+            return None
         return scoped_store("trigrams", build)
     global _trigram_index
-    if _trigram_index is None:
-        with _trigram_index_lock:
-            if _trigram_index is None:
-                import os
-                project_dir = _get_project_dir()
-                index_dir = os.path.join(project_dir, ".attocode", "index")
-                if os.path.isdir(index_dir):
-                    try:
-                        from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
-                        idx = TrigramIndex(index_dir=index_dir)
-                        if idx.load():
-                            _trigram_index = idx
-                    except Exception:
-                        pass
+    import os
+    index_dir = os.path.realpath(os.path.join(_get_project_dir(), ".attocode", "index"))
+    with _trigram_index_lock:
+        # The legacy direct-call path can select a different project between calls.
+        cached_dir = getattr(_trigram_index, "index_dir", None)
+        if isinstance(cached_dir, (str, os.PathLike)) and os.path.realpath(cached_dir) != index_dir:
+            _trigram_index.close()
+            _trigram_index = None
+        if _trigram_index is None and os.path.isdir(index_dir):
+            from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
+            idx = TrigramIndex(index_dir=index_dir)
+            try:
+                if idx.load():
+                    _trigram_index = idx
+                else:
+                    idx.close()
+            except Exception:
+                idx.close()
     return _trigram_index
 
 
@@ -269,7 +279,10 @@ def dataflow_scan(
         files: Specific files to analyze (relative paths). Default: all.
         path: Subdirectory to restrict analysis to.
     """
-    from attocode_intel._internal.integrations.security.dataflow import analyze_project, format_report
+    from attocode_intel._internal.integrations.security.dataflow import (
+        analyze_project,
+        format_report,
+    )
 
     project_dir = _get_project_dir()
     if path and not files:
@@ -278,11 +291,11 @@ def dataflow_scan(
         if not os.path.isdir(scan_dir):
             return f"Error: Path not found: {path}"
         # Discover files in subdirectory
-        _EXTS = {".py", ".js", ".ts", ".jsx", ".tsx"}
+        extensions = {".py", ".js", ".ts", ".jsx", ".tsx"}
         files = []
         for dirpath, _, filenames in os.walk(scan_dir):
             for fname in filenames:
-                if os.path.splitext(fname)[1].lower() in _EXTS:
+                if os.path.splitext(fname)[1].lower() in extensions:
                     files.append(os.path.relpath(
                         os.path.join(dirpath, fname), project_dir,
                     ))
@@ -373,8 +386,12 @@ def fast_search(
             index_dir = os.path.join(project_dir, ".attocode", "index")
             idx = TrigramIndex(index_dir=index_dir)
             stats = idx.build(project_dir)
-            global _trigram_index
-            _trigram_index = idx
+            from attocode_intel.request_context import current_request
+            if (request := current_request.get()) is not None:
+                request.stores["trigrams"] = idx
+            else:
+                global _trigram_index
+                _trigram_index = idx
             if explain:
                 query_result = idx.query(
                     pattern,
@@ -508,7 +525,7 @@ def regex_search(
         return f"Error: Invalid regex pattern: {e}"
 
     # Try trigram pre-filtering
-    _SELECTIVITY_THRESHOLD = 0.10
+    selectivity_threshold = 0.10
     trigram_idx = _get_trigram_index()
     candidates: list[str] | None = None
     used_index = False
@@ -517,7 +534,7 @@ def regex_search(
         candidates = trigram_idx.query(
             pattern,
             case_insensitive=case_insensitive,
-            selectivity_threshold=_SELECTIVITY_THRESHOLD,
+            selectivity_threshold=selectivity_threshold,
         )
         if candidates is not None:
             used_index = True
@@ -668,12 +685,12 @@ def frecency_search(
         candidate_paths.append(file)
 
     # Phase 2: Pre-sort by frecency so high-value files are searched first
-    _FRECENCY_PRESORT_LIMIT = 10_000
+    presort_limit = 10_000
     file_scores: dict[str, FrecencyResult] = {}
     if (
         frecency_tracker is not None
         and use_frecency
-        and len(candidate_paths) <= _FRECENCY_PRESORT_LIMIT
+        and len(candidate_paths) <= presort_limit
     ):
         path_strs: list[str] = []
         path_map: dict[str, Path] = {}
