@@ -417,7 +417,6 @@ class DbAnalysisProvider:
             repo_id = uuid.UUID(self._project_id)
             branch_ctx = await get_branch_context(repo_id, branch, session)
             content_shas = branch_ctx.content_shas
-            sha_to_path = branch_ctx.sha_to_path
 
             if not content_shas:
                 return HotspotsResponse(file_hotspots=[], function_hotspots=[], orphan_files=[])
@@ -431,14 +430,14 @@ class DbAnalysisProvider:
 
             fan_out_result = await session.execute(
                 select(Dependency.source_sha, sa_func.count())
-                .where(Dependency.source_sha.in_(content_shas))
+                .where(Dependency.source_sha.in_(content_shas), Dependency.target_sha.in_(content_shas))
                 .group_by(Dependency.source_sha)
             )
             fan_out: dict[str, int] = dict(fan_out_result.all())
 
             fan_in_result = await session.execute(
                 select(Dependency.target_sha, sa_func.count())
-                .where(Dependency.target_sha.in_(content_shas))
+                .where(Dependency.source_sha.in_(content_shas), Dependency.target_sha.in_(content_shas))
                 .group_by(Dependency.target_sha)
             )
             fan_in: dict[str, int] = dict(fan_in_result.all())
@@ -449,21 +448,20 @@ class DbAnalysisProvider:
             )
             file_sizes: dict[str, int] = dict(size_result.all())
 
+            # The two maps have different key sets and iteration orders. Match
+            # both counts to the same file, and compute maxima once per request.
+            max_sym = max(sym_counts.values(), default=1) or 1
+            max_conn = max((fan_in.get(sha, 0) + fan_out.get(sha, 0) for sha in content_shas), default=1) or 1
+            max_size = max(file_sizes.values(), default=1) or 1
+            max_lines = max(max_size // 40, 1)
             items: list[FileMetricsItem] = []
-            for sha, path in sha_to_path.items():
+            # Distinct paths sharing content are still distinct files in the UI.
+            for path, sha in branch_ctx.manifest.items():
                 sc = sym_counts.get(sha, 0)
                 fi = fan_in.get(sha, 0)
                 fo = fan_out.get(sha, 0)
                 size = file_sizes.get(sha, 0)
                 lines = max(size // 40, 1) if size > 0 else 0
-                max_sym = max(sym_counts.values()) if sym_counts else 1
-                max_conn = max(
-                    (fi_ + fo_ for fi_, fo_ in zip(fan_in.values(), fan_out.values(), strict=False)),
-                    default=1,
-                ) or 1
-                max_size = max(file_sizes.values()) if file_sizes else 1
-                max_lines = max(max_size // 40, 1)
-
                 composite = (
                     0.3 * (sc / max(max_sym, 1))
                     + 0.3 * ((fi + fo) / max(max_conn, 1))
@@ -480,7 +478,7 @@ class DbAnalysisProvider:
                     composite=round(composite, 4),
                 ))
 
-            items.sort(key=lambda x: x.composite, reverse=True)
+            items.sort(key=lambda x: (-x.composite, x.path))
             return HotspotsResponse(
                 file_hotspots=items[:top_n],
                 function_hotspots=[],

@@ -7,12 +7,19 @@ are stored and indexed only once.
 from __future__ import annotations
 
 import logging
-import uuid
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
-from attocode_intel.indexing.parser import detect_language, extract_imports, extract_references, extract_symbols
+from attocode_intel.indexing.parser import (
+    detect_language,
+    extract_imports,
+    extract_references,
+    extract_symbols,
+)
 
 if TYPE_CHECKING:
+    import uuid
+    from collections.abc import Callable
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from attocode_intel.git.manager import GitRepoManager
@@ -195,7 +202,7 @@ class FullIndexer:
         # Deferred reference extraction: (sha, content, path)
         deferred_refs: list[tuple[str, bytes, str]] = []
 
-        for i, (path, oid) in enumerate(all_files):
+        for i, (path, _oid) in enumerate(all_files):
             try:
                 # Skip binary/large files
                 ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
@@ -264,7 +271,7 @@ class FullIndexer:
 
         # Second pass: resolve imports to dependencies
         self._progress({"phase": "resolving_dependencies", "total": len(deferred_deps), "current": 0})
-        for idx, (source_path, source_sha, imports, language) in enumerate(deferred_deps):
+        for source_path, source_sha, imports, language in deferred_deps:
             try:
                 if await dep_store.has_dependencies(source_sha):
                     continue
@@ -286,26 +293,18 @@ class FullIndexer:
 
         # Third pass: extract symbol references (call sites)
         self._progress({"phase": "extracting_references", "total": len(deferred_refs), "current": 0})
-        from attocode_intel.db.models import SymbolReference
-
         refs_seen_shas: set[str] = set()
-        for idx, (sha, content, file_path) in enumerate(deferred_refs):
+        # A stable content order also gives shared-content row locks a stable order.
+        for sha, content, file_path in sorted(deferred_refs, key=lambda item: item[0]):
             if sha in refs_seen_shas:
                 continue
             refs_seen_shas.add(sha)
             try:
                 refs = extract_references(content, file_path)
-                for r in refs:
-                    self._session.add(SymbolReference(
-                        content_sha=sha,
-                        symbol_name=r["symbol_name"],
-                        ref_kind=r["ref_kind"],
-                        line=r["line"],
-                        caller_qualified_name=r.get("caller_qualified_name", ""),
-                    ))
-                stats["references_found"] += len(refs)
+                stats["references_found"] += await symbol_store.replace_references(sha, refs)
             except Exception as e:
                 logger.warning("Error extracting refs for %s: %s", file_path, e)
+                stats["errors"] += 1
 
         await self._session.commit()
 
