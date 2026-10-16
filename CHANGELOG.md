@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Evaluated — Actual-page search usefulness
+
+- Reject extending file diversity to short explicit-test queries: fresh development
+  and held-out judgments showed no first-five relevance gain, and each set lost a
+  relevant code range from its 24-slot page. Product behavior is unchanged.
+- Preserve 24 multi-answer questions, actual five/24-slot before/after results,
+  timings and generation traces. Seven of thirteen first-page misses were deeper
+  in the candidate pool; six were absent. File coverage alone hid snippet losses.
+
 ### Changed — Intelligence-first repository
 
 - Archive the Python agent, swarm, TypeScript implementation, lessons and agent-only

@@ -395,3 +395,13 @@ adds document-lifecycle regression coverage and one evaluation-only body-file
 candidate. Its held-out gate failed despite higher aggregate hits; defaults
 remain unchanged. Bounded local Cockroach component trials did not establish
 additional headroom, and no further cloud reservation was used.
+
+
+## Actual-page usefulness trial (2026-10-16)
+
+The [frozen test-page diversity trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-search-usefulness.md)
+was rejected: first-five judged file pairs stayed 17/24 on development and 18/24
+on the held-out set, while larger pages lost anchored code ranges. Product defaults
+remain unchanged. Evaluate the actual requested result slots and code evidence;
+more distinct files alone do not demonstrate greater usefulness. All 24 questions
+are consumed; future adoption needs new judgments.
