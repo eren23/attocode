@@ -4,7 +4,16 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Latest follow-up, 2026-10-15:** [document lifecycle and body-file trial](../packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md).
+**Latest batch, 2026-10-16:** [explicit test search and transient precision recovery](../packages/code-intel/evals/results/2026-10-16-search-recovery-batch.md).
+One frozen test-intent partition improved labeled hits at five from 3/8 to 6/8,
+with four unchanged production controls. Transient precision replies retry within
+the existing deadline, and partial caches expire. Six fresh real Rust fixtures
+passed after an actual intermittent null-response failure was captured. The
+bounded gate passed 829 tests (nine skips), 120 repeated navigation checkpoints,
+seven source packs and frozen ranking in 171.081 seconds; scratch cleanup passed.
+PostgreSQL and full upstream CI gate merge. No new cloud rental or release.
+
+**Previous follow-up, 2026-10-15:** [document lifecycle and body-file trial](../packages/code-intel/evals/results/2026-10-15-protocol-body-followup.md).
 Shared LSP document state prevents duplicate opens and edit versions across
 callers; strict protocol and six fresh Rust fixtures pass. The intermittent CI
 failure's cause is not proven. Body-file fusion improved consumed development
@@ -63,6 +72,40 @@ work; a controlled 128-file overlap retained identical scores and order while
 reducing query time from 49–55 ms to about 7 ms. This is component evidence,
 not a new Cockroach timing result. These follow-up repairs merged in PR #210 and do not change the published
 0.1.6 artifact.
+
+## Proposed next package: intelligence-only repository
+
+The requested next direction is to retire the agent after this validation batch.
+This is a transition proposal, not authorization to delete code or publish a new
+package. The standalone `attocode-code-intel` distribution already owns the engine;
+the root `attocode` distribution depends on it. Its clean-wheel check rejects
+imports of the agent, swarm, TUI and model-client packages. That gives the
+transition a practical starting point, but does not prove every repository tool
+is independent. In particular, quality/ranking tooling still uses root workspace
+configuration and preserved historical harness inputs.
+
+1. **Preserve and inventory.** Create a final documented agent tag/archive before
+   removal. Map imports, entrypoints, tests, CI, Docker, documentation and release
+   automation. Preserve frozen studies and their grading worktree. Existing
+   intelligence experiments do not establish that the agent itself is worthless.
+2. **Make intelligence the primary product.** Keep the engine, MCP, CLI, API,
+   storage, useful dashboard/deployment surfaces, source adapters and quality
+   harness. Move root documentation, development commands and CI around those
+   supported scenarios. Keep the existing package/import/CLI identity initially
+   to avoid bundling a rename with the migration.
+3. **Remove agent maintenance deliberately.** Archive agent/swarm orchestration,
+   TUI and agent-only examples, model-provider integrations and jobs after their
+   useful intelligence tests have moved. Document migration for existing agent
+   users; do not silently repurpose the `attocode` package.
+4. **Verify the smaller repository.** Require clean standalone installation,
+   MCP/CLI/API workflows, PostgreSQL, platform/language-server CI, incremental
+   recovery and bounded pinned-corpus checks. Record dependency, checkout,
+   install-size and CI-time deltas before making size/speed claims. Keep unrelated
+   shared caches and historical evaluations untouched.
+
+The intended result is one clearly supported code-intelligence product, with
+measurable retrieval and navigation quality and a smaller maintenance surface.
+There is no deletion, rebrand or agent retirement in the current batch.
 
 The entries below are historical evidence.
 

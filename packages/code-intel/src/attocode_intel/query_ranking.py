@@ -109,14 +109,14 @@ def _component(path: str) -> str:
 
 
 def demote_tests(query: str, candidates: list[SemanticSearchResult]) -> list[SemanticSearchResult]:
-    """Put test files after the other files, unless a short query asks for tests.
+    """Prefer source files normally and test files for short explicit test requests.
 
     An issue is fixed in source files, and ``suggest_tests`` finds the tests. A long
     issue often says "test" about its reproduction, so only a short query shows test
     intent. The order in each group does not change.
     """
     if re.search(r"\btests?\b", query, re.IGNORECASE) and len(terms(query)) <= 20:
-        return candidates
+        return sorted(candidates, key=lambda row: not is_test_path(row.file_path))
     return sorted(candidates, key=lambda row: is_test_path(row.file_path))
 
 

@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T11:22:17.945986+00:00",
+  "baseline_commit": "81fc6b80f074af9efab9209eafdb421238e8b15b",
+  "candidate": "One stable tests-first partition for short queries containing the word test/tests (the existing <=20-term explicit-test-intent rule). Production queries retain baseline demotion. No query rewriting, score changes, candidate-generation changes or file-diversity changes. No tuning after observations.",
+  "scope": "Eight new explicit test questions plus four new production controls, four pinned exposed repositories/languages. Non-exhaustive implementer source judgments; files and related behaviors may have previous exposure. One fixed candidate, no sweep. The earlier two Kotlin helper questions are consumed motivation, not validation.",
+  "gate": {
+    "min_net_test_hits5": 2,
+    "min_improved_repositories": 2,
+    "no_individual_hit5_or_label24_loss": true,
+    "production_controls_identical": true,
+    "generation_identical": true,
+    "p95_ratio": 1.5,
+    "latency_floor_seconds": 0.05
+  },
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "id": "express:test-intent-1",
+          "intent": "test",
+          "query": "Find tests for clearing a cookie while ignoring maxAge and supplied expiration",
+          "evidence": [
+            {
+              "file": "test/res.clearCookie.js",
+              "quote": "it('should ignore maxAge'",
+              "line": 36,
+              "source_sha256": "83d883aebfb0e17d1d9fb864c1a52599d1070b2d45af7f9b591acad3ca614882",
+              "relevance": "Asserts expiry clearing ignores maxAge and supplied expires."
+            }
+          ]
+        },
+        {
+          "id": "express:test-intent-2",
+          "intent": "test",
+          "query": "Find tests checking subdomain arrays with custom hostname offsets",
+          "evidence": [
+            {
+              "file": "test/req.subdomains.js",
+              "quote": "describe('when subdomain offset is set'",
+              "line": 95,
+              "source_sha256": "b06fc91e7a90eb5ed5a0f68273ae28fc9094d49da29ae5f8fce9efa1b1f8b822",
+              "relevance": "Checks arrays under configured subdomain offsets."
+            }
+          ]
+        },
+        {
+          "id": "express:test-intent-3",
+          "intent": "production",
+          "query": "Check whether an application feature setting is enabled using its truthiness",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "quote": "app.enabled = function enabled(setting)",
+              "line": 420,
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Converts the setting value to a Boolean."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:test-intent-1",
+          "intent": "test",
+          "query": "Find tests for CRLF line anchors in multiline and only-matching searches",
+          "evidence": [
+            {
+              "file": "tests/feature.rs",
+              "quote": "rgtest!(f416_crlf_multiline",
+              "line": 489,
+              "source_sha256": "fbc6455c5d2cb73580cde4b390c0a43315107598200a6ca6023c3bfc155d8706",
+              "relevance": "Checks CRLF and multiline end anchors alongside only-matching cases."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:test-intent-2",
+          "intent": "test",
+          "query": "Find tests restricting external preprocessing to paths matching a glob",
+          "evidence": [
+            {
+              "file": "tests/misc.rs",
+              "quote": "rgtest!(preprocessing_glob",
+              "line": 862,
+              "source_sha256": "b44867c413b4bd6d22ea5c3a3842167534e152a8b9982122d3aa682488256faa",
+              "relevance": "Applies --pre-glob and checks matching and non-matching input files."
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:test-intent-3",
+          "intent": "production",
+          "query": "Drain process stderr asynchronously while reading stdout to avoid a pipe deadlock",
+          "evidence": [
+            {
+              "file": "crates/cli/src/process.rs",
+              "quote": "StderrReader::r#async(child.stderr.take().unwrap())",
+              "line": 113,
+              "source_sha256": "1452fb92570a07c3c5135dc9efc293a30edd3322580cc93d0b342107c2593e3f",
+              "relevance": "Selects asynchronous stderr consumption for the command reader."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "cats-effect",
+      "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+      "queries": [
+        {
+          "id": "cats-effect:test-intent-1",
+          "intent": "test",
+          "query": "Find tests for zero-capacity priority queues handing values between producer and consumer",
+          "evidence": [
+            {
+              "file": "tests/shared/src/test/scala/cats/effect/std/PQueueSuite.scala",
+              "quote": "real(\"demonstrate offer and take with zero capacity\")",
+              "line": 41,
+              "source_sha256": "61238b74cba53d00baef51427a02e2596523cb7fc60c95dddfc6b82b5fed418d",
+              "relevance": "Exercises a zero-capacity priority queue with concurrent offers and takes."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:test-intent-2",
+          "intent": "test",
+          "query": "Find tests for deque offers and takes at the front and back",
+          "evidence": [
+            {
+              "file": "tests/shared/src/test/scala/cats/effect/std/DequeueSuite.scala",
+              "quote": "\"BoundedDequeue (reversed)\"",
+              "line": 41,
+              "source_sha256": "8f15a846a043c996a01d933fde482039e3b107aa15368ddb11fee243e3e480e6",
+              "relevance": "Checks forward and reverse offer/take operations through common assertions."
+            }
+          ]
+        },
+        {
+          "id": "cats-effect:test-intent-3",
+          "intent": "production",
+          "query": "Release a countdown latch and wake blocked fibers when its count reaches zero",
+          "evidence": [
+            {
+              "file": "std/shared/src/main/scala/cats/effect/std/CountDownLatch.scala",
+              "quote": "(Done(), signal.complete(()).void)",
+              "line": 74,
+              "source_sha256": "acb773226b01022eead28331caf461f6c82da779fbf2c7e0a59eae9847a1e457",
+              "relevance": "Completes the signal when the last release changes the latch to Done."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "queries": [
+        {
+          "id": "okhttp:test-intent-1",
+          "intent": "test",
+          "query": "Find tests rejecting empty header names and trimming header whitespace",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/HeadersTest.kt",
+              "quote": "@Test fun ofThrowsOnEmptyName()",
+              "line": 39,
+              "source_sha256": "8e771b08ba448e76691763c24fa1145a155c59e13a00499145509bf8680dcf21",
+              "relevance": "Checks empty-name rejection and whitespace trimming."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:test-intent-2",
+          "intent": "test",
+          "query": "Find tests percent-encoding form names and values containing spaces and plus signs",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/FormBodyTest.kt",
+              "quote": "assertThat(body.encodedName(0)).isEqualTo(\"a%2B%3D%26+b\")",
+              "line": 36,
+              "source_sha256": "63af90ad917ea4898b2a235f6f88070b9eb466ac7992ee8abe4210bafb54168e",
+              "relevance": "Checks encoding and decoding form name/value pairs."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:test-intent-3",
+          "intent": "production",
+          "query": "Peek response trailers without blocking when the remaining body has not arrived",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Response.kt",
+              "quote": "fun peekTrailers(): Headers? = trailersSource.peek()",
+              "line": 218,
+              "source_sha256": "b6194d22ef86402a0fb6448d34556c4a6376c2ad8ecff89a58f7f6aab11e05ed",
+              "relevance": "Exposes nonblocking trailer lookup with null until available."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
