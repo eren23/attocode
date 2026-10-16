@@ -65,6 +65,9 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
         _cmd_hotspots(args[1:])
     elif cmd == "deps":
         _cmd_deps(args[1:])
+    elif cmd in {"changes", "trace"}:
+        from attocode_intel.investigation_cli import run
+        run(cmd, args[1:])
     elif cmd == "gc":
         _cmd_gc(args[1:])
     elif cmd == "verify":
@@ -86,6 +89,8 @@ def _print_help() -> None:
         "Commands:\n"
         "  init                Add the server to Codex, Claude Code or Cursor\n"
         "  doctor              Start the configured server and check that it answers\n"
+        "  changes             Investigate a Git diff; export, check or refresh evidence\n"
+        "  trace <symbol>      Follow identity-scoped static caller paths\n"
         "  install <target>    Install MCP server into a coding assistant\n"
         "  uninstall <target>  Remove MCP server from a coding assistant\n"
         "  connect             Connect project to a running code-intel server\n"

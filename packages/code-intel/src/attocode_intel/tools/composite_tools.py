@@ -23,6 +23,33 @@ from attocode_intel._shared import (
 logger = logging.getLogger(__name__)
 
 
+@mcp.tool()
+def change_context(mode: str = "working", base: str = "", depth: int = 2,
+                   max_files: int = 24, max_symbols: int = 32) -> dict:
+    """Investigate a Git diff: changed symbols, current caller paths, import impact and candidate tests.
+
+    Local full profile only. Modes: working (HEAD to working tree), staged,
+    unstaged (includes untracked), branch (merge-base of base to working tree).
+    Removed/index-only definitions retain historical source identity, without inferred callers.
+    JSON includes revision/source hashes for `changes --check`; trimmed output is not a portable report.
+    """
+    from attocode_intel.change_investigation import change_context_data
+    return change_context_data(_get_service(), mode, base, depth, max_files, max_symbols)
+
+
+@mcp.tool()
+def trace_flow(symbol_name: str, file_path: str | None = None, line: int | None = None,
+               depth: int = 2, max_nodes: int = 32) -> dict:
+    """Trace bounded static caller paths to a selected symbol, with call-site source and resolution evidence.
+
+    Local Git workspace/full profile. Select file_path and definition start line if ambiguous.
+    Depth 1..3, max_nodes 1..64. Same-name candidates remain unresolved, never followed.
+    These are structural paths, not runtime execution order or complete control/data flow.
+    """
+    from attocode_intel.change_investigation import trace_flow_data
+    return trace_flow_data(_get_service(), symbol_name, file_path, line, depth, max_nodes)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

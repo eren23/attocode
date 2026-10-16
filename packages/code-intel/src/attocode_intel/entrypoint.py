@@ -20,6 +20,8 @@ COMMANDS = """commands:
   impact <file>...    Show the files that a change to these files can affect
   hotspots            Show the files with the most risk or complexity
   deps <file>         Show what a file imports and what imports it
+  changes             Investigate a diff; export, check or refresh evidence
+  trace <symbol>      Follow static caller paths with source evidence
   commands            Show all commands, with maintenance commands and targets
 """
 

@@ -182,10 +182,25 @@ def classify_symbol_references(ast, definition):
                     and caller.rsplit(".", 1)[0] == selected_parent)
             )
         )
+        selected_ast = ast._ast_cache.get(definition.file_path)
+        source_ast = ast._ast_cache.get(ref.file_path)
+        same_go_package = (
+            selected_ast is not None and source_ast is not None
+            and selected_ast.language == source_ast.language == "go"
+            and PurePosixPath(ref.file_path).parent == PurePosixPath(definition.file_path).parent
+            and len(selected_ast.namespaces) == 1
+            and selected_ast.namespaces == source_ast.namespaces
+            and not selected_parent and syntax_name == definition.name
+            and sum(1 for d in same_name_definitions
+                    if PurePosixPath(d.file_path).parent == PurePosixPath(definition.file_path).parent
+                    and d.qualified_name == definition.qualified_name) == 1
+        )
         if ref.source == "lsp" and precise_key == selected_key:
             resolution = "language_server"
         elif same_file and local_identity:
             resolution = "same_file"
+        elif same_go_package:
+            resolution = "package_binding"
         elif not same_file and {syntax_name, syntax_name.split(".", 1)[0]} & local_names:
             resolution = "import_binding"
         elif ref.source == "lsp" and definition_count == 1:

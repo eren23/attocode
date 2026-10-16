@@ -143,7 +143,7 @@ def compact_schema(node, names=False):
 
 
 def remote_available(name):
-    return not is_write(name) or name in REMOTE_WRITES
+    return name not in {"change_context", "trace_flow"} and (not is_write(name) or name in REMOTE_WRITES)
 
 
 def registered_tools():
