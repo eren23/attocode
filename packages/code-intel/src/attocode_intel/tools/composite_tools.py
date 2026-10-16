@@ -454,7 +454,7 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
             )
 
     # Test files named for a changed file, anywhere in the repository.
-    from attocode_intel.test_ranking import folder_overlap, name_matched_tests
+    from attocode_intel.test_ranking import folder_overlap, is_test_path, name_matched_tests
     test_paths = _test_paths(project_dir)
     for f in files:
         for test_file, priority, reason in name_matched_tests(f, test_paths):
@@ -478,12 +478,7 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
 
                 for importer in importers:
                     # Check if the importer is a test file
-                    importer_lower = importer.lower()
-                    is_test = (
-                        "test" in importer_lower
-                        or "spec" in importer_lower
-                        or "__tests__" in importer_lower
-                    )
+                    is_test = is_test_path(importer)
                     if is_test:
                         _add_suggestion(
                             importer,
@@ -502,12 +497,7 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
                         importers = set()
 
                 for importer in importers:
-                    importer_lower = importer.lower()
-                    is_test = (
-                        "test" in importer_lower
-                        or "spec" in importer_lower
-                        or "__tests__" in importer_lower
-                    )
+                    is_test = is_test_path(importer)
                     if not is_test:
                         # Find tests for this dependent module
                         dep_tests = _find_test_files_by_convention(
@@ -538,11 +528,7 @@ def suggest_tests_data(files: list[str], *, symbol_name: str | None = None,
                         continue
                     seen.add(target)
                     queue.append((target, depth + 1))
-                    parts = Path(target).parts
-                    filename = Path(target).name
-                    if (any(p in {"test", "tests", "__tests__", "spec"} for p in parts)
-                            or filename.startswith("test_") or ".test." in filename
-                            or ".spec." in filename or filename.endswith("_test.go")):
+                    if is_test_path(target):
                         _add_suggestion(target, 2 if depth == 0 else 3,
                                         f"Reverse import path from `{changed}` ({depth + 1} edges)")
                         distances[target] = min(distances.get(target, depth + 1), depth + 1)

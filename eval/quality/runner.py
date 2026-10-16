@@ -31,9 +31,9 @@ LOCAL_TESTS = QUICK_TESTS + ["test_product.py", "test_query_ranking.py", "test_r
                            "test_importance_publication.py", "test_retrieval_ablation.py", "test_retrieval_cycle.py", "test_lsp_document_lifecycle.py", "test_retrieval_body_trial.py",
                            "test_structural_evidence.py", "test_search_evidence_audit.py", "test_remote.py", "test_db_navigation_http.py",
                            "test_module_ownership.py", "test_real_language_server.py", "test_precision_protocol.py",
-                           "test_source_exclusions.py", "test_operation_contracts.py", "test_navigation_prefix_trial.py"]
+                           "test_source_exclusions.py", "test_operation_contracts.py", "test_navigation_prefix_trial.py", "test_kotlin_test_paths.py"]
 LINT_PATHS = ["eval/quality", *["packages/code-intel/src/attocode_intel/" + p for p in (
-    "search_evidence.py", "symbol_links.py", "output.py", "query_ranking.py", "gateway.py",
+    "test_ranking.py", "tools/composite_tools.py", "search_evidence.py", "symbol_links.py", "output.py", "query_ranking.py", "gateway.py",
     "api/models.py", "api/providers/db_provider.py",
     "indexing/full_indexer.py", "indexing/incremental.py", "indexing/parser.py", "storage/symbol_store.py",
     "freshness.py", "_internal/integrations/context/codebase_context.py",
@@ -55,7 +55,7 @@ LINT_PATHS = ["eval/quality", *["packages/code-intel/src/attocode_intel/" + p fo
         "test_file_symbol_scope.py", "test_retrieval_audit.py",
         "test_importance_publication.py", "test_retrieval_ablation.py", "test_retrieval_cycle.py", "test_lsp_document_lifecycle.py", "test_retrieval_body_trial.py",
         "test_module_ownership.py", "test_real_language_server.py", "test_source_exclusions.py",
-        "test_operation_contracts.py", "test_navigation_prefix_trial.py", "test_structural_write_cost.py", "test_lexical_sql_cost.py", "test_index_probe.py", "test_discovery_reuse.py", "test_ast_snapshot.py")]]
+        "test_operation_contracts.py", "test_navigation_prefix_trial.py", "test_kotlin_test_paths.py", "test_structural_write_cost.py", "test_lexical_sql_cost.py", "test_index_probe.py", "test_discovery_reuse.py", "test_ast_snapshot.py")]]
 
 
 def write_json(path, value):

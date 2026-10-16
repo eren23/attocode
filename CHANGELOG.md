@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Kotlin test-source classification
+
+- Recognize conventional Kotlin/Android test source-set directories under `src`,
+  including helpers without test filenames. Ordinary search moves them after
+  production candidates; explicit test requests retain their existing ordering.
+- Share path classification across test discovery and reverse-import suggestions,
+  preserving import distance and avoiding production names such as `Inspection.kt`.
+  Custom source-set names still require build metadata; no model or scoring weight changed.
+
 ### Evaluated — First-page navigation phrases
 
 - Rejected one query-prefix candidate after development regressions and no fresh
