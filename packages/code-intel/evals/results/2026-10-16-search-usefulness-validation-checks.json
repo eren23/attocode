@@ -1,0 +1,57 @@
+{
+  "product_source_unchanged_from": "08dbaa8ac4505dbf9030fb8bb7fe1ee73d8fe106",
+  "local_tests_passed": 829,
+  "local_tests_skipped": 9,
+  "new_acceptance_and_replay_passed": 19,
+  "checks": [
+    {
+      "name": "lint",
+      "status": "passed",
+      "seconds": 0.234,
+      "peak_disk_bytes": 35168256,
+      "peak_rss_bytes": 278528,
+      "cleanup_verified": true
+    },
+    {
+      "name": "contracts",
+      "status": "passed",
+      "seconds": 38.452,
+      "peak_disk_bytes": 84125077,
+      "peak_rss_bytes": 870367232,
+      "cleanup_verified": true
+    },
+    {
+      "name": "scale",
+      "status": "passed",
+      "seconds": 10.459,
+      "peak_disk_bytes": 171971989,
+      "peak_rss_bytes": 244449280,
+      "cleanup_verified": true
+    },
+    {
+      "name": "lifecycle",
+      "status": "passed",
+      "seconds": 3.253,
+      "peak_disk_bytes": 83428757,
+      "peak_rss_bytes": 131694592,
+      "cleanup_verified": true
+    },
+    {
+      "name": "ranking",
+      "status": "passed",
+      "seconds": 40.541,
+      "peak_disk_bytes": 358465554,
+      "peak_rss_bytes": 193478656,
+      "cleanup_verified": true
+    }
+  ],
+  "model_runs": 0,
+  "cloud_runs": 0,
+  "fresh_stdio_mcp_smoke_passed": true,
+  "host_client_reconnect_verified": false,
+  "quality_gate_bounds": {
+    "managed_disk_bytes": 536870912,
+    "rss_bytes": 4294967296,
+    "seconds_per_tier": 600
+  }
+}

@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T13:15:31.234769+00:00",
+  "split": "validation",
+  "baseline_commit": "08dbaa8ac4505dbf9030fb8bb7fe1ee73d8fe106",
+  "scope": "Fresh wording and selected behavior judgments, frozen before any result inspection. Four previously exposed repositories; implementer-authored, non-exhaustive labels, not independent user or agent outcomes. Validation is not inspected until candidate is frozen. Two labeled source files per query.",
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "id": "express:usefulness-validation-1",
+          "category": "tests",
+          "query": "Find tests for encoding redirect URLs and preserving already encoded locations",
+          "evidence": [
+            {
+              "file": "test/res.redirect.js",
+              "line": 35,
+              "quote": "should not touch already-encoded sequences",
+              "source_sha256": "451fae6e8674bbb463de046afd8fafa3c7a766fea840abd8b1af63a1f31b8f04",
+              "relevance": "Source anchor for find tests for encoding redirect URLs and preserving already encoded locations"
+            },
+            {
+              "file": "test/res.location.js",
+              "line": 172,
+              "quote": "should not touch already-encoded sequences",
+              "source_sha256": "5d46e67f931862cf2372c210d8b3efb8ecaa31b328738115eb3ed3060a86f1ef",
+              "relevance": "Source anchor for find tests for encoding redirect URLs and preserving already encoded locations"
+            }
+          ]
+        },
+        {
+          "id": "express:usefulness-validation-2",
+          "category": "tests",
+          "query": "Find tests for partial file downloads using byte range requests",
+          "evidence": [
+            {
+              "file": "test/res.download.js",
+              "line": 44,
+              "quote": "should respond with requested byte range",
+              "source_sha256": "cd90a8f6e6390907af0f8844e08fc02ddb5918f745f1cfe7aeb7f86dd137c5c4",
+              "relevance": "Source anchor for find tests for partial file downloads using byte range requests"
+            },
+            {
+              "file": "test/res.sendFile.js",
+              "line": 365,
+              "quote": "should respond to range request",
+              "source_sha256": "1ce86ede00a1e19a3c11a835ef9f87669d495ada5060922d96cc96e4120ec4f7",
+              "relevance": "Source anchor for find tests for partial file downloads using byte range requests"
+            }
+          ]
+        },
+        {
+          "id": "express:usefulness-validation-3",
+          "category": "error_handling",
+          "query": "Forward unsupported response format errors into the application error handler",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 588,
+              "quote": "next(createError(406,",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "relevance": "Source anchor for forward unsupported response format errors into the application error handler"
+            },
+            {
+              "file": "lib/application.js",
+              "line": 154,
+              "quote": "var done = callback || finalhandler",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Source anchor for forward unsupported response format errors into the application error handler"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "queries": [
+        {
+          "id": "requests:usefulness-validation-1",
+          "category": "tests",
+          "query": "Find tests for preserving or updating URL fragments during redirects",
+          "evidence": [
+            {
+              "file": "tests/test_requests.py",
+              "line": 352,
+              "quote": "def test_fragment_maintained_on_redirect",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "relevance": "Source anchor for find tests for preserving or updating URL fragments during redirects"
+            },
+            {
+              "file": "tests/test_lowlevel.py",
+              "line": 364,
+              "quote": "def test_fragment_update_on_redirect",
+              "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+              "relevance": "Source anchor for find tests for preserving or updating URL fragments during redirects"
+            }
+          ]
+        },
+        {
+          "id": "requests:usefulness-validation-2",
+          "category": "tests",
+          "query": "Find tests for decoding JSON responses with alternate UTF encodings and byte order marks",
+          "evidence": [
+            {
+              "file": "tests/test_lowlevel.py",
+              "line": 407,
+              "quote": "def test_json_decode_compatibility_for_alt_utf_encodings",
+              "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+              "relevance": "Source anchor for find tests for decoding JSON responses with alternate UTF encodings and byte order marks"
+            },
+            {
+              "file": "tests/test_utils.py",
+              "line": 435,
+              "quote": "def test_guess_by_bom",
+              "source_sha256": "749c36bc574e3e796ddb78bbdc91b0d92fccf703a39c6d21f5afbfa7b28f50f8",
+              "relevance": "Source anchor for find tests for decoding JSON responses with alternate UTF encodings and byte order marks"
+            }
+          ]
+        },
+        {
+          "id": "requests:usefulness-validation-3",
+          "category": "error_handling",
+          "query": "Raise an HTTP status failure with the response and request attached",
+          "evidence": [
+            {
+              "file": "src/requests/models.py",
+              "line": 1001,
+              "quote": "def raise_for_status(",
+              "source_sha256": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc",
+              "relevance": "Source anchor for raise an HTTP status failure with the response and request attached"
+            },
+            {
+              "file": "src/requests/exceptions.py",
+              "line": 56,
+              "quote": "class HTTPError(",
+              "source_sha256": "9de3a402478aedebd939faa1b48495b0714894e888267e65071b52d014c56a50",
+              "relevance": "Source anchor for raise an HTTP status failure with the response and request attached"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:usefulness-validation-1",
+          "category": "tests",
+          "query": "Find tests for binary detection and NUL bytes appearing before matches",
+          "evidence": [
+            {
+              "file": "tests/binary.rs",
+              "line": 376,
+              "quote": "rgtest!(before_match1_implicit_binary,",
+              "source_sha256": "683714aaf5bb499c344c0280ab7fc09907a90b51e836dd26859de99e8fc454e9",
+              "relevance": "Source anchor for find tests for binary detection and NUL bytes appearing before matches"
+            },
+            {
+              "file": "tests/regression.rs",
+              "line": 1218,
+              "quote": "rgtest!(r1838_nul_error_with_binary_detection,",
+              "source_sha256": "22d1778677e2668e5351d6d8e4d48424db11d3a699ea270be06e9bd7b7a07ec3",
+              "relevance": "Source anchor for find tests for binary detection and NUL bytes appearing before matches"
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:usefulness-validation-2",
+          "category": "tests",
+          "query": "Find tests for case insensitive matching and smart case behavior",
+          "evidence": [
+            {
+              "file": "tests/regression.rs",
+              "line": 255,
+              "quote": "cmd.arg(\"--smart-case\")",
+              "source_sha256": "22d1778677e2668e5351d6d8e4d48424db11d3a699ea270be06e9bd7b7a07ec3",
+              "relevance": "Source anchor for find tests for case insensitive matching and smart case behavior"
+            },
+            {
+              "file": "tests/feature.rs",
+              "line": 205,
+              "quote": "smart_case",
+              "source_sha256": "fbc6455c5d2cb73580cde4b390c0a43315107598200a6ca6023c3bfc155d8706",
+              "relevance": "Source anchor for find tests for case insensitive matching and smart case behavior"
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:usefulness-validation-3",
+          "category": "callers",
+          "query": "Select a decompression program and search the resulting stream",
+          "evidence": [
+            {
+              "file": "crates/core/search.rs",
+              "line": 329,
+              "quote": "fn search_decompress(",
+              "source_sha256": "1ebd56cf3b1c83e522356760bbac869d6972105c454f95b579020e24a93ade7c",
+              "relevance": "Source anchor for select a decompression program and search the resulting stream"
+            },
+            {
+              "file": "crates/cli/src/decompress.rs",
+              "line": 221,
+              "quote": "pub fn build<P: AsRef<Path>>(",
+              "source_sha256": "eaceb58ab4c650f0f9f62de1181fd6611b9e6b5b162816546760d49514045b37",
+              "relevance": "Source anchor for select a decompression program and search the resulting stream"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "gson",
+      "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+      "queries": [
+        {
+          "id": "gson:usefulness-validation-1",
+          "category": "tests",
+          "query": "Find tests that reject nonfinite floating point values unless special serialization is enabled",
+          "evidence": [
+            {
+              "file": "gson/src/test/java/com/google/gson/functional/PrimitiveTest.java",
+              "line": 530,
+              "quote": "void testNegativeInfinitySerializationNotSupportedByDefault(",
+              "source_sha256": "f0e6d08f059d892dfa6751be70e6fa28bd22e8981aa39c644f48442a4f6fda00",
+              "relevance": "Source anchor for find tests that reject nonfinite floating point values unless special serialization is enabled"
+            },
+            {
+              "file": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+              "line": 175,
+              "quote": "void testNonFiniteDoubles(",
+              "source_sha256": "1d01282d19fc04072a1d6cd88ad2cbe872dcb84eaf27384dcfcf3bb488d41400",
+              "relevance": "Source anchor for find tests that reject nonfinite floating point values unless special serialization is enabled"
+            }
+          ]
+        },
+        {
+          "id": "gson:usefulness-validation-2",
+          "category": "tests",
+          "query": "Find tests for invalid JSON syntax and lenient parsing",
+          "evidence": [
+            {
+              "file": "gson/src/test/java/com/google/gson/functional/LeniencyTest.java",
+              "line": 39,
+              "quote": "void testLenientFromJson(",
+              "source_sha256": "8d06db1b08333d066f3ba21e338c3de031ed0a17392554408bb1bb38737d9bb7",
+              "relevance": "Source anchor for find tests for invalid JSON syntax and lenient parsing"
+            },
+            {
+              "file": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+              "line": 177,
+              "quote": "void testInvalidJsonInput(",
+              "source_sha256": "2f450f42673bb1999838074ce28b7397a9de5f557ba58d3a226f5f2169aef18e",
+              "relevance": "Source anchor for find tests for invalid JSON syntax and lenient parsing"
+            }
+          ]
+        },
+        {
+          "id": "gson:usefulness-validation-3",
+          "category": "configuration",
+          "query": "Exclude fields and classes outside their declared serialization version range",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/GsonBuilder.java",
+              "line": 149,
+              "quote": "public GsonBuilder setVersion(",
+              "source_sha256": "0c4eeb8f6f74fd43a39cbf5ac1ecef132653f7fcc0d77863df13c618a024042f",
+              "relevance": "Source anchor for exclude fields and classes outside their declared serialization version range"
+            },
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/Excluder.java",
+              "line": 237,
+              "quote": "private boolean isValidVersion(",
+              "source_sha256": "e17d3c22344f691869c92d8f26972186cafd6577e2993c67bc6a7190d6a04277",
+              "relevance": "Source anchor for exclude fields and classes outside their declared serialization version range"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

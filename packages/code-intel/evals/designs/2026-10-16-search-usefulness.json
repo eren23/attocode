@@ -1,0 +1,36 @@
+{
+  "frozen_at": "2026-10-16T13:17:37.870769+00:00",
+  "baseline_commit": "08dbaa8ac4505dbf9030fb8bb7fe1ee73d8fe106",
+  "candidate": "Stable distinct-file-first delivery only for unscoped queries containing test/tests, at most20 lexical terms and at least2 concepts, with experimental broad rerank off. Preserve first hit per file and all first-file order; fill spare slots with repeated chunks. No query, candidate generation, score, provider, model or scoped-search change. One candidate frozen before any observations.",
+  "hypothesis": "Explicit tests bypass existing file diversity and repeated chunks may occupy small pages. This trial measures actual five result slots, not first five distinct files collected from a larger page.",
+  "judgments": {
+    "2026-10-16-search-usefulness-development.json": "bb07bfbcc055f41fcf899f43c56323ab58e3136feef82b3656e9f4d2d3f98e04",
+    "2026-10-16-search-usefulness-validation.json": "27a8a36ac5e9292824e95da8bd2eebc308f335464717bb64ad469ec461d28d91"
+  },
+  "comparison_code_sha256": "9ab8921b218805cbd330d7cf0168047e2bc988a358960cf8e1342b5ba99a3e18",
+  "gate": {
+    "each_split_queries": 12,
+    "each_query_labels": 2,
+    "min_net_pairs5": 2,
+    "min_improved_queries": 2,
+    "min_improved_repositories": 2,
+    "no_individual_label_loss_at_5_or_24": true,
+    "no_anchor_chunk_range_loss_at_5_or_24": true,
+    "production_and_scoped_results_identical": true,
+    "candidate_generation_identical": true,
+    "p95_median_query_seconds_ratio": 1.5,
+    "latency_floor_seconds": 0.05,
+    "adopt_only_if_both_splits_pass": true,
+    "run_validation_once_even_if_development_rejects": "diagnostic only; no retuning or replacement queries"
+  },
+  "bounds": {
+    "seconds_per_pack": 180,
+    "managed_bytes": 536870912,
+    "rss_bytes": 1610612736,
+    "source_pack_bytes": 67108864,
+    "downloads": false,
+    "models": false,
+    "cloud": false
+  },
+  "scope": "Implementer-authored, source-bound non-exhaustive judgments from four exposed repositories. Held-out behaviors/wording are new to this candidate, not proof of general relevance or agent outcomes. Range coverage is not a claim every line is displayed."
+}

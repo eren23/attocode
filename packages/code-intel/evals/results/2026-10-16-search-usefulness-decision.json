@@ -1,0 +1,256 @@
+{
+  "decision": "reject",
+  "product_changed": false,
+  "splits": {
+    "development": {
+      "passed": false,
+      "checks": {
+        "net_pairs5_at_least_two": false,
+        "two_improved_queries": false,
+        "two_improved_repositories": false,
+        "no_individual_label_losses": true,
+        "no_delivered_anchor_range_losses": false,
+        "generation_identical": true,
+        "controls_identical": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 12,
+        "pairs5": 17,
+        "any5": 11,
+        "all5": 6,
+        "anchor_ranges5": 7,
+        "pairs24": 21,
+        "any24": 12,
+        "all24": 9,
+        "anchor_ranges24": 8,
+        "p95_seconds": 0.020025959005579352
+      },
+      "candidate": {
+        "questions": 12,
+        "pairs5": 17,
+        "any5": 11,
+        "all5": 6,
+        "anchor_ranges5": 7,
+        "pairs24": 21,
+        "any24": 12,
+        "all24": 9,
+        "anchor_ranges24": 7,
+        "p95_seconds": 0.01883016701322049
+      },
+      "improved": [],
+      "label_losses": [],
+      "anchor_range_losses": [
+        "requests:usefulness-development-1:24"
+      ],
+      "diagnosis": {
+        "misses5": [
+          {
+            "question": "express:usefulness-development-1",
+            "label": "test/res.send.js",
+            "ranks": {
+              "keyword": 37,
+              "body": 10,
+              "file_bm25": null,
+              "chunk_fused": 9,
+              "fused": 6
+            }
+          },
+          {
+            "question": "express:usefulness-development-2",
+            "label": "test/req.accepts.js",
+            "ranks": {
+              "keyword": null,
+              "body": null,
+              "file_bm25": null,
+              "chunk_fused": null,
+              "fused": null
+            }
+          },
+          {
+            "question": "requests:usefulness-development-3",
+            "label": "src/requests/sessions.py",
+            "ranks": {
+              "keyword": 1,
+              "body": 1,
+              "file_bm25": null,
+              "chunk_fused": 11,
+              "fused": 8
+            }
+          },
+          {
+            "question": "requests:usefulness-development-3",
+            "label": "src/requests/utils.py",
+            "ranks": {
+              "keyword": null,
+              "body": 14,
+              "file_bm25": null,
+              "chunk_fused": 14,
+              "fused": 11
+            }
+          },
+          {
+            "question": "ripgrep:usefulness-development-1",
+            "label": "tests/feature.rs",
+            "ranks": {
+              "keyword": null,
+              "body": null,
+              "file_bm25": null,
+              "chunk_fused": null,
+              "fused": null
+            }
+          },
+          {
+            "question": "ripgrep:usefulness-development-2",
+            "label": "tests/regression.rs",
+            "ranks": {
+              "keyword": null,
+              "body": null,
+              "file_bm25": null,
+              "chunk_fused": null,
+              "fused": null
+            }
+          },
+          {
+            "question": "gson:usefulness-development-2",
+            "label": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+            "ranks": {
+              "keyword": 16,
+              "body": 16,
+              "file_bm25": null,
+              "chunk_fused": 10,
+              "fused": 7
+            }
+          }
+        ],
+        "in_candidate_pool": 4,
+        "absent_from_candidate_pool": 3
+      }
+    },
+    "validation": {
+      "passed": false,
+      "checks": {
+        "net_pairs5_at_least_two": false,
+        "two_improved_queries": false,
+        "two_improved_repositories": false,
+        "no_individual_label_losses": true,
+        "no_delivered_anchor_range_losses": false,
+        "generation_identical": true,
+        "controls_identical": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 12,
+        "pairs5": 18,
+        "any5": 11,
+        "all5": 7,
+        "anchor_ranges5": 8,
+        "pairs24": 20,
+        "any24": 12,
+        "all24": 8,
+        "anchor_ranges24": 9,
+        "p95_seconds": 0.020914916065521538
+      },
+      "candidate": {
+        "questions": 12,
+        "pairs5": 18,
+        "any5": 11,
+        "all5": 7,
+        "anchor_ranges5": 8,
+        "pairs24": 21,
+        "any24": 12,
+        "all24": 9,
+        "anchor_ranges24": 8,
+        "p95_seconds": 0.020728374947793782
+      },
+      "improved": [],
+      "label_losses": [],
+      "anchor_range_losses": [
+        "requests:usefulness-validation-2:24"
+      ],
+      "diagnosis": {
+        "misses5": [
+          {
+            "question": "requests:usefulness-validation-3",
+            "label": "src/requests/exceptions.py",
+            "ranks": {
+              "keyword": 2,
+              "body": 13,
+              "file_bm25": null,
+              "chunk_fused": 7,
+              "fused": 6
+            }
+          },
+          {
+            "question": "ripgrep:usefulness-validation-1",
+            "label": "tests/regression.rs",
+            "ranks": {
+              "keyword": null,
+              "body": null,
+              "file_bm25": null,
+              "chunk_fused": null,
+              "fused": null
+            }
+          },
+          {
+            "question": "ripgrep:usefulness-validation-2",
+            "label": "tests/feature.rs",
+            "ranks": {
+              "keyword": null,
+              "body": null,
+              "file_bm25": null,
+              "chunk_fused": null,
+              "fused": null
+            }
+          },
+          {
+            "question": "gson:usefulness-validation-1",
+            "label": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+            "ranks": {
+              "keyword": null,
+              "body": null,
+              "file_bm25": null,
+              "chunk_fused": null,
+              "fused": null
+            }
+          },
+          {
+            "question": "gson:usefulness-validation-2",
+            "label": "gson/src/test/java/com/google/gson/functional/LeniencyTest.java",
+            "ranks": {
+              "keyword": 20,
+              "body": null,
+              "file_bm25": null,
+              "chunk_fused": 36,
+              "fused": 16
+            }
+          },
+          {
+            "question": "gson:usefulness-validation-2",
+            "label": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+            "ranks": {
+              "keyword": 14,
+              "body": 21,
+              "file_bm25": null,
+              "chunk_fused": 16,
+              "fused": 7
+            }
+          }
+        ],
+        "in_candidate_pool": 3,
+        "absent_from_candidate_pool": 3
+      }
+    }
+  },
+  "measurements": {
+    "supervised_seconds": 11.067,
+    "peak_disk_bytes": 35192832,
+    "peak_rss_bytes": 65355776,
+    "all_process_cleanup_verified": true,
+    "model_runs": 0,
+    "cloud_runs": 0,
+    "downloads": 0
+  },
+  "limits": "Non-exhaustive implementer judgments; no agent or human outcome claim. Anchor ranges do not prove UI display.",
+  "design_sha256": "c873552a4d0e702ba9bd2370f5f1da49f1a48cee66945a6cd10897e9d597444c"
+}

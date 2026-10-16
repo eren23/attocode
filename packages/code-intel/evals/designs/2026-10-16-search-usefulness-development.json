@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-16T13:14:58.561506+00:00",
+  "split": "development",
+  "baseline_commit": "08dbaa8ac4505dbf9030fb8bb7fe1ee73d8fe106",
+  "scope": "Fresh wording and selected behavior judgments, frozen before any result inspection. Four previously exposed repositories; implementer-authored, non-exhaustive labels, not independent user or agent outcomes. Validation is not inspected until candidate is frozen. Two labeled source files per query.",
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "id": "express:usefulness-development-1",
+          "category": "tests",
+          "query": "Find tests checking JSON response content types and UTF-8 charset handling",
+          "evidence": [
+            {
+              "file": "test/res.json.js",
+              "line": 21,
+              "quote": "should not override previous Content-Types",
+              "source_sha256": "08186aceebdb74af9f6fabe495c8c8b9334fbc6e5d53bf52145e4f86850eb046",
+              "relevance": "Source anchor for find tests checking JSON response content types and UTF-8 charset handling"
+            },
+            {
+              "file": "test/res.send.js",
+              "line": 112,
+              "quote": "should override charset in Content-Type",
+              "source_sha256": "9dcbd827335442daa10f4bb99ebd26897a922700e6e149b5d1c0c9b6579afa58",
+              "relevance": "Source anchor for find tests checking JSON response content types and UTF-8 charset handling"
+            }
+          ]
+        },
+        {
+          "id": "express:usefulness-development-2",
+          "category": "tests",
+          "query": "Find tests for accepting content types and choosing a response format",
+          "evidence": [
+            {
+              "file": "test/req.accepts.js",
+              "line": 73,
+              "quote": "should return the first acceptable type",
+              "source_sha256": "80bd6f4700f6a28a837bc42f7284b9830c178591d472fd589297cb26c863f5e5",
+              "relevance": "Source anchor for find tests for accepting content types and choosing a response format"
+            },
+            {
+              "file": "test/res.format.js",
+              "line": 197,
+              "quote": "should default the Content-Type",
+              "source_sha256": "bfc02443c7ebc62e716dfc9e121613e27507d63382db8ce3ea430b9019c37c8d",
+              "relevance": "Source anchor for find tests for accepting content types and choosing a response format"
+            }
+          ]
+        },
+        {
+          "id": "express:usefulness-development-3",
+          "category": "configuration",
+          "query": "Configure trusted proxy hops when determining client addresses",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "line": 370,
+              "quote": "case 'trust proxy':",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Source anchor for configure trusted proxy hops when determining client addresses"
+            },
+            {
+              "file": "lib/utils.js",
+              "line": 194,
+              "quote": "exports.compileTrust = function",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+              "relevance": "Source anchor for configure trusted proxy hops when determining client addresses"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "queries": [
+        {
+          "id": "requests:usefulness-development-1",
+          "category": "tests",
+          "query": "Find tests for chunked request uploads and malformed chunked responses",
+          "evidence": [
+            {
+              "file": "tests/test_lowlevel.py",
+              "line": 39,
+              "quote": "def test_chunked_encoding_error",
+              "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+              "relevance": "Source anchor for find tests for chunked request uploads and malformed chunked responses"
+            },
+            {
+              "file": "tests/test_requests.py",
+              "line": 2221,
+              "quote": "def test_chunked",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "relevance": "Source anchor for find tests for chunked request uploads and malformed chunked responses"
+            }
+          ]
+        },
+        {
+          "id": "requests:usefulness-development-2",
+          "category": "tests",
+          "query": "Find tests checking whether environment proxy settings are respected",
+          "evidence": [
+            {
+              "file": "tests/test_lowlevel.py",
+              "line": 290,
+              "quote": "def test_use_proxy_from_environment",
+              "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+              "relevance": "Source anchor for find tests checking whether environment proxy settings are respected"
+            },
+            {
+              "file": "tests/test_requests.py",
+              "line": 609,
+              "quote": "def test_respect_proxy_env_on_send_self_prepared_request",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "relevance": "Source anchor for find tests checking whether environment proxy settings are respected"
+            }
+          ]
+        },
+        {
+          "id": "requests:usefulness-development-3",
+          "category": "callers",
+          "query": "Rebuild authentication after redirects without leaking credentials to another host",
+          "evidence": [
+            {
+              "file": "src/requests/sessions.py",
+              "line": 283,
+              "quote": "def rebuild_auth(",
+              "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2",
+              "relevance": "Source anchor for rebuild authentication after redirects without leaking credentials to another host"
+            },
+            {
+              "file": "src/requests/utils.py",
+              "line": 205,
+              "quote": "def get_netrc_auth(",
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+              "relevance": "Source anchor for rebuild authentication after redirects without leaking credentials to another host"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "queries": [
+        {
+          "id": "ripgrep:usefulness-development-1",
+          "category": "tests",
+          "query": "Find tests for match counts and JSON search summary statistics",
+          "evidence": [
+            {
+              "file": "tests/feature.rs",
+              "line": 233,
+              "quote": "rgtest!(f89_count,",
+              "source_sha256": "fbc6455c5d2cb73580cde4b390c0a43315107598200a6ca6023c3bfc155d8706",
+              "relevance": "Source anchor for find tests for match counts and JSON search summary statistics"
+            },
+            {
+              "file": "tests/json.rs",
+              "line": 253,
+              "quote": "rgtest!(quiet_stats,",
+              "source_sha256": "9dd91b0dadc9be38d4ac37551af4b7bca6f80da8fe9723009f87b11c750efaaa",
+              "relevance": "Source anchor for find tests for match counts and JSON search summary statistics"
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:usefulness-development-2",
+          "category": "tests",
+          "query": "Find tests for context separators and context suppression in output modes",
+          "evidence": [
+            {
+              "file": "tests/feature.rs",
+              "line": 1114,
+              "quote": "rgtest!(no_context_sep,",
+              "source_sha256": "fbc6455c5d2cb73580cde4b390c0a43315107598200a6ca6023c3bfc155d8706",
+              "relevance": "Source anchor for find tests for context separators and context suppression in output modes"
+            },
+            {
+              "file": "tests/regression.rs",
+              "line": 552,
+              "quote": "rgtest!(r693_context_in_contextless_mode,",
+              "source_sha256": "22d1778677e2668e5351d6d8e4d48424db11d3a699ea270be06e9bd7b7a07ec3",
+              "relevance": "Source anchor for find tests for context separators and context suppression in output modes"
+            }
+          ]
+        },
+        {
+          "id": "ripgrep:usefulness-development-3",
+          "category": "implementation",
+          "query": "Allow hidden files during directory traversal when the search option enables them",
+          "evidence": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "line": 895,
+              "quote": ".hidden(!self.hidden)",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "relevance": "Source anchor for allow hidden files during directory traversal when the search option enables them"
+            },
+            {
+              "file": "crates/ignore/src/walk.rs",
+              "line": 801,
+              "quote": "pub fn hidden(",
+              "source_sha256": "3173c55f99ac90119eb00b615fbd9f5532a27c7a969e7ba0a369aba7ba71f1f3",
+              "relevance": "Source anchor for allow hidden files during directory traversal when the search option enables them"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "gson",
+      "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+      "queries": [
+        {
+          "id": "gson:usefulness-development-1",
+          "category": "tests",
+          "query": "Find tests for serializing explicit null fields and map values",
+          "evidence": [
+            {
+              "file": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
+              "line": 66,
+              "quote": "void testExplicitSerializationOfNulls(",
+              "source_sha256": "c7c5c4e3938e55a440206920ca2832e79c52a2276089bab8aedcc66cab9c6a78",
+              "relevance": "Source anchor for find tests for serializing explicit null fields and map values"
+            },
+            {
+              "file": "gson/src/test/java/com/google/gson/functional/MapTest.java",
+              "line": 121,
+              "quote": "void testMapSerializationWithNullValueButSerializeNulls(",
+              "source_sha256": "1e79e34ccc9d133aa10090f3e7b804954bcc1912a01b086ab8c8f591fb622e82",
+              "relevance": "Source anchor for find tests for serializing explicit null fields and map values"
+            }
+          ]
+        },
+        {
+          "id": "gson:usefulness-development-2",
+          "category": "tests",
+          "query": "Find tests for pretty printing arrays and nested objects",
+          "evidence": [
+            {
+              "file": "gson/src/test/java/com/google/gson/functional/PrettyPrintingTest.java",
+              "line": 62,
+              "quote": "void testPrettyPrintArrayOfObjects(",
+              "source_sha256": "a15538393ae01dbed33066044a4a32875c2761d495bbd67e88774b82607e1813",
+              "relevance": "Source anchor for find tests for pretty printing arrays and nested objects"
+            },
+            {
+              "file": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+              "line": 475,
+              "quote": "void testPrettyPrintObject(",
+              "source_sha256": "1d01282d19fc04072a1d6cd88ad2cbe872dcb84eaf27384dcfcf3bb488d41400",
+              "relevance": "Source anchor for find tests for pretty printing arrays and nested objects"
+            }
+          ]
+        },
+        {
+          "id": "gson:usefulness-development-3",
+          "category": "configuration",
+          "query": "Apply a field naming policy while respecting serialized field name annotations",
+          "evidence": [
+            {
+              "file": "gson/src/main/java/com/google/gson/GsonBuilder.java",
+              "line": 321,
+              "quote": "public GsonBuilder setFieldNamingPolicy(",
+              "source_sha256": "0c4eeb8f6f74fd43a39cbf5ac1ecef132653f7fcc0d77863df13c618a024042f",
+              "relevance": "Source anchor for apply a field naming policy while respecting serialized field name annotations"
+            },
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+              "line": 72,
+              "quote": "private List<String> getFieldNames(",
+              "source_sha256": "1def371d22200d2d0a9ce37c09e5f4cdd911da25644b761b928542f90eb6d9f0",
+              "relevance": "Source anchor for apply a field naming policy while respecting serialized field name annotations"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
