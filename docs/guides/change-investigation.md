@@ -2,7 +2,7 @@
 
 Connect a Git diff to changed definitions, current caller paths, potential import
 impact and candidate tests in one local report. No model or project execution is
-needed. Published 0.1.6 predates this workflow; use the repository source build.
+needed. Available in 0.1.7 and the repository source build.
 
 ## CLI
 
