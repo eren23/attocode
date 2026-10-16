@@ -121,6 +121,9 @@ def hydrate_selected_sources(root_dir: str, results: list) -> list:
                                if f"{c.name}.{m.name}" == hit.name]
                 else:
                     matches = [f for f in ast.functions if f.name == hit.name]
+                if hit.definition_start_line:
+                    matches = [m for m in matches if (m.start_line, m.end_line) ==
+                               (hit.definition_start_line, hit.definition_end_line)]
                 if len(matches) != 1:
                     continue
                 start, end = matches[0].start_line, matches[0].end_line

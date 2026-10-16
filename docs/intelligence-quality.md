@@ -405,3 +405,18 @@ on the held-out set, while larger pages lost anchored code ranges. Product defau
 remain unchanged. Evaluate the actual requested result slots and code evidence;
 more distinct files alone do not demonstrate greater usefulness. All 24 questions
 are consumed; future adoption needs new judgments.
+## Search delivery measurements
+
+`eval.quality.mcp_search` measures fresh daily-profile `OperationGateway` calls
+through `execute_mcp`, including retrieval depth, source hydration, snippets and
+final output budgeting. It records the exact response and distinguishes file
+presence, enclosing source ranges and literal visible quotes. A fixed policy
+inspects the first delivered named result; answer labels never select that hit.
+
+Use source-bound frozen questions with explicit budgets and search modes, an
+isolated cache per engine arm and the bounded quality supervisor. Record engine
+and question hashes, process setup separately from warm query medians, every
+individual label loss and the predeclared acceptance decision. These authored,
+non-exhaustive labels are not independent user or agent outcomes. The historical
+`search_usefulness` operator remains an engine-level replay, with different depth
+and delivery semantics; its timing and ranges must not be described as MCP output.

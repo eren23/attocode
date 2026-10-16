@@ -1,0 +1,76 @@
+{
+  "baseline_commit": "54f0e80a5e60144acee53b3b0d0f7c0e899a6419",
+  "arms": {
+    "identity": {
+      "patch_sha256": "ee766a2a470ce0ed3252c07621ad98d7d72fcedde42c44f724854bf631538e74",
+      "files": {
+        "attocode_intel/_internal/integrations/context/semantic_search.py": "107348435b54e12f750b1528757559057c2a797d95f532807706c5a47ad82280",
+        "attocode_intel/search_evidence.py": "956ed1bf38d6fdf74a1abd2c8e336ac3fefb7db1b62c3f4e4ff0e41ae087663b"
+      },
+      "patch_file": "identity.patch.gz",
+      "compressed_sha256": "40ab679294c04fc59d3663de3f1310d85db8242b425743add94f1cde374abed5"
+    },
+    "negation": {
+      "patch_sha256": "ad6b2a7b7910ef75c9569ada4d31a58c0b7fd298f0d3501a07a4b1c55240a2ef",
+      "files": {
+        "attocode_intel/focused_evidence.py": "fc8fa209c15cbf09b920f3c03c63deece09cfa25b3775da1943da22523296032"
+      },
+      "patch_file": "negation.patch.gz",
+      "compressed_sha256": "a8e3d10a3ab6db9a3484b6e330fbfbc7f3ad84a044477fb64b0c2119d2cd6e1f"
+    },
+    "expansion": {
+      "patch_sha256": "1320b730fa393617ec82117f6a02157116452016fb93eacc1557c9bf9b0e0bba",
+      "files": {
+        "attocode_intel/_internal/integrations/context/semantic_search.py": "23a4c1ccd82e779daa5ba1a46fc8127eb61a0fd6e8d0809ceb458482b4f9b92b",
+        "attocode_intel/focused_evidence.py": "0f50feb0d89508ad7c689e4aa92cafc30141b348ebfdf859f44da70ef10bcf88"
+      },
+      "patch_file": "expansion.patch.gz",
+      "compressed_sha256": "ba3c3359fb42d722a731280d320e4067bd0184efad84dd683165050710a915e4"
+    },
+    "combined": {
+      "patch_sha256": "cce230747eb32acdb3b992df2926b85f17661c564bfc5c609caa75098d396978",
+      "files": {
+        "attocode_intel/_internal/integrations/context/semantic_search.py": "19bedc23bef67247123df9070345844a73b64fcc33487c0cb5b5a4d33acda3b1",
+        "attocode_intel/focused_evidence.py": "fc8fa209c15cbf09b920f3c03c63deece09cfa25b3775da1943da22523296032",
+        "attocode_intel/search_evidence.py": "956ed1bf38d6fdf74a1abd2c8e336ac3fefb7db1b62c3f4e4ff0e41ae087663b"
+      },
+      "patch_file": "combined.patch.gz",
+      "compressed_sha256": "bc7758f015cb2f65924043c3fad7e316aa650d618e5bda0d2e55b0c6717d35c6"
+    },
+    "boundaries": {
+      "patch_sha256": "bc6c70e1af85a81d54bc6927242265f7d1ef6eb30c45a6a6260c06c0cbd8598b",
+      "files": {
+        "attocode_intel/_internal/integrations/context/semantic_search.py": "f5b07a37e6b1efff826f4685e85086a3a19202eb88bf88f81055960d2e632478"
+      },
+      "patch_file": "boundaries.patch.gz",
+      "compressed_sha256": "935087f9f98580bb1617f2fb9ad2e6965f4d7a367ec5762b4ebbb82e8f1dc2c9"
+    },
+    "accepted": {
+      "patch_sha256": "d621ba17de66cbf7edc4191ac476669861dfb6bc1614d451b45d5795103fa5f7",
+      "files": {
+        "attocode_intel/_internal/integrations/context/semantic_search.py": "52ec84dcfb2808cc9924748860d5c84ce1f202161b070b6bc0ecfb86040f74fa",
+        "attocode_intel/search_evidence.py": "956ed1bf38d6fdf74a1abd2c8e336ac3fefb7db1b62c3f4e4ff0e41ae087663b"
+      },
+      "patch_file": "accepted.patch.gz",
+      "compressed_sha256": "9477455f7e6c7822749ce2ed9404ad6a08232a380ffad6e4fcde1f1614292029"
+    },
+    "owners": {
+      "patch_sha256": "a42ebe17d907ea88cba10a4a11abc791dda119bcac6701f73ee371631c47f376",
+      "files": {
+        "attocode_intel/_internal/integrations/context/semantic_search.py": "e888544c8dab4f7652ba0af13992b9492d8fbc063692be03bb2122d28160242b",
+        "attocode_intel/search_evidence.py": "956ed1bf38d6fdf74a1abd2c8e336ac3fefb7db1b62c3f4e4ff0e41ae087663b"
+      },
+      "patch_file": "owners.patch.gz",
+      "compressed_sha256": "c3fe65ce7810160fec6486a39c83d2fd9dbd1050ec3a8d9550754d1e39647158"
+    },
+    "owner_only": {
+      "patch_sha256": "b9f0cbcd7d7b07a6b943f86838a27ad20b1985263cd8d2e251387cc44e002365",
+      "files": {
+        "attocode_intel/_internal/integrations/context/semantic_search.py": "697d086e664d58dadf72da2caa98339b2a9a663ff82f947a99e9371409905b81",
+        "attocode_intel/search_evidence.py": "956ed1bf38d6fdf74a1abd2c8e336ac3fefb7db1b62c3f4e4ff0e41ae087663b"
+      },
+      "patch_file": "owner_only.patch.gz",
+      "compressed_sha256": "cc6f3df621cc4e9abd8fbba4021443ab30f8ffaee69bba6ef4909e0391ee5017"
+    }
+  }
+}

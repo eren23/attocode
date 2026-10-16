@@ -51,9 +51,9 @@ def test_keyword_batches_preserve_duplicate_order_fields_and_loaded_documents(tm
             for path, mtime in mtimes.items():
                 reference.execute('INSERT INTO kw_files VALUES (?,?)', (path, mtime))
             for d in documents:
-                reference.execute('INSERT OR REPLACE INTO kw_docs VALUES (?,?,?,?,?,?,?,?,?)',
+                reference.execute('INSERT OR REPLACE INTO kw_docs VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                                   (d.id,d.file_path,d.chunk_type,d.name,d.text,int(d.is_config),int(d.is_test),
-                                   json.dumps(d.term_freqs),d.doc_len))
+                                   json.dumps(d.term_freqs),d.doc_len,d.start_line,d.end_line))
             expected = [reference.execute(f'SELECT rowid,* FROM {t} ORDER BY rowid').fetchall()
                         for t in ('kw_files', 'kw_docs')]
         conn.close()
@@ -80,8 +80,8 @@ def test_keyword_second_group_failure_or_close_keeps_prior_atomic_cache(tmp_path
             return getattr(self.conn, name)
         def execute(self, sql, parameters=()):
             if sql.startswith('INSERT OR REPLACE INTO kw_docs '):
-                inserts.append(len(parameters) // 9)
-                assert len(parameters) <= 576
+                inserts.append(len(parameters) // 11)
+                assert len(parameters) <= 704
                 if failure == 'sql' and len(inserts) == 2:
                     raise sqlite3.OperationalError('second group failure')
                 if failure == 'cancel' and len(inserts) == 1:

@@ -7,14 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Evaluated — Actual-page search usefulness
+### Fixed — Distinct search evidence and query boundaries
+
+- Preserve overloaded definitions and separate source windows across keyword cache,
+  body retrieval, fusion and hydration. Keep named-owner navigation order while
+  retaining additional windows; invalidate old keyword rows once for span identities.
+- Match whole construct tokens and plurals during expansion, so `latest` and
+  `author` no longer inject hints for `test` or `auth`.
+- Measure real daily MCP delivery with explicit budgets, visible quotes and a fixed
+  search-to-inspection workflow. Preserve 24 new source-bound questions and replayable
+  decisions. Reject the broad negation rewrite and the first fusion candidate after
+  their gates fail; the final revision passes further fresh confirmation without
+  claiming a general relevance or speed gain. Behavioral negation remains open.
+
+### Evaluated — Historical engine-page search usefulness
 
 - Reject extending file diversity to short explicit-test queries: fresh development
   and held-out judgments showed no first-five relevance gain, and each set lost a
   relevant code range from its 24-slot page. Product behavior is unchanged.
-- Preserve 24 multi-answer questions, actual five/24-slot before/after results,
+- Preserve 24 multi-answer questions, engine five/24-slot before/after results,
   timings and generation traces. Seven of thirteen first-page misses were deeper
-  in the candidate pool; six were absent. File coverage alone hid snippet losses.
+  in the candidate pool; six were absent. Engine ranges were not proof of visible MCP evidence. The corrected consumer-path
+  evaluation records the depth mismatch and preserves these consumed observations.
 
 ### Changed — Intelligence-first repository
 

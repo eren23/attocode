@@ -131,7 +131,7 @@ def _expand_query(query: str, language: str = "") -> str:
         "parse config" -> "parse config settings env option"
     """
     query_lower = query.lower()
-    tokens = _tokenize(query)
+    tokens = set(_tokenize(query))
     expansions: list[str] = []
 
     # Add language hint if known
@@ -140,7 +140,7 @@ def _expand_query(query: str, language: str = "") -> str:
 
     # Add construct-related terms for each matching concept
     for concept, hints in _CONSTRUCT_HINTS.items():
-        if concept in query_lower or any(t == concept for t in tokens):
+        if concept in tokens or concept + "s" in tokens:
             for hint in hints:
                 if hint not in query_lower and hint not in expansions:
                     expansions.append(hint)
@@ -187,6 +187,8 @@ class _KeywordDoc:
     is_test: bool
     term_freqs: dict[str, int] = field(default_factory=dict)
     doc_len: int = 0
+    start_line: int = 0
+    end_line: int = 0
 
 
 @dataclass(slots=True)
@@ -342,6 +344,9 @@ class SemanticSearchResult:
     score: float
     start_line: int = 0
     end_line: int = 0
+    # Definition identity for metadata hits; start/end above describe source text.
+    definition_start_line: int = 0
+    definition_end_line: int = 0
 
 
 def _file_order(results: list[SemanticSearchResult]) -> list[str]:
@@ -1087,32 +1092,67 @@ class SemanticSearchManager:
                 trace["fused"] = _file_order(keyword)
             return rerank_broad_candidates(query, keyword, top_k, file_filter)
 
-        def key(result: SemanticSearchResult) -> tuple[str, str, str]:
-            return result.file_path, result.chunk_type, result.name
+        def key(result: SemanticSearchResult) -> tuple[str, str, str, int, int]:
+            return (result.file_path, result.chunk_type, result.name,
+                    result.start_line or result.definition_start_line,
+                    result.end_line or result.definition_end_line)
 
-        candidates: dict[tuple[str, str, str], SemanticSearchResult] = {}
-        scores: dict[tuple[str, str, str], float] = {}
+        # A metadata definition contributes once to its best-ranked body window.
+        # Other windows remain distinct; overloads can match only their own span.
+        body_by_owner: dict[tuple[str, str, str], list[SemanticSearchResult]] = {}
+        for hit in body:
+            body_by_owner.setdefault((hit.file_path, hit.chunk_type, hit.name), []).append(hit)
+        candidates: dict[tuple[str, str, str, int, int], SemanticSearchResult] = {}
+        scores: dict[tuple[str, str, str, int, int], float] = {}
         for weight, ranked in ((1.0, keyword), (cfg.body_weight, body)):
+            seen = set()
             for rank, result in enumerate(ranked):
                 item = key(result)
+                if ranked is keyword and result.definition_start_line:
+                    windows = body_by_owner.get((result.file_path, result.chunk_type, result.name), [])
+                    match = next((h for h in windows if result.definition_start_line <= h.start_line
+                                  <= h.end_line <= result.definition_end_line), None)
+                    if match is not None:
+                        item = key(match)
+                if item in seen:
+                    continue
+                seen.add(item)
                 scores[item] = scores.get(item, 0.0) + weight / (cfg.chunk_rrf_k + rank + 1)
-                # Source evidence is more useful to consumers than a signature.
                 if item not in candidates or (ranked is body and result.start_line):
                     candidates[item] = result
 
         ordered = sorted(scores, key=lambda item: (-scores[item], item))
-        fused = [
-            SemanticSearchResult(
-                file_path=candidates[item].file_path,
-                chunk_type=candidates[item].chunk_type,
-                name=candidates[item].name,
-                text=candidates[item].text,
-                score=round(scores[item], 6),
-                start_line=candidates[item].start_line,
-                end_line=candidates[item].end_line,
-            )
-            for item in ordered
-        ]
+        # Preserve the established navigation order of named owners. Distinct
+        # windows are evidence within an owner, not extra votes for its rank.
+        # A definition's metadata can still support its best body window above.
+        owner_scores: dict[tuple[str, str, str], float] = {}
+        representatives = {}
+        for weight, ranked in ((1.0, keyword), (cfg.body_weight, body)):
+            seen_chunks, seen_owners = set(), set()
+            for rank, result in enumerate(ranked):
+                owner = (result.file_path, result.chunk_type, result.name)
+                item = key(result)
+                if item in seen_chunks or (ranked is body and owner in seen_owners):
+                    continue
+                seen_chunks.add(item)
+                seen_owners.add(owner)
+                owner_scores[owner] = owner_scores.get(owner, 0.0) + weight / (cfg.chunk_rrf_k + rank + 1)
+                if ranked is keyword or owner not in representatives:
+                    representatives[owner] = item
+                if ranked is body:
+                    representatives[owner] = item
+        heads = []
+        for owner in sorted(owner_scores, key=lambda item: (-owner_scores[item], item)):
+            item = representatives[owner]
+            # A keyword identity may have fused into its corresponding window.
+            if item not in candidates:
+                item = next(k for k in ordered if k[:3] == owner)
+            heads.append(replace(candidates[item], score=round(owner_scores[owner], 6)))
+            representatives[owner] = item
+        selected = set(representatives.values())
+        floor = heads[-1].score if heads else 0.0
+        fused = heads + [replace(candidates[item], score=min(round(scores[item], 6), floor))
+                         for item in ordered if item not in selected]
         fused = self._penalize_exclusions(fused, negative)
         if trace is not None:
             trace["chunk_fused"] = _file_order(fused)
@@ -1172,15 +1212,7 @@ class SemanticSearchManager:
             )
             source_hits = len(source & negative)
             factor = 0.25 ** identity_hits * 0.8 ** source_hits
-            penalized.append(SemanticSearchResult(
-                file_path=result.file_path,
-                chunk_type=result.chunk_type,
-                name=result.name,
-                text=result.text,
-                score=round(result.score * factor, 6),
-                start_line=result.start_line,
-                end_line=result.end_line,
-            ))
+            penalized.append(replace(result, score=round(result.score * factor, 6)))
         return sorted(penalized, key=lambda result: -result.score)
 
     def _source_revision(self) -> str:
@@ -1650,11 +1682,19 @@ class SemanticSearchManager:
         finally:
             conn.close()
 
-        selected: dict[tuple[str, str, str], SemanticSearchResult] = {}
+        selected: dict[tuple[str, str, str, int, int], SemanticSearchResult] = {}
         files: dict[str, int] = {}
         valid_paths: dict[str, bool] = {}
         stale_paths: set[str] = set()
-        for path, chunk_type, name, start, end, body, rank, mtime_ns, size in rows:
+        # Keep the previous first-hit owner coverage under the per-file cap.
+        # Repeated windows fill spare capacity instead of hiding other methods.
+        owners = set()
+        primary, additional = [], []
+        for row in rows:
+            owner = tuple(row[:3])
+            (additional if owner in owners else primary).append(row)
+            owners.add(owner)
+        for path, chunk_type, name, start, end, body, rank, mtime_ns, size in [*primary, *additional]:
             if file_filter and not fnmatch.fnmatch(path, file_filter):
                 continue
             if path not in valid_paths:
@@ -1666,7 +1706,7 @@ class SemanticSearchManager:
             if not valid_paths[path]:
                 stale_paths.add(path)
                 continue
-            key = (path, chunk_type, name)
+            key = (path, chunk_type, name, int(start), int(end))
             if key in selected or files.get(path, 0) >= self.scoring_config.max_chunks_per_file:
                 continue
             files[path] = files.get(path, 0) + 1
@@ -2072,7 +2112,9 @@ class SemanticSearchManager:
 
         # Equal BM25 scores must not inherit filesystem/discovery insertion
         # order. Otherwise a cold rebuild can change ranks without code edits.
-        scored.sort(key=lambda x: (-x[0], x[1].file_path, x[1].id))
+        # Span-qualified persistence IDs must not reorder ordinary lexical ties.
+        scored.sort(key=lambda x: (-x[0], x[1].file_path,
+                                  x[1].id.rsplit(":", 2)[0] if x[1].start_line else x[1].id))
 
         # Normalize to 0-1
         max_score = scored[0][0] if scored else 1.0
@@ -2092,6 +2134,7 @@ class SemanticSearchManager:
                 name=doc.name,
                 text=doc.text,
                 score=round(raw_score / max_score, 4),
+                definition_start_line=doc.start_line, definition_end_line=doc.end_line,
             ))
             if len(results) >= top_k:
                 break
@@ -2127,10 +2170,16 @@ class SemanticSearchManager:
             conn = sqlite3.connect(self._kw_cache_db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            row = conn.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
+            if row is not None and (not row[0].isdigit() or int(row[0]) > 3):
+                conn.close()
+                return None
+            if row is None or row[0] != "3":
+                # v2 IDs collapsed overloads and stored no definition spans.
+                # Reparse rather than inventing identities for persisted rows.
+                conn.executescript("DROP TABLE IF EXISTS kw_files; DROP TABLE IF EXISTS kw_docs;")
             conn.executescript("""
-                CREATE TABLE IF NOT EXISTS metadata (
-                    key TEXT PRIMARY KEY, value TEXT NOT NULL
-                );
                 CREATE TABLE IF NOT EXISTS kw_files (
                     file_path TEXT PRIMARY KEY, mtime REAL NOT NULL
                 );
@@ -2140,44 +2189,13 @@ class SemanticSearchManager:
                     text TEXT NOT NULL,
                     is_config INTEGER NOT NULL DEFAULT 0,
                     is_test INTEGER NOT NULL DEFAULT 0,
-                    term_freqs TEXT NOT NULL, doc_len INTEGER NOT NULL DEFAULT 0
+                    term_freqs TEXT NOT NULL, doc_len INTEGER NOT NULL DEFAULT 0,
+                    start_line INTEGER NOT NULL DEFAULT 0, end_line INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE INDEX IF NOT EXISTS ix_kw_docs_file ON kw_docs(file_path);
             """)
-            row = conn.execute(
-                "SELECT value FROM metadata WHERE key='schema_version'",
-            ).fetchone()
-            if row is None:
-                conn.execute(
-                    "INSERT INTO metadata (key, value) VALUES ('schema_version', '2')",
-                )
-                conn.commit()
-            elif not row[0].isdigit() or int(row[0]) > 2:
-                conn.close()
-                return None
-            elif row[0] != "2":
-                conn.executescript(
-                    "DROP TABLE IF EXISTS kw_files; DROP TABLE IF EXISTS kw_docs;"
-                )
-                conn.executescript("""
-                    CREATE TABLE kw_files (
-                        file_path TEXT PRIMARY KEY, mtime REAL NOT NULL
-                    );
-                    CREATE TABLE kw_docs (
-                        id TEXT PRIMARY KEY, file_path TEXT NOT NULL,
-                        chunk_type TEXT NOT NULL, name TEXT NOT NULL,
-                        text TEXT NOT NULL,
-                        is_config INTEGER NOT NULL DEFAULT 0,
-                        is_test INTEGER NOT NULL DEFAULT 0,
-                        term_freqs TEXT NOT NULL, doc_len INTEGER NOT NULL DEFAULT 0
-                    );
-                    CREATE INDEX IF NOT EXISTS ix_kw_docs_file ON kw_docs(file_path);
-                """)
-                conn.execute(
-                    "INSERT OR REPLACE INTO metadata (key, value) "
-                    "VALUES ('schema_version', '2')",
-                )
-                conn.commit()
+            conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '3')")
+            conn.commit()
             return conn
         except Exception:
             logger.debug("Failed to open kw cache db", exc_info=True)
@@ -2213,7 +2231,7 @@ class SemanticSearchManager:
                 rows = (
                     (doc.id, doc.file_path, doc.chunk_type, doc.name,
                      doc.text, int(doc.is_config), int(doc.is_test),
-                     encode(doc.term_freqs), doc.doc_len)
+                     encode(doc.term_freqs), doc.doc_len, doc.start_line, doc.end_line)
                     for doc in docs
                 )
                 for batch in _sql_batches(rows):
@@ -2222,8 +2240,8 @@ class SemanticSearchManager:
                     execute(
                         "INSERT OR REPLACE INTO kw_docs "
                         "(id, file_path, chunk_type, name, text, is_config, "
-                        "is_test, term_freqs, doc_len) VALUES "
-                        + ",".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(batch)),
+                        "is_test, term_freqs, doc_len, start_line, end_line) VALUES "
+                        + ",".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(batch)),
                         tuple(value for row in batch for value in row),
                     )
                 if self._closed:
@@ -2273,7 +2291,7 @@ class SemanticSearchManager:
                 # Load docs for unchanged files
                 doc_rows = conn.execute(
                     "SELECT id, file_path, chunk_type, name, text, "
-                    "is_config, is_test, term_freqs, doc_len FROM kw_docs",
+                    "is_config, is_test, term_freqs, doc_len, start_line, end_line FROM kw_docs",
                 ).fetchall()
 
                 docs: list[_KeywordDoc] = []
@@ -2285,6 +2303,7 @@ class SemanticSearchManager:
                         name=row[3], text=row[4], is_config=bool(row[5]),
                         is_test=bool(row[6]),
                         term_freqs=json.loads(row[7]), doc_len=row[8],
+                        start_line=row[9], end_line=row[10],
                     ))
 
             conn.close()
@@ -2440,7 +2459,8 @@ class SemanticSearchManager:
                             preview_parts.append(f"({params_str})")
 
                         docs.append(_KeywordDoc(
-                            id=f"func:{rel}:{func.name}",
+                            id=f"func:{rel}:{func.name}:{func.start_line}:{func.end_line}",
+                            start_line=func.start_line, end_line=func.end_line,
                             file_path=rel,
                             chunk_type="function",
                             name=func.name,
@@ -2476,7 +2496,8 @@ class SemanticSearchManager:
                             cls_preview += f" | {cls.docstring[:100]}"
 
                         docs.append(_KeywordDoc(
-                            id=f"cls:{rel}:{cls.name}",
+                            id=f"cls:{rel}:{cls.name}:{cls.start_line}:{cls.end_line}",
+                            start_line=cls.start_line, end_line=cls.end_line,
                             file_path=rel,
                             chunk_type="class",
                             name=cls.name,
@@ -2508,7 +2529,8 @@ class SemanticSearchManager:
                                 m_preview += f" | {method.docstring[:100]}"
 
                             docs.append(_KeywordDoc(
-                                id=f"method:{rel}:{cls.name}.{method.name}",
+                                id=f"method:{rel}:{cls.name}.{method.name}:{method.start_line}:{method.end_line}",
+                                start_line=method.start_line, end_line=method.end_line,
                                 file_path=rel,
                                 chunk_type="method",
                                 name=f"{cls.name}.{method.name}",
