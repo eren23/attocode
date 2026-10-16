@@ -337,6 +337,7 @@ class ImpactAnalysisResponse(BaseModel):
 
 
 class ReferenceItem(BaseModel):
+    caller_qualified_name: str = ""
     source: str = "unknown"
     symbol: str = ""
     ref_kind: str = ""
@@ -500,17 +501,21 @@ class LSPLocation(BaseModel):
 
 
 class LSPDefinitionResponse(BaseModel):
+    source: str = "language_server"
     location: LSPLocation | None = None
     error: str | None = None
 
 
 class LSPReferencesResponse(BaseModel):
+    note: str | None = None
+    source: str = "language_server"
     locations: list[LSPLocation]
     total: int
     error: str | None = None
 
 
 class LSPHoverResponse(BaseModel):
+    source: str = "language_server"
     content: str | None = None
     file: str = ""
     line: int = 0

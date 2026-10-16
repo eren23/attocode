@@ -1,11 +1,40 @@
 # Code Intelligence Roadmap
 
-> Authoritative roadmap for attocode code-intel. Replaces the old HTTP API roadmap (Phases 2-5).
-> Baseline: **v0.2.22** (April 16, 2026). Phase 1 shipped in **v0.2.23** (May 3, 2026).
+## Current priorities — 2026-10-15
 
----
+The standalone package is `attocode-code-intel` **0.1.6**; the root agent has a
+separate version (`0.2.30` in this checkout). Read the
+[workstream](intelligence-workstream.md) for release and experiment evidence,
+the [quality guide](intelligence-quality.md) for bounded checks, and the
+[generated catalog](intelligence-tools.md) for the current tool surface.
+The phase plan below is retained history, not a release schedule or proof that
+an unchecked feature shipped when its old target version was reached.
 
-## Current State (v0.2.23 — post Phase 1)
+| Priority | Action | Completion evidence / limits |
+| --- | --- | --- |
+| Ready locally | Repair service-mode v2 navigation responses and expose persisted caller names | Real SQL → HTTP checks for schema, branch selection, declaration inclusion, ambiguity, result bounds and local/DB caller fields. PostgreSQL migration/CI verification remains an upstream step. |
+| Ready locally | Reject malformed body-file development decisions | Exact named boolean gates and complete counts for both arms; negative controls. Historical results and consumed questions stay unchanged. |
+| Next correctness work | Audit DB indexing idempotence and dependency metrics | Reindex the same content twice without duplicate references; test hotspot normalization by matching content SHA rather than pairing unrelated dictionary values. Reproduce before changing behavior. |
+| Next performance work | Find a mechanism that improves cold Cockroach headroom | Last real target: 167.970/180 seconds. Retain byte-equivalent index controls, then seek a bounded end-to-end improvement; the two tokenization prototypes were rejected. Any new cloud run needs a new approved scope. |
+| Next retrieval work | Investigate candidate misses with fresh multi-relevant labels | Expansion, dual-query and body-file trials did not pass their complete gates. Freeze new questions before evaluation; existing questions are consumed. No ranking default change. |
+| Reliability | Continue diagnosing intermittent Rust readiness | Shared document lifecycle is fixed on main and final CI passed first try; the original intermittent cause remains unproven. Preserve assertions and capture protocol evidence on recurrence. |
+| Deferred | Structural-rule accuracy corpus | Add positive and negative ground truth for structural rules with a pinned local executor; report per-rule confusion counts. Existing positives alone are not accuracy evidence. |
+
+Validation completed overnight into October 16: the bounded local gate passed
+681 tests (8 explicit skips), lint, scale and lifecycle. It includes 20 new
+SQL/HTTP tests and 13 additional development-choice cases. The SQL tests ran
+with SQLite locally; the existing product CI runs them against PostgreSQL.
+A wall-clock-interrupted attempt remains recorded as incomplete.
+
+The first two rows are local, unreleased maintenance work. No new cloud rental,
+model run, model download, global tool upgrade or host MCP restart is part of
+this cleanup. Keep R7's reviewed STOP and protected study/cache directories.
+
+## Historical Phase 1 snapshot (v0.2.23)
+
+Baseline: v0.2.22 (April 16, 2026); Phase 1: v0.2.23 (May 3, 2026).
+The counts and benchmark results below describe that checkpoint. They are not
+current tool counts, general speed guarantees or agent-outcome measurements.
 
 | Metric | v0.2.21 baseline | v0.2.23 (Phase 1 shipped) |
 |--------|------------------|----------------------------|
@@ -25,7 +54,7 @@
 | Tests | 1,055 | ~1,745 (+ ~117 Phase 1 tests + 6 post-review fixups) |
 | Benchmark tasks | 120 (MCP bench) + 46 annotated files (rule accuracy) | + PyCG synthetic micro-bench (P=R=1.0) |
 
-### Key subsystems already shipped
+### Subsystems recorded at that checkpoint
 
 - **Rule engine**: Metavariables, boolean combinators, inline test framework, CI runner, SARIF v2.1.0, profiling, community marketplace, Semgrep importer
 - **Search**: BGE embeddings, BM25 disk cache (176x warm speedup), frecency with exponential decay, Smith-Waterman fuzzy, query constraints (fff-style filters)
@@ -38,7 +67,7 @@
 
 ## Phase 1: Structural Analysis Foundation — ✅ SHIPPED in v0.2.23
 
-**Status:** Complete on branch `feat/update-85`. All 8 deliverables shipped plus audit follow-ups (R1/R2/R3 + I1–I5 + H1) and coverage gap tests (T1/T2/T3). 10 packs, 91 rules, 4 new MCP tools (`call_graph`, `rule_hygiene`, `synthesize_rule`, `evolve_rules`).
+**Historical status:** Core implementation shipped on branch `feat/update-85`, with audit follow-ups (R1/R2/R3 + I1–I5 + H1) and coverage gap tests (T1/T2/T3). Structural corpus expansion and AST-diff synthesis remained deferred, as listed below. 10 packs, 91 rules, 4 new MCP tools (`call_graph`, `rule_hygiene`, `synthesize_rule`, `evolve_rules`).
 
 ### Deliverables
 
@@ -63,11 +92,11 @@
 **Carry-forward to Phase 2 / Phase 3**:
 - Structural-rule corpus expansion (the deferred benchmark item).
 - AST-diff-based structural synthesis (richer than regex synthesis).
-- DB-side `SymbolReference.caller_qualified_name` is wired (migration 019), but no coverage test against the HTTP API path yet.
+- DB-side `SymbolReference.caller_qualified_name` uses migration 019. The local maintenance follow-up now covers parser output → persisted SQL rows → HTTP, and propagates the field through local HTTP too. This is not a new migration or full indexing-pipeline test.
 
 ---
 
-## Phase 2: Inter-Procedural Dataflow (v0.2.24)
+## Phase 2: Inter-Procedural Dataflow (proposal; original target v0.2.24)
 
 **Theme:** Follow taint across function boundaries. The current `security/dataflow.py` explicitly documents its limitation: "Intra-procedural only." This phase removes it using the Phase 1 call graph.
 
@@ -125,7 +154,7 @@
 
 ---
 
-## Phase 3: Search Quality & Developer Experience (v0.2.25)
+## Phase 3: Search Quality & Developer Experience (proposal; original target v0.2.25)
 
 **Theme:** Make analysis results actionable. Better ranking, polished autofix, new detection capabilities.
 
@@ -160,7 +189,7 @@
 
 ---
 
-## Phase 4: Integration & CI/CD (v0.2.26)
+## Phase 4: Integration & CI/CD (proposal; original target v0.2.26)
 
 **Theme:** Take attocode from local analysis tool to CI pipeline participant. Analysis engine must be mature (Phases 1-3) before external exposure.
 
@@ -197,7 +226,7 @@
 
 ---
 
-## Phase 5: Scale & Production (v0.2.27)
+## Phase 5: Scale & Production (proposal; original target v0.2.27)
 
 **Theme:** Large monorepos, remote analysis, observability.
 
@@ -233,7 +262,7 @@
 
 ---
 
-## Phase 6: Intelligence Platform (v0.2.28)
+## Phase 6: Intelligence Platform (proposal; original target v0.2.28)
 
 **Theme:** Long-term vision. Cross-service understanding, adaptive learning, coverage analysis.
 
@@ -270,7 +299,7 @@
 
 ## Summary
 
-| Phase | Version | Theme | Key Unlock | Deps |
+| Phase | Historical target | Theme | Key Unlock | Deps |
 |-------|---------|-------|------------|------|
 | 1 | v0.2.23 ✅ | Structural Foundation | ast-grep rules, call graph, rule synthesis & evolution | None |
 | 2 | v0.2.24 | Inter-Procedural Dataflow | Cross-function taint, Bayesian confidence, LLM rule gen | P1 |
@@ -285,4 +314,4 @@
 2. **Inter-procedural dataflow extends, not replaces.** Layer on top of the clean 530-line intra-procedural engine.
 3. **ast-grep as subprocess, not embedded.** Avoids Python/Rust FFI. Latency acceptable on pre-filtered file sets.
 4. **Rules stay data-driven (YAML).** No Python per rule. Keeps community marketplace viable.
-5. **LSP is progressive enhancement, not requirement.** Everything works without LSP. Results get better when LSP is available.
+5. **LSP is optional enhancement.** Static navigation remains available without it; cursor precision, diagnostics and other server-dependent operations must report their limits explicitly.

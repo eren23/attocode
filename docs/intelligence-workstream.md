@@ -82,7 +82,11 @@ New labels must be frozen before evaluating product changes. Missing labels,
 unsupported capabilities and incomplete execution are not successful assertions.
 All mutations of source packs happen in disposable copies, never cached inputs.
 
-## Execution bounds
+## Historical execution bounds
+
+These allowance changes record earlier stages, not current launch authority.
+All 22 workers were deleted at the latest checkpoint; the last passing target
+closed its conditional retry. No new rental is authorized by these old caps.
 
 Quick/local remain capped at 120/600 seconds. Managed disk is capped at 5 GiB,
 process-tree RSS at 4 GiB, with a 2 GiB free-space floor. Broad worker tests have
@@ -139,12 +143,12 @@ hash, corrected examples, limitations, runtime/storage and cleanup here.
   were verified. Its temporary environment/cache were removed. The final source wheel also
   passed all seven phases in `release-0.1.6-final`; this is not publication.
 
-### Remaining delivery gates
+### Historical remaining delivery gates (subsequently completed)
 
-Implementation is merged, required CI passed and remote results/cleanup are recorded.
-The remaining gate is a passing full cold matrix after resolving the CockroachDB
-indexing delay. The six-batch allowance is exhausted; no further rental or release
-will start automatically. Keep failures, unsupported
+At this checkpoint, implementation was merged and remote results/cleanup were
+recorded, but the full cold matrix still failed on CockroachDB indexing. The
+six-batch allowance was exhausted. A separately approved later cycle passed the
+full gate and published 0.1.6, as recorded at the top of this page. Keep failures, unsupported
 cases, missing relationship labels and untested advanced operations visible. No
 model benefit, ranking improvement or universal reference resolution is claimed.
 

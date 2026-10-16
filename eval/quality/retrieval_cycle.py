@@ -109,11 +109,27 @@ def check_choice(choice, question_hash, source_hash):
 
 
 def check_body_choice(choice, question_hash, source_hash):
-    if (choice['questions_sha256'] != question_hash or choice['source_sha256'] != source_hash
-            or choice['candidate'] != 'body_file' or not choice['development']['passed']
-            or len(choice['development']['checks']) != 5
-            or not all(choice['development']['checks'].values())
-            or choice['development']['baseline']['queries'] != 48):
+    """Require the named, boolean development gates before accessing fresh data.
+
+    Five arbitrary truthy values (including the JSON string "false") are not a
+    passing development decision. This validates a frozen operator record, not
+    the provenance of its underlying metrics.
+    """
+    required = {'net_hit5_at_least_four', 'gains_in_two_repos', 'at_most_two_hit5_losses',
+                'no_individual_hit24_loss', 'recall5_not_decreased'}
+    if not isinstance(choice, dict):
+        raise ValueError('Body-file choice must be an object')
+    development = choice.get('development')
+    if not isinstance(development, dict):
+        raise ValueError('Body-file choice requires a development record')
+    checks = development.get('checks')
+    counts = [development.get(arm) for arm in ('baseline', 'candidate')]
+    if (choice.get('questions_sha256') != question_hash or choice.get('source_sha256') != source_hash
+            or choice.get('candidate') != 'body_file' or development.get('passed') is not True
+            or not isinstance(checks, dict) or set(checks) != required
+            or any(value is not True for value in checks.values())
+            or any(not isinstance(arm, dict) or type(arm.get('queries')) is not int
+                   or arm['queries'] != 48 for arm in counts)):
         raise ValueError('Body-file choice does not match qualified frozen inputs')
 
 

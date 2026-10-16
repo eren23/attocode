@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from attocode_intel.api.deps import BranchContext
+    from attocode_intel.api.models import FindRelatedResponse, GraphQueryResponse
 
 from attocode_intel.api.models import (
     CodeChunkItem,
@@ -27,6 +28,11 @@ from attocode_intel.api.models import (
     FileMetricsItem,
     HotspotsResponse,
     ImpactAnalysisResponse,
+    LSPDefinitionResponse,
+    LSPDiagnosticsResponse,
+    LSPHoverResponse,
+    LSPLocation,
+    LSPReferencesResponse,
     ReferenceItem,
     SearchResultItem,
     SearchResultsResponse,
@@ -183,6 +189,8 @@ class DbAnalysisProvider:
             references = [
                 ReferenceItem(
                     ref_kind=r.ref_kind,
+                    symbol=r.symbol_name,
+                    caller_qualified_name=r.caller_qualified_name,
                     file_path=sha_to_path.get(r.content_sha, ""),
                     line=r.line,
                 )
@@ -358,10 +366,10 @@ class DbAnalysisProvider:
             return []
 
         # Batch-fetch file content (limit to avoid memory issues)
-        MAX_FILES = 500
-        if len(content_shas) > MAX_FILES:
+        max_files = 500
+        if len(content_shas) > max_files:
             # Only process files matching start_file prefix if too many
-            content_shas = content_shas[:MAX_FILES]
+            content_shas = content_shas[:max_files]
 
         result = await session.execute(
             select(FileContent.sha256, FileContent.content).where(
@@ -450,7 +458,7 @@ class DbAnalysisProvider:
                 lines = max(size // 40, 1) if size > 0 else 0
                 max_sym = max(sym_counts.values()) if sym_counts else 1
                 max_conn = max(
-                    (fi_ + fo_ for fi_, fo_ in zip(fan_in.values(), fan_out.values())),
+                    (fi_ + fo_ for fi_, fo_ in zip(fan_in.values(), fan_out.values(), strict=False)),
                     default=1,
                 ) or 1
                 max_size = max(file_sizes.values()) if file_sizes else 1
@@ -591,10 +599,12 @@ class DbSearchProvider:
         """Run pgvector cosine similarity search."""
         import uuid as _uuid
 
+        from attocode_intel._internal.integrations.context.embeddings import (
+            create_embedding_provider,
+        )
         from attocode_intel.api.deps import get_branch_context, get_config
         from attocode_intel.db.engine import get_session
         from attocode_intel.storage.embedding_store import EmbeddingStore
-        from attocode_intel._internal.integrations.context.embeddings import create_embedding_provider
 
         config = get_config()
         provider = create_embedding_provider(config.embedding_model)
@@ -934,58 +944,48 @@ class DbLSPProvider:
     def __init__(self, project_id: str) -> None:
         self._project_id = project_id
 
-    async def definition(self, file: str, line: int, col: int, branch: str) -> dict:
-        """Find definition of symbol at position."""
+    async def _declaration(self, session, branch_ctx, file, line, col):
+        """Only a unique declaration line is supported by this column-free index.
+
+        A containing function is not the symbol under a cursor in its body.
+        Never silently substitute that function for an unresolved call site.
+        """
         from sqlalchemy import select
 
-        from attocode_intel.api.deps import get_branch_context
-        from attocode_intel.db.engine import get_session
         from attocode_intel.db.models import Symbol
 
+        sha = branch_ctx.manifest.get(file)
+        if sha is None:
+            return None, "File is not indexed on this branch"
+        if col != 0:
+            return None, "Symbol index has no columns; use col=0 for a declaration line or a language server for cursor resolution"
+        result = await session.execute(
+            select(Symbol).where(Symbol.content_sha == sha, Symbol.line_start == line).limit(2)
+        )
+        rows = result.scalars().all()
+        if len(rows) != 1:
+            return None, ("Ambiguous declaration line" if rows else
+                          "Symbol index supports declaration lines only; cursor resolution requires a language server")
+        return rows[0], None
+
+    async def definition(self, file: str, line: int, col: int, branch: str) -> LSPDefinitionResponse:
+        """Return an indexed declaration, without guessing a same-name target."""
+        from attocode_intel.api.deps import get_branch_context
+        from attocode_intel.db.engine import get_session
+
         async for session in get_session():
-            repo_id = uuid.UUID(self._project_id)
-            branch_ctx = await get_branch_context(repo_id, branch, session)
-            sha = branch_ctx.manifest.get(file)
-            if not sha:
-                return {"definitions": []}
-
-            # Find symbol at the given line
-            result = await session.execute(
-                select(Symbol).where(
-                    Symbol.content_sha == sha,
-                    Symbol.line_start <= line,
-                    Symbol.line_end >= line,
-                )
+            ctx = await get_branch_context(uuid.UUID(self._project_id), branch, session)
+            symbol, error = await self._declaration(session, ctx, file, line, col)
+            return LSPDefinitionResponse(
+                location=LSPLocation(file=file, line=symbol.line_start, col=0) if symbol else None,
+                source="symbol_index", error=error,
             )
-            source_sym = result.scalars().first()
-            if source_sym is None:
-                return {"definitions": []}
+        return LSPDefinitionResponse(source="symbol_index", error="Index session unavailable")
 
-            # Search for a definition with the same name across the branch
-            all_shas = branch_ctx.content_shas
-            def_result = await session.execute(
-                select(Symbol).where(
-                    Symbol.content_sha.in_(all_shas),
-                    Symbol.name == source_sym.name,
-                    Symbol.kind.in_(("class", "function", "method", "variable")),
-                ).limit(10)
-            )
-            definitions = []
-            sha_to_path = branch_ctx.sha_to_path
-            for s in def_result.scalars():
-                definitions.append({
-                    "file": sha_to_path.get(s.content_sha, ""),
-                    "line": s.line_start or 0,
-                    "name": s.name,
-                    "kind": s.kind,
-                    "signature": s.signature or "",
-                })
-            return {"definitions": definitions}
-
-        return {"definitions": []}
-
-    async def references(self, file: str, line: int, col: int, branch: str) -> dict:
-        """Find references to symbol at position."""
+    async def references(
+        self, file: str, line: int, col: int, branch: str, include_declaration: bool = True,
+    ) -> LSPReferencesResponse:
+        """Return branch-scoped name candidates for a unique indexed declaration."""
         from sqlalchemy import select
 
         from attocode_intel.api.deps import get_branch_context
@@ -993,90 +993,69 @@ class DbLSPProvider:
         from attocode_intel.db.models import Symbol, SymbolReference
 
         async for session in get_session():
-            repo_id = uuid.UUID(self._project_id)
-            branch_ctx = await get_branch_context(repo_id, branch, session)
-            sha = branch_ctx.manifest.get(file)
-            if not sha:
-                return {"references": []}
-
-            # Find symbol at position
-            result = await session.execute(
-                select(Symbol).where(
-                    Symbol.content_sha == sha,
-                    Symbol.line_start <= line,
-                    Symbol.line_end >= line,
-                )
+            ctx = await get_branch_context(uuid.UUID(self._project_id), branch, session)
+            symbol, error = await self._declaration(session, ctx, file, line, col)
+            if symbol is None:
+                return LSPReferencesResponse(locations=[], total=0, source="symbol_index", error=error)
+            result = await session.execute(select(Symbol).where(
+                Symbol.content_sha.in_(ctx.content_shas), Symbol.name == symbol.name,
+            ).limit(2))
+            definitions = result.scalars().all()
+            # Content may be reused at multiple paths; those are distinct definitions too.
+            if len(definitions) != 1 or sum(sha == symbol.content_sha for sha in ctx.manifest.values()) != 1:
+                return LSPReferencesResponse(locations=[], total=0, source="symbol_index",
+                                             error="Ambiguous symbol name; reference resolution requires a language server")
+            result = await session.execute(select(SymbolReference).where(
+                SymbolReference.content_sha.in_(ctx.content_shas),
+                SymbolReference.symbol_name == symbol.name,
+            ).order_by(SymbolReference.content_sha, SymbolReference.line).limit(501))
+            rows = result.scalars().all()
+            # Expand identical content at branch paths without retaining an
+            # unbounded cross product of paths and references. One extra result
+            # detects truncation; ordering is stable across database row order.
+            lines_by_sha: dict[str, set[int]] = {}
+            for ref in rows[:500]:
+                lines_by_sha.setdefault(ref.content_sha, set()).add(ref.line)
+            positions = set()
+            for path, sha in sorted(ctx.manifest.items()):
+                for ref_line in sorted(lines_by_sha.get(sha, ())):
+                    positions.add((path, ref_line))
+                    if len(positions) > 500:
+                        break
+                if len(positions) > 500:
+                    break
+            if include_declaration:
+                positions.add((file, symbol.line_start))
+            ordered = sorted(positions)
+            truncated = len(rows) > 500 or len(ordered) > 500
+            locations = [LSPLocation(file=path, line=ref_line, col=0) for path, ref_line in ordered[:500]]
+            return LSPReferencesResponse(
+                locations=locations, total=len(locations), source="symbol_index",
+                note="Name-matched candidates, not resolved references; columns are unavailable (col=0).",
+                error="Reference result limit reached; more candidates may exist" if truncated else None,
             )
-            source_sym = result.scalars().first()
-            if source_sym is None:
-                return {"references": []}
+        return LSPReferencesResponse(locations=[], total=0, source="symbol_index", error="Index session unavailable")
 
-            # Query references table
-            all_shas = branch_ctx.content_shas
-            ref_result = await session.execute(
-                select(SymbolReference).where(
-                    SymbolReference.content_sha.in_(all_shas),
-                    SymbolReference.symbol_name == source_sym.name,
-                ).limit(500)
-            )
-            sha_to_path = branch_ctx.sha_to_path
-            references = [
-                {
-                    "file": sha_to_path.get(r.content_sha, ""),
-                    "line": r.line,
-                    "ref_kind": r.ref_kind,
-                }
-                for r in ref_result.scalars()
-            ]
-            return {"references": references}
-
-        return {"references": []}
-
-    async def hover(self, file: str, line: int, col: int, branch: str) -> dict:
-        """Get hover info for symbol at position."""
-        from sqlalchemy import select
-
+    async def hover(self, file: str, line: int, col: int, branch: str) -> LSPHoverResponse:
+        """Display stored declaration metadata, without inferring cursor bindings."""
         from attocode_intel.api.deps import get_branch_context
         from attocode_intel.db.engine import get_session
-        from attocode_intel.db.models import Symbol
 
         async for session in get_session():
-            repo_id = uuid.UUID(self._project_id)
-            branch_ctx = await get_branch_context(repo_id, branch, session)
-            sha = branch_ctx.manifest.get(file)
-            if not sha:
-                return {"hover": None}
-
-            result = await session.execute(
-                select(Symbol).where(
-                    Symbol.content_sha == sha,
-                    Symbol.line_start <= line,
-                    Symbol.line_end >= line,
-                )
+            ctx = await get_branch_context(uuid.UUID(self._project_id), branch, session)
+            symbol, error = await self._declaration(session, ctx, file, line, col)
+            return LSPHoverResponse(
+                content=(f"{symbol.kind} {symbol.name}\n{symbol.signature or ''}".rstrip()) if symbol else None,
+                file=file, line=line, col=col, source="symbol_index", error=error,
             )
-            sym = result.scalars().first()
-            if sym is None:
-                return {"hover": None}
+        return LSPHoverResponse(file=file, line=line, col=col, source="symbol_index", error="Index session unavailable")
 
-            return {
-                "hover": {
-                    "name": sym.name,
-                    "kind": sym.kind,
-                    "signature": sym.signature or "",
-                    "exported": sym.exported,
-                    "line_start": sym.line_start,
-                    "line_end": sym.line_end,
-                }
-            }
-
-        return {"hover": None}
-
-    async def diagnostics(self, file: str, branch: str) -> dict:
-        """Return empty diagnostics — requires a real language server."""
-        return {
-            "diagnostics": [],
-            "message": "Diagnostics require a running language server (not available for remote repos)",
-        }
+    async def diagnostics(self, file: str, branch: str) -> LSPDiagnosticsResponse:
+        """Unsupported is not evidence that a remote file has no diagnostics."""
+        return LSPDiagnosticsResponse(
+            file=file, diagnostics=[], total=0,
+            error="Diagnostics require a running language server (not available for remote repos)",
+        )
 
     async def completions(self, file: str, line: int, col: int, branch: str, limit: int = 20) -> dict:
         """Completions require a real language server."""
