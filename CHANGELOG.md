@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.9] - 2026-10-17
+
 ### Fixed — Defects found by using Attocode on its own repository
 
 - The tree-sitter parser now keeps Python docstrings (functions, methods and
