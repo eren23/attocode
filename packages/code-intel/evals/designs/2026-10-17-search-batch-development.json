@@ -1,0 +1,328 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-17T16:34:17.065213+00:00",
+  "split": "development",
+  "baseline_commit": "94d345beb1e10d8b3254ec1aa5ee4c6a8aeb5983",
+  "budget": 2000,
+  "scope": "Fresh authored questions for four pinned benchmark packs (pandas, prisma, starship, gh-cli), written by reading source only, before any search was run against these sources. Per pack and split: two natural-language implementation questions that avoid the exact identifier, and one exact-symbol control (category control). Development and validation draw only from their declared, disjoint subsystems. Labels are implementer-authored, source-bound and non-exhaustive (the primary file is listed first and becomes the scoped-page file_filter); they are not independent user or agent outcomes. Avoids the existing workflows.yaml and 2026-10-15 expansion questions for these packs.",
+  "acceptance": {
+    "defined_in": "The candidate freeze record, not this manifest. This manifest fixes only questions, labels and source hashes.",
+    "validation": "Held-out until the candidate is frozen; no product tuning after validation results are opened."
+  },
+  "subsystems": {
+    "pandas": [
+      "pandas/core/window/",
+      "pandas/core/indexers/",
+      "pandas/io/json/",
+      "pandas/tests/window/",
+      "pandas/tests/io/json/"
+    ],
+    "prisma": [
+      "packages/client/src/runtime/core/extensions/",
+      "packages/adapter-pg/"
+    ],
+    "starship": [
+      "src/formatter/",
+      "src/modules/directory.rs",
+      "src/configs/directory.rs",
+      "src/modules/utils/",
+      "src/modules/hg_branch.rs"
+    ],
+    "gh-cli": [
+      "internal/update/",
+      "internal/ghcmd/",
+      "pkg/cmd/root/alias.go",
+      "pkg/cmd/root/alias_test.go",
+      "pkg/cmd/alias/"
+    ]
+  },
+  "repositories": [
+    {
+      "pack": "pandas",
+      "commit": "0039f168fe057b945e8ec2a65c9d1e973c7c1fe9",
+      "queries": [
+        {
+          "id": "pandas:search-batch-development-1",
+          "category": "implementation",
+          "query": "When a moving window is given as a time span such as '2s' instead of a number of rows, how are the start and end positions of each window computed?",
+          "evidence": [
+            {
+              "file": "pandas/core/indexers/objects.py",
+              "quote": "class VariableWindowIndexer(BaseIndexer):",
+              "line": 162,
+              "source_sha256": "3b12dee7e9a5685a30d0c49d61eb77f21476b9db464b39ce5e5c3e70beb9707c",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pandas/core/window/rolling.py",
+              "quote": "self._win_freq_i8 = Timedelta(freq.nanos).as_unit(unit)._value",
+              "line": 2023,
+              "source_sha256": "4a852d47997592211ee12ec565984744489fc49325b60a62ab2553c8573a601a",
+              "relevance": "Call site that wires the behavior into the user-facing path; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "pandas:search-batch-development-2",
+          "category": "implementation",
+          "query": "When exporting a table to JSON in the schema-annotated table layout, how is the embedded description of each field's type and the primary key produced?",
+          "evidence": [
+            {
+              "file": "pandas/io/json/_table_schema.py",
+              "quote": "def build_table_schema(",
+              "line": 233,
+              "source_sha256": "c0468c9b19f321c1f8bced3be4f12a18539278e058437be9f0a7717273414d10",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pandas/io/json/_json.py",
+              "quote": "class JSONTableWriter(FrameWriter):",
+              "line": 354,
+              "source_sha256": "b643658aa3746e8ac161b64a5c2ea8d5052cbc8b3f9c7e1baaccd8e3197aa7f3",
+              "relevance": "Call site that wires the behavior into the user-facing path; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "pandas:search-batch-development-3",
+          "category": "control",
+          "query": "Where is nested_to_record defined and where is it tested?",
+          "evidence": [
+            {
+              "file": "pandas/io/json/_normalize.py",
+              "quote": "def nested_to_record(",
+              "line": 70,
+              "source_sha256": "c3ed6e2e6b9b07ed2e887f2ab624aee87f26bbf2a9e538d9fca58db2ff526525",
+              "relevance": "Definition of the named symbol; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pandas/tests/io/json/test_normalize.py",
+              "quote": "result = nested_to_record(recs)",
+              "line": 600,
+              "source_sha256": "239d02a0089dd53c5331c5fbc858c349d28e529cdd7053587e07a22d909d7281",
+              "relevance": "Test exercising the asked behavior; non-exhaustive source-bound judgment."
+            }
+          ],
+          "control": "exact_symbol"
+        }
+      ]
+    },
+    {
+      "pack": "prisma",
+      "commit": "33667c373c0ae84ad37c7aed2497b99452da589c",
+      "queries": [
+        {
+          "id": "prisma:search-batch-development-1",
+          "category": "implementation",
+          "query": "How are extra fields defined by a client extension calculated lazily on returned records, and how are the columns they depend on still requested from the database when the caller did not select them?",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/core/extensions/applyResultExtensions.ts",
+              "quote": "export function applyResultExtensions({ result, modelName, select, omit, extensions }: ApplyExtensionsArgs) {",
+              "line": 34,
+              "source_sha256": "6fe0874d45b7252b058f92ccbc8fe9f7445d4ca011d2fa582691e1c459af8030",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "packages/client/src/runtime/core/extensions/resultUtils.ts",
+              "quote": "export function computeEngineSideSelection(",
+              "line": 105,
+              "source_sha256": "19f677ecf12eb9e1ea8da96b3ce2acd4c2bf3f5530afd6ed08e23f0cfdf7f97d",
+              "relevance": "Supporting implementation a developer needs to answer the question; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "prisma:search-batch-development-2",
+          "category": "implementation",
+          "query": "When the Postgres driver adapter runs a query, how is each result column's native type id translated into a generic column type, and what happens for types it cannot handle?",
+          "evidence": [
+            {
+              "file": "packages/adapter-pg/src/conversion.ts",
+              "quote": "export function fieldToColumnType(fieldTypeId: number): ColumnType {",
+              "line": 183,
+              "source_sha256": "a49628aa46f26a5a02feb7b6f6f6b592ffec346c08895cd523ff57864c145c71",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "packages/adapter-pg/src/pg.ts",
+              "quote": "columnTypes = fields.map((field) => fieldToColumnType(field.dataTypeID))",
+              "line": 53,
+              "source_sha256": "44664e914dd004107aa8492815608b9453cc6d7efb398afd208c7dcd01abcc4c",
+              "relevance": "Call site that wires the behavior into the user-facing path; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "prisma:search-batch-development-3",
+          "category": "control",
+          "query": "Where is visitQueryResult defined and where is it called?",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/core/extensions/visitQueryResult.ts",
+              "quote": "export function visitQueryResult({ visitor, result, args, runtimeDataModel, modelName }: VisitParams) {",
+              "line": 26,
+              "source_sha256": "b1f1b532871eb9c33b6b47db82be10c7b8596d7944598a188b364dc5a785c4e8",
+              "relevance": "Definition of the named symbol; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "packages/client/src/runtime/core/extensions/applyAllResultExtensions.ts",
+              "quote": "return visitQueryResult({",
+              "line": 43,
+              "source_sha256": "8c5e37f9876c888ff48e70b50583fc18a7b46af8f85f40d14e05be7b4324a3c4",
+              "relevance": "Use of the named symbol; non-exhaustive source-bound judgment."
+            }
+          ],
+          "control": "exact_symbol"
+        }
+      ]
+    },
+    {
+      "pack": "starship",
+      "commit": "6d0a1263fcc74381791805cee57fc466f6e6359c",
+      "queries": [
+        {
+          "id": "starship:search-batch-development-1",
+          "category": "implementation",
+          "query": "How does a parenthesized section of the prompt format string get hidden when every variable inside it is empty?",
+          "evidence": [
+            {
+              "file": "src/formatter/string_formatter.rs",
+              "quote": "fn should_show_elements<'a>(",
+              "line": 346,
+              "source_sha256": "fea88a4d417b311d477146b5d0f98fb543aa954b3ef97ef09b3ef1798d204f40",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/formatter/parser.rs",
+              "quote": "FormatElement::Conditional(parse_format(value.into_inner().next().unwrap()))",
+              "line": 19,
+              "source_sha256": "8837bb687c5fa5b663d32a11a7a48d24df15d4ec211e1f3ca8614bb44acf747c",
+              "relevance": "Supporting implementation a developer needs to answer the question; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "starship:search-batch-development-2",
+          "category": "implementation",
+          "query": "How is the working directory path shortened in the prompt, replacing the home folder, cutting at the repository root and keeping only the last few path components?",
+          "evidence": [
+            {
+              "file": "src/modules/directory.rs",
+              "quote": "if let Some(truncated) = truncate(&dir_string, config.truncation_length as usize) {",
+              "line": 88,
+              "source_sha256": "53d3f1645e7de7f38466e90b4e570b1ec2870cdf8a8b4ca70c016f6d79977401",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/modules/utils/directory.rs",
+              "quote": "pub fn truncate(dir_string: &str, length: usize) -> Option<String> {",
+              "line": 6,
+              "source_sha256": "d529ca947988ddeadd5fc7f2bf48114edca403be52a60f462cb3cda4e18dfff0",
+              "relevance": "Supporting implementation a developer needs to answer the question; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/configs/directory.rs",
+              "quote": "truncation_length: 3,",
+              "line": 56,
+              "source_sha256": "6de54611eeac1d0b76ec4ea8aba220075cf553301f1263e6219eed9d9c69c102",
+              "relevance": "Configuration defaults read by the behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "starship:search-batch-development-3",
+          "category": "control",
+          "query": "Where is truncate_text defined and where is it used?",
+          "evidence": [
+            {
+              "file": "src/modules/utils/truncate.rs",
+              "quote": "pub fn truncate_text(text: &str, length: usize, truncation_symbol: &str) -> String {",
+              "line": 8,
+              "source_sha256": "1f3e5ee32df6c1de3c8c5c1bfc0502cf691fbd68a905edf97cd7f81356250430",
+              "relevance": "Definition of the named symbol; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/modules/hg_branch.rs",
+              "quote": "let branch_graphemes = truncate_text(&branch_name, len, config.truncation_symbol);",
+              "line": 39,
+              "source_sha256": "028ea262fafa7df29cce84f42f11e692a9bf2aebbc17769b8ddb09e1c03803eb",
+              "relevance": "Use of the named symbol; non-exhaustive source-bound judgment."
+            }
+          ],
+          "control": "exact_symbol"
+        }
+      ]
+    },
+    {
+      "pack": "gh-cli",
+      "commit": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+      "queries": [
+        {
+          "id": "gh-cli:search-batch-development-1",
+          "category": "implementation",
+          "query": "How does the command line tool decide whether to tell the user that a newer release exists, and how does it avoid asking the server on every run?",
+          "evidence": [
+            {
+              "file": "internal/update/update.go",
+              "quote": "func CheckForUpdate(ctx context.Context, client *http.Client, stateFilePath, repo, currentVersion string) (*ReleaseInfo, error) {",
+              "line": 90,
+              "source_sha256": "84154a6442c2dd39bc586779a67cc22ef797da7ffff6b16f39c366a4c26586f6",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "internal/ghcmd/cmd.go",
+              "quote": "func checkForUpdate(ctx context.Context, f *cmdutil.Factory, currentVersion string) (*update.ReleaseInfo, error) {",
+              "line": 216,
+              "source_sha256": "8137ccbd913b476a69d9c5cc5e293a06bf6f1c42e9b53405899d675a56152db1",
+              "relevance": "Call site that wires the behavior into the user-facing path; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:search-batch-development-2",
+          "category": "implementation",
+          "query": "How are user-defined command shortcuts with numbered placeholders like $1 expanded into the real argument list, and what error is raised when too few arguments are given?",
+          "evidence": [
+            {
+              "file": "pkg/cmd/root/alias.go",
+              "quote": "func expandAlias(expansion string, args []string) ([]string, error) {",
+              "line": 72,
+              "source_sha256": "2ca1cff6ddf14a24ec69ed3d6430c801d25aad743cee68b9675832f432453007",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pkg/cmd/root/alias_test.go",
+              "quote": "func TestExpandAlias(t *testing.T) {",
+              "line": 10,
+              "source_sha256": "5bbca093323a84f87a7eb61e3e5a54b9714a1353fabc98d9dba9318770ddd4e7",
+              "relevance": "Test exercising the asked behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:search-batch-development-3",
+          "category": "control",
+          "query": "Where is ValidAliasExpansionFunc defined and where is it used?",
+          "evidence": [
+            {
+              "file": "pkg/cmd/alias/shared/validations.go",
+              "quote": "func ValidAliasExpansionFunc(cmd *cobra.Command) func(string) bool {",
+              "line": 36,
+              "source_sha256": "2ad30f8ff95a9ce08629f1e6c2bb19b16673a3da7374117aa58f5a8dbc34160c",
+              "relevance": "Definition of the named symbol; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pkg/cmd/alias/set/set.go",
+              "quote": "opts.validAliasExpansion = shared.ValidAliasExpansionFunc(cmd)",
+              "line": 79,
+              "source_sha256": "506c9d1b037efaff46c76830ab6277c7538acc7a2f69edc007eac9f99abdc1c4",
+              "relevance": "Use of the named symbol; non-exhaustive source-bound judgment."
+            }
+          ],
+          "control": "exact_symbol"
+        }
+      ]
+    }
+  ]
+}

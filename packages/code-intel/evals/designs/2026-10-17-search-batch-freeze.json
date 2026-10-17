@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-17",
+  "branch": "intel/dogfood-search-batch",
+  "baseline_commit": "94d345beb1e10d8b3254ec1aa5ee4c6a8aeb5983",
+  "questions": {
+    "development": "a7329951352dae357ca4d3551b2611c8d3f62feb32fb4729dfce8362003b10a7",
+    "validation": "2751afed23f86ac887dcd9179d5f81e79f4cce24a0a1711db4c189603264ac42",
+    "self_development_private": "b24f4bd1408f82b1202b8dacbb743a3d814fdc1299d4548a4141551d627183c2"
+  },
+  "arms": {
+    "A0": "94d345b",
+    "A1": "15f7b4b (docstrings/param types)",
+    "A2": "94d345b + d7c8f41 (impact depth order)",
+    "A3": "94d345b + 6812475 (stopwords into/onto/one)",
+    "F": "6812475 (all fixes)",
+    "C": "F + one candidate, chosen after development diagnosis"
+  },
+  "fixes_reported_not_gated": "Fix arms report summarize() deltas vs A0 and every individual loss; user decided fixes ship even if the ranking gate shifts.",
+  "candidate_acceptance": [
+    "compare() passes on development and validation: no aggregate file/visible loss at 5, 24 or scoped; inspection no net loss; p95 <= max(0.1 s, 1.5 x F)",
+    "zero individual judged-file or visible-quote losses in either split and on the 40 regression questions",
+    "development: >= +2 first-five file judgments across >= 2 questions in >= 2 repos; validation: >= +1",
+    "control responses identical; if C claims fusion-only, generation_identical must hold",
+    "ranking gate C vs F within net loss 2 and MRR@5 drop 0.01",
+    "a fixture reproducing the diagnosed miss fails on F and passes on C",
+    "validation runs once, after the candidate is frozen; no tuning on validation"
+  ],
+  "bounds": {
+    "per_run_seconds": 180,
+    "max_disk_bytes": 536870912,
+    "max_rss_bytes": 1610612736,
+    "sources": "cached pinned packs only; QUALITY_ALLOW_DOWNLOADS unset; no models or cloud"
+  },
+  "scope": "Implementer-authored, source-bound, non-exhaustive labels; not independent user or agent outcomes."
+}

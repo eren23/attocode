@@ -1,0 +1,342 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-17T16:34:17.065213+00:00",
+  "split": "validation",
+  "baseline_commit": "94d345beb1e10d8b3254ec1aa5ee4c6a8aeb5983",
+  "budget": 2000,
+  "scope": "Fresh authored questions for four pinned benchmark packs (pandas, prisma, starship, gh-cli), written by reading source only, before any search was run against these sources. Per pack and split: two natural-language implementation questions that avoid the exact identifier, and one exact-symbol control (category control). Development and validation draw only from their declared, disjoint subsystems. Labels are implementer-authored, source-bound and non-exhaustive (the primary file is listed first and becomes the scoped-page file_filter); they are not independent user or agent outcomes. Avoids the existing workflows.yaml and 2026-10-15 expansion questions for these packs.",
+  "acceptance": {
+    "defined_in": "The candidate freeze record, not this manifest. This manifest fixes only questions, labels and source hashes.",
+    "validation": "Held-out until the candidate is frozen; no product tuning after validation results are opened."
+  },
+  "subsystems": {
+    "pandas": [
+      "pandas/tseries/",
+      "pandas/io/excel/",
+      "pandas/tests/tseries/",
+      "pandas/tests/io/excel/"
+    ],
+    "prisma": [
+      "packages/get-platform/",
+      "packages/client/src/runtime/core/raw-query/",
+      "packages/client/src/runtime/utils/",
+      "packages/client-engine-runtime/src/transaction-manager/"
+    ],
+    "starship": [
+      "src/modules/aws.rs",
+      "src/configs/aws.rs",
+      "src/init/",
+      "src/main.rs",
+      "src/modules/kubernetes.rs",
+      "src/configs/kubernetes.rs"
+    ],
+    "gh-cli": [
+      "pkg/cmd/api/",
+      "pkg/cmd/extension/",
+      "pkg/cmd/gist/"
+    ]
+  },
+  "repositories": [
+    {
+      "pack": "pandas",
+      "commit": "0039f168fe057b945e8ec2a65c9d1e973c7c1fe9",
+      "queries": [
+        {
+          "id": "pandas:search-batch-validation-1",
+          "category": "implementation",
+          "query": "How does the library guess the regular spacing of a sequence of timestamps, for example recognizing business days or month ends?",
+          "evidence": [
+            {
+              "file": "pandas/tseries/frequencies.py",
+              "quote": "class _FrequencyInferer:",
+              "line": 180,
+              "source_sha256": "9ea29e5991b17b955bf09d1c4f9550876749f3a97e21a6cff6a8b5fd7ef75353",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pandas/tests/tseries/frequencies/test_inference.py",
+              "quote": "def test_business_daily():",
+              "line": 113,
+              "source_sha256": "0072679afcc10d149b13a6d5ce7c96bf77b81c5afa226f8b98d1d8b8e02b4d21",
+              "relevance": "Test exercising the asked behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "pandas:search-batch-validation-2",
+          "category": "implementation",
+          "query": "When opening a spreadsheet without naming a backend, how is the file format sniffed from its contents and which parsing library is chosen by default?",
+          "evidence": [
+            {
+              "file": "pandas/io/excel/_base.py",
+              "quote": "def inspect_excel_format(",
+              "line": 1421,
+              "source_sha256": "36343af4ff240a0f2bfe2538777efd6905fba5df8fc88b3e0d7c04dccf24cfb2",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pandas/io/excel/_util.py",
+              "quote": "def get_default_engine(ext: str, mode: Literal[\"reader\", \"writer\"] = \"reader\") -> str:",
+              "line": 50,
+              "source_sha256": "7b37b35d25b64ab851282a7473d2aad32ab25791b99fbd9f621ac765ccd733fb",
+              "relevance": "Supporting implementation a developer needs to answer the question; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "pandas:search-batch-validation-3",
+          "category": "control",
+          "query": "Where is USFederalHolidayCalendar defined and where is it tested?",
+          "evidence": [
+            {
+              "file": "pandas/tseries/holiday.py",
+              "quote": "class USFederalHolidayCalendar(AbstractHolidayCalendar):",
+              "line": 628,
+              "source_sha256": "9789bf0fe3385c8b623f4f7f7bb80d0007c88bcdb6ab7a833761f1bacd541d6b",
+              "relevance": "Definition of the named symbol; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pandas/tests/tseries/holiday/test_calendar.py",
+              "quote": "calendar = USFederalHolidayCalendar()",
+              "line": 30,
+              "source_sha256": "58aaef1f5cec2646a2bcd39118d4e84c7adbf6e4b32deff3dda23b67f93e66a4",
+              "relevance": "Test exercising the asked behavior; non-exhaustive source-bound judgment."
+            }
+          ],
+          "control": "exact_symbol"
+        }
+      ]
+    },
+    {
+      "pack": "prisma",
+      "commit": "33667c373c0ae84ad37c7aed2497b99452da589c",
+      "queries": [
+        {
+          "id": "prisma:search-batch-validation-1",
+          "category": "implementation",
+          "query": "How does the tooling detect the Linux distribution, CPU architecture and installed OpenSSL version to pick which precompiled engine build to use?",
+          "evidence": [
+            {
+              "file": "packages/get-platform/src/getPlatform.ts",
+              "quote": "export function getBinaryTargetForCurrentPlatformInternal(args: GetOSResult): BinaryTarget {",
+              "line": 475,
+              "source_sha256": "4260685b06d9c90871265f79f822cc36dac285746dff718657b0622d1c5c47a5",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "packages/get-platform/src/binaryTargets.ts",
+              "quote": "export type BinaryTarget =",
+              "line": 1,
+              "source_sha256": "61e56f86777b18e27a83c8130791ec1401c5b38040c0879c83f92ccac7b3da45",
+              "relevance": "Supporting implementation a developer needs to answer the question; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "packages/get-platform/src/__tests__/getPlatform.test.ts",
+              "quote": "describe('getBinaryTargetForCurrentPlatformInternal', () => {",
+              "line": 23,
+              "source_sha256": "001d967ac917900c6fc4485492be5c9102f655b545a45de8ab5878eea50a57c3",
+              "relevance": "Test exercising the asked behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "prisma:search-batch-validation-2",
+          "category": "implementation",
+          "query": "When a raw SQL query is written as a tagged template literal, how are the interpolated values turned into database-specific parameter placeholders and serialized?",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/core/raw-query/rawQueryArgsMapper.ts",
+              "quote": "export const rawQueryArgsMapper =",
+              "line": 37,
+              "source_sha256": "bc1310cd95a9589f0b862485ca1bf6f0d4f1b226139994af2fbeafa40b605c6b",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "packages/client/src/runtime/utils/mssqlPreparedStatement.ts",
+              "quote": "export const mssqlPreparedStatement = (sql: Sql) => {",
+              "line": 4,
+              "source_sha256": "327af58e0aacb0165d1ce8e02524201422a2b1677dc914d80d546ee531983468",
+              "relevance": "Supporting implementation a developer needs to answer the question; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "packages/client/src/runtime/utils/serializeRawParameters.ts",
+              "quote": "export function serializeRawParameters(parameters: any[]): string {",
+              "line": 5,
+              "source_sha256": "9b28764e39ec9070ee301a4d328c0ec1c5e38a4401dd0ad0aee644ebc8a0959c",
+              "relevance": "Supporting implementation a developer needs to answer the question; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "prisma:search-batch-validation-3",
+          "category": "control",
+          "query": "Where is TransactionExecutionTimeoutError defined and where is it thrown?",
+          "evidence": [
+            {
+              "file": "packages/client-engine-runtime/src/transaction-manager/transaction-manager-error.ts",
+              "quote": "export class TransactionExecutionTimeoutError extends TransactionManagerError {",
+              "line": 37,
+              "source_sha256": "29e0c9b88d5d5378392ef4b0da24eb4822c7b96fa789454d9c7588a690a2819c",
+              "relevance": "Definition of the named symbol; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "packages/client-engine-runtime/src/transaction-manager/transaction-manager.ts",
+              "quote": "throw new TransactionExecutionTimeoutError(operation, {",
+              "line": 286,
+              "source_sha256": "44f12254b39e159f8088365f81a4c236a764aae0695099f4c845cd742fb88218",
+              "relevance": "Use of the named symbol; non-exhaustive source-bound judgment."
+            }
+          ],
+          "control": "exact_symbol"
+        }
+      ]
+    },
+    {
+      "pack": "starship",
+      "commit": "6d0a1263fcc74381791805cee57fc466f6e6359c",
+      "queries": [
+        {
+          "id": "starship:search-batch-validation-1",
+          "category": "implementation",
+          "query": "How does the prompt work out how long remains before temporary cloud credentials expire, including cached single sign-on tokens, and what is shown once they have expired?",
+          "evidence": [
+            {
+              "file": "src/modules/aws.rs",
+              "quote": "fn get_credentials_duration(",
+              "line": 136,
+              "source_sha256": "6c58290f9fb0c82875174707b7c7e2f7d209af95c186c9e07b0926406915a1bd",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/configs/aws.rs",
+              "quote": "pub expiration_symbol: &'a str,",
+              "line": 47,
+              "source_sha256": "0d61d8f42fe96e609affffb3f8c08550d5a25e13b326311f4d9e2309c6b87df3",
+              "relevance": "Configuration defaults read by the behavior; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "starship:search-batch-validation-2",
+          "category": "implementation",
+          "query": "How does the shell setup command first print a small bootstrap snippet and then the full integration script with the executable's path substituted in?",
+          "evidence": [
+            {
+              "file": "src/init/mod.rs",
+              "quote": "pub fn init_main(shell_name: &str) -> io::Result<()> {",
+              "line": 209,
+              "source_sha256": "2567047886b67fe0488d6e1a46501ca441df6fa0bde0cb76521cf6b89a3f50c0",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/main.rs",
+              "quote": "init::init_main(&shell).expect(\"can't init_main\");",
+              "line": 204,
+              "source_sha256": "6fe8c04ee94bb5b7627d9e07229fa28c3c8a69f6ab05bc920a2d25c0e1188867",
+              "relevance": "Call site that wires the behavior into the user-facing path; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "starship:search-batch-validation-3",
+          "category": "control",
+          "query": "Where is get_aliased_name defined and which configuration feeds it?",
+          "evidence": [
+            {
+              "file": "src/modules/kubernetes.rs",
+              "quote": "fn get_aliased_name<'a>(",
+              "line": 55,
+              "source_sha256": "3c8896c60348bb2c28e828abcdce9948319ce29886a7b8066f26d7a52ee039b0",
+              "relevance": "Definition of the named symbol; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "src/configs/kubernetes.rs",
+              "quote": "pub struct KubernetesContextConfig<'a> {",
+              "line": 50,
+              "source_sha256": "03f58eac5e3e8b13d570f0ac9d4f3f703111ada05fdb931341425e2a15963895",
+              "relevance": "Configuration defaults read by the behavior; non-exhaustive source-bound judgment."
+            }
+          ],
+          "control": "exact_symbol"
+        }
+      ]
+    },
+    {
+      "pack": "gh-cli",
+      "commit": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+      "queries": [
+        {
+          "id": "gh-cli:search-batch-validation-1",
+          "category": "implementation",
+          "query": "When the raw API request command is asked to fetch every page, how does it find the next page from REST response headers and from a GraphQL cursor?",
+          "evidence": [
+            {
+              "file": "pkg/cmd/api/pagination.go",
+              "quote": "func findNextPage(resp *http.Response) (string, bool) {",
+              "line": 17,
+              "source_sha256": "a038b6601a34e09c3db2da22a23d8a051d12170b713e797884f929560be09e53",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pkg/cmd/api/api.go",
+              "quote": "requestPath, hasNextPage = findNextPage(resp)",
+              "line": 424,
+              "source_sha256": "c3355b64349dfba15ee0ed213d615323da67d14c2bd03095ddff4b8efeaa3a25",
+              "relevance": "Call site that wires the behavior into the user-facing path; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:search-batch-validation-2",
+          "category": "implementation",
+          "query": "When installing a third-party add-on command from a repository, how does the tool choose between downloading a prebuilt binary for this platform and cloning a script?",
+          "evidence": [
+            {
+              "file": "pkg/cmd/extension/manager.go",
+              "quote": "func (m *Manager) Install(repo ghrepo.Interface, target string) error {",
+              "line": 249,
+              "source_sha256": "08d7a5999720cc90ed79d25689e8af3f7d9624341f3ed61eb2df0d8fe1e98437",
+              "relevance": "Primary implementation of the asked behavior; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pkg/cmd/extension/http.go",
+              "quote": "func hasScript(httpClient *http.Client, repo ghrepo.Interface) (bool, error) {",
+              "line": 39,
+              "source_sha256": "50a84c8adad8d1529a33403f1dcb153cabfdf57fb7ea7c42f88459cec6da1ef4",
+              "relevance": "Supporting implementation a developer needs to answer the question; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pkg/cmd/extension/command.go",
+              "quote": "err = m.Install(repo, pinFlag)",
+              "line": 390,
+              "source_sha256": "dab042cdc1cd5a3afa75dd028ecf43ec81a38f666fe7d00bd12251b6aaedf41a",
+              "relevance": "Call site that wires the behavior into the user-facing path; non-exhaustive source-bound judgment."
+            }
+          ]
+        },
+        {
+          "id": "gh-cli:search-batch-validation-3",
+          "category": "control",
+          "query": "Where is GistIDFromURL defined and where is it tested?",
+          "evidence": [
+            {
+              "file": "pkg/cmd/gist/shared/shared.go",
+              "quote": "func GistIDFromURL(gistURL string) (string, error) {",
+              "line": 80,
+              "source_sha256": "e19dad9f188f30a42f0f7ada791c7642da40e920626a7bd918cced26482525fe",
+              "relevance": "Definition of the named symbol; non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "pkg/cmd/gist/shared/shared_test.go",
+              "quote": "func Test_GetGistIDFromURL(t *testing.T) {",
+              "line": 15,
+              "source_sha256": "a1d765d211eb27a111d3f45c9481c62c6bf094f131049fb5985218f4f8cdead1",
+              "relevance": "Test exercising the asked behavior; non-exhaustive source-bound judgment."
+            }
+          ],
+          "control": "exact_symbol"
+        }
+      ]
+    }
+  ]
+}
