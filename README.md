@@ -44,6 +44,8 @@ source, or refresh the original request. Local full-profile MCP offers
 `change_context` and `trace_flow`; the daily list stays unchanged.
 [Version 0.1.8](docs/intelligence-0.1.8.md) adds exact file/symbol selection and
 bounded changed-class summaries; use `--class-mode expand` for class-wide callers.
+[Version 0.1.9](docs/intelligence-0.1.9.md) keeps Python docstrings and parameter
+types, and lists impact results nearest first.
 
 ## Teams and remote agents
 

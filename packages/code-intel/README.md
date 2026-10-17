@@ -28,7 +28,8 @@ Version 0.1.7 also provides `changes` and `trace` commands: investigate a diff,
 follow source-backed caller paths, export JSON/Markdown, and check or refresh saved
 evidence. MCP equivalents `change_context` and `trace_flow` are local full-profile
 tools. Version 0.1.8 adds exact file/symbol selection and bounded changed-class
-summaries, with `--class-mode expand` for class-wide callers. See the [change investigation guide](https://github.com/eren23/attocode/blob/main/docs/guides/change-investigation.md).
+summaries, with `--class-mode expand` for class-wide callers. Version 0.1.9 keeps
+Python docstrings and parameter types, and lists impact results nearest first. See the [change investigation guide](https://github.com/eren23/attocode/blob/main/docs/guides/change-investigation.md).
 
 The agent sees 16 tools (the `daily` profile):
 
