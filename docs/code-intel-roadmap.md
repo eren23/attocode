@@ -1,37 +1,24 @@
 # Code Intelligence Roadmap
 
-## Current priorities — 2026-10-16
+## Current priorities — 2026-10-17
 
-The standalone package is `attocode-code-intel` **0.1.6**; the root agent has a
-separate version (`0.2.30` in this checkout). Read the
-[workstream](intelligence-workstream.md) for release and experiment evidence,
-the [quality guide](intelligence-quality.md) for bounded checks, and the
+The standalone package is `attocode-code-intel` **0.1.8**. The root agent was
+retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
+tag. Read the [workstream](intelligence-workstream.md) for release and experiment
+evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
 [generated catalog](intelligence-tools.md) for the current tool surface.
 The phase plan below is retained history, not a release schedule or proof that
 an unchecked feature shipped when its old target version was reached.
 
 | Priority | Action | Completion evidence / limits |
 | --- | --- | --- |
-| Merged #214 | Repair service-mode v2 navigation responses and expose persisted caller names | Real SQL → HTTP checks for schema, branch selection, declaration inclusion, ambiguity, result bounds and local/DB caller fields. PostgreSQL migration/product checks passed on Python 3.12 and 3.13. |
-| Merged #214 | Reject malformed body-file development decisions | Exact named boolean gates and complete counts for both arms; negative controls. Historical results and consumed questions stay unchanged. |
-| Merged #215 | Repair DB indexing idempotence and dependency metrics | Reproduced duplicate references and a hub score of 0.60 instead of 0.70. Atomic reference replacement, branch-scoped keyed normalization, and SQL/HTTP regressions cover repair, rollback, repeated/shared-content indexing and graph limits. PostgreSQL writer serialization has a dedicated CI control. |
-| Merged #216 | Keep incremental callers and impact queries current | Python/JS/TS SQL/HTTP edit, rename, delete, branch and fresh-process recovery controls. Per-file rollback and current-path import reachability; existing dependency caches in other endpoints remain separate. |
+| Released 0.1.7 and 0.1.8 | Change investigation, focused change reports, and the database repairs from #214–#216 | See the [0.1.7](intelligence-0.1.7.md) and [0.1.8](intelligence-0.1.8.md) release notes. Change reports are local full-profile operations; daily and lean defaults are unchanged. |
+| In progress | Dogfood fixes and a fresh search batch | Python docstrings and parameter types on the tree-sitter path, impact results in depth order, and prose words removed from search terms. A frozen 12+12 question comparison on pandas, prisma, starship and gh-cli measures the fixes and one retrieval candidate. |
 | Next performance work | Find a mechanism that improves cold Cockroach headroom | Last real target: 167.970/180 seconds. Retain byte-equivalent index controls, then seek a bounded end-to-end improvement; the two tokenization prototypes were rejected. Any new cloud run needs a new approved scope. |
 | Deeper search pages | Fixed delivery; relevance remains open | [Fresh same-pool comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-deep-page-diversity.md): distinct files precede repeated chunks even when the pool cannot fill a unique-file page. One fresh page improves 37→86 distinct files; labeled coverage is unchanged (all labels 5/6 at 24, 6/6 at 96). Both six-question sets are consumed; future relevance changes need new judgments. |
 | First-page relevance | Prefix stripping rejected; current behavior retained | [One frozen candidate](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-navigation-prefix.md): 11/12 development label misses at five already existed in the pool. Stripping navigation prefixes regressed development and left fresh coverage unchanged at 19/24 labeled pairs. Both gates failed; no product change. |
 | Reliability | Continue diagnosing intermittent Rust readiness | Shared document lifecycle is fixed, but the evidence follow-up reproduced Rust failures in initial selected-definition and post-edit reference checks. Root cause remains unproven. Bounded protocol traces now accompany the unchanged real-server gate. |
 | Deferred | Structural-rule accuracy corpus | Add positive and negative ground truth for structural rules with a pinned local executor; report per-rule confusion counts. Existing positives alone are not accuracy evidence. |
-
-Validation completed overnight into October 16: the bounded local gate passed
-681 tests (8 explicit skips), lint, scale and lifecycle. It includes 20 new
-SQL/HTTP tests and 13 additional development-choice cases. The SQL tests ran
-with SQLite locally; the existing product CI runs them against PostgreSQL.
-A wall-clock-interrupted attempt remains recorded as incomplete.
-
-The first two rows merged in PR #214 after all required CI passed; the subsequent
-DB correctness repairs are described above. These changes remain unreleased. No new cloud rental,
-model run, model download, global tool upgrade or host MCP restart is part of
-this cleanup. Keep R7's reviewed STOP and protected study/cache directories.
 
 ## Historical Phase 1 snapshot (v0.2.23)
 

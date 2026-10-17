@@ -4,7 +4,10 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Latest batch, 2026-10-16:** [explicit test search and transient precision recovery](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-search-recovery-batch.md).
+**Current release:** `attocode-code-intel` 0.1.8 (2026-10-17). See the
+[0.1.8 release notes](intelligence-0.1.8.md).
+
+**Latest search batch, 2026-10-16:** [explicit test search and transient precision recovery](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-search-recovery-batch.md).
 One frozen test-intent partition improved labeled hits at five from 3/8 to 6/8,
 with four unchanged production controls. Transient precision replies retry within
 the existing deadline, and partial caches expire. Six fresh real Rust fixtures
@@ -73,7 +76,10 @@ reducing query time from 49–55 ms to about 7 ms. This is component evidence,
 not a new Cockroach timing result. These follow-up repairs merged in PR #210 and do not change the published
 0.1.6 artifact.
 
-## Proposed next package: intelligence-only repository
+## Completed: intelligence-only repository (PR #222)
+
+**Status:** Implemented on 2026-10-16 in PR #222. The agent is preserved at the
+`agent-archive-2026-10-16` tag. The text below is the original proposal, kept as history.
 
 The requested next direction is to retire the agent after this validation batch.
 This is a transition proposal, not authorization to delete code or publish a new
