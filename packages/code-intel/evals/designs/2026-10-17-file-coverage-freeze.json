@@ -1,0 +1,49 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-17T18:12:15.286152+00:00",
+ "branch": "intel/file-coverage-batch",
+ "baseline_commit": "3085a3bdcfc6ef28c566972fadc8f3a77a4fa922",
+ "questions": {
+  "development": "dd163bb1ea74661a085f09751f8c647803283a3ecc6ab239a71c332fd1a62903",
+  "validation": "ec02aae5446771045cc8135f6c408b7c7ab233ac9e587c2c1e9fce731609567b"
+ },
+ "development_also_uses": [
+  "2026-10-17-search-batch-development.json",
+  "2026-10-17-search-batch-validation.json (consumed in the previous batch; development only)"
+ ],
+ "arms": {
+  "B": "3085a3b (main)",
+  "T": "B + test intent recognizes test, tests, tested and testing",
+  "C2": "B + file-level concept coverage: in default broad delivery, files whose hits together match two or more cleaned concepts go first; queries with an exact identifier are skipped; the cleaned filler list is used only for this ordering",
+  "TC": "B + T + C2"
+ },
+ "initial_patches": {
+  "T": "19af00d89ba3fd542fe538349cbce1f0e00162f3434c0e66bf0f995de8dd9702",
+  "C2": "2bf0b4a059319d48a3327be7419a30aeda798fd4e660e8b8fda87085bbb139e8",
+  "TC": "ba7f9ba91f4338e9fa4062852822b1bc8adf85cc7a5235db854a8c8627492abc"
+ },
+ "tuning": "Only C2 may change before validation (coverage threshold and filler list), using development data only. The final C2/TC patches are hash-bound in a candidate record before validation runs. T is fixed now.",
+ "c2_acceptance_vs_B": [
+  "compare() passes on new development and validation: no aggregate file or visible loss at 5, 24 or scoped; inspection no net loss; p95 <= max(0.1 s, 1.5 x B)",
+  "zero individual judged-file or visible-quote losses in both new splits, on the 24 previous-batch questions and on the 40 earlier regression questions",
+  "development: >= +2 first-five file judgments across >= 2 questions in >= 2 packs; validation: >= +1 first-five file judgment",
+  "exact-symbol control responses identical to B on every page",
+  "candidate generation identical to B on every page (C2 changes only delivery order)",
+  "ranking gate: C2 vs same-environment B within net Acc@5 loss 2 and MRR@5 drop 0.01",
+  "a unit fixture where a file splits two concepts over two chunks fails on B and passes on C2"
+ ],
+ "t_acceptance_vs_B": [
+  "test-intent questions (both new splits): primary test-file label at 5 gains >= +2 in total, with zero individual judged-file or visible-quote losses",
+  "every question that does not contain test, tests, tested or testing has identical delivery and generation (negative control)",
+  "ranking gate: T vs same-environment B within net Acc@5 loss 2 and MRR@5 drop 0.01"
+ ],
+ "shipping": "Ship each change that passes its own rules. If both pass, TC must also show zero individual losses vs B on every set. A change that fails ships nothing; the rejection is published with its diagnosis.",
+ "validation": "Runs once, on B, T, C2 and TC, after the candidate record is written. No tuning after validation results are opened.",
+ "bounds": {
+  "per_run_seconds": 180,
+  "max_disk_bytes": 536870912,
+  "max_rss_bytes": 1610612736,
+  "sources": "cached pinned packs only; QUALITY_ALLOW_DOWNLOADS unset; no models, downloads or cloud"
+ },
+ "scope": "Implementer-authored, source-bound, non-exhaustive labels; not independent user or agent outcomes."
+}

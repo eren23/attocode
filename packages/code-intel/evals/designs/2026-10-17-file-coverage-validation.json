@@ -1,0 +1,394 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-17T18:11:47.188559+00:00",
+ "split": "validation",
+ "baseline_commit": "3085a3bdcfc6ef28c566972fadc8f3a77a4fa922",
+ "budget": 2000,
+ "scope": "Fresh questions for four pinned packs (rails, SwiftFormat, spdlog, ggplot2), written by reading source only, before any search ran on these packs. Per pack and split: two natural-language implementation questions without exact identifiers, one exact-symbol control and one test-intent question that uses the word 'tested'. Subsystems were declared before writing. Labels are implementer-authored (drafted by source-reading subagents, then reviewed), source-bound and non-exhaustive; the primary file is first and is the scoped-page file_filter. They are not independent user or agent outcomes.",
+ "acceptance": {
+  "defined_in": "2026-10-17-file-coverage-freeze.json",
+  "validation": "Held-out until the candidate is frozen; no product tuning after validation results are opened."
+ },
+ "subsystems": {
+  "rails": [
+   "activerecord/lib/active_record/encryption.rb",
+   "activerecord/lib/active_record/encryption/",
+   "activerecord/test/cases/encryption/",
+   "actionpack/lib/action_dispatch/middleware/",
+   "actionpack/test/dispatch/"
+  ],
+  "SwiftFormat": [
+   "Sources/Rules/",
+   "Tests/Rules/",
+   "Sources/Inference.swift",
+   "Tests/InferenceTests.swift",
+   "Sources/Singularize.swift",
+   "Tests/SingularizeTests.swift"
+  ],
+  "spdlog": [
+   "include/spdlog/pattern_formatter.h",
+   "include/spdlog/pattern_formatter-inl.h",
+   "include/spdlog/async.h",
+   "include/spdlog/async_logger.h",
+   "include/spdlog/async_logger-inl.h",
+   "include/spdlog/details/ (except file_helper)",
+   "tests/test_pattern_formatter.cpp",
+   "tests/test_async.cpp",
+   "tests/test_backtrace.cpp",
+   "tests/test_circular_q.cpp",
+   "tests/test_mpmc_q.cpp",
+   "tests/test_registry.cpp"
+  ],
+  "ggplot2": [
+   "R/stat-*.R",
+   "R/position-*.R",
+   "tests/testthat/test-stat-*.R",
+   "tests/testthat/test-position*.R"
+  ]
+ },
+ "repositories": [
+  {
+   "pack": "rails",
+   "commit": "e72eb4c20b6bb5bdc7f63a4477992209585a1fa9",
+   "queries": [
+    {
+     "id": "rails:file-coverage-validation-impl-1",
+     "category": "implementation",
+     "query": "How does reading a protected column still work after the protection settings were changed, falling back to older configurations and tolerating plain stored text?",
+     "evidence": [
+      {
+       "file": "activerecord/lib/active_record/encryption/encrypted_attribute_type.rb",
+       "quote": "def try_to_deserialize_with_previous_encrypted_types(value)",
+       "line": 106,
+       "source_sha256": "52147975a6d0e002df09f4c75f6f2e3e30c8797d19fc74031af48abfdc08af75",
+       "relevance": "tries older types in turn"
+      },
+      {
+       "file": "activerecord/lib/active_record/encryption/scheme.rb",
+       "quote": "def initialize(key_provider: nil, key: nil, deterministic: nil",
+       "line": 13,
+       "source_sha256": "071266e326f435cbdd1312f36c2f0eaddc9a256ddeee4086e66a32c27c6b4c78",
+       "relevance": "scheme holds the older configurations"
+      }
+     ]
+    },
+    {
+     "id": "rails:file-coverage-validation-impl-2",
+     "category": "implementation",
+     "query": "How does the web stack send plain unencrypted requests to the secure address, add the browser transport-security header, and mark outgoing cookies as secure?",
+     "evidence": [
+      {
+       "file": "actionpack/lib/action_dispatch/middleware/ssl.rb",
+       "quote": "def redirect_to_https(request)",
+       "line": 153,
+       "source_sha256": "7fbf60c4a6ea39e5439b9dba5ad93fd8e83aa236beb8db3f4f2860e9148de988",
+       "relevance": "redirects insecure requests"
+      }
+     ]
+    },
+    {
+     "id": "rails:file-coverage-validation-control",
+     "category": "control",
+     "query": "Where is derive_key_from defined and where is it called?",
+     "evidence": [
+      {
+       "file": "activerecord/lib/active_record/encryption/key_generator.rb",
+       "quote": "def derive_key_from(password, length: key_length)",
+       "line": 38,
+       "source_sha256": "4fb61c50ab53a83ae106c86f5d53df574ce2eabc91fea0b80d2c0036592b2473",
+       "relevance": "definition"
+      },
+      {
+       "file": "activerecord/lib/active_record/encryption/key.rb",
+       "quote": "ActiveRecord::Encryption.key_generator.derive_key_from(password)",
+       "line": 19,
+       "source_sha256": "8d299c3990ec8891fa3795f7b5c43be52ef989cbbe9683f582a1075233ebdf2e",
+       "relevance": "call site"
+      }
+     ],
+     "control": "exact_symbol"
+    },
+    {
+     "id": "rails:file-coverage-validation-test",
+     "category": "test_intent",
+     "query": "Where is marking of cookies as secure on encrypted connections tested?",
+     "evidence": [
+      {
+       "file": "actionpack/test/dispatch/ssl_test.rb",
+       "quote": "def test_flag_cookies_as_secure_at_end_of_line",
+       "line": 196,
+       "source_sha256": "e68092296247a765c0b438aac146432c7a95fff35efcb91ec5b1a9839b48d837",
+       "relevance": "tests secure cookie flag"
+      },
+      {
+       "file": "actionpack/lib/action_dispatch/middleware/ssl.rb",
+       "quote": "def flag_cookies_as_secure!(headers)",
+       "line": 129,
+       "source_sha256": "7fbf60c4a6ea39e5439b9dba5ad93fd8e83aa236beb8db3f4f2860e9148de988",
+       "relevance": "implementation"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "SwiftFormat",
+   "commit": "c8e50ff2cfc2eab46246c072a9ae25ab656c6ec3",
+   "queries": [
+    {
+     "id": "SwiftFormat:file-coverage-validation-impl-1",
+     "category": "implementation",
+     "query": "How does the formatter derive a singular name from a plural noun, handling irregular and uncountable words, when choosing a name for a loop element?",
+     "evidence": [
+      {
+       "file": "Sources/Singularize.swift",
+       "quote": "func singularized() -> String? {",
+       "line": 81,
+       "source_sha256": "c3603e0d500c10bc139dca224006c3e7069047e092327dad1c3253d818986cfa",
+       "relevance": "Applies regex rules to singularize a word."
+      },
+      {
+       "file": "Sources/Rules/PreferForLoop.swift",
+       "quote": "if var identifier = forLoopSubjectIdentifier?.singularized(), !identifier.isSwiftKeyword {",
+       "line": 144,
+       "source_sha256": "1caaa2ddc47ad48d221d409eb6a772f1101995fd1b146965aea7a988812c4133",
+       "relevance": "Uses singular form as loop variable name."
+      }
+     ]
+    },
+    {
+     "id": "SwiftFormat:file-coverage-validation-impl-2",
+     "category": "implementation",
+     "query": "How are repeated module imports detected and removed, including the case where one repeated import carries extra attributes that the other lacks?",
+     "evidence": [
+      {
+       "file": "Sources/Rules/DuplicateImports.swift",
+       "quote": "if Set(range.attributes).isSubset(of: range2.attributes) {",
+       "line": 23,
+       "source_sha256": "962a6d998ffb1855ec7df3ce93582194e50fffb1bc7aa1366f7ef1151ddbd3d7",
+       "relevance": "Attribute subset check decides which import to drop."
+      }
+     ]
+    },
+    {
+     "id": "SwiftFormat:file-coverage-validation-control",
+     "category": "control",
+     "query": "Where is inferFormatOptions defined and where is it called?",
+     "evidence": [
+      {
+       "file": "Sources/Inference.swift",
+       "quote": "public func inferFormatOptions(from tokens: [Token]) -> FormatOptions {",
+       "line": 35,
+       "source_sha256": "12946bec9092b338ac8a0a8784d5106a2c2debabfb0dadab19a9a4608fb66335",
+       "relevance": "Definition of inferFormatOptions."
+      },
+      {
+       "file": "Tests/InferenceTests.swift",
+       "quote": "let options = inferFormatOptions(from: tokenize(input))",
+       "line": 49,
+       "source_sha256": "87f443ca127d98367f0127f4f69362e21967e36cd798315c83187eda05acd01d",
+       "relevance": "Test calls the public entry point (first of several identical call lines)."
+      }
+     ],
+     "control": "exact_symbol"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-validation-test",
+     "category": "test_intent",
+     "query": "Where is keeping the original capitalization when converting a plural word to singular tested?",
+     "evidence": [
+      {
+       "file": "Tests/SingularizeTests.swift",
+       "quote": "func testPreserveCase() {",
+       "line": 164,
+       "source_sha256": "d2be7e8da42b5b903c16f7fa6f0113abe543720f4957c51f5deca418e5378d1b",
+       "relevance": "Test of case preservation."
+      },
+      {
+       "file": "Sources/Singularize.swift",
+       "quote": "func singularized() -> String? {",
+       "line": 81,
+       "source_sha256": "c3603e0d500c10bc139dca224006c3e7069047e092327dad1c3253d818986cfa",
+       "relevance": "Implementation of singularization."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "spdlog",
+   "commit": "0f7562a0f9273cfc71fddc6ae52ebff7a490fa04",
+   "queries": [
+    {
+     "id": "spdlog:file-coverage-validation-impl-1",
+     "category": "implementation",
+     "query": "How does the formatter cut a field down to the requested width when the text is longer than the allowed padding size?",
+     "evidence": [
+      {
+       "file": "include/spdlog/pattern_formatter-inl.h",
+       "quote": "} else if (padinfo_.truncate_) {",
+       "line": 71,
+       "source_sha256": "7ee9d22a946e9eb8d8e67d17c6661d9054e6914007c1bade9de4ef7d91add542",
+       "relevance": "resizes destination buffer to truncate overlong field"
+      },
+      {
+       "file": "include/spdlog/pattern_formatter.h",
+       "quote": "struct padding_info {",
+       "line": 23,
+       "source_sha256": "5e3dd73d840a0c10b0d5cae3b5da28dfd3c20286180641b759db5d3dbc41f585",
+       "relevance": "describes width, side and truncation"
+      }
+     ]
+    },
+    {
+     "id": "spdlog:file-coverage-validation-impl-2",
+     "category": "implementation",
+     "query": "How does the background worker queue behave when it is full and a new log record arrives, depending on the chosen policy for blocking, dropping or discarding the oldest?",
+     "evidence": [
+      {
+       "file": "include/spdlog/details/thread_pool-inl.h",
+       "quote": "void SPDLOG_INLINE thread_pool::post_async_msg_(async_msg &&new_msg,",
+       "line": 79,
+       "source_sha256": "b7042c70da4d1c0398ddc74fc12bb5eec746647c18857ace1c6f425b5cf9435e",
+       "relevance": "dispatches by overflow policy"
+      },
+      {
+       "file": "include/spdlog/details/mpmc_blocking_q.h",
+       "quote": "enqueue_nowait(..) - enqueue immediately. overruns oldest message if no",
+       "line": 8,
+       "source_sha256": "66ed3083a98e5cc142aa8d9dc18ce8de5ff32f82382386546f6ff302a01fc6c6",
+       "relevance": "overruns oldest item when no room"
+      }
+     ]
+    },
+    {
+     "id": "spdlog:file-coverage-validation-control",
+     "category": "control",
+     "query": "Where is circular_q defined and where is it called?",
+     "evidence": [
+      {
+       "file": "include/spdlog/details/circular_q.h",
+       "quote": "explicit circular_q(size_t max_items)",
+       "line": 28,
+       "source_sha256": "0bc4025c81425023f4d58711d6aa6231a55ee606bb1fc88f4fb3e655e807e265",
+       "relevance": "class definition"
+      },
+      {
+       "file": "include/spdlog/details/mpmc_blocking_q.h",
+       "quote": "spdlog::details::circular_q<T> q_;",
+       "line": 173,
+       "source_sha256": "66ed3083a98e5cc142aa8d9dc18ce8de5ff32f82382386546f6ff302a01fc6c6",
+       "relevance": "member using the queue"
+      }
+     ],
+     "control": "exact_symbol"
+    },
+    {
+     "id": "spdlog:file-coverage-validation-test",
+     "category": "test_intent",
+     "query": "Where is replaying a buffer of recent debug messages on demand, including when nothing was stored, tested?",
+     "evidence": [
+      {
+       "file": "tests/test_backtrace.cpp",
+       "quote": "TEST_CASE(\"bactrace-empty\", \"[bactrace]\") {",
+       "line": 31,
+       "source_sha256": "e594b74829ab7337e5b6f94afbf87bf6eb67a603e693edc7dea006f32d937533",
+       "relevance": "empty-buffer test"
+      },
+      {
+       "file": "include/spdlog/details/backtracer-inl.h",
+       "quote": "SPDLOG_INLINE void backtracer::foreach_pop(",
+       "line": 54,
+       "source_sha256": "9b2795b78571295776003345d7e2b9f264fa71fabb7a15cda7b049464a2d24c3",
+       "relevance": "implementation draining stored messages"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "ggplot2",
+   "commit": "6f1d98842de0489222c04bff64b3596b796d492d",
+   "queries": [
+    {
+     "id": "ggplot2:file-coverage-validation-impl-1",
+     "category": "implementation",
+     "query": "How does random displacement of points get applied so that infinite coordinates stay unmoved and results can be reproduced with a fixed random seed?",
+     "evidence": [
+      {
+       "file": "R/position-jitter.R",
+       "quote": "compute_jitter <- function(data, width = NULL, height = NULL, seed = NA) {",
+       "line": 82,
+       "source_sha256": "c9fe771d5a3c8c2451c70f55f4647403abc905b2e862831ea28a3d038fd3db93",
+       "relevance": "Computes displacement and zeroes it for infinite values"
+      },
+      {
+       "file": "R/position-jitterdodge.R",
+       "quote": "compute_jitter(data, params$jitter.width, params$jitter.height, params$seed)",
+       "line": 95,
+       "source_sha256": "841a1dffa0aeba92ff830940cea63657267843ff5fbe53de2bf6ef4cec4d4bb6",
+       "relevance": "Reuses the displacement inside a combined position"
+      }
+     ]
+    },
+    {
+     "id": "ggplot2:file-coverage-validation-impl-2",
+     "category": "implementation",
+     "query": "How is a cumulative distribution curve computed when weights are given, and what extra points are added at the ends of the curve by default?",
+     "evidence": [
+      {
+       "file": "R/stat-ecdf.R",
+       "quote": "wecdf <- function(x, weights = NULL) {",
+       "line": 116,
+       "source_sha256": "fe3f90f73bb5578585c17c232843e4c7ad4c7490efd482d3c5616f7e4d887d5e",
+       "relevance": "Weighted cumulative distribution function"
+      }
+     ]
+    },
+    {
+     "id": "ggplot2:file-coverage-validation-control",
+     "category": "control",
+     "query": "Where is pos_dodge defined and where is it called?",
+     "evidence": [
+      {
+       "file": "R/position-dodge.R",
+       "quote": "pos_dodge <- function(df, width, n = NULL) {",
+       "line": 183,
+       "source_sha256": "f8682ef8a142427b5a62c9972a1d38613abdc92c922914c2282f74a295ebbf9a",
+       "relevance": "Definition of the dodge strategy"
+      },
+      {
+       "file": "R/position-jitterdodge.R",
+       "quote": "strategy = pos_dodge,",
+       "line": 89,
+       "source_sha256": "841a1dffa0aeba92ff830940cea63657267843ff5fbe53de2bf6ef4cec4d4bb6",
+       "relevance": "Passes the strategy in a combined position"
+      }
+     ],
+     "control": "exact_symbol"
+    },
+    {
+     "id": "ggplot2:file-coverage-validation-test",
+     "category": "test_intent",
+     "query": "Where is the handling of user-supplied histogram bin boundaries under an axis transformation tested?",
+     "evidence": [
+      {
+       "file": "tests/testthat/test-stat-bin.R",
+       "quote": "test_that(\"breaks are transformed by the scale\", {",
+       "line": 80,
+       "source_sha256": "8fb1b5e11e2e509d48ba5c4aaa7be26e72bdbd04da7a962ec641a25f9d0e586d",
+       "relevance": "Test of break transformation"
+      },
+      {
+       "file": "R/stat-bin.R",
+       "quote": "breaks = breaks, binwidth = binwidth, bins = bins,",
+       "line": 50,
+       "source_sha256": "3b578df41b9a4714a9982ef7e2bc536fc705f0b84ee965d1b92071d7028d2067",
+       "relevance": "Passes breaks and scale to the bin computation"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
