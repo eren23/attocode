@@ -16,7 +16,9 @@ The main entry point is ``ts_parse_file()`` which returns a ``FileAST``
 
 from __future__ import annotations
 
+import ast as _pyast
 import functools
+import inspect
 import logging
 import re
 import warnings
@@ -509,8 +511,8 @@ def _find_name(node, source_bytes: bytes) -> str:
     return ""
 
 
-def _find_parameters(node, source_bytes: bytes) -> list[str]:
-    """Extract parameter names from a function node."""
+def _find_parameters(node, source_bytes: bytes, types: dict[str, str] | None = None) -> list[str]:
+    """Extract parameter names from a function node; fill ``types`` with annotated ones."""
     params_node = node.child_by_field_name("parameters")
     if params_node is None:
         # Some languages use "formal_parameters"
@@ -537,6 +539,10 @@ def _find_parameters(node, source_bytes: bytes) -> list[str]:
                 name = name.lstrip("*").lstrip("&")
             if name and name not in ("self", "cls", ",", "(", ")"):
                 param_names.append(name)
+                annotation = child.child_by_field_name("type")
+                if types is not None and annotation is not None:
+                    # TypeScript wraps the type in ``: T``; Python and Java do not.
+                    types[name] = _node_text(annotation, source_bytes).lstrip(":").strip()
     return param_names
 
 
@@ -565,6 +571,20 @@ def _find_decorators(node, source_bytes: bytes) -> list[str]:
         decorators.insert(0, text)
         prev = prev.prev_named_sibling
     return decorators
+
+
+def _find_python_docstring(node, source_bytes: bytes) -> str:
+    """Return the cleaned docstring of a Python function or class body."""
+    body = node.child_by_field_name("body")
+    first = next((c for c in body.named_children if c.type != "comment"), None) if body else None
+    if (first is None or first.type != "expression_statement" or first.named_child_count != 1
+            or first.named_children[0].type != "string"):
+        return ""
+    try:
+        value = _pyast.literal_eval(_node_text(first.named_children[0], source_bytes))
+    except (ValueError, SyntaxError):  # f-strings are not docstrings
+        return ""
+    return inspect.cleandoc(value) if isinstance(value, str) else ""
 
 
 def _find_go_doc_comment(node, source_bytes: bytes) -> str:
@@ -1446,7 +1466,8 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
             if not name:
                 return
 
-            params = _find_parameters(node, source_bytes)
+            param_types: dict[str, str] = {}
+            params = _find_parameters(node, source_bytes, param_types)
             ret_type = _find_return_type(node, source_bytes)
             decorators = _find_decorators(node, source_bytes)
             is_async_fn = _is_async(node, source_bytes)
@@ -1463,6 +1484,8 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
             docstring = ""
             if language == "go":
                 docstring = _find_go_doc_comment(node, source_bytes)
+            elif language == "python":
+                docstring = _find_python_docstring(node, source_bytes)
 
             fn_data = {
                 "name": name,
@@ -1480,6 +1503,8 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
             }
             if docstring:
                 fn_data["docstring"] = docstring
+            if param_types:
+                fn_data["param_types"] = param_types
 
             if effective_parent:
                 # Will be added as method to the class
@@ -1569,6 +1594,10 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 # Go: extract doc comment for type declarations
                 if language == "go":
                     docstring = _find_go_doc_comment(node, source_bytes)
+                    if docstring:
+                        cls_data["docstring"] = docstring
+                elif language == "python":
+                    docstring = _find_python_docstring(node, source_bytes)
                     if docstring:
                         cls_data["docstring"] = docstring
 

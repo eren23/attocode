@@ -4086,3 +4086,14 @@ class TestCommunityDetection:
         for c in communities:
             all_nodes.update(c)
         assert all_nodes == all_files
+
+
+def test_conventions_report_counts_tree_sitter_docstrings_and_param_types():
+    from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+    from attocode_intel.helpers import _analyze_conventions, _format_conventions
+
+    code = 'def pack(item: str, count: int) -> str:\n    """Wrap."""\n    return item\n'
+    stats = _analyze_conventions({"box.py": parse_file("box.py", content=code)}, ["box.py"])
+    report = _format_conventions(stats)
+    assert "100% parameters have type annotations" in report
+    assert "Docstrings: 100% of functions" in report

@@ -1112,8 +1112,9 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
     functions: list[FunctionDef] = []
     for fn in result.get("functions", []):
         params = fn.get("parameters", [])
+        types = fn.get("param_types", {})
         param_defs = [
-            ParamDef(name=p) if isinstance(p, str) else p
+            ParamDef(name=p, type_annotation=types.get(p, "")) if isinstance(p, str) else p
             for p in params
         ]
         functions.append(FunctionDef(
@@ -1137,8 +1138,9 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
         methods: list[FunctionDef] = []
         for m in cls.get("methods", []):
             m_params = m.get("parameters", [])
+            m_types = m.get("param_types", {})
             m_param_defs = [
-                ParamDef(name=p) if isinstance(p, str) else p
+                ParamDef(name=p, type_annotation=m_types.get(p, "")) if isinstance(p, str) else p
                 for p in m_params
             ]
             methods.append(FunctionDef(
