@@ -115,9 +115,17 @@ def demote_tests(query: str, candidates: list[SemanticSearchResult]) -> list[Sem
     issue often says "test" about its reproduction, so only a short query shows test
     intent. The order in each group does not change.
     """
-    if re.search(r"\btests?\b", query, re.IGNORECASE) and len(terms(query)) <= 20:
+    short = len(terms(query)) <= 20
+    if short and re.search(r"\btests?\b", query, re.IGNORECASE):
         return sorted(candidates, key=lambda row: not is_test_path(row.file_path))
-    return sorted(candidates, key=lambda row: is_test_path(row.file_path))
+    ordered = sorted(candidates, key=lambda row: is_test_path(row.file_path))
+    # "Where is X tested?" asks about a behavior and its check, so it needs both
+    # files: keep the source order and show the best test hit second.
+    if short and re.search(r"\btest(?:ed|ing)\b", query, re.IGNORECASE):
+        test = next((i for i, row in enumerate(ordered) if is_test_path(row.file_path)), None)
+        if test is not None and test > 1:
+            ordered.insert(1, ordered.pop(test))
+    return ordered
 
 
 def _source_weight(path: str, test_intent: bool) -> float:
