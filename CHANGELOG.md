@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Focused change reports and class summaries
+
+- Select exact changed paths and simple/qualified symbol names in `changes` and
+  full local MCP `change_context`, before result caps. Match either rename/source
+  version, distinguish unmatched/filtered scope from omissions, and preserve the
+  selection through saved-report refresh. Caller/test scope remains cross-file.
+- Summarize changed classes by default with bounded changed-member identities;
+  retain method caller flows and offer `--class-mode expand` for class-wide
+  traversal. Report nested caller/impact/test/summary limits at the top level.
+  Daily/lean advertisements and ranking defaults remain unchanged.
+
+### Evaluated — Real change-investigation workflows
+
+- Replay three historical fixes using installed 0.1.7 CLI and full-profile MCP,
+  with source-audited caller labels and saved-report edit/stage/branch controls.
+  Preserve timings, capped/partial graphs, compressed observations and scorer
+  rejection controls. This measures selected workflow evidence, without an agent
+  outcome, native speed comparison or broad test-discovery claim; product defaults
+  and versions are unchanged.
+
 ## [Intelligence 0.1.7] - 2026-10-16
 
 ### Fixed — Trigram workspace ownership

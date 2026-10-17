@@ -1,0 +1,98 @@
+{
+  "engine_version": "0.1.7",
+  "source_commit": "7b09e28946dad07448d4f8a155fa2be8c6defb4d",
+  "scope": "Selected production/regression files replayed on complete actual parent trees; other original PR files are excluded. No input-project code execution. Not an agent study or fresh unseen tasks.",
+  "known_labels": "Source-audited selected examples, not exhaustive relevance judgments; Python stdlib AST independently locates exact preselected call sites.",
+  "limits": {
+    "scratch_bytes": 1073741824,
+    "process_tree_rss_bytes": 2147483648,
+    "seconds": 600,
+    "warm_samples_per_task": 5
+  },
+  "tasks": [
+    {
+      "id": "workspace-cache",
+      "commit": "7b09e28946dad07448d4f8a155fa2be8c6defb4d",
+      "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+      "symbol": "_get_trigram_index",
+      "patch_files": [
+        "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+        "packages/code-intel/tests/test_trigram_workspace.py"
+      ],
+      "known_callers": [
+        {
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "caller": "fast_search"
+        },
+        {
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "caller": "regex_search"
+        },
+        {
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "caller": "frecency_search"
+        }
+      ],
+      "known_tests": [
+        "packages/code-intel/tests/test_trigram_workspace.py",
+        "packages/code-intel/tests/unit/code_intel/test_remote_local_fallback.py"
+      ],
+      "parent": "c3850fde3b2c11c94eb7d2e7c7161651ff75d0f4"
+    },
+    {
+      "id": "behavioral-negation",
+      "commit": "39883fefa1f9f2f4b8a9463817a710d50e50ad13",
+      "file": "packages/code-intel/src/attocode_intel/focused_evidence.py",
+      "symbol": "scope_exclusion_terms",
+      "patch_files": [
+        "packages/code-intel/src/attocode_intel/focused_evidence.py",
+        "packages/code-intel/src/attocode_intel/query_ranking.py",
+        "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+        "packages/code-intel/tests/test_behavioral_negation.py"
+      ],
+      "known_callers": [
+        {
+          "file": "packages/code-intel/src/attocode_intel/query_ranking.py",
+          "caller": "rerank_broad_candidates"
+        },
+        {
+          "file": "packages/code-intel/src/attocode_intel/query_ranking.py",
+          "caller": "query_diagnostics"
+        },
+        {
+          "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+          "caller": "SemanticSearchManager.search_candidates"
+        }
+      ],
+      "known_tests": [
+        "packages/code-intel/tests/test_behavioral_negation.py"
+      ],
+      "parent": "6d407d656da83242e70ff8a37c03ce43893cfa54"
+    },
+    {
+      "id": "overload-source",
+      "commit": "6d407d656da83242e70ff8a37c03ce43893cfa54",
+      "file": "packages/code-intel/src/attocode_intel/search_evidence.py",
+      "symbol": "hydrate_selected_sources",
+      "patch_files": [
+        "packages/code-intel/src/attocode_intel/search_evidence.py",
+        "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+        "packages/code-intel/tests/test_chunk_identity.py"
+      ],
+      "known_callers": [
+        {
+          "file": "packages/code-intel/src/attocode_intel/gateway.py",
+          "caller": "OperationGateway._execute_sync"
+        },
+        {
+          "file": "packages/code-intel/tests/test_chunk_identity.py",
+          "caller": "test_java_overloads_fuse_individually_and_reopen_without_losing_metadata"
+        }
+      ],
+      "known_tests": [
+        "packages/code-intel/tests/test_chunk_identity.py"
+      ],
+      "parent": "54f0e80a5e60144acee53b3b0d0f7c0e899a6419"
+    }
+  ]
+}

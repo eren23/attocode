@@ -25,16 +25,22 @@ logger = logging.getLogger(__name__)
 
 @mcp.tool()
 def change_context(mode: str = "working", base: str = "", depth: int = 2,
-                   max_files: int = 24, max_symbols: int = 32) -> dict:
+                   max_files: int = 24, max_symbols: int = 32,
+                   files: list[str] | None = None, symbols: list[str] | None = None,
+                   class_mode: str = "summary") -> dict:
     """Investigate a Git diff: changed symbols, current caller paths, import impact and candidate tests.
 
     Local full profile only. Modes: working (HEAD to working tree), staged,
     unstaged (includes untracked), branch (merge-base of base to working tree).
     Removed/index-only definitions retain historical source identity, without inferred callers.
+    files: exact repository-relative paths (either rename side); symbols: exact simple/qualified
+    changed names (either source version). Filters intersect, before caps. No glob matching.
+    Classes default to a changed-member summary; class_mode="expand" collects their callers too.
     JSON includes revision/source hashes for `changes --check`; trimmed output is not a portable report.
     """
     from attocode_intel.change_investigation import change_context_data
-    return change_context_data(_get_service(), mode, base, depth, max_files, max_symbols)
+    return change_context_data(_get_service(), mode, base, depth, max_files, max_symbols,
+                               files, symbols, class_mode)
 
 
 @mcp.tool()

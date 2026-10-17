@@ -19,6 +19,12 @@ attocode-code-intel changes --mode unstaged --project .
 # Merge-base with main to working tree, including uncommitted edits
 attocode-code-intel changes --mode branch --base main --project .
 
+# Current source build: select changes before result caps apply
+attocode-code-intel changes --file src/worker.py --symbol Worker.work --project .
+
+# Current source build: include class-wide callers as well as methods
+attocode-code-intel changes --class-mode expand --project .
+
 # Static caller paths into one definition
 attocode-code-intel trace work --file src/worker.py --line 12 --depth 2 --project .
 
@@ -43,6 +49,39 @@ Exit 0 means recorded inputs match; 1 means stale; 2 means invalid input or
 collection failure. The digest is not a signature or proof of complete impact or
 test coverage. Ignored files outside the recorded evidence are not checked.
 
+## Focused reports and changed classes (Unreleased)
+
+File/symbol filters and class summaries require the current source build; they
+are not included in the published 0.1.7 package.
+
+Repeat `--file` or `--symbol` to select several exact paths/names. File and symbol
+filters intersect. Paths match either side of a Git rename; symbol names match
+either before or after source. A simple name can select several distinct owners
+or overloads; use the qualified name to narrow it. These are literal selections,
+without glob/substring matching. Directories and paths outside the repository are
+rejected. File selection precedes parsing and caps; symbol selection precedes file
+and definition caps, so an unrelated earlier file cannot use up the result slots.
+
+`selection` distinguishes intentionally excluded scope, unmatched selectors and
+matching files from `omitted` results. `no_matches` means the selected comparison
+has no matching changed definitions/files; it is not evidence that a definition
+or its callers do not exist elsewhere. No filters preserves the broad comparison.
+Filtered reports still check the complete Git snapshot: editing an excluded dirty
+file makes the saved report stale too. Refresh retains the filters and class mode;
+check/refresh reject replacement collection arguments.
+
+Changed classes default to a summary of their before/after identity and up to
+12 changed child definitions, with total/omitted counts. Changed methods retain
+their own caller graphs. Class-wide callers are explicitly not collected in this
+mode; use `--class-mode expand` for the previous traversal behavior, or a focused
+`trace` of the class. Removed/index-only classes receive no current caller
+follow-up. Summary members describe lexical child identities in the same file,
+without inferring inheritance or overload dispatch.
+
+Top-level `bounded` also reflects capped caller flows, impact reachability,
+test candidates and summary previews. `limits` names those categories; the
+existing `omitted.files` and `omitted.symbols` retain their narrower meanings.
+
 ## MCP
 
 Start a local full-profile session with
@@ -52,6 +91,11 @@ Start a local full-profile session with
   import impact and tests. Branch mode requires `base`; other modes reject it.
 - `trace_flow(symbol_name="work", file_path="src/worker.py", line=12, depth=2)`
   follows caller evidence backward into a selected definition.
+
+In the current source build, `change_context` additionally accepts exact
+`files=["src/worker.py"]`, `symbols=["Worker.work"]`, and
+`class_mode="summary"` (default) or `"expand"`. These selections do not scope
+the caller traversal: callers and tests can remain outside the selected files.
 
 Daily and lean advertised lists stay unchanged. Remote catalogs omit these
 working-tree operations. Full MCP returns structured `data` alongside its readable
@@ -91,6 +135,12 @@ or evidence files, and dirty/evidence source totals over 16 MiB. Git commands ha
 an 8 MiB output cap and 15-second deadline. A 45-second collection guard runs
 between analysis operations; it cannot preempt a parser/shared index operation.
 JSON reports are capped below 1 MiB. Reduce limits when a bound is reached.
+Filters accept at most 32 paths / 48 names, each at most 512 characters. A
+symbol-only selection can scan more changed files than it delivers: that scan
+rejects more than 256 changed files or 16 MiB of combined before/after source.
+Add file filters to reduce it. The normal full-snapshot path/byte limits still
+apply, even outside the report selection. An incomplete selection scan fails
+explicitly rather than returning an unsupported no-match result.
 Symlinks, submodules and unusual modes are not interpreted as source definitions.
 Unmerged paths and unborn repositories need resolution/an initial commit first.
 

@@ -425,3 +425,27 @@ Use `--capture-generation` with the MCP search operator to record the complete
 pre-penalty keyword/body/file candidate lists, source-text hashes and arguments.
 The [behavioral-negation trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-negation.md)
 uses those diagnostics to verify that a penalty-only change preserves retrieval.
+
+## Change-investigation workflow replays
+
+The [0.1.7 real-change replays](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-change-workflow-replays.md)
+exercise three pinned historical fixes with the installed CLI, full-profile stdio,
+saved-report refresh and source/index/branch freshness controls. The
+[manifest](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/designs/2026-10-17-change-workflow-replays.json)
+freezes selected callers/test files; the compressed observations preserve exact
+reports and timing samples. The outer run is bounded to 600 seconds, 1 GiB scratch
+and 2 GiB process-tree RSS; input projects are never executed.
+
+These are source-audited examples from a familiar Python repository, with no
+native timing comparator or agent study. Three labeled tests are already changed
+patch inputs, so their delivery is not new test discovery. Broad changed-class
+flows hit caps even when focused traces retained all labeled callers. Preserve
+these qualifications when quoting the counts or latency.
+
+The subsequent [focused-report comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-focused-change-reports.md)
+reuses those consumed labels with the installed baseline and the unreleased
+source candidate. Class-heavy combined JSON shrinks by 32% and 48%; all resolved
+edges in 45 non-class flows are identical. Class callers are intentionally not
+collected by summaries; expand mode remains available. New Python/TypeScript/Go
+fixtures cover scope and freshness, without claiming agent outcomes or new
+real-repository/language evidence beyond the stated cases.

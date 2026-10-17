@@ -50,7 +50,7 @@ def _output(path, text):
 
 
 def run(command, args):
-    parser = argparse.ArgumentParser(prog="attocode-code-intel " + command)
+    parser = argparse.ArgumentParser(prog="attocode-code-intel " + command, allow_abbrev=False)
     parser.add_argument("--project", default=".")
     parser.add_argument("--format", choices=["json", "markdown"], default="json")
     parser.add_argument("--output", help="Create a new report file (never overwrite)")
@@ -62,6 +62,12 @@ def run(command, args):
         parser.add_argument("--base", default="")
         parser.add_argument("--max-files", type=int, default=24)
         parser.add_argument("--max-symbols", type=int, default=32)
+        parser.add_argument("--file", dest="files", action="append",
+                            help="Exact changed file, repeatable; matches either side of a rename")
+        parser.add_argument("--symbol", dest="symbols", action="append",
+                            help="Exact changed simple or qualified name, repeatable")
+        parser.add_argument("--class-mode", choices=("summary", "expand"), default="summary",
+                            help="Summarize classes or also expand their caller graphs")
         saved = parser.add_mutually_exclusive_group()
         saved.add_argument("--check", metavar="REPORT.json")
         saved.add_argument("--refresh", metavar="REPORT.json")
@@ -75,7 +81,8 @@ def run(command, args):
         command == "changes"
         and (opts.check or opts.refresh)
         and any(
-            arg.split("=", 1)[0] in {"--mode", "--base", "--depth", "--max-files", "--max-symbols"}
+            arg.split("=", 1)[0] in {"--mode", "--base", "--depth", "--max-files", "--max-symbols",
+                                     "--file", "--symbol", "--class-mode"}
             for arg in args
         )
     ):
@@ -106,7 +113,8 @@ def run(command, args):
         elif command == "changes":
             operation = "change_context"
             request = {
-                k: getattr(opts, k) for k in ("mode", "base", "depth", "max_files", "max_symbols")
+                k: getattr(opts, k) for k in ("mode", "base", "depth", "max_files", "max_symbols",
+                                            "files", "symbols", "class_mode")
             }
         else:
             operation = "trace_flow"
