@@ -1,0 +1,474 @@
+{
+ "baseline_commit": "77dc6fdd7d50e6b4abb8d72154524666b09f2bba",
+ "freeze_sha256": "31bfd9734599e29b0913d52bc7e66163b2054cbc1e77131db7576a42c4907ec8",
+ "candidate_record_sha256": "08e566802b72c556088b09fb4930fa246e15f57a4107136a8da9ba9c1c59c686",
+ "engine_sha256": {
+  "B": "04fe582d8c96500b592ad9a81f449f0ede784a7cb5ab49902c895debfe76686a",
+  "T2": "b268463f950fc3cd4f0967d0fdf787a1c86712d2bfaf7fb5e968a0f79b174d35",
+  "T3": "28166a19d45a8ee17edea5d989dc9d51a20c2402db6cae8a7ea877c24897d876"
+ },
+ "artifact": {
+  "raw_bytes": 5813496,
+  "compressed_bytes": 616634,
+  "gzip_sha256": "8aa5fd868313b6613263c337f8bcd5f017378d4036069a0f73f30590cc77ed96",
+  "raw_sha256": "9ac115461126dc35844b5facfa66c5c190703a4cc23cfcca52c8eaa79fd0e50c",
+  "processes": 38,
+  "omitted": "per-stage generation lists (size); generation identity was checked on the full private observations"
+ },
+ "candidates": {
+  "T2": "Test intent also recognizes tested and testing; test hits first, best source hit second.",
+  "T3": "Short queries with 'test' or 'tests' keep the current order: test hits first. Short queries with 'tested' or 'testing' (and no 'test' or 'tests') keep the default source-first order and file diversity, and the best test hit moves to second place."
+ },
+ "patches": {
+  "T2": {
+   "file": "designs/2026-10-17-test-source-slot-t2.patch.gz",
+   "patch_sha256": "42c95b7e47d59de8f5ff60f9337e71460eb7fa38387f8634a868e62bd5638de3",
+   "compressed_sha256": "77734d0285235228497dead18742af0b2ad34972fa663d8afb1d6552fbed07dc"
+  },
+  "T3": {
+   "file": "designs/2026-10-17-test-source-slot-t3.patch.gz",
+   "patch_sha256": "07dbc26fd526c56e7206a039f608eeec3f7ea45f0a4d0fbf98156e6d8c82810b",
+   "compressed_sha256": "1661c38a70ce1634d6b27cd5fd2f2106397534dddbbbee881120c0788b195887"
+  }
+ },
+ "splits": {
+  "development": {
+   "questions_file": "designs/2026-10-17-test-source-slot-development.json",
+   "questions_sha256": "c001108186956cc4cfc49bef969ec4abf85015677a8c4755c79450fbb06bc02e",
+   "T2": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 68,
+      "files_5": 69,
+      "ranges_5": 31,
+      "visible_5": 21,
+      "files_24": 81,
+      "ranges_24": 32,
+      "visible_24": 2,
+      "files_scoped": 66,
+      "ranges_scoped": 56,
+      "visible_scoped": 32,
+      "inspection_visible": 12,
+      "p95_seconds": 0.13592875003814697
+     },
+     "candidate": {
+      "questions": 68,
+      "files_5": 71,
+      "ranges_5": 33,
+      "visible_5": 22,
+      "files_24": 85,
+      "ranges_24": 35,
+      "visible_24": 2,
+      "files_scoped": 66,
+      "ranges_scoped": 56,
+      "visible_scoped": 32,
+      "inspection_visible": 12,
+      "p95_seconds": 0.11483487498480827
+     },
+     "individual_losses": [
+      {
+       "id": "ripgrep:usefulness-development-2",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "requests:usefulness-development-1",
+       "page": "5",
+       "metric": "visible",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "requests:usefulness-development-2",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ],
+     "individual_gains": [
+      {
+       "id": "rails:file-coverage-development-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "rails:file-coverage-development-test",
+       "page": "5",
+       "metric": "visible",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "rails:file-coverage-development-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "spdlog:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "spdlog:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "5",
+       "metric": "visible",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   },
+   "T3": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 68,
+      "files_5": 69,
+      "ranges_5": 31,
+      "visible_5": 21,
+      "files_24": 81,
+      "ranges_24": 32,
+      "visible_24": 2,
+      "files_scoped": 66,
+      "ranges_scoped": 56,
+      "visible_scoped": 32,
+      "inspection_visible": 12,
+      "p95_seconds": 0.13592875003814697
+     },
+     "candidate": {
+      "questions": 68,
+      "files_5": 73,
+      "ranges_5": 34,
+      "visible_5": 23,
+      "files_24": 85,
+      "ranges_24": 35,
+      "visible_24": 2,
+      "files_scoped": 66,
+      "ranges_scoped": 56,
+      "visible_scoped": 32,
+      "inspection_visible": 12,
+      "p95_seconds": 0.11810225003864616
+     },
+     "individual_losses": [],
+     "individual_gains": [
+      {
+       "id": "rails:file-coverage-development-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "rails:file-coverage-development-test",
+       "page": "5",
+       "metric": "visible",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "rails:file-coverage-development-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "5",
+       "metric": "visible",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   }
+  },
+  "validation": {
+   "questions_file": "designs/2026-10-17-test-source-slot-validation.json",
+   "questions_sha256": "505518dfd74dd2e438c3b31fa17e7f35f530782d3d0d92fc8f0dc73f3ccf47cc",
+   "T3": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 16,
+      "files_5": 14,
+      "ranges_5": 10,
+      "visible_5": 8,
+      "files_24": 16,
+      "ranges_24": 12,
+      "visible_24": 3,
+      "files_scoped": 16,
+      "ranges_scoped": 13,
+      "visible_scoped": 10,
+      "inspection_visible": 4,
+      "p95_seconds": 0.23558874998707324
+     },
+     "candidate": {
+      "questions": 16,
+      "files_5": 16,
+      "ranges_5": 11,
+      "visible_5": 9,
+      "files_24": 18,
+      "ranges_24": 13,
+      "visible_24": 3,
+      "files_scoped": 16,
+      "ranges_scoped": 13,
+      "visible_scoped": 10,
+      "inspection_visible": 4,
+      "p95_seconds": 0.29634445905685425
+     },
+     "individual_losses": [],
+     "individual_gains": [
+      {
+       "id": "aspnetcore:test-source-slot-tested",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "aspnetcore:test-source-slot-tested",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "luarocks:test-source-slot-tested",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "luarocks:test-source-slot-tested",
+       "page": "5",
+       "metric": "visible",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "luarocks:test-source-slot-tested",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   }
+  }
+ },
+ "rules": {
+  "T2_development": {
+   "compare_passes": true,
+   "zero_individual_losses": false,
+   "first_five_net_gain_at_least_2": true,
+   "first_five_net_gain": 2,
+   "no_test_word_identical": true,
+   "generation_identical": true
+  },
+  "T3_development": {
+   "compare_passes": true,
+   "zero_individual_losses": true,
+   "first_five_net_gain_at_least_2": true,
+   "first_five_net_gain": 4,
+   "no_test_word_identical": true,
+   "generation_identical": true
+  },
+  "T3_validation": {
+   "compare_passes": true,
+   "zero_individual_losses": true,
+   "first_five_net_gain_at_least_2": true,
+   "first_five_net_gain": 2,
+   "no_test_word_identical": true,
+   "generation_identical": true,
+   "gain_packs": [
+    "aspnetcore",
+    "luarocks"
+   ],
+   "gains_in_at_least_2_packs": true
+  }
+ },
+ "decision": {
+  "T2": "rejected on development",
+  "T3": "ships: every development and validation rule holds; the CI ranking gate must also pass on the PR"
+ }
+}

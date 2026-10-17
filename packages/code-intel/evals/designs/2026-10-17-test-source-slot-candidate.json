@@ -1,0 +1,350 @@
+{
+ "schema_version": 1,
+ "written_at": "2026-10-17T20:47:50.381871+00:00",
+ "freeze": {
+  "file": "2026-10-17-test-source-slot-freeze.json",
+  "sha256": "31bfd9734599e29b0913d52bc7e66163b2054cbc1e77131db7576a42c4907ec8"
+ },
+ "validation_questions_sha256": "505518dfd74dd2e438c3b31fa17e7f35f530782d3d0d92fc8f0dc73f3ccf47cc",
+ "validation_observations_before_this_record": 0,
+ "candidate": {
+  "id": "T3",
+  "description": "Short queries with 'test' or 'tests' keep the current order: test hits first. Short queries with 'tested' or 'testing' (and no 'test' or 'tests') keep the default source-first order and file diversity, and the best test hit moves to second place.",
+  "patch": {
+   "file": "2026-10-17-test-source-slot-t3.patch.gz",
+   "sha256": "07dbc26fd526c56e7206a039f608eeec3f7ea45f0a4d0fbf98156e6d8c82810b"
+  },
+  "engine_sha256": "28166a19d45a8ee17edea5d989dc9d51a20c2402db6cae8a7ea877c24897d876"
+ },
+ "baseline_engine_sha256": "04fe582d8c96500b592ad9a81f449f0ede784a7cb5ab49902c895debfe76686a",
+ "development_history": [
+  {
+   "id": "T2",
+   "patch": {
+    "file": "2026-10-17-test-source-slot-t2.patch.gz",
+    "sha256": "42c95b7e47d59de8f5ff60f9337e71460eb7fa38387f8634a868e62bd5638de3"
+   },
+   "engine_sha256": "b268463f950fc3cd4f0967d0fdf787a1c86712d2bfaf7fb5e968a0f79b174d35",
+   "result": "rejected on development: 5 individual losses. On three 'Find tests for' questions the source slot pushed a labeled test or its visible quote out of the first five. On one 'tested' question the labeled source was the third source hit and left pages 5 and 24."
+  },
+  {
+   "id": "T3",
+   "result": "passes every development rule: compare passes, zero individual losses, judged files at 5 69 -> 73, identity checks hold."
+  }
+ ],
+ "development_summary": {
+  "T2": {
+   "overall": {
+    "passed": true,
+    "checks": {
+     "file_totals_no_loss": true,
+     "visible_totals_no_loss": true,
+     "scoped_no_individual_loss": true,
+     "inspection_no_net_loss": true,
+     "latency": true
+    },
+    "baseline": {
+     "questions": 68,
+     "files_5": 69,
+     "ranges_5": 31,
+     "visible_5": 21,
+     "files_24": 81,
+     "ranges_24": 32,
+     "visible_24": 2,
+     "files_scoped": 66,
+     "ranges_scoped": 56,
+     "visible_scoped": 32,
+     "inspection_visible": 12,
+     "p95_seconds": 0.13592875003814697
+    },
+    "candidate": {
+     "questions": 68,
+     "files_5": 71,
+     "ranges_5": 33,
+     "visible_5": 22,
+     "files_24": 85,
+     "ranges_24": 35,
+     "visible_24": 2,
+     "files_scoped": 66,
+     "ranges_scoped": 56,
+     "visible_scoped": 32,
+     "inspection_visible": 12,
+     "p95_seconds": 0.11483487498480827
+    },
+    "individual_losses": [
+     {
+      "id": "ripgrep:usefulness-development-2",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "requests:usefulness-development-1",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "requests:usefulness-development-2",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-validation-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-validation-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     }
+    ],
+    "individual_gains": [
+     {
+      "id": "rails:file-coverage-development-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "rails:file-coverage-development-test",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "rails:file-coverage-development-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "rails:file-coverage-validation-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "rails:file-coverage-validation-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "spdlog:file-coverage-validation-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "spdlog:file-coverage-validation-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-development-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-development-test",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-development-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-validation-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-validation-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     }
+    ]
+   },
+   "identity": {
+    "no_test_word_changed": [],
+    "controls_changed": [],
+    "generation_changed": []
+   }
+  },
+  "T3": {
+   "overall": {
+    "passed": true,
+    "checks": {
+     "file_totals_no_loss": true,
+     "visible_totals_no_loss": true,
+     "scoped_no_individual_loss": true,
+     "inspection_no_net_loss": true,
+     "latency": true
+    },
+    "baseline": {
+     "questions": 68,
+     "files_5": 69,
+     "ranges_5": 31,
+     "visible_5": 21,
+     "files_24": 81,
+     "ranges_24": 32,
+     "visible_24": 2,
+     "files_scoped": 66,
+     "ranges_scoped": 56,
+     "visible_scoped": 32,
+     "inspection_visible": 12,
+     "p95_seconds": 0.13592875003814697
+    },
+    "candidate": {
+     "questions": 68,
+     "files_5": 73,
+     "ranges_5": 34,
+     "visible_5": 23,
+     "files_24": 85,
+     "ranges_24": 35,
+     "visible_24": 2,
+     "files_scoped": 66,
+     "ranges_scoped": 56,
+     "visible_scoped": 32,
+     "inspection_visible": 12,
+     "p95_seconds": 0.11810225003864616
+    },
+    "individual_losses": [],
+    "individual_gains": [
+     {
+      "id": "rails:file-coverage-development-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "rails:file-coverage-development-test",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "rails:file-coverage-development-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "rails:file-coverage-validation-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "rails:file-coverage-validation-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-development-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-development-test",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-development-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-validation-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "ggplot2:file-coverage-validation-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     }
+    ]
+   },
+   "identity": {
+    "no_test_word_changed": [],
+    "controls_changed": [],
+    "generation_changed": []
+   }
+  }
+ }
+}

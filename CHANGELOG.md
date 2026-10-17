@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Search order for "tested" questions
+
+- A short search with "tested" or "testing" (and no "test" or "tests") keeps
+  the source-first order and shows the best test hit second. Before, the test
+  file often missed the first five. Searches with "test" or "tests" do not
+  change. On 16 new frozen validation questions, judged files at five went
+  from 14 to 16 with no individual loss. The first form (test hits first, best
+  source second) lost judged test files on development and does not ship. See
+  the [results](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-test-source-slot.md).
+
 ## [Intelligence 0.1.9] - 2026-10-17
 
 ### Fixed — Defects found by using Attocode on its own repository

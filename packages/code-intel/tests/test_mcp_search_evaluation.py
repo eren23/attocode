@@ -203,3 +203,55 @@ def test_file_coverage_decisions_replay_from_hash_bound_observations(split):
     assert not recorded["c2_rules"]["validation_first_five_gain_at_least_1"]
     assert not recorded["t_rules"]["test_intent_zero_individual_losses"]
     assert recorded["t_rules"]["negative_control_identical"]
+
+
+@pytest.mark.parametrize("split", ["development", "validation"])
+def test_test_source_slot_decisions_replay_from_hash_bound_observations(split):
+    import gzip
+    import hashlib
+    import json
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "evals"
+    stem = "2026-10-17-test-source-slot"
+    recorded = json.loads((root / "results" / f"{stem}-decision.json").read_text())
+    candidate = (root / "designs" / f"{stem}-candidate.json").read_bytes()
+    assert hashlib.sha256(candidate).hexdigest() == recorded["candidate_record_sha256"]
+    assert json.loads(candidate)["candidate"]["engine_sha256"] == recorded["engine_sha256"]["T3"]
+    for patch in recorded["patches"].values():
+        data = (root / patch["file"]).read_bytes()
+        assert hashlib.sha256(data).hexdigest() == patch["compressed_sha256"]
+        assert hashlib.sha256(gzip.decompress(data)).hexdigest() == patch["patch_sha256"]
+    compressed = (root / "results" / f"{stem}-observations.json.gz").read_bytes()
+    assert hashlib.sha256(compressed).hexdigest() == recorded["artifact"]["gzip_sha256"]
+    raw = gzip.decompress(compressed)
+    assert len(raw) == recorded["artifact"]["raw_bytes"]
+    assert hashlib.sha256(raw).hexdigest() == recorded["artifact"]["raw_sha256"]
+    decision = recorded["splits"][split]
+    questions = (root / decision["questions_file"]).read_bytes()
+    assert hashlib.sha256(questions).hexdigest() == decision["questions_sha256"]
+    rows = {}
+    for item in json.loads(raw):
+        if item["split"] == split:
+            assert item["observation"]["questions_sha256"] == decision["questions_sha256"]
+            rows.setdefault(item["observation"]["arm"], []).extend(item["observation"]["queries"])
+    expected = [q["id"] for q in rows["B"]]
+    base = {q["id"]: q for q in rows["B"]}
+    test_word = re.compile(r"\btest(?:s|ed|ing)?\b", re.I)
+    for arm, record in decision.items():
+        if arm in ("questions_file", "questions_sha256"):
+            continue
+        replayed = compare(rows["B"], rows[arm], expected)
+        assert replayed == {k: v for k, v in record["compare"].items() if k != "individual_gains"}
+        same = {(q["id"], page): q["pages"][page]["response"]["data"]["results"]
+                == base[q["id"]]["pages"][page]["response"]["data"]["results"]
+                for q in rows[arm] for page in q["pages"]}
+        assert record["controls_identical"] == all(
+            ok for (qid, _), ok in same.items() if base[qid].get("category") == "control")
+        assert record["no_test_word_identical"] == all(
+            ok for (qid, _), ok in same.items() if not test_word.search(base[qid]["query"]))
+    # T2 loses judged tests on development; T3 holds every development and validation rule.
+    assert not recorded["rules"]["T2_development"]["zero_individual_losses"]
+    assert all(v for k, v in recorded["rules"]["T3_validation"].items() if k not in ("first_five_net_gain", "gain_packs"))
+    assert all(v for k, v in recorded["rules"]["T3_development"].items() if k != "first_five_net_gain")
