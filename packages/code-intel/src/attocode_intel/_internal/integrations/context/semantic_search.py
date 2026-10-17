@@ -2173,12 +2173,12 @@ class SemanticSearchManager:
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             row = conn.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
-            if row is not None and (not row[0].isdigit() or int(row[0]) > 3):
+            if row is not None and (not row[0].isdigit() or int(row[0]) > 4):
                 conn.close()
                 return None
-            if row is None or row[0] != "3":
-                # v2 IDs collapsed overloads and stored no definition spans.
-                # Reparse rather than inventing identities for persisted rows.
+            if row is None or row[0] != "4":
+                # v2 IDs collapsed overloads and stored no definition spans; v3 docs
+                # lacked Python docstrings. Reparse rather than patching persisted rows.
                 conn.executescript("DROP TABLE IF EXISTS kw_files; DROP TABLE IF EXISTS kw_docs;")
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS kw_files (
@@ -2195,7 +2195,7 @@ class SemanticSearchManager:
                 );
                 CREATE INDEX IF NOT EXISTS ix_kw_docs_file ON kw_docs(file_path);
             """)
-            conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '3')")
+            conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '4')")
             conn.commit()
             return conn
         except Exception:

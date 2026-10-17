@@ -432,6 +432,35 @@ class TestJSParameterTypes:
         assert cls.is_abstract is True
 
 
+class TestTreeSitterDocsAndTypes:
+    """parse_file selects tree-sitter, which must keep docstrings and annotations."""
+
+    def test_python_docstrings_and_param_types(self) -> None:
+        code = (
+            'class Box:\n    """A box."""\n\n'
+            '    def put(self, item: str, count: int = 1) -> None:\n'
+            '        """Store an item."""\n\n'
+            'def plain(a, *args: int, **kw: str):\n    return a\n'
+        )
+        ast = parse_file("box.py", content=code)
+        assert ast.parsing_tier == "tree_sitter"
+        cls = ast.classes[0]
+        assert cls.docstring == "A box."
+        put = cls.methods[0]
+        assert put.docstring == "Store an item."
+        assert [(p.name, p.type_annotation) for p in put.parameters] == [("item", "str"), ("count", "int")]
+        plain = ast.functions[0]
+        assert plain.docstring == ""
+        assert [(p.name, p.type_annotation) for p in plain.parameters] == [("a", ""), ("args", "int"), ("kw", "str")]
+
+    def test_typescript_param_types(self) -> None:
+        code = "function greet(name: string, age?: number): void {\n}\n"
+        ast = parse_file("greet.ts", content=code)
+        assert ast.parsing_tier == "tree_sitter"
+        assert [(p.name, p.type_annotation) for p in ast.functions[0].parameters] == [
+            ("name", "string"), ("age", "number")]
+
+
 # ============================================================
 # Incremental Update Pipeline Tests
 # ============================================================

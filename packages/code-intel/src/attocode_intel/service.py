@@ -822,7 +822,8 @@ class CodeIntelService:
                 layers.append({"depth": current_depth, "files": sorted(next_frontier)})
             frontier = next_frontier
 
-        impacted = sorted(visited - set(changed_files))
+        # Nearest dependents first, so budget trimming drops the farthest files.
+        impacted = [f for layer in layers for f in layer["files"]]
         return {
             "changed_files": changed_files,
             "impacted_files": impacted,
@@ -2185,13 +2186,12 @@ class CodeIntelService:
         return "\n".join(lines)
 
     def impact_analysis(self, changed_files: list[str]) -> str:
-        svc = self._get_ast_service()
-        impacted = svc.get_impact(changed_files)
+        impacted = self.impact_analysis_data(changed_files)["impacted_files"]
         if not impacted:
             return f"No indexed relationships found for {', '.join(changed_files)}. Missing relationships do not prove absence of impact."
         lines = [f"Impact analysis for {', '.join(changed_files)}:"]
         lines.append(f"\n  {len(impacted)} potentially related files (static graph reachability):")
-        for f in sorted(impacted):
+        for f in impacted:
             lines.append(f"    {f}")
         return "\n".join(lines)
 

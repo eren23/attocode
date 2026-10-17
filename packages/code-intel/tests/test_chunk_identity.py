@@ -125,7 +125,7 @@ def test_v2_keyword_cache_is_invalidated_and_newer_cache_is_not_modified(tmp_pat
         warm(manager)
         assert len({d.id for d in manager._kw_docs if d.name == "Parser.parse"}) == 2
         conn = sqlite3.connect(manager._kw_cache_db_path)
-        assert conn.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone() == ("3",)
+        assert conn.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone() == ("4",)
         conn.execute("UPDATE metadata SET value='999' WHERE key='schema_version'")
         conn.commit()
         conn.close()
@@ -164,5 +164,27 @@ def test_extra_windows_preserve_navigation_to_other_named_owners(tmp_path, monke
         assert [h.name for h in hits[:2]] == ["Worker.quota", "Worker.limit"]
         assert spans(hits, "Worker.quota") == {(2, 30), (27, 55), (52, 80)}
         assert manager.search_candidates("quota", 2) == hits[:2]
+    finally:
+        manager.close()
+
+
+def test_v3_keyword_cache_is_rebuilt_with_python_docstrings(tmp_path):
+    # v3 caches were built while the tree-sitter path dropped Python docstrings.
+    (tmp_path / "box.py").write_text('def pack(item):\n    """Wrap the parcel."""\n    return item\n')
+    manager = SemanticSearchManager(str(tmp_path))
+    try:
+        warm(manager)
+        conn = sqlite3.connect(manager._kw_cache_db_path)
+        conn.execute("UPDATE metadata SET value='3' WHERE key='schema_version'")
+        conn.execute("UPDATE kw_docs SET text='stale'")
+        conn.commit()
+        conn.close()
+    finally:
+        manager.close()
+    manager = SemanticSearchManager(str(tmp_path))
+    try:
+        warm(manager)
+        texts = [d.text for d in manager._kw_docs if d.name == "pack"]
+        assert texts and all("Wrap the parcel" in t for t in texts)
     finally:
         manager.close()

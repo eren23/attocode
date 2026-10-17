@@ -6,7 +6,7 @@ import re
 import tokenize
 from collections import Counter
 
-STOP_WORDS = frozenset({"a", "an", "and", "are", "as", "at", "be", "by", "code", "def", "do", "does", "for", "from", "function", "get", "how", "in", "is", "it", "method", "of", "on", "or", "return", "self", "test", "tests", "the", "this", "to", "use", "value", "with"})
+STOP_WORDS = frozenset({"a", "an", "and", "are", "as", "at", "be", "by", "code", "def", "do", "does", "for", "from", "function", "get", "how", "in", "into", "is", "it", "method", "of", "on", "one", "onto", "or", "return", "self", "test", "tests", "the", "this", "to", "use", "value", "with"})
 _EXCLUSION = re.compile(r"\b(?:without|excluding|exclude|except|avoid)\b", re.IGNORECASE)
 _EXCLUSION_END = re.compile(r"[,;.!?]|\b(?:but|instead|rather|while)\b", re.IGNORECASE)
 _EXCLUSION_MODIFIERS = frozenset({"unrelated", "irrelevant", "unwanted", "other"})

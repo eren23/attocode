@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Defects found by using Attocode on its own repository
+
+- The tree-sitter parser now keeps Python docstrings (functions, methods and
+  classes) and annotated parameter types (Python, TypeScript and Java). Before,
+  the conventions report showed 0% docstrings and 0% typed parameters, and the
+  keyword index did not include Python docstrings. The keyword cache schema
+  changes from 3 to 4, so existing caches rebuild once.
+- Impact analysis now lists impacted files in import-depth order, in the local
+  service, the text report and the database provider. Before, the list was
+  alphabetical, and budget trimming removed direct dependents first.
+- The prose words "into", "onto" and "one" are no longer search terms. Before,
+  "one" in a question matched unrelated identifiers such as `SystemOne`.
+- Measured effect: the ranking gate MRR@5 goes from 0.530 to 0.555. On 12 fresh
+  validation questions, file and quote judgments do not change. Docstrings move
+  two pandas workflow labels out of the first five, and two earlier regression
+  questions lose a visible quote. See
+  `packages/code-intel/evals/results/2026-10-17-search-batch.md`.
+
+### Evaluation — One search candidate rejected
+
+- Hits that match fewer than two query concepts were moved after the others.
+  This added two first-five files on development, but changed all four
+  exact-symbol controls and lost one validation label. The product does not
+  include it.
+
 ## [Intelligence 0.1.8] - 2026-10-17
 
 ### Added — Focused change reports and class summaries

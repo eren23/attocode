@@ -212,19 +212,35 @@ class TestServerTools:
         from attocode_intel.server import impact_analysis
 
         mock_ast = self._make_mock_ast_service()
+        graph = {"a.py": {"z_near.py"}, "z_near.py": {"a_far.py"}}
+        mock_ast.get_dependents.side_effect = lambda p: graph.get(p, set())
         srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = impact_analysis(["a.py"])
-        assert "affected1.py" in result
-        assert "affected2.py" in result
         assert "2 potentially related files" in result
+        # Depth order, not alphabetical: the direct dependent comes first.
+        assert result.index("z_near.py") < result.index("a_far.py")
+
+    def test_impact_analysis_data_orders_by_depth_and_survives_trimming(self):
+        from attocode_intel.output import bounded_compact
+
+        mock_ast = self._make_mock_ast_service()
+        graph = {"core.py": {"z_direct.py"}, "z_direct.py": {f"a_far{i:02}.py" for i in range(60)}}
+        mock_ast.get_dependents.side_effect = lambda p: graph.get(p, set())
+        service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
+
+        data = service.impact_analysis_data(["core.py"])
+        assert data["impacted_files"] == [f for layer in data["layers"] for f in layer["files"]]
+        assert data["impacted_files"][0] == "z_direct.py"
+        trimmed = json.loads(bounded_compact({"workspace": "w"}, data, 300).content[0].text)
+        assert trimmed["data"]["impacted_files"][0] == "z_direct.py"
 
     def test_impact_analysis_no_impact(self):
         import attocode_intel.server as srv
         from attocode_intel.server import impact_analysis
 
         mock_ast = self._make_mock_ast_service()
-        mock_ast.get_impact.return_value = set()
+        mock_ast.get_dependents.return_value = set()
         srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = impact_analysis(["isolated.py"])
@@ -4086,3 +4102,14 @@ class TestCommunityDetection:
         for c in communities:
             all_nodes.update(c)
         assert all_nodes == all_files
+
+
+def test_conventions_report_counts_tree_sitter_docstrings_and_param_types():
+    from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+    from attocode_intel.helpers import _analyze_conventions, _format_conventions
+
+    code = 'def pack(item: str, count: int) -> str:\n    """Wrap."""\n    return item\n'
+    stats = _analyze_conventions({"box.py": parse_file("box.py", content=code)}, ["box.py"])
+    report = _format_conventions(stats)
+    assert "100% parameters have type annotations" in report
+    assert "Docstrings: 100% of functions" in report

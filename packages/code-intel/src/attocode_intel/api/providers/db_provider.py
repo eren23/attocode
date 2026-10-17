@@ -241,7 +241,8 @@ class DbAnalysisProvider:
                     layers.append(ImpactLayer(depth=depth, files=sorted(following)))
                 visited.update(following)
                 frontier = following
-            impacted = sorted(visited - changed)
+            # Nearest dependents first, so budget trimming drops the farthest files.
+            impacted = [path for layer in layers for path in layer.files]
             return ImpactAnalysisResponse(
                 changed_files=files, impacted_files=impacted,
                 total_impacted=len(impacted), layers=layers,
