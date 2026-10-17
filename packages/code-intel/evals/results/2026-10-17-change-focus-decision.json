@@ -1,0 +1,160 @@
+{
+  "base_commit": "7b09e28946dad07448d4f8a155fa2be8c6defb4d",
+  "baseline": "Published 0.1.7 installed tool; new same-environment sequential replay",
+  "candidate": "Unreleased editable source, class summaries enabled by default",
+  "candidate_engine_sha256": "b4f6cfd5598db38e7e0137ba0cd4dce21f705b43b457aad009087d707ee50ddb",
+  "freeze": {
+    "labels_unchanged": true,
+    "manifest_sha256": "f0829a9ad0dd6bc2a152d747e412bf2456c477f6a7f6b7769b88dbdc0a2ea7f2",
+    "product_files_sha256": {
+      "packages/code-intel/src/attocode_intel/change_investigation.py": "9c18cda0b7adf6cba1c8c3e9e564c01eed2f39737e2b83540400f56876d7a75c",
+      "packages/code-intel/src/attocode_intel/investigation_cli.py": "be7a0aeb20a44634f0c94a5eb90bb70d5c15ac08aa557c26578b76e108a3d8c7",
+      "packages/code-intel/src/attocode_intel/tools/composite_tools.py": "9a8633f94ec633a88e03570f414c662e33262e280259a4051b871127333fc213"
+    },
+    "runner_sha256": "b957650dd1445367f0fcfcc18b07964df7346da42bebe2be2333b0fd647872e8",
+    "same_environment_baseline_then_candidate": true,
+    "final_review_correction": "Class-member summaries also require source containment to distinguish duplicate class names; clarify that only selected member flows are delivered. Known labels unchanged."
+  },
+  "arms": {
+    "baseline": {
+      "artifact": "2026-10-17-change-focus-baseline.json.gz",
+      "gzip_sha256": "f432dfb8477a3fb5eba28c891f6dd8eb74a5b30998a916c52d46ef9d56035bd5",
+      "raw_sha256": "507adf3664c74ec46387449276fad37e0e457411c1173a0e62da515236d527e8",
+      "raw_bytes": 1160967,
+      "gzip_bytes": 70763,
+      "supervision": {
+        "seconds": 80.079,
+        "wall_seconds": 80.08,
+        "peak_disk_bytes": 197632054,
+        "peak_rss_bytes": 430686208,
+        "cleanup_verified": true
+      }
+    },
+    "candidate": {
+      "artifact": "2026-10-17-change-focus-candidate.json.gz",
+      "gzip_sha256": "609cbb268242e5a64fc600c775767d30181b9642a790227fa625cc193ac1b8f5",
+      "raw_sha256": "39902ed3c4d7f7e8bca750aaa99f44dd7fc4ace7b2e2afdaea62da721894e979",
+      "raw_bytes": 953540,
+      "gzip_bytes": 60508,
+      "supervision": {
+        "seconds": 74.804,
+        "wall_seconds": 74.804,
+        "peak_disk_bytes": 206155830,
+        "peak_rss_bytes": 459620352,
+        "cleanup_verified": true
+      }
+    }
+  },
+  "tasks": [
+    {
+      "id": "workspace-cache",
+      "baseline_report_bytes": 101679,
+      "candidate_report_bytes": 102039,
+      "bytes_reduction_fraction": -0.003540554096716164,
+      "known_callers_retained": 3,
+      "nonclass_flows_compared": 11,
+      "nonclass_resolved_edges_identical": true,
+      "known_tests_retained": [
+        {
+          "file": "packages/code-intel/tests/test_trigram_workspace.py",
+          "found": true,
+          "rank": 5
+        },
+        {
+          "file": "packages/code-intel/tests/unit/code_intel/test_remote_local_fallback.py",
+          "found": true,
+          "rank": 3
+        }
+      ],
+      "candidate_class_summaries": 0,
+      "timings": {
+        "baseline": {
+          "new_index_changes_seconds": 6.283472000039183,
+          "cached_cli_trace_seconds": 1.1024351250380278,
+          "in_process_trace_median_seconds": 0.2697261249413714,
+          "stdio_trace_including_startup_seconds": 1.0779324999311939
+        },
+        "candidate": {
+          "new_index_changes_seconds": 4.20542483299505,
+          "cached_cli_trace_seconds": 3.2976214999798685,
+          "in_process_trace_median_seconds": 0.541220374929253,
+          "stdio_trace_including_startup_seconds": 1.0819442920619622
+        }
+      }
+    },
+    {
+      "id": "behavioral-negation",
+      "baseline_report_bytes": 257931,
+      "candidate_report_bytes": 174205,
+      "bytes_reduction_fraction": 0.32460619312917016,
+      "known_callers_retained": 3,
+      "nonclass_flows_compared": 14,
+      "nonclass_resolved_edges_identical": true,
+      "known_tests_retained": [
+        {
+          "file": "packages/code-intel/tests/test_behavioral_negation.py",
+          "found": true,
+          "rank": 3
+        }
+      ],
+      "candidate_class_summaries": 1,
+      "timings": {
+        "baseline": {
+          "new_index_changes_seconds": 4.668141957954504,
+          "cached_cli_trace_seconds": 3.1727850410388783,
+          "in_process_trace_median_seconds": 0.46924618748016655,
+          "stdio_trace_including_startup_seconds": 0.9772187080234289
+        },
+        "candidate": {
+          "new_index_changes_seconds": 4.666719374945387,
+          "cached_cli_trace_seconds": 3.319811374996789,
+          "in_process_trace_median_seconds": 0.5898817084962502,
+          "stdio_trace_including_startup_seconds": 1.102902540937066
+        }
+      }
+    },
+    {
+      "id": "overload-source",
+      "baseline_report_bytes": 406914,
+      "candidate_report_bytes": 212152,
+      "bytes_reduction_fraction": 0.4786318484987,
+      "known_callers_retained": 2,
+      "nonclass_flows_compared": 20,
+      "nonclass_resolved_edges_identical": true,
+      "known_tests_retained": [
+        {
+          "file": "packages/code-intel/tests/test_chunk_identity.py",
+          "found": true,
+          "rank": 3
+        }
+      ],
+      "candidate_class_summaries": 3,
+      "timings": {
+        "baseline": {
+          "new_index_changes_seconds": 5.089328333036974,
+          "cached_cli_trace_seconds": 3.240020291064866,
+          "in_process_trace_median_seconds": 0.4533247079816647,
+          "stdio_trace_including_startup_seconds": 3.1255698750028387
+        },
+        "candidate": {
+          "new_index_changes_seconds": 4.793609583983198,
+          "cached_cli_trace_seconds": 3.313361292006448,
+          "in_process_trace_median_seconds": 0.5379430835018866,
+          "stdio_trace_including_startup_seconds": 1.062626083032228
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Previously consumed selected caller/test labels from familiar Python fixes, not fresh held-out ranking or agent outcomes.",
+    "Three known tests are themselves changed patch inputs; only one preexisting test is a discovery example.",
+    "Sequential local arms have no isolation of OS caches, temperature or timing noise; no general speedup claim.",
+    "Unresolved diagnostic counts/ranks vary; fewer diagnostics are not established precision gains."
+  ],
+  "candidate_patch": {
+    "artifact": "2026-10-17-change-focus-candidate.patch.gz",
+    "gzip_sha256": "3bbb85f459e70c573ba3d9638a5d5cd7f0ae409f567b199f8784571a25d65f3c",
+    "raw_sha256": "249e0a7ac095744078107a660d1112eb98b2fded3f17d172c29df4131a75e743"
+  },
+  "gate_passed": true
+}

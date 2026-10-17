@@ -1,0 +1,467 @@
+{
+  "manifest_sha256": "f0829a9ad0dd6bc2a152d747e412bf2456c477f6a7f6b7769b88dbdc0a2ea7f2",
+  "runner_sha256": "b957650dd1445367f0fcfcc18b07964df7346da42bebe2be2333b0fd647872e8",
+  "artifact": {
+    "filename": "2026-10-17-change-workflow-observations.json.gz",
+    "gzip_sha256": "a7c492268dd21fec07812522271db3e921f5b39e60fe9088726d7f30d8d78ebe",
+    "raw_sha256": "05a7b79432cfc4e5a34b06f585399f5700b439631dfa3c077ac7e614242968d8",
+    "gzip_bytes": 70711,
+    "raw_bytes": 1159956
+  },
+  "engine_version": "0.1.7",
+  "source_commit": "7b09e28946dad07448d4f8a155fa2be8c6defb4d",
+  "supervisor": {
+    "status": "passed",
+    "seconds": 70.712,
+    "wall_seconds": 70.712,
+    "peak_disk_bytes": 206950454,
+    "peak_rss_bytes": 470745088,
+    "cleanup_verified": true
+  },
+  "tasks": [
+    {
+      "id": "workspace-cache",
+      "fix_commit": "7b09e28946dad07448d4f8a155fa2be8c6defb4d",
+      "changed_target_found": true,
+      "known_call_sites": [
+        {
+          "caller": "fast_search",
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "line": 355,
+          "found": true
+        },
+        {
+          "caller": "regex_search",
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "line": 529,
+          "found": true
+        },
+        {
+          "caller": "frecency_search",
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "line": 635,
+          "found": true
+        }
+      ],
+      "known_test_files": [
+        {
+          "file": "packages/code-intel/tests/test_trigram_workspace.py",
+          "found": true,
+          "rank": 5,
+          "existed_in_parent": false,
+          "is_in_changed_patch": true
+        },
+        {
+          "file": "packages/code-intel/tests/unit/code_intel/test_remote_local_fallback.py",
+          "found": true,
+          "rank": 3,
+          "existed_in_parent": true,
+          "is_in_changed_patch": false
+        }
+      ],
+      "cli_changes_new_index_seconds": 6.553430250030942,
+      "cli_trace_existing_disk_cache_seconds": 1.0755933329928666,
+      "gateway_trace_seconds": [
+        0.7680735000176355,
+        0.24070974998176098,
+        0.30110683396924287,
+        0.2533672080608085,
+        0.2750907090958208
+      ],
+      "warm_in_process_samples": 4,
+      "warm_in_process_median_seconds": 0.26422895857831463,
+      "warm_in_process_range_seconds": [
+        0.24070974998176098,
+        0.30110683396924287
+      ],
+      "stdio_including_startup_seconds": 1.0199680420337245,
+      "stdio_portable_status": "current",
+      "stdio_known_sites_found": 3,
+      "warm_known_sites_found": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "freshness_controls": [
+        {
+          "mutation": "source_edit",
+          "old": "stale",
+          "refresh_seconds": 1.7803627910325304,
+          "refreshed": "current"
+        },
+        {
+          "mutation": "stage",
+          "old": "stale",
+          "refresh_seconds": 1.783788333996199,
+          "refreshed": "current"
+        },
+        {
+          "mutation": "branch",
+          "old": "stale",
+          "refresh_seconds": 1.3932919159997255,
+          "refreshed": "current"
+        }
+      ],
+      "changed_report_bytes": 101671,
+      "trace_report_bytes": 46977,
+      "changes_omitted": {
+        "files": 0,
+        "symbols": 0
+      },
+      "changed_flows_with_caps": 1,
+      "changed_flows_omitted_nodes_sum": 10,
+      "changed_flows_omitted_unresolved_sum": 0,
+      "trace_graph": {
+        "nodes": 26,
+        "edges": 26,
+        "unresolved": 24,
+        "omitted": {
+          "edges": 0,
+          "nodes": 0,
+          "unresolved": 0
+        },
+        "coverage": {
+          "discovery_truncated": false,
+          "parsed_files": 1061,
+          "phase": "ready",
+          "total_files": 1061
+        }
+      },
+      "combined_report_known_call_sites": [
+        {
+          "caller": "fast_search",
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "line": 355,
+          "found": true
+        },
+        {
+          "caller": "regex_search",
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "line": 529,
+          "found": true
+        },
+        {
+          "caller": "frecency_search",
+          "file": "packages/code-intel/src/attocode_intel/tools/search_tools.py",
+          "line": 635,
+          "found": true
+        }
+      ]
+    },
+    {
+      "id": "behavioral-negation",
+      "fix_commit": "39883fefa1f9f2f4b8a9463817a710d50e50ad13",
+      "changed_target_found": true,
+      "known_call_sites": [
+        {
+          "caller": "rerank_broad_candidates",
+          "file": "packages/code-intel/src/attocode_intel/query_ranking.py",
+          "line": 149,
+          "found": true
+        },
+        {
+          "caller": "query_diagnostics",
+          "file": "packages/code-intel/src/attocode_intel/query_ranking.py",
+          "line": 217,
+          "found": true
+        },
+        {
+          "caller": "SemanticSearchManager.search_candidates",
+          "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+          "line": 1060,
+          "found": true
+        }
+      ],
+      "known_test_files": [
+        {
+          "file": "packages/code-intel/tests/test_behavioral_negation.py",
+          "found": true,
+          "rank": 5,
+          "existed_in_parent": false,
+          "is_in_changed_patch": true
+        }
+      ],
+      "cli_changes_new_index_seconds": 4.636165916919708,
+      "cli_trace_existing_disk_cache_seconds": 3.1622366660740227,
+      "gateway_trace_seconds": [
+        2.870382457971573,
+        0.6544796669622883,
+        0.6396801670780405,
+        0.260299832909368,
+        0.5847815420711413
+      ],
+      "warm_in_process_samples": 4,
+      "warm_in_process_median_seconds": 0.6122308545745909,
+      "warm_in_process_range_seconds": [
+        0.260299832909368,
+        0.6544796669622883
+      ],
+      "stdio_including_startup_seconds": 0.9818268340313807,
+      "stdio_portable_status": "current",
+      "stdio_known_sites_found": 3,
+      "warm_known_sites_found": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "freshness_controls": [
+        {
+          "mutation": "source_edit",
+          "old": "stale",
+          "refresh_seconds": 2.0263971670065075,
+          "refreshed": "current"
+        },
+        {
+          "mutation": "stage",
+          "old": "stale",
+          "refresh_seconds": 2.0044049160787836,
+          "refreshed": "current"
+        },
+        {
+          "mutation": "branch",
+          "old": "stale",
+          "refresh_seconds": 1.620932332938537,
+          "refreshed": "current"
+        }
+      ],
+      "changed_report_bytes": 257930,
+      "trace_report_bytes": 41486,
+      "changes_omitted": {
+        "files": 0,
+        "symbols": 0
+      },
+      "changed_flows_with_caps": 4,
+      "changed_flows_omitted_nodes_sum": 74,
+      "changed_flows_omitted_unresolved_sum": 611,
+      "trace_graph": {
+        "nodes": 18,
+        "edges": 38,
+        "unresolved": 0,
+        "omitted": {
+          "edges": 0,
+          "nodes": 0,
+          "unresolved": 0
+        },
+        "coverage": {
+          "discovery_truncated": false,
+          "parsed_files": 1051,
+          "phase": "hydrating",
+          "total_files": 1051
+        }
+      },
+      "combined_report_known_call_sites": [
+        {
+          "caller": "rerank_broad_candidates",
+          "file": "packages/code-intel/src/attocode_intel/query_ranking.py",
+          "line": 149,
+          "found": true
+        },
+        {
+          "caller": "query_diagnostics",
+          "file": "packages/code-intel/src/attocode_intel/query_ranking.py",
+          "line": 217,
+          "found": true
+        },
+        {
+          "caller": "SemanticSearchManager.search_candidates",
+          "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+          "line": 1060,
+          "found": true
+        }
+      ]
+    },
+    {
+      "id": "overload-source",
+      "fix_commit": "6d407d656da83242e70ff8a37c03ce43893cfa54",
+      "changed_target_found": true,
+      "known_call_sites": [
+        {
+          "caller": "OperationGateway._execute_sync",
+          "file": "packages/code-intel/src/attocode_intel/gateway.py",
+          "line": 483,
+          "found": true
+        },
+        {
+          "caller": "test_java_overloads_fuse_individually_and_reopen_without_losing_metadata",
+          "file": "packages/code-intel/tests/test_chunk_identity.py",
+          "line": 46,
+          "found": true
+        }
+      ],
+      "known_test_files": [
+        {
+          "file": "packages/code-intel/tests/test_chunk_identity.py",
+          "found": true,
+          "rank": 3,
+          "existed_in_parent": false,
+          "is_in_changed_patch": true
+        }
+      ],
+      "cli_changes_new_index_seconds": 5.167919541941956,
+      "cli_trace_existing_disk_cache_seconds": 3.204379417002201,
+      "gateway_trace_seconds": [
+        3.0531108339782804,
+        0.9215021670097485,
+        0.4563816669397056,
+        0.3005094160325825,
+        0.5923204169375822
+      ],
+      "warm_in_process_samples": 4,
+      "warm_in_process_median_seconds": 0.5243510419386439,
+      "warm_in_process_range_seconds": [
+        0.3005094160325825,
+        0.9215021670097485
+      ],
+      "stdio_including_startup_seconds": 1.079593832953833,
+      "stdio_portable_status": "current",
+      "stdio_known_sites_found": 2,
+      "warm_known_sites_found": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "freshness_controls": [
+        {
+          "mutation": "source_edit",
+          "old": "stale",
+          "refresh_seconds": 2.5300831249915063,
+          "refreshed": "current"
+        },
+        {
+          "mutation": "stage",
+          "old": "stale",
+          "refresh_seconds": 2.3520033339736983,
+          "refreshed": "current"
+        },
+        {
+          "mutation": "branch",
+          "old": "stale",
+          "refresh_seconds": 1.9740905410144478,
+          "refreshed": "current"
+        }
+      ],
+      "changed_report_bytes": 406951,
+      "trace_report_bytes": 9312,
+      "changes_omitted": {
+        "files": 0,
+        "symbols": 0
+      },
+      "changed_flows_with_caps": 8,
+      "changed_flows_omitted_nodes_sum": 102,
+      "changed_flows_omitted_unresolved_sum": 1175,
+      "trace_graph": {
+        "nodes": 5,
+        "edges": 6,
+        "unresolved": 0,
+        "omitted": {
+          "edges": 0,
+          "nodes": 0,
+          "unresolved": 0
+        },
+        "coverage": {
+          "discovery_truncated": false,
+          "parsed_files": 1040,
+          "phase": "hydrating",
+          "total_files": 1040
+        }
+      },
+      "combined_report_known_call_sites": [
+        {
+          "caller": "OperationGateway._execute_sync",
+          "file": "packages/code-intel/src/attocode_intel/gateway.py",
+          "line": 483,
+          "found": true
+        },
+        {
+          "caller": "test_java_overloads_fuse_individually_and_reopen_without_losing_metadata",
+          "file": "packages/code-intel/tests/test_chunk_identity.py",
+          "line": 46,
+          "found": true
+        }
+      ]
+    }
+  ],
+  "scorer_negative_controls": [
+    {
+      "task": "workspace-cache",
+      "mutation": "empty",
+      "rejected": true
+    },
+    {
+      "task": "workspace-cache",
+      "mutation": "wrong_line",
+      "rejected": true
+    },
+    {
+      "task": "workspace-cache",
+      "mutation": "wrong_callee_file",
+      "rejected": true
+    },
+    {
+      "task": "workspace-cache",
+      "mutation": "wrong_caller",
+      "rejected": true
+    },
+    {
+      "task": "behavioral-negation",
+      "mutation": "empty",
+      "rejected": true
+    },
+    {
+      "task": "behavioral-negation",
+      "mutation": "wrong_line",
+      "rejected": true
+    },
+    {
+      "task": "behavioral-negation",
+      "mutation": "wrong_callee_file",
+      "rejected": true
+    },
+    {
+      "task": "behavioral-negation",
+      "mutation": "wrong_caller",
+      "rejected": true
+    },
+    {
+      "task": "overload-source",
+      "mutation": "empty",
+      "rejected": true
+    },
+    {
+      "task": "overload-source",
+      "mutation": "wrong_line",
+      "rejected": true
+    },
+    {
+      "task": "overload-source",
+      "mutation": "wrong_callee_file",
+      "rejected": true
+    },
+    {
+      "task": "overload-source",
+      "mutation": "wrong_caller",
+      "rejected": true
+    }
+  ],
+  "interpretation": "Known historical fixes in one familiar Python repository, patch-only replays with selected labels. No native timing comparator or agent/outcome study; no general benefit or complete-impact claim. Three of four labeled test files are themselves changed patch inputs; only one preexisting labeled test is a discovery example. Seven caller sites are production, one is a newly added test.",
+  "totals": {
+    "tasks": 3,
+    "changed_targets_found": 3,
+    "known_call_sites": 8,
+    "known_call_sites_found": 8,
+    "known_test_files": 4,
+    "known_test_files_found": 4,
+    "freshness_sequences": 9,
+    "negative_controls_rejected": 12,
+    "combined_report_known_sites_found": 8,
+    "known_preexisting_tests": 1,
+    "known_preexisting_tests_found": 1,
+    "known_test_files_already_changed": 3
+  }
+}

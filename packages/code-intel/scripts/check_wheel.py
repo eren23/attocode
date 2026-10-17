@@ -243,12 +243,48 @@ async def check_change_workflow(temp):
     assert "# Change investigation" in cli(
         "trace", "helper", "--file", "helper.py", "--format", "markdown"
     )
+    # Focus must survive real installed MCP and CLI refresh, with unrelated dirty input.
+    worker = root / "worker.py"
+    old = "class Worker:\n    def work(self): return 1\ndef make(): return Worker()\n"
+    worker.write_text(old)
+    git("add", "worker.py")
+    git("commit", "-qm", "focus base")
+    worker.write_text(old.replace("return 1", "return 2"))
+    async with asyncio.timeout(45), stdio_client(params) as streams:  # noqa: SIM117
+        async with ClientSession(*streams) as session:
+            await session.initialize()
+            response = await session.call_tool(
+                "change_context", {"files": ["worker.py"], "symbols": ["Worker"]}
+            )
+            assert not response.isError
+            focused = response.structuredContent["data"]
+            assert focused["symbols"][0]["flow"]["status"] == "summarized"
+            assert focused["symbols"][0]["class_summary"]["total_changed_members"] == 1
+            response = await session.call_tool(
+                "change_context", {"files": ["worker.py"], "symbols": ["Worker"],
+                                   "class_mode": "expand"}
+            )
+            assert not response.isError
+            assert any(e["caller"]["name"] == "make"
+                       for e in response.structuredContent["data"]["symbols"][0]["flow"]["edges"])
+    selected, selected_fresh = temp / "selected.json", temp / "selected-fresh.json"
+    cli("changes", "--file", "worker.py", "--symbol", "Worker.work",
+        "--max-files", "1", "--max-symbols", "1", "--output", str(selected))
+    selected_report = json.loads(selected.read_text())
+    assert [r["after"]["qualified_name"] for r in selected_report["symbols"]] == ["Worker.work"]
+    assert selected_report["omitted"] == {"files": 0, "symbols": 0}
+    worker.write_text(old.replace("return 1", "return 3"))
+    cli("changes", "--check", str(selected), expected=1)
+    cli("changes", "--refresh", str(selected), "--output", str(selected_fresh))
+    assert json.loads(selected_fresh.read_text())["request"] == selected_report["request"]
+    cli("changes", "--check", str(selected_fresh))
     print(
         json.dumps(
             {
                 "installed_change_workflow": "passed",
                 "full_mcp": True,
                 "cli_export_check_refresh": True,
+                "filtered_reports_and_class_summaries": True,
             }
         )
     )
