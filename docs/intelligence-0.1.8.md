@@ -31,7 +31,7 @@ Three historical Python fix replays preserved 45 non-class caller flows. The two
 class-heavy reports shrank from 257,931 to 174,205 bytes (32.5%) and from 406,914
 to 212,152 bytes (47.9%). Class-wide evidence is deliberately omitted in summary
 mode; these measurements do not establish better agent outcomes or general speed.
-See the [replay evidence](../packages/code-intel/evals/results/2026-10-17-focused-change-reports.md).
+See the [replay evidence](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-focused-change-reports.md).
 
 The feature package passed 952 local tests with nine environment skips and all
 17 required upstream checks. Uploaded product artifacts verified all 22 focus,
