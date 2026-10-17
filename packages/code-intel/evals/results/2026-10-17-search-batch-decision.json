@@ -1,0 +1,245 @@
+{
+ "baseline_commit": "94d345beb1e10d8b3254ec1aa5ee4c6a8aeb5983",
+ "fixes_commit": "6812475bf3451570eb0817eb917dd9a8da6b7680",
+ "engine_sha256": {
+  "a0": "07819a8f43d18ac393ddb528a1b8e228fe21d164fc5e663a2e3a264340ae5ef9",
+  "f": "0e558d64df4bdeeb544b80480a1f3a30547c3556ad89aa93fedc0633d0591e51",
+  "c": "47f989b95c24d7b7a8b2275ddaa734c328fc7c2c04763de05c03bb599a73f653"
+ },
+ "questions_sha256": {
+  "development": "a7329951352dae357ca4d3551b2611c8d3f62feb32fb4729dfce8362003b10a7",
+  "validation": "2751afed23f86ac887dcd9179d5f81e79f4cce24a0a1711db4c189603264ac42"
+ },
+ "artifact": {
+  "raw_bytes": 1866689,
+  "compressed_bytes": 218833,
+  "gzip_sha256": "e4b170f32c4b043727bb8bfdc82f330e2e09bcdbcd0e488555bdea2231945565",
+  "raw_sha256": "e5ef817bf45f33f6a22c0836bb2147f1ab093fb4f6e9526fba55c5b29bf0dc76",
+  "processes": 24,
+  "omitted": "per-stage generation lists (size); candidate_generation_identical was checked on the full private observations"
+ },
+ "candidate": {
+  "description": "C (option a): in default broad delivery, hits matching fewer than 2 query concepts go after hits matching 2 or more; order within each group unchanged",
+  "patch_file": "designs/2026-10-17-search-batch-candidate.patch.gz",
+  "patch_sha256": "f54b718af7dcac6e392a4a10bf3872d66249ad193729977550d8d3c2fb32a24d",
+  "compressed_sha256": "2e4a97dad2fb36fe9586504359a3d6725a23a9cf95382ea0cca0c976ae88932c",
+  "development_variants_rejected": [
+   {
+    "name": "v1 prose stop words",
+    "patch_sha256": "32fea3c7c28181693b2212dbf6c14b4a656f27495c4ce23595564fa672f0d337",
+    "result": "files_5 12->12, files_24 15->17, 2 individual losses (prisma dev-3 @5, gh-cli dev-2 @24)"
+   },
+   {
+    "name": "v2 prose documents last",
+    "patch_sha256": "8dcb258c782e30769771d2dc0e65150a7783cb5b89d0370d8c9a579970841731",
+    "result": "files_5 12->13, files_24 15->18, 0 losses; below the +2 first-five development rule"
+   }
+  ]
+ },
+ "splits": {
+  "development": {
+   "fixes": {
+    "passed": true,
+    "checks": {
+     "file_totals_no_loss": true,
+     "visible_totals_no_loss": true,
+     "scoped_no_individual_loss": true,
+     "inspection_no_net_loss": true,
+     "latency": true
+    },
+    "baseline": {
+     "questions": 12,
+     "files_5": 12,
+     "ranges_5": 3,
+     "visible_5": 3,
+     "files_24": 15,
+     "ranges_24": 4,
+     "visible_24": 0,
+     "files_scoped": 12,
+     "ranges_scoped": 7,
+     "visible_scoped": 7,
+     "inspection_visible": 1,
+     "p95_seconds": 0.9926310830051079
+    },
+    "candidate": {
+     "questions": 12,
+     "files_5": 12,
+     "ranges_5": 3,
+     "visible_5": 3,
+     "files_24": 15,
+     "ranges_24": 4,
+     "visible_24": 0,
+     "files_scoped": 12,
+     "ranges_scoped": 7,
+     "visible_scoped": 7,
+     "inspection_visible": 1,
+     "p95_seconds": 0.9884599590441212
+    },
+    "individual_losses": [
+     {
+      "id": "pandas:search-batch-development-2",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     }
+    ]
+   },
+   "candidate": {
+    "passed": true,
+    "checks": {
+     "file_totals_no_loss": true,
+     "visible_totals_no_loss": true,
+     "scoped_no_individual_loss": true,
+     "inspection_no_net_loss": true,
+     "latency": true
+    },
+    "baseline": {
+     "questions": 12,
+     "files_5": 12,
+     "ranges_5": 3,
+     "visible_5": 3,
+     "files_24": 15,
+     "ranges_24": 4,
+     "visible_24": 0,
+     "files_scoped": 12,
+     "ranges_scoped": 7,
+     "visible_scoped": 7,
+     "inspection_visible": 1,
+     "p95_seconds": 0.9884599590441212
+    },
+    "candidate": {
+     "questions": 12,
+     "files_5": 14,
+     "ranges_5": 3,
+     "visible_5": 3,
+     "files_24": 18,
+     "ranges_24": 4,
+     "visible_24": 0,
+     "files_scoped": 12,
+     "ranges_scoped": 7,
+     "visible_scoped": 7,
+     "inspection_visible": 2,
+     "p95_seconds": 1.0146846249699593
+    },
+    "individual_losses": []
+   },
+   "candidate_controls_identical": false,
+   "candidate_generation_identical": true
+  },
+  "validation": {
+   "fixes": {
+    "passed": true,
+    "checks": {
+     "file_totals_no_loss": true,
+     "visible_totals_no_loss": true,
+     "scoped_no_individual_loss": true,
+     "inspection_no_net_loss": true,
+     "latency": true
+    },
+    "baseline": {
+     "questions": 12,
+     "files_5": 13,
+     "ranges_5": 6,
+     "visible_5": 4,
+     "files_24": 14,
+     "ranges_24": 7,
+     "visible_24": 1,
+     "files_scoped": 12,
+     "ranges_scoped": 8,
+     "visible_scoped": 4,
+     "inspection_visible": 3,
+     "p95_seconds": 0.9276077500544488
+    },
+    "candidate": {
+     "questions": 12,
+     "files_5": 13,
+     "ranges_5": 6,
+     "visible_5": 4,
+     "files_24": 14,
+     "ranges_24": 7,
+     "visible_24": 1,
+     "files_scoped": 12,
+     "ranges_scoped": 8,
+     "visible_scoped": 4,
+     "inspection_visible": 3,
+     "p95_seconds": 1.0355905001051724
+    },
+    "individual_losses": []
+   },
+   "candidate": {
+    "passed": true,
+    "checks": {
+     "file_totals_no_loss": true,
+     "visible_totals_no_loss": true,
+     "scoped_no_individual_loss": true,
+     "inspection_no_net_loss": true,
+     "latency": true
+    },
+    "baseline": {
+     "questions": 12,
+     "files_5": 13,
+     "ranges_5": 6,
+     "visible_5": 4,
+     "files_24": 14,
+     "ranges_24": 7,
+     "visible_24": 1,
+     "files_scoped": 12,
+     "ranges_scoped": 8,
+     "visible_scoped": 4,
+     "inspection_visible": 3,
+     "p95_seconds": 1.0355905001051724
+    },
+    "candidate": {
+     "questions": 12,
+     "files_5": 14,
+     "ranges_5": 8,
+     "visible_5": 6,
+     "files_24": 14,
+     "ranges_24": 8,
+     "visible_24": 1,
+     "files_scoped": 12,
+     "ranges_scoped": 8,
+     "visible_scoped": 4,
+     "inspection_visible": 3,
+     "p95_seconds": 1.100107166916132
+    },
+    "individual_losses": [
+     {
+      "id": "starship:search-batch-validation-1",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     },
+     {
+      "id": "starship:search-batch-validation-1",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     }
+    ]
+   },
+   "candidate_controls_identical": false,
+   "candidate_generation_identical": true
+  }
+ },
+ "candidate_rules": {
+  "compare_passes_both_splits": true,
+  "zero_individual_losses": false,
+  "development_first_five_gain_at_least_2": true,
+  "validation_first_five_gain_at_least_1": true,
+  "controls_identical": false,
+  "generation_identical": true,
+  "not_run_after_rejection": [
+   "40 regression questions on C",
+   "ranking gate C vs F",
+   "miss fixture"
+  ]
+ },
+ "decision": "Fixes ship. Candidate rejected: development changed all four exact-symbol control responses, and validation lost the primary label of starship:search-batch-validation-1 at 5 and 24."
+}

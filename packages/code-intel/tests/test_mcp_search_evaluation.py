@@ -114,3 +114,43 @@ def test_frozen_delivery_decisions_replay_from_hash_bound_observations(split):
         assert compare(rows["baseline"], rows[arm], expected) == decision
     if split == "confirmation":
         assert all(d["passed"] for d in recorded["splits"][split].values())
+
+
+@pytest.mark.parametrize("split", ["development", "validation"])
+def test_search_batch_decisions_replay_from_hash_bound_observations(split):
+    import gzip
+    import hashlib
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "evals"
+    stem = "2026-10-17-search-batch"
+    recorded = json.loads((root / "results" / f"{stem}-decision.json").read_text())
+    patch = (root / "designs" / f"{stem}-candidate.patch.gz").read_bytes()
+    assert hashlib.sha256(patch).hexdigest() == recorded["candidate"]["compressed_sha256"]
+    assert hashlib.sha256(gzip.decompress(patch)).hexdigest() == recorded["candidate"]["patch_sha256"]
+    compressed = (root / "results" / f"{stem}-observations.json.gz").read_bytes()
+    assert hashlib.sha256(compressed).hexdigest() == recorded["artifact"]["gzip_sha256"]
+    raw = gzip.decompress(compressed)
+    assert len(raw) == recorded["artifact"]["raw_bytes"] < 5_000_000
+    assert hashlib.sha256(raw).hexdigest() == recorded["artifact"]["raw_sha256"]
+    questions = (root / "designs" / f"{stem}-{split}.json").read_bytes()
+    design = json.loads(questions)
+    expected = [q["id"] for group in design["repositories"] for q in group["queries"]]
+    rows = {}
+    for item in json.loads(raw):
+        if item["split"] == split:
+            assert item["observation"]["questions_sha256"] == hashlib.sha256(questions).hexdigest()
+            rows.setdefault(item["observation"]["arm"], []).extend(item["observation"]["queries"])
+    decision = recorded["splits"][split]
+    assert compare(rows["a0"], rows["f"], expected) == decision["fixes"]
+    assert compare(rows["f"], rows["c"], expected) == decision["candidate"]
+    # The rejection: changed exact-symbol controls (development) and an individual loss (validation).
+    controls = [q for q in rows["f"] if q["category"] == "control"]
+    by_id = {q["id"]: q for q in rows["c"]}
+    changed = [q["id"] for q in controls for page in q["pages"]
+               if q["pages"][page]["response"]["data"]["results"]
+               != by_id[q["id"]]["pages"][page]["response"]["data"]["results"]]
+    assert bool(changed) == (not decision["candidate_controls_identical"])
+    assert not recorded["candidate_rules"]["controls_identical"]
+    assert not recorded["candidate_rules"]["zero_individual_losses"]
