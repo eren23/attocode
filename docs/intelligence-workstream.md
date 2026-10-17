@@ -7,7 +7,11 @@ three successive groups. This is offline product evidence, not an agent study.
 **Current release:** `attocode-code-intel` 0.1.8 (2026-10-17). See the
 [0.1.8 release notes](intelligence-0.1.8.md).
 
-**Latest search batch, 2026-10-16:** [explicit test search and transient precision recovery](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-search-recovery-batch.md).
+**Latest search batch, 2026-10-17:** [dogfood fixes and one search candidate](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-search-batch.md).
+Three defects found by using Attocode on this repository are fixed. On 12 fresh validation questions, the fixes keep
+every file and quote judgment unchanged. The one retrieval candidate failed two predeclared rules and does not ship.
+
+**Previous search batch, 2026-10-16:** [explicit test search and transient precision recovery](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-16-search-recovery-batch.md).
 One frozen test-intent partition improved labeled hits at five from 3/8 to 6/8,
 with four unchanged production controls. Transient precision replies retry within
 the existing deadline, and partial caches expire. Six fresh real Rust fixtures
