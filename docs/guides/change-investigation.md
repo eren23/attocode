@@ -2,7 +2,7 @@
 
 Connect a Git diff to changed definitions, current caller paths, potential import
 impact and candidate tests in one local report. No model or project execution is
-needed. Available in 0.1.7 and the repository source build.
+needed. Available since 0.1.7; focused reports and class summaries require 0.1.8.
 
 ## CLI
 
@@ -19,10 +19,10 @@ attocode-code-intel changes --mode unstaged --project .
 # Merge-base with main to working tree, including uncommitted edits
 attocode-code-intel changes --mode branch --base main --project .
 
-# Current source build: select changes before result caps apply
+# Version 0.1.8: select changes before result caps apply
 attocode-code-intel changes --file src/worker.py --symbol Worker.work --project .
 
-# Current source build: include class-wide callers as well as methods
+# Version 0.1.8: include class-wide callers as well as methods
 attocode-code-intel changes --class-mode expand --project .
 
 # Static caller paths into one definition
@@ -49,10 +49,9 @@ Exit 0 means recorded inputs match; 1 means stale; 2 means invalid input or
 collection failure. The digest is not a signature or proof of complete impact or
 test coverage. Ignored files outside the recorded evidence are not checked.
 
-## Focused reports and changed classes (Unreleased)
+## Focused reports and changed classes (0.1.8)
 
-File/symbol filters and class summaries require the current source build; they
-are not included in the published 0.1.7 package.
+File/symbol filters and class summaries are available in 0.1.8.
 
 Repeat `--file` or `--symbol` to select several exact paths/names. File and symbol
 filters intersect. Paths match either side of a Git rename; symbol names match
@@ -92,7 +91,7 @@ Start a local full-profile session with
 - `trace_flow(symbol_name="work", file_path="src/worker.py", line=12, depth=2)`
   follows caller evidence backward into a selected definition.
 
-In the current source build, `change_context` additionally accepts exact
+Since 0.1.8, `change_context` additionally accepts exact
 `files=["src/worker.py"]`, `symbols=["Worker.work"]`, and
 `class_mode="summary"` (default) or `"expand"`. These selections do not scope
 the caller traversal: callers and tests can remain outside the selected files.

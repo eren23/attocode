@@ -42,6 +42,8 @@ caller evidence, import impact and candidate tests. `attocode-code-intel trace`
 follows static caller paths. Export JSON/Markdown, check saved evidence for stale
 source, or refresh the original request. Local full-profile MCP offers
 `change_context` and `trace_flow`; the daily list stays unchanged.
+[Version 0.1.8](docs/intelligence-0.1.8.md) adds exact file/symbol selection and
+bounded changed-class summaries; use `--class-mode expand` for class-wide callers.
 
 ## Teams and remote agents
 
