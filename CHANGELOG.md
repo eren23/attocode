@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.8] - 2026-10-17
+
 ### Added — Focused change reports and class summaries
 
 - Select exact changed paths and simple/qualified symbol names in `changes` and
@@ -24,8 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with source-audited caller labels and saved-report edit/stage/branch controls.
   Preserve timings, capped/partial graphs, compressed observations and scorer
   rejection controls. This measures selected workflow evidence, without an agent
-  outcome, native speed comparison or broad test-discovery claim; product defaults
-  and versions are unchanged.
+  outcome, native speed comparison or broad test-discovery claim; ranking defaults
+  remain unchanged.
 
 ## [Intelligence 0.1.7] - 2026-10-16
 
