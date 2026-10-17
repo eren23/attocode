@@ -7,7 +7,11 @@ three successive groups. This is offline product evidence, not an agent study.
 **Current release:** `attocode-code-intel` 0.1.8 (2026-10-17). See the
 [0.1.8 release notes](intelligence-0.1.8.md).
 
-**Latest search batch, 2026-10-17:** [dogfood fixes and one search candidate](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-search-batch.md).
+**Latest search batch, 2026-10-17:** [file-level coverage and "tested" test intent](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-file-coverage.md).
+Both candidates failed their predeclared rules on 32 new questions, so the search code does not change.
+File-level concept coverage had no net first-five gain on validation. "tested" intent found more test files but pushed out implementation files.
+
+**Previous search batch, 2026-10-17:** [dogfood fixes and one search candidate](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-search-batch.md).
 Three defects found by using Attocode on this repository are fixed. On 12 fresh validation questions, the fixes keep
 every file and quote judgment unchanged. The one retrieval candidate failed two predeclared rules and does not ship.
 

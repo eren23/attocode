@@ -154,3 +154,52 @@ def test_search_batch_decisions_replay_from_hash_bound_observations(split):
     assert bool(changed) == (not decision["candidate_controls_identical"])
     assert not recorded["candidate_rules"]["controls_identical"]
     assert not recorded["candidate_rules"]["zero_individual_losses"]
+
+
+@pytest.mark.parametrize("split", ["development", "validation", "previous_development", "previous_validation"])
+def test_file_coverage_decisions_replay_from_hash_bound_observations(split):
+    import gzip
+    import hashlib
+    import json
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "evals"
+    stem = "2026-10-17-file-coverage"
+    recorded = json.loads((root / "results" / f"{stem}-decision.json").read_text())
+    for patch in recorded["patches"].values():
+        data = (root / patch["file"]).read_bytes()
+        assert hashlib.sha256(data).hexdigest() == patch["compressed_sha256"]
+        assert hashlib.sha256(gzip.decompress(data)).hexdigest() == patch["patch_sha256"]
+    compressed = (root / "results" / f"{stem}-observations.json.gz").read_bytes()
+    assert hashlib.sha256(compressed).hexdigest() == recorded["artifact"]["gzip_sha256"]
+    raw = gzip.decompress(compressed)
+    assert len(raw) == recorded["artifact"]["raw_bytes"] < 5_000_000
+    assert hashlib.sha256(raw).hexdigest() == recorded["artifact"]["raw_sha256"]
+    decision = recorded["splits"][split]
+    questions = (root / decision["questions_file"]).read_bytes()
+    assert hashlib.sha256(questions).hexdigest() == decision["questions_sha256"]
+    rows = {}
+    for item in json.loads(raw):
+        if item["split"] == split:
+            assert item["observation"]["questions_sha256"] == decision["questions_sha256"]
+            rows.setdefault(item["observation"]["arm"], []).extend(item["observation"]["queries"])
+    expected = [q["id"] for q in rows["B"]]
+    base = {q["id"]: q for q in rows["B"]}
+    test_word = re.compile(r"\btest(?:s|ed|ing)?\b", re.I)
+    for arm, record in decision.items():
+        if arm in ("questions_file", "questions_sha256"):
+            continue
+        assert compare(rows["B"], rows[arm], expected) == record["compare"]
+        same = {(q["id"], page): q["pages"][page]["response"]["data"]["results"]
+                == base[q["id"]]["pages"][page]["response"]["data"]["results"]
+                for q in rows[arm] for page in q["pages"]}
+        assert record["controls_identical"] == all(
+            ok for (qid, _), ok in same.items() if base[qid]["category"] == "control")
+        assert record["no_test_word_identical"] == all(
+            ok for (qid, _), ok in same.items() if not test_word.search(base[qid]["query"]))
+    # Both rejections: individual losses for C2f, implementation-file losses for T.
+    assert not recorded["c2_rules"]["zero_individual_losses"]
+    assert not recorded["c2_rules"]["validation_first_five_gain_at_least_1"]
+    assert not recorded["t_rules"]["test_intent_zero_individual_losses"]
+    assert recorded["t_rules"]["negative_control_identical"]

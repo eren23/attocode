@@ -1,0 +1,409 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-17T18:11:47.188559+00:00",
+ "split": "development",
+ "baseline_commit": "3085a3bdcfc6ef28c566972fadc8f3a77a4fa922",
+ "budget": 2000,
+ "scope": "Fresh questions for four pinned packs (rails, SwiftFormat, spdlog, ggplot2), written by reading source only, before any search ran on these packs. Per pack and split: two natural-language implementation questions without exact identifiers, one exact-symbol control and one test-intent question that uses the word 'tested'. Subsystems were declared before writing. Labels are implementer-authored (drafted by source-reading subagents, then reviewed), source-bound and non-exhaustive; the primary file is first and is the scoped-page file_filter. They are not independent user or agent outcomes.",
+ "acceptance": {
+  "defined_in": "2026-10-17-file-coverage-freeze.json",
+  "validation": "Held-out until the candidate is frozen; no product tuning after validation results are opened."
+ },
+ "subsystems": {
+  "rails": [
+   "activesupport/lib/active_support/cache.rb",
+   "activesupport/lib/active_support/cache/",
+   "activesupport/test/cache/",
+   "activejob/lib/active_job/",
+   "activejob/test/"
+  ],
+  "SwiftFormat": [
+   "Sources/Tokenizer.swift",
+   "Tests/TokenizerTests.swift",
+   "Sources/Globs.swift",
+   "Tests/GlobsTests.swift",
+   "Sources/Arguments.swift",
+   "Tests/ArgumentsTests.swift",
+   "Sources/CommandLine.swift",
+   "Tests/CommandLineTests.swift"
+  ],
+  "spdlog": [
+   "include/spdlog/sinks/",
+   "include/spdlog/details/file_helper.h",
+   "include/spdlog/details/file_helper-inl.h",
+   "tests/test_file_logging.cpp",
+   "tests/test_daily_logger.cpp",
+   "tests/test_dup_filter.cpp",
+   "tests/test_file_helper.cpp",
+   "tests/test_ringbuffer.cpp",
+   "tests/test_sink.h"
+  ],
+  "ggplot2": [
+   "R/scale-*.R",
+   "R/scales-.R",
+   "R/guide-*.R",
+   "R/guides-*.R",
+   "tests/testthat/test-scale*.R",
+   "tests/testthat/test-guide*.R"
+  ]
+ },
+ "repositories": [
+  {
+   "pack": "rails",
+   "commit": "e72eb4c20b6bb5bdc7f63a4477992209585a1fa9",
+   "queries": [
+    {
+     "id": "rails:file-coverage-development-impl-1",
+     "category": "implementation",
+     "query": "How does the in-process cache decide which entries to drop when stored data grows past its memory limit, and what keeps two cleanups from running at the same moment?",
+     "evidence": [
+      {
+       "file": "activesupport/lib/active_support/cache/memory_store.rb",
+       "quote": "def prune(target_size, max_time = nil)",
+       "line": 116,
+       "source_sha256": "8857e593b1f11451138c6cabdab104ee97b2767dfa7ecb9b87ccc9faa12889f3",
+       "relevance": "evicts least recently accessed entries with a reentrancy guard"
+      },
+      {
+       "file": "activesupport/lib/active_support/cache/entry.rb",
+       "quote": "def bytesize",
+       "line": 61,
+       "source_sha256": "b695774657da12f6aea0a1eb6b1cbfa94bd0a9f77dee4b15b41dbb4856529ccf",
+       "relevance": "entry size used for memory accounting"
+      }
+     ]
+    },
+    {
+     "id": "rails:file-coverage-development-impl-2",
+     "category": "implementation",
+     "query": "How does a background job get put back in the queue after a failure, waiting longer each time with some random variation, and when does it finally give up?",
+     "evidence": [
+      {
+       "file": "activejob/lib/active_job/exceptions.rb",
+       "quote": "def determine_delay(seconds_or_duration_or_algorithm:, executions:",
+       "line": 173,
+       "source_sha256": "b6e1d6567a0b6db55906b6eab6280c80e6d5ef6f37185cdc110b19454b7fdb97",
+       "relevance": "computes backoff delay with jitter"
+      },
+      {
+       "file": "activejob/lib/active_job/enqueuing.rb",
+       "quote": "def enqueue(options = {})",
+       "line": 112,
+       "source_sha256": "6dcabf64043e52c826ab3d5b3e6d5f6e20fa9c8a5c890710ee5e27a049a4cfc6",
+       "relevance": "re-enqueue with a wait option"
+      }
+     ]
+    },
+    {
+     "id": "rails:file-coverage-development-control",
+     "category": "control",
+     "query": "Where is queue_name_from_part defined and where is it called?",
+     "evidence": [
+      {
+       "file": "activejob/lib/active_job/queue_name.rb",
+       "quote": "def queue_name_from_part(part_name)",
+       "line": 47,
+       "source_sha256": "b473689c7e9b0b6424751c1b2500660bd374a1b829822c4634c6771f0a03edea",
+       "relevance": "definition"
+      },
+      {
+       "file": "activejob/lib/active_job/core.rb",
+       "quote": "self.queue_name   = self.class.queue_name_from_part(options[:queue])",
+       "line": 178,
+       "source_sha256": "b740be56b9be48c76b1e8d65bdc44cef4341d0d596246fac0691da71f6fe35e1",
+       "relevance": "call site"
+      }
+     ],
+     "control": "exact_symbol"
+    },
+    {
+     "id": "rails:file-coverage-development-test",
+     "category": "test_intent",
+     "query": "Where is removal of expired entries from the on-disk cache tested?",
+     "evidence": [
+      {
+       "file": "activesupport/test/cache/stores/file_store_test.rb",
+       "quote": "def test_cleanup_removes_all_expired_entries",
+       "line": 139,
+       "source_sha256": "2bfac5a4d55e9b0a554152f7b47c27e6f425d0119bb607e6f42d6c6d29672728",
+       "relevance": "tests disk cache cleanup of expired entries"
+      },
+      {
+       "file": "activesupport/lib/active_support/cache/file_store.rb",
+       "quote": "def cleanup(options = nil)",
+       "line": 41,
+       "source_sha256": "5b10318164a3bd991e9c9342810546786268e511444edd70db72047ad95629dd",
+       "relevance": "implements cleanup"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "SwiftFormat",
+   "commit": "c8e50ff2cfc2eab46246c072a9ae25ab656c6ec3",
+   "queries": [
+    {
+     "id": "SwiftFormat:file-coverage-development-impl-1",
+     "category": "implementation",
+     "query": "How does the tool react when a user passes a misspelled long flag, and how does it propose the closest valid alternative in its error message?",
+     "evidence": [
+      {
+       "file": "Sources/Arguments.swift",
+       "quote": "throw FormatError.options(\"Unknown option --\\(key). Did you mean --\\(match)?\")",
+       "line": 279,
+       "source_sha256": "0f9c09f1276853eef6464ede1ca42c9fbd6509dd1d40a47d72c4f1c14da14f0a",
+       "relevance": "Unknown flag error with closest-match suggestion."
+      },
+      {
+       "file": "Sources/CommandLine.swift",
+       "quote": "var args = try preprocessArguments(args, commandLineArguments)",
+       "line": 415,
+       "source_sha256": "41e70cf0b03b8101658d0b5f5279339f02c3f89ed280fce41872aa5966e12156",
+       "relevance": "Command line entry point triggers the flag parsing."
+      }
+     ]
+    },
+    {
+     "id": "SwiftFormat:file-coverage-development-impl-2",
+     "category": "implementation",
+     "query": "How are comma-separated path patterns with wildcards and alternative groups in curly braces converted into regular expressions for matching file paths?",
+     "evidence": [
+      {
+       "file": "Sources/Globs.swift",
+       "quote": "public func expandGlobs(_ paths: String, in directory: String) -> [Glob] {",
+       "line": 78,
+       "source_sha256": "db95843103dbb859c4f466a394b4c56264d8592b8eb517dc412fbfe77fde4859",
+       "relevance": "Builds glob matchers from pattern strings."
+      },
+      {
+       "file": "Sources/Arguments.swift",
+       "quote": "try matchGlobs(expandGlobs(paths, in: directory), in: directory)",
+       "line": 387,
+       "source_sha256": "0f9c09f1276853eef6464ede1ca42c9fbd6509dd1d40a47d72c4f1c14da14f0a",
+       "relevance": "Path parsing uses the expanded patterns."
+      }
+     ]
+    },
+    {
+     "id": "SwiftFormat:file-coverage-development-control",
+     "category": "control",
+     "query": "Where is tokenize defined and where is it called?",
+     "evidence": [
+      {
+       "file": "Sources/Tokenizer.swift",
+       "quote": "public func tokenize(_ source: String) -> [Token] {",
+       "line": 1305,
+       "source_sha256": "b884d2d5f7f0b1241e5d8148a17f33c13fdc25ff416c7a9cccf1f61355a8254e",
+       "relevance": "Definition of tokenize."
+      },
+      {
+       "file": "Sources/CommandLine.swift",
+       "quote": "let tokens = tokenize(input)",
+       "line": 783,
+       "source_sha256": "41e70cf0b03b8101658d0b5f5279339f02c3f89ed280fce41872aa5966e12156",
+       "relevance": "Called when processing stdin input."
+      }
+     ],
+     "control": "exact_symbol"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-development-test",
+     "category": "test_intent",
+     "query": "Where is reading a list of input files from a text file, ignoring hash comments and blank lines, tested?",
+     "evidence": [
+      {
+       "file": "Tests/CommandLineTests.swift",
+       "quote": "func testParseFileList() {",
+       "line": 502,
+       "source_sha256": "295dc321753b0c26c7c65c28f76c4a2e68debfde2009fb7ab1590cb02d7208f3",
+       "relevance": "Test of file list parsing with comments."
+      },
+      {
+       "file": "Sources/CommandLine.swift",
+       "quote": "func parseFileList(_ source: String, in directory: String) throws -> [URL] {",
+       "line": 951,
+       "source_sha256": "41e70cf0b03b8101658d0b5f5279339f02c3f89ed280fce41872aa5966e12156",
+       "relevance": "Implementation of file list parsing."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "spdlog",
+   "commit": "0f7562a0f9273cfc71fddc6ae52ebff7a490fa04",
+   "queries": [
+    {
+     "id": "spdlog:file-coverage-development-impl-1",
+     "category": "implementation",
+     "query": "How does a logging destination avoid flooding output when the same message keeps arriving repeatedly within a short time window, and how does it report what was dropped?",
+     "evidence": [
+      {
+       "file": "include/spdlog/sinks/dup_filter_sink.h",
+       "quote": "void sink_it_(const details::log_msg &msg) override {",
+       "line": 53,
+       "source_sha256": "a7ac15cb20399b04b7a620e60c61796ee01eb702b54e277683fc00166677c83b",
+       "relevance": "counts skipped duplicates and emits a summary message"
+      },
+      {
+       "file": "include/spdlog/sinks/dist_sink.h",
+       "quote": "class dist_sink : public base_sink<Mutex> {",
+       "line": 23,
+       "source_sha256": "ae9e88cb5e7c92f271304e6852787edf5d83aea63dc6f79189c8c50adddf6ac8",
+       "relevance": "base class that forwards messages to wrapped sinks"
+      }
+     ]
+    },
+    {
+     "id": "spdlog:file-coverage-development-impl-2",
+     "category": "implementation",
+     "query": "How does the date-based rotating file destination remove the oldest files so only a limited number of past log files remain after switching to a new day?",
+     "evidence": [
+      {
+       "file": "include/spdlog/sinks/daily_file_sink.h",
+       "quote": "void delete_old_() {",
+       "line": 166,
+       "source_sha256": "ffd282c0791333c291ecf3efb9ae8d834d45029b5b961f6c8a4603bf2a1ae8ac",
+       "relevance": "Deletes the file that is max-files rotations old after a new daily file opens."
+      }
+     ]
+    },
+    {
+     "id": "spdlog:file-coverage-development-control",
+     "category": "control",
+     "query": "Where is rotating_file_sink defined and where is it called?",
+     "evidence": [
+      {
+       "file": "include/spdlog/sinks/rotating_file_sink.h",
+       "quote": "class rotating_file_sink final : public base_sink<Mutex> {",
+       "line": 21,
+       "source_sha256": "27fa443b8bd9158f4472e116a05fea37e82b6452b6eb70a4ea78ae0089039142",
+       "relevance": "class definition"
+      },
+      {
+       "file": "tests/test_file_logging.cpp",
+       "quote": "spdlog::sinks::rotating_file_sink_st>(basename, max_size, 2);",
+       "line": 127,
+       "source_sha256": "4a37b11d7c565375e9ce0ff949d374674b7e184ea0eba3de778513f93e7b44c5",
+       "relevance": "test constructs the sink"
+      }
+     ],
+     "control": "exact_symbol"
+    },
+    {
+     "id": "spdlog:file-coverage-development-test",
+     "category": "test_intent",
+     "query": "Where is keeping only the most recent entries of a fixed-capacity in-memory log store after it overflows tested?",
+     "evidence": [
+      {
+       "file": "tests/test_ringbuffer.cpp",
+       "quote": "TEST_CASE(\"ringbuffer overrun keeps last items\", \"[ringbuffer]\") {",
+       "line": 24,
+       "source_sha256": "0e30a2e30964d4dfe86dc8296c013ed1e77010613c41c1d95c043d0c12776169",
+       "relevance": "test of overrun behaviour"
+      },
+      {
+       "file": "include/spdlog/sinks/ringbuffer_sink.h",
+       "quote": "std::vector<std::string> last_formatted(size_t lim = 0) {",
+       "line": 42,
+       "source_sha256": "69dd445a2519bdc25261f2af884b479a09a54458468f9f351a8333ae6ab370a5",
+       "relevance": "implementation returning stored messages"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "ggplot2",
+   "commit": "6f1d98842de0489222c04bff64b3596b796d492d",
+   "queries": [
+    {
+     "id": "ggplot2:file-coverage-development-impl-1",
+     "category": "implementation",
+     "query": "How does a manually specified colour mapping decide which values go to which levels when the supplied values carry names or when explicit breaks are given?",
+     "evidence": [
+      {
+       "file": "R/scale-manual.R",
+       "quote": "limits <- function(x) {",
+       "line": 161,
+       "source_sha256": "9c1ba6c4fe1d7649fa5380fde459f96421a99fb186e0a8bd216290366dd23553",
+       "relevance": "Builds limits from the names of supplied values"
+      },
+      {
+       "file": "R/scale-.R",
+       "quote": "discrete_scale <- function(aesthetics, scale_name = deprecated(), palette, name = waiver(),",
+       "line": 217,
+       "source_sha256": "f9519a28589ba67f1bc7403affb7fb8a89b86eaed59f09b9ae56f0be835d1a5e",
+       "relevance": "Generic discrete scale constructor the manual scale delegates to"
+      }
+     ]
+    },
+    {
+     "id": "ggplot2:file-coverage-development-impl-2",
+     "category": "implementation",
+     "query": "How is the range of a position axis widened using multiplicative and additive padding, including when only two numbers are supplied rather than separate lower and upper amounts?",
+     "evidence": [
+      {
+       "file": "R/scale-expansion.R",
+       "quote": "expand_range4 <- function(limits, expand) {",
+       "line": 67,
+       "source_sha256": "fad501a8402cd48bc5d574624d5131ec90543122552faccb20094ef4b229ac29",
+       "relevance": "Expands limits using 2 or 4 constants"
+      },
+      {
+       "file": "R/scale-.R",
+       "quote": "expand_range4(self$get_limits(), expand)",
+       "line": 1561,
+       "source_sha256": "f9519a28589ba67f1bc7403affb7fb8a89b86eaed59f09b9ae56f0be835d1a5e",
+       "relevance": "Scale dimension applies the expansion"
+      }
+     ]
+    },
+    {
+     "id": "ggplot2:file-coverage-development-control",
+     "category": "control",
+     "query": "Where is guide_coloursteps defined and where is it called?",
+     "evidence": [
+      {
+       "file": "R/guide-colorsteps.R",
+       "quote": "guide_coloursteps <- function(",
+       "line": 48,
+       "source_sha256": "c3c9170cb72b91eaa7425d990c53b36ba133f3a129609a4f6c292e853b1f596d",
+       "relevance": "Definition of the constructor"
+      },
+      {
+       "file": "tests/testthat/test-guide-colorsteps.R",
+       "quote": "g <- guide_coloursteps(even.steps = TRUE)",
+       "line": 32,
+       "source_sha256": "41e4e2b8941fe548e0ad3bdecf1c50684913480b83abb28567583795ec6e2e91",
+       "relevance": "Calls the constructor in a test"
+      }
+     ],
+     "control": "exact_symbol"
+    },
+    {
+     "id": "ggplot2:file-coverage-development-test",
+     "category": "test_intent",
+     "query": "Where is rejection of invalid colour set input for the qualitative hue-based palette tested?",
+     "evidence": [
+      {
+       "file": "tests/testthat/test-scale-hue.R",
+       "quote": "test_that(\"scale_hue() checks the type input\", {",
+       "line": 1,
+       "source_sha256": "ceec2cc2a83a54db1752fdf7a890e2e63966a8f7f0ba89fcf1b01067b75845dc",
+       "relevance": "Test of palette type input checking"
+      },
+      {
+       "file": "R/scale-hue.R",
+       "quote": "pal_qualitative <- function(type, h, c, l, h.start, direction) {",
+       "line": 107,
+       "source_sha256": "eecb79292b70a4101dc307c44ebf19245f5a9aed1781ac7a5d8de962314a7a17",
+       "relevance": "Implementation of the palette"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,632 @@
+{
+ "baseline_commit": "3085a3bdcfc6ef28c566972fadc8f3a77a4fa922",
+ "freeze_sha256": "c89494e4f0c225f7b807861b1c6153f92cae3b0429a503a0d564ca7cb2538dee",
+ "candidate_record_sha256": "a4ece1223be1eb05cc97de35ac23ba9771ccb2dd9f90280d7cd32158fe5debda",
+ "engine_sha256": {
+  "B": "0e558d64df4bdeeb544b80480a1f3a30547c3556ad89aa93fedc0633d0591e51",
+  "T": "9aa90b3384cef16c0eb47d568ad35b8ec74bd4af894e0abb2e503fa44598ee57",
+  "C2f": "59ee0b3d6f394f73e49329d7bf872f8e1a41f1b55ba9a63daa6495388cce1c8a",
+  "TCf": "4517506576902a25b41f5e3fcb4dd4c3b75e8b82966c4618140368603c79871e"
+ },
+ "artifact": {
+  "raw_bytes": 4221374,
+  "compressed_bytes": 487471,
+  "gzip_sha256": "2af1273f2b7b85f4d24bd967d733b38b2f00c92d8caa508442a853bfda6859bd",
+  "raw_sha256": "d23cc1ef919c4d72a5456623a7e79655366eeaf3228bcb33fd40db565741dc0b",
+  "processes": 48,
+  "omitted": "per-stage generation lists (size); generation identity was checked on the full private observations"
+ },
+ "candidates": {
+  "T": "Test intent also recognizes tested and testing.",
+  "C2f": "f_near1: files whose cleaned concept coverage is within one of the best file go first; exact-identifier queries skipped; cleaned filler list used only for this ordering.",
+  "TCf": "T and C2f together."
+ },
+ "patches": {
+  "T": {
+   "file": "designs/2026-10-17-file-coverage-t.patch.gz",
+   "patch_sha256": "19af00d89ba3fd542fe538349cbce1f0e00162f3434c0e66bf0f995de8dd9702",
+   "compressed_sha256": "b90c3c62ba104e63a3c2f4588c503f2a4ffda93cdfc1ab5c1c6a538776c1ce85"
+  },
+  "C2f": {
+   "file": "designs/2026-10-17-file-coverage-c2f.patch.gz",
+   "patch_sha256": "90288038bbb8c98cc7c18728b855ce44426c9ad5cc32b4aff7c847aa15210c8b",
+   "compressed_sha256": "486f7d84febc15b4bb5520d7d560561a31b63200c64c9dbca2d6ecb2af43c485"
+  },
+  "TCf": {
+   "file": "designs/2026-10-17-file-coverage-tcf.patch.gz",
+   "patch_sha256": "7193b1a382a78e67385624be3508bba4279ff611c5b18f96ffaded628772752f",
+   "compressed_sha256": "d9b7e64948eddb1a2e3547cd36f36e35c8179bc4124421915723a8f0ab0c409f"
+  }
+ },
+ "c2_tuning": {
+  "data": "new development (16) plus the 24 consumed previous-batch questions; offline pool simulation reproduced the B first-five counts (11, 12, 13) before variants were compared",
+  "variants_simulated": {
+   "f_min2 (initial C2)": "new dev +1 at 5, no losses; below the +2 rule",
+   "f_count": "new dev +4, one page-10 loss; previous dev one primary first-five loss",
+   "f_near1 (chosen)": "new dev +4, no loss in simulation; previous dev +3 with two losses",
+   "f_idf": "losses in all three sets",
+   "f_rare1/f_rare2": "losses, fewer gains"
+  },
+  "chosen": "f_near1: files whose cleaned concept coverage is within one of the best file go first",
+  "mcp_development_result": {
+   "new_dev": "files@5 11->15, files@24 14->15, inspection 1->2, 1 loss (ggplot2 impl-2 page 24, label 1)",
+   "previous_dev": "files@5 12->14, files@24 15->17, 1 loss (pandas dev-1 page 5, label 0)",
+   "previous_val": "files@5 13->14, files@24 14->15, visible@5 4->5, 0 losses",
+   "controls_identical": true,
+   "generation_identical": true
+  },
+  "diagnosis": "Long questions keep many generic words after the filler list. Large files (pandas generic.py, groupby.py) and prose match many of them, so file-level coverage also promotes broad files and can push a judged file down."
+ },
+ "splits": {
+  "development": {
+   "questions_file": "designs/2026-10-17-file-coverage-development.json",
+   "questions_sha256": "dd163bb1ea74661a085f09751f8c647803283a3ecc6ab239a71c332fd1a62903",
+   "T": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 16,
+      "files_5": 11,
+      "ranges_5": 3,
+      "visible_5": 2,
+      "files_24": 14,
+      "ranges_24": 3,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 14,
+      "visible_scoped": 6,
+      "inspection_visible": 1,
+      "p95_seconds": 1.2939730409998447
+     },
+     "candidate": {
+      "questions": 16,
+      "files_5": 12,
+      "ranges_5": 5,
+      "visible_5": 4,
+      "files_24": 15,
+      "ranges_24": 5,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 14,
+      "visible_scoped": 6,
+      "inspection_visible": 2,
+      "p95_seconds": 1.4621894999872893
+     },
+     "individual_losses": [
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true,
+    "test_intent_primary": {
+     "gained": [
+      "ggplot2:file-coverage-development-test",
+      "rails:file-coverage-development-test"
+     ],
+     "lost": []
+    }
+   },
+   "C2f": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 16,
+      "files_5": 11,
+      "ranges_5": 3,
+      "visible_5": 2,
+      "files_24": 14,
+      "ranges_24": 3,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 14,
+      "visible_scoped": 6,
+      "inspection_visible": 1,
+      "p95_seconds": 1.2939730409998447
+     },
+     "candidate": {
+      "questions": 16,
+      "files_5": 15,
+      "ranges_5": 3,
+      "visible_5": 2,
+      "files_24": 15,
+      "ranges_24": 3,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 14,
+      "visible_scoped": 6,
+      "inspection_visible": 2,
+      "p95_seconds": 1.4868938339641318
+     },
+     "individual_losses": [
+      {
+       "id": "ggplot2:file-coverage-development-impl-2",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": false
+   },
+   "TCf": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 16,
+      "files_5": 11,
+      "ranges_5": 3,
+      "visible_5": 2,
+      "files_24": 14,
+      "ranges_24": 3,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 14,
+      "visible_scoped": 6,
+      "inspection_visible": 1,
+      "p95_seconds": 1.2939730409998447
+     },
+     "candidate": {
+      "questions": 16,
+      "files_5": 15,
+      "ranges_5": 5,
+      "visible_5": 4,
+      "files_24": 15,
+      "ranges_24": 5,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 14,
+      "visible_scoped": 6,
+      "inspection_visible": 3,
+      "p95_seconds": 1.2896071249851957
+     },
+     "individual_losses": [
+      {
+       "id": "ggplot2:file-coverage-development-impl-2",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-development-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": false,
+    "test_intent_primary": {
+     "gained": [
+      "ggplot2:file-coverage-development-test",
+      "rails:file-coverage-development-test"
+     ],
+     "lost": []
+    }
+   }
+  },
+  "validation": {
+   "questions_file": "designs/2026-10-17-file-coverage-validation.json",
+   "questions_sha256": "ec02aae5446771045cc8135f6c408b7c7ab233ac9e587c2c1e9fce731609567b",
+   "T": {
+    "compare": {
+     "passed": false,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": false,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": false,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 16,
+      "files_5": 15,
+      "ranges_5": 6,
+      "visible_5": 5,
+      "files_24": 16,
+      "ranges_24": 6,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 12,
+      "visible_scoped": 6,
+      "inspection_visible": 2,
+      "p95_seconds": 1.5362411250825971
+     },
+     "candidate": {
+      "questions": 16,
+      "files_5": 16,
+      "ranges_5": 6,
+      "visible_5": 4,
+      "files_24": 17,
+      "ranges_24": 6,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 12,
+      "visible_scoped": 6,
+      "inspection_visible": 1,
+      "p95_seconds": 0.9998237499967217
+     },
+     "individual_losses": [
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "5",
+       "metric": "visible",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true,
+    "test_intent_primary": {
+     "gained": [
+      "spdlog:file-coverage-validation-test",
+      "ggplot2:file-coverage-validation-test",
+      "rails:file-coverage-validation-test"
+     ],
+     "lost": []
+    }
+   },
+   "C2f": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 16,
+      "files_5": 15,
+      "ranges_5": 6,
+      "visible_5": 5,
+      "files_24": 16,
+      "ranges_24": 6,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 12,
+      "visible_scoped": 6,
+      "inspection_visible": 2,
+      "p95_seconds": 1.5362411250825971
+     },
+     "candidate": {
+      "questions": 16,
+      "files_5": 15,
+      "ranges_5": 7,
+      "visible_5": 5,
+      "files_24": 18,
+      "ranges_24": 8,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 12,
+      "visible_scoped": 6,
+      "inspection_visible": 2,
+      "p95_seconds": 1.1959410000126809
+     },
+     "individual_losses": [
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": false
+   },
+   "TCf": {
+    "compare": {
+     "passed": false,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": false,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": false,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 16,
+      "files_5": 15,
+      "ranges_5": 6,
+      "visible_5": 5,
+      "files_24": 16,
+      "ranges_24": 6,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 12,
+      "visible_scoped": 6,
+      "inspection_visible": 2,
+      "p95_seconds": 1.5362411250825971
+     },
+     "candidate": {
+      "questions": 16,
+      "files_5": 17,
+      "ranges_5": 7,
+      "visible_5": 4,
+      "files_24": 19,
+      "ranges_24": 8,
+      "visible_24": 0,
+      "files_scoped": 15,
+      "ranges_scoped": 12,
+      "visible_scoped": 6,
+      "inspection_visible": 1,
+      "p95_seconds": 1.3963495419593528
+     },
+     "individual_losses": [
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "ggplot2:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "5",
+       "metric": "visible",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "rails:file-coverage-validation-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": false,
+    "test_intent_primary": {
+     "gained": [
+      "spdlog:file-coverage-validation-test",
+      "ggplot2:file-coverage-validation-test",
+      "rails:file-coverage-validation-test"
+     ],
+     "lost": []
+    }
+   }
+  },
+  "previous_development": {
+   "questions_file": "designs/2026-10-17-search-batch-development.json",
+   "questions_sha256": "a7329951352dae357ca4d3551b2611c8d3f62feb32fb4729dfce8362003b10a7",
+   "C2f": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 12,
+      "files_5": 12,
+      "ranges_5": 3,
+      "visible_5": 3,
+      "files_24": 15,
+      "ranges_24": 4,
+      "visible_24": 0,
+      "files_scoped": 12,
+      "ranges_scoped": 7,
+      "visible_scoped": 7,
+      "inspection_visible": 1,
+      "p95_seconds": 0.752477457979694
+     },
+     "candidate": {
+      "questions": 12,
+      "files_5": 14,
+      "ranges_5": 3,
+      "visible_5": 3,
+      "files_24": 17,
+      "ranges_24": 4,
+      "visible_24": 0,
+      "files_scoped": 12,
+      "ranges_scoped": 7,
+      "visible_scoped": 7,
+      "inspection_visible": 1,
+      "p95_seconds": 0.9919248750666156
+     },
+     "individual_losses": [
+      {
+       "id": "pandas:search-batch-development-1",
+       "page": "5",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": false
+   }
+  },
+  "previous_validation": {
+   "questions_file": "designs/2026-10-17-search-batch-validation.json",
+   "questions_sha256": "2751afed23f86ac887dcd9179d5f81e79f4cce24a0a1711db4c189603264ac42",
+   "C2f": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 12,
+      "files_5": 13,
+      "ranges_5": 6,
+      "visible_5": 4,
+      "files_24": 14,
+      "ranges_24": 7,
+      "visible_24": 1,
+      "files_scoped": 12,
+      "ranges_scoped": 8,
+      "visible_scoped": 4,
+      "inspection_visible": 3,
+      "p95_seconds": 1.183648083009757
+     },
+     "candidate": {
+      "questions": 12,
+      "files_5": 14,
+      "ranges_5": 7,
+      "visible_5": 5,
+      "files_24": 15,
+      "ranges_24": 8,
+      "visible_24": 1,
+      "files_scoped": 12,
+      "ranges_scoped": 8,
+      "visible_scoped": 4,
+      "inspection_visible": 3,
+      "p95_seconds": 1.0836757080396637
+     },
+     "individual_losses": []
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": false
+   }
+  }
+ },
+ "c2_rules": {
+  "compare_passes_new_splits": true,
+  "zero_individual_losses": false,
+  "development_first_five_gain_at_least_2": true,
+  "validation_first_five_gain_at_least_1": false,
+  "controls_identical": true,
+  "generation_identical": true,
+  "not_run_after_rejection": [
+   "40 earlier regression questions",
+   "ranking gate",
+   "unit fixture"
+  ]
+ },
+ "t_rules": {
+  "test_intent_primary_gain_at_least_2": true,
+  "test_intent_zero_individual_losses": false,
+  "negative_control_identical": true,
+  "ranking_gate_queries_affected": 0,
+  "ranking_gate_note": "None of the 73 ranking-gate queries contains tested or testing without test or tests, so T cannot change the gate."
+ },
+ "decision": "Neither change ships. C2f: individual losses on new development, new validation and previous development; no net first-five gain on validation (15 -> 15). T: moved the primary test file into the first five on 5 of 8 test-intent questions, but pushed the implementation file out of the page on 3 of them (1 development, 2 validation)."
+}

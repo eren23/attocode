@@ -32,6 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exact-symbol controls and lost one validation label. The product does not
   include it.
 
+### Evaluation — Two more search candidates rejected
+
+- File-level concept coverage (files within one concept of the best file go
+  first) had a net gain of four first-five files on 16 new development
+  questions. On 16 new validation questions, the net first-five gain was zero.
+  It also lost judged files in three of four question sets.
+- Test intent for "tested" and "testing" moved the test file into the first
+  five on 5 of 8 questions. On 3 of them, it pushed the implementation file
+  out of the page. The product includes neither change. See
+  `packages/code-intel/evals/results/2026-10-17-file-coverage.md`.
+
 ## [Intelligence 0.1.8] - 2026-10-17
 
 ### Added — Focused change reports and class summaries
