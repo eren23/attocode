@@ -287,3 +287,13 @@ def test_equal_lexical_scores_have_stable_file_order_across_cold_builds(tmp_path
         ))))
     assert orders[0] == orders[1]
     assert orders[0][:2] == ["alpha.py", "beta.py"]
+
+
+def test_prose_words_are_not_search_terms():
+    from attocode_intel.focused_evidence import task_terms
+
+    query = "how keyword and body search scores are fused into one ranking"
+    positive, _ = task_terms(query)
+    assert not {"into", "onto", "one"} & positive
+    assert {"keyword", "body", "fused", "ranking"} <= positive
+    assert "one" not in query_concepts(query) and "into" not in query_concepts(query)
