@@ -30,7 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and perl5, it gained two with no loss. It failed the frozen p95 latency
   limit (0.110 against 0.1 seconds) in the one validation run, so the
   product does not include it. Two later repeats passed, so the failure is
-  most likely host noise, but they cannot change the frozen decision. See
+  most likely host noise, but they cannot change the frozen decision. A
+  second trial with the same order checked each file once and used a
+  latency rule over three interleaved rounds. On 20 more new questions over
+  vapor, protobuf, spring-boot, mojo and elixir, it passed the latency rule
+  but lost one judged test file at 24 and gained none. See
   `packages/code-intel/evals/results/2026-10-18-query-source.md`.
 
 ## [Intelligence 0.1.10] - 2026-10-18

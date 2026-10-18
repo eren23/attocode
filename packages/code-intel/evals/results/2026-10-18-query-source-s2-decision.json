@@ -1,0 +1,385 @@
+{
+ "freeze_sha256": "916586bea61c73b3a319a80a4bebe7451dc9e998d69f07164ca84cc2c5bcd08e",
+ "questions_file": "designs/2026-10-18-query-source-s2-validation.json",
+ "questions_sha256": "435112a144dd8bc329d822e3e66f2fa86819d65e0aaaf85e449830b5e3640eb0",
+ "patch": {
+  "file": "designs/2026-10-18-query-source-s2.patch.gz",
+  "patch_sha256": "5eec47d2e7f8d476259b4ccb7b17c04a60374a513009e5c26301e915979d39dc",
+  "compressed_sha256": "00b37bfd887b9e3d368fbcc473b3b0fa7a31e77ba15288df7a6d9ad9f951efc5"
+ },
+ "artifact": {
+  "raw_bytes": 3050407,
+  "compressed_bytes": 331579,
+  "gzip_sha256": "59056005a21a6b915b7b029efb703cb3cf4fc4fa2bd8c7b2caf0ce7934712309",
+  "raw_sha256": "9b7e587bd9ab6caa396bfff4c0d383c654e042a9c03af350a3dcc60195747ae8",
+  "processes": 30,
+  "omitted": "per-stage generation lists (size); generation identity was checked on the full private observations"
+ },
+ "decided_at": "2026-10-18T10:15:19.645450+00:00",
+ "p95_seconds": {
+  "D": 0.06379174999892712,
+  "S2": 0.06442870805040002,
+  "limit": 0.1
+ },
+ "per_round_p95_seconds": {
+  "D": [
+   0.06491541699506342,
+   0.06463108398020267,
+   0.06274095899425447
+  ],
+  "S2": [
+   0.0649770830059424,
+   0.06442870805040002,
+   0.0626250000204891
+  ]
+ },
+ "rules": {
+  "compare_passes": false,
+  "compare_checks": {
+   "file_totals_no_loss": false,
+   "visible_totals_no_loss": true,
+   "scoped_no_individual_loss": true,
+   "inspection_no_net_loss": true,
+   "latency": true
+  },
+  "zero_individual_losses": false,
+  "files_24_net_gain": -1,
+  "gain_packs": [],
+  "files_24_net_gain_at_least_2_in_2_packs": false,
+  "identity": {
+   "no_test_word_changed": 0,
+   "controls_changed": 0,
+   "generation_changed": 0
+  },
+  "identity_holds": true
+ },
+ "cross_round_delivery_differences": {
+  "D": [],
+  "S2": []
+ },
+ "decision": "rejected on validation",
+ "compare": {
+  "passed": false,
+  "checks": {
+   "file_totals_no_loss": false,
+   "visible_totals_no_loss": true,
+   "scoped_no_individual_loss": true,
+   "inspection_no_net_loss": true,
+   "latency": true
+  },
+  "baseline": {
+   "questions": 20,
+   "files_5": 18,
+   "ranges_5": 14,
+   "visible_5": 10,
+   "files_24": 20,
+   "ranges_24": 15,
+   "visible_24": 1,
+   "files_scoped": 19,
+   "ranges_scoped": 17,
+   "visible_scoped": 12,
+   "inspection_visible": 3,
+   "p95_seconds": 0.06379174999892712
+  },
+  "candidate": {
+   "questions": 20,
+   "files_5": 18,
+   "ranges_5": 14,
+   "visible_5": 10,
+   "files_24": 19,
+   "ranges_24": 14,
+   "visible_24": 1,
+   "files_scoped": 19,
+   "ranges_scoped": 17,
+   "visible_scoped": 12,
+   "inspection_visible": 3,
+   "p95_seconds": 0.06442870805040002
+  },
+  "individual_losses": [
+   {
+    "id": "vapor:query-source-s2-3",
+    "page": "24",
+    "metric": "files",
+    "labels": [
+     0
+    ]
+   }
+  ],
+  "individual_gains": []
+ },
+ "diagnosis_after_decision": {
+  "note": "From the full private round-1 D observations; it cannot change the decision.",
+  "implementation_source_rank_by_stage": [
+   {
+    "id": "vapor:query-source-s2-1",
+    "implementation": "Sources/Vapor/Request/Request.swift",
+    "source_rank_by_stage": {
+     "keyword": [
+      20,
+      35
+     ],
+     "body": [
+      4,
+      25
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "vapor:query-source-s2-2",
+    "implementation": "Sources/Vapor/Error/AbortError.swift",
+    "source_rank_by_stage": {
+     "keyword": [
+      null,
+      33
+     ],
+     "body": [
+      null,
+      26
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "vapor:query-source-s2-3",
+    "implementation": "Sources/Vapor/Application.swift",
+    "source_rank_by_stage": {
+     "keyword": [
+      null,
+      3
+     ],
+     "body": [
+      17,
+      29
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "protobuf:query-source-s2-1",
+    "implementation": "src/google/protobuf/compiler/ruby/rbs_generator.cc",
+    "source_rank_by_stage": {
+     "keyword": [
+      1,
+      27
+     ],
+     "body": [
+      7,
+      34
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "protobuf:query-source-s2-2",
+    "implementation": "src/google/protobuf/compiler/objectivec/line_consumer.cc",
+    "source_rank_by_stage": {
+     "keyword": [
+      26,
+      26
+     ],
+     "body": [
+      6,
+      25
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "protobuf:query-source-s2-3",
+    "implementation": "src/google/protobuf/util/delimited_message_util.cc",
+    "source_rank_by_stage": {
+     "keyword": [
+      null,
+      29
+     ],
+     "body": [
+      8,
+      30
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "spring-boot:query-source-s2-1",
+    "implementation": "core/spring-boot/src/main/java/org/springframework/boot/convert/CollectionToDelimitedStringConverter.java",
+    "source_rank_by_stage": {
+     "keyword": [
+      25,
+      34
+     ],
+     "body": [
+      15,
+      28
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "spring-boot:query-source-s2-2",
+    "implementation": "core/spring-boot/src/main/java/org/springframework/boot/logging/logback/ColorConverter.java",
+    "source_rank_by_stage": {
+     "keyword": [
+      null,
+      22
+     ],
+     "body": [
+      3,
+      10
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "spring-boot:query-source-s2-3",
+    "implementation": "core/spring-boot/src/main/java/org/springframework/boot/context/config/ConfigDataImporter.java",
+    "source_rank_by_stage": {
+     "keyword": [
+      null,
+      41
+     ],
+     "body": [
+      9,
+      16
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "mojo:query-source-s2-1",
+    "implementation": "lib/Mojo/DynamicMethods.pm",
+    "source_rank_by_stage": {
+     "keyword": [
+      2,
+      15
+     ],
+     "body": [
+      3,
+      51
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "mojo:query-source-s2-2",
+    "implementation": "lib/Mojo/UserAgent.pm",
+    "source_rank_by_stage": {
+     "keyword": [
+      23,
+      35
+     ],
+     "body": [
+      13,
+      32
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "mojo:query-source-s2-3",
+    "implementation": "lib/Test/Mojo.pm",
+    "source_rank_by_stage": {
+     "keyword": [
+      null,
+      15
+     ],
+     "body": [
+      30,
+      40
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "elixir:query-source-s2-1",
+    "implementation": "lib/elixir/lib/module.ex",
+    "source_rank_by_stage": {
+     "keyword": [
+      20,
+      30
+     ],
+     "body": [
+      8,
+      32
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "elixir:query-source-s2-2",
+    "implementation": "lib/elixir/lib/enum.ex",
+    "source_rank_by_stage": {
+     "keyword": [
+      6,
+      23
+     ],
+     "body": [
+      2,
+      30
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   },
+   {
+    "id": "elixir:query-source-s2-3",
+    "implementation": "lib/elixir/lib/macro/env.ex",
+    "source_rank_by_stage": {
+     "keyword": [
+      null,
+      34
+     ],
+     "body": [
+      3,
+      30
+     ],
+     "file_bm25": [
+      null,
+      0
+     ]
+    }
+   }
+  ]
+ }
+}

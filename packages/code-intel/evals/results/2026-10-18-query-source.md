@@ -5,12 +5,16 @@ batch showed that the test name rarely names the implementation file. This
 batch tries a signal from the query words instead: the best source hit for
 the query. The candidate (S1) held every judged rule on development and on
 new frozen validation questions. It failed the frozen p95 latency limit in
-the one validation run, so it does not ship. The search code does not change.
+the one validation run, so it does not ship. A second trial (S2) kept the S1
+order, made it cheaper and used a latency rule over three rounds. On 20 more
+new questions, S2 passed the latency rule but lost a judged test file and
+gained nothing. The search code does not change.
 
 | Id | Change |
 | --- | --- |
 | QN | Short queries with "test" or "tests" keep the first five test hits first. The best N distinct source files come next, then the other test hits, then the other source hits. |
 | S1 | The short form of Q1: one source hit after the first five test hits. |
+| S2 | The S1 order. S2 checks each candidate once with `is_test_path`. |
 
 All arms change only `demote_tests` in `query_ranking.py`. Candidate
 generation and the delivery of every query without "test" or "tests" do not
@@ -132,20 +136,70 @@ The most likely cause of the failure is run noise. The latency rule uses one
 run per arm, so one slow sample can decide it. The frozen rule still
 decides: S1 does not ship.
 
+## Second validation: S2
+
+S2 gives the same order as S1 on 5,000 seeded pools. On a 300-row pool, one
+call costs 607 microseconds for D, 1,199 for S1 and 609 for S2. The
+[equivalence record](../designs/2026-10-18-query-source-s2-equivalence.json)
+holds these numbers.
+
+The [second validation set](../designs/2026-10-18-query-source-s2-validation.json)
+has 20 new questions on five repositories that no earlier trial used:
+vapor (Swift), protobuf (C++), spring-boot (Java), mojo (Perl) and elixir
+(Elixir). Each pack pins the HEAD commit of its cached local clone and keeps
+one source area and its tests. The draw, templates and label checks are the
+same as above. No drawn file needed a replacement.
+
+The [freeze record](../designs/2026-10-18-query-source-s2-freeze.json) holds a
+new latency rule. We wrote it before any search on these packs:
+
+1. Run every pack in three rounds: D then S2, S2 then D, D then S2. Each run
+   is a fresh process with a cold index.
+2. For each question, take the median of the three round medians of the
+   page-5 latency.
+3. Take the p95 over these values. The limit stays max(0.1 s, 1.5 × D).
+
+The judged rules use the round-1 delivery and are the same as above.
+
+| Set | Arm | Files 5 / 24 / scoped | Visible 5 | Inspection | Individual losses |
+| --- | --- | --- | --- | --- | --- |
+| Validation 2 (20) | D | 18 / 20 / 19 | 10 | 3 | |
+| | S2 | 18 / 19 / 19 | 10 | 3 | 1 |
+
+S2 fails two frozen rules:
+
+- `compare` fails on the file totals: judged files at 24 go from 20 to 19.
+  The latency check passes. The p95 is 0.064 seconds in both arms, and the
+  three rounds agree within 3 ms.
+- On a vapor question, the judged test `ApplicationCreationTests.swift` was
+  in slot 8 of the 8 delivered results. The source hit in slot 6 pushed it
+  off the page.
+- S2 gains no judged file, so the rule for a gain of 2 in 2 packs fails.
+
+Controls, questions without a test word and candidate generation stay
+identical. Delivery is identical in all three rounds for both arms.
+
+After the decision, we looked at the source hits that S2 put in slot 6. None
+was the judged implementation. In the body stage, the judged implementation
+had a median rank of 7.5 among source hits, and one was absent. It was the
+first source hit in a stage on 1 of 15 questions. On one mojo question, slot 6 held
+`t/mojo/lib/Mojo/LoaderException2.pm`, a fixture in the Perl `t/` test
+folder. `is_test_path` does not count that folder.
+
 ## Limits
 
-- S1 does not change the first five results. It helps only the "24" page.
-- The best source hit is the implementation file in only 3 of 20 diagnosis
-  questions. S1 cannot help when the implementation is not the best source
-  hit.
+- S1 and S2 do not change the first five results. They help only the "24"
+  page, and only when the best source hit is the implementation.
+- Over both validation sets, the source slot gained 2 judged files and lost
+  1 in 30 test questions. The query words do not rank the implementation
+  first among the source hits.
 - The labels are author-written, source-bound and not exhaustive. They are
   not user or agent outcomes. The latency numbers are descriptive.
-- All 20 validation questions are now consumed. A new trial of S1 needs new
-  frozen questions.
+- All 40 validation questions are now consumed.
 
 ## Runs
 
-We made 147 supervised pack runs:
+We made 177 supervised pack runs:
 
 - 8 diagnosis runs of D on consumed packs, before any candidate.
 - 108 development runs: 18 packs each for D, Q1, Q2, Q3, Q5 and S1.
@@ -153,8 +207,9 @@ We made 147 supervised pack runs:
   delivery". We kept the record and excluded it. One rerun passed.
 - 10 validation runs of D and S1.
 - 20 repeat runs of D and S1 on the validation packs, after the decision.
+- 30 runs of D and S2 on the second validation packs, in three rounds.
 
-All 146 other runs passed inside the bounds. The largest RSS was 591 MiB
+All 176 other runs passed inside the bounds. The largest RSS was 591 MiB
 and the largest disk use was 331 MiB.
 
 ## Artifacts
@@ -171,5 +226,9 @@ and the largest disk use was 331 MiB.
   [Q3](../designs/2026-10-18-query-source-q3.patch.gz),
   [Q5](../designs/2026-10-18-query-source-q5.patch.gz) and
   [S1](../designs/2026-10-18-query-source-s1.patch.gz).
-- `test_query_source_decisions_replay_from_hash_bound_observations`
-  recomputes every comparison and identity check from these files.
+- S2: [decision record](2026-10-18-query-source-s2-decision.json),
+  [observations](2026-10-18-query-source-s2-observations.json.gz) of the 30
+  runs and the [patch](../designs/2026-10-18-query-source-s2.patch.gz).
+- `test_query_source_decisions_replay_from_hash_bound_observations` and
+  `test_query_source_s2_decision_replays_from_hash_bound_observations`
+  recompute every comparison and identity check from these files.

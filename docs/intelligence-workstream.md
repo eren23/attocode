@@ -8,8 +8,9 @@ three successive groups. This is offline product evidence, not an agent study.
 [0.1.10 release notes](intelligence-0.1.10.md).
 
 **Latest search batch, 2026-10-18:** [source hit after the first five tests](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-query-source.md).
-The candidate gained two judged files at 24 on 20 new questions with no loss. It failed the frozen p95 limit in
-the one validation run, so the search code does not change.
+The candidate gained two judged files at 24 on 20 new questions with no loss, but failed the frozen p95 limit in
+one run. A second trial with a three-round latency rule passed latency, but lost one judged test file and gained none
+on 20 more new questions. The search code does not change.
 
 **Earlier search batch, 2026-10-18:** [paired source for "test" questions](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-paired-source.md).
 The candidate gained no judged file on 16 new questions, so the search code does not change.
