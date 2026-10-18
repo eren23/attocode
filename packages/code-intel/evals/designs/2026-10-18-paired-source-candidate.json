@@ -1,0 +1,244 @@
+{
+ "schema_version": 1,
+ "written_at": "2026-10-18T06:31:40.109703+00:00",
+ "freeze": {
+  "file": "2026-10-18-paired-source-freeze.json",
+  "sha256": "f1c8defae39c81a97a959890f52b2a7764a218985a5d01f273f42325b82366e0"
+ },
+ "validation_questions_sha256": "d5707b6d485e5c3e7f6c1a57e8244eb63cc28d326ce9b499c765ffa239741b5f",
+ "validation_observations_before_this_record": 0,
+ "candidate": {
+  "id": "P",
+  "description": "Short queries with 'test' or 'tests' keep test hits first. If the best test hit has a test affix (FooTest.java, test_foo.py, foo_spec.rb) and a source hit in the pool has that name, the source hit moves to second place.",
+  "patch": {
+   "file": "2026-10-18-paired-source-p.patch.gz",
+   "sha256": "3fcd002a419a6df81a6be06bdd339a8cfc47c6a4394dced50b42395bc53ceaf1",
+   "patch_sha256": "7a8de9116a774d009dd485cd19b5bedd5b73f344b61ef3e9ec7796ea89805778"
+  },
+  "engine_sha256": "a44219d5589b74bb176bca078afb95936c18d8837f65c0e31772801ade1a1cb3"
+ },
+ "baseline_engine_sha256": "550955b817a473cf09cc04b73d79d5488ef95837964337e5d6b8a305e7706bda",
+ "development_history": [
+  {
+   "id": "Pf",
+   "patch": {
+    "file": "2026-10-18-paired-source-pf.patch.gz",
+    "sha256": "f63596cf3207181c4128c36232d805d79ae1ff719077a0c257d9682b1405490c",
+    "patch_sha256": "f1635b428515494a80d4723c49649bfb7f22995bb48e476f28aaea83a0a1da2c"
+   },
+   "engine_sha256": "aba86b45127781f72d5ef5d6450c627193b1d86f56cbab8af013132d0531cc81",
+   "result": "rejected on development: 1 individual loss. Pf also pairs a test file without a test affix by its own name. On ripgrep, the helper tests/util.rs paired with a source util.rs, and the labeled tests/feature.rs left the first five."
+  },
+  {
+   "id": "P",
+   "result": "passes every development rule: compare passes, zero individual losses, judged files at 5 90 -> 92, identity checks hold."
+  }
+ ],
+ "development_summary": {
+  "P": {
+   "overall": {
+    "passed": true,
+    "checks": {
+     "file_totals_no_loss": true,
+     "visible_totals_no_loss": true,
+     "scoped_no_individual_loss": true,
+     "inspection_no_net_loss": true,
+     "latency": true
+    },
+    "baseline": {
+     "questions": 84,
+     "files_5": 90,
+     "ranges_5": 46,
+     "visible_5": 33,
+     "files_24": 104,
+     "ranges_24": 49,
+     "visible_24": 6,
+     "files_scoped": 82,
+     "ranges_scoped": 69,
+     "visible_scoped": 42,
+     "inspection_visible": 16,
+     "p95_seconds": 0.14081466605421156
+    },
+    "candidate": {
+     "questions": 84,
+     "files_5": 92,
+     "ranges_5": 46,
+     "visible_5": 33,
+     "files_24": 106,
+     "ranges_24": 49,
+     "visible_24": 6,
+     "files_scoped": 82,
+     "ranges_scoped": 69,
+     "visible_scoped": 42,
+     "inspection_visible": 16,
+     "p95_seconds": 0.1384508339688182
+    },
+    "individual_losses": [],
+    "individual_gains": [
+     {
+      "id": "aspnetcore:test-source-slot-tests",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "aspnetcore:test-source-slot-tests",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "aspnetcore:test-source-slot-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "aspnetcore:test-source-slot-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     }
+    ]
+   },
+   "identity": {
+    "no_test_word_changed": 0,
+    "controls_changed": 0,
+    "generation_changed": 0
+   },
+   "label_split": {
+    "test_label_5": [
+     38,
+     38
+    ],
+    "source_label_5": [
+     6,
+     8
+    ],
+    "test_label_24": [
+     42,
+     42
+    ],
+    "source_label_24": [
+     6,
+     8
+    ]
+   }
+  },
+  "Pf": {
+   "overall": {
+    "passed": true,
+    "checks": {
+     "file_totals_no_loss": true,
+     "visible_totals_no_loss": true,
+     "scoped_no_individual_loss": true,
+     "inspection_no_net_loss": true,
+     "latency": true
+    },
+    "baseline": {
+     "questions": 84,
+     "files_5": 90,
+     "ranges_5": 46,
+     "visible_5": 33,
+     "files_24": 104,
+     "ranges_24": 49,
+     "visible_24": 6,
+     "files_scoped": 82,
+     "ranges_scoped": 69,
+     "visible_scoped": 42,
+     "inspection_visible": 16,
+     "p95_seconds": 0.14081466605421156
+    },
+    "candidate": {
+     "questions": 84,
+     "files_5": 91,
+     "ranges_5": 46,
+     "visible_5": 33,
+     "files_24": 106,
+     "ranges_24": 49,
+     "visible_24": 6,
+     "files_scoped": 82,
+     "ranges_scoped": 69,
+     "visible_scoped": 42,
+     "inspection_visible": 16,
+     "p95_seconds": 0.12177199998404831
+    },
+    "individual_losses": [
+     {
+      "id": "ripgrep:usefulness-development-2",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       0
+      ]
+     }
+    ],
+    "individual_gains": [
+     {
+      "id": "aspnetcore:test-source-slot-tests",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "aspnetcore:test-source-slot-tests",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "aspnetcore:test-source-slot-test",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     },
+     {
+      "id": "aspnetcore:test-source-slot-test",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+       1
+      ]
+     }
+    ]
+   },
+   "identity": {
+    "no_test_word_changed": 0,
+    "controls_changed": 0,
+    "generation_changed": 0
+   },
+   "label_split": {
+    "test_label_5": [
+     38,
+     37
+    ],
+    "source_label_5": [
+     6,
+     8
+    ],
+    "test_label_24": [
+     42,
+     42
+    ],
+    "source_label_24": [
+     6,
+     8
+    ]
+   }
+  }
+ }
+}

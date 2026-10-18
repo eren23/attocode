@@ -1,0 +1,47 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-18T06:24:30.889740+00:00",
+ "baseline_commit": "d33dd08b3e304cf24c9404afb214ed1c4fed1cbe",
+ "baseline_tree": "95657e57f658dc4ed3568af82d3131bc2f920f59",
+ "baseline_note": "PR #235 head. Main after the squash merge of #235 must have this tree.",
+ "validation_questions": {
+  "file": "2026-10-18-paired-source-validation.json",
+  "sha256": "d5707b6d485e5c3e7f6c1a57e8244eb63cc28d326ce9b499c765ffa239741b5f",
+  "questions": 16
+ },
+ "candidate": {
+  "id": "P",
+  "description": "For a short query with 'test' or 'tests', test hits still go first. If a source hit in the pool has the name that the best test hit is for, that source hit moves to second place.",
+  "frozen_before_validation_in": "candidate record written after development and before validation"
+ },
+ "development": {
+  "file": "2026-10-18-paired-source-development.json",
+  "sha256": "f88421c934d8273d8806812c6ff236273a171294437092134e4d6fb5d7b7a093",
+  "questions": "Consumed sets only: the 68-question test-source-slot development set and the 16 test-source-slot validation questions; 84 questions on 14 packs.",
+  "allowed": "Candidate changes are allowed on development data only."
+ },
+ "bounds": {
+  "per_pack_seconds": 180,
+  "per_pack_disk_bytes": 536870912,
+  "per_pack_rss_bytes": 1610612736,
+  "models": false,
+  "downloads": false,
+  "cloud": false
+ },
+ "acceptance": {
+  "validation_rules": [
+   "compare(B, P) passes: no aggregate loss of files or visible quotes at 5, 24 or scoped; no net inspection loss; p95 at most max(0.1 s, 1.5 x B).",
+   "Zero individual judged-file or visible-quote losses at 5, 24 and scoped.",
+   "Judged files at 5: net gain of at least 2, with gains in at least 2 packs.",
+   "Every question without a test word has identical delivery on every page; candidate generation is identical for every question."
+  ],
+  "development_rules": [
+   "compare(B, P) passes on the 84 consumed questions.",
+   "Zero individual judged-file or visible-quote losses.",
+   "Judged files at 5: net gain of at least 2.",
+   "Questions without a test word: identical delivery; generation identical."
+  ],
+  "ranking_gate": "The CI ranking gate must pass on the PR if the candidate ships.",
+  "decision": "Ship only if every development and validation rule holds. Validation runs once; no tuning after it."
+ }
+}
