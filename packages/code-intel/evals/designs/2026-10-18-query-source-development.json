@@ -1,0 +1,2220 @@
+{
+ "schema_version": 1,
+ "split": "development",
+ "budget": 2000,
+ "scope": "All consumed questions of the paired-source batch (84 development + 16 validation). Not fresh evidence.",
+ "repositories": [
+  {
+   "pack": "express",
+   "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+   "queries": [
+    {
+     "id": "express:test-intent-1",
+     "intent": "test",
+     "query": "Find tests for clearing a cookie while ignoring maxAge and supplied expiration",
+     "evidence": [
+      {
+       "file": "test/res.clearCookie.js",
+       "quote": "it('should ignore maxAge'",
+       "line": 36,
+       "source_sha256": "83d883aebfb0e17d1d9fb864c1a52599d1070b2d45af7f9b591acad3ca614882",
+       "relevance": "Asserts expiry clearing ignores maxAge and supplied expires."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "express:test-intent-2",
+     "intent": "test",
+     "query": "Find tests checking subdomain arrays with custom hostname offsets",
+     "evidence": [
+      {
+       "file": "test/req.subdomains.js",
+       "quote": "describe('when subdomain offset is set'",
+       "line": 95,
+       "source_sha256": "b06fc91e7a90eb5ed5a0f68273ae28fc9094d49da29ae5f8fce9efa1b1f8b822",
+       "relevance": "Checks arrays under configured subdomain offsets."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "express:test-intent-3",
+     "intent": "production",
+     "query": "Check whether an application feature setting is enabled using its truthiness",
+     "evidence": [
+      {
+       "file": "lib/application.js",
+       "quote": "app.enabled = function enabled(setting)",
+       "line": 420,
+       "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+       "relevance": "Converts the setting value to a Boolean."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "express:usefulness-development-1",
+     "category": "tests",
+     "query": "Find tests checking JSON response content types and UTF-8 charset handling",
+     "evidence": [
+      {
+       "file": "test/res.json.js",
+       "line": 21,
+       "quote": "should not override previous Content-Types",
+       "source_sha256": "08186aceebdb74af9f6fabe495c8c8b9334fbc6e5d53bf52145e4f86850eb046",
+       "relevance": "Source anchor for find tests checking JSON response content types and UTF-8 charset handling"
+      },
+      {
+       "file": "test/res.send.js",
+       "line": 112,
+       "quote": "should override charset in Content-Type",
+       "source_sha256": "9dcbd827335442daa10f4bb99ebd26897a922700e6e149b5d1c0c9b6579afa58",
+       "relevance": "Source anchor for find tests checking JSON response content types and UTF-8 charset handling"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "express:usefulness-development-2",
+     "category": "tests",
+     "query": "Find tests for accepting content types and choosing a response format",
+     "evidence": [
+      {
+       "file": "test/req.accepts.js",
+       "line": 73,
+       "quote": "should return the first acceptable type",
+       "source_sha256": "80bd6f4700f6a28a837bc42f7284b9830c178591d472fd589297cb26c863f5e5",
+       "relevance": "Source anchor for find tests for accepting content types and choosing a response format"
+      },
+      {
+       "file": "test/res.format.js",
+       "line": 197,
+       "quote": "should default the Content-Type",
+       "source_sha256": "bfc02443c7ebc62e716dfc9e121613e27507d63382db8ce3ea430b9019c37c8d",
+       "relevance": "Source anchor for find tests for accepting content types and choosing a response format"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "express:usefulness-development-3",
+     "category": "configuration",
+     "query": "Configure trusted proxy hops when determining client addresses",
+     "evidence": [
+      {
+       "file": "lib/application.js",
+       "line": 370,
+       "quote": "case 'trust proxy':",
+       "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+       "relevance": "Source anchor for configure trusted proxy hops when determining client addresses"
+      },
+      {
+       "file": "lib/utils.js",
+       "line": 194,
+       "quote": "exports.compileTrust = function",
+       "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+       "relevance": "Source anchor for configure trusted proxy hops when determining client addresses"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "express:usefulness-validation-1",
+     "category": "tests",
+     "query": "Find tests for encoding redirect URLs and preserving already encoded locations",
+     "evidence": [
+      {
+       "file": "test/res.redirect.js",
+       "line": 35,
+       "quote": "should not touch already-encoded sequences",
+       "source_sha256": "451fae6e8674bbb463de046afd8fafa3c7a766fea840abd8b1af63a1f31b8f04",
+       "relevance": "Source anchor for find tests for encoding redirect URLs and preserving already encoded locations"
+      },
+      {
+       "file": "test/res.location.js",
+       "line": 172,
+       "quote": "should not touch already-encoded sequences",
+       "source_sha256": "5d46e67f931862cf2372c210d8b3efb8ecaa31b328738115eb3ed3060a86f1ef",
+       "relevance": "Source anchor for find tests for encoding redirect URLs and preserving already encoded locations"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    },
+    {
+     "id": "express:usefulness-validation-2",
+     "category": "tests",
+     "query": "Find tests for partial file downloads using byte range requests",
+     "evidence": [
+      {
+       "file": "test/res.download.js",
+       "line": 44,
+       "quote": "should respond with requested byte range",
+       "source_sha256": "cd90a8f6e6390907af0f8844e08fc02ddb5918f745f1cfe7aeb7f86dd137c5c4",
+       "relevance": "Source anchor for find tests for partial file downloads using byte range requests"
+      },
+      {
+       "file": "test/res.sendFile.js",
+       "line": 365,
+       "quote": "should respond to range request",
+       "source_sha256": "1ce86ede00a1e19a3c11a835ef9f87669d495ada5060922d96cc96e4120ec4f7",
+       "relevance": "Source anchor for find tests for partial file downloads using byte range requests"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    },
+    {
+     "id": "express:usefulness-validation-3",
+     "category": "error_handling",
+     "query": "Forward unsupported response format errors into the application error handler",
+     "evidence": [
+      {
+       "file": "lib/response.js",
+       "line": 588,
+       "quote": "next(createError(406,",
+       "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+       "relevance": "Source anchor for forward unsupported response format errors into the application error handler"
+      },
+      {
+       "file": "lib/application.js",
+       "line": 154,
+       "quote": "var done = callback || finalhandler",
+       "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+       "relevance": "Source anchor for forward unsupported response format errors into the application error handler"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "ripgrep",
+   "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+   "queries": [
+    {
+     "id": "ripgrep:test-intent-1",
+     "intent": "test",
+     "query": "Find tests for CRLF line anchors in multiline and only-matching searches",
+     "evidence": [
+      {
+       "file": "tests/feature.rs",
+       "quote": "rgtest!(f416_crlf_multiline",
+       "line": 489,
+       "source_sha256": "fbc6455c5d2cb73580cde4b390c0a43315107598200a6ca6023c3bfc155d8706",
+       "relevance": "Checks CRLF and multiline end anchors alongside only-matching cases."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "ripgrep:test-intent-2",
+     "intent": "test",
+     "query": "Find tests restricting external preprocessing to paths matching a glob",
+     "evidence": [
+      {
+       "file": "tests/misc.rs",
+       "quote": "rgtest!(preprocessing_glob",
+       "line": 862,
+       "source_sha256": "b44867c413b4bd6d22ea5c3a3842167534e152a8b9982122d3aa682488256faa",
+       "relevance": "Applies --pre-glob and checks matching and non-matching input files."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "ripgrep:test-intent-3",
+     "intent": "production",
+     "query": "Drain process stderr asynchronously while reading stdout to avoid a pipe deadlock",
+     "evidence": [
+      {
+       "file": "crates/cli/src/process.rs",
+       "quote": "StderrReader::r#async(child.stderr.take().unwrap())",
+       "line": 113,
+       "source_sha256": "1452fb92570a07c3c5135dc9efc293a30edd3322580cc93d0b342107c2593e3f",
+       "relevance": "Selects asynchronous stderr consumption for the command reader."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "ripgrep:usefulness-development-1",
+     "category": "tests",
+     "query": "Find tests for match counts and JSON search summary statistics",
+     "evidence": [
+      {
+       "file": "tests/feature.rs",
+       "line": 233,
+       "quote": "rgtest!(f89_count,",
+       "source_sha256": "fbc6455c5d2cb73580cde4b390c0a43315107598200a6ca6023c3bfc155d8706",
+       "relevance": "Source anchor for find tests for match counts and JSON search summary statistics"
+      },
+      {
+       "file": "tests/json.rs",
+       "line": 253,
+       "quote": "rgtest!(quiet_stats,",
+       "source_sha256": "9dd91b0dadc9be38d4ac37551af4b7bca6f80da8fe9723009f87b11c750efaaa",
+       "relevance": "Source anchor for find tests for match counts and JSON search summary statistics"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "ripgrep:usefulness-development-2",
+     "category": "tests",
+     "query": "Find tests for context separators and context suppression in output modes",
+     "evidence": [
+      {
+       "file": "tests/feature.rs",
+       "line": 1114,
+       "quote": "rgtest!(no_context_sep,",
+       "source_sha256": "fbc6455c5d2cb73580cde4b390c0a43315107598200a6ca6023c3bfc155d8706",
+       "relevance": "Source anchor for find tests for context separators and context suppression in output modes"
+      },
+      {
+       "file": "tests/regression.rs",
+       "line": 552,
+       "quote": "rgtest!(r693_context_in_contextless_mode,",
+       "source_sha256": "22d1778677e2668e5351d6d8e4d48424db11d3a699ea270be06e9bd7b7a07ec3",
+       "relevance": "Source anchor for find tests for context separators and context suppression in output modes"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "ripgrep:usefulness-development-3",
+     "category": "implementation",
+     "query": "Allow hidden files during directory traversal when the search option enables them",
+     "evidence": [
+      {
+       "file": "crates/core/flags/hiargs.rs",
+       "line": 895,
+       "quote": ".hidden(!self.hidden)",
+       "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+       "relevance": "Source anchor for allow hidden files during directory traversal when the search option enables them"
+      },
+      {
+       "file": "crates/ignore/src/walk.rs",
+       "line": 801,
+       "quote": "pub fn hidden(",
+       "source_sha256": "3173c55f99ac90119eb00b615fbd9f5532a27c7a969e7ba0a369aba7ba71f1f3",
+       "relevance": "Source anchor for allow hidden files during directory traversal when the search option enables them"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "ripgrep:usefulness-validation-1",
+     "category": "tests",
+     "query": "Find tests for binary detection and NUL bytes appearing before matches",
+     "evidence": [
+      {
+       "file": "tests/binary.rs",
+       "line": 376,
+       "quote": "rgtest!(before_match1_implicit_binary,",
+       "source_sha256": "683714aaf5bb499c344c0280ab7fc09907a90b51e836dd26859de99e8fc454e9",
+       "relevance": "Source anchor for find tests for binary detection and NUL bytes appearing before matches"
+      },
+      {
+       "file": "tests/regression.rs",
+       "line": 1218,
+       "quote": "rgtest!(r1838_nul_error_with_binary_detection,",
+       "source_sha256": "22d1778677e2668e5351d6d8e4d48424db11d3a699ea270be06e9bd7b7a07ec3",
+       "relevance": "Source anchor for find tests for binary detection and NUL bytes appearing before matches"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    },
+    {
+     "id": "ripgrep:usefulness-validation-2",
+     "category": "tests",
+     "query": "Find tests for case insensitive matching and smart case behavior",
+     "evidence": [
+      {
+       "file": "tests/regression.rs",
+       "line": 255,
+       "quote": "cmd.arg(\"--smart-case\")",
+       "source_sha256": "22d1778677e2668e5351d6d8e4d48424db11d3a699ea270be06e9bd7b7a07ec3",
+       "relevance": "Source anchor for find tests for case insensitive matching and smart case behavior"
+      },
+      {
+       "file": "tests/feature.rs",
+       "line": 205,
+       "quote": "smart_case",
+       "source_sha256": "fbc6455c5d2cb73580cde4b390c0a43315107598200a6ca6023c3bfc155d8706",
+       "relevance": "Source anchor for find tests for case insensitive matching and smart case behavior"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    },
+    {
+     "id": "ripgrep:usefulness-validation-3",
+     "category": "callers",
+     "query": "Select a decompression program and search the resulting stream",
+     "evidence": [
+      {
+       "file": "crates/core/search.rs",
+       "line": 329,
+       "quote": "fn search_decompress(",
+       "source_sha256": "1ebd56cf3b1c83e522356760bbac869d6972105c454f95b579020e24a93ade7c",
+       "relevance": "Source anchor for select a decompression program and search the resulting stream"
+      },
+      {
+       "file": "crates/cli/src/decompress.rs",
+       "line": 221,
+       "quote": "pub fn build<P: AsRef<Path>>(",
+       "source_sha256": "eaceb58ab4c650f0f9f62de1181fd6611b9e6b5b162816546760d49514045b37",
+       "relevance": "Source anchor for select a decompression program and search the resulting stream"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "cats-effect",
+   "commit": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7",
+   "queries": [
+    {
+     "id": "cats-effect:test-intent-1",
+     "intent": "test",
+     "query": "Find tests for zero-capacity priority queues handing values between producer and consumer",
+     "evidence": [
+      {
+       "file": "tests/shared/src/test/scala/cats/effect/std/PQueueSuite.scala",
+       "quote": "real(\"demonstrate offer and take with zero capacity\")",
+       "line": 41,
+       "source_sha256": "61238b74cba53d00baef51427a02e2596523cb7fc60c95dddfc6b82b5fed418d",
+       "relevance": "Exercises a zero-capacity priority queue with concurrent offers and takes."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "cats-effect:test-intent-2",
+     "intent": "test",
+     "query": "Find tests for deque offers and takes at the front and back",
+     "evidence": [
+      {
+       "file": "tests/shared/src/test/scala/cats/effect/std/DequeueSuite.scala",
+       "quote": "\"BoundedDequeue (reversed)\"",
+       "line": 41,
+       "source_sha256": "8f15a846a043c996a01d933fde482039e3b107aa15368ddb11fee243e3e480e6",
+       "relevance": "Checks forward and reverse offer/take operations through common assertions."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "cats-effect:test-intent-3",
+     "intent": "production",
+     "query": "Release a countdown latch and wake blocked fibers when its count reaches zero",
+     "evidence": [
+      {
+       "file": "std/shared/src/main/scala/cats/effect/std/CountDownLatch.scala",
+       "quote": "(Done(), signal.complete(()).void)",
+       "line": 74,
+       "source_sha256": "acb773226b01022eead28331caf461f6c82da779fbf2c7e0a59eae9847a1e457",
+       "relevance": "Completes the signal when the last release changes the latch to Done."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    }
+   ]
+  },
+  {
+   "pack": "okhttp",
+   "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+   "queries": [
+    {
+     "id": "okhttp:test-intent-1",
+     "intent": "test",
+     "query": "Find tests rejecting empty header names and trimming header whitespace",
+     "evidence": [
+      {
+       "file": "okhttp/src/jvmTest/kotlin/okhttp3/HeadersTest.kt",
+       "quote": "@Test fun ofThrowsOnEmptyName()",
+       "line": 39,
+       "source_sha256": "8e771b08ba448e76691763c24fa1145a155c59e13a00499145509bf8680dcf21",
+       "relevance": "Checks empty-name rejection and whitespace trimming."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "okhttp:test-intent-2",
+     "intent": "test",
+     "query": "Find tests percent-encoding form names and values containing spaces and plus signs",
+     "evidence": [
+      {
+       "file": "okhttp/src/jvmTest/kotlin/okhttp3/FormBodyTest.kt",
+       "quote": "assertThat(body.encodedName(0)).isEqualTo(\"a%2B%3D%26+b\")",
+       "line": 36,
+       "source_sha256": "63af90ad917ea4898b2a235f6f88070b9eb466ac7992ee8abe4210bafb54168e",
+       "relevance": "Checks encoding and decoding form name/value pairs."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    },
+    {
+     "id": "okhttp:test-intent-3",
+     "intent": "production",
+     "query": "Peek response trailers without blocking when the remaining body has not arrived",
+     "evidence": [
+      {
+       "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/Response.kt",
+       "quote": "fun peekTrailers(): Headers? = trailersSource.peek()",
+       "line": 218,
+       "source_sha256": "b6194d22ef86402a0fb6448d34556c4a6376c2ad8ecff89a58f7f6aab11e05ed",
+       "relevance": "Exposes nonblocking trailer lookup with null until available."
+      }
+     ],
+     "source_set": "2026-10-16-test-intent.json"
+    }
+   ]
+  },
+  {
+   "pack": "requests",
+   "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+   "queries": [
+    {
+     "id": "requests:usefulness-development-1",
+     "category": "tests",
+     "query": "Find tests for chunked request uploads and malformed chunked responses",
+     "evidence": [
+      {
+       "file": "tests/test_lowlevel.py",
+       "line": 39,
+       "quote": "def test_chunked_encoding_error",
+       "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+       "relevance": "Source anchor for find tests for chunked request uploads and malformed chunked responses"
+      },
+      {
+       "file": "tests/test_requests.py",
+       "line": 2221,
+       "quote": "def test_chunked",
+       "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+       "relevance": "Source anchor for find tests for chunked request uploads and malformed chunked responses"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "requests:usefulness-development-2",
+     "category": "tests",
+     "query": "Find tests checking whether environment proxy settings are respected",
+     "evidence": [
+      {
+       "file": "tests/test_lowlevel.py",
+       "line": 290,
+       "quote": "def test_use_proxy_from_environment",
+       "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+       "relevance": "Source anchor for find tests checking whether environment proxy settings are respected"
+      },
+      {
+       "file": "tests/test_requests.py",
+       "line": 609,
+       "quote": "def test_respect_proxy_env_on_send_self_prepared_request",
+       "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+       "relevance": "Source anchor for find tests checking whether environment proxy settings are respected"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "requests:usefulness-development-3",
+     "category": "callers",
+     "query": "Rebuild authentication after redirects without leaking credentials to another host",
+     "evidence": [
+      {
+       "file": "src/requests/sessions.py",
+       "line": 283,
+       "quote": "def rebuild_auth(",
+       "source_sha256": "81b9a5b0d4a2f7ab088a0d26aed1f3640653fdf388593a1ef989d6eefe69b4a2",
+       "relevance": "Source anchor for rebuild authentication after redirects without leaking credentials to another host"
+      },
+      {
+       "file": "src/requests/utils.py",
+       "line": 205,
+       "quote": "def get_netrc_auth(",
+       "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+       "relevance": "Source anchor for rebuild authentication after redirects without leaking credentials to another host"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "requests:usefulness-validation-1",
+     "category": "tests",
+     "query": "Find tests for preserving or updating URL fragments during redirects",
+     "evidence": [
+      {
+       "file": "tests/test_requests.py",
+       "line": 352,
+       "quote": "def test_fragment_maintained_on_redirect",
+       "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+       "relevance": "Source anchor for find tests for preserving or updating URL fragments during redirects"
+      },
+      {
+       "file": "tests/test_lowlevel.py",
+       "line": 364,
+       "quote": "def test_fragment_update_on_redirect",
+       "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+       "relevance": "Source anchor for find tests for preserving or updating URL fragments during redirects"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    },
+    {
+     "id": "requests:usefulness-validation-2",
+     "category": "tests",
+     "query": "Find tests for decoding JSON responses with alternate UTF encodings and byte order marks",
+     "evidence": [
+      {
+       "file": "tests/test_lowlevel.py",
+       "line": 407,
+       "quote": "def test_json_decode_compatibility_for_alt_utf_encodings",
+       "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+       "relevance": "Source anchor for find tests for decoding JSON responses with alternate UTF encodings and byte order marks"
+      },
+      {
+       "file": "tests/test_utils.py",
+       "line": 435,
+       "quote": "def test_guess_by_bom",
+       "source_sha256": "749c36bc574e3e796ddb78bbdc91b0d92fccf703a39c6d21f5afbfa7b28f50f8",
+       "relevance": "Source anchor for find tests for decoding JSON responses with alternate UTF encodings and byte order marks"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    },
+    {
+     "id": "requests:usefulness-validation-3",
+     "category": "error_handling",
+     "query": "Raise an HTTP status failure with the response and request attached",
+     "evidence": [
+      {
+       "file": "src/requests/models.py",
+       "line": 1001,
+       "quote": "def raise_for_status(",
+       "source_sha256": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc",
+       "relevance": "Source anchor for raise an HTTP status failure with the response and request attached"
+      },
+      {
+       "file": "src/requests/exceptions.py",
+       "line": 56,
+       "quote": "class HTTPError(",
+       "source_sha256": "9de3a402478aedebd939faa1b48495b0714894e888267e65071b52d014c56a50",
+       "relevance": "Source anchor for raise an HTTP status failure with the response and request attached"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "gson",
+   "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+   "queries": [
+    {
+     "id": "gson:usefulness-development-1",
+     "category": "tests",
+     "query": "Find tests for serializing explicit null fields and map values",
+     "evidence": [
+      {
+       "file": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
+       "line": 66,
+       "quote": "void testExplicitSerializationOfNulls(",
+       "source_sha256": "c7c5c4e3938e55a440206920ca2832e79c52a2276089bab8aedcc66cab9c6a78",
+       "relevance": "Source anchor for find tests for serializing explicit null fields and map values"
+      },
+      {
+       "file": "gson/src/test/java/com/google/gson/functional/MapTest.java",
+       "line": 121,
+       "quote": "void testMapSerializationWithNullValueButSerializeNulls(",
+       "source_sha256": "1e79e34ccc9d133aa10090f3e7b804954bcc1912a01b086ab8c8f591fb622e82",
+       "relevance": "Source anchor for find tests for serializing explicit null fields and map values"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "gson:usefulness-development-2",
+     "category": "tests",
+     "query": "Find tests for pretty printing arrays and nested objects",
+     "evidence": [
+      {
+       "file": "gson/src/test/java/com/google/gson/functional/PrettyPrintingTest.java",
+       "line": 62,
+       "quote": "void testPrettyPrintArrayOfObjects(",
+       "source_sha256": "a15538393ae01dbed33066044a4a32875c2761d495bbd67e88774b82607e1813",
+       "relevance": "Source anchor for find tests for pretty printing arrays and nested objects"
+      },
+      {
+       "file": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+       "line": 475,
+       "quote": "void testPrettyPrintObject(",
+       "source_sha256": "1d01282d19fc04072a1d6cd88ad2cbe872dcb84eaf27384dcfcf3bb488d41400",
+       "relevance": "Source anchor for find tests for pretty printing arrays and nested objects"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "gson:usefulness-development-3",
+     "category": "configuration",
+     "query": "Apply a field naming policy while respecting serialized field name annotations",
+     "evidence": [
+      {
+       "file": "gson/src/main/java/com/google/gson/GsonBuilder.java",
+       "line": 321,
+       "quote": "public GsonBuilder setFieldNamingPolicy(",
+       "source_sha256": "0c4eeb8f6f74fd43a39cbf5ac1ecef132653f7fcc0d77863df13c618a024042f",
+       "relevance": "Source anchor for apply a field naming policy while respecting serialized field name annotations"
+      },
+      {
+       "file": "gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+       "line": 72,
+       "quote": "private List<String> getFieldNames(",
+       "source_sha256": "1def371d22200d2d0a9ce37c09e5f4cdd911da25644b761b928542f90eb6d9f0",
+       "relevance": "Source anchor for apply a field naming policy while respecting serialized field name annotations"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-development.json"
+    },
+    {
+     "id": "gson:usefulness-validation-1",
+     "category": "tests",
+     "query": "Find tests that reject nonfinite floating point values unless special serialization is enabled",
+     "evidence": [
+      {
+       "file": "gson/src/test/java/com/google/gson/functional/PrimitiveTest.java",
+       "line": 530,
+       "quote": "void testNegativeInfinitySerializationNotSupportedByDefault(",
+       "source_sha256": "f0e6d08f059d892dfa6751be70e6fa28bd22e8981aa39c644f48442a4f6fda00",
+       "relevance": "Source anchor for find tests that reject nonfinite floating point values unless special serialization is enabled"
+      },
+      {
+       "file": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+       "line": 175,
+       "quote": "void testNonFiniteDoubles(",
+       "source_sha256": "1d01282d19fc04072a1d6cd88ad2cbe872dcb84eaf27384dcfcf3bb488d41400",
+       "relevance": "Source anchor for find tests that reject nonfinite floating point values unless special serialization is enabled"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    },
+    {
+     "id": "gson:usefulness-validation-2",
+     "category": "tests",
+     "query": "Find tests for invalid JSON syntax and lenient parsing",
+     "evidence": [
+      {
+       "file": "gson/src/test/java/com/google/gson/functional/LeniencyTest.java",
+       "line": 39,
+       "quote": "void testLenientFromJson(",
+       "source_sha256": "8d06db1b08333d066f3ba21e338c3de031ed0a17392554408bb1bb38737d9bb7",
+       "relevance": "Source anchor for find tests for invalid JSON syntax and lenient parsing"
+      },
+      {
+       "file": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+       "line": 177,
+       "quote": "void testInvalidJsonInput(",
+       "source_sha256": "2f450f42673bb1999838074ce28b7397a9de5f557ba58d3a226f5f2169aef18e",
+       "relevance": "Source anchor for find tests for invalid JSON syntax and lenient parsing"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    },
+    {
+     "id": "gson:usefulness-validation-3",
+     "category": "configuration",
+     "query": "Exclude fields and classes outside their declared serialization version range",
+     "evidence": [
+      {
+       "file": "gson/src/main/java/com/google/gson/GsonBuilder.java",
+       "line": 149,
+       "quote": "public GsonBuilder setVersion(",
+       "source_sha256": "0c4eeb8f6f74fd43a39cbf5ac1ecef132653f7fcc0d77863df13c618a024042f",
+       "relevance": "Source anchor for exclude fields and classes outside their declared serialization version range"
+      },
+      {
+       "file": "gson/src/main/java/com/google/gson/internal/Excluder.java",
+       "line": 237,
+       "quote": "private boolean isValidVersion(",
+       "source_sha256": "e17d3c22344f691869c92d8f26972186cafd6577e2993c67bc6a7190d6a04277",
+       "relevance": "Source anchor for exclude fields and classes outside their declared serialization version range"
+      }
+     ],
+     "source_set": "2026-10-16-search-usefulness-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "rails",
+   "commit": "e72eb4c20b6bb5bdc7f63a4477992209585a1fa9",
+   "queries": [
+    {
+     "id": "rails:file-coverage-development-impl-1",
+     "category": "implementation",
+     "query": "How does the in-process cache decide which entries to drop when stored data grows past its memory limit, and what keeps two cleanups from running at the same moment?",
+     "evidence": [
+      {
+       "file": "activesupport/lib/active_support/cache/memory_store.rb",
+       "quote": "def prune(target_size, max_time = nil)",
+       "line": 116,
+       "source_sha256": "8857e593b1f11451138c6cabdab104ee97b2767dfa7ecb9b87ccc9faa12889f3",
+       "relevance": "evicts least recently accessed entries with a reentrancy guard"
+      },
+      {
+       "file": "activesupport/lib/active_support/cache/entry.rb",
+       "quote": "def bytesize",
+       "line": 61,
+       "source_sha256": "b695774657da12f6aea0a1eb6b1cbfa94bd0a9f77dee4b15b41dbb4856529ccf",
+       "relevance": "entry size used for memory accounting"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "rails:file-coverage-development-impl-2",
+     "category": "implementation",
+     "query": "How does a background job get put back in the queue after a failure, waiting longer each time with some random variation, and when does it finally give up?",
+     "evidence": [
+      {
+       "file": "activejob/lib/active_job/exceptions.rb",
+       "quote": "def determine_delay(seconds_or_duration_or_algorithm:, executions:",
+       "line": 173,
+       "source_sha256": "b6e1d6567a0b6db55906b6eab6280c80e6d5ef6f37185cdc110b19454b7fdb97",
+       "relevance": "computes backoff delay with jitter"
+      },
+      {
+       "file": "activejob/lib/active_job/enqueuing.rb",
+       "quote": "def enqueue(options = {})",
+       "line": 112,
+       "source_sha256": "6dcabf64043e52c826ab3d5b3e6d5f6e20fa9c8a5c890710ee5e27a049a4cfc6",
+       "relevance": "re-enqueue with a wait option"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "rails:file-coverage-development-control",
+     "category": "control",
+     "query": "Where is queue_name_from_part defined and where is it called?",
+     "evidence": [
+      {
+       "file": "activejob/lib/active_job/queue_name.rb",
+       "quote": "def queue_name_from_part(part_name)",
+       "line": 47,
+       "source_sha256": "b473689c7e9b0b6424751c1b2500660bd374a1b829822c4634c6771f0a03edea",
+       "relevance": "definition"
+      },
+      {
+       "file": "activejob/lib/active_job/core.rb",
+       "quote": "self.queue_name   = self.class.queue_name_from_part(options[:queue])",
+       "line": 178,
+       "source_sha256": "b740be56b9be48c76b1e8d65bdc44cef4341d0d596246fac0691da71f6fe35e1",
+       "relevance": "call site"
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "rails:file-coverage-development-test",
+     "category": "test_intent",
+     "query": "Where is removal of expired entries from the on-disk cache tested?",
+     "evidence": [
+      {
+       "file": "activesupport/test/cache/stores/file_store_test.rb",
+       "quote": "def test_cleanup_removes_all_expired_entries",
+       "line": 139,
+       "source_sha256": "2bfac5a4d55e9b0a554152f7b47c27e6f425d0119bb607e6f42d6c6d29672728",
+       "relevance": "tests disk cache cleanup of expired entries"
+      },
+      {
+       "file": "activesupport/lib/active_support/cache/file_store.rb",
+       "quote": "def cleanup(options = nil)",
+       "line": 41,
+       "source_sha256": "5b10318164a3bd991e9c9342810546786268e511444edd70db72047ad95629dd",
+       "relevance": "implements cleanup"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "rails:file-coverage-validation-impl-1",
+     "category": "implementation",
+     "query": "How does reading a protected column still work after the protection settings were changed, falling back to older configurations and tolerating plain stored text?",
+     "evidence": [
+      {
+       "file": "activerecord/lib/active_record/encryption/encrypted_attribute_type.rb",
+       "quote": "def try_to_deserialize_with_previous_encrypted_types(value)",
+       "line": 106,
+       "source_sha256": "52147975a6d0e002df09f4c75f6f2e3e30c8797d19fc74031af48abfdc08af75",
+       "relevance": "tries older types in turn"
+      },
+      {
+       "file": "activerecord/lib/active_record/encryption/scheme.rb",
+       "quote": "def initialize(key_provider: nil, key: nil, deterministic: nil",
+       "line": 13,
+       "source_sha256": "071266e326f435cbdd1312f36c2f0eaddc9a256ddeee4086e66a32c27c6b4c78",
+       "relevance": "scheme holds the older configurations"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "rails:file-coverage-validation-impl-2",
+     "category": "implementation",
+     "query": "How does the web stack send plain unencrypted requests to the secure address, add the browser transport-security header, and mark outgoing cookies as secure?",
+     "evidence": [
+      {
+       "file": "actionpack/lib/action_dispatch/middleware/ssl.rb",
+       "quote": "def redirect_to_https(request)",
+       "line": 153,
+       "source_sha256": "7fbf60c4a6ea39e5439b9dba5ad93fd8e83aa236beb8db3f4f2860e9148de988",
+       "relevance": "redirects insecure requests"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "rails:file-coverage-validation-control",
+     "category": "control",
+     "query": "Where is derive_key_from defined and where is it called?",
+     "evidence": [
+      {
+       "file": "activerecord/lib/active_record/encryption/key_generator.rb",
+       "quote": "def derive_key_from(password, length: key_length)",
+       "line": 38,
+       "source_sha256": "4fb61c50ab53a83ae106c86f5d53df574ce2eabc91fea0b80d2c0036592b2473",
+       "relevance": "definition"
+      },
+      {
+       "file": "activerecord/lib/active_record/encryption/key.rb",
+       "quote": "ActiveRecord::Encryption.key_generator.derive_key_from(password)",
+       "line": 19,
+       "source_sha256": "8d299c3990ec8891fa3795f7b5c43be52ef989cbbe9683f582a1075233ebdf2e",
+       "relevance": "call site"
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "rails:file-coverage-validation-test",
+     "category": "test_intent",
+     "query": "Where is marking of cookies as secure on encrypted connections tested?",
+     "evidence": [
+      {
+       "file": "actionpack/test/dispatch/ssl_test.rb",
+       "quote": "def test_flag_cookies_as_secure_at_end_of_line",
+       "line": 196,
+       "source_sha256": "e68092296247a765c0b438aac146432c7a95fff35efcb91ec5b1a9839b48d837",
+       "relevance": "tests secure cookie flag"
+      },
+      {
+       "file": "actionpack/lib/action_dispatch/middleware/ssl.rb",
+       "quote": "def flag_cookies_as_secure!(headers)",
+       "line": 129,
+       "source_sha256": "7fbf60c4a6ea39e5439b9dba5ad93fd8e83aa236beb8db3f4f2860e9148de988",
+       "relevance": "implementation"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "SwiftFormat",
+   "commit": "c8e50ff2cfc2eab46246c072a9ae25ab656c6ec3",
+   "queries": [
+    {
+     "id": "SwiftFormat:file-coverage-development-impl-1",
+     "category": "implementation",
+     "query": "How does the tool react when a user passes a misspelled long flag, and how does it propose the closest valid alternative in its error message?",
+     "evidence": [
+      {
+       "file": "Sources/Arguments.swift",
+       "quote": "throw FormatError.options(\"Unknown option --\\(key). Did you mean --\\(match)?\")",
+       "line": 279,
+       "source_sha256": "0f9c09f1276853eef6464ede1ca42c9fbd6509dd1d40a47d72c4f1c14da14f0a",
+       "relevance": "Unknown flag error with closest-match suggestion."
+      },
+      {
+       "file": "Sources/CommandLine.swift",
+       "quote": "var args = try preprocessArguments(args, commandLineArguments)",
+       "line": 415,
+       "source_sha256": "41e70cf0b03b8101658d0b5f5279339f02c3f89ed280fce41872aa5966e12156",
+       "relevance": "Command line entry point triggers the flag parsing."
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-development-impl-2",
+     "category": "implementation",
+     "query": "How are comma-separated path patterns with wildcards and alternative groups in curly braces converted into regular expressions for matching file paths?",
+     "evidence": [
+      {
+       "file": "Sources/Globs.swift",
+       "quote": "public func expandGlobs(_ paths: String, in directory: String) -> [Glob] {",
+       "line": 78,
+       "source_sha256": "db95843103dbb859c4f466a394b4c56264d8592b8eb517dc412fbfe77fde4859",
+       "relevance": "Builds glob matchers from pattern strings."
+      },
+      {
+       "file": "Sources/Arguments.swift",
+       "quote": "try matchGlobs(expandGlobs(paths, in: directory), in: directory)",
+       "line": 387,
+       "source_sha256": "0f9c09f1276853eef6464ede1ca42c9fbd6509dd1d40a47d72c4f1c14da14f0a",
+       "relevance": "Path parsing uses the expanded patterns."
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-development-control",
+     "category": "control",
+     "query": "Where is tokenize defined and where is it called?",
+     "evidence": [
+      {
+       "file": "Sources/Tokenizer.swift",
+       "quote": "public func tokenize(_ source: String) -> [Token] {",
+       "line": 1305,
+       "source_sha256": "b884d2d5f7f0b1241e5d8148a17f33c13fdc25ff416c7a9cccf1f61355a8254e",
+       "relevance": "Definition of tokenize."
+      },
+      {
+       "file": "Sources/CommandLine.swift",
+       "quote": "let tokens = tokenize(input)",
+       "line": 783,
+       "source_sha256": "41e70cf0b03b8101658d0b5f5279339f02c3f89ed280fce41872aa5966e12156",
+       "relevance": "Called when processing stdin input."
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-development-test",
+     "category": "test_intent",
+     "query": "Where is reading a list of input files from a text file, ignoring hash comments and blank lines, tested?",
+     "evidence": [
+      {
+       "file": "Tests/CommandLineTests.swift",
+       "quote": "func testParseFileList() {",
+       "line": 502,
+       "source_sha256": "295dc321753b0c26c7c65c28f76c4a2e68debfde2009fb7ab1590cb02d7208f3",
+       "relevance": "Test of file list parsing with comments."
+      },
+      {
+       "file": "Sources/CommandLine.swift",
+       "quote": "func parseFileList(_ source: String, in directory: String) throws -> [URL] {",
+       "line": 951,
+       "source_sha256": "41e70cf0b03b8101658d0b5f5279339f02c3f89ed280fce41872aa5966e12156",
+       "relevance": "Implementation of file list parsing."
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-validation-impl-1",
+     "category": "implementation",
+     "query": "How does the formatter derive a singular name from a plural noun, handling irregular and uncountable words, when choosing a name for a loop element?",
+     "evidence": [
+      {
+       "file": "Sources/Singularize.swift",
+       "quote": "func singularized() -> String? {",
+       "line": 81,
+       "source_sha256": "c3603e0d500c10bc139dca224006c3e7069047e092327dad1c3253d818986cfa",
+       "relevance": "Applies regex rules to singularize a word."
+      },
+      {
+       "file": "Sources/Rules/PreferForLoop.swift",
+       "quote": "if var identifier = forLoopSubjectIdentifier?.singularized(), !identifier.isSwiftKeyword {",
+       "line": 144,
+       "source_sha256": "1caaa2ddc47ad48d221d409eb6a772f1101995fd1b146965aea7a988812c4133",
+       "relevance": "Uses singular form as loop variable name."
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-validation-impl-2",
+     "category": "implementation",
+     "query": "How are repeated module imports detected and removed, including the case where one repeated import carries extra attributes that the other lacks?",
+     "evidence": [
+      {
+       "file": "Sources/Rules/DuplicateImports.swift",
+       "quote": "if Set(range.attributes).isSubset(of: range2.attributes) {",
+       "line": 23,
+       "source_sha256": "962a6d998ffb1855ec7df3ce93582194e50fffb1bc7aa1366f7ef1151ddbd3d7",
+       "relevance": "Attribute subset check decides which import to drop."
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-validation-control",
+     "category": "control",
+     "query": "Where is inferFormatOptions defined and where is it called?",
+     "evidence": [
+      {
+       "file": "Sources/Inference.swift",
+       "quote": "public func inferFormatOptions(from tokens: [Token]) -> FormatOptions {",
+       "line": 35,
+       "source_sha256": "12946bec9092b338ac8a0a8784d5106a2c2debabfb0dadab19a9a4608fb66335",
+       "relevance": "Definition of inferFormatOptions."
+      },
+      {
+       "file": "Tests/InferenceTests.swift",
+       "quote": "let options = inferFormatOptions(from: tokenize(input))",
+       "line": 49,
+       "source_sha256": "87f443ca127d98367f0127f4f69362e21967e36cd798315c83187eda05acd01d",
+       "relevance": "Test calls the public entry point (first of several identical call lines)."
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "SwiftFormat:file-coverage-validation-test",
+     "category": "test_intent",
+     "query": "Where is keeping the original capitalization when converting a plural word to singular tested?",
+     "evidence": [
+      {
+       "file": "Tests/SingularizeTests.swift",
+       "quote": "func testPreserveCase() {",
+       "line": 164,
+       "source_sha256": "d2be7e8da42b5b903c16f7fa6f0113abe543720f4957c51f5deca418e5378d1b",
+       "relevance": "Test of case preservation."
+      },
+      {
+       "file": "Sources/Singularize.swift",
+       "quote": "func singularized() -> String? {",
+       "line": 81,
+       "source_sha256": "c3603e0d500c10bc139dca224006c3e7069047e092327dad1c3253d818986cfa",
+       "relevance": "Implementation of singularization."
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "spdlog",
+   "commit": "0f7562a0f9273cfc71fddc6ae52ebff7a490fa04",
+   "queries": [
+    {
+     "id": "spdlog:file-coverage-development-impl-1",
+     "category": "implementation",
+     "query": "How does a logging destination avoid flooding output when the same message keeps arriving repeatedly within a short time window, and how does it report what was dropped?",
+     "evidence": [
+      {
+       "file": "include/spdlog/sinks/dup_filter_sink.h",
+       "quote": "void sink_it_(const details::log_msg &msg) override {",
+       "line": 53,
+       "source_sha256": "a7ac15cb20399b04b7a620e60c61796ee01eb702b54e277683fc00166677c83b",
+       "relevance": "counts skipped duplicates and emits a summary message"
+      },
+      {
+       "file": "include/spdlog/sinks/dist_sink.h",
+       "quote": "class dist_sink : public base_sink<Mutex> {",
+       "line": 23,
+       "source_sha256": "ae9e88cb5e7c92f271304e6852787edf5d83aea63dc6f79189c8c50adddf6ac8",
+       "relevance": "base class that forwards messages to wrapped sinks"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "spdlog:file-coverage-development-impl-2",
+     "category": "implementation",
+     "query": "How does the date-based rotating file destination remove the oldest files so only a limited number of past log files remain after switching to a new day?",
+     "evidence": [
+      {
+       "file": "include/spdlog/sinks/daily_file_sink.h",
+       "quote": "void delete_old_() {",
+       "line": 166,
+       "source_sha256": "ffd282c0791333c291ecf3efb9ae8d834d45029b5b961f6c8a4603bf2a1ae8ac",
+       "relevance": "Deletes the file that is max-files rotations old after a new daily file opens."
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "spdlog:file-coverage-development-control",
+     "category": "control",
+     "query": "Where is rotating_file_sink defined and where is it called?",
+     "evidence": [
+      {
+       "file": "include/spdlog/sinks/rotating_file_sink.h",
+       "quote": "class rotating_file_sink final : public base_sink<Mutex> {",
+       "line": 21,
+       "source_sha256": "27fa443b8bd9158f4472e116a05fea37e82b6452b6eb70a4ea78ae0089039142",
+       "relevance": "class definition"
+      },
+      {
+       "file": "tests/test_file_logging.cpp",
+       "quote": "spdlog::sinks::rotating_file_sink_st>(basename, max_size, 2);",
+       "line": 127,
+       "source_sha256": "4a37b11d7c565375e9ce0ff949d374674b7e184ea0eba3de778513f93e7b44c5",
+       "relevance": "test constructs the sink"
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "spdlog:file-coverage-development-test",
+     "category": "test_intent",
+     "query": "Where is keeping only the most recent entries of a fixed-capacity in-memory log store after it overflows tested?",
+     "evidence": [
+      {
+       "file": "tests/test_ringbuffer.cpp",
+       "quote": "TEST_CASE(\"ringbuffer overrun keeps last items\", \"[ringbuffer]\") {",
+       "line": 24,
+       "source_sha256": "0e30a2e30964d4dfe86dc8296c013ed1e77010613c41c1d95c043d0c12776169",
+       "relevance": "test of overrun behaviour"
+      },
+      {
+       "file": "include/spdlog/sinks/ringbuffer_sink.h",
+       "quote": "std::vector<std::string> last_formatted(size_t lim = 0) {",
+       "line": 42,
+       "source_sha256": "69dd445a2519bdc25261f2af884b479a09a54458468f9f351a8333ae6ab370a5",
+       "relevance": "implementation returning stored messages"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "spdlog:file-coverage-validation-impl-1",
+     "category": "implementation",
+     "query": "How does the formatter cut a field down to the requested width when the text is longer than the allowed padding size?",
+     "evidence": [
+      {
+       "file": "include/spdlog/pattern_formatter-inl.h",
+       "quote": "} else if (padinfo_.truncate_) {",
+       "line": 71,
+       "source_sha256": "7ee9d22a946e9eb8d8e67d17c6661d9054e6914007c1bade9de4ef7d91add542",
+       "relevance": "resizes destination buffer to truncate overlong field"
+      },
+      {
+       "file": "include/spdlog/pattern_formatter.h",
+       "quote": "struct padding_info {",
+       "line": 23,
+       "source_sha256": "5e3dd73d840a0c10b0d5cae3b5da28dfd3c20286180641b759db5d3dbc41f585",
+       "relevance": "describes width, side and truncation"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "spdlog:file-coverage-validation-impl-2",
+     "category": "implementation",
+     "query": "How does the background worker queue behave when it is full and a new log record arrives, depending on the chosen policy for blocking, dropping or discarding the oldest?",
+     "evidence": [
+      {
+       "file": "include/spdlog/details/thread_pool-inl.h",
+       "quote": "void SPDLOG_INLINE thread_pool::post_async_msg_(async_msg &&new_msg,",
+       "line": 79,
+       "source_sha256": "b7042c70da4d1c0398ddc74fc12bb5eec746647c18857ace1c6f425b5cf9435e",
+       "relevance": "dispatches by overflow policy"
+      },
+      {
+       "file": "include/spdlog/details/mpmc_blocking_q.h",
+       "quote": "enqueue_nowait(..) - enqueue immediately. overruns oldest message if no",
+       "line": 8,
+       "source_sha256": "66ed3083a98e5cc142aa8d9dc18ce8de5ff32f82382386546f6ff302a01fc6c6",
+       "relevance": "overruns oldest item when no room"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "spdlog:file-coverage-validation-control",
+     "category": "control",
+     "query": "Where is circular_q defined and where is it called?",
+     "evidence": [
+      {
+       "file": "include/spdlog/details/circular_q.h",
+       "quote": "explicit circular_q(size_t max_items)",
+       "line": 28,
+       "source_sha256": "0bc4025c81425023f4d58711d6aa6231a55ee606bb1fc88f4fb3e655e807e265",
+       "relevance": "class definition"
+      },
+      {
+       "file": "include/spdlog/details/mpmc_blocking_q.h",
+       "quote": "spdlog::details::circular_q<T> q_;",
+       "line": 173,
+       "source_sha256": "66ed3083a98e5cc142aa8d9dc18ce8de5ff32f82382386546f6ff302a01fc6c6",
+       "relevance": "member using the queue"
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "spdlog:file-coverage-validation-test",
+     "category": "test_intent",
+     "query": "Where is replaying a buffer of recent debug messages on demand, including when nothing was stored, tested?",
+     "evidence": [
+      {
+       "file": "tests/test_backtrace.cpp",
+       "quote": "TEST_CASE(\"bactrace-empty\", \"[bactrace]\") {",
+       "line": 31,
+       "source_sha256": "e594b74829ab7337e5b6f94afbf87bf6eb67a603e693edc7dea006f32d937533",
+       "relevance": "empty-buffer test"
+      },
+      {
+       "file": "include/spdlog/details/backtracer-inl.h",
+       "quote": "SPDLOG_INLINE void backtracer::foreach_pop(",
+       "line": 54,
+       "source_sha256": "9b2795b78571295776003345d7e2b9f264fa71fabb7a15cda7b049464a2d24c3",
+       "relevance": "implementation draining stored messages"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "ggplot2",
+   "commit": "6f1d98842de0489222c04bff64b3596b796d492d",
+   "queries": [
+    {
+     "id": "ggplot2:file-coverage-development-impl-1",
+     "category": "implementation",
+     "query": "How does a manually specified colour mapping decide which values go to which levels when the supplied values carry names or when explicit breaks are given?",
+     "evidence": [
+      {
+       "file": "R/scale-manual.R",
+       "quote": "limits <- function(x) {",
+       "line": 161,
+       "source_sha256": "9c1ba6c4fe1d7649fa5380fde459f96421a99fb186e0a8bd216290366dd23553",
+       "relevance": "Builds limits from the names of supplied values"
+      },
+      {
+       "file": "R/scale-.R",
+       "quote": "discrete_scale <- function(aesthetics, scale_name = deprecated(), palette, name = waiver(),",
+       "line": 217,
+       "source_sha256": "f9519a28589ba67f1bc7403affb7fb8a89b86eaed59f09b9ae56f0be835d1a5e",
+       "relevance": "Generic discrete scale constructor the manual scale delegates to"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "ggplot2:file-coverage-development-impl-2",
+     "category": "implementation",
+     "query": "How is the range of a position axis widened using multiplicative and additive padding, including when only two numbers are supplied rather than separate lower and upper amounts?",
+     "evidence": [
+      {
+       "file": "R/scale-expansion.R",
+       "quote": "expand_range4 <- function(limits, expand) {",
+       "line": 67,
+       "source_sha256": "fad501a8402cd48bc5d574624d5131ec90543122552faccb20094ef4b229ac29",
+       "relevance": "Expands limits using 2 or 4 constants"
+      },
+      {
+       "file": "R/scale-.R",
+       "quote": "expand_range4(self$get_limits(), expand)",
+       "line": 1561,
+       "source_sha256": "f9519a28589ba67f1bc7403affb7fb8a89b86eaed59f09b9ae56f0be835d1a5e",
+       "relevance": "Scale dimension applies the expansion"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "ggplot2:file-coverage-development-control",
+     "category": "control",
+     "query": "Where is guide_coloursteps defined and where is it called?",
+     "evidence": [
+      {
+       "file": "R/guide-colorsteps.R",
+       "quote": "guide_coloursteps <- function(",
+       "line": 48,
+       "source_sha256": "c3c9170cb72b91eaa7425d990c53b36ba133f3a129609a4f6c292e853b1f596d",
+       "relevance": "Definition of the constructor"
+      },
+      {
+       "file": "tests/testthat/test-guide-colorsteps.R",
+       "quote": "g <- guide_coloursteps(even.steps = TRUE)",
+       "line": 32,
+       "source_sha256": "41e4e2b8941fe548e0ad3bdecf1c50684913480b83abb28567583795ec6e2e91",
+       "relevance": "Calls the constructor in a test"
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "ggplot2:file-coverage-development-test",
+     "category": "test_intent",
+     "query": "Where is rejection of invalid colour set input for the qualitative hue-based palette tested?",
+     "evidence": [
+      {
+       "file": "tests/testthat/test-scale-hue.R",
+       "quote": "test_that(\"scale_hue() checks the type input\", {",
+       "line": 1,
+       "source_sha256": "ceec2cc2a83a54db1752fdf7a890e2e63966a8f7f0ba89fcf1b01067b75845dc",
+       "relevance": "Test of palette type input checking"
+      },
+      {
+       "file": "R/scale-hue.R",
+       "quote": "pal_qualitative <- function(type, h, c, l, h.start, direction) {",
+       "line": 107,
+       "source_sha256": "eecb79292b70a4101dc307c44ebf19245f5a9aed1781ac7a5d8de962314a7a17",
+       "relevance": "Implementation of the palette"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-development.json"
+    },
+    {
+     "id": "ggplot2:file-coverage-validation-impl-1",
+     "category": "implementation",
+     "query": "How does random displacement of points get applied so that infinite coordinates stay unmoved and results can be reproduced with a fixed random seed?",
+     "evidence": [
+      {
+       "file": "R/position-jitter.R",
+       "quote": "compute_jitter <- function(data, width = NULL, height = NULL, seed = NA) {",
+       "line": 82,
+       "source_sha256": "c9fe771d5a3c8c2451c70f55f4647403abc905b2e862831ea28a3d038fd3db93",
+       "relevance": "Computes displacement and zeroes it for infinite values"
+      },
+      {
+       "file": "R/position-jitterdodge.R",
+       "quote": "compute_jitter(data, params$jitter.width, params$jitter.height, params$seed)",
+       "line": 95,
+       "source_sha256": "841a1dffa0aeba92ff830940cea63657267843ff5fbe53de2bf6ef4cec4d4bb6",
+       "relevance": "Reuses the displacement inside a combined position"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "ggplot2:file-coverage-validation-impl-2",
+     "category": "implementation",
+     "query": "How is a cumulative distribution curve computed when weights are given, and what extra points are added at the ends of the curve by default?",
+     "evidence": [
+      {
+       "file": "R/stat-ecdf.R",
+       "quote": "wecdf <- function(x, weights = NULL) {",
+       "line": 116,
+       "source_sha256": "fe3f90f73bb5578585c17c232843e4c7ad4c7490efd482d3c5616f7e4d887d5e",
+       "relevance": "Weighted cumulative distribution function"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "ggplot2:file-coverage-validation-control",
+     "category": "control",
+     "query": "Where is pos_dodge defined and where is it called?",
+     "evidence": [
+      {
+       "file": "R/position-dodge.R",
+       "quote": "pos_dodge <- function(df, width, n = NULL) {",
+       "line": 183,
+       "source_sha256": "f8682ef8a142427b5a62c9972a1d38613abdc92c922914c2282f74a295ebbf9a",
+       "relevance": "Definition of the dodge strategy"
+      },
+      {
+       "file": "R/position-jitterdodge.R",
+       "quote": "strategy = pos_dodge,",
+       "line": 89,
+       "source_sha256": "841a1dffa0aeba92ff830940cea63657267843ff5fbe53de2bf6ef4cec4d4bb6",
+       "relevance": "Passes the strategy in a combined position"
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    },
+    {
+     "id": "ggplot2:file-coverage-validation-test",
+     "category": "test_intent",
+     "query": "Where is the handling of user-supplied histogram bin boundaries under an axis transformation tested?",
+     "evidence": [
+      {
+       "file": "tests/testthat/test-stat-bin.R",
+       "quote": "test_that(\"breaks are transformed by the scale\", {",
+       "line": 80,
+       "source_sha256": "8fb1b5e11e2e509d48ba5c4aaa7be26e72bdbd04da7a962ec641a25f9d0e586d",
+       "relevance": "Test of break transformation"
+      },
+      {
+       "file": "R/stat-bin.R",
+       "quote": "breaks = breaks, binwidth = binwidth, bins = bins,",
+       "line": 50,
+       "source_sha256": "3b578df41b9a4714a9982ef7e2bc536fc705f0b84ee965d1b92071d7028d2067",
+       "relevance": "Passes breaks and scale to the bin computation"
+      }
+     ],
+     "source_set": "2026-10-17-file-coverage-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "aspnetcore",
+   "commit": "2b1cb0a7ae862ba622fd172a960ed937063c5f08",
+   "queries": [
+    {
+     "id": "aspnetcore:test-source-slot-tested",
+     "category": "test_intent",
+     "query": "Where is rejecting a multipart section with too many headers tested?",
+     "evidence": [
+      {
+       "file": "src/Http/WebUtilities/test/MultipartReaderTests.cs",
+       "quote": "public async Task MultipartReader_HeaderCountExceeded_Throws()",
+       "line": 124,
+       "source_sha256": "9d23a1641aa07a578042fcf414d06c874d44243345911f492869dcf24919a631",
+       "relevance": "Test sets a header count limit of one and asserts reading a section throws."
+      },
+      {
+       "file": "src/Http/WebUtilities/src/MultipartReader.cs",
+       "quote": "if (accumulator.KeyCount > HeadersCountLimit)",
+       "line": 127,
+       "source_sha256": "18d723df827665ab2dee449c60f9700612de4f97828282337b16296e6e1e0a95",
+       "relevance": "Header reading throws when the section header count exceeds the limit."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "aspnetcore:test-source-slot-tests",
+     "category": "test_intent",
+     "query": "Which tests cover rejecting a cookie maximum age that overflows during parsing?",
+     "evidence": [
+      {
+       "file": "src/Http/Headers/test/SetCookieHeaderValueTest.cs",
+       "quote": "public void SetCookieHeaderValue_TryParse_MaxAgeOverflow_ReturnsFalse(string value)",
+       "line": 494,
+       "source_sha256": "8aa93137e22d50bfe013fb992e71f04e3943f36fc5c004e04c1189928f793fd3",
+       "relevance": "Test asserts parsing fails without throwing for out-of-range max-age values."
+      },
+      {
+       "file": "src/Http/Headers/src/SetCookieHeaderValue.cs",
+       "quote": "if (maxAge is > MaxTimeSpanSeconds or < MinTimeSpanSeconds)",
+       "line": 594,
+       "source_sha256": "7ca1bc2d3e0641e64aea7117d583efc66db6e2eb619eca0cc8570bc851bd4928",
+       "relevance": "Parser aborts when the max-age seconds would overflow a TimeSpan."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "aspnetcore:test-source-slot-test",
+     "category": "test_intent",
+     "query": "Where is the test for turning off response buffering when streaming server-sent events?",
+     "evidence": [
+      {
+       "file": "src/Http/Http.Results/test/ServerSentEventsResultTests.cs",
+       "quote": "public async Task ExecuteAsync_DisablesBuffering()",
+       "line": 266,
+       "source_sha256": "ceba9f47db433b09518ab94cd0bbc84b6fbecc0c11caf51aa1fd80ba119f4635",
+       "relevance": "Test asserts executing the server-sent events result disables response buffering."
+      },
+      {
+       "file": "src/Http/Http.Results/src/ServerSentEventsResult.cs",
+       "quote": "bufferingFeature.DisableBuffering();",
+       "line": 49,
+       "source_sha256": "b7a47fdd3b075d7e2e7af1f1a6b7a41cb34b4a7d823c3d66e34af9527491e2c5",
+       "relevance": "Result execution disables buffering on the response body feature."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "aspnetcore:test-source-slot-control",
+     "category": "control",
+     "query": "Where is UnescapeAsQuotedString defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/Http/Headers/src/HeaderUtilities.cs",
+       "quote": "public static StringSegment UnescapeAsQuotedString(StringSegment input)",
+       "line": 614,
+       "source_sha256": "337a077fbd6c7c447fcc1ab498bd52425b01fee34705b0fbd6c90e25305e26fe",
+       "relevance": "Declaration of the public static helper."
+      },
+      {
+       "file": "src/Http/Headers/src/NameValueHeaderValue.cs",
+       "quote": "return HeaderUtilities.UnescapeAsQuotedString(_value);",
+       "line": 183,
+       "source_sha256": "daad7cd196fb9359ce0646078fac4809b78ac6934deef08427468c8e94b1da2a",
+       "relevance": "Real call that unescapes a quoted header parameter value."
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "luarocks",
+   "commit": "47301d83aba58925e1b9594023621ebb27070cdb",
+   "queries": [
+    {
+     "id": "luarocks:test-source-slot-tested",
+     "category": "test_intent",
+     "query": "Where is swapping the order of a function's two arguments tested?",
+     "evidence": [
+      {
+       "file": "spec/unit/fun_spec.lua",
+       "quote": "it(\"returns a function behaving as the one given in the argument but with the arguments interchanged\"",
+       "line": 95,
+       "source_sha256": "76f08dc371df86ebc62a3ad885b52d476b154a8386880a9e76c05d4b22333064",
+       "relevance": "Unit test that asserts the returned function receives its two arguments in reversed order."
+      },
+      {
+       "file": "src/luarocks/fun.lua",
+       "quote": "function fun.flip(f)",
+       "line": 62,
+       "source_sha256": "5d7780225d4ddd24f27b5c02599fef9ca30fd2f8447329a96061f9a1a153e4b3",
+       "relevance": "Implementation that wraps a function and calls it with its two arguments swapped."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "luarocks:test-source-slot-tests",
+     "category": "test_intent",
+     "query": "Which tests cover collapsing single-dot and double-dot segments when cleaning up paths?",
+     "evidence": [
+      {
+       "file": "spec/unit/dir_spec.lua",
+       "quote": "it(\"strips unneeded /../ and /./\"",
+       "line": 51,
+       "source_sha256": "2896a4185166522ccfb647ce05060c33cf3724edc1446a65775da1a45b123720",
+       "relevance": "Unit test that asserts path cleanup removes current-directory and parent-directory segments."
+      },
+      {
+       "file": "src/luarocks/core/dir.lua",
+       "quote": "function dir.normalize(name)",
+       "line": 38,
+       "source_sha256": "307119f16b03dae1d010a7ead0f63b327a142401a8eba5d4d46ff312cefbd223",
+       "relevance": "Implementation that drops '.' pieces and resolves '..' pieces against previous path pieces."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "luarocks:test-source-slot-test",
+     "category": "test_intent",
+     "query": "Where is the test for serializing a table key that is a reserved word?",
+     "evidence": [
+      {
+       "file": "spec/unit/persist_spec.lua",
+       "quote": "it(\"table with a keyword key (#947)\"",
+       "line": 37,
+       "source_sha256": "76b7841ea3c5397702508aa88f2226c431ff1ad7dc60e9539e863b4d87079e2d",
+       "relevance": "Unit test that asserts a Lua keyword key is written in bracketed string form."
+      },
+      {
+       "file": "src/luarocks/persist.lua",
+       "quote": "function is_valid_plain_key(k)",
+       "line": 90,
+       "source_sha256": "3566ac2b88d2f0a34babcf73ceb64f854b4af48e0961211647517c9b0f24e92a",
+       "relevance": "Check that rejects Lua keywords as plain keys, so the writer uses bracket syntax for them."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "luarocks:test-source-slot-control",
+     "category": "control",
+     "query": "Where is deduce_base_dir defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/luarocks/dir.lua",
+       "quote": "function dir.deduce_base_dir(url)",
+       "line": 55,
+       "source_sha256": "6808d468cd8368e1369f958a3403342d8097fde57553fd931461e2ee9d4e6921",
+       "relevance": "Definition of the function."
+      },
+      {
+       "file": "src/luarocks/fetch.lua",
+       "quote": "dir.deduce_base_dir(src_url)",
+       "line": 300,
+       "source_sha256": "e0d08064cc8c0beece0cc7300eed2f6d0ed26b9d5488781ef380cdb8399a1f9b",
+       "relevance": "Call that infers the unpacked source directory from the source URL."
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "zls",
+   "commit": "695a1d5c8a607f927b552784c2dc9f9c1d1f6130",
+   "queries": [
+    {
+     "id": "zls:test-source-slot-tested",
+     "category": "test_intent",
+     "query": "Where is it tested that applying computed edits to old text yields the new text?",
+     "evidence": [
+      {
+       "file": "tests/utility/diff.zig",
+       "quote": "test \"diff - random\"",
+       "line": 10,
+       "source_sha256": "d13d13f879fc9485c015c0ec6abfc5c9658b9cac1941289d42ce2429a270429c",
+       "relevance": "Randomized test that computes edits between two strings, applies them, and asserts the result equals the target text in three encodings."
+      },
+      {
+       "file": "src/diff.zig",
+       "quote": "pub fn edits(",
+       "line": 9,
+       "source_sha256": "051cf99a8ef69a964eda372c02c2891c84fc0a66d0f84c286101927000f7d2ed",
+       "relevance": "Computes the list of text edits that transform the old text into the new text."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "zls:test-source-slot-tests",
+     "category": "test_intent",
+     "query": "Which tests cover collapsing consecutive top-level import declarations into one foldable block?",
+     "evidence": [
+      {
+       "file": "tests/lsp_features/folding_range.zig",
+       "quote": "test \"imports\"",
+       "line": 423,
+       "source_sha256": "75b8a64f0a535900978f4a4ab30dd874a432d864dccb8918b525912b08b14150",
+       "relevance": "Asserts that adjacent top-level imports form one imports fold, a single import makes none, and gaps split groups."
+      },
+      {
+       "file": "src/features/folding_range.zig",
+       "quote": "try builder.add(.imports, tree.firstToken(start_import.?)",
+       "line": 208,
+       "source_sha256": "d658a8973515678197f68ef31fdd6673cafbf3868e690aabc901e138965ee452",
+       "relevance": "Adds the imports folding range that spans a run of consecutive top-level import declarations."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "zls:test-source-slot-test",
+     "category": "test_intent",
+     "query": "Where is the test for expanding selection to include one function parameter?",
+     "evidence": [
+      {
+       "file": "tests/lsp_features/selection_range.zig",
+       "quote": "test \"function parameter\"",
+       "line": 24,
+       "source_sha256": "95c036187711aea5e108fabf021cac1d250ed2b4fe42325d9a26c0c058f52e6c",
+       "relevance": "Asserts that the selection ranges include the type, then the whole parameter, then the function prototype."
+      },
+      {
+       "file": "src/features/selection_range.zig",
+       "quote": "const param_loc = ast.paramLoc(&handle.tree, param, true);",
+       "line": 45,
+       "source_sha256": "22dad7d34c76613a10f1d5a09ee723654f41bb74983091d54b6e4a58240dfa46",
+       "relevance": "Adds the location of the function parameter that contains the cursor to the selection range stack."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "zls:test-source-slot-control",
+     "category": "control",
+     "query": "Where is getDocumentSymbols defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/features/document_symbol.zig",
+       "quote": "pub fn getDocumentSymbols(",
+       "line": 41,
+       "source_sha256": "354db70b25c2046acedd63bf582827a809444b1b21e40f9b15020f6b84a14b66",
+       "relevance": "Definition of the public function."
+      },
+      {
+       "file": "src/Server.zig",
+       "quote": "document_symbol.getDocumentSymbols(arena, &handle.tree, server.offset_encoding)",
+       "line": 1439,
+       "source_sha256": "6434e4aa8de7fee37e805da4924f9da09662a412da2b8a3faeac0795bde61129",
+       "relevance": "The server calls the function to answer a document symbol request."
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "otp",
+   "commit": "1a14bac7486708dfff367d4810dfe4478f87fcef",
+   "queries": [
+    {
+     "id": "otp:test-source-slot-tested",
+     "category": "test_intent",
+     "query": "Where is rejecting a base address without a scheme during reference resolution tested?",
+     "evidence": [
+      {
+       "file": "lib/stdlib/test/uri_string_SUITE.erl",
+       "quote": "resolve_base_uri(_Config) ->",
+       "line": 900,
+       "source_sha256": "cd175e4abf917ce2c0735d869f25d82853cdad0b94c97c87684aa1c1ae7eb7c3",
+       "relevance": "Test case asserting that resolving against a scheme-less base returns an invalid_scheme error."
+      },
+      {
+       "file": "lib/stdlib/src/uri_string.erl",
+       "quote": "resolve_map(_URIMap, BaseURIMap) when is_map(BaseURIMap) ->",
+       "line": 2375,
+       "source_sha256": "75aa660e1a85a7875cd39c2e5d66d3cf59fa7e003e8513699e8eaafe57fde19a",
+       "relevance": "Resolution clause that returns the invalid_scheme error when the base map has no scheme."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "otp:test-source-slot-tests",
+     "category": "test_intent",
+     "query": "Which tests cover removing only the last matching item from a FIFO collection?",
+     "evidence": [
+      {
+       "file": "lib/stdlib/test/queue_SUITE.erl",
+       "quote": "do_op_test(F) ->",
+       "line": 297,
+       "source_sha256": "0a86e490dd538f9270d771f71af4c2a4cd5939ebd090199dd0197238b9d4780e",
+       "relevance": "Whole-queue operation test body that asserts rear-first deletion of the last matching element."
+      },
+      {
+       "file": "lib/stdlib/src/queue.erl",
+       "quote": "delete_r(Item, {R0, F0}) when is_list(R0), is_list(F0) ->",
+       "line": 963,
+       "source_sha256": "61b322302ecf74578d72b442d2317ea200a5dee4e0994b58c5e1e961f252b101",
+       "relevance": "Implementation that deletes the last item matching the given value."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "otp:test-source-slot-test",
+     "category": "test_intent",
+     "query": "Where is the test for week-of-year numbering of dates near a year boundary?",
+     "evidence": [
+      {
+       "file": "lib/stdlib/test/calendar_SUITE.erl",
+       "quote": "iso_week_number(Config) when is_list(Config) ->",
+       "line": 400,
+       "source_sha256": "924801675bcfc2c2eca211c0268cad737463be8ca341ce120b18d661bfc09613",
+       "relevance": "Test case checking week numbers for dates in the previous, current and next year."
+      },
+      {
+       "file": "lib/stdlib/src/calendar.erl",
+       "quote": "iso_week_number({Year, Month, Day}) ->",
+       "line": 378,
+       "source_sha256": "e54dd85f469cd434510495f3731451b7ec694bbec46f04042d6a67283611a020",
+       "relevance": "Implementation that computes the year and week number, including year-boundary cases."
+      }
+     ],
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    },
+    {
+     "id": "otp:test-source-slot-control",
+     "category": "control",
+     "query": "Where is seconds_to_daystime defined and where is it called?",
+     "evidence": [
+      {
+       "file": "lib/stdlib/src/calendar.erl",
+       "quote": "seconds_to_daystime(Secs) ->",
+       "line": 677,
+       "source_sha256": "e54dd85f469cd434510495f3731451b7ec694bbec46f04042d6a67283611a020",
+       "relevance": "Definition of the exported function."
+      },
+      {
+       "file": "lib/stdlib/src/c.erl",
+       "quote": "calendar:seconds_to_daystime(UpTime div 1000)",
+       "line": 1395,
+       "source_sha256": "abb08733e9c9af839a48b7895b14e34eee94d3119ecc545cb54c1e1d6cdbcf41",
+       "relevance": "Real call that converts node uptime into days and time."
+      }
+     ],
+     "control": "exact_symbol",
+     "source_set": "2026-10-17-test-source-slot-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "crystal",
+   "commit": "066c322f53676e4e59d5e495cc3fa7331c376e8a",
+   "queries": [
+    {
+     "id": "crystal:paired-source-1",
+     "category": "test_intent",
+     "query": "Which tests cover raising an error when an IPv4 socket toggles IPv6 only mode?",
+     "evidence": [
+      {
+       "file": "spec/std/socket/udp_socket_spec.cr",
+       "quote": "Unsupported IP address family: INET. For use with IPv6 only",
+       "line": 31,
+       "source_sha256": "16b266fd0776f66650df5650e65cd15c9361a5d925f5a0557ba2393af9edff07",
+       "relevance": "Asserts that reading the IPv6-only flag on a default IPv4 UDP socket raises Socket::Error."
+      },
+      {
+       "file": "src/socket/ip_socket.cr",
+       "quote": "For use with IPv6 only\") unless family.inet6?",
+       "line": 32,
+       "source_sha256": "3f788946b5a81487577c27bdfd50b2585b10890ce3e7a4d7fb00947dfb0809ea",
+       "relevance": "The IPv6-only getter raises Socket::Error unless the socket family is INET6."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "crystal:paired-source-2",
+     "category": "test_intent",
+     "query": "Where is the test for a thread condition wait running its block after timing out?",
+     "evidence": [
+      {
+       "file": "spec/std/thread/condition_variable_spec.cr",
+       "quote": "cond.wait(mutex, 1.microsecond) { timedout = true }",
+       "line": 71,
+       "source_sha256": "adaa9dd380ae94b663489eb7b07f35f9393dd2a98ffe71f737a3645bc3e672cf",
+       "relevance": "Waits with a tiny timeout and asserts the timeout block ran."
+      },
+      {
+       "file": "src/crystal/system/unix/pthread_condition_variable.cr",
+       "quote": "when Errno::ETIMEDOUT",
+       "line": 60,
+       "source_sha256": "e4783169355c46d308dbf885cd235d9331efe18856439b0a41fa8da0ed51579c",
+       "relevance": "The timed pthread wait yields to the caller's block when the wait times out."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "crystal:paired-source-3",
+     "category": "test_intent",
+     "query": "Find the tests for rejecting assignment to regex match or exit status globals outside methods",
+     "evidence": [
+      {
+       "file": "spec/compiler/semantic/special_vars_spec.cr",
+       "quote": "can't be assigned at the top level",
+       "line": 40,
+       "source_sha256": "35647ac14bcb344ba32c5409d2c3553967150bb672fe920c2a3cb9890da46f51",
+       "relevance": "Asserts that assigning $~ or $? at the top level is a compile error."
+      },
+      {
+       "file": "src/compiler/crystal/semantic/main_visitor.cr",
+       "quote": "can't be assigned at the top level",
+       "line": 800,
+       "source_sha256": "cd668a6c852f1443868919ca000817257cec5f8d44d34c40eed42155fea2c77a",
+       "relevance": "The semantic main visitor raises this error for special var assignment outside a def."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "crystal:paired-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is dequote_string defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/http/common.cr",
+       "quote": "def self.dequote_string(str : String) : String",
+       "line": 383,
+       "source_sha256": "b4eecd9c86bdc484f74de3f38cdb0826270cf31a98027751960123aebd9727ab",
+       "relevance": "Single definition of HTTP.dequote_string."
+      },
+      {
+       "file": "src/http/formdata.cr",
+       "quote": "HTTP.dequote_string(value[1...-1])",
+       "line": 149,
+       "source_sha256": "d67914c74cca3f4c72e424cdf2687f9e460af17bcb91b6a8f10aa80f556464a7",
+       "relevance": "Form-data header parsing calls HTTP.dequote_string on quoted parameter values."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "dart-sdk",
+   "commit": "2a83a782138bbdac5467a54a83c994e88b84dc3b",
+   "queries": [
+    {
+     "id": "dart-sdk:paired-source-1",
+     "category": "test_intent",
+     "query": "Which tests cover rejecting an FFI callback exceptional return value with the wrong type?",
+     "evidence": [
+      {
+       "file": "pkg/analyzer/test/src/diagnostics/must_be_a_subtype_test.dart",
+       "quote": "test_fromFunction_secondArgument() async {",
+       "line": 32,
+       "source_sha256": "99331b175b0bcd6d6ac3a2d88c0942acd6c9e56339cdc7566411b624bc157684",
+       "relevance": "Test case expecting a subtype error when the exceptional return argument is a String for an Int8 return."
+      },
+      {
+       "file": "pkg/analyzer/lib/src/generated/ffi_verifier.dart",
+       "quote": ".withArguments(subtype: eType, supertype: R, name: 'fromFunction')",
+       "line": 1713,
+       "source_sha256": "d55e60c3949e15144b831b6e97c2f38929fb471d5333da93be760dc5051cbe91",
+       "relevance": "Verifier reports the subtype error when the exceptional return value type does not match the native return type."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "dart-sdk:paired-source-2",
+     "category": "test_intent",
+     "query": "Where is the test for watching a single file on disk and reporting its deletion?",
+     "evidence": [
+      {
+       "file": "pkg/analyzer/test/file_system/physical_resource_provider_watch_test.dart",
+       "quote": "test_watchFile_delete() {",
+       "line": 27,
+       "source_sha256": "0d199b5dd0fd4d588b1056682a6d041d29e9938a3a15a881a8f8ef3ef8447559",
+       "relevance": "Test case deletes a watched file and expects one REMOVE event for its path."
+      },
+      {
+       "file": "pkg/analyzer/lib/file_system/physical_file_system.dart",
+       "quote": "var watcher = FileWatcher(_entry.path);",
+       "line": 182,
+       "source_sha256": "315d1552913ff1db5774e2612e169f3d085499c084c47745114c214d1ed4ab00",
+       "relevance": "Physical file watch() creates the FileWatcher whose events the test receives."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "dart-sdk:paired-source-3",
+     "category": "test_intent",
+     "query": "Find the tests for checking the generated syntax tree node classes are up to date",
+     "evidence": [
+      {
+       "file": "pkg/analyzer/tool/generators/ast_generator_test.dart",
+       "quote": "await AstNodeImplGenerator().generate()",
+       "line": 15,
+       "source_sha256": "0114785d5e46c03dae99530f54c2a217ef1a2c95018d0359f55580a4e34b3e28",
+       "relevance": "Test regenerates the AST implementation file content and checks it matches the committed file."
+      },
+      {
+       "file": "pkg/analyzer/tool/generators/ast_generator.dart",
+       "quote": "Future<String> generate() async {",
+       "line": 38,
+       "source_sha256": "2a23dbd8215aa1711c128e9b716c640797cdf9a249bc7d43a2c6be1913a4f1cc",
+       "relevance": "Generator method that produces the AST node implementation code the test compares."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "dart-sdk:paired-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is computeStrongComponents defined and where is it called?",
+     "evidence": [
+      {
+       "file": "pkg/analyzer/lib/src/util/graph.dart",
+       "quote": "List<List<T>> computeStrongComponents<T>(Graph<T> graph) {",
+       "line": 10,
+       "source_sha256": "2e8a5e915ec3582e5c4ed270ddd5b62f58381166b9f90c3268030d8f21df4353",
+       "relevance": "Single definition of the strongly connected components function."
+      },
+      {
+       "file": "pkg/analyzer/lib/src/summary2/default_types_builder.dart",
+       "quote": "var stronglyConnected = computeStrongComponents(graph);",
+       "line": 232,
+       "source_sha256": "7fb3a8b404fa4be9a1821d26842fc250ce8c24f9455b775f2ca9d94d29dabad7",
+       "relevance": "Real call site that computes strongly connected components of the type parameter graph."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "postgrest",
+   "commit": "58368513abdc104e377c4f358f476f49bc1dd2ba",
+   "queries": [
+    {
+     "id": "postgrest:paired-source-1",
+     "category": "test_intent",
+     "query": "Which tests cover a table-specific media handler overriding the generic anyelement handler?",
+     "evidence": [
+      {
+       "file": "test/spec/Feature/Query/CustomMediaSpec.hs",
+       "quote": "will use the more specific application/vnd.geo2 handler for this table",
+       "line": 60,
+       "source_sha256": "cf0fc4f08271d58ebf7d68e66c006c893e15ff71bb319fabb8c094f7c05c4d7f",
+       "relevance": "Test asserts the table-specific vnd.geo2 handler wins over the anyelement one."
+      },
+      {
+       "file": "src/PostgREST/Plan/Negotiate.hs",
+       "quote": "HM.lookup (RelId identifier, mt) produces",
+       "line": 78,
+       "source_sha256": "338491aa20573a7c0db9b20362f05d1e20b09b7f95d5c599996f7ce9493861f3",
+       "relevance": "Content negotiation looks up the handler for the specific relation before the anyelement fallback."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "postgrest:paired-source-2",
+     "category": "test_intent",
+     "query": "Where is the test for echoing the configured request trace header back in responses?",
+     "evidence": [
+      {
+       "file": "test/spec/Feature/ObservabilitySpec.hs",
+       "quote": "includes the server trace header on the response",
+       "line": 14,
+       "source_sha256": "9739d6a0eba288b8017bb8b8fbd45e16e1439ac835deda317f9d8ce32a222799",
+       "relevance": "Test asserts the X-Request-Id request header is copied to the response."
+      },
+      {
+       "file": "src/PostgREST/App.hs",
+       "quote": "Wai.mapResponseHeaders ([(hdr, fromMaybe mempty hdrVal)] ++)",
+       "line": 223,
+       "source_sha256": "1e26e8ddedf0b948459b24c5feaf2d996cc390b396fa06710f069bece81385e3",
+       "relevance": "Middleware adds the configured trace header value from the request to the response headers."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "postgrest:paired-source-3",
+     "category": "test_intent",
+     "query": "Find the tests for accepting a JWT when one audience in an array matches",
+     "evidence": [
+      {
+       "file": "test/spec/Feature/Auth/AudienceJwtSecretSpec.hs",
+       "quote": "succeeds when the audience claim has more than 1 element and one matches",
+       "line": 70,
+       "source_sha256": "0d45cf1ab3d80068f16bf3e22cec446a95c5e6f6628bcd508ceffc8d607d0da8",
+       "relevance": "Test asserts a JWT with an aud array containing the configured audience is accepted."
+      },
+      {
+       "file": "src/PostgREST/Auth/Jwt.hs",
+       "quote": "(VAArray auds) -> null auds || any audMatches auds",
+       "line": 80,
+       "source_sha256": "54a5828ffb810148b0d43d8b9f020c41bb066dc62c7bd264f7e61834f23d8dab",
+       "relevance": "Claim validation accepts an aud array when any element matches the configured audience."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "postgrest:paired-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is unwrapGucHeader defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/PostgREST/Response/GucHeader.hs",
+       "quote": "unwrapGucHeader :: GucHeader -> Header",
+       "line": 29,
+       "source_sha256": "3ad05e4acbd8906331d9c7dbeebe29b64d26b5a6b83e65d8a7f6f15b25784dd3",
+       "relevance": "Definition of unwrapGucHeader."
+      },
+      {
+       "file": "src/PostgREST/Response.hs",
+       "quote": "map unwrapGucHeader gucHeaders",
+       "line": 246,
+       "source_sha256": "882337205800590dce5ea5c01eb912611bb97dc9524ce707452602a8584515e6",
+       "relevance": "Response building calls unwrapGucHeader to convert GUC headers to HTTP headers."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    }
+   ]
+  },
+  {
+   "pack": "ring",
+   "commit": "0a36f21646232cdcaed92e55da8f31ba7f44e856",
+   "queries": [
+    {
+     "id": "ring:paired-source-1",
+     "category": "test_intent",
+     "query": "Which tests cover guessing media type from the served file path when URL has no extension?",
+     "evidence": [
+      {
+       "file": "ring-core/test/ring/middleware/test/content_type.clj",
+       "quote": "(testing \"fallback on response file extension\"",
+       "line": 44,
+       "source_sha256": "c043afbec9954594cda420c09b3c5a62d4c3bf692fbb7d6e37054cee1ddb2f14",
+       "relevance": "Test case asserting the type comes from the File body path when the URI has no extension."
+      },
+      {
+       "file": "ring-core/src/ring/middleware/content_type.clj",
+       "quote": "(ext-mime-type (.getAbsolutePath ^java.io.File body) mime-types)",
+       "line": 9,
+       "source_sha256": "028d6dca81f7033eae188503341ed4657364677216e5fee62a36e2bf8a42e668",
+       "relevance": "Implementation falls back to the File body's absolute path to look up the mime type."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "ring:paired-source-2",
+     "category": "test_intent",
+     "query": "Where is the test for catching exceptions thrown by a callback and forwarding them to the error handler?",
+     "evidence": [
+      {
+       "file": "ring-core/test/ring/util/test/async.clj",
+       "quote": "((raising error #(/ 1 0)))",
+       "line": 7,
+       "source_sha256": "0d7e4e16cb1fee83702c3e8c16f68a1df96b60be5014b576c3aa3ffd7a5969f7",
+       "relevance": "Test wraps a throwing function and checks the error promise receives the exception."
+      },
+      {
+       "file": "ring-core/src/ring/util/async.clj",
+       "quote": "(catch Throwable t (raise t))",
+       "line": 12,
+       "source_sha256": "5bf1475e3da0cb8556dc4bc6bb081414c5d04e6e154aca57a0926da14931b832",
+       "relevance": "Implementation catches any Throwable and passes it to the raise function."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "ring:paired-source-3",
+     "category": "test_intent",
+     "query": "Find the tests for rejecting HTTP methods written in uppercase or as plain strings",
+     "evidence": [
+      {
+       "file": "ring-devel/test/ring/middleware/test/lint.clj",
+       "quote": "(lints-req :request-method",
+       "line": 92,
+       "source_sha256": "ed95c6421ae27cd2c3aaf9115926024fda568e73fd09c2fa649592191e445ca8",
+       "relevance": "Generates valid/invalid request-method tests, rejecting :FOOBAR, \"get\" and 'get."
+      },
+      {
+       "file": "ring-devel/src/ring/middleware/lint.clj",
+       "quote": "(str/lower-case (name %))",
+       "line": 40,
+       "source_sha256": "2531ce26f55265a1c4fc643d281701871d54e837fb0f7dd22eb6a5ddc0ee9cc5",
+       "relevance": "Implementation requires the request method to be a lowercase keyword."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    },
+    {
+     "id": "ring:paired-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is websocket-response? defined and where is it called?",
+     "evidence": [
+      {
+       "file": "ring-core/src/ring/websocket.clj",
+       "quote": "(defn websocket-response?",
+       "line": 75,
+       "source_sha256": "1a520cea856fcb7f24cfb4b7ad78cbd2804c7c813cb39b96018ae611652fb6d1",
+       "relevance": "Single definition of the predicate that checks a response for a websocket listener."
+      },
+      {
+       "file": "ring-jetty-adapter/src/ring/adapter/jetty.clj",
+       "quote": "(ws/websocket-response? response-map)",
+       "line": 117,
+       "source_sha256": "96cb67dce7f1bf717b45ac0b0035c628ec6687eea62de39b5107cb3a4231a9a6",
+       "relevance": "Jetty proxy handler calls it to decide whether to upgrade to a websocket."
+      }
+     ],
+     "source_set": "2026-10-18-paired-source-validation.json"
+    }
+   ]
+  }
+ ]
+}

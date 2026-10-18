@@ -4,10 +4,14 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current release:** `attocode-code-intel` 0.1.8 (2026-10-17). See the
-[0.1.8 release notes](intelligence-0.1.8.md).
+**Current release:** `attocode-code-intel` 0.1.10 (2026-10-18). See the
+[0.1.10 release notes](intelligence-0.1.10.md).
 
-**Latest search batch, 2026-10-18:** [paired source for "test" questions](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-paired-source.md).
+**Latest search batch, 2026-10-18:** [source hit after the first five tests](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-query-source.md).
+The candidate gained two judged files at 24 on 20 new questions with no loss. It failed the frozen p95 limit in
+the one validation run, so the search code does not change.
+
+**Earlier search batch, 2026-10-18:** [paired source for "test" questions](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-paired-source.md).
 The candidate gained no judged file on 16 new questions, so the search code does not change.
 
 **Previous search batch, 2026-10-17:** [test intent for "tested" questions](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-test-source-slot.md).

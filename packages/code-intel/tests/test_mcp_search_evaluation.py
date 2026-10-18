@@ -205,7 +205,7 @@ def test_file_coverage_decisions_replay_from_hash_bound_observations(split):
     assert recorded["t_rules"]["negative_control_identical"]
 
 
-def _replay_slot_decision(stem, candidate_arm, split):
+def _replay_slot_decision(stem, candidate_arm, split, baseline="B"):
     """Recompute every recorded comparison and identity check from the hash-bound public files."""
     import gzip
     import hashlib
@@ -235,13 +235,13 @@ def _replay_slot_decision(stem, candidate_arm, split):
         if item["split"] == split:
             assert item["observation"]["questions_sha256"] == decision["questions_sha256"]
             rows.setdefault(item["observation"]["arm"], []).extend(item["observation"]["queries"])
-    expected = [q["id"] for q in rows["B"]]
-    base = {q["id"]: q for q in rows["B"]}
+    expected = [q["id"] for q in rows[baseline]]
+    base = {q["id"]: q for q in rows[baseline]}
     test_word = re.compile(r"\btest(?:s|ed|ing)?\b", re.I)
     for arm, record in decision.items():
         if arm in ("questions_file", "questions_sha256"):
             continue
-        replayed = compare(rows["B"], rows[arm], expected)
+        replayed = compare(rows[baseline], rows[arm], expected)
         assert replayed == {k: v for k, v in record["compare"].items() if k != "individual_gains"}
         same = {(q["id"], page): q["pages"][page]["response"]["data"]["results"]
                 == base[q["id"]]["pages"][page]["response"]["data"]["results"]
@@ -273,3 +273,15 @@ def test_paired_source_decisions_replay_from_hash_bound_observations(split):
     assert validation["zero_individual_losses"] and validation["compare_passes"]
     assert validation["first_five_net_gain"] == 0 and not validation["gains_in_at_least_2_packs"]
     assert recorded["decision"]["P"] == "rejected on validation"
+
+
+@pytest.mark.parametrize("split", ["development", "validation", "validation_repeat_1", "validation_repeat_2"])
+def test_query_source_decisions_replay_from_hash_bound_observations(split):
+    recorded = _replay_slot_decision("2026-10-18-query-source", "S1", split, baseline="D")
+    # S1 holds every judged rule but fails the frozen p95 limit in the one validation run.
+    # The two repeats came after the decision and pass compare, but they cannot change it.
+    rules = recorded["validation_rules"]
+    assert rules["zero_individual_losses"] and rules["files_24_net_gain_at_least_2_in_2_packs"]
+    assert rules["identity_holds"] and not rules["compare_checks"]["latency"]
+    assert recorded["decision"]["S1"] == "rejected on validation"
+    assert recorded["splits"][split]["S1"]["compare"]["passed"] == (split != "validation")

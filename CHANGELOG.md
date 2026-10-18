@@ -21,6 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changed. In the dart-sdk workflow, `suggest_tests` now also finds
   `tool/element/element_test.dart`.
 
+### Evaluation — Query-word source hit for "test" searches rejected
+
+- For a short search with "test" or "tests", the candidate put the best
+  source hit for the query after the first five test hits. On 100 consumed
+  development questions, it gained three judged implementation files at 24
+  with no loss. On 20 new validation questions over julia, Nim, deno, fsharp
+  and perl5, it gained two with no loss. It failed the frozen p95 latency
+  limit (0.110 against 0.1 seconds) in the one validation run, so the
+  product does not include it. Two later repeats passed, so the failure is
+  most likely host noise, but they cannot change the frozen decision. See
+  `packages/code-intel/evals/results/2026-10-18-query-source.md`.
+
 ## [Intelligence 0.1.10] - 2026-10-18
 
 ### Changed — Search order for "tested" questions
