@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source second) lost judged test files on development and does not ship. See
   the [results](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-test-source-slot.md).
 
+### Fixed — Swift and Xcode test folders
+
+- Files under `Tests/` or `Specs/` (any letter case) and under Xcode test
+  targets such as `ModernTests/` or `MyAppUITests/` are now test files. Before,
+  only lowercase `test/` and `tests/` folders counted, so Swift tests ranked
+  as source in default search and were absent from test-intent order. The
+  singular `Test/` folder and file names such as `NoForceTryInTests.swift`
+  do not count, because they can be source code. Of 36 cached pinned packs,
+  only SwiftFormat (219 files), iTerm2 (130) and aspnetcore (55, all in test
+  folders) change. On 12 consumed questions in SwiftFormat and aspnetcore,
+  one exact-symbol control gained its judged file and quote at five, with no
+  loss.
+
 ## [Intelligence 0.1.9] - 2026-10-17
 
 ### Fixed — Defects found by using Attocode on its own repository

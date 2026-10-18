@@ -39,6 +39,8 @@ def test_helper_in_conventional_source_set(source_set):
     "src/jvmTestSupport/kotlin/Queue.kt", "src/JvmTest/kotlin/Queue.kt",
     "okhttp-testing-support/src/main/kotlin/okhttp3/FakeDns.kt",
     "src/main/kotlin/Inspection.kt", "", "src/TestData/Queue.kt",
+    "Sources/Rules/NoForceTryInTests.swift", "stdlib/Test/src/Test.jl", "Contests/Queue.kt",
+    "Sources/Tests.swift",
 ])
 def test_production_and_ambiguous_names_are_not_inferred_as_tests(path):
     assert not is_test_path(path)
@@ -48,6 +50,8 @@ def test_production_and_ambiguous_names_are_not_inferred_as_tests(path):
     "src/jvmTest.kt", "src/test/kotlin/Fixture.kt", "src/androidTest/java/Fixture.java",
     "src/jvmTest/resources/fixture.txt", "lib.Tests/Fixture.cs",
     "test_parser.py", "parser_test.go", "src/__tests__/fixture.ts", "spec/fixture.rb",
+    "Tests/SwiftFormatTests/RulesTests.swift", "Tests/ProjectFilePaths.swift",
+    "ModernTests/FIFOQueueTests.swift", "App/AppUITests/LaunchTests.swift", "Specs/QueueSpec.swift",
 ])
 def test_existing_conventions_and_source_set_contents(path):
     assert is_test_path(path)
