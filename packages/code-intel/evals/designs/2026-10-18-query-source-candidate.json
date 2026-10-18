@@ -1,0 +1,422 @@
+{
+ "schema_version": 1,
+ "written_at": "2026-10-18T09:32:42.406336+00:00",
+ "freeze": {
+  "file": "2026-10-18-query-source-freeze.json",
+  "sha256": "5c62fa950d4fa2934f31d40b108e01e3d8f9be88505805f26f6c547bdfd64b8f"
+ },
+ "validation_questions_sha256": "70ba776b5f7b43cfdc60b571951ef752a124e9d3204467e4fa97f1b50faae5eb",
+ "validation_observations_before_this_record": 0,
+ "diagnosis": "On the 20 consumed questions with an implementation label, the query words without 'test' give the same source order. The implementation file is the best source hit in 3 of 20, in the first 3 in 9 and in the first 5 in 11.",
+ "selection_rule": "Development arms QN put the best N distinct source files after the first five test hits. Choose the largest N with zero individual development losses and a net gain of at least 2 judged files at 24 in at least 2 packs.",
+ "development_history": [
+  {
+   "id": "Q1",
+   "patch_sha256": "58c4bdff7d2437021f7e3bc05198f91fbaf0bb36e4c2bfa51aabd84b451562c2",
+   "engine_sha256": "b30aee0b12f46c1ac327f711d1333a6dd7ce9b40f26ef145d0cc164e656774cb",
+   "passed_compare": true,
+   "baseline": {
+    "files_5": 103,
+    "files_24": 117,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "candidate": {
+    "files_5": 103,
+    "files_24": 120,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "individual_losses": [],
+   "individual_gains": [
+    {
+     "id": "aspnetcore:test-source-slot-tests",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "crystal:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "dart-sdk:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "id": "Q2",
+   "patch_sha256": "e9f4fbf2ae49f82d92891d162f9501ecc13e8105fcbfcfc7644e232de14ed078",
+   "engine_sha256": "0f3098522218f379804e43eb98d19b56a96b67b20b061fb09a653859cb5c4e4f",
+   "passed_compare": true,
+   "baseline": {
+    "files_5": 103,
+    "files_24": 117,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "candidate": {
+    "files_5": 103,
+    "files_24": 121,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "individual_losses": [
+    {
+     "id": "gson:usefulness-validation-2",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    }
+   ],
+   "individual_gains": [
+    {
+     "id": "aspnetcore:test-source-slot-tests",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "crystal:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "dart-sdk:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "otp:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "zls:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "id": "Q3",
+   "patch_sha256": "a4c700d5099a2a0887d2979514f84018ec896ac34267bbb06143d50ebd0ce017",
+   "engine_sha256": "2e331ace0e5e7ad6a491b624a21b12687b30a62c99587d7542e5107d984ff912",
+   "passed_compare": true,
+   "baseline": {
+    "files_5": 103,
+    "files_24": 117,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "candidate": {
+    "files_5": 103,
+    "files_24": 124,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "individual_losses": [
+    {
+     "id": "gson:usefulness-validation-2",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    }
+   ],
+   "individual_gains": [
+    {
+     "id": "aspnetcore:test-source-slot-tests",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "aspnetcore:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "crystal:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "dart-sdk:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "luarocks:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "otp:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "postgrest:paired-source-2",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "zls:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "id": "Q5",
+   "patch_sha256": "f0c2d8be0695398a41b0913122174591dc672b004fae5af343b4004a1a2ee7e9",
+   "engine_sha256": "45abf5b7c65c16e7c1ddccd73179299512786b741554a14ab7d207b890bf9f6a",
+   "passed_compare": true,
+   "baseline": {
+    "files_5": 103,
+    "files_24": 117,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "candidate": {
+    "files_5": 103,
+    "files_24": 124,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "individual_losses": [
+    {
+     "id": "express:test-intent-2",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      0
+     ]
+    },
+    {
+     "id": "gson:usefulness-validation-2",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "luarocks:test-source-slot-test",
+     "page": "24",
+     "metric": "visible",
+     "labels": [
+      0
+     ]
+    }
+   ],
+   "individual_gains": [
+    {
+     "id": "aspnetcore:test-source-slot-tests",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "aspnetcore:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "crystal:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "dart-sdk:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "express:usefulness-validation-1",
+     "page": "24",
+     "metric": "visible",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "luarocks:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "otp:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "postgrest:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "postgrest:paired-source-2",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "zls:test-source-slot-test",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "id": "S1",
+   "note": "Short form of Q1. Every development page is identical to Q1; one inspection differs only in an index-progress counter.",
+   "patch_sha256": "9136d7b030d13949ede1598f5bebd7f27f14751c9164cbc884057658d79677e2",
+   "engine_sha256": "c348b0943162f4cde90ece4dabca02e4c5d0acadde7303aa3f90f309eeb26ec2",
+   "passed_compare": true,
+   "baseline": {
+    "files_5": 103,
+    "files_24": 117,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "candidate": {
+    "files_5": 103,
+    "files_24": 120,
+    "files_scoped": 98,
+    "visible_5": 41,
+    "visible_24": 7,
+    "inspection_visible": 18
+   },
+   "individual_losses": [],
+   "individual_gains": [
+    {
+     "id": "aspnetcore:test-source-slot-tests",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "crystal:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    },
+    {
+     "id": "dart-sdk:paired-source-1",
+     "page": "24",
+     "metric": "files",
+     "labels": [
+      1
+     ]
+    }
+   ]
+  }
+ ],
+ "unstable_run": "One Q2 spdlog run stopped on the harness check 'Unstable warmed delivery'. The record is in obs-unstable/; one rerun passed.",
+ "candidate": {
+  "id": "S1",
+  "patch_sha256": "9136d7b030d13949ede1598f5bebd7f27f14751c9164cbc884057658d79677e2",
+  "engine_sha256": "c348b0943162f4cde90ece4dabca02e4c5d0acadde7303aa3f90f309eeb26ec2"
+ },
+ "baseline_engine_sha256": "024d6d619a88fc0a2de8795f8687c9a52f074a155ccfbeed686942850c9b2826"
+}

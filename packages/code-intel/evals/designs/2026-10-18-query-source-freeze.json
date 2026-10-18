@@ -1,0 +1,44 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-18T09:32:29.222257+00:00",
+ "baseline": {
+  "arm": "B",
+  "source": "PR #238 head 4a1464fa2ece425cae6bf96766b19eba62b9ef7c",
+  "engine_sha256": "024d6d619a88fc0a2de8795f8687c9a52f074a155ccfbeed686942850c9b2826"
+ },
+ "validation_questions": {
+  "file": "2026-10-18-query-source-validation.json",
+  "sha256": "70ba776b5f7b43cfdc60b571951ef752a124e9d3204467e4fa97f1b50faae5eb",
+  "questions": 20
+ },
+ "development": {
+  "file": "2026-10-18-query-source-development.json",
+  "sha256": "cc467155ac20d7ed6318a79e9164939628d1163898fe36b976b5ad5ab58cea0a",
+  "questions": "Consumed sets only: the 84 paired-source development questions and the 16 paired-source validation questions; 100 questions on 18 packs.",
+  "allowed": "Candidate changes are allowed on development data only."
+ },
+ "candidate": {
+  "id": "S1",
+  "description": "For a short query with 'test' or 'tests', the first five test hits stay first. The best source hit comes next, then the other test hits, then the other source hits.",
+  "patch_sha256": "9136d7b030d13949ede1598f5bebd7f27f14751c9164cbc884057658d79677e2",
+  "engine_sha256": "c348b0943162f4cde90ece4dabca02e4c5d0acadde7303aa3f90f309eeb26ec2"
+ },
+ "bounds": {
+  "per_pack_seconds": 180,
+  "per_pack_disk_bytes": 536870912,
+  "per_pack_rss_bytes": 1610612736,
+  "models": false,
+  "downloads": false,
+  "cloud": false
+ },
+ "acceptance": {
+  "validation_rules": [
+   "compare(B, S1) passes: no aggregate loss of files or visible quotes at 5, 24 or scoped; no net inspection loss; p95 at most max(0.1 s, 1.5 x B).",
+   "Zero individual judged-file or visible-quote losses at 5, 24 and scoped.",
+   "Judged files at 24: net gain of at least 2, with gains in at least 2 packs.",
+   "Every question without a test word has identical delivery on every page; candidate generation is identical for every question."
+  ],
+  "ranking_gate": "The CI ranking gate must pass on the PR if the candidate ships.",
+  "decision": "Ship only if every validation rule holds. Validation runs once, for B and S1, with no tuning after it."
+ }
+}

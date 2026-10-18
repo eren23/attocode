@@ -1,0 +1,536 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-18T10:10:00.076085+00:00",
+ "split": "validation",
+ "baseline_commit": "4a1464fa2ece425cae6bf96766b19eba62b9ef7c",
+ "baseline_note": "PR #238 head (main e153f86 plus the test-name fix). No search on these packs ran before this file.",
+ "budget": 2000,
+ "scope": "20 new questions on five repositories that no earlier trial used: vapor, protobuf, spring-boot, mojo and elixir. The packs pin the HEAD commit of each cached local clone; the include lists keep one source area and its tests.",
+ "selection": {
+  "declared_at": "2026-10-18T10:05:41.595079+00:00",
+  "seed": "2026-10-18 query-source S2 validation",
+  "method": "Eligible files match the pack's test folder prefix and file-name pattern, count as tests under is_test_path, are not runner, helper, fixture, support, mock or stub files, and contain a test case marker of the language (Swift func test.../@Test, C++ TEST/TEST_F/TEST_P, Java @Test, Perl ok/is/like at line start or ->..._ok, Elixir test \"...\"). Sort, shuffle with random.Random(seed + pack), and take the first three from distinct parent folders. If a pack has fewer than three such folders, take the next files in shuffle order.",
+  "templates": [
+   "Which tests cover X?",
+   "Where is the test for X?",
+   "Find the tests for X"
+  ],
+  "replacement_rule": "If a drafter finds no implementation for a drawn file inside the pack, the next file in the shuffle order that is not chosen, not rejected, and not in a parent folder of the other two chosen files replaces it, and the record keeps the reason.",
+  "replacements": []
+ },
+ "repositories": [
+  {
+   "pack": "vapor",
+   "repo": "vapor/vapor",
+   "commit": "ff88583e10f02aa47be49e632d5179f89e855e03",
+   "include": [
+    "Sources/Vapor",
+    "Tests/VaporTests"
+   ],
+   "tree": "44fc3af548e084574ba2ce9f6419f74110a4f9c3",
+   "queries": [
+    {
+     "id": "vapor:query-source-s2-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "Tests/VaporTests/LoggingTests.swift",
+     "query": "Which tests cover adjusting the per-request log verbosity to trace level inside a route handler?",
+     "evidence": [
+      {
+       "file": "Tests/VaporTests/LoggingTests.swift",
+       "line": 18,
+       "quote": "req.logger.logLevel = .trace",
+       "relevance": "The route handler raises its own request logger to trace level and the test checks that the request still succeeds.",
+       "source_sha256": "7e3d1c13a10089db23d9d2d756b5c6944c0c5090692ae4fc2fa0863daabb0204"
+      },
+      {
+       "file": "Sources/Vapor/Request/Request.swift",
+       "line": 192,
+       "quote": "self._logger.withLockedValue { $0 = newValue }",
+       "relevance": "The request logger setter stores the changed logger, so the new log level applies to this request.",
+       "source_sha256": "a5954a6fcdd89392fed506fb0ce1f67085021c140282ba528bdf5118a96bd2f7"
+      }
+     ]
+    },
+    {
+     "id": "vapor:query-source-s2-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "Tests/VaporTests/ContentTests.swift",
+     "query": "Where is the test for the failure message naming a missing snake-case JSON key and its path?",
+     "evidence": [
+      {
+       "file": "Tests/VaporTests/ContentTests.swift",
+       "line": 515,
+       "quote": "No such key 'is_free' at path ''",
+       "relevance": "The test decodes JSON without the snake-case key is_free and checks the exact error reason text.",
+       "source_sha256": "f7482a83a4cacd25a4e49a24ea21cbf59065139bdc8af0de0dc6264085e411fc"
+      },
+      {
+       "file": "Sources/Vapor/Error/AbortError.swift",
+       "line": 72,
+       "quote": "case let .keyNotFound(key, ctx):",
+       "relevance": "This case builds the 'No such key ... at path ...' reason for a missing key decoding failure.",
+       "source_sha256": "02a38ab534856afaa5312b0aef0a7e150568efaa612ee26c3f86784097cb52c0"
+      }
+     ]
+    },
+    {
+     "id": "vapor:query-source-s2-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "Tests/VaporTests/ApplicationCreationTests.swift",
+     "query": "Find the tests for asynchronously constructing an app that keeps a caller-supplied log label",
+     "evidence": [
+      {
+       "file": "Tests/VaporTests/ApplicationCreationTests.swift",
+       "line": 19,
+       "quote": "Application.make(.testing, logger: logger)",
+       "relevance": "The test creates the application asynchronously with a custom logger and checks that its label is kept.",
+       "source_sha256": "5ceee142d8c6310da91ebfaef83c623912ed4b061017b569bbeee11889f3812f"
+      },
+      {
+       "file": "Sources/Vapor/Application.swift",
+       "line": 174,
+       "quote": "Application(environment, eventLoopGroupProvider, async: true, logger: logger)",
+       "relevance": "The async factory passes the caller-supplied logger into the application initializer.",
+       "source_sha256": "ed3dc76e54899649f96934f024dc690831609c54c1b9c78d65aec1b87a247a0b"
+      }
+     ]
+    },
+    {
+     "id": "vapor:query-source-s2-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is URLEncodedFormParser defined and where is it called?",
+     "evidence": [
+      {
+       "file": "Sources/Vapor/URLEncodedForm/URLEncodedFormParser.swift",
+       "line": 2,
+       "quote": "internal struct URLEncodedFormParser {",
+       "relevance": "Definition of the URL-encoded form parser type.",
+       "source_sha256": "61ee3bd2b6e00e61fbed979cd13986c33c2d3996df28b2f18b461977b2454656"
+      },
+      {
+       "file": "Sources/Vapor/URLEncodedForm/URLEncodedFormDecoder.swift",
+       "line": 86,
+       "quote": "self.parser = URLEncodedFormParser()",
+       "relevance": "The URL-encoded form decoder creates its parser instance here.",
+       "source_sha256": "af532286352b6d88c3b5d5da05106301c0201c60092f21654dab6aa1cbcabd80"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "protobuf",
+   "repo": "protocolbuffers/protobuf",
+   "commit": "68bd6bed7923ddade82a57a6fb8274024a3cd5d8",
+   "include": [
+    "src/google/protobuf"
+   ],
+   "tree": "40fa92275ea77590cade3380662862bb8da2fba4",
+   "queries": [
+    {
+     "id": "protobuf:query-source-s2-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "src/google/protobuf/compiler/ruby/rbs_generator_unittest.cc",
+     "query": "Which tests cover RBS signature generation when a proto sets an explicit Ruby package with module separators?",
+     "evidence": [
+      {
+       "file": "src/google/protobuf/compiler/ruby/rbs_generator_unittest.cc",
+       "line": 98,
+       "quote": "RBSTest(\"/ruby_generated_pkg_explicit\");",
+       "relevance": "The explicit-package golden test runs the RBS generator on a proto whose ruby_package is \"A::B::C\" and compares the output.",
+       "source_sha256": "bde2200c5681ce5b2ac7d33061765623640b7f3a2bd7aeb999382cebd3e2ab68"
+      },
+      {
+       "file": "src/google/protobuf/compiler/ruby/rbs_generator.cc",
+       "line": 99,
+       "quote": "if (absl::StrContains(package_name, \"::\")) {",
+       "relevance": "When the explicit Ruby package already contains \"::\", the RBS module path is used as-is instead of being converted from dotted package parts.",
+       "source_sha256": "b008cc2f759c83057a01301fa78d715c586adaa7397b4d78700bcbeb303d7ea0"
+      }
+     ]
+    },
+    {
+     "id": "protobuf:query-source-s2-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "src/google/protobuf/compiler/objectivec/line_consumer_unittest.cc",
+     "query": "Where is the test for stripping hash comments when parsing a simple line-oriented input stream?",
+     "evidence": [
+      {
+       "file": "src/google/protobuf/compiler/objectivec/line_consumer_unittest.cc",
+       "line": 89,
+       "quote": "{\"a # same line\", {\"a\"}},",
+       "relevance": "The comment-dropping test case expects text after '#' on a line to be removed before the line is consumed.",
+       "source_sha256": "ece0b76e591bcd4349be5a41a3b9fad1d753cc098959531f2e1183ff7ecefa78"
+      },
+      {
+       "file": "src/google/protobuf/compiler/objectivec/line_consumer.cc",
+       "line": 60,
+       "quote": "size_t offset = input->find('#');",
+       "relevance": "The line parser finds the first '#' and truncates the line there, which drops the comment.",
+       "source_sha256": "94b50c3a24d25ea92bcd12e918be069f2b383bcbeddcee7eecd61c1202d179d6"
+      }
+     ]
+    },
+    {
+     "id": "protobuf:query-source-s2-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "src/google/protobuf/util/delimited_message_util_test.cc",
+     "query": "Find the tests for writing and reading back length-prefixed messages and detecting a clean end of stream",
+     "evidence": [
+      {
+       "file": "src/google/protobuf/util/delimited_message_util_test.cc",
+       "line": 59,
+       "quote": "EXPECT_TRUE(clean_eof);",
+       "relevance": "After both delimited messages are read back, a further read must fail and report a clean end of stream.",
+       "source_sha256": "600a1046afd512a02d0096229be881d23ef38f3df5dcf96295328e731df87de2"
+      },
+      {
+       "file": "src/google/protobuf/util/delimited_message_util.cc",
+       "line": 51,
+       "quote": "*clean_eof = input->CurrentPosition() == start;",
+       "relevance": "When the size varint cannot be read, clean EOF is reported only if no bytes were consumed.",
+       "source_sha256": "c3d85df7a477b04d986f468fdd06f99fb683491baf64cc4fceec9625f68e42db"
+      }
+     ]
+    },
+    {
+     "id": "protobuf:query-source-s2-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is PackageToModule defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/google/protobuf/compiler/ruby/ruby_generator.cc",
+       "line": 74,
+       "quote": "std::string PackageToModule(absl::string_view name) {",
+       "relevance": "Definition of the helper that converts a snake_case package part into a PascalCase Ruby module name.",
+       "source_sha256": "141bc4a8545a8f02013442bdcdb5bb2bf8be6bdc728e50e5c50511d84d17a447"
+      },
+      {
+       "file": "src/google/protobuf/compiler/ruby/rbs_generator.cc",
+       "line": 112,
+       "quote": "package_name += PackageToModule(part);",
+       "relevance": "The RBS generator calls it to build the module path for each dotted package part.",
+       "source_sha256": "b008cc2f759c83057a01301fa78d715c586adaa7397b4d78700bcbeb303d7ea0"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "spring-boot",
+   "repo": "spring-projects/spring-boot",
+   "commit": "d10f1b8399067634220763968a798ae6a239e243",
+   "include": [
+    "core/spring-boot/src"
+   ],
+   "tree": "552af9aea963c09ee381bdea4e360565848e9105",
+   "queries": [
+    {
+     "id": "spring-boot:query-source-s2-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "core/spring-boot/src/test/java/org/springframework/boot/convert/ArrayToDelimitedStringConverterTests.java",
+     "query": "Which tests cover joining array elements into a string using a custom separator annotation on the field?",
+     "evidence": [
+      {
+       "file": "core/spring-boot/src/test/java/org/springframework/boot/convert/ArrayToDelimitedStringConverterTests.java",
+       "line": 65,
+       "quote": "assertThat(converted).isEqualTo(\"1-2-3\");",
+       "relevance": "The test checks that an array field annotated with a dash separator is joined as 1-2-3.",
+       "source_sha256": "b5ef12b18bfc626a135664c75e98c228cdeea89c51e2a81b7019c72f0591f316"
+      },
+      {
+       "file": "core/spring-boot/src/main/java/org/springframework/boot/convert/CollectionToDelimitedStringConverter.java",
+       "line": 80,
+       "quote": "return (annotation != null) ? annotation.value() : \",\";",
+       "relevance": "The array converter delegates here, where the separator comes from the field annotation or defaults to a comma.",
+       "source_sha256": "b462b0f4f0a6962b3802ce8d00cc7c56c3ed38f946971b4d76add676b29be955"
+      }
+     ]
+    },
+    {
+     "id": "spring-boot:query-source-s2-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "core/spring-boot/src/test/java/org/springframework/boot/logging/logback/ColorConverterTests.java",
+     "query": "Where is the test for combining several comma-separated styling options into one ANSI escape sequence for log output?",
+     "evidence": [
+      {
+       "file": "core/spring-boot/src/test/java/org/springframework/boot/logging/logback/ColorConverterTests.java",
+       "line": 239,
+       "quote": "setOptionList(Collections.singletonList(\"bold, red\"))",
+       "relevance": "The test gives one comma-separated option and expects a single combined bold and red escape sequence.",
+       "source_sha256": "24ba9b9e8435056bbd77e4113887d8eedb62b66551bd03799d2a82f88119e540"
+      },
+      {
+       "file": "core/spring-boot/src/main/java/org/springframework/boot/logging/logback/ColorConverter.java",
+       "line": 80,
+       "quote": "String[] optionParts = option.split(\",\");",
+       "relevance": "The logback converter splits each option on commas and collects every matching ANSI element.",
+       "source_sha256": "58853d2f3673fda963854dff5088116c97e35f217cf139e1f12609c1247a82bf"
+      }
+     ]
+    },
+    {
+     "id": "spring-boot:query-source-s2-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "core/spring-boot/src/test/java/org/springframework/boot/context/config/ConfigDataEnvironmentPostProcessorIntegrationTests.java",
+     "query": "Find the tests for skipping a missing config location marked optional while still loading the remaining property files",
+     "evidence": [
+      {
+       "file": "core/spring-boot/src/test/java/org/springframework/boot/context/config/ConfigDataEnvironmentPostProcessorIntegrationTests.java",
+       "line": 251,
+       "quote": "optional:classpath:nonexistent.properties",
+       "relevance": "The test adds a nonexistent optional location and checks that the other files still load.",
+       "source_sha256": "28f3cb504b24d600ebcef436c8a46a4ee5ff3bb4ff5d901351655868e6c2ef50"
+      },
+      {
+       "file": "core/spring-boot/src/main/java/org/springframework/boot/context/config/ConfigDataImporter.java",
+       "line": 159,
+       "quote": "if (location.isOptional() || (resource != null && resource.isOptional())) {",
+       "relevance": "The importer ignores a not-found error when the location or resource is optional.",
+       "source_sha256": "d77d7bb93586bc712222df4aee0cecd6b33f53a34810bfd27a6ef4ce5a63e2bb"
+      }
+     ]
+    },
+    {
+     "id": "spring-boot:query-source-s2-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is AnsiOutput defined and where is it called?",
+     "evidence": [
+      {
+       "file": "core/spring-boot/src/main/java/org/springframework/boot/ansi/AnsiOutput.java",
+       "line": 36,
+       "quote": "public abstract class AnsiOutput {",
+       "relevance": "Definition of the class.",
+       "source_sha256": "e9c7f232e9f95af6b1fac01bd59eeb83acf01874d22634f58b15394b5b3564cd"
+      },
+      {
+       "file": "core/spring-boot/src/main/java/org/springframework/boot/logging/logback/ColorConverter.java",
+       "line": 98,
+       "quote": "return AnsiOutput.toString(element, in);",
+       "relevance": "The logback color converter calls the class to build ANSI output.",
+       "source_sha256": "58853d2f3673fda963854dff5088116c97e35f217cf139e1f12609c1247a82bf"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "mojo",
+   "repo": "mojolicious/mojo",
+   "commit": "19fc4f19a0d83204a458ae4a19d192b7eaf4ba81",
+   "include": [
+    "lib",
+    "t"
+   ],
+   "tree": "ea2f7113fbdceac425935e3f6b7d608ecc7409e6",
+   "queries": [
+    {
+     "id": "mojo:query-source-s2-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "t/mojo/dynamic_methods.t",
+     "query": "Which tests cover per-object methods added at runtime staying hidden when asking whether the class supports them?",
+     "evidence": [
+      {
+       "file": "t/mojo/dynamic_methods.t",
+       "line": 35,
+       "quote": "ok !Mojo::TestDynamic->can('foo'), 'dynamic method is hidden';",
+       "relevance": "Asserts that a method registered for one object is not reported by the class's can lookup.",
+       "source_sha256": "ecfdf45c4caca3b74d9cc616438d35ce09dc298ee92d3848b8233ff37333a90b"
+      },
+      {
+       "file": "lib/Mojo/DynamicMethods.pm",
+       "line": 21,
+       "quote": "return $h && $h eq $can ? undef : $can;",
+       "relevance": "The patched can returns undef when the found code is the generated dynamic dispatcher, which hides the method.",
+       "source_sha256": "289d212538c36e57558f20280e4ce660eff361309580bfb0b3adeb28b9480574"
+      }
+     ]
+    },
+    {
+     "id": "mojo:query-source-s2-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "t/mojolicious/longpolling_lite_app.t",
+     "query": "Where is the test for a client request aborting with an error once its overall time limit expires?",
+     "evidence": [
+      {
+       "file": "t/mojolicious/longpolling_lite_app.t",
+       "line": 319,
+       "quote": "is $tx->error->{message}, 'Request timeout', 'right error';",
+       "relevance": "Checks that a request to a never-finishing route fails with the overall request time limit error.",
+       "source_sha256": "c0587b710a2fec26160981663ce5f73ff4249e53096a397fb7b4e4bb0d16525f"
+      },
+      {
+       "file": "lib/Mojo/UserAgent.pm",
+       "line": 332,
+       "quote": "$loop->timer($t => sub { $self->_error($id, 'Request timeout') })",
+       "relevance": "The user agent starts a timer for the configured request time limit and sets the error when it fires.",
+       "source_sha256": "e7243b43bb880496d2366aa8a170082cf026883429ce35ebf1c811b10ad4d6a2"
+      }
+     ]
+    },
+    {
+     "id": "mojo:query-source-s2-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "t/test/mojo.t",
+     "query": "Find the tests for running a fallback callback only when the previous assertion in a chain failed",
+     "evidence": [
+      {
+       "file": "t/test/mojo.t",
+       "line": 38,
+       "quote": "is $or, 'false', 'right result';",
+       "relevance": "Asserts that only the callback after the failed assertion ran, not the one after the passing assertion.",
+       "source_sha256": "5132baac333adb3c065ee7bcd702cf0f68602c7af4fac696e3927b0903f5efb4"
+      },
+      {
+       "file": "lib/Test/Mojo.pm",
+       "line": 266,
+       "quote": "$self->$cb unless $self->success;",
+       "relevance": "Test::Mojo invokes the callback only when the last test result was not successful.",
+       "source_sha256": "8ef928a78479fd32b4381a83b0bd557277c2572a263e4f7a2f42aae610a8c943"
+      }
+     ]
+    },
+    {
+     "id": "mojo:query-source-s2-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is proxy_connect defined and where is it called?",
+     "evidence": [
+      {
+       "file": "lib/Mojo/UserAgent/Transactor.pm",
+       "line": 92,
+       "quote": "sub proxy_connect {",
+       "relevance": "Definition of proxy_connect, which builds a CONNECT transaction for proxied HTTPS or WebSocket requests.",
+       "source_sha256": "deaf6ecd0fec00012b30012a2505836bb8a82d2c72f5b4804c0f4973fd81747d"
+      },
+      {
+       "file": "lib/Mojo/UserAgent.pm",
+       "line": 147,
+       "quote": "return undef unless my $new = $self->transactor->proxy_connect($old);",
+       "relevance": "The user agent calls proxy_connect when it sets up a connection through a proxy.",
+       "source_sha256": "e7243b43bb880496d2366aa8a170082cf026883429ce35ebf1c811b10ad4d6a2"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "elixir",
+   "repo": "elixir-lang/elixir",
+   "commit": "8df8f920302a79ca64b53d1b464c8ed5bd736b9c",
+   "include": [
+    "lib/elixir/lib",
+    "lib/elixir/test"
+   ],
+   "tree": "5c0497e9c494994c2383871f22bce8be8a142df4",
+   "queries": [
+    {
+     "id": "elixir:query-source-s2-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "lib/elixir/test/elixir/kernel/deprecated_test.exs",
+     "query": "Which tests cover raising an error when a deprecation annotation receives a number instead of a reason string?",
+     "evidence": [
+      {
+       "file": "lib/elixir/test/elixir/kernel/deprecated_test.exs",
+       "line": 13,
+       "quote": "assert_raise ArgumentError, ~r\"should be a string with the reason\"",
+       "relevance": "The test sets @deprecated to 1.2 and asserts an ArgumentError that asks for a reason string.",
+       "source_sha256": "230c1768be66b94e48165c057fce4bb98bf7b6f6376cc9bab0259049727ccc43"
+      },
+      {
+       "file": "lib/elixir/lib/module.ex",
+       "line": 2287,
+       "quote": "defp preprocess_attribute(:deprecated, value) when not is_binary(value)",
+       "relevance": "This clause rejects a non-binary @deprecated value and raises the ArgumentError that the test checks.",
+       "source_sha256": "e98a44db92ab5cf0d405b8feb1b163af8437c19719b16c0892df1f97b7cee688"
+      }
+     ]
+    },
+    {
+     "id": "elixir:query-source-s2-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "lib/elixir/test/elixir/enum_test.exs",
+     "query": "Where is the test for the deprecated grouping function treating a nil leftover as dropping the incomplete final group?",
+     "evidence": [
+      {
+       "file": "lib/elixir/test/elixir/enum_test.exs",
+       "line": 107,
+       "quote": "enum.chunk(1..5, 2, 1, nil) == Enum.chunk_every(1..5, 2, 1, :discard)",
+       "relevance": "The test asserts that the deprecated four-argument chunk call with a nil leftover gives the same result as the :discard mode.",
+       "source_sha256": "e4ec3a29ac107c72bbf622108b745007bd439e1d98799be45ab8175d45668990"
+      },
+      {
+       "file": "lib/elixir/lib/enum.ex",
+       "line": 516,
+       "quote": "chunk_every(enumerable, count, step, leftover || :discard)",
+       "relevance": "The deprecated chunk/4 replaces a nil leftover with :discard before it delegates to chunk_every/4.",
+       "source_sha256": "194a213e280609b6a21d258683dbb498bdeea7f9df61c67f1124ce2be547e075"
+      }
+     ]
+    },
+    {
+     "id": "elixir:query-source-s2-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "lib/elixir/test/elixir/macro/env_test.exs",
+     "query": "Find the tests for building call frames from a compile context lacking a current function or module",
+     "evidence": [
+      {
+       "file": "lib/elixir/test/elixir/macro/env_test.exs",
+       "line": 52,
+       "quote": "{__MODULE__, :__MODULE__, 0, [file: ~c\"foo\", line: 12]}",
+       "relevance": "The stacktrace test expects a :__MODULE__/0 frame when the environment has no current function.",
+       "source_sha256": "211552c8ccf7e7a5241dee652427bdaec9e41ec3a05cf66752a7d0cf636b8eb6"
+      },
+      {
+       "file": "lib/elixir/lib/macro/env.ex",
+       "line": 709,
+       "quote": "[{env.module, :__MODULE__, 0, relative_location(env)}]",
+       "relevance": "Macro.Env.stacktrace/1 builds the :__MODULE__/0 frame in the branch for an environment without a function.",
+       "source_sha256": "4c5d5b4eb9d68022badda42192f3cb9939cb5d1f8380edc4adfb5d133cf3f5d4"
+      }
+     ]
+    },
+    {
+     "id": "elixir:query-source-s2-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is defdelegate_all defined and where is it called?",
+     "evidence": [
+      {
+       "file": "lib/elixir/lib/kernel/utils.ex",
+       "line": 31,
+       "quote": "def defdelegate_all(funs, opts, env) do",
+       "relevance": "Definition of Kernel.Utils.defdelegate_all/3.",
+       "source_sha256": "2206b14c55aea1997e55a30419620107e9d5e369667007a4826832314f6697f9"
+      },
+      {
+       "file": "lib/elixir/lib/kernel.ex",
+       "line": 6210,
+       "quote": "target = Kernel.Utils.defdelegate_all(funs, opts, __ENV__)",
+       "relevance": "The defdelegate/2 macro in Kernel calls defdelegate_all/3 to get the delegation target.",
+       "source_sha256": "93f5f90b5f9bbec89a5734156b1443f502f915f6bcbd1332bf8d8ea9f59ca4d8"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

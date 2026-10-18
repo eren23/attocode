@@ -1,0 +1,12 @@
+{
+ "pools": 5000,
+ "label_paths": 201,
+ "s1_s2_identical": true,
+ "s2_differs_from_d_on": 2082,
+ "pool_rows_for_timing": 300,
+ "microseconds_per_call": {
+  "D": 607.1,
+  "S1": 1198.6,
+  "S2": 609.0
+ }
+}

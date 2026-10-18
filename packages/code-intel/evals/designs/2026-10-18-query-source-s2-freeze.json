@@ -1,0 +1,51 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-18T10:10:11.042762+00:00",
+ "baseline": {
+  "arm": "D",
+  "source": "PR #238 head 4a1464fa2ece425cae6bf96766b19eba62b9ef7c",
+  "engine_sha256": "024d6d619a88fc0a2de8795f8687c9a52f074a155ccfbeed686942850c9b2826"
+ },
+ "validation_questions": {
+  "file": "2026-10-18-query-source-s2-validation.json",
+  "sha256": "435112a144dd8bc329d822e3e66f2fa86819d65e0aaaf85e449830b5e3640eb0",
+  "questions": 20
+ },
+ "candidate": {
+  "id": "S2",
+  "description": "For a short query with 'test' or 'tests', the first five test hits stay first. The best source hit comes next, then the other test hits, then the other source hits. S2 checks each candidate once with is_test_path.",
+  "patch_sha256": "5eec47d2e7f8d476259b4ccb7b17c04a60374a513009e5c26301e915979d39dc",
+  "engine_sha256": "e1ba9f3eaed0dbec797ccdc13fc52669f604b597638c4a6480b414ee49b50082"
+ },
+ "development": {
+  "evidence": "S2 is the S1 order of the query-source batch. S1 held every judged rule on its 100 development questions and on its 20 validation questions, and failed only the one-run p95 rule. Those 120 questions are consumed.",
+  "equivalence": {
+   "file": "equivalence.json",
+   "sha256": "c13d3ae2311099f0f4977713dfe1f959a8f1b27c4cc9f4c198ebce3730cf950f",
+   "result": "S2 gives the same order as S1 on 5,000 seeded pools; per call it costs the same as D (609 against 607 microseconds) and S1 costs 1,199."
+  },
+  "previous_freeze_sha256": "5c62fa950d4fa2934f31d40b108e01e3d8f9be88505805f26f6c547bdfd64b8f",
+  "previous_decision_sha256": "090c9d852e6dd1b07ae966c917d24605ed27dbe4d623116971449f78bcd599f5"
+ },
+ "bounds": {
+  "per_pack_seconds": 180,
+  "per_pack_disk_bytes": 536870912,
+  "per_pack_rss_bytes": 1610612736,
+  "models": false,
+  "downloads": false,
+  "cloud": false
+ },
+ "runs": "Three rounds per pack. Round 1: D then S2. Round 2: S2 then D. Round 3: D then S2. Each run is a fresh process with a cold index. If a run stops on a harness check, that one run runs again once, and both records stay.",
+ "acceptance": {
+  "latency_rule": "For each question, the page-5 latency is the median of the three round medians (each round median is over three warmed samples). The p95 over questions uses these values. Rule: p95(S2) <= max(0.1 s, 1.5 x p95(D)).",
+  "validation_rules": [
+   "compare(D, S2) passes on round-1 rows whose page-5 seconds are the per-question latency above: no aggregate loss of files or visible quotes at 5, 24 or scoped; no net inspection loss; the latency rule.",
+   "Zero individual judged-file or visible-quote losses at 5, 24 and scoped in round 1.",
+   "Judged files at 24 in round 1: net gain of at least 2, with gains in at least 2 packs.",
+   "Every question without a test word has identical round-1 delivery on every page; candidate generation is identical for every question."
+  ],
+  "reported_not_gated": "Any page whose delivery differs between rounds of the same arm.",
+  "ranking_gate": "The CI ranking gate must pass on the PR if the candidate ships.",
+  "decision": "Ship only if every validation rule holds. Validation runs once (three rounds), with no tuning after it."
+ }
+}

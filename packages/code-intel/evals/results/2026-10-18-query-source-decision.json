@@ -1,0 +1,814 @@
+{
+ "baseline": "PR #238 head 4a1464fa2ece425cae6bf96766b19eba62b9ef7c; the observations name this arm D",
+ "freeze_sha256": "5c62fa950d4fa2934f31d40b108e01e3d8f9be88505805f26f6c547bdfd64b8f",
+ "candidate_record_sha256": "89baab5b5cd20955f537b2cd597e92c5751002938cdbd7c46e6d1a7b525c7630",
+ "engine_sha256": {
+  "D": "024d6d619a88fc0a2de8795f8687c9a52f074a155ccfbeed686942850c9b2826",
+  "Q1": "b30aee0b12f46c1ac327f711d1333a6dd7ce9b40f26ef145d0cc164e656774cb",
+  "Q2": "0f3098522218f379804e43eb98d19b56a96b67b20b061fb09a653859cb5c4e4f",
+  "Q3": "2e331ace0e5e7ad6a491b624a21b12687b30a62c99587d7542e5107d984ff912",
+  "Q5": "45abf5b7c65c16e7c1ddccd73179299512786b741554a14ab7d207b890bf9f6a",
+  "S1": "c348b0943162f4cde90ece4dabca02e4c5d0acadde7303aa3f90f309eeb26ec2"
+ },
+ "artifact": {
+  "raw_bytes": 17491734,
+  "compressed_bytes": 1886126,
+  "gzip_sha256": "a3a36a093101783a67220b705f4ebecff5752af17d066151c216e2f9d0a7fd2b",
+  "raw_sha256": "b7d14128fae8b8875945a413697f512630ded33765b703452617081acfc807c8",
+  "processes": 138,
+  "omitted": "per-stage generation lists (size); generation identity was checked on the full private observations"
+ },
+ "patches": {
+  "Q1": {
+   "file": "designs/2026-10-18-query-source-q1.patch.gz",
+   "patch_sha256": "58c4bdff7d2437021f7e3bc05198f91fbaf0bb36e4c2bfa51aabd84b451562c2",
+   "compressed_sha256": "7b14c32bc1221da8b284d20e7b2a5212db819a18ae0889823734405dd697e5f4"
+  },
+  "Q2": {
+   "file": "designs/2026-10-18-query-source-q2.patch.gz",
+   "patch_sha256": "e9f4fbf2ae49f82d92891d162f9501ecc13e8105fcbfcfc7644e232de14ed078",
+   "compressed_sha256": "109790a24a3c5b3d6da50d15f060f1bc9e7484a56e5fceb936f0a2e8aeaba5ad"
+  },
+  "Q3": {
+   "file": "designs/2026-10-18-query-source-q3.patch.gz",
+   "patch_sha256": "a4c700d5099a2a0887d2979514f84018ec896ac34267bbb06143d50ebd0ce017",
+   "compressed_sha256": "e558f3c604eefb42ec2c923bca5249929d0e716553a13dc84478e070157945cd"
+  },
+  "Q5": {
+   "file": "designs/2026-10-18-query-source-q5.patch.gz",
+   "patch_sha256": "f0c2d8be0695398a41b0913122174591dc672b004fae5af343b4004a1a2ee7e9",
+   "compressed_sha256": "506564a262ea02a7e786ca0134db9b5a0bf1ce01f7c11fb1c91a328f964923ff"
+  },
+  "S1": {
+   "file": "designs/2026-10-18-query-source-s1.patch.gz",
+   "patch_sha256": "9136d7b030d13949ede1598f5bebd7f27f14751c9164cbc884057658d79677e2",
+   "compressed_sha256": "792b9fa2d430cc603d83e312900eb6c39d28b4a9fd9599cd6896a208bd92fcbc"
+  }
+ },
+ "splits": {
+  "development": {
+   "questions_file": "designs/2026-10-18-query-source-development.json",
+   "questions_sha256": "cc467155ac20d7ed6318a79e9164939628d1163898fe36b976b5ad5ab58cea0a",
+   "Q1": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 117,
+      "ranges_24": 58,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.13143700000364333
+     },
+     "candidate": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 120,
+      "ranges_24": 59,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.15077058400493115
+     },
+     "individual_losses": [],
+     "individual_gains": [
+      {
+       "id": "aspnetcore:test-source-slot-tests",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "crystal:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "dart-sdk:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   },
+   "Q2": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 117,
+      "ranges_24": 58,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.13143700000364333
+     },
+     "candidate": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 121,
+      "ranges_24": 58,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.12745604198426008
+     },
+     "individual_losses": [
+      {
+       "id": "gson:usefulness-validation-2",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ],
+     "individual_gains": [
+      {
+       "id": "aspnetcore:test-source-slot-tests",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "zls:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "otp:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "crystal:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "dart-sdk:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   },
+   "Q3": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 117,
+      "ranges_24": 58,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.13143700000364333
+     },
+     "candidate": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 124,
+      "ranges_24": 59,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.12813454202841967
+     },
+     "individual_losses": [
+      {
+       "id": "gson:usefulness-validation-2",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ],
+     "individual_gains": [
+      {
+       "id": "aspnetcore:test-source-slot-tests",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "aspnetcore:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "luarocks:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "zls:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "otp:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "crystal:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "dart-sdk:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "postgrest:paired-source-2",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   },
+   "Q5": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 117,
+      "ranges_24": 58,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.13143700000364333
+     },
+     "candidate": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 124,
+      "ranges_24": 59,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.12483904208056629
+     },
+     "individual_losses": [
+      {
+       "id": "express:test-intent-2",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        0
+       ]
+      },
+      {
+       "id": "gson:usefulness-validation-2",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "luarocks:test-source-slot-test",
+       "page": "24",
+       "metric": "visible",
+       "labels": [
+        0
+       ]
+      }
+     ],
+     "individual_gains": [
+      {
+       "id": "express:usefulness-validation-1",
+       "page": "24",
+       "metric": "visible",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "aspnetcore:test-source-slot-tests",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "aspnetcore:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "luarocks:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "zls:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "otp:test-source-slot-test",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "crystal:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "dart-sdk:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "postgrest:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "postgrest:paired-source-2",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   },
+   "S1": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 117,
+      "ranges_24": 58,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.13143700000364333
+     },
+     "candidate": {
+      "questions": 100,
+      "files_5": 103,
+      "ranges_5": 55,
+      "visible_5": 41,
+      "files_24": 120,
+      "ranges_24": 59,
+      "visible_24": 7,
+      "files_scoped": 98,
+      "ranges_scoped": 85,
+      "visible_scoped": 56,
+      "inspection_visible": 18,
+      "p95_seconds": 0.1415500839939341
+     },
+     "individual_losses": [],
+     "individual_gains": [
+      {
+       "id": "aspnetcore:test-source-slot-tests",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "crystal:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "dart-sdk:paired-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   }
+  },
+  "validation": {
+   "questions_file": "designs/2026-10-18-query-source-validation.json",
+   "questions_sha256": "70ba776b5f7b43cfdc60b571951ef752a124e9d3204467e4fa97f1b50faae5eb",
+   "S1": {
+    "compare": {
+     "passed": false,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": false
+     },
+     "baseline": {
+      "questions": 20,
+      "files_5": 12,
+      "ranges_5": 9,
+      "visible_5": 8,
+      "files_24": 20,
+      "ranges_24": 12,
+      "visible_24": 1,
+      "files_scoped": 19,
+      "ranges_scoped": 16,
+      "visible_scoped": 14,
+      "inspection_visible": 6,
+      "p95_seconds": 0.06522816698998213
+     },
+     "candidate": {
+      "questions": 20,
+      "files_5": 12,
+      "ranges_5": 9,
+      "visible_5": 8,
+      "files_24": 22,
+      "ranges_24": 13,
+      "visible_24": 1,
+      "files_scoped": 19,
+      "ranges_scoped": 16,
+      "visible_scoped": 14,
+      "inspection_visible": 6,
+      "p95_seconds": 0.10961208306252956
+     },
+     "individual_losses": [],
+     "individual_gains": [
+      {
+       "id": "Nim-t:query-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "deno-t:query-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   }
+  },
+  "validation_repeat_1": {
+   "questions_file": "designs/2026-10-18-query-source-validation.json",
+   "questions_sha256": "70ba776b5f7b43cfdc60b571951ef752a124e9d3204467e4fa97f1b50faae5eb",
+   "S1": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 20,
+      "files_5": 12,
+      "ranges_5": 9,
+      "visible_5": 8,
+      "files_24": 20,
+      "ranges_24": 12,
+      "visible_24": 1,
+      "files_scoped": 19,
+      "ranges_scoped": 16,
+      "visible_scoped": 14,
+      "inspection_visible": 6,
+      "p95_seconds": 0.06763333396520466
+     },
+     "candidate": {
+      "questions": 20,
+      "files_5": 12,
+      "ranges_5": 9,
+      "visible_5": 8,
+      "files_24": 22,
+      "ranges_24": 13,
+      "visible_24": 1,
+      "files_scoped": 19,
+      "ranges_scoped": 16,
+      "visible_scoped": 14,
+      "inspection_visible": 6,
+      "p95_seconds": 0.08833420893643051
+     },
+     "individual_losses": [],
+     "individual_gains": [
+      {
+       "id": "Nim-t:query-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "deno-t:query-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   }
+  },
+  "validation_repeat_2": {
+   "questions_file": "designs/2026-10-18-query-source-validation.json",
+   "questions_sha256": "70ba776b5f7b43cfdc60b571951ef752a124e9d3204467e4fa97f1b50faae5eb",
+   "S1": {
+    "compare": {
+     "passed": true,
+     "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+     },
+     "baseline": {
+      "questions": 20,
+      "files_5": 12,
+      "ranges_5": 9,
+      "visible_5": 8,
+      "files_24": 20,
+      "ranges_24": 12,
+      "visible_24": 1,
+      "files_scoped": 19,
+      "ranges_scoped": 16,
+      "visible_scoped": 14,
+      "inspection_visible": 6,
+      "p95_seconds": 0.06508899992331862
+     },
+     "candidate": {
+      "questions": 20,
+      "files_5": 12,
+      "ranges_5": 9,
+      "visible_5": 8,
+      "files_24": 22,
+      "ranges_24": 13,
+      "visible_24": 1,
+      "files_scoped": 19,
+      "ranges_scoped": 16,
+      "visible_scoped": 14,
+      "inspection_visible": 6,
+      "p95_seconds": 0.06511874997522682
+     },
+     "individual_losses": [],
+     "individual_gains": [
+      {
+       "id": "Nim-t:query-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      },
+      {
+       "id": "deno-t:query-source-1",
+       "page": "24",
+       "metric": "files",
+       "labels": [
+        1
+       ]
+      }
+     ]
+    },
+    "controls_identical": true,
+    "generation_identical": true,
+    "no_test_word_identical": true
+   }
+  }
+ },
+ "selection": {
+  "rule": "Development arms QN put the best N distinct source files after the first five test hits. Choose the largest N with zero individual development losses and a net gain of at least 2 judged files at 24 in at least 2 packs.",
+  "chosen": "S1, the short form of Q1. Q2, Q3 and Q5 each lose a judged development item."
+ },
+ "validation_rules": {
+  "compare_passes": false,
+  "compare_checks": {
+   "file_totals_no_loss": true,
+   "visible_totals_no_loss": true,
+   "scoped_no_individual_loss": true,
+   "inspection_no_net_loss": true,
+   "latency": false
+  },
+  "zero_individual_losses": true,
+  "files_24_net_gain": 2,
+  "gain_packs": [
+   "Nim-t",
+   "deno-t"
+  ],
+  "files_24_net_gain_at_least_2_in_2_packs": true,
+  "identity_holds": true
+ },
+ "decision": {
+  "S1": "rejected on validation",
+  "decided_at": "2026-10-18T09:35:10.474133+00:00",
+  "note": "Recorded before any diagnostic run. Later diagnostics cannot change this decision."
+ },
+ "diagnostics_after_decision": {
+  "note": "These runs came after the decision and cannot change it.",
+  "p95_seconds_baseline_candidate": {
+   "validation": [
+    0.06522816698998213,
+    0.10961208306252956
+   ],
+   "validation_repeat_1": [
+    0.06763333396520466,
+    0.08833420893643051
+   ],
+   "validation_repeat_2": [
+    0.06508899992331862,
+    0.06511874997522682
+   ]
+  },
+  "repeats_pass_compare": [
+   true,
+   true
+  ],
+  "demote_tests_microseconds_per_call": {
+   "D": {
+    "microseconds_per_call": 409.0
+   },
+   "S1": {
+    "microseconds_per_call": 811.8
+   },
+   "pool_rows": 300
+  }
+ }
+}

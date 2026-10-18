@@ -1,0 +1,558 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-18T09:32:21.226359+00:00",
+ "split": "validation",
+ "baseline_commit": "4a1464fa2ece425cae6bf96766b19eba62b9ef7c",
+ "baseline_note": "PR #238 head (main e153f86 plus the test-name fix). No search on these packs ran before this file.",
+ "budget": 2000,
+ "scope": "20 new questions on five packs that no earlier trial used: julia, Nim, deno, fsharp and perl5. The packs use the pinned commits of eval/quality/workflows.yaml from the local clones, with the include list widened to the test folders.",
+ "selection": {
+  "declared_at": "2026-10-18T09:22:44.488696+00:00",
+  "seed": "2026-10-18 query-source validation",
+  "method": "Eligible files match the pack's test folder prefix and file-name pattern, count as tests under is_test_path, and are not runner or helper files (runtests, choosetests, testenv, testdefs, helper, utils, testfx, Program.fs, common, setup), and contain a test case marker of the language (julia @test, Nim doAssert/check/assert, Deno.test, F# [<Fact>]/[<Test>]/[<Theory>], Perl ok/is/like at line start). Sort, shuffle with random.Random(seed + pack), and take the first three from distinct parent folders. If a pack has fewer than three such folders, take the next files in shuffle order. If a drafter finds no implementation for a drawn file inside the pack, the next eligible file in the shuffle order replaces it, and the record keeps the reason.",
+  "correction": "The first draw (selection-initial.json) counted julia test/testhelpers/Quaternions.jl and a fixture package file test/project/.../ExtDep2.jl. These hold no test case. The rule now also needs a test case marker. The correction came before any question and before any search on these packs.",
+  "templates": [
+   "Which tests cover X?",
+   "Where is the test for X?",
+   "Find the tests for X"
+  ],
+  "replacement_rule": "A replacement is the next file in the shuffle order after the replaced file that is not chosen, not rejected, and not in a parent folder of the other two chosen files.",
+  "replacements": [
+   {
+    "pack": "julia-t",
+    "index": 3,
+    "rejected": "test/gcext/gcext-test.jl",
+    "replacement": "test/trimming/trimming.jl",
+    "reason": "The behaviors in this file are in C (gcext.c, foreignlib.c and the Julia runtime). The pack holds only base/ and test/."
+   },
+   {
+    "pack": "fsharp-t",
+    "index": 3,
+    "rejected": "tests/FSharp.Core.UnitTests/StructTuples.fs",
+    "replacement": "tests/FSharp.Core.UnitTests/FSharp.Core/PrimTypes.fs",
+    "reason": "All test cases sit in a disabled #if TUPLE_SAMPLE block and check compiler and .NET behavior, not src/FSharp.Core."
+   },
+   {
+    "pack": "julia-t",
+    "index": 3,
+    "rejected": "test/trimming/trimming.jl",
+    "replacement": "test/embedding/embedding-test.jl",
+    "reason": "The test cases check a JSON log of exported symbols and a compiled binary. The juliac build script writes that log, and it is not in the pack. The drafter found only a partial match (the custom C name in base/c.jl), so the file is rejected."
+   }
+  ]
+ },
+ "repositories": [
+  {
+   "pack": "julia-t",
+   "commit": "8493b13f44455a5f16f1f830c223845a3dacf2c8",
+   "include": [
+    "base",
+    "test"
+   ],
+   "tree": "78ab38d64d1436175fc60c7c504b85a5cd46216d",
+   "queries": [
+    {
+     "id": "julia-t:query-source-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "test/sysinfo.jl",
+     "query": "Which tests cover locating a program on the search path when an earlier directory denies access?",
+     "evidence": [
+      {
+       "file": "test/sysinfo.jl",
+       "line": 42,
+       "quote": "abspath(Base.Sys.which(\"foo\")) == abspath(joinpath(seconddir, \"foo\"))",
+       "relevance": "Checks the lookup skips the unreadable first directory and returns the program from the second.",
+       "source_sha256": "2c09e81d22f4776be0797bb54648356f686dfc0b1a258141a91c07f48e091eae"
+      },
+      {
+       "file": "base/sysinfo.jl",
+       "line": 517,
+       "quote": "isa(e, Base.IOError) && e.code == Base.UV_EACCES",
+       "relevance": "Catches the permission-denied error so the search continues with the next directory.",
+       "source_sha256": "cdc7bf67012e8425566bc76c157f47d7b663f3fdb06a5d4444a3539d8ec5b262"
+      }
+     ]
+    },
+    {
+     "id": "julia-t:query-source-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "test/strings/io.jl",
+     "query": "Where is the test for joining items with a different separator before the final item?",
+     "evidence": [
+      {
+       "file": "test/strings/io.jl",
+       "line": 179,
+       "quote": "join(1:5, \", \", \" and \") == \"1, 2, 3, 4 and 5\"",
+       "relevance": "Checks that the last pair uses the special final separator.",
+       "source_sha256": "7fd6844aba647f398c6a74bdc4a55915f6f9ed05ec6db0f81b193a73e32c11bf"
+      },
+      {
+       "file": "base/strings/io.jl",
+       "line": 332,
+       "quote": "first || print(io, last)",
+       "relevance": "Prints the final separator before the last item when more than one item exists.",
+       "source_sha256": "01b8731b9c9ff757248ff0f859f6f1c698c65d99ade9a9dc6eb343aa31f00170"
+      }
+     ]
+    },
+    {
+     "id": "julia-t:query-source-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "test/embedding/embedding-test.jl",
+     "query": "Find the tests for the message saying a function exists but lacks a method for these argument types",
+     "evidence": [
+      {
+       "file": "test/embedding/embedding-test.jl",
+       "line": 24,
+       "quote": "The function `this_function_has_no_methods` exists, but no method is defined for this combination of argument types.",
+       "relevance": "Checks the second line of the printed no-method error: the note that the function exists but has no matching method.",
+       "source_sha256": "633cb5a783ebf8e55b9da0ead2d7888cc08a0ad5bdc3273526595473ba517f54"
+      },
+      {
+       "file": "base/errorshow.jl",
+       "line": 376,
+       "quote": "print(io, \"function `$f` exists, but no method is defined for this combination of argument types.\")",
+       "relevance": "The MethodError showerror branch for a function prints this exact note after the \"The \" prefix on line 374.",
+       "source_sha256": "8cccd5d6847a01f363f025fa0414e5ec413f8b2ae6345285365ed881d50f674a"
+      }
+     ]
+    },
+    {
+     "id": "julia-t:query-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is append_sign defined and where is it called?",
+     "evidence": [
+      {
+       "file": "base/ryu/utils.jl",
+       "line": 186,
+       "quote": "function append_sign(x, plus::Bool, space::Bool, buf, pos::Int)",
+       "relevance": "Single definition of the helper that writes a leading sign.",
+       "source_sha256": "51a8d2279c45469fe5d6e01d77125381c3884a57d0c8d5156e1f290014154e3f"
+      },
+      {
+       "file": "base/ryu/fixed.jl",
+       "line": 7,
+       "quote": "pos = append_sign(x, plus, space, buf, pos)",
+       "relevance": "Fixed-precision float writer calls the helper to emit the sign.",
+       "source_sha256": "31f30f57ec9e25a7ff67833a11eb9c92b2e75b078dc8f9554790af7b28d30be7"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "Nim-t",
+   "commit": "4414b5a396fa00f2cfeca385445d0fd6077bed93",
+   "include": [
+    "lib/pure",
+    "lib/std",
+    "tests/stdlib"
+   ],
+   "tree": "67bce7568be04f62a988890515adbd70fcc59e6f",
+   "queries": [
+    {
+     "id": "Nim-t:query-source-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "tests/stdlib/twith.nim",
+     "query": "Which tests cover chaining calls and assignments onto a nested inner field of an object?",
+     "evidence": [
+      {
+       "file": "tests/stdlib/twith.nim",
+       "line": 44,
+       "quote": "doAssert bar.baz.a == 2",
+       "relevance": "Checks that a nested chaining block assigned the inner object's field.",
+       "source_sha256": "1b6d69a822d8ac85a1ffd60d36d4e58d5631314c062b026db96203f1b0974a4d"
+      },
+      {
+       "file": "lib/std/private/underscored_calls.nim",
+       "line": 28,
+       "quote": "underscoredCalls(result, n[2 .. ^1].newStmtList, newDotExpr(arg0, n[1]))",
+       "relevance": "Rewrites a nested chaining block to target the inner field of the outer argument.",
+       "source_sha256": "3aadc57a3367db66ac04183effc264902afb0ace952fe1aa8c39f194f780089b"
+      }
+     ]
+    },
+    {
+     "id": "Nim-t:query-source-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "tests/stdlib/concurrency/tatomics.nim",
+     "query": "Where is the test for atomically swapping in a new value and returning the old one?",
+     "evidence": [
+      {
+       "file": "tests/stdlib/concurrency/tatomics.nim",
+       "line": 44,
+       "quote": "doAssert location.exchange(2) == 1",
+       "relevance": "Checks that the atomic swap stores the new value and returns the previous one.",
+       "source_sha256": "cc36ae8ff7a1d4e90437e51404a4450c41ea85f005f7dba82f77b10db62e653c"
+      },
+      {
+       "file": "lib/pure/concurrency/atomics.nim",
+       "line": 358,
+       "quote": "cast[T](atomic_exchange_explicit(addr(location.value), cast[nonAtomicType(T)](desired), order))",
+       "relevance": "Performs the C atomic exchange for trivial types and returns the old value.",
+       "source_sha256": "c231276d9d683e6ec35ed7ada8d0e579c7bc1954014c2abb87d2be1475f54a12"
+      }
+     ]
+    },
+    {
+     "id": "Nim-t:query-source-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "tests/stdlib/theapqueue.nim",
+     "query": "Find the tests for removing an element at a given position from a priority heap",
+     "evidence": [
+      {
+       "file": "tests/stdlib/theapqueue.nim",
+       "line": 40,
+       "quote": "doAssert(heap[0] == 1)",
+       "relevance": "Checks the heap minimum after deleting the element at index zero.",
+       "source_sha256": "608fdb458a3fe3611d1100023e074471da748518a62fce25c0be418d5c2a8cd9"
+      },
+      {
+       "file": "lib/pure/collections/heapqueue.nim",
+       "line": 204,
+       "quote": "swap(heap.data[^1], heap.data[index])",
+       "relevance": "Moves the element to delete to the end before shrinking and re-sifting the heap.",
+       "source_sha256": "961192514a6e3447602e2760282badf99f6934a3a8966df55beadec8f37e6c88"
+      }
+     ]
+    },
+    {
+     "id": "Nim-t:query-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is parseSaturatedNatural defined and where is it called?",
+     "evidence": [
+      {
+       "file": "lib/pure/parseutils.nim",
+       "line": 1032,
+       "quote": "proc parseSaturatedNatural*(s: string, b: var int, start = 0): int {.",
+       "relevance": "Definition of the string overload with a start index.",
+       "source_sha256": "ddff2e2ae5429b80be2eeb11857b6314914e8e9a7358dd02b278aec3c9097ab3"
+      },
+      {
+       "file": "lib/pure/strformat.nim",
+       "line": 465,
+       "quote": "let parsedLength = parseSaturatedNatural(s, result.minimumWidth, i)",
+       "relevance": "Call site that parses the minimum width in a format specifier.",
+       "source_sha256": "e27d6d3432c41f1a024608a852df039ffae92a270941b400e4f382c948f3a496"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "deno-t",
+   "commit": "574272ded08b82c7dec64da2120be8442a1f7636",
+   "include": [
+    "runtime",
+    "ext",
+    "tests/unit"
+   ],
+   "tree": "3670fd9a587d05a68ab12c34a820590645591066",
+   "queries": [
+    {
+     "id": "deno-t:query-source-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "tests/unit/event_target_test.ts",
+     "query": "Which tests cover listeners added during an event dispatch not firing for that same event?",
+     "evidence": [
+      {
+       "file": "tests/unit/event_target_test.ts",
+       "line": 306,
+       "quote": "eventTargetDispatchShouldFireCurrentListenersOnly",
+       "relevance": "Test asserts a listener added inside a handler is not called in the same dispatch.",
+       "source_sha256": "6d2351cb02adb1caacde1d0917c5e6d8b0c774e6633457dc502f18ae3a88b64f"
+      },
+      {
+       "file": "ext/web/02_event.js",
+       "line": 725,
+       "quote": "handlers = ArrayPrototypeSlice(targetListeners[type]);",
+       "relevance": "Dispatch copies the listener list before iterating, so listeners added mid-dispatch are skipped.",
+       "source_sha256": "e17e46004da5ee915e5f34fda8d78162cec8578a828fe8e37c906601eef9e01d"
+      }
+     ]
+    },
+    {
+     "id": "deno-t:query-source-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "tests/unit/event_source_test.ts",
+     "query": "Where is the test for server-sent event message data that contains a colon staying intact?",
+     "evidence": [
+      {
+       "file": "tests/unit/event_source_test.ts",
+       "line": 6,
+       "quote": "async function eventSourceColonInMessage() {",
+       "relevance": "Test sends data with a colon and checks the received message data is unchanged.",
+       "source_sha256": "2df49bf0a1c828b2a53ec7e8bc5fdb6b1d4372defd231904c47ed2f7bf39f54f"
+      },
+      {
+       "file": "ext/fetch/27_eventsource.js",
+       "line": 287,
+       "quote": "const colonIndex = StringPrototypeIndexOf(chunk, \":\");",
+       "relevance": "Stream line parser splits field and value at the first colon only, keeping later colons in the value.",
+       "source_sha256": "9e323d4772c4bb7092fac3e944adf764fbfee9febcd7d8d05eff021d409c4f64"
+      }
+     ]
+    },
+    {
+     "id": "deno-t:query-source-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "tests/unit/streams_test.ts",
+     "query": "Find the tests for rejecting a plain string when building a readable stream from an iterable",
+     "evidence": [
+      {
+       "file": "tests/unit/streams_test.ts",
+       "line": 577,
+       "quote": "Deno.test(function readableStreamFromWithStringThrows() {",
+       "relevance": "Test asserts creating a stream from a string throws a TypeError.",
+       "source_sha256": "19768e8b165be35f441363fbacd0cfc890f347746ebcfa2b558d81fe36643ac5"
+      },
+      {
+       "file": "ext/webidl/00_webidl.js",
+       "line": 955,
+       "quote": "if (type(V) !== \"Object\") {",
+       "relevance": "Async iterable converter used by the stream factory rejects non-object values such as strings.",
+       "source_sha256": "0f086a2285eef213d8f466f35dcf8514d70749c5f1c202fbf9338a7188bf7d47"
+      }
+     ]
+    },
+    {
+     "id": "deno-t:query-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is resolve_addr_sync defined and where is it called?",
+     "evidence": [
+      {
+       "file": "ext/net/resolve_addr.rs",
+       "line": 19,
+       "quote": "pub fn resolve_addr_sync(",
+       "relevance": "Definition of the synchronous host and port resolver.",
+       "source_sha256": "3c124aa85beafdcfa560f1c52c98d24546dc8c0ed1fce704c83afa5557e3e24c"
+      },
+      {
+       "file": "ext/net/ops_tls.rs",
+       "line": 528,
+       "quote": "let bind_addr = resolve_addr_sync(&addr.hostname, addr.port)?",
+       "relevance": "TLS op calls the resolver to get its bind address.",
+       "source_sha256": "c6f03dbcbfd9d3b33bfe46b8057b76a507e969cc3ba454f47b776d0ae3badfb3"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "fsharp-t",
+   "commit": "ff81858ea7eaa4631e1d1ad6aa4f61d7b8967139",
+   "include": [
+    "src/FSharp.Core",
+    "tests/FSharp.Core.UnitTests"
+   ],
+   "tree": "b4976db5a3209bf4bf2cfb2b8edc8cc6d642cb39",
+   "queries": [
+    {
+     "id": "fsharp-t:query-source-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "tests/FSharp.Core.UnitTests/FSharp.Core/Microsoft.FSharp.Control/EventTypes.fs",
+     "query": "Which tests cover thread-safe adding and removing of handlers on a published event?",
+     "evidence": [
+      {
+       "file": "tests/FSharp.Core.UnitTests/FSharp.Core/Microsoft.FSharp.Control/EventTypes.fs",
+       "line": 50,
+       "quote": "Adding/removing handlers to published Event<'T> is thread-safe",
+       "relevance": "Test adds and removes handlers in parallel and checks no listeners remain.",
+       "source_sha256": "fafa83086333c1f1b8e6c458b2ca512d4ae72b42959bff01fccee36629cf2c01"
+      },
+      {
+       "file": "src/FSharp.Core/event.fs",
+       "line": 184,
+       "quote": "Delegate.Remove(value, d) :?> Handler<'T>) &x.multicast",
+       "relevance": "Removes a handler from the event's delegate list with an atomic compare-and-swap update.",
+       "source_sha256": "e5709e937f7f733228f77d08fbbb23a5551e7bc21e8cfad7a5c2d5aa4de9910c"
+      }
+     ]
+    },
+    {
+     "id": "fsharp-t:query-source-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "tests/FSharp.Core.UnitTests/FSharp.Core/Microsoft.FSharp.Collections/ObsoleteSeqFunctions.fs",
+     "query": "Where is the test for the deprecated lookup of a sequence element by its position?",
+     "evidence": [
+      {
+       "file": "tests/FSharp.Core.UnitTests/FSharp.Core/Microsoft.FSharp.Collections/ObsoleteSeqFunctions.fs",
+       "line": 14,
+       "quote": "member this.Nth() =",
+       "relevance": "Test checks positional lookup results and errors for negative, out-of-range, empty and null input.",
+       "source_sha256": "b12ae233693500763ccfdde5b688185917f23b5a15d8f83e46893141cddd2157"
+      },
+      {
+       "file": "src/FSharp.Core/seq.fs",
+       "line": 654,
+       "quote": "item index source",
+       "relevance": "The deprecated positional lookup forwards to the checked element-at-index function.",
+       "source_sha256": "ae19626e3434caeaa0fc0834ec7a2a8eae59fd15b2203c2b53ca77420df5c644"
+      }
+     ]
+    },
+    {
+     "id": "fsharp-t:query-source-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "tests/FSharp.Core.UnitTests/FSharp.Core/PrimTypes.fs",
+     "query": "Find the tests for how a list prints as text, showing only three items before an ellipsis",
+     "evidence": [
+      {
+       "file": "tests/FSharp.Core.UnitTests/FSharp.Core/PrimTypes.fs",
+       "line": 751,
+       "quote": "member this.ListToString() =",
+       "relevance": "Test case that checks list text output for empty, short and longer lists, including the truncated form.",
+       "source_sha256": "fdc0976a91796b0f867bc9263f9ae80fa0f72f06fe42cb88f2faf71cbe89904b"
+      },
+      {
+       "file": "src/FSharp.Core/prim-types.fs",
+       "line": 4352,
+       "quote": "| h1 :: h2 :: h3 :: _ -> StringBuilder().Append(\"[\")",
+       "relevance": "List ToString branch that prints the first three items and appends the ellipsis for longer lists.",
+       "source_sha256": "923d3d4fbe7dced1c751f3db3cb884a745cef7500a734a9435864caa9df2f5dd"
+      }
+     ]
+    },
+    {
+     "id": "fsharp-t:query-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is ConvImmutableTypeToMutableType defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/FSharp.Core/QueryExtensions.fs",
+       "line": 217,
+       "quote": "let rec ConvImmutableTypeToMutableType conv ty =",
+       "relevance": "Definition of the query type conversion function.",
+       "source_sha256": "5c1c7bdde3813919a6c0dff9a885092bad6375601b238e460c242f435ac6df81"
+      },
+      {
+       "file": "src/FSharp.Core/Query.fs",
+       "line": 1213,
+       "quote": "ConvImmutableTypeToMutableType conv immutConsumingVar.Type",
+       "relevance": "Call site in the query translator in another file.",
+       "source_sha256": "ef6919508ea03695c1a78c90618af11da6ff1115c581e28dfa8ee59af33b110a"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "perl5-t",
+   "commit": "ef53bc6892cb851320be193e8cd9b15b2494e24c",
+   "include": [
+    "dist/Carp",
+    "lib"
+   ],
+   "tree": "5673c558e93d618dd2d6cfcefe3203b291f3934a",
+   "queries": [
+    {
+     "id": "perl5-t:query-source-1",
+     "category": "test_intent",
+     "template": "Which tests cover X?",
+     "drawn_test": "lib/dumpvar.t",
+     "query": "Which tests cover escaping characters above code point 255 as hexadecimal sequences in variable dumps?",
+     "evidence": [
+      {
+       "file": "lib/dumpvar.t",
+       "line": 116,
+       "quote": "uniescape(\"\\x{100}\");",
+       "relevance": "Test case that expects a wide character to print as a four-digit hex escape.",
+       "source_sha256": "d78373eb37575919e1b5b6fe28bdffed6819ff07cf1f5f06a8e57abecbca59e7"
+      },
+      {
+       "file": "lib/dumpvar.pl",
+       "line": 57,
+       "quote": "$_ > 255 ? sprintf(\"\\\\x{%04X}\", $_) : chr($_)",
+       "relevance": "Maps each code point above 255 to a four-digit hex escape.",
+       "source_sha256": "b04e978788d9ea53852ef91dee26d3f5a903ceb926717801c29002ae9038073e"
+      }
+     ]
+    },
+    {
+     "id": "perl5-t:query-source-2",
+     "category": "test_intent",
+     "template": "Where is the test for X?",
+     "drawn_test": "dist/Carp/t/broken_can.t",
+     "query": "Where is the test for full stack traces when an argument object's method lookup throws?",
+     "evidence": [
+      {
+       "file": "dist/Carp/t/broken_can.t",
+       "line": 18,
+       "quote": "like $@, qr/^-sins at /;",
+       "relevance": "Checks that confess still reports its message when an argument's can method dies.",
+       "source_sha256": "3750db8ba7bf311937f652abb550c4d3f69adfc945cc87cfadccf6279619de17"
+      },
+      {
+       "file": "dist/Carp/lib/Carp.pm",
+       "line": 409,
+       "quote": "eval {$arg->can('CARP_TRACE') }",
+       "relevance": "Wraps the method lookup on an argument object in eval so a dying can does not break the trace.",
+       "source_sha256": "f2e590a6925ed3574197edf157db4baf8e14cf074636839e0123b1f3b70efa75"
+      }
+     ]
+    },
+    {
+     "id": "perl5-t:query-source-3",
+     "category": "test_intent",
+     "template": "Find the tests for X",
+     "drawn_test": "lib/B/Deparse.t",
+     "query": "Find the tests for adding braces around punctuation array names inside interpolated strings when decompiling code",
+     "evidence": [
+      {
+       "file": "lib/B/Deparse.t",
+       "line": 249,
+       "quote": "coderef2text(sub{ print \"foo@{]}\" })",
+       "relevance": "Checks that the decompiled string keeps braces around the punctuation array name.",
+       "source_sha256": "d594a44faabd90989195d90b5da05f1f710f46a9f1ee9451a4fe619c4a0edbd8"
+      },
+      {
+       "file": "lib/B/Deparse.pm",
+       "line": 2096,
+       "quote": "return \"$prefix\\{$name}\";",
+       "relevance": "Adds braces around a single punctuation array name in interpolation context.",
+       "source_sha256": "13c7bdf5b7aa36b5a8f9ab3052d79f10f2fc9d6710af59b31cb224fc3ebecc94"
+      }
+     ]
+    },
+    {
+     "id": "perl5-t:query-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is fileparse defined and where is it called?",
+     "evidence": [
+      {
+       "file": "lib/File/Basename.pm",
+       "line": 104,
+       "quote": "sub fileparse {",
+       "relevance": "Definition of the path splitting sub.",
+       "source_sha256": "6030b2b1539dc25fd82718943444bd219762d8c88c927cacf2a40488710f7e49"
+      },
+      {
+       "file": "lib/Pod/t/Usage.t",
+       "line": 31,
+       "quote": "my( $file, $path ) = fileparse( $0 );",
+       "relevance": "Calls the sub from another file to split the script path.",
+       "source_sha256": "a7d0766e846e4dcffb84a710eda5d84b5762b68577b4ca6fa8a9840d5be6e0a3"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
