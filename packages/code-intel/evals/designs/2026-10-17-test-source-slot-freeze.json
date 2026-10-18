@@ -1,0 +1,43 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-17T19:45:51.050681+00:00",
+ "baseline_commit": "77dc6fdd7d50e6b4abb8d72154524666b09f2bba",
+ "validation_questions": {
+  "file": "2026-10-17-test-source-slot-validation.json",
+  "sha256": "505518dfd74dd2e438c3b31fa17e7f35f530782d3d0d92fc8f0dc73f3ccf47cc",
+  "questions": 16
+ },
+ "candidate": {
+  "id": "T2",
+  "description": "Test intent also recognizes 'tested' and 'testing'. For a short test search, test hits still go first, but the best source hit moves to second place.",
+  "frozen_before_validation_in": "candidate record written after development and before validation"
+ },
+ "development": {
+  "questions": "Consumed sets only: 2026-10-16-test-intent, 2026-10-16-search-usefulness (development and validation), 2026-10-17-file-coverage (development and validation); 68 questions, 32 with a test word.",
+  "allowed": "Candidate changes are allowed on development data only."
+ },
+ "bounds": {
+  "per_pack_seconds": 180,
+  "per_pack_disk_bytes": 536870912,
+  "per_pack_rss_bytes": 1610612736,
+  "models": false,
+  "downloads": false,
+  "cloud": false
+ },
+ "acceptance": {
+  "validation_rules": [
+   "compare(B, T2) passes: no aggregate loss of files or visible quotes at 5, 24 or scoped; no net inspection loss; p95 at most max(0.1 s, 1.5 x B).",
+   "Zero individual judged-file or visible-quote losses at 5, 24 and scoped.",
+   "Judged files at 5: net gain of at least 2, with gains in at least 2 packs.",
+   "Every question without a test word has identical delivery on every page; candidate generation is identical for every question."
+  ],
+  "development_rules": [
+   "compare(B, T2) passes on the 68 consumed questions.",
+   "Zero individual judged-file or visible-quote losses.",
+   "Judged files at 5: net gain of at least 2.",
+   "Questions without a test word: identical delivery; generation identical."
+  ],
+  "ranking_gate": "The CI ranking gate must pass on the PR if the candidate ships.",
+  "decision": "Ship only if every development and validation rule holds. Validation runs once; no tuning after it."
+ }
+}

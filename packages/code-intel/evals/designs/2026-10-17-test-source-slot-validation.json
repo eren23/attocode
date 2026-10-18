@@ -1,0 +1,400 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-17T19:45:40.263367+00:00",
+ "split": "validation",
+ "baseline_commit": "77dc6fdd7d50e6b4abb8d72154524666b09f2bba",
+ "budget": 2000,
+ "scope": "Fresh held-out questions for four pinned packs that no earlier trial used (aspnetcore, luarocks, zls, otp), written by reading source only, before any search ran on these packs. Per pack: three test questions that use the words 'tested', 'tests' and 'test', and one exact-symbol control. Each test question has two labels: the test file first, then the implementation file. Subsystems were declared before writing. Labels are drafted by source-reading subagents and reviewed; they are source-bound and non-exhaustive, not independent user or agent outcomes.",
+ "acceptance": {
+  "defined_in": "2026-10-17-test-source-slot-freeze.json",
+  "validation": "Run once, after the candidate is frozen; no product tuning after validation results are opened."
+ },
+ "subsystems": {
+  "aspnetcore": [
+   "src/Http/WebUtilities/ (src and test)",
+   "src/Http/Headers/ (src and test)",
+   "src/Http/Http.Results/ (src and test)"
+  ],
+  "luarocks": [
+   "src/luarocks/fun.lua and spec/unit/fun_spec.lua",
+   "src/luarocks/core/dir.lua, src/luarocks/dir.lua and spec/unit/dir_spec.lua",
+   "src/luarocks/persist.lua and spec/unit/persist_spec.lua"
+  ],
+  "zls": [
+   "src/diff.zig and tests/utility/diff.zig",
+   "src/features/folding_range.zig and tests/lsp_features/folding_range.zig",
+   "src/features/selection_range.zig and tests/lsp_features/selection_range.zig"
+  ],
+  "otp": [
+   "lib/stdlib/src/uri_string.erl and lib/stdlib/test/uri_string_SUITE.erl",
+   "lib/stdlib/src/queue.erl and lib/stdlib/test/queue_SUITE.erl",
+   "lib/stdlib/src/calendar.erl and lib/stdlib/test/calendar_SUITE.erl"
+  ]
+ },
+ "repositories": [
+  {
+   "pack": "aspnetcore",
+   "commit": "2b1cb0a7ae862ba622fd172a960ed937063c5f08",
+   "queries": [
+    {
+     "id": "aspnetcore:test-source-slot-tested",
+     "category": "test_intent",
+     "query": "Where is rejecting a multipart section with too many headers tested?",
+     "evidence": [
+      {
+       "file": "src/Http/WebUtilities/test/MultipartReaderTests.cs",
+       "quote": "public async Task MultipartReader_HeaderCountExceeded_Throws()",
+       "line": 124,
+       "source_sha256": "9d23a1641aa07a578042fcf414d06c874d44243345911f492869dcf24919a631",
+       "relevance": "Test sets a header count limit of one and asserts reading a section throws."
+      },
+      {
+       "file": "src/Http/WebUtilities/src/MultipartReader.cs",
+       "quote": "if (accumulator.KeyCount > HeadersCountLimit)",
+       "line": 127,
+       "source_sha256": "18d723df827665ab2dee449c60f9700612de4f97828282337b16296e6e1e0a95",
+       "relevance": "Header reading throws when the section header count exceeds the limit."
+      }
+     ]
+    },
+    {
+     "id": "aspnetcore:test-source-slot-tests",
+     "category": "test_intent",
+     "query": "Which tests cover rejecting a cookie maximum age that overflows during parsing?",
+     "evidence": [
+      {
+       "file": "src/Http/Headers/test/SetCookieHeaderValueTest.cs",
+       "quote": "public void SetCookieHeaderValue_TryParse_MaxAgeOverflow_ReturnsFalse(string value)",
+       "line": 494,
+       "source_sha256": "8aa93137e22d50bfe013fb992e71f04e3943f36fc5c004e04c1189928f793fd3",
+       "relevance": "Test asserts parsing fails without throwing for out-of-range max-age values."
+      },
+      {
+       "file": "src/Http/Headers/src/SetCookieHeaderValue.cs",
+       "quote": "if (maxAge is > MaxTimeSpanSeconds or < MinTimeSpanSeconds)",
+       "line": 594,
+       "source_sha256": "7ca1bc2d3e0641e64aea7117d583efc66db6e2eb619eca0cc8570bc851bd4928",
+       "relevance": "Parser aborts when the max-age seconds would overflow a TimeSpan."
+      }
+     ]
+    },
+    {
+     "id": "aspnetcore:test-source-slot-test",
+     "category": "test_intent",
+     "query": "Where is the test for turning off response buffering when streaming server-sent events?",
+     "evidence": [
+      {
+       "file": "src/Http/Http.Results/test/ServerSentEventsResultTests.cs",
+       "quote": "public async Task ExecuteAsync_DisablesBuffering()",
+       "line": 266,
+       "source_sha256": "ceba9f47db433b09518ab94cd0bbc84b6fbecc0c11caf51aa1fd80ba119f4635",
+       "relevance": "Test asserts executing the server-sent events result disables response buffering."
+      },
+      {
+       "file": "src/Http/Http.Results/src/ServerSentEventsResult.cs",
+       "quote": "bufferingFeature.DisableBuffering();",
+       "line": 49,
+       "source_sha256": "b7a47fdd3b075d7e2e7af1f1a6b7a41cb34b4a7d823c3d66e34af9527491e2c5",
+       "relevance": "Result execution disables buffering on the response body feature."
+      }
+     ]
+    },
+    {
+     "id": "aspnetcore:test-source-slot-control",
+     "category": "control",
+     "query": "Where is UnescapeAsQuotedString defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/Http/Headers/src/HeaderUtilities.cs",
+       "quote": "public static StringSegment UnescapeAsQuotedString(StringSegment input)",
+       "line": 614,
+       "source_sha256": "337a077fbd6c7c447fcc1ab498bd52425b01fee34705b0fbd6c90e25305e26fe",
+       "relevance": "Declaration of the public static helper."
+      },
+      {
+       "file": "src/Http/Headers/src/NameValueHeaderValue.cs",
+       "quote": "return HeaderUtilities.UnescapeAsQuotedString(_value);",
+       "line": 183,
+       "source_sha256": "daad7cd196fb9359ce0646078fac4809b78ac6934deef08427468c8e94b1da2a",
+       "relevance": "Real call that unescapes a quoted header parameter value."
+      }
+     ],
+     "control": "exact_symbol"
+    }
+   ]
+  },
+  {
+   "pack": "luarocks",
+   "commit": "47301d83aba58925e1b9594023621ebb27070cdb",
+   "queries": [
+    {
+     "id": "luarocks:test-source-slot-tested",
+     "category": "test_intent",
+     "query": "Where is swapping the order of a function's two arguments tested?",
+     "evidence": [
+      {
+       "file": "spec/unit/fun_spec.lua",
+       "quote": "it(\"returns a function behaving as the one given in the argument but with the arguments interchanged\"",
+       "line": 95,
+       "source_sha256": "76f08dc371df86ebc62a3ad885b52d476b154a8386880a9e76c05d4b22333064",
+       "relevance": "Unit test that asserts the returned function receives its two arguments in reversed order."
+      },
+      {
+       "file": "src/luarocks/fun.lua",
+       "quote": "function fun.flip(f)",
+       "line": 62,
+       "source_sha256": "5d7780225d4ddd24f27b5c02599fef9ca30fd2f8447329a96061f9a1a153e4b3",
+       "relevance": "Implementation that wraps a function and calls it with its two arguments swapped."
+      }
+     ]
+    },
+    {
+     "id": "luarocks:test-source-slot-tests",
+     "category": "test_intent",
+     "query": "Which tests cover collapsing single-dot and double-dot segments when cleaning up paths?",
+     "evidence": [
+      {
+       "file": "spec/unit/dir_spec.lua",
+       "quote": "it(\"strips unneeded /../ and /./\"",
+       "line": 51,
+       "source_sha256": "2896a4185166522ccfb647ce05060c33cf3724edc1446a65775da1a45b123720",
+       "relevance": "Unit test that asserts path cleanup removes current-directory and parent-directory segments."
+      },
+      {
+       "file": "src/luarocks/core/dir.lua",
+       "quote": "function dir.normalize(name)",
+       "line": 38,
+       "source_sha256": "307119f16b03dae1d010a7ead0f63b327a142401a8eba5d4d46ff312cefbd223",
+       "relevance": "Implementation that drops '.' pieces and resolves '..' pieces against previous path pieces."
+      }
+     ]
+    },
+    {
+     "id": "luarocks:test-source-slot-test",
+     "category": "test_intent",
+     "query": "Where is the test for serializing a table key that is a reserved word?",
+     "evidence": [
+      {
+       "file": "spec/unit/persist_spec.lua",
+       "quote": "it(\"table with a keyword key (#947)\"",
+       "line": 37,
+       "source_sha256": "76b7841ea3c5397702508aa88f2226c431ff1ad7dc60e9539e863b4d87079e2d",
+       "relevance": "Unit test that asserts a Lua keyword key is written in bracketed string form."
+      },
+      {
+       "file": "src/luarocks/persist.lua",
+       "quote": "function is_valid_plain_key(k)",
+       "line": 90,
+       "source_sha256": "3566ac2b88d2f0a34babcf73ceb64f854b4af48e0961211647517c9b0f24e92a",
+       "relevance": "Check that rejects Lua keywords as plain keys, so the writer uses bracket syntax for them."
+      }
+     ]
+    },
+    {
+     "id": "luarocks:test-source-slot-control",
+     "category": "control",
+     "query": "Where is deduce_base_dir defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/luarocks/dir.lua",
+       "quote": "function dir.deduce_base_dir(url)",
+       "line": 55,
+       "source_sha256": "6808d468cd8368e1369f958a3403342d8097fde57553fd931461e2ee9d4e6921",
+       "relevance": "Definition of the function."
+      },
+      {
+       "file": "src/luarocks/fetch.lua",
+       "quote": "dir.deduce_base_dir(src_url)",
+       "line": 300,
+       "source_sha256": "e0d08064cc8c0beece0cc7300eed2f6d0ed26b9d5488781ef380cdb8399a1f9b",
+       "relevance": "Call that infers the unpacked source directory from the source URL."
+      }
+     ],
+     "control": "exact_symbol"
+    }
+   ]
+  },
+  {
+   "pack": "zls",
+   "commit": "695a1d5c8a607f927b552784c2dc9f9c1d1f6130",
+   "queries": [
+    {
+     "id": "zls:test-source-slot-tested",
+     "category": "test_intent",
+     "query": "Where is it tested that applying computed edits to old text yields the new text?",
+     "evidence": [
+      {
+       "file": "tests/utility/diff.zig",
+       "quote": "test \"diff - random\"",
+       "line": 10,
+       "source_sha256": "d13d13f879fc9485c015c0ec6abfc5c9658b9cac1941289d42ce2429a270429c",
+       "relevance": "Randomized test that computes edits between two strings, applies them, and asserts the result equals the target text in three encodings."
+      },
+      {
+       "file": "src/diff.zig",
+       "quote": "pub fn edits(",
+       "line": 9,
+       "source_sha256": "051cf99a8ef69a964eda372c02c2891c84fc0a66d0f84c286101927000f7d2ed",
+       "relevance": "Computes the list of text edits that transform the old text into the new text."
+      }
+     ]
+    },
+    {
+     "id": "zls:test-source-slot-tests",
+     "category": "test_intent",
+     "query": "Which tests cover collapsing consecutive top-level import declarations into one foldable block?",
+     "evidence": [
+      {
+       "file": "tests/lsp_features/folding_range.zig",
+       "quote": "test \"imports\"",
+       "line": 423,
+       "source_sha256": "75b8a64f0a535900978f4a4ab30dd874a432d864dccb8918b525912b08b14150",
+       "relevance": "Asserts that adjacent top-level imports form one imports fold, a single import makes none, and gaps split groups."
+      },
+      {
+       "file": "src/features/folding_range.zig",
+       "quote": "try builder.add(.imports, tree.firstToken(start_import.?)",
+       "line": 208,
+       "source_sha256": "d658a8973515678197f68ef31fdd6673cafbf3868e690aabc901e138965ee452",
+       "relevance": "Adds the imports folding range that spans a run of consecutive top-level import declarations."
+      }
+     ]
+    },
+    {
+     "id": "zls:test-source-slot-test",
+     "category": "test_intent",
+     "query": "Where is the test for expanding selection to include one function parameter?",
+     "evidence": [
+      {
+       "file": "tests/lsp_features/selection_range.zig",
+       "quote": "test \"function parameter\"",
+       "line": 24,
+       "source_sha256": "95c036187711aea5e108fabf021cac1d250ed2b4fe42325d9a26c0c058f52e6c",
+       "relevance": "Asserts that the selection ranges include the type, then the whole parameter, then the function prototype."
+      },
+      {
+       "file": "src/features/selection_range.zig",
+       "quote": "const param_loc = ast.paramLoc(&handle.tree, param, true);",
+       "line": 45,
+       "source_sha256": "22dad7d34c76613a10f1d5a09ee723654f41bb74983091d54b6e4a58240dfa46",
+       "relevance": "Adds the location of the function parameter that contains the cursor to the selection range stack."
+      }
+     ]
+    },
+    {
+     "id": "zls:test-source-slot-control",
+     "category": "control",
+     "query": "Where is getDocumentSymbols defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/features/document_symbol.zig",
+       "quote": "pub fn getDocumentSymbols(",
+       "line": 41,
+       "source_sha256": "354db70b25c2046acedd63bf582827a809444b1b21e40f9b15020f6b84a14b66",
+       "relevance": "Definition of the public function."
+      },
+      {
+       "file": "src/Server.zig",
+       "quote": "document_symbol.getDocumentSymbols(arena, &handle.tree, server.offset_encoding)",
+       "line": 1439,
+       "source_sha256": "6434e4aa8de7fee37e805da4924f9da09662a412da2b8a3faeac0795bde61129",
+       "relevance": "The server calls the function to answer a document symbol request."
+      }
+     ],
+     "control": "exact_symbol"
+    }
+   ]
+  },
+  {
+   "pack": "otp",
+   "commit": "1a14bac7486708dfff367d4810dfe4478f87fcef",
+   "queries": [
+    {
+     "id": "otp:test-source-slot-tested",
+     "category": "test_intent",
+     "query": "Where is rejecting a base address without a scheme during reference resolution tested?",
+     "evidence": [
+      {
+       "file": "lib/stdlib/test/uri_string_SUITE.erl",
+       "quote": "resolve_base_uri(_Config) ->",
+       "line": 900,
+       "source_sha256": "cd175e4abf917ce2c0735d869f25d82853cdad0b94c97c87684aa1c1ae7eb7c3",
+       "relevance": "Test case asserting that resolving against a scheme-less base returns an invalid_scheme error."
+      },
+      {
+       "file": "lib/stdlib/src/uri_string.erl",
+       "quote": "resolve_map(_URIMap, BaseURIMap) when is_map(BaseURIMap) ->",
+       "line": 2375,
+       "source_sha256": "75aa660e1a85a7875cd39c2e5d66d3cf59fa7e003e8513699e8eaafe57fde19a",
+       "relevance": "Resolution clause that returns the invalid_scheme error when the base map has no scheme."
+      }
+     ]
+    },
+    {
+     "id": "otp:test-source-slot-tests",
+     "category": "test_intent",
+     "query": "Which tests cover removing only the last matching item from a FIFO collection?",
+     "evidence": [
+      {
+       "file": "lib/stdlib/test/queue_SUITE.erl",
+       "quote": "do_op_test(F) ->",
+       "line": 297,
+       "source_sha256": "0a86e490dd538f9270d771f71af4c2a4cd5939ebd090199dd0197238b9d4780e",
+       "relevance": "Whole-queue operation test body that asserts rear-first deletion of the last matching element."
+      },
+      {
+       "file": "lib/stdlib/src/queue.erl",
+       "quote": "delete_r(Item, {R0, F0}) when is_list(R0), is_list(F0) ->",
+       "line": 963,
+       "source_sha256": "61b322302ecf74578d72b442d2317ea200a5dee4e0994b58c5e1e961f252b101",
+       "relevance": "Implementation that deletes the last item matching the given value."
+      }
+     ]
+    },
+    {
+     "id": "otp:test-source-slot-test",
+     "category": "test_intent",
+     "query": "Where is the test for week-of-year numbering of dates near a year boundary?",
+     "evidence": [
+      {
+       "file": "lib/stdlib/test/calendar_SUITE.erl",
+       "quote": "iso_week_number(Config) when is_list(Config) ->",
+       "line": 400,
+       "source_sha256": "924801675bcfc2c2eca211c0268cad737463be8ca341ce120b18d661bfc09613",
+       "relevance": "Test case checking week numbers for dates in the previous, current and next year."
+      },
+      {
+       "file": "lib/stdlib/src/calendar.erl",
+       "quote": "iso_week_number({Year, Month, Day}) ->",
+       "line": 378,
+       "source_sha256": "e54dd85f469cd434510495f3731451b7ec694bbec46f04042d6a67283611a020",
+       "relevance": "Implementation that computes the year and week number, including year-boundary cases."
+      }
+     ]
+    },
+    {
+     "id": "otp:test-source-slot-control",
+     "category": "control",
+     "query": "Where is seconds_to_daystime defined and where is it called?",
+     "evidence": [
+      {
+       "file": "lib/stdlib/src/calendar.erl",
+       "quote": "seconds_to_daystime(Secs) ->",
+       "line": 677,
+       "source_sha256": "e54dd85f469cd434510495f3731451b7ec694bbec46f04042d6a67283611a020",
+       "relevance": "Definition of the exported function."
+      },
+      {
+       "file": "lib/stdlib/src/c.erl",
+       "quote": "calendar:seconds_to_daystime(UpTime div 1000)",
+       "line": 1395,
+       "source_sha256": "abb08733e9c9af839a48b7895b14e34eee94d3119ecc545cb54c1e1d6cdbcf41",
+       "relevance": "Real call that converts node uptime into days and time."
+      }
+     ],
+     "control": "exact_symbol"
+    }
+   ]
+  }
+ ]
+}

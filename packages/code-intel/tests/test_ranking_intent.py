@@ -109,6 +109,23 @@ def test_issue_search_puts_test_files_after_source_files():
     assert demote_tests("parser tests", rows) == [rows[i] for i in (0, 2, 1, 3)]
 
 
+def test_tested_question_keeps_source_order_and_shows_best_test_second():
+    rows = [SemanticSearchResult(path, "function", "parse", "", 0.9 - rank / 10) for rank, path in enumerate(
+        ("tests/test_parser.py", "src/parser.py", "tests/test_lexer.py", "src/lexer.py", "src/config.py"))]
+
+    def paths(query):
+        return [row.file_path for row in demote_tests(query, rows)]
+
+    assert paths("where is nested parsing tested") == [
+        "src/parser.py", "tests/test_parser.py", "src/lexer.py", "src/config.py", "tests/test_lexer.py"]
+    assert paths("Testing nested parsing") == paths("where is nested parsing tested")
+    # "test" and "tests" keep tests first; other words and long issues keep tests last.
+    assert paths("where are the nested parsing tests tested")[:2] == ["tests/test_parser.py", "tests/test_lexer.py"]
+    assert paths("untested nested parsing") == paths("nested parsing")
+    issue = "nested parsing was tested " + " ".join(f"word{i}" for i in range(25))
+    assert paths(issue) == paths("nested parsing")
+
+
 def test_search_puts_tests_last_but_task_scores_keep_them(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "tests").mkdir()

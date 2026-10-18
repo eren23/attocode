@@ -7,7 +7,12 @@ three successive groups. This is offline product evidence, not an agent study.
 **Current release:** `attocode-code-intel` 0.1.8 (2026-10-17). See the
 [0.1.8 release notes](intelligence-0.1.8.md).
 
-**Latest search batch, 2026-10-17:** [file-level coverage and "tested" test intent](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-file-coverage.md).
+**Latest search batch, 2026-10-17:** [test intent for "tested" questions](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-test-source-slot.md).
+Short "tested" and "testing" searches keep the source order and show the best test hit second. On 16 new frozen
+questions, judged files at five went from 14 to 16 with no loss. "test" and "tests" searches still miss every
+implementation label at five.
+
+**Previous search batch, 2026-10-17:** [file-level coverage and "tested" test intent](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-17-file-coverage.md).
 Both candidates failed their predeclared rules on 32 new questions, so the search code does not change.
 File-level concept coverage had no net first-five gain on validation. "tested" intent found more test files but pushed out implementation files.
 
