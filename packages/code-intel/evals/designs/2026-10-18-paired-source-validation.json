@@ -1,0 +1,410 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-18T06:24:30.889307+00:00",
+ "split": "validation",
+ "baseline_commit": "d33dd08b3e304cf24c9404afb214ed1c4fed1cbe",
+ "budget": 2000,
+ "scope": "Fresh held-out questions for four pinned packs that no earlier trial used (crystal, dart-sdk, postgrest, ring), written by reading source only, before any search ran on these packs. Per pack: three test questions that use the words 'tests' or 'test', and one exact-symbol control. The test files were drawn with a seeded shuffle before any question was written. Each test question has two labels: the test file first, then the implementation file. Labels are drafted by source-reading subagents and reviewed; they are source-bound and non-exhaustive, not independent user or agent outcomes.",
+ "selection": {
+  "seed": "2026-10-18 paired-source validation",
+  "method": "Eligible suite files per repository convention; sorted; seeded shuffle; first three from distinct parent folders. Drawn before any question was written and before any search on these packs.",
+  "correction": "The first draw used '*_test.clj' for ring and found no file. Ring keeps tests as test/ring/.../test/*.clj namespaces. The rule was corrected before any question; the first draw is kept as selection-initial.json. The other packs draw the same files.",
+  "templates": [
+   "Which tests cover X?",
+   "Where is the test for X?",
+   "Find the tests for X"
+  ],
+  "drawn": {
+   "crystal": [
+    "spec/std/socket/udp_socket_spec.cr",
+    "spec/std/thread/condition_variable_spec.cr",
+    "spec/compiler/semantic/special_vars_spec.cr"
+   ],
+   "dart-sdk": [
+    "pkg/analyzer/test/src/diagnostics/must_be_a_subtype_test.dart",
+    "pkg/analyzer/test/file_system/physical_resource_provider_watch_test.dart",
+    "pkg/analyzer/tool/generators/ast_generator_test.dart"
+   ],
+   "postgrest": [
+    "test/spec/Feature/Query/CustomMediaSpec.hs",
+    "test/spec/Feature/ObservabilitySpec.hs",
+    "test/spec/Feature/Auth/AudienceJwtSecretSpec.hs"
+   ],
+   "ring": [
+    "ring-core/test/ring/middleware/test/content_type.clj",
+    "ring-core/test/ring/util/test/async.clj",
+    "ring-devel/test/ring/middleware/test/lint.clj"
+   ]
+  }
+ },
+ "acceptance": {
+  "defined_in": "2026-10-18-paired-source-freeze.json",
+  "validation": "Run once, after the candidate is frozen; no product tuning after validation results are opened."
+ },
+ "repositories": [
+  {
+   "pack": "crystal",
+   "commit": "066c322f53676e4e59d5e495cc3fa7331c376e8a",
+   "queries": [
+    {
+     "id": "crystal:paired-source-1",
+     "category": "test_intent",
+     "query": "Which tests cover raising an error when an IPv4 socket toggles IPv6 only mode?",
+     "evidence": [
+      {
+       "file": "spec/std/socket/udp_socket_spec.cr",
+       "quote": "Unsupported IP address family: INET. For use with IPv6 only",
+       "line": 31,
+       "source_sha256": "16b266fd0776f66650df5650e65cd15c9361a5d925f5a0557ba2393af9edff07",
+       "relevance": "Asserts that reading the IPv6-only flag on a default IPv4 UDP socket raises Socket::Error."
+      },
+      {
+       "file": "src/socket/ip_socket.cr",
+       "quote": "For use with IPv6 only\") unless family.inet6?",
+       "line": 32,
+       "source_sha256": "3f788946b5a81487577c27bdfd50b2585b10890ce3e7a4d7fb00947dfb0809ea",
+       "relevance": "The IPv6-only getter raises Socket::Error unless the socket family is INET6."
+      }
+     ]
+    },
+    {
+     "id": "crystal:paired-source-2",
+     "category": "test_intent",
+     "query": "Where is the test for a thread condition wait running its block after timing out?",
+     "evidence": [
+      {
+       "file": "spec/std/thread/condition_variable_spec.cr",
+       "quote": "cond.wait(mutex, 1.microsecond) { timedout = true }",
+       "line": 71,
+       "source_sha256": "adaa9dd380ae94b663489eb7b07f35f9393dd2a98ffe71f737a3645bc3e672cf",
+       "relevance": "Waits with a tiny timeout and asserts the timeout block ran."
+      },
+      {
+       "file": "src/crystal/system/unix/pthread_condition_variable.cr",
+       "quote": "when Errno::ETIMEDOUT",
+       "line": 60,
+       "source_sha256": "e4783169355c46d308dbf885cd235d9331efe18856439b0a41fa8da0ed51579c",
+       "relevance": "The timed pthread wait yields to the caller's block when the wait times out."
+      }
+     ]
+    },
+    {
+     "id": "crystal:paired-source-3",
+     "category": "test_intent",
+     "query": "Find the tests for rejecting assignment to regex match or exit status globals outside methods",
+     "evidence": [
+      {
+       "file": "spec/compiler/semantic/special_vars_spec.cr",
+       "quote": "can't be assigned at the top level",
+       "line": 40,
+       "source_sha256": "35647ac14bcb344ba32c5409d2c3553967150bb672fe920c2a3cb9890da46f51",
+       "relevance": "Asserts that assigning $~ or $? at the top level is a compile error."
+      },
+      {
+       "file": "src/compiler/crystal/semantic/main_visitor.cr",
+       "quote": "can't be assigned at the top level",
+       "line": 800,
+       "source_sha256": "cd668a6c852f1443868919ca000817257cec5f8d44d34c40eed42155fea2c77a",
+       "relevance": "The semantic main visitor raises this error for special var assignment outside a def."
+      }
+     ]
+    },
+    {
+     "id": "crystal:paired-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is dequote_string defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/http/common.cr",
+       "quote": "def self.dequote_string(str : String) : String",
+       "line": 383,
+       "source_sha256": "b4eecd9c86bdc484f74de3f38cdb0826270cf31a98027751960123aebd9727ab",
+       "relevance": "Single definition of HTTP.dequote_string."
+      },
+      {
+       "file": "src/http/formdata.cr",
+       "quote": "HTTP.dequote_string(value[1...-1])",
+       "line": 149,
+       "source_sha256": "d67914c74cca3f4c72e424cdf2687f9e460af17bcb91b6a8f10aa80f556464a7",
+       "relevance": "Form-data header parsing calls HTTP.dequote_string on quoted parameter values."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "dart-sdk",
+   "commit": "2a83a782138bbdac5467a54a83c994e88b84dc3b",
+   "queries": [
+    {
+     "id": "dart-sdk:paired-source-1",
+     "category": "test_intent",
+     "query": "Which tests cover rejecting an FFI callback exceptional return value with the wrong type?",
+     "evidence": [
+      {
+       "file": "pkg/analyzer/test/src/diagnostics/must_be_a_subtype_test.dart",
+       "quote": "test_fromFunction_secondArgument() async {",
+       "line": 32,
+       "source_sha256": "99331b175b0bcd6d6ac3a2d88c0942acd6c9e56339cdc7566411b624bc157684",
+       "relevance": "Test case expecting a subtype error when the exceptional return argument is a String for an Int8 return."
+      },
+      {
+       "file": "pkg/analyzer/lib/src/generated/ffi_verifier.dart",
+       "quote": ".withArguments(subtype: eType, supertype: R, name: 'fromFunction')",
+       "line": 1713,
+       "source_sha256": "d55e60c3949e15144b831b6e97c2f38929fb471d5333da93be760dc5051cbe91",
+       "relevance": "Verifier reports the subtype error when the exceptional return value type does not match the native return type."
+      }
+     ]
+    },
+    {
+     "id": "dart-sdk:paired-source-2",
+     "category": "test_intent",
+     "query": "Where is the test for watching a single file on disk and reporting its deletion?",
+     "evidence": [
+      {
+       "file": "pkg/analyzer/test/file_system/physical_resource_provider_watch_test.dart",
+       "quote": "test_watchFile_delete() {",
+       "line": 27,
+       "source_sha256": "0d199b5dd0fd4d588b1056682a6d041d29e9938a3a15a881a8f8ef3ef8447559",
+       "relevance": "Test case deletes a watched file and expects one REMOVE event for its path."
+      },
+      {
+       "file": "pkg/analyzer/lib/file_system/physical_file_system.dart",
+       "quote": "var watcher = FileWatcher(_entry.path);",
+       "line": 182,
+       "source_sha256": "315d1552913ff1db5774e2612e169f3d085499c084c47745114c214d1ed4ab00",
+       "relevance": "Physical file watch() creates the FileWatcher whose events the test receives."
+      }
+     ]
+    },
+    {
+     "id": "dart-sdk:paired-source-3",
+     "category": "test_intent",
+     "query": "Find the tests for checking the generated syntax tree node classes are up to date",
+     "evidence": [
+      {
+       "file": "pkg/analyzer/tool/generators/ast_generator_test.dart",
+       "quote": "await AstNodeImplGenerator().generate()",
+       "line": 15,
+       "source_sha256": "0114785d5e46c03dae99530f54c2a217ef1a2c95018d0359f55580a4e34b3e28",
+       "relevance": "Test regenerates the AST implementation file content and checks it matches the committed file."
+      },
+      {
+       "file": "pkg/analyzer/tool/generators/ast_generator.dart",
+       "quote": "Future<String> generate() async {",
+       "line": 38,
+       "source_sha256": "2a23dbd8215aa1711c128e9b716c640797cdf9a249bc7d43a2c6be1913a4f1cc",
+       "relevance": "Generator method that produces the AST node implementation code the test compares."
+      }
+     ]
+    },
+    {
+     "id": "dart-sdk:paired-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is computeStrongComponents defined and where is it called?",
+     "evidence": [
+      {
+       "file": "pkg/analyzer/lib/src/util/graph.dart",
+       "quote": "List<List<T>> computeStrongComponents<T>(Graph<T> graph) {",
+       "line": 10,
+       "source_sha256": "2e8a5e915ec3582e5c4ed270ddd5b62f58381166b9f90c3268030d8f21df4353",
+       "relevance": "Single definition of the strongly connected components function."
+      },
+      {
+       "file": "pkg/analyzer/lib/src/summary2/default_types_builder.dart",
+       "quote": "var stronglyConnected = computeStrongComponents(graph);",
+       "line": 232,
+       "source_sha256": "7fb3a8b404fa4be9a1821d26842fc250ce8c24f9455b775f2ca9d94d29dabad7",
+       "relevance": "Real call site that computes strongly connected components of the type parameter graph."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "postgrest",
+   "commit": "58368513abdc104e377c4f358f476f49bc1dd2ba",
+   "queries": [
+    {
+     "id": "postgrest:paired-source-1",
+     "category": "test_intent",
+     "query": "Which tests cover a table-specific media handler overriding the generic anyelement handler?",
+     "evidence": [
+      {
+       "file": "test/spec/Feature/Query/CustomMediaSpec.hs",
+       "quote": "will use the more specific application/vnd.geo2 handler for this table",
+       "line": 60,
+       "source_sha256": "cf0fc4f08271d58ebf7d68e66c006c893e15ff71bb319fabb8c094f7c05c4d7f",
+       "relevance": "Test asserts the table-specific vnd.geo2 handler wins over the anyelement one."
+      },
+      {
+       "file": "src/PostgREST/Plan/Negotiate.hs",
+       "quote": "HM.lookup (RelId identifier, mt) produces",
+       "line": 78,
+       "source_sha256": "338491aa20573a7c0db9b20362f05d1e20b09b7f95d5c599996f7ce9493861f3",
+       "relevance": "Content negotiation looks up the handler for the specific relation before the anyelement fallback."
+      }
+     ]
+    },
+    {
+     "id": "postgrest:paired-source-2",
+     "category": "test_intent",
+     "query": "Where is the test for echoing the configured request trace header back in responses?",
+     "evidence": [
+      {
+       "file": "test/spec/Feature/ObservabilitySpec.hs",
+       "quote": "includes the server trace header on the response",
+       "line": 14,
+       "source_sha256": "9739d6a0eba288b8017bb8b8fbd45e16e1439ac835deda317f9d8ce32a222799",
+       "relevance": "Test asserts the X-Request-Id request header is copied to the response."
+      },
+      {
+       "file": "src/PostgREST/App.hs",
+       "quote": "Wai.mapResponseHeaders ([(hdr, fromMaybe mempty hdrVal)] ++)",
+       "line": 223,
+       "source_sha256": "1e26e8ddedf0b948459b24c5feaf2d996cc390b396fa06710f069bece81385e3",
+       "relevance": "Middleware adds the configured trace header value from the request to the response headers."
+      }
+     ]
+    },
+    {
+     "id": "postgrest:paired-source-3",
+     "category": "test_intent",
+     "query": "Find the tests for accepting a JWT when one audience in an array matches",
+     "evidence": [
+      {
+       "file": "test/spec/Feature/Auth/AudienceJwtSecretSpec.hs",
+       "quote": "succeeds when the audience claim has more than 1 element and one matches",
+       "line": 70,
+       "source_sha256": "0d45cf1ab3d80068f16bf3e22cec446a95c5e6f6628bcd508ceffc8d607d0da8",
+       "relevance": "Test asserts a JWT with an aud array containing the configured audience is accepted."
+      },
+      {
+       "file": "src/PostgREST/Auth/Jwt.hs",
+       "quote": "(VAArray auds) -> null auds || any audMatches auds",
+       "line": 80,
+       "source_sha256": "54a5828ffb810148b0d43d8b9f020c41bb066dc62c7bd264f7e61834f23d8dab",
+       "relevance": "Claim validation accepts an aud array when any element matches the configured audience."
+      }
+     ]
+    },
+    {
+     "id": "postgrest:paired-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is unwrapGucHeader defined and where is it called?",
+     "evidence": [
+      {
+       "file": "src/PostgREST/Response/GucHeader.hs",
+       "quote": "unwrapGucHeader :: GucHeader -> Header",
+       "line": 29,
+       "source_sha256": "3ad05e4acbd8906331d9c7dbeebe29b64d26b5a6b83e65d8a7f6f15b25784dd3",
+       "relevance": "Definition of unwrapGucHeader."
+      },
+      {
+       "file": "src/PostgREST/Response.hs",
+       "quote": "map unwrapGucHeader gucHeaders",
+       "line": 246,
+       "source_sha256": "882337205800590dce5ea5c01eb912611bb97dc9524ce707452602a8584515e6",
+       "relevance": "Response building calls unwrapGucHeader to convert GUC headers to HTTP headers."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "ring",
+   "commit": "0a36f21646232cdcaed92e55da8f31ba7f44e856",
+   "queries": [
+    {
+     "id": "ring:paired-source-1",
+     "category": "test_intent",
+     "query": "Which tests cover guessing media type from the served file path when URL has no extension?",
+     "evidence": [
+      {
+       "file": "ring-core/test/ring/middleware/test/content_type.clj",
+       "quote": "(testing \"fallback on response file extension\"",
+       "line": 44,
+       "source_sha256": "c043afbec9954594cda420c09b3c5a62d4c3bf692fbb7d6e37054cee1ddb2f14",
+       "relevance": "Test case asserting the type comes from the File body path when the URI has no extension."
+      },
+      {
+       "file": "ring-core/src/ring/middleware/content_type.clj",
+       "quote": "(ext-mime-type (.getAbsolutePath ^java.io.File body) mime-types)",
+       "line": 9,
+       "source_sha256": "028d6dca81f7033eae188503341ed4657364677216e5fee62a36e2bf8a42e668",
+       "relevance": "Implementation falls back to the File body's absolute path to look up the mime type."
+      }
+     ]
+    },
+    {
+     "id": "ring:paired-source-2",
+     "category": "test_intent",
+     "query": "Where is the test for catching exceptions thrown by a callback and forwarding them to the error handler?",
+     "evidence": [
+      {
+       "file": "ring-core/test/ring/util/test/async.clj",
+       "quote": "((raising error #(/ 1 0)))",
+       "line": 7,
+       "source_sha256": "0d7e4e16cb1fee83702c3e8c16f68a1df96b60be5014b576c3aa3ffd7a5969f7",
+       "relevance": "Test wraps a throwing function and checks the error promise receives the exception."
+      },
+      {
+       "file": "ring-core/src/ring/util/async.clj",
+       "quote": "(catch Throwable t (raise t))",
+       "line": 12,
+       "source_sha256": "5bf1475e3da0cb8556dc4bc6bb081414c5d04e6e154aca57a0926da14931b832",
+       "relevance": "Implementation catches any Throwable and passes it to the raise function."
+      }
+     ]
+    },
+    {
+     "id": "ring:paired-source-3",
+     "category": "test_intent",
+     "query": "Find the tests for rejecting HTTP methods written in uppercase or as plain strings",
+     "evidence": [
+      {
+       "file": "ring-devel/test/ring/middleware/test/lint.clj",
+       "quote": "(lints-req :request-method",
+       "line": 92,
+       "source_sha256": "ed95c6421ae27cd2c3aaf9115926024fda568e73fd09c2fa649592191e445ca8",
+       "relevance": "Generates valid/invalid request-method tests, rejecting :FOOBAR, \"get\" and 'get."
+      },
+      {
+       "file": "ring-devel/src/ring/middleware/lint.clj",
+       "quote": "(str/lower-case (name %))",
+       "line": 40,
+       "source_sha256": "2531ce26f55265a1c4fc643d281701871d54e837fb0f7dd22eb6a5ddc0ee9cc5",
+       "relevance": "Implementation requires the request method to be a lowercase keyword."
+      }
+     ]
+    },
+    {
+     "id": "ring:paired-source-control",
+     "category": "control",
+     "control": "exact_symbol",
+     "query": "Where is websocket-response? defined and where is it called?",
+     "evidence": [
+      {
+       "file": "ring-core/src/ring/websocket.clj",
+       "quote": "(defn websocket-response?",
+       "line": 75,
+       "source_sha256": "1a520cea856fcb7f24cfb4b7ad78cbd2804c7c813cb39b96018ae611652fb6d1",
+       "relevance": "Single definition of the predicate that checks a response for a websocket listener."
+      },
+      {
+       "file": "ring-jetty-adapter/src/ring/adapter/jetty.clj",
+       "quote": "(ws/websocket-response? response-map)",
+       "line": 117,
+       "source_sha256": "96cb67dce7f1bf717b45ac0b0035c628ec6687eea62de39b5107cb3a4231a9a6",
+       "relevance": "Jetty proxy handler calls it to decide whether to upgrade to a websocket."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

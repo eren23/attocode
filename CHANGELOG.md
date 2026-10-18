@@ -30,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one exact-symbol control gained its judged file and quote at five, with no
   loss.
 
+### Evaluation — Paired source for "test" searches rejected
+
+- For a short search with "test" or "tests", the candidate moved the source
+  file named by the best test hit (`FooTest.java` to `Foo.java`) to second
+  place. It gained two judged files on 84 consumed development questions. On
+  16 new validation questions over crystal, dart-sdk, postgrest and ring, it
+  gained none and lost none. Most tests check code in a file with another
+  name. The product does not include this change. See
+  `packages/code-intel/evals/results/2026-10-18-paired-source.md`.
+
 ## [Intelligence 0.1.9] - 2026-10-17
 
 ### Fixed — Defects found by using Attocode on its own repository

@@ -205,8 +205,8 @@ def test_file_coverage_decisions_replay_from_hash_bound_observations(split):
     assert recorded["t_rules"]["negative_control_identical"]
 
 
-@pytest.mark.parametrize("split", ["development", "validation"])
-def test_test_source_slot_decisions_replay_from_hash_bound_observations(split):
+def _replay_slot_decision(stem, candidate_arm, split):
+    """Recompute every recorded comparison and identity check from the hash-bound public files."""
     import gzip
     import hashlib
     import json
@@ -214,11 +214,10 @@ def test_test_source_slot_decisions_replay_from_hash_bound_observations(split):
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1] / "evals"
-    stem = "2026-10-17-test-source-slot"
     recorded = json.loads((root / "results" / f"{stem}-decision.json").read_text())
     candidate = (root / "designs" / f"{stem}-candidate.json").read_bytes()
     assert hashlib.sha256(candidate).hexdigest() == recorded["candidate_record_sha256"]
-    assert json.loads(candidate)["candidate"]["engine_sha256"] == recorded["engine_sha256"]["T3"]
+    assert json.loads(candidate)["candidate"]["engine_sha256"] == recorded["engine_sha256"][candidate_arm]
     for patch in recorded["patches"].values():
         data = (root / patch["file"]).read_bytes()
         assert hashlib.sha256(data).hexdigest() == patch["compressed_sha256"]
@@ -251,7 +250,26 @@ def test_test_source_slot_decisions_replay_from_hash_bound_observations(split):
             ok for (qid, _), ok in same.items() if base[qid].get("category") == "control")
         assert record["no_test_word_identical"] == all(
             ok for (qid, _), ok in same.items() if not test_word.search(base[qid]["query"]))
+    return recorded
+
+
+@pytest.mark.parametrize("split", ["development", "validation"])
+def test_test_source_slot_decisions_replay_from_hash_bound_observations(split):
+    recorded = _replay_slot_decision("2026-10-17-test-source-slot", "T3", split)
     # T2 loses judged tests on development; T3 holds every development and validation rule.
     assert not recorded["rules"]["T2_development"]["zero_individual_losses"]
     assert all(v for k, v in recorded["rules"]["T3_validation"].items() if k not in ("first_five_net_gain", "gain_packs"))
     assert all(v for k, v in recorded["rules"]["T3_development"].items() if k != "first_five_net_gain")
+
+
+@pytest.mark.parametrize("split", ["development", "validation"])
+def test_paired_source_decisions_replay_from_hash_bound_observations(split):
+    recorded = _replay_slot_decision("2026-10-18-paired-source", "P", split)
+    # Pf loses a judged test on development. P holds every development rule but gains
+    # nothing on validation: no paired source it moved was a judged implementation.
+    assert not recorded["rules"]["Pf_development"]["zero_individual_losses"]
+    assert all(v for k, v in recorded["rules"]["P_development"].items() if k != "first_five_net_gain")
+    validation = recorded["rules"]["P_validation"]
+    assert validation["zero_individual_losses"] and validation["compare_passes"]
+    assert validation["first_five_net_gain"] == 0 and not validation["gains_in_at_least_2_packs"]
+    assert recorded["decision"]["P"] == "rejected on validation"
