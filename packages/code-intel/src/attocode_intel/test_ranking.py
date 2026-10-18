@@ -29,6 +29,9 @@ def is_test_path(path):
     return (any(p in {"test", "tests", "__tests__", "spec", "specs"} for p in parts)
             # Swift packages keep tests in Tests/. The singular Test/ can be a test framework's source.
             or any(p.lower() in {"tests", "specs"} or _CAMEL_TESTS_DIR.fullmatch(p) for p in parts[:-1])
+            # Perl modules and scripts in a Perl t/ folder are test helpers or fixtures:
+            # t/mojo/lib/Mojo/LoaderException2.pm. Other files in a t/ folder can be data (terminfo/t/).
+            or ("t" in parts[:-1] and name.endswith((".pm", ".pl")))
             or any(parent == "src" and child in _KOTLIN_TEST_SOURCE_SETS
                    for parent, child in zip(parts[:-2], parts[1:-1], strict=True))
             # .NET test projects: UnitsNet.Tests/, Kavita.Services.Tests/
