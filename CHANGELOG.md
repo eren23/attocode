@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — More test file names
+
+- These file names now count as tests: `_test.dart`, `_test.exs`, `_test.ts`,
+  `_test.h`, `_tests.erl`, `Test.m`, `Tests.m` and Perl `.t` scripts. Before,
+  a test outside a test folder, such as
+  `pkg/analyzer/tool/generators/ast_generator_test.dart`, ranked as source.
+  `Test.php` and `_test.js` do not count, because Laravel and Deno use these
+  names for source code. In the cached repositories at their pinned commits,
+  the rule adds 3,245 test files in six repositories (perl5 3,003, dart-sdk
+  167, iTerm2 39, phoenix 17, deno 16 and otp 3) and removes none. On 20
+  consumed questions in dart-sdk, otp and phoenix, no judged file or quote
+  changed. In the dart-sdk workflow, `suggest_tests` now also finds
+  `tool/element/element_test.dart`.
+
 ## [Intelligence 0.1.10] - 2026-10-18
 
 ### Changed — Search order for "tested" questions
