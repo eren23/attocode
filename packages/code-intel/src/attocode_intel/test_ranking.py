@@ -19,12 +19,16 @@ _KOTLIN_TEST_SOURCE_SETS = frozenset({
     "androidTest", "androidAndroidTest", "androidUnitTest", "androidInstrumentedTest",
     "androidHostTest", "androidDeviceTest",
 })
+# Xcode test targets: ModernTests/, MyAppUITests/. Lowercase "contests" or singular "Test" do not match.
+_CAMEL_TESTS_DIR = re.compile(r"[A-Z][A-Za-z0-9]*Tests")
 
 
 def is_test_path(path):
     parts = PurePosixPath(path).parts
     name = parts[-1] if parts else ""
     return (any(p in {"test", "tests", "__tests__", "spec", "specs"} for p in parts)
+            # Swift packages keep tests in Tests/. The singular Test/ can be a test framework's source.
+            or any(p.lower() in {"tests", "specs"} or _CAMEL_TESTS_DIR.fullmatch(p) for p in parts[:-1])
             or any(parent == "src" and child in _KOTLIN_TEST_SOURCE_SETS
                    for parent, child in zip(parts[:-2], parts[1:-1], strict=True))
             # .NET test projects: UnitsNet.Tests/, Kavita.Services.Tests/
