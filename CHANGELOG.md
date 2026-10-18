@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consumed questions in dart-sdk, otp and phoenix, no judged file or quote
   changed. In the dart-sdk workflow, `suggest_tests` now also finds
   `tool/element/element_test.dart`.
+- Perl modules and scripts (`.pm`, `.pl`) in a `t/` folder now count as
+  tests, for example the fixture `t/mojo/lib/Mojo/LoaderException2.pm`. Other
+  files in a `t/` folder do not count, because a `t/` folder can hold data:
+  cosmopolitan keeps terminfo entries in `usr/share/terminfo/t/`. In the
+  cached repositories, the rule adds 276 test files in two repositories
+  (perl5 237, mojo 39).
+- On 8 consumed questions in perl5 and mojo, no judged file or quote
+  changed, and the perl5 workflow results did not change. Two unjudged pages
+  changed. A "where is it defined" control no longer shows the
+  test helper `TestConnectProxy.pm` in the first five. On one "test"
+  question, the fixture `LoaderException2.pm` is now the first test hit,
+  because its function `throw_error` matches "error".
 
 ### Evaluation — Query-word source hit for "test" searches rejected
 

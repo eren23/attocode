@@ -43,6 +43,8 @@ def test_helper_in_conventional_source_set(source_set):
     "Sources/Tests.swift",
     # Source files with test-like names: a Laravel concern and Deno's own Deno.test runtime.
     "src/Illuminate/Console/Concerns/CreatesMatchingTest.php", "cli/js/40_test.js", "src/parser.ts", ".t",
+    # Data in a t/ folder: a terminfo database groups entries in one-letter folders.
+    "usr/share/terminfo/t/t1061f", "t/mojo/certs/ca.crt", "lib/Mojo/t.pm",
 ])
 def test_production_and_ambiguous_names_are_not_inferred_as_tests(path):
     assert not is_test_path(path)
@@ -57,6 +59,7 @@ def test_production_and_ambiguous_names_are_not_inferred_as_tests(path):
     "pkg/analyzer/tool/generators/ast_generator_test.dart", "installer/templates/phx_test/page_controller_test.exs",
     "libs/core_testing/unit/timer_test.ts", "runtime/vm/unit_test.h", "lib/eunit/src/eunit_tests.erl",
     "iTerm2XCTests/VT100GridTest.m", "sources/iTermTests/iTermTests.m", "lib/Benchmark.t", "cpan/Archive-Tar/t/01_use.t",
+    "t/mojo/lib/Mojo/LoaderException2.pm", "cpan/Test-Harness/t/lib/Dev/Null.pm", "t/test.pl",
 ])
 def test_existing_conventions_and_source_set_contents(path):
     assert is_test_path(path)
