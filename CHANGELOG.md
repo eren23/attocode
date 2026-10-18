@@ -49,6 +49,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   but lost one judged test file at 24 and gained none. See
   `packages/code-intel/evals/results/2026-10-18-query-source.md`.
 
+### Evaluation — Loc-Bench re-measure
+
+- Product search on `main` gives file Acc@5 0.566 on the full issue of
+  Loc-Bench 560, against 0.532 at R1 (38 wins, 19 losses). With the title
+  as the query, it gives 0.561 against 0.498. On SWE-bench Lite, it gives
+  0.711 against 0.659. A Jev rerank of 48 files of `rrf(product+dense)`
+  gives 0.823.
+- `eval/matrix/function_dense.py` runs CodeRankEmbed on function units, as
+  SweRank does. It gives 74.82 on the SweRank corpora and 73.93 on the
+  matrix snapshots. SweRank reports 74.29. Thus the earlier 13-point gap of
+  the `dense` cell came from its 40-line windows, not from the harness. See
+  `packages/code-intel/evals/results/2026-10-18-locbench-remeasure.md`.
+
 ## [Intelligence 0.1.10] - 2026-10-18
 
 ### Changed — Search order for "tested" questions

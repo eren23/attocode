@@ -284,7 +284,7 @@ On 2026-10-09, one RTX 4090 pod embedded the 767 snapshots of the core mix and L
 
 A trial of the fused attention of PyTorch gave 1.37 times the speed, but its lowest cosine with the model attention was 0.9993. Thus the job keeps the attention of the model code. The pod also ran the retrieve stage, and only the `ret/` results came back. The vectors did not come back.
 
-On the full issue of Loc-Bench 560, `dense` gave Acc@5 0.602 against 0.532 for `product` (Δ +0.070, Holm p 0.009). `rrf(product+dense)` gave 0.679 (Δ +0.146, Holm p 0.0004). With only the Python files in each list, `dense` gives Acc@5 0.614 and Acc@10 0.713. SweRank reports 74.29 (Acc@10 80.36) for CodeRankEmbed alone on this set. Thus this harness is still about 13 points lower, and the cause is not clear.
+On the full issue of Loc-Bench 560, `dense` gave Acc@5 0.602 against 0.532 for `product` (Δ +0.070, Holm p 0.009). `rrf(product+dense)` gave 0.679 (Δ +0.146, Holm p 0.0004). With only the Python files in each list, `dense` gives Acc@5 0.614 and Acc@10 0.713. SweRank reports 74.29 (Acc@10 80.36) for CodeRankEmbed alone on this set. The cause of the gap is the unit. On 2026-10-18, a function-level run gave 74.82 on the SweRank corpora and 73.93 on the matrix snapshots (Acc@10 81.07 and 80.71). See [the re-measure](results/2026-10-18-locbench-remeasure.md).
 
 The table gives the core mix on the full query. The metric is Acc@5, but gNDCG@5 on the judged rows of `graded_blind`.
 
