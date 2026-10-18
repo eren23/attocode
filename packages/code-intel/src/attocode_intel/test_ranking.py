@@ -35,7 +35,10 @@ def is_test_path(path):
             or any(p.endswith((".Tests", ".Test", ".UnitTests", ".IntegrationTests")) for p in parts[:-1])
             or name.startswith("test_") or ".test." in name or ".spec." in name
             or name.endswith(("_test.py", "_test.go", "Test.java", "Test.kt", "Tests.java", "Tests.kt",
-                              "Test.cs", "Tests.cs", "_test.c", "_test.cc", "_test.cpp", "_unittest.cc")))
+                              "Test.cs", "Tests.cs", "_test.c", "_test.cc", "_test.cpp", "_unittest.cc",
+                              "_test.h", "_test.dart", "_test.exs", "_test.ts", "_tests.erl", "Test.m", "Tests.m"))
+            # Perl test scripts: t/basic.t, lib/Benchmark.t.
+            or (name.endswith(".t") and len(name) > 2))
 
 
 _TEST_PREFIX = re.compile(r"^(?:unit)?tests?[_-]|^Tests?(?=[A-Z])")

@@ -41,6 +41,8 @@ def test_helper_in_conventional_source_set(source_set):
     "src/main/kotlin/Inspection.kt", "", "src/TestData/Queue.kt",
     "Sources/Rules/NoForceTryInTests.swift", "stdlib/Test/src/Test.jl", "Contests/Queue.kt",
     "Sources/Tests.swift",
+    # Source files with test-like names: a Laravel concern and Deno's own Deno.test runtime.
+    "src/Illuminate/Console/Concerns/CreatesMatchingTest.php", "cli/js/40_test.js", "src/parser.ts", ".t",
 ])
 def test_production_and_ambiguous_names_are_not_inferred_as_tests(path):
     assert not is_test_path(path)
@@ -52,6 +54,9 @@ def test_production_and_ambiguous_names_are_not_inferred_as_tests(path):
     "test_parser.py", "parser_test.go", "src/__tests__/fixture.ts", "spec/fixture.rb",
     "Tests/SwiftFormatTests/RulesTests.swift", "Tests/ProjectFilePaths.swift",
     "ModernTests/FIFOQueueTests.swift", "App/AppUITests/LaunchTests.swift", "Specs/QueueSpec.swift",
+    "pkg/analyzer/tool/generators/ast_generator_test.dart", "installer/templates/phx_test/page_controller_test.exs",
+    "libs/core_testing/unit/timer_test.ts", "runtime/vm/unit_test.h", "lib/eunit/src/eunit_tests.erl",
+    "iTerm2XCTests/VT100GridTest.m", "sources/iTermTests/iTermTests.m", "lib/Benchmark.t", "cpan/Archive-Tar/t/01_use.t",
 ])
 def test_existing_conventions_and_source_set_contents(path):
     assert is_test_path(path)
