@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.10] - 2026-10-18
+
 ### Changed — Search order for "tested" questions
 
 - A short search with "tested" or "testing" (and no "test" or "tests") keeps

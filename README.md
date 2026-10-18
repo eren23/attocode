@@ -46,6 +46,8 @@ source, or refresh the original request. Local full-profile MCP offers
 bounded changed-class summaries; use `--class-mode expand` for class-wide callers.
 [Version 0.1.9](docs/intelligence-0.1.9.md) keeps Python docstrings and parameter
 types, and lists impact results nearest first.
+[Version 0.1.10](docs/intelligence-0.1.10.md) shows the best test hit second for "tested"
+searches, and counts Swift `Tests/` folders as tests.
 
 ## Teams and remote agents
 
