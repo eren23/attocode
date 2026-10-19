@@ -25,6 +25,26 @@ async def test_doctor_reports_a_client_without_configuration(tmp_path):
     assert "init --client claude" in result["hint"]
 
 
+@pytest.mark.asyncio
+async def test_doctor_reads_claude_local_scope_first(tmp_path, monkeypatch):
+    import json
+
+    project, home = tmp_path / "project", tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    (project / "main.py").write_text("def example(): return 1\n")
+    monkeypatch.setenv("HOME", str(home))
+    entry = configure_client("claude", project, dry_run=True)["configuration"]
+    # `claude mcp add` (local scope) writes here; a broken project entry must not hide it.
+    (home / ".claude.json").write_text(json.dumps(
+        {"projects": {str(project.resolve()): {"mcpServers": {"attocode-code-intel": entry}}}}))
+    (project / ".mcp.json").write_text(json.dumps(
+        {"mcpServers": {"attocode-code-intel": {"command": str(tmp_path / "missing")}}}))
+    result = await diagnose("claude", project)
+    assert result["status"] == "ok"
+    assert result["config"] == str(home / ".claude.json")
+
+
 def test_doctor_for_all_clients_fails_only_when_none_is_ready(tmp_path, capsys):
     from attocode_intel import entrypoint
 

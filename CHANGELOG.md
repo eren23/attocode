@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — `doctor` reads the Claude Code local scope
+
+- `doctor --client claude` now reads the local-scope entry in
+  `~/.claude.json` (the project path key) before the project `.mcp.json`.
+  `claude mcp add` writes to the local scope by default, and Claude Code
+  prefers a local entry to a project entry with the same name. Before, `doctor`
+  reported "not configured" for a server that Claude Code ran. The result now
+  names the configuration file that `doctor` checked.
+
 ## [Intelligence 0.1.11] - 2026-10-19
 
 ### Fixed — More test file names
