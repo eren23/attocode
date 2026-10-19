@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode-code-intel"
-version = "0.1.10"
+version = "0.1.11"
 description = "Local code search and navigation for coding agents and people"
 readme = "README.md"
 requires-python = ">=3.12"

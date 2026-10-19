@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.11] - 2026-10-19
+
 ### Fixed — More test file names
 
 - These file names now count as tests: `_test.dart`, `_test.exs`, `_test.ts`,

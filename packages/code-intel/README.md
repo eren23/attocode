@@ -31,7 +31,8 @@ tools. Version 0.1.8 adds exact file/symbol selection and bounded changed-class
 summaries, with `--class-mode expand` for class-wide callers. Version 0.1.9 keeps
 Python docstrings and parameter types, and lists impact results nearest first.
 Version 0.1.10 shows the best test hit second for "tested" searches, and counts
-Swift `Tests/` folders as tests. See the [change investigation guide](https://github.com/eren23/attocode/blob/main/docs/guides/change-investigation.md).
+Swift `Tests/` folders as tests. Version 0.1.11 counts more test file names as
+tests, such as `_test.dart` and Perl `.t` scripts and `t/` modules. See the [change investigation guide](https://github.com/eren23/attocode/blob/main/docs/guides/change-investigation.md).
 
 The agent sees 16 tools (the `daily` profile):
 
