@@ -4,8 +4,8 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current release:** `attocode-code-intel` 0.1.10 (2026-10-18). See the
-[0.1.10 release notes](intelligence-0.1.10.md).
+**Current release:** `attocode-code-intel` 0.1.11 (2026-10-19). See the
+[0.1.11 release notes](intelligence-0.1.11.md).
 
 **Latest search batch, 2026-10-18:** [source hit after the first five tests](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-query-source.md).
 The candidate gained two judged files at 24 on 20 new questions with no loss, but failed the frozen p95 limit in

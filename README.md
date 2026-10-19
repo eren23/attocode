@@ -48,6 +48,8 @@ bounded changed-class summaries; use `--class-mode expand` for class-wide caller
 types, and lists impact results nearest first.
 [Version 0.1.10](docs/intelligence-0.1.10.md) shows the best test hit second for "tested"
 searches, and counts Swift `Tests/` folders as tests.
+[Version 0.1.11](docs/intelligence-0.1.11.md) counts more test file names as tests,
+such as `_test.dart` and Perl `.t` scripts and `t/` modules.
 
 ## Teams and remote agents
 
