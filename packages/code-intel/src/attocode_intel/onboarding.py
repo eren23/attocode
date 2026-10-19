@@ -204,6 +204,14 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
     text = config.read_text() if config.exists() else ""
     doc = (tomlkit.parse(text) if config.suffix == ".toml" else json.loads(text)) if text else {}
     entry = doc.get(key, {}).get(name)
+    if client == "claude" and not global_scope:
+        # `claude mcp add` uses local scope by default: ~/.claude.json, under the project path.
+        # Claude Code prefers a local entry to a project entry with the same name.
+        home_config = Path.home() / ".claude.json"
+        home = json.loads(home_config.read_text()) if home_config.exists() else {}
+        local = home.get("projects", {}).get(str(root), {}).get(key, {}).get(name)
+        if local:
+            config, entry = home_config, local
     if not entry:
         return {"client": client, "status": "not configured", "config": str(config),
                 "hint": f"Run: attocode-code-intel init --client {client}"}
@@ -231,6 +239,7 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
                 raise RuntimeError("Bounded project query failed")
             return {
                 "client": client,
+                "config": str(config),
                 "tools": len(catalog.tools),
                 "metadata": metadata,
                 "status": "ok",
