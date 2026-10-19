@@ -133,7 +133,11 @@ with the prefix. On the full issue:
 | `fn-dense` | `dense` | 0.602 | 0.739 | +0.138 | 91 / 14 | 0.0003 |
 | `rrf(product+fn-dense)` | `rrf(product+dense)` | 0.713 | 0.745 | +0.032 | 35 / 17 | 0.031 |
 
-Thus function units explain the R1 gap. A fusion with `product` adds only
+The function unit and the corpus rule together explain the R1 gap.
+(Correction, 2026-10-19: this sentence first said "Thus function units
+explain the R1 gap". That is too strong. The
+[2026-10-19 report](2026-10-19-function-bm25.md) splits the gain: +0.055
+from the unit and +0.082 from the corpus rule.) A fusion with `product` adds only
 0.005 to `fn-dense` alone. The pod embedded 709,135 unique texts in 19
 minutes (669 texts each second). This cell is a measurement, not a
 product feature: it reads only Python, it skips async functions and test
