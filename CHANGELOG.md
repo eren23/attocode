@@ -59,8 +59,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `eval/matrix/function_dense.py` runs CodeRankEmbed on function units, as
   SweRank does. It gives 74.82 on the SweRank corpora and 73.93 on the
   matrix snapshots. SweRank reports 74.29. Thus the earlier 13-point gap of
-  the `dense` cell came from its 40-line windows, not from the harness. See
+  the `dense` cell came from its 40-line windows and its corpus, not from
+  the harness. See
   `packages/code-intel/evals/results/2026-10-18-locbench-remeasure.md`.
+
+### Evaluation — Function units in a lexical ranker
+
+- BM25 over function units does not beat BM25 over 40-line windows of the
+  same files on Loc-Bench 560 (0.548 against 0.557 Acc@5). Fused with
+  `product`, the function list beats the window list by +0.018 (Holm p
+  0.364), below the frozen +0.02 rule. Thus product search does not add
+  function-body documents.
+- Correction: the `fn-dense` gain over `dense` has two parts. The function
+  unit gives +0.055, and the corpus rule (Python files without tests)
+  gives +0.082. The corpus-rule gain fits Loc-Bench gold and is not a
+  product opportunity. See
+  `packages/code-intel/evals/results/2026-10-19-function-bm25.md`.
 
 ## [Intelligence 0.1.10] - 2026-10-18
 

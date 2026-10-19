@@ -1,0 +1,427 @@
+{
+ "schema": 1,
+ "date": "2026-10-19",
+ "source": "e440d069d4d52ae5a903e2414e161b6465a25536",
+ "dataset": "Loc-Bench V1, 560 instances, full issue, snapshots of the 2026-10-18 run",
+ "script": {
+  "path": "eval/matrix/function_bm25.py",
+  "frozen_sha256": "64c585bcc1dcb6aab8e29ee3712c5ed32607bcacc5a1628fc01fe124ef87e8f1",
+  "committed_sha256": "75fba3de6221631fd5b284a026553f6f45ef9222c79143db1252946989addbc0",
+  "difference": "a Ruff import-order fix after the run; no output change"
+ },
+ "frozen_rule": {
+  "frozen_at": "2026-10-19T11:54:02+0200",
+  "arms": {
+   "fn-bm25": "BM25 over SweRank function units (non-test .py files with >=1 unit), product tokenizer, product k1/b",
+   "win-bm25": "BM25 over 40-line windows of the same files, same tokenizer and k1/b",
+   "rrf(product+fn-bm25)": "eval.matrix.arms.rrf, k 60, 48 files each",
+   "rrf(product+win-bm25)": "same with win-bm25"
+  },
+  "decision": {
+   "build_worthy_if_all": [
+    "rrf(product+fn-bm25) - rrf(product+win-bm25) >= +0.02 Acc@5 with Holm p < 0.05 (repo bootstrap, 10,000 draws)",
+    "rrf(product+fn-bm25) - product >= +0.03 Acc@5 with Holm p < 0.05"
+   ],
+   "otherwise": "record a negative result; no product change from this signal",
+   "note": "fusion with a list of non-test .py files carries the corpus-filter gain; only fn vs win isolates the unit"
+  },
+  "no_tuning": "one configuration, no parameter changes after the run"
+ },
+ "run": {
+  "started": "2026-10-19T11:54:15+0200",
+  "seconds": 191,
+  "workers": 4,
+  "computer": "Mac",
+  "function_documents": 3070649,
+  "window_documents": 2317856,
+  "empty_lists": [
+   "locbench/Innopoints__backend-124",
+   "locbench/Standard-Labs__real-intent-102"
+  ]
+ },
+ "decision": "rejected: condition 1 fails (+0.0179, Holm p 0.3639); condition 2 passes (+0.0679, Holm p 0.0015)",
+ "values": {
+  "dense": {
+   "acc@1": 0.3786,
+   "acc@5": 0.6018,
+   "acc@10": 0.6982,
+   "mrr@5": 0.5034,
+   "ceil@24": 0.7911
+  },
+  "fn-bm25": {
+   "acc@1": 0.3268,
+   "acc@5": 0.5482,
+   "acc@10": 0.6804,
+   "mrr@5": 0.4398,
+   "ceil@24": 0.8
+  },
+  "fn-dense": {
+   "acc@1": 0.5375,
+   "acc@5": 0.7393,
+   "acc@10": 0.8071,
+   "mrr@5": 0.6401,
+   "ceil@24": 0.8696
+  },
+  "product": {
+   "acc@1": 0.35,
+   "acc@5": 0.5661,
+   "acc@10": 0.6732,
+   "mrr@5": 0.4538,
+   "ceil@24": 0.7839
+  },
+  "rrf(product+fn-bm25)": {
+   "acc@1": 0.4054,
+   "acc@5": 0.6339,
+   "acc@10": 0.7429,
+   "mrr@5": 0.5168,
+   "ceil@24": 0.8375
+  },
+  "rrf(product+win-bm25)": {
+   "acc@1": 0.3643,
+   "acc@5": 0.6161,
+   "acc@10": 0.7196,
+   "mrr@5": 0.4885,
+   "ceil@24": 0.8375
+  },
+  "win-bm25": {
+   "acc@1": 0.3286,
+   "acc@5": 0.5571,
+   "acc@10": 0.6661,
+   "mrr@5": 0.4377,
+   "ceil@24": 0.8
+  }
+ },
+ "comparisons": [
+  {
+   "cell": "rrf(product+fn-bm25)",
+   "baseline": "rrf(product+win-bm25)",
+   "metric": "Acc@5",
+   "n": 560,
+   "repos": 165,
+   "baseline_value": 0.6161,
+   "value": 0.6339,
+   "delta": 0.0179,
+   "wins": 27,
+   "losses": 17,
+   "delta_range": [
+    -0.0019,
+    0.0374
+   ],
+   "p_holm": 0.3639
+  },
+  {
+   "cell": "rrf(product+fn-bm25)",
+   "baseline": "product",
+   "metric": "Acc@5",
+   "n": 560,
+   "repos": 165,
+   "baseline_value": 0.5661,
+   "value": 0.6339,
+   "delta": 0.0679,
+   "wins": 58,
+   "losses": 20,
+   "delta_range": [
+    0.0381,
+    0.0988
+   ],
+   "p_holm": 0.0015
+  },
+  {
+   "cell": "fn-bm25",
+   "baseline": "win-bm25",
+   "metric": "Acc@5",
+   "n": 560,
+   "repos": 165,
+   "baseline_value": 0.5571,
+   "value": 0.5482,
+   "delta": -0.0089,
+   "wins": 40,
+   "losses": 45,
+   "delta_range": [
+    -0.0401,
+    0.024
+   ],
+   "p_holm": 1.0
+  },
+  {
+   "cell": "rrf(product+win-bm25)",
+   "baseline": "product",
+   "metric": "Acc@5",
+   "n": 560,
+   "repos": 165,
+   "baseline_value": 0.5661,
+   "value": 0.6161,
+   "delta": 0.05,
+   "wins": 47,
+   "losses": 19,
+   "delta_range": [
+    0.0181,
+    0.0813
+   ],
+   "p_holm": 0.0176
+  },
+  {
+   "cell": "fn-bm25",
+   "baseline": "product",
+   "metric": "Acc@5",
+   "n": 560,
+   "repos": 165,
+   "baseline_value": 0.5661,
+   "value": 0.5482,
+   "delta": -0.0179,
+   "wins": 60,
+   "losses": 70,
+   "delta_range": [
+    -0.0631,
+    0.0264
+   ],
+   "p_holm": 1.0
+  }
+ ],
+ "correction_2026_10_18": {
+  "claim": "Thus function units explain the R1 gap.",
+  "finding": "the fn-dense gain over dense has a unit part (+0.0554) and a corpus-rule part (+0.0821)",
+  "rule": ".py files without 'test' in the path; pytest-dev repositories check only the file name",
+  "gold_files_removed": 0,
+  "gold_files": 676,
+  "post_hoc": true,
+  "mean_test_files_in_first_five": {
+   "dense": 1.72,
+   "product": 0.14
+  },
+  "values": {
+   "body": {
+    "acc@1": 0.1286,
+    "acc@5": 0.2589,
+    "acc@10": 0.3554,
+    "mrr@5": 0.1935,
+    "ceil@24": 0.4821
+   },
+   "body.filtered": {
+    "acc@1": 0.2036,
+    "acc@5": 0.3732,
+    "acc@10": 0.4893,
+    "mrr@5": 0.2905,
+    "ceil@24": 0.5875
+   },
+   "chunkrrf": {
+    "acc@1": 0.2393,
+    "acc@5": 0.4143,
+    "acc@10": 0.5482,
+    "mrr@5": 0.3283,
+    "ceil@24": 0.7
+   },
+   "chunkrrf.filtered": {
+    "acc@1": 0.2929,
+    "acc@5": 0.5232,
+    "acc@10": 0.6429,
+    "mrr@5": 0.4012,
+    "ceil@24": 0.7946
+   },
+   "dense": {
+    "acc@1": 0.3786,
+    "acc@5": 0.6018,
+    "acc@10": 0.6982,
+    "mrr@5": 0.5034,
+    "ceil@24": 0.7911
+   },
+   "dense.filtered": {
+    "acc@1": 0.525,
+    "acc@5": 0.6839,
+    "acc@10": 0.7696,
+    "mrr@5": 0.6189,
+    "ceil@24": 0.8464
+   },
+   "fn-dense": {
+    "acc@1": 0.5375,
+    "acc@5": 0.7393,
+    "acc@10": 0.8071,
+    "mrr@5": 0.6401,
+    "ceil@24": 0.8696
+   },
+   "fn-dense.filtered": {
+    "acc@1": 0.5375,
+    "acc@5": 0.7393,
+    "acc@10": 0.8071,
+    "mrr@5": 0.6401,
+    "ceil@24": 0.8696
+   },
+   "kw": {
+    "acc@1": 0.2875,
+    "acc@5": 0.4946,
+    "acc@10": 0.6268,
+    "mrr@5": 0.3913,
+    "ceil@24": 0.7696
+   },
+   "kw.filtered": {
+    "acc@1": 0.3054,
+    "acc@5": 0.5107,
+    "acc@10": 0.6571,
+    "mrr@5": 0.4094,
+    "ceil@24": 0.7929
+   },
+   "product": {
+    "acc@1": 0.35,
+    "acc@5": 0.5661,
+    "acc@10": 0.6732,
+    "mrr@5": 0.4538,
+    "ceil@24": 0.7839
+   },
+   "product.filtered": {
+    "acc@1": 0.3661,
+    "acc@5": 0.5929,
+    "acc@10": 0.6875,
+    "mrr@5": 0.4739,
+    "ceil@24": 0.8125
+   },
+   "rrf(product+dense)": {
+    "acc@1": 0.5089,
+    "acc@5": 0.7125,
+    "acc@10": 0.7911,
+    "mrr@5": 0.6195,
+    "ceil@24": 0.8571
+   },
+   "rrf(product.filtered+dense.filtered)": {
+    "acc@1": 0.525,
+    "acc@5": 0.7286,
+    "acc@10": 0.8089,
+    "mrr@5": 0.6342,
+    "ceil@24": 0.8768
+   }
+  },
+  "comparisons": [
+   {
+    "cell": "fn-dense",
+    "baseline": "dense.filtered",
+    "metric": "Acc@5",
+    "n": 560,
+    "repos": 165,
+    "baseline_value": 0.6839,
+    "value": 0.7393,
+    "delta": 0.0554,
+    "wins": 58,
+    "losses": 27,
+    "delta_range": [
+     0.0245,
+     0.0886
+    ],
+    "p_holm": 0.0024
+   },
+   {
+    "cell": "dense.filtered",
+    "baseline": "dense",
+    "metric": "Acc@5",
+    "n": 560,
+    "repos": 165,
+    "baseline_value": 0.6018,
+    "value": 0.6839,
+    "delta": 0.0821,
+    "wins": 46,
+    "losses": 0,
+    "delta_range": [
+     0.0553,
+     0.1118
+    ],
+    "p_holm": 0.0007
+   },
+   {
+    "cell": "product.filtered",
+    "baseline": "product",
+    "metric": "Acc@5",
+    "n": 560,
+    "repos": 165,
+    "baseline_value": 0.5661,
+    "value": 0.5929,
+    "delta": 0.0268,
+    "wins": 15,
+    "losses": 0,
+    "delta_range": [
+     0.013,
+     0.0436
+    ],
+    "p_holm": 0.0007
+   },
+   {
+    "cell": "rrf(product.filtered+dense.filtered)",
+    "baseline": "rrf(product+dense)",
+    "metric": "Acc@5",
+    "n": 560,
+    "repos": 165,
+    "baseline_value": 0.7125,
+    "value": 0.7286,
+    "delta": 0.0161,
+    "wins": 17,
+    "losses": 8,
+    "delta_range": [
+     -0.002,
+     0.036
+    ],
+    "p_holm": 0.1368
+   },
+   {
+    "cell": "kw.filtered",
+    "baseline": "kw",
+    "metric": "Acc@5",
+    "n": 560,
+    "repos": 165,
+    "baseline_value": 0.4946,
+    "value": 0.5107,
+    "delta": 0.0161,
+    "wins": 9,
+    "losses": 0,
+    "delta_range": [
+     0.0039,
+     0.0323
+    ],
+    "p_holm": 0.0666
+   },
+   {
+    "cell": "body.filtered",
+    "baseline": "body",
+    "metric": "Acc@5",
+    "n": 560,
+    "repos": 165,
+    "baseline_value": 0.2589,
+    "value": 0.3732,
+    "delta": 0.1143,
+    "wins": 64,
+    "losses": 0,
+    "delta_range": [
+     0.0876,
+     0.1418
+    ],
+    "p_holm": 0.0007
+   },
+   {
+    "cell": "chunkrrf.filtered",
+    "baseline": "chunkrrf",
+    "metric": "Acc@5",
+    "n": 560,
+    "repos": 165,
+    "baseline_value": 0.4143,
+    "value": 0.5232,
+    "delta": 0.1089,
+    "wins": 61,
+    "losses": 0,
+    "delta_range": [
+     0.0857,
+     0.1319
+    ],
+    "p_holm": 0.0007
+   }
+  ]
+ },
+ "spend": {
+  "cloud_usd": 0,
+  "model_usd": 0
+ },
+ "private_inputs": {
+  "lb-2026-10-19/results.jsonl": "7c69f125110e4be1e5936794e0bbc154f6f9a25bb1f3bd2c8522c11968d33442",
+  "lb-2026-10-19/report.md": "481dff2adeca976278830f254f618a204b97cc695ed10943d1f57cec56dfbf11",
+  "lb-2026-10-19/freeze.json": "b92e627861b7b1db504eba638ad955bac40b0b72478a5620ba97b95a014d05c2",
+  "lb-2026-10-19/fn-bm25.json.gz": "e4f5b4126bb26d88143fddf54ace7cb0038fb3383695e38b871007c9e0d6c88c",
+  "lb-2026-10-19-filter/results.jsonl": "20f0052e1fd714097576c13c9e8dc5c83bcedeb5caa920cc6a0885f01596abf6",
+  "lb-2026-10-19-filter/report.md": "33bf8ddd9ca3b13ecb49fc5a84e63252eca809ee07f871d6011cf7b33746f9fd",
+  "lb-2026-10-19/instances.jsonl": "25a709ac7f6a8ecdab27f510628a53cf2de235babf21959ab3d59bcba38ae4a3"
+ }
+}
