@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Evaluation and documentation
+
+- Updated the roadmap to 0.1.12 and corrected shipped status and closed experiments.
+- Rejected the fixed test-support ordering candidate on consumed development
+  questions: no judged test recovered at five, no individual evidence loss.
+  Fresh validation was not started; product ranking is unchanged. See the
+  [report](packages/code-intel/evals/results/2026-10-20-test-support.md).
+
 ## [Intelligence 0.1.12] - 2026-10-20
 
 ### Fixed — `doctor` reads the Claude Code local scope

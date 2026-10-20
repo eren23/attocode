@@ -1,0 +1,56 @@
+{
+  "decision": "rejected on development: no judged test recovered at five",
+  "fresh_validation_started": false,
+  "product_changes_retained": false,
+  "freeze_sha256": "bf4b49522cb0a1da437d567eb151719579c3f75740034ccee008a1e6f4654cd1",
+  "artifact_sha256": "380cb7f4c24295282c6629f9dab723924435e753a25f6fc69ab4496bf099f2b2",
+  "comparison": {
+    "passed": true,
+    "checks": {
+      "file_totals_no_loss": true,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+    },
+    "baseline": {
+      "questions": 13,
+      "files_5": 13,
+      "ranges_5": 10,
+      "visible_5": 5,
+      "files_24": 17,
+      "ranges_24": 10,
+      "visible_24": 2,
+      "files_scoped": 12,
+      "ranges_scoped": 12,
+      "visible_scoped": 6,
+      "inspection_visible": 2,
+      "p95_seconds": 0.056223500054329634
+    },
+    "candidate": {
+      "questions": 13,
+      "files_5": 13,
+      "ranges_5": 10,
+      "visible_5": 5,
+      "files_24": 17,
+      "ranges_24": 10,
+      "visible_24": 2,
+      "files_scoped": 12,
+      "ranges_scoped": 12,
+      "visible_scoped": 6,
+      "inspection_visible": 2,
+      "p95_seconds": 0.032716916990466416
+    },
+    "individual_losses": []
+  },
+  "added_files_at_five": [],
+  "changed_top_five": [
+    "express:usefulness-development-2",
+    "mojo:query-source-s2-2"
+  ],
+  "generation_identical_all_pages": true,
+  "engine_sha256": {
+    "B": "6d230c206725a0c6ea3838bcb31588ef9efb878158ff988318f34e7d064f5219",
+    "C": "8ed906b4211f4c051bcfa04303f40d7bcfa302cd64ea75bde28c5e1b59700d13"
+  }
+}

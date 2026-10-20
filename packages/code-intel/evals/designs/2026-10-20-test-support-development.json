@@ -1,0 +1,294 @@
+{
+  "schema_version": 1,
+  "split": "development",
+  "budget": 2000,
+  "scope": "Consumed questions only. Early feasibility gate; not held-out validation.",
+  "repositories": [
+    {
+      "pack": "express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "queries": [
+        {
+          "id": "express:test-intent-1",
+          "intent": "test",
+          "query": "Find tests for clearing a cookie while ignoring maxAge and supplied expiration",
+          "evidence": [
+            {
+              "file": "test/res.clearCookie.js",
+              "quote": "it('should ignore maxAge'",
+              "line": 36,
+              "source_sha256": "83d883aebfb0e17d1d9fb864c1a52599d1070b2d45af7f9b591acad3ca614882",
+              "relevance": "Asserts expiry clearing ignores maxAge and supplied expires."
+            }
+          ],
+          "source_set": "2026-10-16-test-intent.json"
+        },
+        {
+          "id": "express:test-intent-2",
+          "intent": "test",
+          "query": "Find tests checking subdomain arrays with custom hostname offsets",
+          "evidence": [
+            {
+              "file": "test/req.subdomains.js",
+              "quote": "describe('when subdomain offset is set'",
+              "line": 95,
+              "source_sha256": "b06fc91e7a90eb5ed5a0f68273ae28fc9094d49da29ae5f8fce9efa1b1f8b822",
+              "relevance": "Checks arrays under configured subdomain offsets."
+            }
+          ],
+          "source_set": "2026-10-16-test-intent.json"
+        },
+        {
+          "id": "express:test-intent-3",
+          "intent": "production",
+          "query": "Check whether an application feature setting is enabled using its truthiness",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "quote": "app.enabled = function enabled(setting)",
+              "line": 420,
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Converts the setting value to a Boolean."
+            }
+          ],
+          "source_set": "2026-10-16-test-intent.json"
+        },
+        {
+          "id": "express:usefulness-development-1",
+          "category": "tests",
+          "query": "Find tests checking JSON response content types and UTF-8 charset handling",
+          "evidence": [
+            {
+              "file": "test/res.json.js",
+              "line": 21,
+              "quote": "should not override previous Content-Types",
+              "source_sha256": "08186aceebdb74af9f6fabe495c8c8b9334fbc6e5d53bf52145e4f86850eb046",
+              "relevance": "Source anchor for find tests checking JSON response content types and UTF-8 charset handling"
+            },
+            {
+              "file": "test/res.send.js",
+              "line": 112,
+              "quote": "should override charset in Content-Type",
+              "source_sha256": "9dcbd827335442daa10f4bb99ebd26897a922700e6e149b5d1c0c9b6579afa58",
+              "relevance": "Source anchor for find tests checking JSON response content types and UTF-8 charset handling"
+            }
+          ],
+          "source_set": "2026-10-16-search-usefulness-development.json"
+        },
+        {
+          "id": "express:usefulness-development-2",
+          "category": "tests",
+          "query": "Find tests for accepting content types and choosing a response format",
+          "evidence": [
+            {
+              "file": "test/req.accepts.js",
+              "line": 73,
+              "quote": "should return the first acceptable type",
+              "source_sha256": "80bd6f4700f6a28a837bc42f7284b9830c178591d472fd589297cb26c863f5e5",
+              "relevance": "Source anchor for find tests for accepting content types and choosing a response format"
+            },
+            {
+              "file": "test/res.format.js",
+              "line": 197,
+              "quote": "should default the Content-Type",
+              "source_sha256": "bfc02443c7ebc62e716dfc9e121613e27507d63382db8ce3ea430b9019c37c8d",
+              "relevance": "Source anchor for find tests for accepting content types and choosing a response format"
+            }
+          ],
+          "source_set": "2026-10-16-search-usefulness-development.json"
+        },
+        {
+          "id": "express:usefulness-development-3",
+          "category": "configuration",
+          "query": "Configure trusted proxy hops when determining client addresses",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "line": 370,
+              "quote": "case 'trust proxy':",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Source anchor for configure trusted proxy hops when determining client addresses"
+            },
+            {
+              "file": "lib/utils.js",
+              "line": 194,
+              "quote": "exports.compileTrust = function",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+              "relevance": "Source anchor for configure trusted proxy hops when determining client addresses"
+            }
+          ],
+          "source_set": "2026-10-16-search-usefulness-development.json"
+        },
+        {
+          "id": "express:usefulness-validation-1",
+          "category": "tests",
+          "query": "Find tests for encoding redirect URLs and preserving already encoded locations",
+          "evidence": [
+            {
+              "file": "test/res.redirect.js",
+              "line": 35,
+              "quote": "should not touch already-encoded sequences",
+              "source_sha256": "451fae6e8674bbb463de046afd8fafa3c7a766fea840abd8b1af63a1f31b8f04",
+              "relevance": "Source anchor for find tests for encoding redirect URLs and preserving already encoded locations"
+            },
+            {
+              "file": "test/res.location.js",
+              "line": 172,
+              "quote": "should not touch already-encoded sequences",
+              "source_sha256": "5d46e67f931862cf2372c210d8b3efb8ecaa31b328738115eb3ed3060a86f1ef",
+              "relevance": "Source anchor for find tests for encoding redirect URLs and preserving already encoded locations"
+            }
+          ],
+          "source_set": "2026-10-16-search-usefulness-validation.json"
+        },
+        {
+          "id": "express:usefulness-validation-2",
+          "category": "tests",
+          "query": "Find tests for partial file downloads using byte range requests",
+          "evidence": [
+            {
+              "file": "test/res.download.js",
+              "line": 44,
+              "quote": "should respond with requested byte range",
+              "source_sha256": "cd90a8f6e6390907af0f8844e08fc02ddb5918f745f1cfe7aeb7f86dd137c5c4",
+              "relevance": "Source anchor for find tests for partial file downloads using byte range requests"
+            },
+            {
+              "file": "test/res.sendFile.js",
+              "line": 365,
+              "quote": "should respond to range request",
+              "source_sha256": "1ce86ede00a1e19a3c11a835ef9f87669d495ada5060922d96cc96e4120ec4f7",
+              "relevance": "Source anchor for find tests for partial file downloads using byte range requests"
+            }
+          ],
+          "source_set": "2026-10-16-search-usefulness-validation.json"
+        },
+        {
+          "id": "express:usefulness-validation-3",
+          "category": "error_handling",
+          "query": "Forward unsupported response format errors into the application error handler",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "line": 588,
+              "quote": "next(createError(406,",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "relevance": "Source anchor for forward unsupported response format errors into the application error handler"
+            },
+            {
+              "file": "lib/application.js",
+              "line": 154,
+              "quote": "var done = callback || finalhandler",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "relevance": "Source anchor for forward unsupported response format errors into the application error handler"
+            }
+          ],
+          "source_set": "2026-10-16-search-usefulness-validation.json"
+        }
+      ]
+    },
+    {
+      "pack": "mojo",
+      "repo": "mojolicious/mojo",
+      "commit": "19fc4f19a0d83204a458ae4a19d192b7eaf4ba81",
+      "include": [
+        "lib",
+        "t"
+      ],
+      "tree": "ea2f7113fbdceac425935e3f6b7d608ecc7409e6",
+      "queries": [
+        {
+          "id": "mojo:query-source-s2-1",
+          "category": "test_intent",
+          "template": "Which tests cover X?",
+          "drawn_test": "t/mojo/dynamic_methods.t",
+          "query": "Which tests cover per-object methods added at runtime staying hidden when asking whether the class supports them?",
+          "evidence": [
+            {
+              "file": "t/mojo/dynamic_methods.t",
+              "line": 35,
+              "quote": "ok !Mojo::TestDynamic->can('foo'), 'dynamic method is hidden';",
+              "relevance": "Asserts that a method registered for one object is not reported by the class's can lookup.",
+              "source_sha256": "ecfdf45c4caca3b74d9cc616438d35ce09dc298ee92d3848b8233ff37333a90b"
+            },
+            {
+              "file": "lib/Mojo/DynamicMethods.pm",
+              "line": 21,
+              "quote": "return $h && $h eq $can ? undef : $can;",
+              "relevance": "The patched can returns undef when the found code is the generated dynamic dispatcher, which hides the method.",
+              "source_sha256": "289d212538c36e57558f20280e4ce660eff361309580bfb0b3adeb28b9480574"
+            }
+          ]
+        },
+        {
+          "id": "mojo:query-source-s2-2",
+          "category": "test_intent",
+          "template": "Where is the test for X?",
+          "drawn_test": "t/mojolicious/longpolling_lite_app.t",
+          "query": "Where is the test for a client request aborting with an error once its overall time limit expires?",
+          "evidence": [
+            {
+              "file": "t/mojolicious/longpolling_lite_app.t",
+              "line": 319,
+              "quote": "is $tx->error->{message}, 'Request timeout', 'right error';",
+              "relevance": "Checks that a request to a never-finishing route fails with the overall request time limit error.",
+              "source_sha256": "c0587b710a2fec26160981663ce5f73ff4249e53096a397fb7b4e4bb0d16525f"
+            },
+            {
+              "file": "lib/Mojo/UserAgent.pm",
+              "line": 332,
+              "quote": "$loop->timer($t => sub { $self->_error($id, 'Request timeout') })",
+              "relevance": "The user agent starts a timer for the configured request time limit and sets the error when it fires.",
+              "source_sha256": "e7243b43bb880496d2366aa8a170082cf026883429ce35ebf1c811b10ad4d6a2"
+            }
+          ]
+        },
+        {
+          "id": "mojo:query-source-s2-3",
+          "category": "test_intent",
+          "template": "Find the tests for X",
+          "drawn_test": "t/test/mojo.t",
+          "query": "Find the tests for running a fallback callback only when the previous assertion in a chain failed",
+          "evidence": [
+            {
+              "file": "t/test/mojo.t",
+              "line": 38,
+              "quote": "is $or, 'false', 'right result';",
+              "relevance": "Asserts that only the callback after the failed assertion ran, not the one after the passing assertion.",
+              "source_sha256": "5132baac333adb3c065ee7bcd702cf0f68602c7af4fac696e3927b0903f5efb4"
+            },
+            {
+              "file": "lib/Test/Mojo.pm",
+              "line": 266,
+              "quote": "$self->$cb unless $self->success;",
+              "relevance": "Test::Mojo invokes the callback only when the last test result was not successful.",
+              "source_sha256": "8ef928a78479fd32b4381a83b0bd557277c2572a263e4f7a2f42aae610a8c943"
+            }
+          ]
+        },
+        {
+          "id": "mojo:query-source-s2-control",
+          "category": "control",
+          "control": "exact_symbol",
+          "query": "Where is proxy_connect defined and where is it called?",
+          "evidence": [
+            {
+              "file": "lib/Mojo/UserAgent/Transactor.pm",
+              "line": 92,
+              "quote": "sub proxy_connect {",
+              "relevance": "Definition of proxy_connect, which builds a CONNECT transaction for proxied HTTPS or WebSocket requests.",
+              "source_sha256": "deaf6ecd0fec00012b30012a2505836bb8a82d2c72f5b4804c0f4973fd81747d"
+            },
+            {
+              "file": "lib/Mojo/UserAgent.pm",
+              "line": 147,
+              "quote": "return undef unless my $new = $self->transactor->proxy_connect($old);",
+              "relevance": "The user agent calls proxy_connect when it sets up a connection through a proxy.",
+              "source_sha256": "e7243b43bb880496d2366aa8a170082cf026883429ce35ebf1c811b10ad4d6a2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

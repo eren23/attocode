@@ -332,3 +332,50 @@ def test_query_source_s2_decision_replays_from_hash_bound_observations():
     assert replayed["checks"]["latency"] and not replayed["checks"]["file_totals_no_loss"]
     assert [(x["id"], x["page"]) for x in replayed["individual_losses"]] == [("vapor:query-source-s2-3", "24")]
     assert recorded["decision"] == "rejected on validation"
+
+
+def test_test_support_development_rejection_replays_from_delivery():
+    """Helper demotion must recover judged tests before fresh validation is spent."""
+    import gzip
+    import hashlib
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "evals"
+    stem = "2026-10-20-test-support"
+    decision = json.loads((root / "results" / f"{stem}-decision.json").read_text())
+    freeze_raw = (root / "designs" / f"{stem}-freeze.json").read_bytes()
+    questions_raw = (root / "designs" / f"{stem}-development.json").read_bytes()
+    compressed = (root / "results" / f"{stem}-observations.json.gz").read_bytes()
+    assert hashlib.sha256(freeze_raw).hexdigest() == decision["freeze_sha256"]
+    freeze = json.loads(freeze_raw)
+    assert hashlib.sha256(questions_raw).hexdigest() == freeze["questions_sha256"]
+    assert hashlib.sha256(compressed).hexdigest() == decision["artifact_sha256"]
+    artifact = json.loads(gzip.decompress(compressed))
+    assert hashlib.sha256(artifact["candidate_patch"].encode()).hexdigest() == freeze["candidate_patch_sha256"]
+    assert hashlib.sha256(artifact["operator"].encode()).hexdigest() == freeze["operator_sha256"]
+    questions = [q for g in json.loads(questions_raw)["repositories"] for q in g["queries"]]
+    ids = [q["id"] for q in questions]
+    arms = {arm: [q for obs in artifact["observations"] if obs["arm"] == arm
+                  for q in obs["queries"]] for arm in ("B", "C")}
+    for obs in artifact["observations"]:
+        assert obs["questions_sha256"] == freeze["questions_sha256"]
+        assert obs["engine_sha256"] == decision["engine_sha256"][obs["arm"]]
+    for arm in arms.values():
+        assert [q["id"] for q in arm] == ids
+        for q, frozen in zip(arm, questions, strict=True):
+            assert q["query"] == frozen["query"] and q["evidence"] == frozen["evidence"]
+            for page in q["pages"].values():
+                assert page["hits"] == evidence_hits(page["response"]["data"]["results"], q["evidence"])
+    replayed = compare(arms["B"], arms["C"], ids)
+    assert replayed == decision["comparison"]
+    gains = []
+    for old, new in zip(arms["B"], arms["C"], strict=True):
+        gained = set(new["pages"]["5"]["hits"]["files"]) - set(old["pages"]["5"]["hits"]["files"])
+        gains.extend((old["id"], i) for i in gained)
+        for page in old["pages"]:
+            assert old["pages"][page]["generation_diagnostic"] == new["pages"][page]["generation_diagnostic"]
+    assert gains == []
+    assert decision["decision"] == "rejected on development: no judged test recovered at five"
+    assert decision["fresh_validation_started"] is False
+    assert not replayed["individual_losses"]
