@@ -134,7 +134,7 @@ wheels = [
 
 [[package]]
 name = "attocode-code-intel"
-version = "0.1.11"
+version = "0.1.12"
 source = { editable = "packages/code-intel" }
 dependencies = [
     { name = "aiosqlite" },

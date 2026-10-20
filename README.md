@@ -50,6 +50,8 @@ types, and lists impact results nearest first.
 searches, and counts Swift `Tests/` folders as tests.
 [Version 0.1.11](docs/intelligence-0.1.11.md) counts more test file names as tests,
 such as `_test.dart` and Perl `.t` scripts and `t/` modules.
+[Version 0.1.12](docs/intelligence-0.1.12.md) makes `doctor --client claude` read the
+local-scope entry that `claude mcp add` writes to `~/.claude.json`.
 
 ## Teams and remote agents
 
