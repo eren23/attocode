@@ -1,0 +1,33 @@
+{
+  "name": "CPU cost of function-unit CodeRankEmbed embeddings",
+  "date": "2026-10-19",
+  "question": "Can product search embed function units with nomic-ai/CodeRankEmbed on a CPU, as an opt-in mode, at an acceptable index time, query time and memory?",
+  "model": "nomic-ai/CodeRankEmbed at revision 3c4b60807d71f79b43f3c4363786d9493691f8b1 (eval.matrix.dense.MODEL_REVISION)",
+  "units": "Product discovery (CodebaseContextManager.discover_files) and product parse_file: every top-level function and every class method, all parsed languages, test files included and counted separately. Text: relative path, newline, source lines of the unit.",
+  "repos": {
+    "fastapi": ["fastapi/fastapi", "11614be9021aa4ac078d4d0693a8b5250a1010d8"],
+    "express": ["expressjs/express", "6c4249feec8ab40631817c8e7001baf2ed022224"],
+    "cli": ["cli/cli", "6e49747f49f31c9c0a68cfa344df7262a684e723"],
+    "pandas": ["pandas-dev/pandas", "0039f168fe057b945e8ec2a65c9d1e973c7c1fe9"],
+    "cockroach": ["cockroachdb/cockroach", "53aadff3cedde4d810c72b69ddd96e6a735d93e7"]
+  },
+  "configs": ["fp32-512-4", "fp32-512-8", "fp32-1024-8", "int8-512-8"],
+  "config_meaning": "weights - max tokens per unit - CPU threads. Each config runs in its own process, pinned with taskset to that many vCPUs; torch and OpenMP use the same thread count. The GPU is not used.",
+  "measure": {
+    "sample": "1,000 units per repo (all units if fewer), random.Random(0); seconds per unit times the unit count gives the full index time",
+    "check": "one full index of cli/cli with fp32-512-8; it must fall within 20 percent of its estimate, else every estimate is reported as unreliable",
+    "query": "50 workflow-pack query texts with the query prefix, one at a time, after 5 warm-up calls; p50 and p95",
+    "memory": "peak RSS of each config process",
+    "int8": "cosine of each int8 sample vector to its fp32 vector"
+  },
+  "rule": {
+    "pass": "At least one config with 8 threads meets all of: query p95 <= 150 ms; estimated full index <= 10 min for the median repo (by unit count) and <= 60 min for the largest; peak RSS <= 2 GiB. An int8 config counts only if its mean cosine to fp32 is >= 0.99.",
+    "on_pass": "Next step: an opt-in product mode and a quality test on Loc-Bench and fresh questions. A pass is not a quality result.",
+    "on_fail": "Report which limit fails and by how much. Do not tune the limits after the run."
+  },
+  "limits": [
+    "RunPod x86 server vCPUs (hyperthreads), not Apple Silicon. A Mac can use MPS, which is not measured here.",
+    "No retrieval quality is measured. The 0.739 Acc@5 of #241 used bf16, 1,024 tokens, Python-only CoRNStack units, on a GPU."
+  ],
+  "budget": "RunPod $2 cap, one pod, destroyed by node name within 100 minutes of creation."
+}
