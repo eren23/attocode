@@ -2,7 +2,7 @@
 
 The standalone distribution has its own version in `packages/code-intel/pyproject.toml` and release tags named `intel-vVERSION`. Historical agent `v*` tags remain preserved; the active repository publishes intelligence only.
 
-See the [0.1.11 release notes](intelligence-0.1.11.md) for the latest changes and upgrade instructions.
+See the [0.1.12 release notes](intelligence-0.1.12.md) for the latest changes and upgrade instructions.
 
 ## Release gate
 

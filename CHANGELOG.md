@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.12] - 2026-10-20
+
 ### Fixed — `doctor` reads the Claude Code local scope
 
 - `doctor --client claude` now reads the local-scope entry in
