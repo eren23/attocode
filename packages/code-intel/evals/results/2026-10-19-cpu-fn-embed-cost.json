@@ -1,0 +1,365 @@
+{
+ "schema": 1,
+ "date": "2026-10-19",
+ "source": "94471b6",
+ "design": {
+  "path": "packages/code-intel/evals/designs/2026-10-19-cpu-fn-embed-cost.json",
+  "sha256": "94c1bff807a7f9f30252d81767ee5f860f647f810167e65dcbfad4b68bb330f7"
+ },
+ "script": {
+  "path": "eval/matrix/function_embed_cost.py",
+  "frozen_sha256": "a315e3a1c0ff6fc9a08736821e77c5c74e56ff865b9e527a12856829628e6823",
+  "committed_sha256": "4598311225a9022c4dd9444def816f5f6fa8915f67861699556e7f78c1bff2f7",
+  "committed_change": "The rule path points to the design file; a docstring fix; two Ruff fixes. The measurement code is the same."
+ },
+ "host": {
+  "provider": "RunPod",
+  "gpu_type": "RTX PRO 4500 SE (not used)",
+  "cpu": "AMD EPYC 7282 16-Core Processor (Zen 2)",
+  "visible_vcpus": 64,
+  "cgroup_cpu_quota": 13.6,
+  "cgroup_note": "cgroup v1; the script reads only cgroup v2, so its JSON records cpu_max null. The quota was read by hand.",
+  "torch": "2.8.0+cu128",
+  "sentence_transformers": "3.4.1",
+  "transformers": "4.51.3"
+ },
+ "units": {
+  "fastapi": {
+   "repo": "fastapi/fastapi",
+   "commit": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+   "files": 2640,
+   "units": 4583,
+   "discovered": 2646,
+   "discovery_truncated": true,
+   "test_units": 3491,
+   "discover_s": 2.41,
+   "parse_s": 0.84,
+   "tokens": {
+    "p50": 91,
+    "p90": 264,
+    "max": 44828,
+    "over_512": 292,
+    "over_1024": 105,
+    "sum_capped_512": 598867,
+    "sum_capped_1024": 698042
+   }
+  },
+  "express": {
+   "repo": "expressjs/express",
+   "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+   "files": 158,
+   "units": 175,
+   "discovered": 201,
+   "discovery_truncated": false,
+   "test_units": 30,
+   "discover_s": 0.19,
+   "parse_s": 0.39,
+   "tokens": {
+    "p50": 73,
+    "p90": 205,
+    "max": 664,
+    "over_512": 4,
+    "over_1024": 0,
+    "sum_capped_512": 19614,
+    "sum_capped_1024": 20055
+   }
+  },
+  "cli": {
+   "repo": "cli/cli",
+   "commit": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+   "files": 904,
+   "units": 4893,
+   "discovered": 1050,
+   "discovery_truncated": false,
+   "test_units": 1659,
+   "discover_s": 2.06,
+   "parse_s": 0.6,
+   "tokens": {
+    "p50": 180,
+    "p90": 817,
+    "max": 33657,
+    "over_512": 971,
+    "over_1024": 336,
+    "sum_capped_512": 1172201,
+    "sum_capped_1024": 1476788
+   }
+  },
+  "pandas": {
+   "repo": "pandas-dev/pandas",
+   "commit": "0039f168fe057b945e8ec2a65c9d1e973c7c1fe9",
+   "files": 1658,
+   "units": 31056,
+   "discovered": 2337,
+   "discovery_truncated": true,
+   "test_units": 20979,
+   "discover_s": 7.1,
+   "parse_s": 1.16,
+   "tokens": {
+    "p50": 148,
+    "p90": 415,
+    "max": 9050,
+    "over_512": 2080,
+    "over_1024": 460,
+    "sum_capped_512": 5820897,
+    "sum_capped_1024": 6330441
+   }
+  },
+  "cockroach": {
+   "repo": "cockroachdb/cockroach",
+   "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+   "files": 8462,
+   "units": 80319,
+   "discovered": 18850,
+   "discovery_truncated": true,
+   "test_units": 7727,
+   "discover_s": 3.32,
+   "parse_s": 2.45,
+   "tokens": {
+    "p50": 103,
+    "p90": 576,
+    "max": 202355,
+    "over_512": 9382,
+    "over_1024": 3403,
+    "sum_capped_512": 14235911,
+    "sum_capped_1024": 17157451
+   }
+  }
+ },
+ "results": {
+  "fp32-512-8": {
+   "load_s": 19.17,
+   "rss_after_load_mib": 1882.9,
+   "peak_rss_mib": 2107.4,
+   "query_ms": {
+    "n": 50,
+    "p50": 51.7,
+    "p95": 52.9,
+    "max": 55.0
+   },
+   "repos": {
+    "fastapi": {
+     "sample": 1000,
+     "seconds": 122.0,
+     "units_per_s": 8.2,
+     "estimate_full_min": 9.32
+    },
+    "express": {
+     "sample": 175,
+     "seconds": 23.0,
+     "units_per_s": 7.61,
+     "estimate_full_min": 0.38
+    },
+    "cli": {
+     "sample": 1000,
+     "seconds": 264.37,
+     "units_per_s": 3.78,
+     "estimate_full_min": 21.56
+    },
+    "pandas": {
+     "sample": 1000,
+     "seconds": 216.35,
+     "units_per_s": 4.62,
+     "estimate_full_min": 111.98
+    },
+    "cockroach": {
+     "sample": 1000,
+     "seconds": 219.04,
+     "units_per_s": 4.57,
+     "estimate_full_min": 293.22
+    }
+   }
+  },
+  "fp32-1024-8": {
+   "load_s": 2.59,
+   "rss_after_load_mib": 1861.2,
+   "peak_rss_mib": 3273.9,
+   "query_ms": {
+    "n": 50,
+    "p50": 62.0,
+    "p95": 63.3,
+    "max": 65.0
+   },
+   "repos": {
+    "fastapi": {
+     "sample": 1000,
+     "seconds": 199.98,
+     "units_per_s": 5.0,
+     "estimate_full_min": 15.28
+    },
+    "express": {
+     "sample": 175,
+     "seconds": 23.57,
+     "units_per_s": 7.42,
+     "estimate_full_min": 0.39
+    },
+    "cli": {
+     "sample": 1000,
+     "seconds": 387.2,
+     "units_per_s": 2.58,
+     "estimate_full_min": 31.58
+    },
+    "pandas": {
+     "sample": 1000,
+     "seconds": 259.51,
+     "units_per_s": 3.85,
+     "estimate_full_min": 134.32
+    },
+    "cockroach": {
+     "sample": 1000,
+     "seconds": 348.82,
+     "units_per_s": 2.87,
+     "estimate_full_min": 466.95
+    }
+   }
+  },
+  "int8-512-8": {
+   "load_s": 3.86,
+   "rss_after_load_mib": 1970.7,
+   "peak_rss_mib": 2205.1,
+   "query_ms": {
+    "n": 50,
+    "p50": 21.3,
+    "p95": 23.1,
+    "max": 24.4
+   },
+   "repos": {
+    "fastapi": {
+     "sample": 1000,
+     "seconds": 102.14,
+     "units_per_s": 9.79,
+     "estimate_full_min": 7.8
+    },
+    "express": {
+     "sample": 175,
+     "seconds": 15.82,
+     "units_per_s": 11.06,
+     "estimate_full_min": 0.26
+    },
+    "cli": {
+     "sample": 1000,
+     "seconds": 209.69,
+     "units_per_s": 4.77,
+     "estimate_full_min": 17.1
+    },
+    "pandas": {
+     "sample": 1000,
+     "seconds": 169.34,
+     "units_per_s": 5.91,
+     "estimate_full_min": 87.65
+    },
+    "cockroach": {
+     "sample": 1000,
+     "seconds": 168.22,
+     "units_per_s": 5.94,
+     "estimate_full_min": 225.19
+    }
+   }
+  }
+ },
+ "partial": {
+  "fp32-512-4": {
+   "note": "Stopped at the pod time limit after 3 of 5 repositories. It is not an 8-thread config, so the rule does not use it.",
+   "estimate_full_min": {
+    "fastapi": 18.46,
+    "express": 0.64,
+    "cli": 37.2
+   }
+  }
+ },
+ "int8_cosine": {
+  "fastapi": {
+   "mean": 0.834,
+   "p01": 0.7386
+  },
+  "express": {
+   "mean": 0.8231,
+   "p01": 0.7395
+  },
+  "cli": {
+   "mean": 0.7754,
+   "p01": 0.6676
+  },
+  "pandas": {
+   "mean": 0.817,
+   "p01": 0.7445
+  },
+  "cockroach": {
+   "mean": 0.7985,
+   "p01": 0.6934
+  }
+ },
+ "checks": {
+  "fp32-512-8": {
+   "query_p95_ms": 52.9,
+   "query_ok": true,
+   "median_repo": "cli",
+   "median_min": 21.56,
+   "median_ok": false,
+   "largest_repo": "cockroach",
+   "largest_min": 293.22,
+   "largest_ok": false,
+   "peak_rss_mib": 2107.4,
+   "rss_ok": false,
+   "pass": false
+  },
+  "fp32-1024-8": {
+   "query_p95_ms": 63.3,
+   "query_ok": true,
+   "median_repo": "cli",
+   "median_min": 31.58,
+   "median_ok": false,
+   "largest_repo": "cockroach",
+   "largest_min": 466.95,
+   "largest_ok": false,
+   "peak_rss_mib": 3273.9,
+   "rss_ok": false,
+   "pass": false
+  },
+  "int8-512-8": {
+   "query_p95_ms": 23.1,
+   "query_ok": true,
+   "median_repo": "cli",
+   "median_min": 17.1,
+   "median_ok": false,
+   "largest_repo": "cockroach",
+   "largest_min": 225.19,
+   "largest_ok": false,
+   "peak_rss_mib": 2205.1,
+   "rss_ok": false,
+   "cosine_mean": 0.8096,
+   "cosine_ok": false,
+   "pass": false
+  }
+ },
+ "estimate_check": {
+  "estimate_min": 21.56,
+  "actual_min": 20.57,
+  "ratio": 0.954,
+  "within_20pct": true,
+  "peak_rss_mib": 2054.2,
+  "units": 4893,
+  "seconds": 1234.1
+ },
+ "decision": "fail",
+ "speedup_needed_fp32_512_8": {
+  "median_repo_cli": 2.16,
+  "largest_repo_cockroach": 4.89
+ },
+ "run_order": [
+  "prepare",
+  "fp32-512-8",
+  "int8-512-8",
+  "fp32-1024-8 (stopped at 20:51:05Z, then run again)",
+  "full cli fp32-512-8",
+  "fp32-1024-8",
+  "fp32-512-4 (partial)",
+  "summary"
+ ],
+ "spend": {
+  "pod_minutes": 85.8,
+  "rate_usd_per_hour": 0.5,
+  "estimate_usd": 0.72,
+  "invoice_checked": false,
+  "pod_destroyed": "2026-10-19T21:46Z"
+ }
+}
