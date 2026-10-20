@@ -1,0 +1,32 @@
+{
+  "baseline": "6e91a82cc7e4d39c0e0ea5ef7d9d21d56056d945",
+  "questions_sha256": "1ea014a5aa30f214bc5c475a02d0f38681bcb83dc3f86143446e106cfc824cbc",
+  "operator_sha256": "9cefe5d292b703a74a50839b0ebb0bae9f488e61b77383b1874a3a2af9d7ef8e",
+  "candidate_patch_sha256": "720332fbb47e798b2df5d9864b4e3b987c715e778844a975493ab9870d04f3ee",
+  "packs": [
+    {
+      "id": "express",
+      "repo": "expressjs/express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "tree": "54c892ea11cf7a6d1dc508ffc05da08e6ba94b3a"
+    },
+    {
+      "id": "mojo",
+      "repo": "mojolicious/mojo",
+      "commit": "19fc4f19a0d83204a458ae4a19d192b7eaf4ba81",
+      "include": [
+        "lib",
+        "t"
+      ],
+      "tree": "ea2f7113fbdceac425935e3f6b7d608ecc7409e6"
+    }
+  ],
+  "decision_rule": "Stop if no judged test file is recovered at five on the consumed development questions. Any losses are reported. Fresh validation requires recovery; no acceptance from development alone.",
+  "bounds": {
+    "seconds_per_pack": 180,
+    "seconds_cumulative": 600,
+    "scratch_per_pack_bytes": 536870912,
+    "total_scratch_bytes": 1073741824,
+    "rss_bytes": 1610612736
+  }
+}

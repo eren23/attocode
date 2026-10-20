@@ -7,7 +7,18 @@ three successive groups. This is offline product evidence, not an agent study.
 **Current release:** `attocode-code-intel` 0.1.12 (2026-10-20). See the
 [0.1.12 release notes](intelligence-0.1.12.md).
 
-**Latest search batch, 2026-10-18:** [source hit after the first five tests](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-query-source.md).
+**Latest search batch, 2026-10-20:** [test cases before recognized support paths](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-20-test-support.md).
+The fixed candidate moved helpers off two first pages but recovered no judged test
+on 13 consumed Express/Mojo questions: files at five stayed 13, at 24 stayed 17,
+with no individual losses. The development stop rule applies. No fresh validation
+was sampled or run, and no product ranking change is retained.
+
+**Earlier experiments, 2026-10-19:** [function-unit BM25](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-19-function-bm25.md)
+failed its frozen quality rule. [CPU function embeddings](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-19-cpu-fn-embed-cost.md)
+failed indexing time and memory limits; int8 also failed vector fidelity.
+Neither result supports a new local search mode.
+
+**Earlier search batch, 2026-10-18:** [source hit after the first five tests](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-query-source.md).
 The candidate gained two judged files at 24 on 20 new questions with no loss, but failed the frozen p95 limit in
 one run. A second trial with a three-round latency rule passed latency, but lost one judged test file and gained none
 on 20 more new questions. The search code does not change.
