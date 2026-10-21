@@ -91,13 +91,105 @@ def bounded_bootstrap(metadata: dict, body: str, max_tokens: int) -> types.CallT
     return compact_result(compact, {"result": "\n\n".join(selected)})
 
 
-def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResult:
+def _search_truncation(metadata, data, upstream_truncated):
+    """Describe the delivered page, retaining unrelated upstream truncation."""
+    omitted = metadata.get("omitted", {})
+    missing = data["ranking"].get("omitted_results_due_to_budget", 0)
+    if "data.results" in omitted:
+        if missing:
+            omitted["data.results"] = missing
+        else:
+            omitted.pop("data.results")
+    shortened = any(row.get("snippet_truncated") for row in data["results"])
+    if not shortened:
+        omitted.pop("data.results.snippet", None)
+    if not omitted:
+        metadata.pop("omitted", None)
+    metadata["truncated"] = bool(upstream_truncated or missing or shortened or omitted)
+
+
+def _fill_search_prefix(metadata, data, rows, total, max_tokens, *, upstream_truncated=False):
+    """Recover consecutive omitted hits without shortening delivered evidence."""
+    _search_truncation(metadata, data, upstream_truncated)
+    while len(data["results"]) < len(rows):
+        hit = deepcopy(rows[len(data["results"])])
+        for short in (False, True):
+            if short:
+                if len(hit.get("snippet", "")) <= 32:
+                    break
+                hit.update(snippet_window(hit["snippet"], data.get("query", ""), 32,
+                                          hit.get("snippet_start_line")))
+                hit["snippet_truncated"] = True
+            trial, provenance = deepcopy(data), deepcopy(metadata)
+            trial["results"].append(hit)
+            delivered = len(trial["results"])
+            trial["ranking"]["delivered_count"] = delivered
+            if total > delivered:
+                trial["ranking"]["omitted_results_due_to_budget"] = total - delivered
+            else:
+                trial["ranking"].pop("omitted_results_due_to_budget", None)
+            provenance["ranking"] = deepcopy(trial["ranking"])
+            _search_truncation(provenance, trial, upstream_truncated)
+            if response_tokens(compact_result(provenance, trial)) <= max_tokens:
+                data, metadata = trial, provenance
+                break
+        else:
+            return compact_result(metadata, data)
+        if len(data["results"]) != delivered:
+            return compact_result(metadata, data)
+    return compact_result(metadata, data)
+
+
+def bounded_search(metadata, data, max_tokens, *, all_results, follow_up=None):
+    """Fit search delivery, reserving a progressing retry after final omissions."""
+    payload = deepcopy(data)
+    if follow_up is None:
+        payload.pop("follow_up", None)
+    # Keep the legacy fitted evidence as the floor for a newly added hint.
+    # Recovery may add rows, but a continuation must not crowd out that floor.
+    try:
+        fitted = bounded_compact(metadata, payload, max_tokens, search_results=[])
+    except ValueError:
+        if "follow_up" not in payload:
+            raise
+        # An optional hint must not make an otherwise usable page fail.
+        payload.pop("follow_up")
+        fitted = bounded_compact(metadata, payload, max_tokens, search_results=[])
+    protected = json.loads(fitted.content[0].text)
+    total = len(payload["results"]) + payload["ranking"].get("omitted_results_due_to_budget", 0)
+    result = _fill_search_prefix(protected["metadata"], protected["data"],
+                                 all_results, total, max_tokens,
+                                 upstream_truncated=metadata.get("truncated", False))
+    delivered = json.loads(result.content[0].text)
+    search_deeper = bool(follow_up and follow_up.get("reason") == "search_deeper")
+    if (follow_up and "follow_up" not in payload
+            and (search_deeper or delivered["data"]["ranking"].get("omitted_results_due_to_budget"))):
+        payload["follow_up"] = follow_up
+        try:
+            with_hint = bounded_compact(metadata, payload, max_tokens, search_results=all_results)
+        except ValueError:
+            # The hint alone can exceed a tiny budget; retain the usable page.
+            pass
+        else:
+            candidate = json.loads(with_hint.content[0].text)
+            prefix = protected["data"]["results"]
+            if candidate["data"]["results"][:len(prefix)] == prefix:
+                result, delivered = with_hint, candidate
+    if (not search_deeper
+            and len(delivered["data"]["results"]) >= delivered["data"]["ranking"]["candidate_pool_count"]):
+        delivered["data"].pop("follow_up", None)
+        result = compact_result(delivered["metadata"], delivered["data"])
+    return result
+
+
+def bounded_compact(metadata: dict, data, max_tokens: int, *, search_results=None) -> types.CallToolResult:
     """Bound the serialized result while retaining valid data and its provenance.
 
     The estimate uses the shared tokenizer, not a promise about every client's tokenizer.
     Only evidence collections and prose are shortened; paths, identifiers and flags survive.
     """
     metadata = compact_metadata(metadata)
+    upstream_truncated = metadata.get("truncated", False)
     data = deepcopy(data)
     omitted = {}
     match data:
@@ -105,6 +197,7 @@ def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResu
               "ranking": {"candidate_pool_count": _, **ranking}}:
             search_result_count = len(result_rows)
             initial_search_omissions = ranking.get("omitted_results_due_to_budget", 0)
+            recoverable = deepcopy(search_results if search_results is not None else result_rows)
         case _:
             search_result_count = None
             initial_search_omissions = 0
@@ -118,6 +211,7 @@ def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResu
                 )
                 metadata["ranking"] = deepcopy(data["ranking"])
                 metadata["truncated"] = True
+            _search_truncation(metadata, data, upstream_truncated)
         # Budget trimming can shorten a source page after inspection constructed its
         # continuation. Compute the next offset from the excerpt actually delivered.
         if (isinstance(data, dict) and isinstance(data.get("follow_up"), dict) and "next_source" in data["follow_up"]
@@ -132,6 +226,10 @@ def bounded_compact(metadata: dict, data, max_tokens: int) -> types.CallToolResu
             } if source["end_line"] < definition["end_line"] else None)
         result = compact_result(metadata, data)
         if response_tokens(result) <= max_tokens:
+            if search_result_count is not None:
+                return _fill_search_prefix(metadata, data, recoverable,
+                                           search_result_count + initial_search_omissions, max_tokens,
+                                           upstream_truncated=upstream_truncated)
             return result
         if search_result_count is not None:
             # Search rows are identifiers plus optional prose. Spend the remaining

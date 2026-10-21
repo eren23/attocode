@@ -37,6 +37,17 @@ Inspection, reference and call-graph queries automatically use installed languag
 
 Daily MCP responses contain one JSON text block with `metadata` and `data`. The default `max_tokens=2000` bounds the complete serialized MCP result using an estimated tokenizer count. Provenance and ambiguity survive truncation; undersized budgets return an error. Writes require at least 512 tokens and reserve room to acknowledge their outcome before making changes. `cross_references` returns `next_cursor` when more references remain; repeat the original query with that cursor. Edits invalidate continuations. Detailed coverage and precision diagnostics are available through `capabilities`. The full profile and REST operations retain the `result`, `metadata`, and structured `data` response envelope.
 
+When compact search fills its retrieval pool, a continuation with
+`reason: "search_deeper"` offers a larger search. Further matches are possible,
+not guaranteed. These automatic depth suggestions stop at 50 results; callers
+can still choose their own `top_k`. A budget-only continuation can remain when
+selected rows are omitted, until the 32,000-token ceiling. Hints are optional:
+if a new hint would displace already-fitted evidence, the page keeps that
+evidence. Local continuations rerun the current index; remote continuations
+retain the resolved revision. Results can move when retrieval depth changes.
+To examine another part of a returned file, repeat the query with that path as
+`file_filter`, or read the source directly.
+
 Set `ATTOCODE_INTEL_TRACE` to an absolute path outside the repository to collect optional JSONL timings and response sizes. Traces contain operation names and metrics, without source or arguments. Timings for indexing, discovery, execution and precision can overlap because they include nested work.
 
 Index readiness describes indexing progress. Analysis metadata separately reports unresolved imports, evidence sources, and precision failures. Missing relationships do not prove absence of impact, and suggested tests are candidates rather than complete coverage. Search ranking scores are not confidence percentages.

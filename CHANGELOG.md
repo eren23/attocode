@@ -7,8 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Navigation recovery after restart
+
+- Reconcile the saved navigation index when a missing or invalid AST summary
+  requires parsing again. Previously, a successful parse could recover a
+  definition while symbol searches and references still used the old index.
+  Valid cached summaries retain the existing fast restart path.
+
+### Fixed — Compact search delivery
+
+- Fill spare token budget with consecutive selected results while preserving
+  already delivered evidence. Final trimming now offers a follow-up that increases
+  page size or budget when it fits without displacing existing evidence; identical
+  retries at the budget ceiling are suppressed. Remote retries keep the resolved
+  snapshot revision.
+- Recompute compact search truncation from the delivered rows and snippets;
+  discard an oversized optional continuation if it would make the page fail.
+- Offer a bounded deeper search when a compact page reaches the retrieval
+  limit. The hint identifies a new search, preserves the fitted evidence, and
+  stops automatic depth expansion at 50 results. Ranking remains unchanged.
+- Evaluated and rejected definition fusion, hint weighting and morphology
+  candidates under the no-loss rule; ranking defaults remain unchanged. See the
+  [search repair report](packages/code-intel/evals/results/2026-10-20-search-repair.md).
+
 ### Evaluation and documentation
 
+- Rejected exact-chunk agreement across full and clause searches on 37 consumed
+  questions: distinct first-page query/file matches fall 38→36, with an individual
+  excerpt loss. Fresh validation was skipped; passive traces explain the failures.
+  Product ranking remains unchanged.
+- Rejected explicit clause balancing after three frozen validation rounds:
+  three additional first-page file matches, but a relevant test excerpt is
+  displaced in every round. Ranking stays unchanged; see the
+  [search repair report](packages/code-intel/evals/results/2026-10-20-search-repair.md#subsequent-first-page-experiment-explicit-clause-balancing).
 - Updated the roadmap to 0.1.12 and corrected shipped status and closed experiments.
 - Rejected the fixed test-support ordering candidate on consumed development
   questions: no judged test recovered at five, no individual evidence loss.

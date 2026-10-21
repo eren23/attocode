@@ -25,7 +25,7 @@ from attocode_intel.catalog import (
     registered_tools,
     tool_catalog,
 )
-from attocode_intel.output import bounded_compact, bounded_text, response_tokens
+from attocode_intel.output import bounded_compact, bounded_search, bounded_text, response_tokens
 from attocode_intel.project_dir import cache_folder
 from attocode_intel.query_ranking import hit_evidence, next_search_top_k
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
@@ -487,15 +487,16 @@ class OperationGateway:
                         ranking["index"] = mgr.candidate_diagnostics()
                     result_cap = max(1, budget // 120)
                     omitted_results = max(0, len(results) - result_cap)
-                    results = results[:result_cap]
                     if not self.resolver:
                         results = hydrate_selected_sources(service.project_dir, results)
+                    selected_results = results
+                    results = results[:result_cap]
                     ranking["delivered_count"] = len(results)
                     if omitted_results:
                         ranking["omitted_results_due_to_budget"] = omitted_results
                     snippet_cap = max(32, min(320, budget // max(1, len(results))))
                     hits = []
-                    for result in results:
+                    for result in selected_results:
                         hits.append({
                             "file_path": result.file_path,
                             "name": result.name,
@@ -508,13 +509,23 @@ class OperationGateway:
                         })
                     payload = {
                         "query": args["query"],
-                        "results": hits,
+                        "results": hits[:len(results)],
                         "ranking": ranking,
                     }
+                    search_follow_up = None
                     if ranking.get("index", {}).get("status") == "ready":
                         next_k = next_search_top_k(
-                            len(candidates), args["top_k"], len(results),
+                            len(candidates), args["top_k"], 0,
                         )
+                        # A full retrieval pool is a limit, not proof that the
+                        # repository has no further matches. Keep automatic
+                        # exploration bounded and label it as a fresh probe.
+                        search_deeper = compact and (
+                            0 < len(candidates) == service._retrieval_depth(args["top_k"])
+                            and len(candidates) <= args["top_k"] < 50
+                        )
+                        if search_deeper:
+                            next_k = min(50, args["top_k"] * 2)
                         if next_k is not None:
                             request = {
                                 "query": args["query"], "top_k": next_k,
@@ -525,12 +536,18 @@ class OperationGateway:
                             }
                             if args.get("branch"):
                                 request["branch"] = args["branch"]
-                            if args.get("revision"):
-                                request["revision"] = args["revision"]
-                            payload["follow_up"] = {
+                            if context.source == "remote":
+                                request["revision"] = context.revision
+                            search_follow_up = {
                                 "tool": "semantic_search", "arguments": request,
                                 "reruns_current_index": True,
                             }
+                            if search_deeper:
+                                search_follow_up["reason"] = "search_deeper"
+                            if request["max_tokens"] <= budget and next_k <= args["top_k"]:
+                                search_follow_up = None
+                            if search_follow_up and len(candidates) > len(results) and not search_deeper:
+                                payload["follow_up"] = search_follow_up
                     note = (
                         "Broad query matches multiple components; narrow with file_filter or a component name.\n"
                         if ranking["query"]["ambiguous"] else ""
@@ -663,7 +680,13 @@ class OperationGateway:
                 text, _ = bounded_text(header + json.dumps(payload), budget)
                 structured = {"result": text, "metadata": metadata}
             if compact:
-                if name == "bootstrap":
+                if name == "semantic_search":
+                    # Compact search fits its own rows/snippets. Neither the early
+                    # row estimate nor the unused prose describes its final page.
+                    metadata["truncated"] = False
+                    result = bounded_search(metadata, payload, budget, all_results=hits,
+                                            follow_up=search_follow_up)
+                elif name == "bootstrap":
                     from attocode_intel.output import bounded_bootstrap
                     result = bounded_bootstrap(metadata, body, budget)
                 else:

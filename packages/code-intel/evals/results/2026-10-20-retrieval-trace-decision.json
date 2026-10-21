@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "decision": "diagnosed; no product change",
+  "baseline": "d2a6d2933091d659ce9b2ea82035668ecb767afd",
+  "engine_sha256": "6d230c206725a0c6ea3838bcb31588ef9efb878158ff988318f34e7d064f5219",
+  "artifact_sha256": "badb010f9a0f2ac71078b91672e4492551fb6a5b946ef3ecf34c4e9cf091e1c3",
+  "verification": {
+    "passed": true,
+    "reports": {
+      "express": {
+        "5": {
+          "delivered": 5,
+          "selected": 5,
+          "targets": [
+            {
+              "file": "test/req.accepts.js",
+              "keyword": null,
+              "body": 64,
+              "fused": 75,
+              "after_test_partition": 44,
+              "selected": null,
+              "delivered": null
+            },
+            {
+              "file": "test/res.format.js",
+              "keyword": 8,
+              "body": 1,
+              "fused": 3,
+              "after_test_partition": 1,
+              "selected": 1,
+              "delivered": 1
+            }
+          ]
+        },
+        "24": {
+          "delivered": 16,
+          "selected": 24,
+          "targets": [
+            {
+              "file": "test/req.accepts.js",
+              "keyword": null,
+              "body": 64,
+              "fused": 75,
+              "after_test_partition": 44,
+              "selected": null,
+              "delivered": null
+            },
+            {
+              "file": "test/res.format.js",
+              "keyword": 8,
+              "body": 1,
+              "fused": 3,
+              "after_test_partition": 1,
+              "selected": 1,
+              "delivered": 1
+            }
+          ]
+        },
+        "followup": {
+          "delivered": 24,
+          "files": [
+            1
+          ],
+          "ranges": [],
+          "visible": []
+        }
+      },
+      "mojo": {
+        "5": {
+          "delivered": 5,
+          "selected": 5,
+          "targets": [
+            {
+              "file": "t/mojolicious/longpolling_lite_app.t",
+              "keyword": null,
+              "body": 37,
+              "fused": 68,
+              "after_test_partition": 17,
+              "selected": null,
+              "delivered": null
+            },
+            {
+              "file": "lib/Mojo/UserAgent.pm",
+              "keyword": 37,
+              "body": 25,
+              "fused": 50,
+              "after_test_partition": 75,
+              "selected": null,
+              "delivered": null
+            }
+          ]
+        },
+        "24": {
+          "delivered": 8,
+          "selected": 24,
+          "targets": [
+            {
+              "file": "t/mojolicious/longpolling_lite_app.t",
+              "keyword": null,
+              "body": 37,
+              "fused": 68,
+              "after_test_partition": 17,
+              "selected": 17,
+              "delivered": null
+            },
+            {
+              "file": "lib/Mojo/UserAgent.pm",
+              "keyword": 37,
+              "body": 25,
+              "fused": 50,
+              "after_test_partition": 75,
+              "selected": null,
+              "delivered": null
+            }
+          ]
+        },
+        "followup": {
+          "delivered": 24,
+          "files": [
+            0
+          ],
+          "ranges": [
+            0
+          ],
+          "visible": [
+            0
+          ]
+        }
+      }
+    },
+    "rejected_mutations": [
+      "express:score",
+      "express:cutoff",
+      "express:budget",
+      "mojo:score",
+      "mojo:cutoff",
+      "mojo:budget"
+    ]
+  },
+  "scope": "Two consumed questions; no relevance candidate, held-out validation or outcome claim.",
+  "fresh_validation_started": false,
+  "product_changed": false
+}

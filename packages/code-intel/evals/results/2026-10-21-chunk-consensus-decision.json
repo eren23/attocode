@@ -1,0 +1,137 @@
+{
+  "retained": false,
+  "fresh_validation_allowed": false,
+  "checks": {
+    "gain": false,
+    "no_individual_loss": false,
+    "inspection": true,
+    "controls": true,
+    "complete": true
+  },
+  "comparison": {
+    "passed": false,
+    "checks": {
+      "file_totals_no_loss": false,
+      "visible_totals_no_loss": true,
+      "scoped_no_individual_loss": true,
+      "inspection_no_net_loss": true,
+      "latency": true
+    },
+    "baseline": {
+      "questions": 37,
+      "files_5": 40,
+      "ranges_5": 24,
+      "visible_5": 15,
+      "files_24": 49,
+      "ranges_24": 30,
+      "visible_24": 4,
+      "files_scoped": 38,
+      "ranges_scoped": 33,
+      "visible_scoped": 21,
+      "inspection_visible": 6,
+      "p95_seconds": 0.03853587503544986
+    },
+    "candidate": {
+      "questions": 37,
+      "files_5": 38,
+      "ranges_5": 21,
+      "visible_5": 15,
+      "files_24": 50,
+      "ranges_24": 30,
+      "visible_24": 4,
+      "files_scoped": 38,
+      "ranges_scoped": 33,
+      "visible_scoped": 21,
+      "inspection_visible": 6,
+      "p95_seconds": 0.07863029197324067
+    },
+    "individual_losses": [
+      {
+        "id": "express:test-intent-1",
+        "page": "5",
+        "metric": "files",
+        "labels": [
+          0
+        ]
+      },
+      {
+        "id": "express:usefulness-validation-1",
+        "page": "5",
+        "metric": "files",
+        "labels": [
+          0
+        ]
+      },
+      {
+        "id": "express:usefulness-validation-1",
+        "page": "5",
+        "metric": "visible",
+        "labels": [
+          0
+        ]
+      },
+      {
+        "id": "phoenix:clause-fresh-1",
+        "page": "5",
+        "metric": "files",
+        "labels": [
+          1
+        ]
+      }
+    ]
+  },
+  "gains5": [
+    {
+      "id": "requests:clause-fresh-1",
+      "pack": "requests",
+      "file": "tests/test_utils.py"
+    }
+  ],
+  "distinct_query_file_matches": {
+    "B": {
+      "5": 38,
+      "24": 47,
+      "scoped": 36
+    },
+    "C": {
+      "5": 36,
+      "24": 48,
+      "scoped": 36
+    }
+  },
+  "pages_recomputed": 222,
+  "questions": 37,
+  "eligible_queries": [
+    "express:test-intent-1",
+    "express:usefulness-development-1",
+    "express:usefulness-development-2",
+    "express:usefulness-validation-1",
+    "okhttp:clause-fresh-1",
+    "okhttp:clause-fresh-2",
+    "okhttp:clause-fresh-3",
+    "phoenix:clause-fresh-1",
+    "phoenix:clause-fresh-2",
+    "phoenix:clause-fresh-3",
+    "rails:clause-fresh-1",
+    "rails:clause-fresh-2",
+    "rails:clause-fresh-3",
+    "requests:clause-fresh-1",
+    "requests:clause-fresh-2",
+    "requests:clause-fresh-3"
+  ],
+  "status": "rejected_on_consumed_development",
+  "limitation": "Consumed non-exhaustive source judgments, no fresh validation or agent outcome claim.",
+  "archive": {
+    "path": "2026-10-21-chunk-consensus-observations.json.gz",
+    "sha256": "4382f1be343d98f3d786fed593855fe0181071b8dfc4edb6d87453f87396ee06",
+    "files": 58
+  },
+  "baseline_engine_sha256": "b07d70d25d171405a6bc04af7ecec66c33b11f04022311b26b81113ca97877fd",
+  "candidate_sha256": "fbcbc538a7034104c7c53ee00075734972b64491bfa9313b628f59ca7632a082",
+  "questions_sha256": "47236dcf3f884b57472d9a58bd38054c410cc98a70b8bee4359a961ee2687445",
+  "source_anchors_verified": 59,
+  "passive_traces_recomputed": 3,
+  "product_source_changed": false,
+  "review": "Minor replay integrity gap fixed and verified; independent review confirms rejection with no remaining material finding.",
+  "completed": "2026-10-21"
+}

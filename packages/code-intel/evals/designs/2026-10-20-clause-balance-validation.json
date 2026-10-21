@@ -1,0 +1,499 @@
+{
+  "schema_version": 1,
+  "split": "validation",
+  "budget": 2000,
+  "scope": "24 new source-bound questions authored by three source-only agents blind to candidate/results.12 explicit paired behaviors plus single-behavior/helper/exact controls. Repositories exposed previously; labels non-exhaustive; no agent outcomes.",
+  "repositories": [
+    {
+      "pack": "requests",
+      "repo": "psf/requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "include": [
+        "src",
+        "tests"
+      ],
+      "tree": "47afbe2faf7c7f036f5a292092f5f8231ff830bd",
+      "queries": [
+        {
+          "id": "requests:clause-fresh-1",
+          "category": "test",
+          "query": "Find tests for escaping stray URL percent signs and trimming repeated leading path separators.",
+          "evidence": [
+            {
+              "file": "tests/test_utils.py",
+              "line": 488,
+              "quote": "def test_requote_uri_with_unquoted_percents(uri, expected):",
+              "source_sha256": "749c36bc574e3e796ddb78bbdc91b0d92fccf703a39c6d21f5afbfa7b28f50f8",
+              "relevance": "Exercises URL requoting with stray percent signs. Non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "tests/test_adapters.py",
+              "line": 8,
+              "quote": "    assert \"/v:h\" == a.request_url(p, {})",
+              "source_sha256": "28f88de1601bcde6a9f178b98452d6b90c55f5d1a6c9a2c15622cd760fbd4c91",
+              "relevance": "Checks repeated leading path separators collapse in the adapter request URL. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "requests:clause-fresh-2",
+          "category": "test",
+          "query": "Find tests for resetting digest authentication challenges after redirects and saving authenticated session cookies.",
+          "evidence": [
+            {
+              "file": "tests/test_lowlevel.py",
+              "line": 127,
+              "quote": "def test_digestauth_401_count_reset_on_redirect():",
+              "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+              "relevance": "Exercises a fresh digest challenge following successful authentication then a redirect. Non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "tests/test_requests.py",
+              "line": 773,
+              "quote": "            assert s.cookies[\"fake\"] == \"fake_value\"",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "relevance": "Checks cookies from digest authentication are retained in the session. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "requests:clause-fresh-3",
+          "category": "test",
+          "query": "Find tests for converting cookie expiration dates and applying integer cookie lifetimes.",
+          "evidence": [
+            {
+              "file": "tests/test_requests.py",
+              "line": 2437,
+              "quote": "        assert cookie.expires == 1",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "relevance": "Checks a textual cookie expiration date converts to an epoch timestamp. Non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "tests/test_requests.py",
+              "line": 2471,
+              "quote": "        assert isinstance(cookie.expires, int)",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "relevance": "Checks an integer max-age produces an integer expiration timestamp. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "requests:clause-fresh-4",
+          "category": "test",
+          "query": "Find tests rejecting carriage returns inside HTTP headers.",
+          "evidence": [
+            {
+              "file": "tests/test_requests.py",
+              "line": 1796,
+              "quote": "    def test_header_no_return_chars(self, httpbin, invalid_header):",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "relevance": "Parameterized cases reject carriage returns or newlines in header names or values. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": false
+        },
+        {
+          "id": "requests:clause-fresh-5",
+          "category": "helper",
+          "query": "Find the test helper that restores environment variables after temporary overrides.",
+          "evidence": [
+            {
+              "file": "tests/utils.py",
+              "line": 17,
+              "quote": "        os.environ.update(save_env)",
+              "source_sha256": "cfaec86690eba62573c8c730a121332837809333fb2b1006a20e2e8f4d34d4de",
+              "relevance": "The context manager restores its saved environment in a finally block. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": false
+        },
+        {
+          "id": "requests:clause-fresh-6",
+          "category": "exact",
+          "query": "Where is atomic_open defined?",
+          "evidence": [
+            {
+              "file": "src/requests/utils.py",
+              "line": 294,
+              "quote": "def atomic_open(filename):",
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+              "relevance": "Exact definition of the atomic file-writing context manager. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": false
+        }
+      ]
+    },
+    {
+      "pack": "phoenix",
+      "repo": "phoenixframework/phoenix",
+      "commit": "850162d618cf4e31be82fb53ad6e259095fa6126",
+      "include": [
+        "lib",
+        "test"
+      ],
+      "tree": "4d4a84b0662b4cf912235decdd40d874e4dab919",
+      "queries": [
+        {
+          "id": "phoenix:clause-fresh-1",
+          "category": "test",
+          "query": "Find tests for generating unique database indexes and HTML controllers using custom primary keys.",
+          "evidence": [
+            {
+              "file": "test/mix/tasks/phx.gen.schema_test.exs",
+              "line": 292,
+              "quote": "        assert file =~ \"create unique_index(:posts, [:title])\"",
+              "source_sha256": "be50b684ce703db95e18b6e094d92fcf9e90e7f025d6da24746587183db4b7e1",
+              "relevance": "Checks generated database migrations contain a unique index. Non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "test/mix/tasks/phx.gen.html_test.exs",
+              "line": 433,
+              "quote": "        assert file =~ ~s[%{\"post_id\" => post_id}]",
+              "source_sha256": "892d97f1c2ec0faa1c83a7474d4c2cbbcd8e6348f8e8a6144528daa8acc2d8cf",
+              "relevance": "Checks generated HTML controllers use the configured primary-key parameter. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "phoenix:clause-fresh-2",
+          "category": "test",
+          "query": "Find tests for routing scopes matching multiple hosts and running pipelines inherited from nested scopes.",
+          "evidence": [
+            {
+              "file": "test/phoenix/router/scope_test.exs",
+              "line": 177,
+              "quote": "  test \"host scopes allows list of hosts\" do",
+              "source_sha256": "3a307c969fba0b3c9df4d8c1711bf3ff8cc3e0366835ec8e4eace7e5219a5099",
+              "relevance": "Exercises one scoped route for several configured hostnames. Non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "test/phoenix/router/pipeline_test.exs",
+              "line": 100,
+              "quote": "  test \"invokes pipelines in a nested scope\" do",
+              "source_sha256": "46b3639fb854d461db6039bf35fca3977896fac2998b2868e461ee290d4b7d89",
+              "relevance": "Exercises execution of both outer browser and inner API pipelines. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "phoenix:clause-fresh-3",
+          "category": "test",
+          "query": "Find tests for retaining flash messages across redirects and clearing existing flash messages.",
+          "evidence": [
+            {
+              "file": "test/phoenix/controller/flash_test.exs",
+              "line": 42,
+              "quote": "  test \"flash is persisted when status is a redirect\" do",
+              "source_sha256": "999838063f62ccd2d2546bf1928db39e805e3a45871a52d30432ffb763cf95f2",
+              "relevance": "Exercises flash persistence by recycling cookies into the next request after redirect statuses. Non-exhaustive source-bound judgment."
+            },
+            {
+              "file": "test/phoenix/controller/flash_test.exs",
+              "line": 137,
+              "quote": "  test \"clear_flash/1 clears the flash messages\" do",
+              "source_sha256": "999838063f62ccd2d2546bf1928db39e805e3a45871a52d30432ffb763cf95f2",
+              "relevance": "Checks clearing populated flash messages produces an empty map. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "phoenix:clause-fresh-4",
+          "category": "test",
+          "query": "Find tests for generating a secret with a requested character count.",
+          "evidence": [
+            {
+              "file": "test/mix/tasks/phx.gen.secret_test.exs",
+              "line": 15,
+              "quote": "    assert_receive {:mix_shell, :info, [secret]} when byte_size(secret) == 32",
+              "source_sha256": "5633c1587aa665ac1a841d5d9300fe47b847268999320b47db372a036c85c945",
+              "relevance": "Checks a custom requested secret length of 32 characters. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": false
+        },
+        {
+          "id": "phoenix:clause-fresh-5",
+          "category": "helper",
+          "query": "Find the router test helper that fetches query parameters before dispatch.",
+          "evidence": [
+            {
+              "file": "test/support/router_helper.exs",
+              "line": 23,
+              "quote": "    |> Plug.Conn.fetch_query_params()",
+              "source_sha256": "f2b2e8a6b29743a01e81d1042135cdddb2e34b4c659f250fba4c5ac87a496c05",
+              "relevance": "The shared call helper parses query parameters before invoking the router. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": false
+        },
+        {
+          "id": "phoenix:clause-fresh-6",
+          "category": "exact",
+          "query": "Where is Phoenix.Naming.underscore defined?",
+          "evidence": [
+            {
+              "file": "lib/phoenix/naming.ex",
+              "line": 68,
+              "quote": "  def underscore(value), do: Macro.underscore(value)",
+              "source_sha256": "dad4bfe2e6e2d4555e8f52a34e13178f58ceda82960ea9ef444a058556a30e50",
+              "relevance": "Exact Phoenix.Naming.underscore definition delegates to Macro.underscore. Non-exhaustive source-bound judgment."
+            }
+          ],
+          "paired": false
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "repo": "square/okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "include": [
+        "okhttp/src"
+      ],
+      "tree": "fac74a5545e4cb1862d74328b36d1f16fba7e795",
+      "queries": [
+        {
+          "id": "okhttp:clause-fresh-1",
+          "category": "test",
+          "query": "Which tests prefer the first charset parameter and let a byte order mark override response encoding?",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/MediaTypeTest.kt",
+              "line": 172,
+              "quote": "    assertEquals(\"UTF-8\", mediaType.charsetName())",
+              "source_sha256": "8944c70ea11ad4e9f0671f7a2e54763c532a231cfc24bb245d47ebb1e6ef8be7",
+              "relevance": "testMultipleCharsetsReturnsFirstMatch parses conflicting utf-8 and utf-16 parameters, then asserts that the first charset wins."
+            },
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/ResponseBodyJvmTest.kt",
+              "line": 66,
+              "quote": "    assertThat(body.string()).isEqualTo(\"hello\")",
+              "source_sha256": "1ffaadb97d10bcc171c6c700f45cc487d570285053330442f4a759a6b26fd363",
+              "relevance": "stringBomOverridesExplicitCharset supplies a UTF-32BE byte order mark with an explicit utf-8 charset and asserts successful decoding of hello."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "okhttp:clause-fresh-2",
+          "category": "test",
+          "query": "Which tests cap cookie expiration dates and clamp oversized cache freshness durations?",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/CookieTest.kt",
+              "line": 481,
+              "quote": "    assertThat(cookie.toString()).isEqualTo(\"a=b; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/\")",
+              "source_sha256": "c5896d5815aefbd2f9a3d13d5dfefcbf80b8a50daef5b1d95e84591abb628400",
+              "relevance": "builderClampsMaxDate supplies Long.MAX_VALUE as an expiration timestamp and verifies serialization is capped at the end of year 9999."
+            },
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/CacheControlJvmTest.kt",
+              "line": 207,
+              "quote": "    assertThat(cacheControl.maxAgeSeconds).isEqualTo(Int.MAX_VALUE)",
+              "source_sha256": "173cd1c4c0ba055a0451ef231dd8533993550ba4d013fb02dae58db2515fda03",
+              "relevance": "timeDurationTruncatedToMaxValue requests one hundred years of freshness and asserts a cap of Int.MAX_VALUE seconds."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "okhttp:clause-fresh-3",
+          "category": "test",
+          "query": "Which tests advance directly to later multipart parts and propagate single-use status from an upload part?",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/MultipartReaderTest.kt",
+              "line": 235,
+              "quote": "    assertThat(partMno.body.readUtf8()).isEqualTo(\"mnop\")",
+              "source_sha256": "3cfec7074a5fa84fc6cee67e0ba587de9c1e04b79fd3e5e88c0926bd235a3299",
+              "relevance": "The test obtains a second part without reading the first and verifies that its body is mnop."
+            },
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/MultipartBodyTest.kt",
+              "line": 366,
+              "quote": "    assertThat(body.isOneShot()).isEqualTo(true)",
+              "source_sha256": "c9864d56b98f5da1f81aa5eee9262303acb6f1bce6e019d214f498387a193587",
+              "relevance": "writeTwiceWithOneShot wraps a single-use part and asserts that the enclosing multipart upload is also single-use."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "okhttp:clause-fresh-4",
+          "category": "test",
+          "query": "Which tests accept Shoutcast status lines as HTTP one point zero responses?",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/internal/http/StatusLineTest.kt",
+              "line": 67,
+              "quote": "    assertThat(statusLine.protocol).isEqualTo(Protocol.HTTP_1_0)",
+              "source_sha256": "16eca20e9dfe4d83395cc1dab3a363f0f61e70c8dc77ed5d171acd8a573f6352",
+              "relevance": "shoutcast parses ICY 200 OK and verifies it is interpreted as HTTP/1.0."
+            }
+          ],
+          "paired": false
+        },
+        {
+          "id": "okhttp:clause-fresh-5",
+          "category": "helper",
+          "query": "Find the test filesystem helper that simulates atomic rename failures.",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/internal/io/FaultyFileSystem.kt",
+              "line": 71,
+              "quote": "    if (renameFaults.contains(source) || renameFaults.contains(target)) throw IOException(\"boom!\")",
+              "source_sha256": "a9e13f6b1dd479f25e00cfff6fdc24e12d51c93ecdf3df2c122b19e5f35cdf07",
+              "relevance": "The test filesystem checks fault-marked source or target paths during atomicMove and throws IOException to simulate a rename failure."
+            }
+          ],
+          "paired": false
+        },
+        {
+          "id": "okhttp:clause-fresh-6",
+          "category": "exact",
+          "query": "Where is HttpUrl.redact defined?",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/HttpUrl.kt",
+              "line": 711,
+              "quote": "  fun redact(): String =",
+              "source_sha256": "dc026bebb8c9c43ea084a3c4e93fc3664bd34d824c79ee623acfcac8b981a289",
+              "relevance": "Exact declaration of the HttpUrl.redact source method."
+            }
+          ],
+          "paired": false
+        }
+      ]
+    },
+    {
+      "pack": "rails",
+      "repo": "rails/rails",
+      "commit": "e72eb4c20b6bb5bdc7f63a4477992209585a1fa9",
+      "include": [
+        "railties/lib",
+        "railties/test"
+      ],
+      "tree": "8c1b7d50f8db3ea26d3b45c543dd700adbcc57fe",
+      "queries": [
+        {
+          "id": "rails:clause-fresh-1",
+          "category": "test",
+          "query": "Find tests for refreshing changed page templates and discovering newly added mailer previews between requests.",
+          "evidence": [
+            {
+              "file": "railties/test/application/view_reloading_test.rb",
+              "line": 55,
+              "quote": "        assert_equal \"After!\", last_response.body.strip",
+              "source_sha256": "c9771d6fd1206d747fa8ebc802f423caaf22068cee34a3cf30d70af641861b9c",
+              "relevance": "After rewriting the page template, the next response contains its updated body."
+            },
+            {
+              "file": "railties/test/application/mailer_previews_test.rb",
+              "line": 172,
+              "quote": "      assert_match '<h3><a href=\"/rails/mailers/notifier\">Notifier</a></h3>', last_response.body",
+              "source_sha256": "27bdedc7a8f706c1b2e431bebeb3283b65ada97d175e26e92f7c79d0a06f2aa1",
+              "relevance": "After adding a mailer preview at runtime, the next index request lists it."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "rails:clause-fresh-2",
+          "category": "test",
+          "query": "Find tests for expanding abbreviated runner environments and showing the production environment in console prompts.",
+          "evidence": [
+            {
+              "file": "railties/test/application/runner_test.rb",
+              "line": 113,
+              "quote": "      assert_match \"production\", rails(\"runner\", \"-e\", \"prod\", \"puts Rails.env\")",
+              "source_sha256": "d746dde5f84d837091d1038c6d9e069d034b23f86c284ae95cb189e00119ee1e",
+              "relevance": "The runner expands prod to the production environment."
+            },
+            {
+              "file": "railties/test/application/console_test.rb",
+              "line": 147,
+              "quote": "    write_prompt \"123\", prompt: \"app-template(prod):\"",
+              "source_sha256": "db74564100600abe3436cc5e968d18bd07bb512feed49d33c6c0e26897cf3abb",
+              "relevance": "A console started in production displays prod in its prompt."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "rails:clause-fresh-3",
+          "category": "test",
+          "query": "Find tests for loading environment-specific credentials and editing secrets for a selected environment.",
+          "evidence": [
+            {
+              "file": "railties/test/application/credentials_test.rb",
+              "line": 18,
+              "quote": "    assert_equal \"revealed\", Rails.application.credentials.mystery",
+              "source_sha256": "c20e64e6b38aef9530b293a5cb6ab2aa90963cbed4e7ac512c3e32e64781d219",
+              "relevance": "The production application reads a value from its environment-specific encrypted credentials."
+            },
+            {
+              "file": "railties/test/commands/credentials_test.rb",
+              "line": 108,
+              "quote": "    assert_file \"config/credentials/production.yml.enc\"",
+              "source_sha256": "eb4cbc2765f4a64e4043ff237911b210dae91df942b1dd2552d678d698024921",
+              "relevance": "Editing credentials with the production environment option creates the production secrets file."
+            }
+          ],
+          "paired": true
+        },
+        {
+          "id": "rails:clause-fresh-4",
+          "category": "test",
+          "query": "Find tests for custom autoloader capitalization overriding the default filename conversion.",
+          "evidence": [
+            {
+              "file": "railties/test/application/zeitwerk_inflector_test.rb",
+              "line": 43,
+              "quote": "    assert_equal \"MySQLAdapter\", camelize(\"mysql_adapter\")",
+              "source_sha256": "2f965b99c39ba2ffd0798790cc4f6d20f3813cfed6abdadccecfa6306a998ddf",
+              "relevance": "An explicit mysql_adapter inflection produces MySQLAdapter instead of the default MysqlAdapter."
+            }
+          ],
+          "paired": false
+        },
+        {
+          "id": "rails:clause-fresh-5",
+          "category": "helper",
+          "query": "Find the test helper that temporarily changes an environment variable then restores its original value.",
+          "evidence": [
+            {
+              "file": "railties/test/env_helpers.rb",
+              "line": 25,
+              "quote": "      ENV[key] = old",
+              "source_sha256": "d7116762c71c2d796bf1118cef22aeb8ab7579dc200ddb0768a9499884abdfc9",
+              "relevance": "The switch_env helper restores the previous environment variable value in ensure after yielding."
+            }
+          ],
+          "paired": false
+        },
+        {
+          "id": "rails:clause-fresh-6",
+          "category": "exact",
+          "query": "Where is CodeStatisticsCalculator.add_by_io defined?",
+          "evidence": [
+            {
+              "file": "railties/lib/rails/code_statistics_calculator.rb",
+              "line": 62,
+              "quote": "    def add_by_io(io, file_type)",
+              "source_sha256": "b593b43f34801d8f2e079bdc1b2c75ab6cd1e4191d3ecebd4c7c46e178aae6bd",
+              "relevance": "Definition of the method that accumulates code statistics from an IO stream."
+            }
+          ],
+          "paired": false
+        }
+      ]
+    }
+  ]
+}

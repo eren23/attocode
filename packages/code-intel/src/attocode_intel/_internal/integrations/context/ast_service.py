@@ -502,19 +502,25 @@ class ASTService:
                 eligible = {fi.relative_path for fi in parseable}
                 summaries = {path: ast for path, ast in summaries.items() if path in eligible}
             cached = summaries if summaries is not None else {}
+            reparsed = set()
             for fi in parseable:
                 if fi.relative_path not in cached:
                     cached[fi.relative_path] = parse_file(fi.path)
+                    reparsed.add(fi.relative_path)
             if self._snapshot_identity() != self._snapshot_start:
                 return False
             self._index.load_from_store()
-            if (saved["identity"] != self._snapshot_start
+            # A missing summary can follow a transient grammar failure or a
+            # parser upgrade. Unchanged source does not prove that the freshly
+            # parsed definitions/references match the persisted index.
+            if (reparsed or saved["identity"] != self._snapshot_start
                     or saved["discovered"] != sorted(fi.relative_path for fi in files)
                     or saved["parsed"] != sorted(cached)):
                 from .index_repair import changed_paths, repair_index
 
                 changed = changed_paths(saved["identity"], self._snapshot_start)
                 changed |= set(saved["parsed"]) ^ cached.keys()
+                changed |= reparsed
                 self._last_snapshot_repair = repair_index(self, cached, self._snapshot_start, changed)
                 return True
             from attocode_intel._internal.integrations.context.codebase_context import (
@@ -528,8 +534,8 @@ class ASTService:
             if summaries is None:
                 from .ast_snapshot import encode_summaries
 
-                # Upgrade an older/missing cache once; partial bounded caches are
-                # intentionally not rewritten for every oversized-file miss.
+                # Retain a completion summary even for an empty parseable set.
+                # Nonempty cache misses were reconciled by repair_index above.
                 self._store.set_meta(AST_SNAPSHOT_KEY, encode_summaries(cached, raw))
             self._context_mgr._dep_graph = graph
             self._ast_cache = cached

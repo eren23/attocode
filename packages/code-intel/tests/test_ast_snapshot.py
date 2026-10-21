@@ -121,6 +121,39 @@ def test_file_bound_and_unsupported_tier_fall_back(tmp_path, monkeypatch):
     close(first)
 
 
+def test_restart_repairs_symbols_after_transient_grammar_failure(tmp_path):
+    from attocode_intel._internal.integrations.context import ts_parser
+
+    source = 'function greet(name)\n return name\nend\ngreet("reader")\n'
+    (tmp_path / 'example.lua').write_text(source)
+    first = ASTService(str(tmp_path))
+    try:
+        # A bounded grammar failure legitimately falls through to a minimal AST.
+        with (patch.object(ts_parser, 'bounded_parse', return_value=None),
+              patch.object(ts_parser, 'ctags_parse_file', return_value=None)):
+            first.initialize_skeleton(indexing_depth='eager')
+        assert first._ast_cache['example.lua'].parsing_tier == 'minimal'
+        assert not first._index.get_definitions('greet')
+        assert first._store.get_meta(SNAPSHOT_KEY)
+    finally:
+        close(first)
+
+    # Unchanged source is successfully reparsed, so both navigation and its
+    # persisted index must recover. A third restart must retain the repair.
+    for _ in range(2):
+        recovered = ASTService(str(tmp_path))
+        try:
+            recovered.initialize_skeleton()
+            assert 'greet' in recovered._ast_cache['example.lua'].get_symbols()
+            assert len(recovered._index.get_definitions('greet')) == 1
+            assert any(row.name == 'greet' for row in recovered._store.load_symbols())
+            assert any(ref.file_path == 'example.lua' and ref.line == 4
+                       for ref in recovered._index.get_references('greet'))
+            assert any(ref.line == 4 for ref in recovered._store.load_references('example.lua'))
+        finally:
+            close(recovered)
+
+
 def test_source_digest_rejects_changed_file_even_with_rebound_snapshot(tmp_path):
     first = seed(tmp_path)
     raw = first._store.get_meta(SNAPSHOT_KEY)

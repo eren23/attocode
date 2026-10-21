@@ -1,0 +1,681 @@
+{
+  "schema_version": 1,
+  "observations_sha256": "ee5ff5ecf9f18d555f03478a5d572b74de3ae7dd1d1745f74becf093af9b90af",
+  "development": {
+    "summaries": {
+      "B": {
+        "questions": 13,
+        "files_5": 13,
+        "ranges_5": 10,
+        "visible_5": 5,
+        "files_24": 17,
+        "ranges_24": 10,
+        "visible_24": 2,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.04339658305980265
+      },
+      "R": {
+        "questions": 13,
+        "files_5": 13,
+        "ranges_5": 10,
+        "visible_5": 5,
+        "files_24": 18,
+        "ranges_24": 10,
+        "visible_24": 2,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.054698499967344105
+      },
+      "D": {
+        "questions": 13,
+        "files_5": 13,
+        "ranges_5": 10,
+        "visible_5": 5,
+        "files_24": 18,
+        "ranges_24": 10,
+        "visible_24": 2,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.04696175002027303
+      },
+      "G": {
+        "questions": 13,
+        "files_5": 14,
+        "ranges_5": 9,
+        "visible_5": 5,
+        "files_24": 18,
+        "ranges_24": 10,
+        "visible_24": 3,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.08947595802601427
+      },
+      "M": {
+        "questions": 13,
+        "files_5": 14,
+        "ranges_5": 10,
+        "visible_5": 5,
+        "files_24": 17,
+        "ranges_24": 10,
+        "visible_24": 2,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.09740566601976752
+      }
+    },
+    "comparisons": {
+      "R": {
+        "passed": true,
+        "checks": {
+          "file_totals_no_loss": true,
+          "visible_totals_no_loss": true,
+          "scoped_no_individual_loss": true,
+          "inspection_no_net_loss": true,
+          "latency": true
+        },
+        "baseline": {
+          "questions": 13,
+          "files_5": 13,
+          "ranges_5": 10,
+          "visible_5": 5,
+          "files_24": 17,
+          "ranges_24": 10,
+          "visible_24": 2,
+          "files_scoped": 12,
+          "ranges_scoped": 12,
+          "visible_scoped": 6,
+          "inspection_visible": 2,
+          "p95_seconds": 0.04339658305980265
+        },
+        "candidate": {
+          "questions": 13,
+          "files_5": 13,
+          "ranges_5": 10,
+          "visible_5": 5,
+          "files_24": 18,
+          "ranges_24": 10,
+          "visible_24": 2,
+          "files_scoped": 12,
+          "ranges_scoped": 12,
+          "visible_scoped": 6,
+          "inspection_visible": 2,
+          "p95_seconds": 0.054698499967344105
+        },
+        "individual_losses": [],
+        "gains5": [],
+        "controls_preserved": true,
+        "quality_pass": true
+      },
+      "D": {
+        "passed": true,
+        "checks": {
+          "file_totals_no_loss": true,
+          "visible_totals_no_loss": true,
+          "scoped_no_individual_loss": true,
+          "inspection_no_net_loss": true,
+          "latency": true
+        },
+        "baseline": {
+          "questions": 13,
+          "files_5": 13,
+          "ranges_5": 10,
+          "visible_5": 5,
+          "files_24": 18,
+          "ranges_24": 10,
+          "visible_24": 2,
+          "files_scoped": 12,
+          "ranges_scoped": 12,
+          "visible_scoped": 6,
+          "inspection_visible": 2,
+          "p95_seconds": 0.054698499967344105
+        },
+        "candidate": {
+          "questions": 13,
+          "files_5": 13,
+          "ranges_5": 10,
+          "visible_5": 5,
+          "files_24": 18,
+          "ranges_24": 10,
+          "visible_24": 2,
+          "files_scoped": 12,
+          "ranges_scoped": 12,
+          "visible_scoped": 6,
+          "inspection_visible": 2,
+          "p95_seconds": 0.04696175002027303
+        },
+        "individual_losses": [],
+        "gains5": [],
+        "controls_preserved": true,
+        "quality_pass": true
+      },
+      "G": {
+        "passed": true,
+        "checks": {
+          "file_totals_no_loss": true,
+          "visible_totals_no_loss": true,
+          "scoped_no_individual_loss": true,
+          "inspection_no_net_loss": true,
+          "latency": true
+        },
+        "baseline": {
+          "questions": 13,
+          "files_5": 13,
+          "ranges_5": 10,
+          "visible_5": 5,
+          "files_24": 18,
+          "ranges_24": 10,
+          "visible_24": 2,
+          "files_scoped": 12,
+          "ranges_scoped": 12,
+          "visible_scoped": 6,
+          "inspection_visible": 2,
+          "p95_seconds": 0.054698499967344105
+        },
+        "candidate": {
+          "questions": 13,
+          "files_5": 14,
+          "ranges_5": 9,
+          "visible_5": 5,
+          "files_24": 18,
+          "ranges_24": 10,
+          "visible_24": 3,
+          "files_scoped": 12,
+          "ranges_scoped": 12,
+          "visible_scoped": 6,
+          "inspection_visible": 2,
+          "p95_seconds": 0.08947595802601427
+        },
+        "individual_losses": [
+          {
+            "id": "mojo:query-source-s2-1",
+            "page": "24",
+            "metric": "files",
+            "labels": [
+              1
+            ]
+          }
+        ],
+        "gains5": [
+          {
+            "id": "express:test-intent-2",
+            "labels": [
+              0
+            ]
+          }
+        ],
+        "controls_preserved": true,
+        "quality_pass": false
+      },
+      "M": {
+        "passed": false,
+        "checks": {
+          "file_totals_no_loss": false,
+          "visible_totals_no_loss": true,
+          "scoped_no_individual_loss": true,
+          "inspection_no_net_loss": true,
+          "latency": true
+        },
+        "baseline": {
+          "questions": 13,
+          "files_5": 13,
+          "ranges_5": 10,
+          "visible_5": 5,
+          "files_24": 18,
+          "ranges_24": 10,
+          "visible_24": 2,
+          "files_scoped": 12,
+          "ranges_scoped": 12,
+          "visible_scoped": 6,
+          "inspection_visible": 2,
+          "p95_seconds": 0.054698499967344105
+        },
+        "candidate": {
+          "questions": 13,
+          "files_5": 14,
+          "ranges_5": 10,
+          "visible_5": 5,
+          "files_24": 17,
+          "ranges_24": 10,
+          "visible_24": 2,
+          "files_scoped": 12,
+          "ranges_scoped": 12,
+          "visible_scoped": 6,
+          "inspection_visible": 2,
+          "p95_seconds": 0.09740566601976752
+        },
+        "individual_losses": [
+          {
+            "id": "mojo:query-source-s2-1",
+            "page": "24",
+            "metric": "files",
+            "labels": [
+              1
+            ]
+          }
+        ],
+        "gains5": [
+          {
+            "id": "express:usefulness-validation-3",
+            "labels": [
+              1
+            ]
+          }
+        ],
+        "controls_preserved": true,
+        "quality_pass": false
+      }
+    },
+    "survivors": [
+      "D"
+    ]
+  },
+  "validation": {
+    "retained": false,
+    "checks": {
+      "gain": false,
+      "no_individual_losses": false,
+      "inspection": true,
+      "controls": false,
+      "stable": true,
+      "latency": true,
+      "resources": true,
+      "complete": true
+    },
+    "p95_median_seconds": {
+      "R": 0.07513233297504485,
+      "D": 0.08131687494460493
+    },
+    "resources": {
+      "requests": {
+        "setup_seconds": {
+          "R": 0.550129667040892,
+          "D": 0.6254372500116006,
+          "ratio": 1.1368906050382317,
+          "passed": true
+        },
+        "peak_rss_bytes": {
+          "R": 146964480,
+          "D": 152322048,
+          "ratio": 1.0364548494983277,
+          "passed": true
+        },
+        "peak_disk_bytes": {
+          "R": 4501504,
+          "D": 4501504,
+          "ratio": 1.0,
+          "passed": true
+        }
+      },
+      "phoenix": {
+        "setup_seconds": {
+          "R": 1.0583559169899672,
+          "D": 1.0601286250166595,
+          "ratio": 1.0016749639683917,
+          "passed": true
+        },
+        "peak_rss_bytes": {
+          "R": 155222016,
+          "D": 161660928,
+          "ratio": 1.0414819506016466,
+          "passed": true
+        },
+        "peak_disk_bytes": {
+          "R": 11456512,
+          "D": 11456512,
+          "ratio": 1.0,
+          "passed": true
+        }
+      },
+      "okhttp": {
+        "setup_seconds": {
+          "R": 2.0451324590248987,
+          "D": 2.0252440000185743,
+          "ratio": 0.9902752220676175,
+          "passed": true
+        },
+        "peak_rss_bytes": {
+          "R": 184582144,
+          "D": 189333504,
+          "ratio": 1.0257411681164565,
+          "passed": true
+        },
+        "peak_disk_bytes": {
+          "R": 42602496,
+          "D": 42598400,
+          "ratio": 0.9999038553985193,
+          "passed": true
+        }
+      },
+      "rails": {
+        "setup_seconds": {
+          "R": 1.4706958329770714,
+          "D": 1.5423535420559347,
+          "ratio": 1.0487236772363795,
+          "passed": true
+        },
+        "peak_rss_bytes": {
+          "R": 189251584,
+          "D": 193511424,
+          "ratio": 1.0225088736905896,
+          "passed": true
+        },
+        "peak_disk_bytes": {
+          "R": 30601216,
+          "D": 30625792,
+          "ratio": 1.0008031053406505,
+          "passed": true
+        }
+      }
+    },
+    "rounds": [
+      {
+        "passed": false,
+        "checks": {
+          "file_totals_no_loss": false,
+          "visible_totals_no_loss": true,
+          "scoped_no_individual_loss": true,
+          "inspection_no_net_loss": true,
+          "latency": true
+        },
+        "baseline": {
+          "questions": 24,
+          "files_5": 25,
+          "ranges_5": 17,
+          "visible_5": 13,
+          "files_24": 27,
+          "ranges_24": 17,
+          "visible_24": 1,
+          "files_scoped": 24,
+          "ranges_scoped": 24,
+          "visible_scoped": 18,
+          "inspection_visible": 5,
+          "p95_seconds": 0.08121062500867993
+        },
+        "candidate": {
+          "questions": 24,
+          "files_5": 25,
+          "ranges_5": 17,
+          "visible_5": 13,
+          "files_24": 26,
+          "ranges_24": 17,
+          "visible_24": 1,
+          "files_scoped": 24,
+          "ranges_scoped": 24,
+          "visible_scoped": 18,
+          "inspection_visible": 7,
+          "p95_seconds": 0.08131687494460493
+        },
+        "individual_losses": [
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "5",
+            "metric": "files",
+            "labels": [
+              1
+            ]
+          },
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "5",
+            "metric": "visible",
+            "labels": [
+              1
+            ]
+          },
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "24",
+            "metric": "files",
+            "labels": [
+              1
+            ]
+          }
+        ],
+        "round": 1,
+        "gains5": [],
+        "gain_gate": false,
+        "controls_preserved": false
+      },
+      {
+        "passed": false,
+        "checks": {
+          "file_totals_no_loss": false,
+          "visible_totals_no_loss": true,
+          "scoped_no_individual_loss": true,
+          "inspection_no_net_loss": true,
+          "latency": true
+        },
+        "baseline": {
+          "questions": 24,
+          "files_5": 25,
+          "ranges_5": 17,
+          "visible_5": 13,
+          "files_24": 27,
+          "ranges_24": 17,
+          "visible_24": 1,
+          "files_scoped": 24,
+          "ranges_scoped": 24,
+          "visible_scoped": 18,
+          "inspection_visible": 5,
+          "p95_seconds": 0.07513233297504485
+        },
+        "candidate": {
+          "questions": 24,
+          "files_5": 25,
+          "ranges_5": 17,
+          "visible_5": 13,
+          "files_24": 26,
+          "ranges_24": 17,
+          "visible_24": 1,
+          "files_scoped": 24,
+          "ranges_scoped": 24,
+          "visible_scoped": 18,
+          "inspection_visible": 7,
+          "p95_seconds": 0.08412958297412843
+        },
+        "individual_losses": [
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "5",
+            "metric": "files",
+            "labels": [
+              1
+            ]
+          },
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "5",
+            "metric": "visible",
+            "labels": [
+              1
+            ]
+          },
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "24",
+            "metric": "files",
+            "labels": [
+              1
+            ]
+          }
+        ],
+        "round": 2,
+        "gains5": [],
+        "gain_gate": false,
+        "controls_preserved": false
+      },
+      {
+        "passed": false,
+        "checks": {
+          "file_totals_no_loss": false,
+          "visible_totals_no_loss": true,
+          "scoped_no_individual_loss": true,
+          "inspection_no_net_loss": true,
+          "latency": true
+        },
+        "baseline": {
+          "questions": 24,
+          "files_5": 25,
+          "ranges_5": 17,
+          "visible_5": 13,
+          "files_24": 27,
+          "ranges_24": 17,
+          "visible_24": 1,
+          "files_scoped": 24,
+          "ranges_scoped": 24,
+          "visible_scoped": 18,
+          "inspection_visible": 5,
+          "p95_seconds": 0.07146208302583545
+        },
+        "candidate": {
+          "questions": 24,
+          "files_5": 25,
+          "ranges_5": 17,
+          "visible_5": 13,
+          "files_24": 26,
+          "ranges_24": 17,
+          "visible_24": 1,
+          "files_scoped": 24,
+          "ranges_scoped": 24,
+          "visible_scoped": 18,
+          "inspection_visible": 7,
+          "p95_seconds": 0.07695687504019588
+        },
+        "individual_losses": [
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "5",
+            "metric": "files",
+            "labels": [
+              1
+            ]
+          },
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "5",
+            "metric": "visible",
+            "labels": [
+              1
+            ]
+          },
+          {
+            "id": "rails:search-repair-confirmation-6",
+            "page": "24",
+            "metric": "files",
+            "labels": [
+              1
+            ]
+          }
+        ],
+        "round": 3,
+        "gains5": [],
+        "gain_gate": false,
+        "controls_preserved": false
+      }
+    ],
+    "limitation": "Source-bound implementer judgments, not exhaustive relevance or agent-outcome evidence."
+  },
+  "retained": [
+    "RF"
+  ],
+  "rejected": [
+    "D",
+    "G",
+    "M"
+  ],
+  "scope": "Local uncommitted delivery fix; no ranking/model/default/release change.",
+  "final_delivery": {
+    "B": {
+      "passed": true,
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 13,
+        "files_5": 13,
+        "ranges_5": 10,
+        "visible_5": 5,
+        "files_24": 17,
+        "ranges_24": 10,
+        "visible_24": 2,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.04339658305980265
+      },
+      "candidate": {
+        "questions": 13,
+        "files_5": 13,
+        "ranges_5": 10,
+        "visible_5": 5,
+        "files_24": 18,
+        "ranges_24": 10,
+        "visible_24": 2,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.061005041003227234
+      },
+      "individual_losses": [],
+      "no_loss": true
+    },
+    "R": {
+      "passed": true,
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 13,
+        "files_5": 13,
+        "ranges_5": 10,
+        "visible_5": 5,
+        "files_24": 18,
+        "ranges_24": 10,
+        "visible_24": 2,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.054698499967344105
+      },
+      "candidate": {
+        "questions": 13,
+        "files_5": 13,
+        "ranges_5": 10,
+        "visible_5": 5,
+        "files_24": 18,
+        "ranges_24": 10,
+        "visible_24": 2,
+        "files_scoped": 12,
+        "ranges_scoped": 12,
+        "visible_scoped": 6,
+        "inspection_visible": 2,
+        "p95_seconds": 0.061005041003227234
+      },
+      "individual_losses": [],
+      "no_loss": true
+    }
+  },
+  "note": "RF is frozen R plus reviewed evidence-preservation and remote-revision fixes; original candidate trials remain unchanged."
+}
