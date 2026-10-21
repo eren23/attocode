@@ -34,7 +34,9 @@ Version 0.1.10 shows the best test hit second for "tested" searches, and counts
 Swift `Tests/` folders as tests. Version 0.1.11 counts more test file names as
 tests, such as `_test.dart` and Perl `.t` scripts and `t/` modules. Version
 0.1.12 makes `doctor --client claude` read the local-scope entry that
-`claude mcp add` writes to `~/.claude.json`. See the [change investigation guide](https://github.com/eren23/attocode/blob/main/docs/guides/change-investigation.md).
+`claude mcp add` writes to `~/.claude.json`. Version 0.1.13 fills compact search
+pages within their budget, offers bounded deeper searches, and repairs stale
+navigation indexes after successful restart parsing. See the [change investigation guide](https://github.com/eren23/attocode/blob/main/docs/guides/change-investigation.md).
 
 The agent sees 16 tools (the `daily` profile):
 

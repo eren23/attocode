@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.13] - 2026-10-21
+
 ### Fixed — Navigation recovery after restart
 
 - Reconcile the saved navigation index when a missing or invalid AST summary
