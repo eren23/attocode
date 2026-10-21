@@ -14,6 +14,7 @@ from .index_store import AST_SNAPSHOT_KEY
 
 MAX_CACHE_BYTES = 32 * 2**20
 MAX_FILE_BYTES = 2**20
+MAX_FINGERPRINT_BYTES = 8 * 2**20
 
 
 @lru_cache(maxsize=128)
@@ -66,6 +67,47 @@ def _fields(value):
     return {f.name: getattr(value, f.name) for f in fields(value)}
 
 
+def navigation_identity() -> str:
+    """Bind reuse to the code that extracts/resolves persisted navigation."""
+    digest = hashlib.sha256(b'navigation-fingerprint-v1')
+    for name in ('ast_service.py', 'ast_snapshot.py', 'codebase_ast.py',
+                 'ts_parser.py', 'parse_diagnostics.py', 'cross_references.py',
+                 'syntax_evidence.py', 'module_resolution.py', 'index_repair.py',
+                 'codebase_context.py', 'language_registry.py'):
+        path = Path(__file__).with_name(name)
+        stat = path.stat()
+        digest.update(name.encode())
+        digest.update(_file_hash(str(path), stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size).encode())
+    return digest.hexdigest()
+
+
+def structural_fingerprints(asts: dict[str, FileAST]) -> dict[str, str]:
+    """Small proof of identical extraction when a full summary cannot be kept.
+
+    Only direct installed grammar identities qualify, as with full summaries.
+    Omitted or unverified records always take the conservative repair path.
+    Failure timing is diagnostic and does not change extracted navigation.
+    """
+    signatures = {language: parser_identity(language) for language in {a.language for a in asts.values()}}
+    result, size = {}, 2
+    for path, ast in sorted(asts.items()):
+        signature = signatures.get(ast.language)
+        if not signature or not ast.content_sha256 or ast.parsing_tier != 'tree_sitter' or ast.parse_failures:
+            continue
+        record = _fields(ast)
+        record.pop('parse_failures', None)
+        digest = hashlib.sha256(signature.encode())
+        for chunk in json.JSONEncoder(default=_fields, separators=(',', ':'), sort_keys=True,
+                                      ensure_ascii=True).iterencode(record):
+            digest.update(chunk.encode())
+        cost = len(json.dumps(path, ensure_ascii=True)) + 68
+        if size + cost > MAX_FINGERPRINT_BYTES:
+            continue
+        result[path] = digest.hexdigest()
+        size += cost
+    return result
+
+
 def _bounded_json(value, limit):
     chunks, size = [], 0
     for chunk in json.JSONEncoder(default=_fields, separators=(',', ':'), ensure_ascii=True).iterencode(value):
@@ -114,7 +156,8 @@ def encode_summaries(asts: dict[str, FileAST], snapshot: str) -> str:
     size = len(chunks[0]) + 2
     count = 0
     for path, ast in sorted(asts.items()):
-        if ast.parsing_tier != 'tree_sitter' or not ast.content_sha256 or not identities.get(ast.language):
+        if (ast.parsing_tier != 'tree_sitter' or not ast.content_sha256
+                or not identities.get(ast.language) or ast.parse_failures):
             continue
         entry = _bounded_json(ast, min(MAX_FILE_BYTES, MAX_CACHE_BYTES - size))
         key = json.dumps(path, ensure_ascii=True)
@@ -148,7 +191,7 @@ def restore_summaries(store, snapshot: str, parseable) -> dict[str, FileAST] | N
                 continue
             try:
                 ast = _decoder(FileAST)(record)
-                if ast.path != fi.path or ast.parsing_tier != 'tree_sitter':
+                if ast.path != fi.path or ast.parsing_tier != 'tree_sitter' or ast.parse_failures:
                     continue
                 if ast.language not in identities:
                     identities[ast.language] = parser_identity(ast.language)

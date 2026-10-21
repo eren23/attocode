@@ -13,6 +13,7 @@ Wraps ``codebase_ast.parse_file`` / ``diff_file_ast`` and
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -97,6 +98,7 @@ class ASTService:
         self._snapshot_start = None
         self._last_snapshot_repair = None
         self._parse_lock = threading.RLock()
+        self._parse_recovery_attempts = {}
 
     @classmethod
     def get_instance(cls, root_dir: str) -> ASTService:
@@ -494,7 +496,11 @@ class ASTService:
             saved = json.loads(raw)
             if saved["counts"] != self._store.stats():
                 return False
-            from .ast_snapshot import restore_summaries
+            from .ast_snapshot import (
+                navigation_identity,
+                restore_summaries,
+                structural_fingerprints,
+            )
 
             if summaries is None or snapshot != raw:
                 summaries = restore_summaries(self._store, raw, parseable)
@@ -510,10 +516,18 @@ class ASTService:
             if self._snapshot_identity() != self._snapshot_start:
                 return False
             self._index.load_from_store()
+            verified_navigation = saved.get('navigation_identity') == navigation_identity()
+            if verified_navigation and reparsed:
+                fingerprints = structural_fingerprints({p: cached[p] for p in reparsed})
+                old_fingerprints = saved.get('structures', {})
+                if not isinstance(old_fingerprints, dict):
+                    old_fingerprints = {}
+                reparsed = {p for p in reparsed if not fingerprints.get(p)
+                            or fingerprints[p] != old_fingerprints.get(p)}
             # A missing summary can follow a transient grammar failure or a
             # parser upgrade. Unchanged source does not prove that the freshly
             # parsed definitions/references match the persisted index.
-            if (reparsed or saved["identity"] != self._snapshot_start
+            if (reparsed or not verified_navigation or saved["identity"] != self._snapshot_start
                     or saved["discovered"] != sorted(fi.relative_path for fi in files)
                     or saved["parsed"] != sorted(cached)):
                 from .index_repair import changed_paths, repair_index
@@ -521,6 +535,8 @@ class ASTService:
                 changed = changed_paths(saved["identity"], self._snapshot_start)
                 changed |= set(saved["parsed"]) ^ cached.keys()
                 changed |= reparsed
+                if not verified_navigation:
+                    changed |= cached.keys()
                 self._last_snapshot_repair = repair_index(self, cached, self._snapshot_start, changed)
                 return True
             from attocode_intel._internal.integrations.context.codebase_context import (
@@ -569,14 +585,17 @@ class ASTService:
             (source, target) for source, targets in self._index.file_dependencies.items()
             for target in targets
         ])
+        from .ast_snapshot import encode_summaries, navigation_identity, structural_fingerprints
+
         snapshot = json.dumps({
             "identity": self._snapshot_start,
             "discovered": sorted(fi.relative_path for fi in self._context_mgr._files),
             "parsed": sorted(self._ast_cache),
             "counts": self._store.stats(),
             "unresolved": graph.unresolved if graph else {},
+            "navigation_identity": navigation_identity(),
+            "structures": structural_fingerprints(self._ast_cache),
         }, separators=(",", ":"))
-        from .ast_snapshot import encode_summaries
 
         # Bind the disposable payload to the completion record; publish it first.
         # A partial/interleaved write can only cause a parse fallback on restart.
@@ -632,6 +651,52 @@ class ASTService:
             if self._hydration_state:
                 self._hydration_state.parsed_files += 1
             return True
+
+    def recover_failed_file(self, rel_path: str) -> bool:
+        """Retry one degraded selected file once for this source/parser identity.
+
+        Reuse the completed-index repair path so callers and persisted navigation
+        are reconciled before publishing the replacement AST. Partial hydration
+        keeps its normal path; a later request may recover after it completes.
+        """
+        from .ast_snapshot import parser_identity
+        from .index_repair import repair_index
+
+        with self._parse_lock:
+            previous = self._ast_cache.get(rel_path)
+            if (previous is None or not previous.parse_failures
+                    or previous.parsing_tier == 'tree_sitter'
+                    or not self._hydration_state or self._hydration_state.phase != 'ready'
+                    or self._snapshot_start is None):
+                return False
+            path = Path(self._root_dir, rel_path)
+            if not path.resolve().is_relative_to(Path(self._root_dir)):
+                return False
+            try:
+                identity = self._snapshot_start
+                if self._snapshot_identity() != identity:
+                    return False
+                digest = hashlib.sha256(path.read_text(encoding='utf-8', errors='replace').encode()).hexdigest()
+                if digest != previous.content_sha256:
+                    return False
+                key = (digest, parser_identity(previous.language))
+                if self._parse_recovery_attempts.get(rel_path) == key:
+                    return False
+                self._parse_recovery_attempts[rel_path] = key
+                parsed = parse_file(str(path))
+                if parsed.parse_failures or parsed.parsing_tier == 'minimal':
+                    return False
+                if hashlib.sha256(path.read_text(encoding='utf-8', errors='replace').encode()).hexdigest() != digest:
+                    return False
+                if self._snapshot_identity() != identity:
+                    return False
+                asts = dict(self._ast_cache)
+                asts[rel_path] = parsed
+                self._last_snapshot_repair = repair_index(self, asts, identity, {rel_path})
+                return True
+            except (OSError, ValueError, sqlite3.Error):
+                logger.debug('Cannot recover selected parse for %s', rel_path, exc_info=True)
+                return False
 
     def ensure_references_indexed(self, rel_path: str) -> bool:
         """Index references for a file on-demand if not already done."""
@@ -841,6 +906,7 @@ class ASTService:
 
         # Handle deletion
         if not Path(abs_path).exists():
+            self._parse_recovery_attempts.pop(rel, None)
             self._index.remove_file(rel)
             old_ast = self._ast_cache.pop(rel, None)
             if old_ast is None:
@@ -1398,6 +1464,9 @@ class ASTService:
         ``known_symbols`` is complete.
         """
         index = self._index if index is None else index
+        from .parse_diagnostics import ParseFailure, collect_parse_failures
+
+        ast.parse_failures[:] = [failure for failure in ast.parse_failures if failure.stage != 'references']
         # Import references
         for imp in ast.imports:
             for name in imp.names:
@@ -1414,7 +1483,8 @@ class ASTService:
         abs_path = os.path.join(self._root_dir, rel_path)
         try:
             content = Path(abs_path).read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        except OSError as exc:
+            ast.parse_failures.append(ParseFailure('source_unreadable', 0, 0, type(exc).__name__, 'references'))
             return
 
         # Collect known symbol names for targeted scanning
@@ -1448,7 +1518,11 @@ class ASTService:
             return best_q
 
         from .syntax_evidence import reference_candidates
-        candidates = reference_candidates(abs_path, content, ast.language)
+        with collect_parse_failures() as failures:
+            candidates = reference_candidates(abs_path, content, ast.language)
+        for failure in failures:
+            failure.stage = 'references'
+        ast.parse_failures.extend(failures[:max(0, 8 - len(ast.parse_failures))])
         if candidates is not None:
             aliases = {imp.alias: imp.names[-1] for imp in ast.imports if imp.alias and imp.names}
             seen = set()

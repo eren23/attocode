@@ -24,6 +24,7 @@ import re
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter_ns
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,18 @@ def bounded_parse(parser, source_bytes):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         parser.timeout_micros = PARSE_TIMEOUT_MICROS
+    from .parse_diagnostics import record_parse_failure
+
+    started = perf_counter_ns()
     try:
-        return parser.parse(source_bytes)
-    except ValueError:
+        result = parser.parse(source_bytes)
+        if result is None:
+            record_parse_failure('no_tree', (perf_counter_ns() - started) // 1000,
+                                 PARSE_TIMEOUT_MICROS)
+        return result
+    except ValueError as exc:
+        record_parse_failure('parser_error', (perf_counter_ns() - started) // 1000,
+                             PARSE_TIMEOUT_MICROS, type(exc).__name__)
         return None
     finally:
         parser.reset()
@@ -772,6 +782,7 @@ def _extract_import_module(node, source_bytes: bytes, language: str) -> str:
             literal = args.named_children[0]
             if literal.type == "string" and all(c.type == "string_content" for c in literal.named_children):
                 return _node_text(literal, source_bytes)[1:-1]
+        return ""
     elif language in ("c", "cpp"):
         # #include <stdio.h> or #include "header.h"
         path = node.child_by_field_name("path")
@@ -1722,7 +1733,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                         stack.extend(reversed(item.named_children))
                 return
             module = _extract_import_module(node, source_bytes, language)
-            if language == "ruby" and _node_text(node, source_bytes).startswith("require_relative") and not module.startswith("."):
+            if language == "ruby" and module and _node_text(node, source_bytes).startswith("require_relative") and not module.startswith("."):
                 module = "./" + module
             if module:
                 is_from = language == "python" and ntype == "import_from_statement"

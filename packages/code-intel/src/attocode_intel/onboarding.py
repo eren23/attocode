@@ -218,7 +218,7 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
 
     async def probe(streams):
         async with ClientSession(streams[0], streams[1]) as session:
-            await session.initialize()
+            initialization = await session.initialize()
             catalog = await session.list_tools()
             result = await session.call_tool(
                 "capabilities", {"max_tokens": 16000, **({"workspace": str(root)} if "url" not in entry else {})}
@@ -240,6 +240,11 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
             return {
                 "client": client,
                 "config": str(config),
+                # Report the executable only: arguments and environment can contain credentials.
+                "configured_command": entry.get("command") if "url" not in entry else None,
+                "probed_server_version": initialization.serverInfo.version,
+                "probe_connection": "new",
+                "probe_hint": "This probe opened a new MCP connection; it does not verify an existing host session.",
                 "tools": len(catalog.tools),
                 "metadata": metadata,
                 "status": "ok",

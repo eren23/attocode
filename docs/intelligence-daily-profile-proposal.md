@@ -1,9 +1,17 @@
-# Experimental seven-tool local profile
+# Opt-in lean profile and historical proposal
 
-Drafted 2026-10-13 at checkout `73826f0`, after R6. Implemented locally as opt-in `lean`; it has not been released.
-The default remains `daily`. Remote profiles remain `daily` and `full`.
+**Current status:** `lean` is shipped as an opt-in local profile in the current
+[0.1.13 release](https://github.com/eren23/attocode/releases/tag/intel-v0.1.13).
+The default remains `daily`; remote profiles remain `daily` and `full`.
+The completed [R7 pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)
+demonstrated no completion benefit: native resolved 14/16 tasks and optional lean
+13/16. The reviewed decision was **stop**, with no default change or further
+study implied by the profile's availability.
 
-## Decision
+The proposal below was drafted on 2026-10-13 at checkout `73826f0`, after R6.
+Its design rationale and measurements are historical evidence.
+
+## Original design decision
 
 The watched local `lean` profile advertises seven tools: `bootstrap`, `search_symbols`,
 `inspect_symbol`, `semantic_search`, `impact_analysis`, `suggest_tests`,
@@ -43,7 +51,7 @@ code. `impact_analysis` and the two lookup entry points are retained
 because the proposed experiment includes edits; their retention is a
 design judgment, not a result from the review studies.
 
-## Leave nine in the full profile
+## Nine tools omitted from lean
 
 | Tool | Tradeoff |
 |---|---|
@@ -63,7 +71,7 @@ not be promised that ToolSearch can reveal a tool absent from `tools/list`.
 For the initial experiment, advanced tools require an explicit full-profile
 session; the harness does not switch profiles during a scored attempt.
 
-## Measured schema budget
+## Historical schema measurement (2026-10-13)
 
 Measured without a model request, using the actual watched local MCP
 surface, `OperationGateway(profile='daily').catalog(mcp=True)`.
@@ -73,8 +81,8 @@ it is not the agent-facing count. The gateway hides `hydration_status`,
 
 | Surface | Advertised tools | Serialized tool-definition characters |
 |---|---:|---:|
-| Current watched local daily | 16 | 10,576 |
-| Implemented watched local lean | 7 | 4,737 |
+| Watched local daily at the proposal checkpoint | 16 | 10,576 |
+| Watched local lean at the proposal checkpoint | 7 | 4,737 |
 | Reduction | 9 | 5,839 (55.2%) |
 
 Serialization is one compact JSON array of
@@ -84,7 +92,7 @@ include tool schemas, descriptions and annotations, but exclude server
 instructions, client wrappers and provider prompt formatting. They are
 not Claude token counts. Instruction edits could change the final budget.
 
-Reproduce from the repository environment:
+Measurement method (current schemas may produce different character counts):
 
 ```python
 import json
@@ -101,7 +109,9 @@ lean = OperationGateway(profile='lean').catalog(mcp=True)
 print(len(lean), size(lean))
 ```
 
-## Implementation contract
+## Historical implementation contract
+
+These requirements describe the implemented experiment, rather than pending work.
 
 - Add an explicit experimental profile; preserve current defaults,
   remote tools, ranking and candidate selection. Update CLI/installer
@@ -129,19 +139,20 @@ print(len(lean), size(lean))
   `test_daily_workflows.py`, `test_doctor.py`, and `scripts/check_wheel.py`;
   add meaningful coverage for the new profile when implementing it.
 
-## Evaluation and default decision
+## Completed evaluation and default decision
 
-The [R7 pilot draft](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/designs/2026-10-13-r7-task-completion-pilot.md)
-compares native tools with this optional seven-tool package on completed
-bug fixes. It deliberately does not isolate the effect of tool count
-from conditional instructions, or compare seven tools against sixteen.
+The [R7 design](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/designs/2026-10-13-r7-task-completion-pilot.md)
+compared native tools with this optional seven-tool package on completed
+bug fixes. It did not isolate the effect of tool count from conditional
+instructions, or compare seven tools against sixteen. The
+[completed pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)
+failed its continuation rule and stopped. It does not support a completion,
+speed or optimal-tool-list claim.
 
-A positive pilot permits planning a fresh held-out study; it does not
-justify a default change or performance claim. If the question later
-becomes whether seven tools outperform sixteen, preregister that direct
-comparison separately. The user retains the daily-list decision.
+Daily remains the default. A future study would need a new design and separate
+authorization; this historical proposal does not reopen R7.
 
-Use this checkout with `attocode-code-intel init --client claude --profile lean`,
+To opt in, run `attocode-code-intel init --client claude --profile lean`,
 then restart the client. `doctor` probes an advertised tool in each profile.
 Legacy SSE and remote lean are rejected because they cannot offer this surface.
 The [R7 design](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/designs/2026-10-13-r7-task-completion-pilot.md)
