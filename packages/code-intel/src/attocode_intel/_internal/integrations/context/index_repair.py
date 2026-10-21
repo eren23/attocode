@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import Path
 
 from .codebase_context import build_dependency_graph
@@ -22,6 +23,7 @@ def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict
     Shortlist those files using changed symbol names before extracting their
     references again. All definitions exist before any reference extraction.
     """
+    asts = dict(asts)
     old = service._index
     new = CrossRefIndex()
     for path, ast in asts.items():
@@ -47,6 +49,9 @@ def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict
             if ref.file_path in asts and ref.file_path not in affected:
                 new.add_reference(ref)
     for path in sorted(affected):
+        # Reference extraction updates diagnostics. Keep those changes private
+        # as well as navigation until the replacement generation is accepted.
+        asts[path] = replace(asts[path], parse_failures=list(asts[path].parse_failures))
         service._index_references(path, asts[path], index=new)
 
     graph = build_dependency_graph(service._context_mgr._files, service.root_dir, ast_cache=asts)
