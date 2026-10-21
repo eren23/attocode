@@ -69,6 +69,9 @@ def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict
     new.set_store(store)
     new.persist_files(affected)
 
+    if not service._save_snapshot(asts=asts, index=new, identity=identity, graph=graph):
+        raise ValueError("Workspace changed before index repair completed; retry")
+
     service._index = new
     service._ast_cache = asts
     service._reference_indexed_files = set(asts)
@@ -80,8 +83,6 @@ def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict
     state.total_files = state.parsed_files = state.reference_indexed_files = len(asts)
     state.dep_graph_files = len(graph.forward)
     state.phase = "ready"
-    if not service._save_snapshot():
-        raise ValueError("Workspace changed before index repair completed; retry")
     store.record_scan_time()
     return {
         "changed_files": len(changed),

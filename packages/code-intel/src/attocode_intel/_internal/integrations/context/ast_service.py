@@ -571,36 +571,49 @@ class ASTService:
             state.phase = "skeleton"
             return False
 
-    def _save_snapshot(self) -> bool:
-        """Publish the completion record last, after all files and graph edges."""
-        if self._snapshot_start is None:
+    def _save_snapshot(self, *, asts=None, index=None, identity=None, graph=None) -> bool:
+        """Save a complete live or staged index before publishing its completion.
+
+        A staged AST map represents a fully reference-indexed replacement, kept
+        private until persistence and the final workspace checks succeed.
+        """
+        reference_files = self._reference_indexed_files if asts is None else set(asts)
+        asts = self._ast_cache if asts is None else asts
+        index = self._index if index is None else index
+        identity = self._snapshot_start if identity is None else identity
+        if identity is None:
             return False
-        if (len(self._ast_cache) != self._count_parseable_source_files()
-                or set(self._ast_cache) != self._reference_indexed_files
-                or self._snapshot_identity() != self._snapshot_start):
+        if (len(asts) != self._count_parseable_source_files()
+                or set(asts) != reference_files
+                or self._snapshot_identity() != identity):
             return False
-        graph = self._context_mgr.dependency_graph
+        graph = self._context_mgr.dependency_graph if graph is None else graph
         self._store.clear_dependencies()
         self._store.save_dependencies_batch([
-            (source, target) for source, targets in self._index.file_dependencies.items()
+            (source, target) for source, targets in index.file_dependencies.items()
             for target in targets
         ])
         from .ast_snapshot import encode_summaries, navigation_identity, structural_fingerprints
 
         snapshot = json.dumps({
-            "identity": self._snapshot_start,
+            "identity": identity,
             "discovered": sorted(fi.relative_path for fi in self._context_mgr._files),
-            "parsed": sorted(self._ast_cache),
+            "parsed": sorted(asts),
             "counts": self._store.stats(),
             "unresolved": graph.unresolved if graph else {},
             "navigation_identity": navigation_identity(),
-            "structures": structural_fingerprints(self._ast_cache),
+            "structures": structural_fingerprints(asts),
         }, separators=(",", ":"))
 
         # Bind the disposable payload to the completion record; publish it first.
         # A partial/interleaved write can only cause a parse fallback on restart.
-        self._store.set_meta(AST_SNAPSHOT_KEY, encode_summaries(self._ast_cache, snapshot))
+        self._store.set_meta(AST_SNAPSHOT_KEY, encode_summaries(asts, snapshot))
+        if self._snapshot_identity() != identity:
+            return False
         self._store.set_meta(SNAPSHOT_KEY, snapshot)
+        if self._snapshot_identity() != identity:
+            self._store.set_meta(SNAPSHOT_KEY, '')
+            return False
         return True
 
     def repair_changed_files(self, *, expected_manifest=None) -> bool:

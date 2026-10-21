@@ -152,3 +152,27 @@ def test_explicit_line_miss_recovers_even_when_another_definition_has_same_name(
     finally:
         service._get_ast_service().stop_hydration()
         service._get_ast_service()._store.close()
+
+
+def test_persistence_stage_edit_does_not_publish_recovered_live_state(tmp_path):
+    other = tmp_path/'other.py'
+    other.write_text('def old(): return 1\n')
+    service, ast = degraded_service(tmp_path)
+    previous = ast._ast_cache['sample.lua']
+    original = type(ast._store).save_files_batch
+
+    def save_then_edit(store, files):
+        original(store, files)
+        other.write_text('def changed(): return 2\n')
+
+    try:
+        with patch.object(type(ast._store), 'save_files_batch', save_then_edit):
+            result = inspect_symbol_data(service, 'target', 'sample.lua')
+        assert result['status'] == 'not_found'
+        assert ast._ast_cache['sample.lua'] is previous
+        assert not ast.find_symbol('target')
+        from attocode_intel._internal.integrations.context.index_store import SNAPSHOT_KEY
+        assert ast._store.get_meta(SNAPSHOT_KEY) in (None, '')
+    finally:
+        ast.stop_hydration()
+        ast._store.close()
