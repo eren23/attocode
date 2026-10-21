@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "status": "diagnostic_complete_cold_miss_reproduced",
+  "engine_sha256": "9727191189ed40975788fbf23ac5144959c47f3c92f0b34f8d2d21899848ad8c",
+  "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+  "natural_trials": 3,
+  "natural_cold_lookup_failures": 1,
+  "natural_restart_successes": 3,
+  "trials": [
+    {
+      "trial": "natural-1",
+      "mode": "natural",
+      "outcomes": {
+        "definition": "failed",
+        "source": "failed",
+        "scoped_search": "passed",
+        "caller_syntax": "limited",
+        "dependencies": "limited",
+        "impact": "limited",
+        "tests": "limited",
+        "restart": "passed"
+      },
+      "failed_grammar_attempts": [
+        {
+          "cold": true,
+          "seconds": 0.1609439579769969,
+          "limit_micros": 100000,
+          "injected": false
+        },
+        {
+          "cold": true,
+          "seconds": 0.10120270808693022,
+          "limit_micros": 100000,
+          "injected": false
+        },
+        {
+          "cold": true,
+          "seconds": 0.11566058301832527,
+          "limit_micros": 100000,
+          "injected": false
+        }
+      ],
+      "file_parses": [
+        {
+          "phase": "file",
+          "cold": true,
+          "seconds": 0.26381170796230435,
+          "tier": "minimal",
+          "functions": 0,
+          "target_spans": []
+        },
+        {
+          "phase": "file",
+          "cold": false,
+          "seconds": 0.057601707987487316,
+          "tier": "tree_sitter",
+          "functions": 934,
+          "target_spans": [
+            [
+              7378,
+              7392
+            ]
+          ]
+        }
+      ],
+      "same_parser_overlapping_calls": 0
+    },
+    {
+      "trial": "natural-2",
+      "mode": "natural",
+      "outcomes": {
+        "definition": "passed",
+        "source": "passed",
+        "scoped_search": "passed",
+        "caller_syntax": "limited",
+        "dependencies": "limited",
+        "impact": "limited",
+        "tests": "limited",
+        "restart": "passed"
+      },
+      "failed_grammar_attempts": [],
+      "file_parses": [
+        {
+          "phase": "file",
+          "cold": true,
+          "seconds": 0.17174504103604704,
+          "tier": "tree_sitter",
+          "functions": 934,
+          "target_spans": [
+            [
+              7378,
+              7392
+            ]
+          ]
+        },
+        {
+          "phase": "file",
+          "cold": true,
+          "seconds": 0.12708350003231317,
+          "tier": "tree_sitter",
+          "functions": 934,
+          "target_spans": [
+            [
+              7378,
+              7392
+            ]
+          ]
+        },
+        {
+          "phase": "file",
+          "cold": false,
+          "seconds": 0.13657945801969618,
+          "tier": "tree_sitter",
+          "functions": 934,
+          "target_spans": [
+            [
+              7378,
+              7392
+            ]
+          ]
+        }
+      ],
+      "same_parser_overlapping_calls": 0
+    },
+    {
+      "trial": "natural-3",
+      "mode": "natural",
+      "outcomes": {
+        "definition": "passed",
+        "source": "passed",
+        "scoped_search": "passed",
+        "caller_syntax": "limited",
+        "dependencies": "limited",
+        "impact": "limited",
+        "tests": "limited",
+        "restart": "passed"
+      },
+      "failed_grammar_attempts": [
+        {
+          "cold": true,
+          "seconds": 0.10097945795860142,
+          "limit_micros": 100000,
+          "injected": false
+        }
+      ],
+      "file_parses": [
+        {
+          "phase": "file",
+          "cold": true,
+          "seconds": 0.22857787506654859,
+          "tier": "generic_ts",
+          "functions": 245,
+          "target_spans": [
+            [
+              7378,
+              7392
+            ]
+          ]
+        },
+        {
+          "phase": "file",
+          "cold": false,
+          "seconds": 0.048724208027124405,
+          "tier": "tree_sitter",
+          "functions": 934,
+          "target_spans": [
+            [
+              7378,
+              7392
+            ]
+          ]
+        }
+      ],
+      "same_parser_overlapping_calls": 0
+    },
+    {
+      "trial": "forced-timeout",
+      "mode": "forced-timeout",
+      "outcomes": {
+        "definition": "failed",
+        "source": "failed",
+        "scoped_search": "passed",
+        "caller_syntax": "limited",
+        "dependencies": "limited",
+        "impact": "limited",
+        "tests": "limited",
+        "restart": "passed"
+      },
+      "failed_grammar_attempts": [
+        {
+          "cold": true,
+          "seconds": 4.766695201396942e-05,
+          "limit_micros": 1,
+          "injected": true
+        },
+        {
+          "cold": true,
+          "seconds": 2.6250025257468224e-05,
+          "limit_micros": 1,
+          "injected": true
+        },
+        {
+          "cold": true,
+          "seconds": 2.929195761680603e-05,
+          "limit_micros": 1,
+          "injected": true
+        }
+      ],
+      "file_parses": [
+        {
+          "phase": "file",
+          "cold": true,
+          "seconds": 0.0075174589874222875,
+          "tier": "minimal",
+          "functions": 0,
+          "target_spans": []
+        },
+        {
+          "phase": "file",
+          "cold": false,
+          "seconds": 0.05148237501271069,
+          "tier": "tree_sitter",
+          "functions": 934,
+          "target_spans": [
+            [
+              7378,
+              7392
+            ]
+          ]
+        }
+      ],
+      "same_parser_overlapping_calls": 0
+    }
+  ],
+  "same_session_existing_refresh": "not_found to found; unchanged file, same gateway",
+  "worker_seconds": 102.53756391693186,
+  "peak_rss_bytes": 184631296,
+  "peak_disk_bytes": 34902016,
+  "source_unchanged": true,
+  "owned_scratch_removed": true,
+  "interpretation": "A fresh natural trace reproduces a bounded grammar failure followed by a minimal AST and missing cold navigation, consistent with timeout. The explicit low-timeout control reproduces the timeout failure/recovery path. Gateway reopen in the same worker process and explicit single-file refresh recover once parsing succeeds.",
+  "limits": [
+    "The original matrix failure was not instrumented; this reproduces a cause of the recurring symptom, not a direct trace of that historical event.",
+    "Natural tracing wraps bounded_parse, which suppresses ValueError; the underlying native exception was not captured.",
+    "Restart checks recreate the gateway within the same worker process, whose parser state may be warm; they are not OS-process restart checks.",
+    "No overlapping calls on the same parser instance were captured. This does not rule out other parser concurrency.",
+    "Three natural trials do not estimate a failure rate. No artificial load or parser-policy change was applied to them.",
+    "A completed worker is not a passed workflow: natural-1 and the forced control each fail cold definition/source checks.",
+    "The same-session refresh is an explicit operation in a daily, non-watching disposable gateway; this does not add automatic recovery or claim availability in every host profile.",
+    "No product change, new ranking result, model call, publication or host MCP restart."
+  ],
+  "artifact": {
+    "file": "2026-10-21-ocaml-cold-trace-observations.json.gz",
+    "gzip_sha256": "5574d2baeefcc5ee457075d208b213d3d1690ae30f04b96294890be75418d3fc",
+    "raw_sha256": "f6a206b4e33f5caf4c802bd2e385f522f0fbb5ff5393a33e14e2f95f1b4dce4f",
+    "raw_bytes": 215627
+  }
+}

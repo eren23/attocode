@@ -1,0 +1,419 @@
+{
+  "schema_version": 1,
+  "split": "validation",
+  "budget": 2000,
+  "scope": "24 fresh implementer-authored source-bound questions; non-exhaustive labels, repositories exposed in older studies. No model outcomes.",
+  "repositories": [
+    {
+      "pack": "requests",
+      "repo": "psf/requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "include": [
+        "src",
+        "tests"
+      ],
+      "tree": "47afbe2faf7c7f036f5a292092f5f8231ff830bd",
+      "queries": [
+        {
+          "id": "requests:search-repair-confirmation-1",
+          "category": "test",
+          "query": "Find tests verifying diagnostics still work when the IDNA library has no version attribute.",
+          "evidence": [
+            {
+              "file": "tests/test_help.py",
+              "line": 21,
+              "quote": "assert info()[\"idna\"] == {\"version\": \"\"}",
+              "source_sha256": "1c2ac8ca9f4986429717791df766122b23e1fe90aa621318380ccf1f8e83d0f6",
+              "relevance": "Source anchor for Find tests verifying diagnostics still work when the IDNA library has no version attribute."
+            }
+          ]
+        },
+        {
+          "id": "requests:search-repair-confirmation-2",
+          "category": "test",
+          "query": "Find tests confirming a copied case insensitive dictionary is equal but a different object.",
+          "evidence": [
+            {
+              "file": "tests/test_structures.py",
+              "line": 39,
+              "quote": "assert copy is not self.case_insensitive_dict",
+              "source_sha256": "f7b80e00888105ae80312203279e0cf9256726740bcaa15c6cee7c2c07d33d60",
+              "relevance": "Source anchor for Find tests confirming a copied case insensitive dictionary is equal but a different object."
+            }
+          ]
+        },
+        {
+          "id": "requests:search-repair-confirmation-3",
+          "category": "test",
+          "query": "Find tests for response hook chains retaining prior data when a callback returns nothing.",
+          "evidence": [
+            {
+              "file": "tests/test_hooks.py",
+              "line": 18,
+              "quote": "assert hooks.dispatch_hook(\"response\", {\"response\": hooks_list}, \"Data\") == result",
+              "source_sha256": "a9e5163f538543a660be3b06650cd0b803ff0c503f5948f66b6fc50ede38109c",
+              "relevance": "Source anchor for Find tests for response hook chains retaining prior data when a callback returns nothing."
+            }
+          ]
+        },
+        {
+          "id": "requests:search-repair-confirmation-4",
+          "category": "helper",
+          "query": "Find the test fixture helper that appends a trailing slash before joining HTTP server URL suffixes.",
+          "evidence": [
+            {
+              "file": "tests/conftest.py",
+              "line": 17,
+              "quote": "httpbin_url = value.url.rstrip(\"/\") + \"/\"",
+              "source_sha256": "c31d83bf96fbf585c0d497fbf21a39b2e69411948ddb947e5ad51e5857976c5c",
+              "relevance": "Source anchor for Find the test fixture helper that appends a trailing slash before joining HTTP server URL suffixes."
+            }
+          ]
+        },
+        {
+          "id": "requests:search-repair-confirmation-5",
+          "category": "exact",
+          "query": "Where is dispatch_hook defined?",
+          "evidence": [
+            {
+              "file": "src/requests/hooks.py",
+              "line": 23,
+              "quote": "def dispatch_hook(key, hooks, hook_data, **kwargs):",
+              "source_sha256": "f5fad88402ec2c19071fbe86f8762abc0becb1296ed42d5becbebc700b3e1398",
+              "relevance": "Source anchor for Where is dispatch_hook defined?"
+            }
+          ]
+        },
+        {
+          "id": "requests:search-repair-confirmation-6",
+          "category": "tested",
+          "query": "Where are empty default response hooks created and how is this tested?",
+          "evidence": [
+            {
+              "file": "src/requests/hooks.py",
+              "line": 17,
+              "quote": "return {event: [] for event in HOOKS}",
+              "source_sha256": "f5fad88402ec2c19071fbe86f8762abc0becb1296ed42d5becbebc700b3e1398",
+              "relevance": "Source anchor for Where are empty default response hooks created and how is this tested?"
+            },
+            {
+              "file": "tests/test_hooks.py",
+              "line": 22,
+              "quote": "assert hooks.default_hooks() == {\"response\": []}",
+              "source_sha256": "a9e5163f538543a660be3b06650cd0b803ff0c503f5948f66b6fc50ede38109c",
+              "relevance": "Source anchor for Where are empty default response hooks created and how is this tested?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "phoenix",
+      "repo": "phoenixframework/phoenix",
+      "commit": "850162d618cf4e31be82fb53ad6e259095fa6126",
+      "include": [
+        "lib",
+        "test"
+      ],
+      "tree": "4d4a84b0662b4cf912235decdd40d874e4dab919",
+      "queries": [
+        {
+          "id": "phoenix:search-repair-confirmation-1",
+          "category": "test",
+          "query": "Find tests rejecting a forwarded route containing a dynamic version segment.",
+          "evidence": [
+            {
+              "file": "test/phoenix/router/forward_test.exs",
+              "line": 91,
+              "quote": "assert_raise ArgumentError, ~r{dynamic segment \"/api/:version\" not allowed}, fn ->",
+              "source_sha256": "057c04873bcc07735993c1b2ef886dfbd131fe7ab8df1901cd4652a09674ebde",
+              "relevance": "Source anchor for Find tests rejecting a forwarded route containing a dynamic version segment."
+            }
+          ]
+        },
+        {
+          "id": "phoenix:search-repair-confirmation-2",
+          "category": "test",
+          "query": "Find tests checking a signed token expires when its maximum age is zero.",
+          "evidence": [
+            {
+              "file": "test/phoenix/token_test.exs",
+              "line": 60,
+              "quote": "assert Token.verify(conn(), \"id\", token, max_age: 0) == {:error, :expired}",
+              "source_sha256": "fad24183aa5a400d4d28f0c515770c4ddc6960b5f8acefd30cd4f0385f915a8a",
+              "relevance": "Source anchor for Find tests checking a signed token expires when its maximum age is zero."
+            }
+          ]
+        },
+        {
+          "id": "phoenix:search-repair-confirmation-3",
+          "category": "test",
+          "query": "Find tests for choosing the base module namespace from the application configuration.",
+          "evidence": [
+            {
+              "file": "test/mix/phoenix_test.exs",
+              "line": 9,
+              "quote": "assert Mix.Phoenix.base() == \"Phoenix.Sample.App\"",
+              "source_sha256": "446bb7a83d549bb48127955b609973cfaa5a851c2a57f3b5fa51c6eeac1c3f7c",
+              "relevance": "Source anchor for Find tests for choosing the base module namespace from the application configuration."
+            }
+          ]
+        },
+        {
+          "id": "phoenix:search-repair-confirmation-4",
+          "category": "helper",
+          "query": "Find the shared test helper error view that renders a JSON 404 with the request method.",
+          "evidence": [
+            {
+              "file": "test/test_helper.exs",
+              "line": 10,
+              "quote": "%{error: \"Got 404 from #{kind} with #{conn.method}\"}",
+              "source_sha256": "9b8bcd4d7d3b6b5185e654c40bb5815a88295bdeab4b944aba5484b4d178f15b",
+              "relevance": "Source anchor for Find the shared test helper error view that renders a JSON 404 with the request method."
+            }
+          ]
+        },
+        {
+          "id": "phoenix:search-repair-confirmation-5",
+          "category": "exact",
+          "query": "Where is Phoenix.Token.verify defined?",
+          "evidence": [
+            {
+              "file": "lib/phoenix/token.ex",
+              "line": 220,
+              "quote": "def verify(context, salt, token, opts \\\\ []) when is_binary(salt) do",
+              "source_sha256": "493936140f4f19b9a406de18db05630951987254d8436890d993831dbbad9f82",
+              "relevance": "Source anchor for Where is Phoenix.Token.verify defined?"
+            }
+          ]
+        },
+        {
+          "id": "phoenix:search-repair-confirmation-6",
+          "category": "tested",
+          "query": "Where is signed token verification delegated to cryptography and how is expiry tested?",
+          "evidence": [
+            {
+              "file": "lib/phoenix/token.ex",
+              "line": 223,
+              "quote": "|> Plug.Crypto.verify(salt, token, opts)",
+              "source_sha256": "493936140f4f19b9a406de18db05630951987254d8436890d993831dbbad9f82",
+              "relevance": "Source anchor for Where is signed token verification delegated to cryptography and how is expiry tested?"
+            },
+            {
+              "file": "test/phoenix/token_test.exs",
+              "line": 57,
+              "quote": "assert Token.verify(conn(), \"id\", token, max_age: -1000) == {:error, :expired}",
+              "source_sha256": "fad24183aa5a400d4d28f0c515770c4ddc6960b5f8acefd30cd4f0385f915a8a",
+              "relevance": "Source anchor for Where is signed token verification delegated to cryptography and how is expiry tested?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "okhttp",
+      "repo": "square/okhttp",
+      "commit": "e2061bdd146ae3ce5f097b78fa7a731dc7638510",
+      "include": [
+        "okhttp/src"
+      ],
+      "tree": "fac74a5545e4cb1862d74328b36d1f16fba7e795",
+      "queries": [
+        {
+          "id": "okhttp:search-repair-confirmation-1",
+          "category": "test",
+          "query": "Find tests confirming the platform trust manager comes from Conscrypt.",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/ConscryptTest.kt",
+              "line": 49,
+              "quote": "assertThat(Conscrypt.isConscrypt(Platform.get().platformTrustManager())).isTrue()",
+              "source_sha256": "345e5b040741d7104713df627e7f31f56f895982dea06a709029c6375bcc346f",
+              "relevance": "Source anchor for Find tests confirming the platform trust manager comes from Conscrypt."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:search-repair-confirmation-2",
+          "category": "test",
+          "query": "Find tests expecting a protocol exception when duplex request bodies use HTTP one.",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/DuplexTest.kt",
+              "line": 122,
+              "quote": "assertFailsWith<ProtocolException> {",
+              "source_sha256": "7fc57c3b6805ce55bfdd7bbd09696afb6ec1fd1080d5941476bc3c66a0216bb2",
+              "relevance": "Source anchor for Find tests expecting a protocol exception when duplex request bodies use HTTP one."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:search-repair-confirmation-3",
+          "category": "test",
+          "query": "Find tests recovering a disk cache after initialization failed while deleting incomplete files.",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/internal/cache/DiskLruCacheTest.kt",
+              "line": 138,
+              "quote": "assertThat(snapshot).isNull()",
+              "source_sha256": "91dbef9bd091fd36fdf13d6b79d61c5bb78c1bbcfd77029f64976d0951e0dc53",
+              "relevance": "Source anchor for Find tests recovering a disk cache after initialization failed while deleting incomplete files."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:search-repair-confirmation-4",
+          "category": "helper",
+          "query": "Find the HTTP2 test peer helper that truncates its last outbound frame to simulate connection closure.",
+          "evidence": [
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/internal/http2/MockHttp2Peer.kt",
+              "line": 74,
+              "quote": "fun truncateLastFrame(length: Int): Http2Writer {",
+              "source_sha256": "0ddd9296f12df29f92ab3815950f4bec0366ecd7941c7702b1b0118b02674452",
+              "relevance": "Source anchor for Find the HTTP2 test peer helper that truncates its last outbound frame to simulate connection closure."
+            }
+          ]
+        },
+        {
+          "id": "okhttp:search-repair-confirmation-5",
+          "category": "exact",
+          "query": "Where is CertificatePinner.findMatchingPins defined?",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/CertificatePinner.kt",
+              "line": 228,
+              "quote": "fun findMatchingPins(hostname: String): List<Pin> = pins.filterList { matchesHostname(hostname) }",
+              "source_sha256": "f28ef71d77352a9a1b2905c6689a03ce269c8225eb729d98602410e191bce0a6",
+              "relevance": "Source anchor for Where is CertificatePinner.findMatchingPins defined?"
+            }
+          ]
+        },
+        {
+          "id": "okhttp:search-repair-confirmation-6",
+          "category": "tested",
+          "query": "Where are double wildcard certificate hostnames matched and how is matching through dots tested?",
+          "evidence": [
+            {
+              "file": "okhttp/src/commonJvmAndroid/kotlin/okhttp3/CertificatePinner.kt",
+              "line": 295,
+              "quote": "pattern.startsWith(\"**.\") -> {",
+              "source_sha256": "f28ef71d77352a9a1b2905c6689a03ce269c8225eb729d98602410e191bce0a6",
+              "relevance": "Source anchor for Where are double wildcard certificate hostnames matched and how is matching through dots tested?"
+            },
+            {
+              "file": "okhttp/src/jvmTest/kotlin/okhttp3/CertificatePinnerKotlinTest.kt",
+              "line": 103,
+              "quote": "assertThat(certificatePinner.findMatchingPins(\"a.b.example.com\")).isEqualTo(expectedPin1)",
+              "source_sha256": "1fd1a2c07a50f2bca19fb7a292a693e8ee9b63329ff5c90c0104404e79819a7a",
+              "relevance": "Source anchor for Where are double wildcard certificate hostnames matched and how is matching through dots tested?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pack": "rails",
+      "repo": "rails/rails",
+      "commit": "e72eb4c20b6bb5bdc7f63a4477992209585a1fa9",
+      "include": [
+        "railties/lib",
+        "railties/test"
+      ],
+      "tree": "8c1b7d50f8db3ea26d3b45c543dd700adbcc57fe",
+      "queries": [
+        {
+          "id": "rails:search-repair-confirmation-1",
+          "category": "test",
+          "query": "Find tests verifying the restart command works when the temporary directory is absent.",
+          "evidence": [
+            {
+              "file": "railties/test/commands/restart_test.rb",
+              "line": 28,
+              "quote": "assert File.exist?(\"tmp/restart.txt\")",
+              "source_sha256": "10f25cf47f34c720d0913fee30fd9a313e3a3ea5f3e17e1ce7590be9caa66eee",
+              "relevance": "Source anchor for Find tests verifying the restart command works when the temporary directory is absent."
+            }
+          ]
+        },
+        {
+          "id": "rails:search-repair-confirmation-2",
+          "category": "test",
+          "query": "Find tests checking SQL query comments include the current controller by default.",
+          "evidence": [
+            {
+              "file": "railties/test/application/query_logs_test.rb",
+              "line": 110,
+              "quote": "assert_includes comment, \"controller:users\"",
+              "source_sha256": "17913248fba286c518b7c7858e57d03b70afb392fc60c566b364cdda50d4b8dc",
+              "relevance": "Source anchor for Find tests checking SQL query comments include the current controller by default."
+            }
+          ]
+        },
+        {
+          "id": "rails:search-repair-confirmation-3",
+          "category": "test",
+          "query": "Find tests retaining interactive console stack frames as user code during backtrace cleaning.",
+          "evidence": [
+            {
+              "file": "railties/test/backtrace_cleaner_test.rb",
+              "line": 16,
+              "quote": "assert_equal \"(irb):1\", result[0]",
+              "source_sha256": "c5f91f750d90c972887b913c61982d2aeb0c13c0a1e2383f717b5cc4104cf351",
+              "relevance": "Source anchor for Find tests retaining interactive console stack frames as user code during backtrace cleaning."
+            }
+          ]
+        },
+        {
+          "id": "rails:search-repair-confirmation-4",
+          "category": "helper",
+          "query": "Find the shared test setup helper that loads the complete Rails framework and sets a test application root.",
+          "evidence": [
+            {
+              "file": "railties/test/abstract_unit.rb",
+              "line": 17,
+              "quote": "config.root = File.expand_path(\"../../\", __FILE__)",
+              "source_sha256": "5855e13f48bd1f5abcb60dd291179e7cccf5efc440d21186bb1cfa13158cb602",
+              "relevance": "Source anchor for Find the shared test setup helper that loads the complete Rails framework and sets a test application root."
+            }
+          ]
+        },
+        {
+          "id": "rails:search-repair-confirmation-5",
+          "category": "exact",
+          "query": "Where is RestartCommand.perform defined?",
+          "evidence": [
+            {
+              "file": "railties/lib/rails/commands/restart/restart_command.rb",
+              "line": 7,
+              "quote": "def perform",
+              "source_sha256": "73f4f8b2e2e05fd9ef254e5d7aca7d6ff13e3301f377ffaa22269432ac49e426",
+              "relevance": "Source anchor for Where is RestartCommand.perform defined?"
+            }
+          ]
+        },
+        {
+          "id": "rails:search-repair-confirmation-6",
+          "category": "tested",
+          "query": "Where is the restart marker file touched and how is its modification time tested?",
+          "evidence": [
+            {
+              "file": "railties/lib/rails/commands/restart/restart_command.rb",
+              "line": 10,
+              "quote": "FileUtils.touch   Rails::Command.application_root.join(\"tmp/restart.txt\")",
+              "source_sha256": "73f4f8b2e2e05fd9ef254e5d7aca7d6ff13e3301f377ffaa22269432ac49e426",
+              "relevance": "Source anchor for Where is the restart marker file touched and how is its modification time tested?"
+            },
+            {
+              "file": "railties/test/commands/restart_test.rb",
+              "line": 20,
+              "quote": "assert_not_equal prev_mtime, curr_mtime",
+              "source_sha256": "10f25cf47f34c720d0913fee30fd9a313e3a3ea5f3e17e1ce7590be9caa66eee",
+              "relevance": "Source anchor for Where is the restart marker file touched and how is its modification time tested?"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

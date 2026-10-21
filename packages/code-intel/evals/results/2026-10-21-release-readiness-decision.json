@@ -1,0 +1,474 @@
+{
+  "artifact": {
+    "file": "2026-10-21-release-readiness-observations.json.gz",
+    "gzip_bytes": 2173739,
+    "gzip_sha256": "8004e8c54cc4f00407413e8ce83f794d04833b6d5fad8236283b16408fabf108",
+    "raw_bytes": 17794873,
+    "raw_sha256": "d97838270fdb3f687a7275b1e6d9914daeb00edeb6c135e304b7f93a6f8ca0ab"
+  },
+  "base_commit": "d2a6d2933091d659ce9b2ea82035668ecb767afd",
+  "documentation": "strict build passed",
+  "engine_sha256": "9727191189ed40975788fbf23ac5144959c47f3c92f0b34f8d2d21899848ad8c",
+  "lifecycle": {
+    "cycles": 20,
+    "leaked_threads": [],
+    "lookup_p95_seconds": 0.024015417089685798,
+    "search_p95_seconds": 0.025480124983005226
+  },
+  "limits": [
+    "Workflow relationship checks without positive labels remain limited, not verified relationships. 7 unsupported checks remain unsupported.",
+    "Retrieval labels are consumed, non-exhaustive development observations; no new relevance gain is claimed.",
+    "One final workflow run is not a universal cold-parser reliability or performance guarantee.",
+    "Uncached ASTs now incur index repair on restart; valid summaries retain their existing fast path.",
+    "Wheel dependencies are reused read-only from the existing standalone installation; this is not a fresh dependency install.",
+    "No commit, push, PR, release, model/cloud run, download or host MCP restart."
+  ],
+  "owned_scratch_removed": true,
+  "peak_workflow_disk_bytes": 917549210,
+  "peak_workflow_rss_bytes": 929267712,
+  "published": false,
+  "ranking": {
+    "exit_code": 0,
+    "frozen_local_snapshot": true,
+    "passed": true
+  },
+  "restart_timings": [
+    {
+      "after_outcome": "passed",
+      "after_seconds": 2.069687583949417,
+      "before_outcome": "passed",
+      "before_seconds": 1.0517539168940857,
+      "pack": "Nim"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.390493833925575,
+      "before_outcome": "passed",
+      "before_seconds": 0.6947412919253111,
+      "pack": "SwiftFormat"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.07681900006718934,
+      "before_outcome": "passed",
+      "before_seconds": 0.35335295903496444,
+      "pack": "acme-sh"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 1.08392195799388,
+      "before_outcome": "passed",
+      "before_seconds": 1.0140713329892606,
+      "pack": "aspnetcore"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.23084070801269263,
+      "before_outcome": "passed",
+      "before_seconds": 0.5972681660205126,
+      "pack": "cats-effect"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 11.759698249981739,
+      "before_outcome": "passed",
+      "before_seconds": 5.839776124921627,
+      "pack": "cockroach"
+    },
+    {
+      "after_outcome": "unsupported",
+      "after_seconds": 1.5192808330757543,
+      "before_outcome": "unsupported",
+      "before_seconds": 0.989035916980356,
+      "pack": "crystal"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 4.969300874974579,
+      "before_outcome": "passed",
+      "before_seconds": 3.0075980410911143,
+      "pack": "dart-sdk"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.13569670799188316,
+      "before_outcome": "passed",
+      "before_seconds": 0.15572083299048245,
+      "pack": "deno"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.05157687503378838,
+      "before_outcome": "passed",
+      "before_seconds": 0.06417220900766551,
+      "pack": "express"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.5105551250744611,
+      "before_outcome": "passed",
+      "before_seconds": 0.7887855409644544,
+      "pack": "fastapi"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 1.7087808749638498,
+      "before_outcome": "passed",
+      "before_seconds": 1.579471915960312,
+      "pack": "framework"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.061985458014532924,
+      "before_outcome": "passed",
+      "before_seconds": 0.5317962500266731,
+      "pack": "frontend"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 5.525370290968567,
+      "before_outcome": "passed",
+      "before_seconds": 3.1198726249858737,
+      "pack": "fsharp"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.7463498750003055,
+      "before_outcome": "passed",
+      "before_seconds": 3.3568616659613326,
+      "pack": "ggplot2"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.41485716693568975,
+      "before_outcome": "passed",
+      "before_seconds": 0.6427460829727352,
+      "pack": "gh-cli"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.13781008298974484,
+      "before_outcome": "passed",
+      "before_seconds": 0.1844503340544179,
+      "pack": "gson"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 6.9408572079846635,
+      "before_outcome": "passed",
+      "before_seconds": 4.73607212502975,
+      "pack": "iTerm2"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 1.3969395420281217,
+      "before_outcome": "passed",
+      "before_seconds": 4.819871959043667,
+      "pack": "julia"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.12955987500026822,
+      "before_outcome": "passed",
+      "before_seconds": 0.38415170810185373,
+      "pack": "luarocks"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 1.7377451659413055,
+      "before_outcome": "failed",
+      "before_seconds": 1.1332789158914238,
+      "pack": "ocaml"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.41524362505879253,
+      "before_outcome": "passed",
+      "before_seconds": 0.4194943750044331,
+      "pack": "okhttp"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 2.8349363749148324,
+      "before_outcome": "passed",
+      "before_seconds": 1.6521503330441192,
+      "pack": "otp"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 1.7987585839582607,
+      "before_outcome": "passed",
+      "before_seconds": 6.680977791082114,
+      "pack": "pandas"
+    },
+    {
+      "after_outcome": "unsupported",
+      "after_seconds": 0.3539565000683069,
+      "before_outcome": "unsupported",
+      "before_seconds": 0.24901066604070365,
+      "pack": "perl5"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.21138016693294048,
+      "before_outcome": "passed",
+      "before_seconds": 0.3766954590100795,
+      "pack": "phoenix"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.2894695419818163,
+      "before_outcome": "passed",
+      "before_seconds": 0.44204916595481336,
+      "pack": "postgrest"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 1.2299587079323828,
+      "before_outcome": "passed",
+      "before_seconds": 2.486941499984823,
+      "pack": "prisma"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 6.23571100004483,
+      "before_outcome": "passed",
+      "before_seconds": 8.444077374995686,
+      "pack": "rails"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.6142884999280795,
+      "before_outcome": "passed",
+      "before_seconds": 5.440187374944799,
+      "pack": "redis"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.0418458339991048,
+      "before_outcome": "passed",
+      "before_seconds": 0.19016999995801598,
+      "pack": "requests"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.10315787501167506,
+      "before_outcome": "passed",
+      "before_seconds": 0.09051920904312283,
+      "pack": "ring"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.2638279580278322,
+      "before_outcome": "passed",
+      "before_seconds": 0.3451793330023065,
+      "pack": "ripgrep"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.07737712503876537,
+      "before_outcome": "passed",
+      "before_seconds": 0.10584945802111179,
+      "pack": "spdlog"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.7492936669150367,
+      "before_outcome": "passed",
+      "before_seconds": 0.793196291080676,
+      "pack": "starship"
+    },
+    {
+      "after_outcome": "passed",
+      "after_seconds": 0.10313699999824166,
+      "before_outcome": "passed",
+      "before_seconds": 0.1177529999986291,
+      "pack": "zls"
+    }
+  ],
+  "retained_failure": {
+    "confirmed_defect": "On restart, reparsed ASTs could recover while persisted definitions/references remained stale. Deterministic regression failed before the repair and passes afterward.",
+    "failed_checks": [
+      "definition",
+      "source",
+      "restart"
+    ],
+    "failed_pack": "ocaml",
+    "initial_trigger": "Unproven; the original worker did not capture grammar timing. A later instrumented repeat parsed the source successfully.",
+    "workflow_packs_completed": 36
+  },
+  "retained_setup_failure": {
+    "failed_tests": 15,
+    "reason": "Private full-suite operator placed disposable test projects under the real Git checkout. The subsequent run uses an external temporary root. Original XML, logs and runtime are retained."
+  },
+  "retrieval": {
+    "labeled_hit_at_24": 127,
+    "labeled_hit_at_5": 98,
+    "missing_questions": [],
+    "observed_questions": 144,
+    "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+  },
+  "scale": {
+    "results": [
+      {
+        "cold_bootstrap_ms": 298.2,
+        "cold_coverage": {
+          "dep_graph_files": 99,
+          "discovered_files": 101,
+          "discovery_truncated": false,
+          "elapsed_ms": 163.8,
+          "embedding_coverage": 0.0,
+          "excluded_checkout_roots": [],
+          "excluded_checkout_roots_truncated": false,
+          "parse_coverage": 1.0,
+          "parsed_files": 101,
+          "phase": "ready",
+          "reference_coverage": 1.0,
+          "reference_indexed_files": 101,
+          "snapshot_repair": null,
+          "tier": "small",
+          "total_files": 101
+        },
+        "cold_lookup_ms": 1.1,
+        "cold_tokens": 1373,
+        "files": 100,
+        "warm_bootstrap_ms": 77.0,
+        "warm_coverage": {
+          "dep_graph_files": 99,
+          "discovered_files": 101,
+          "discovery_truncated": false,
+          "elapsed_ms": 58.7,
+          "embedding_coverage": 0.0,
+          "excluded_checkout_roots": [],
+          "excluded_checkout_roots_truncated": false,
+          "parse_coverage": 1.0,
+          "parsed_files": 101,
+          "phase": "ready",
+          "reference_coverage": 1.0,
+          "reference_indexed_files": 101,
+          "snapshot_repair": null,
+          "tier": "small",
+          "total_files": 101
+        },
+        "warm_lookup_ms": 0.9,
+        "warm_tokens": 1373
+      },
+      {
+        "cold_bootstrap_ms": 629.4,
+        "cold_coverage": {
+          "dep_graph_files": 999,
+          "discovered_files": 1001,
+          "discovery_truncated": false,
+          "elapsed_ms": 451.8,
+          "embedding_coverage": 0.0,
+          "excluded_checkout_roots": [],
+          "excluded_checkout_roots_truncated": false,
+          "parse_coverage": 1.0,
+          "parsed_files": 1001,
+          "phase": "ready",
+          "reference_coverage": 1.0,
+          "reference_indexed_files": 1001,
+          "snapshot_repair": null,
+          "tier": "medium",
+          "total_files": 1001
+        },
+        "cold_lookup_ms": 3.6,
+        "cold_tokens": 1374,
+        "files": 1000,
+        "warm_bootstrap_ms": 296.6,
+        "warm_coverage": {
+          "dep_graph_files": 999,
+          "discovered_files": 1001,
+          "discovery_truncated": false,
+          "elapsed_ms": 191.7,
+          "embedding_coverage": 0.0,
+          "excluded_checkout_roots": [],
+          "excluded_checkout_roots_truncated": false,
+          "parse_coverage": 1.0,
+          "parsed_files": 1001,
+          "phase": "ready",
+          "reference_coverage": 1.0,
+          "reference_indexed_files": 1001,
+          "snapshot_repair": null,
+          "tier": "medium",
+          "total_files": 1001
+        },
+        "warm_lookup_ms": 3.8,
+        "warm_tokens": 1374
+      },
+      {
+        "cold_bootstrap_ms": 4832.5,
+        "cold_coverage": {
+          "dep_graph_files": 9999,
+          "discovered_files": 10001,
+          "discovery_truncated": false,
+          "elapsed_ms": 4313.6,
+          "embedding_coverage": 0.0,
+          "excluded_checkout_roots": [],
+          "excluded_checkout_roots_truncated": false,
+          "parse_coverage": 1.0,
+          "parsed_files": 10001,
+          "phase": "ready",
+          "reference_coverage": 1.0,
+          "reference_indexed_files": 10001,
+          "snapshot_repair": null,
+          "tier": "large",
+          "total_files": 10001
+        },
+        "cold_lookup_ms": 36.3,
+        "cold_tokens": 1550,
+        "files": 10000,
+        "warm_bootstrap_ms": 2586.5,
+        "warm_coverage": {
+          "dep_graph_files": 9999,
+          "discovered_files": 10001,
+          "discovery_truncated": false,
+          "elapsed_ms": 1322.1,
+          "embedding_coverage": 0.0,
+          "excluded_checkout_roots": [],
+          "excluded_checkout_roots_truncated": false,
+          "parse_coverage": 1.0,
+          "parsed_files": 10001,
+          "phase": "ready",
+          "reference_coverage": 1.0,
+          "reference_indexed_files": 10001,
+          "snapshot_repair": null,
+          "tier": "large",
+          "total_files": 10001
+        },
+        "warm_lookup_ms": 33.4,
+        "warm_tokens": 1550
+      }
+    ],
+    "workload": "python-import-chain"
+  },
+  "schema_version": 1,
+  "status": "local_review_ready",
+  "suite": {
+    "errors": 0,
+    "failures": 0,
+    "passed": 4073,
+    "seconds": 148.035,
+    "skipped": 14,
+    "tests": 4088,
+    "xfail": 1
+  },
+  "wheel": {
+    "continuation_smoke": "passed",
+    "dependency_mode": "Existing standalone-tool dependencies reused read-only; not a fresh dependency install.",
+    "development_version": "0.1.12; not published",
+    "python_files_matching_source_and_install": 271,
+    "sdist_sha256": "1feae2c711e38f5047e0ff0b5426c5b234067f1456a78e06917436eef44fc1d1",
+    "standard_smoke": "passed",
+    "wheel_sha256": "341cd2c5d0d787a36e28fb0bdeb731fd1164f3c0c6c0a9edbe741225add98e35"
+  },
+  "workflow_outcomes": {
+    "failed": 0,
+    "incomplete": 0,
+    "limited": 124,
+    "passed": 157,
+    "unsupported": 7
+  },
+  "workflow_packs": 36,
+  "workflow_seconds": 374.0938465410145
+}

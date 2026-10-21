@@ -1,0 +1,336 @@
+{
+  "retained": false,
+  "distinct_query_file_matches": {
+    "B": {
+      "5": 25,
+      "24": 29,
+      "scoped": 24
+    },
+    "C": {
+      "5": 28,
+      "24": 30,
+      "scoped": 24
+    }
+  },
+  "identity_checks": "Frozen questions, author inputs, candidate, operators, engine and per-observation identities verified; page and inspection evidence recomputed.",
+  "validation_checks": {
+    "gain": true,
+    "no_individual_losses": false,
+    "inspection": true,
+    "controls": true,
+    "stable": true,
+    "latency": true,
+    "resources": true,
+    "complete": true
+  },
+  "development_no_loss": false,
+  "rounds": [
+    {
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 24,
+        "files_5": 27,
+        "ranges_5": 14,
+        "visible_5": 10,
+        "files_24": 31,
+        "ranges_24": 20,
+        "visible_24": 1,
+        "files_scoped": 26,
+        "ranges_scoped": 21,
+        "visible_scoped": 15,
+        "inspection_visible": 4,
+        "p95_seconds": 0.03327591600827873
+      },
+      "candidate": {
+        "questions": 24,
+        "files_5": 30,
+        "ranges_5": 12,
+        "visible_5": 11,
+        "files_24": 32,
+        "ranges_24": 22,
+        "visible_24": 1,
+        "files_scoped": 26,
+        "ranges_scoped": 21,
+        "visible_scoped": 15,
+        "inspection_visible": 4,
+        "p95_seconds": 0.07387887500226498
+      },
+      "individual_losses": [
+        {
+          "id": "requests:clause-fresh-2",
+          "page": "5",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        }
+      ],
+      "round": 1,
+      "gains5": [
+        {
+          "id": "requests:clause-fresh-1",
+          "pack": "requests",
+          "file": "tests/test_utils.py"
+        },
+        {
+          "id": "okhttp:clause-fresh-2",
+          "pack": "okhttp",
+          "file": "okhttp/src/jvmTest/kotlin/okhttp3/CacheControlJvmTest.kt"
+        },
+        {
+          "id": "rails:clause-fresh-2",
+          "pack": "rails",
+          "file": "railties/test/application/runner_test.rb"
+        }
+      ],
+      "gain_gate": true,
+      "controls_preserved": true,
+      "aggregate_checks_passed": true,
+      "passed": false
+    },
+    {
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 24,
+        "files_5": 27,
+        "ranges_5": 14,
+        "visible_5": 10,
+        "files_24": 31,
+        "ranges_24": 20,
+        "visible_24": 1,
+        "files_scoped": 26,
+        "ranges_scoped": 21,
+        "visible_scoped": 15,
+        "inspection_visible": 4,
+        "p95_seconds": 0.03434804209973663
+      },
+      "candidate": {
+        "questions": 24,
+        "files_5": 30,
+        "ranges_5": 12,
+        "visible_5": 11,
+        "files_24": 32,
+        "ranges_24": 22,
+        "visible_24": 1,
+        "files_scoped": 26,
+        "ranges_scoped": 21,
+        "visible_scoped": 15,
+        "inspection_visible": 4,
+        "p95_seconds": 0.0842737500788644
+      },
+      "individual_losses": [
+        {
+          "id": "requests:clause-fresh-2",
+          "page": "5",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        }
+      ],
+      "round": 2,
+      "gains5": [
+        {
+          "id": "requests:clause-fresh-1",
+          "pack": "requests",
+          "file": "tests/test_utils.py"
+        },
+        {
+          "id": "okhttp:clause-fresh-2",
+          "pack": "okhttp",
+          "file": "okhttp/src/jvmTest/kotlin/okhttp3/CacheControlJvmTest.kt"
+        },
+        {
+          "id": "rails:clause-fresh-2",
+          "pack": "rails",
+          "file": "railties/test/application/runner_test.rb"
+        }
+      ],
+      "gain_gate": true,
+      "controls_preserved": true,
+      "aggregate_checks_passed": true,
+      "passed": false
+    },
+    {
+      "checks": {
+        "file_totals_no_loss": true,
+        "visible_totals_no_loss": true,
+        "scoped_no_individual_loss": true,
+        "inspection_no_net_loss": true,
+        "latency": true
+      },
+      "baseline": {
+        "questions": 24,
+        "files_5": 27,
+        "ranges_5": 14,
+        "visible_5": 10,
+        "files_24": 31,
+        "ranges_24": 20,
+        "visible_24": 1,
+        "files_scoped": 26,
+        "ranges_scoped": 21,
+        "visible_scoped": 15,
+        "inspection_visible": 4,
+        "p95_seconds": 0.0353566660778597
+      },
+      "candidate": {
+        "questions": 24,
+        "files_5": 30,
+        "ranges_5": 12,
+        "visible_5": 11,
+        "files_24": 32,
+        "ranges_24": 22,
+        "visible_24": 1,
+        "files_scoped": 26,
+        "ranges_scoped": 21,
+        "visible_scoped": 15,
+        "inspection_visible": 4,
+        "p95_seconds": 0.07474291592370719
+      },
+      "individual_losses": [
+        {
+          "id": "requests:clause-fresh-2",
+          "page": "5",
+          "metric": "visible",
+          "labels": [
+            0
+          ]
+        }
+      ],
+      "round": 3,
+      "gains5": [
+        {
+          "id": "requests:clause-fresh-1",
+          "pack": "requests",
+          "file": "tests/test_utils.py"
+        },
+        {
+          "id": "okhttp:clause-fresh-2",
+          "pack": "okhttp",
+          "file": "okhttp/src/jvmTest/kotlin/okhttp3/CacheControlJvmTest.kt"
+        },
+        {
+          "id": "rails:clause-fresh-2",
+          "pack": "rails",
+          "file": "railties/test/application/runner_test.rb"
+        }
+      ],
+      "gain_gate": true,
+      "controls_preserved": true,
+      "aggregate_checks_passed": true,
+      "passed": false
+    }
+  ],
+  "warm_p95_median_seconds": {
+    "B": 0.03434804209973663,
+    "C": 0.07474291592370719
+  },
+  "resources": {
+    "requests": {
+      "setup_seconds": {
+        "B": 0.31178774998988956,
+        "C": 0.2982487090630457,
+        "ratio": 0.9565760972736007,
+        "passed": true
+      },
+      "peak_rss_bytes": {
+        "B": 144703488,
+        "C": 142245888,
+        "ratio": 0.983016304347826,
+        "passed": true
+      },
+      "peak_disk_bytes": {
+        "B": 4509696,
+        "C": 4505600,
+        "ratio": 0.9990917347865577,
+        "passed": true
+      }
+    },
+    "phoenix": {
+      "setup_seconds": {
+        "B": 0.5855771669885144,
+        "C": 0.5760724159190431,
+        "ratio": 0.9837685763631258,
+        "passed": true
+      },
+      "peak_rss_bytes": {
+        "B": 150700032,
+        "C": 150274048,
+        "ratio": 0.9971732985431615,
+        "passed": true
+      },
+      "peak_disk_bytes": {
+        "B": 11448320,
+        "C": 11456512,
+        "ratio": 1.0007155635062612,
+        "passed": true
+      }
+    },
+    "okhttp": {
+      "setup_seconds": {
+        "B": 1.2290300419554114,
+        "C": 1.2397993749473244,
+        "ratio": 1.0087624652158858,
+        "passed": true
+      },
+      "peak_rss_bytes": {
+        "B": 177881088,
+        "C": 177864704,
+        "ratio": 0.9999078935249148,
+        "passed": true
+      },
+      "peak_disk_bytes": {
+        "B": 42434560,
+        "C": 42414080,
+        "ratio": 0.9995173745173745,
+        "passed": true
+      }
+    },
+    "rails": {
+      "setup_seconds": {
+        "B": 0.8974090410629287,
+        "C": 0.8599529589992017,
+        "ratio": 0.958261973804763,
+        "passed": true
+      },
+      "peak_rss_bytes": {
+        "B": 183926784,
+        "C": 184303616,
+        "ratio": 1.0020488152503118,
+        "passed": true
+      },
+      "peak_disk_bytes": {
+        "B": 29925376,
+        "C": 29933568,
+        "ratio": 1.0002737476047086,
+        "passed": true
+      }
+    }
+  },
+  "stored_pages_recomputed": 432,
+  "limitation": "Non-exhaustive source labels on purpose-built paired queries; no agent outcomes or broad natural-query sampling.",
+  "archive": {
+    "path": "2026-10-20-clause-balance-observations.json.gz",
+    "sha256": "31fdded71965df61baa399d9885184e89d6bf08eae2dd217793aea196dbaeec0",
+    "files": 87
+  },
+  "questions_sha256": "84cbbb03afbcb8a95c4336ecad329c0c2ed51daa4948c4c82d5bd10b37b3809d",
+  "candidate_sha256": "7bd612a69ca9489b62af310c0316e0dcbef69a8f6ef4d645af929e2e7eb9a4a1",
+  "baseline_engine_sha256": "b07d70d25d171405a6bc04af7ecec66c33b11f04022311b26b81113ca97877fd",
+  "source_anchors_verified": 36,
+  "development_pages_recomputed": 78,
+  "review": "Initial replay identity gap corrected; independent final review found no remaining material issue affecting rejection.",
+  "product_ranking_changed": false
+}
