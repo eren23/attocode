@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 
 
-def run(image):
+def run(image, *, allow_build_tree=False):
     with tempfile.TemporaryDirectory(prefix="intelligence-image-", dir="/tmp") as temp:
         root = Path(temp).resolve()
         (root / ".attocode").mkdir()
@@ -80,6 +80,19 @@ def run(image):
                 result = client.post("/mcp/", json=body, headers=headers).json()["result"]
                 assert not result.get("isError"), result
                 assert "container_navigation" in result["content"][0]["text"]
+                for arguments in (["attocode-code-intel", "--help"],
+                                  ["attocode-code-intel", "serve", "--help"]):
+                    subprocess.run(["docker", "exec", container, *arguments], check=True,
+                                   stdout=subprocess.DEVNULL, timeout=30)
+                subprocess.run(["docker", "exec", container, "python", "-c",
+                                "import tempfile\n"
+                                "for directory in ['/var/lib/code-intel/repos', '/project/.attocode']:\n"
+                                "    with tempfile.TemporaryFile(dir=directory) as stream: stream.write(b'state')"],
+                               check=True, timeout=30)
+                if not allow_build_tree:
+                    subprocess.run(["docker", "exec", container, "python", "-c",
+                                    "from pathlib import Path; assert not Path('/build').exists(), "
+                                    "'runtime image retains package build source'"], check=True, timeout=30)
                 print(
                     json.dumps(
                         {
@@ -88,6 +101,9 @@ def run(image):
                             "dashboard": "ok",
                             "mcp_auth": "ok",
                             "navigation": "ok",
+                            "cli": "ok",
+                            "writable_state": "ok",
+                            "build_source": "allowed_baseline" if allow_build_tree else "absent",
                         }
                     )
                 )
@@ -98,4 +114,6 @@ def run(image):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("image")
-    run(parser.parse_args().image)
+    parser.add_argument("--allow-build-tree", action="store_true", help="Historical comparison only")
+    args = parser.parse_args()
+    run(args.image, allow_build_tree=args.allow_build_tree)

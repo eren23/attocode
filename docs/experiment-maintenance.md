@@ -25,3 +25,8 @@ Parent and worker origins, committed design, engine, operator, test and fixture
 identities are retained. Partial attempts always have `decision: null`; a complete
 payload is not itself a relevance or performance verdict. Existing normal CI
 gates and release checks remain required.
+
+The next image contract checks the dashboard, authenticated MCP navigation, CLI
+entrypoints and writable service state, then requires the runtime image to omit
+the package build source. The historical comparison may explicitly allow that
+old build tree; the candidate and ordinary image gate require its absence.
