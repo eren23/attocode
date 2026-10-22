@@ -6,6 +6,12 @@ on:
     branches: [main]
     paths: ['packages/code-intel/**', 'eval/quality/**', 'frontend/**', 'docker/code-intel/**', 'pyproject.toml', 'uv.lock', 'docs/intelligence-tools.md', '.github/workflows/intelligence.yml', '.github/workflows/release-intelligence.yml']
   workflow_dispatch:
+    inputs:
+      experiment:
+        description: 'Run the full gate or a frozen source-only experiment'
+        type: choice
+        default: none
+        options: [none, preview-windows]
   workflow_call:
 
 permissions:
@@ -20,6 +26,7 @@ concurrency:
 
 jobs:
   product:
+    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -84,6 +91,7 @@ jobs:
             .attocode/quality/runs/*/*.xml
           include-hidden-files: true
   wheel-macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     # The release builds on Linux. This job installs the same pure-Python wheel on macOS.
     runs-on: macos-latest
     timeout-minutes: 20
@@ -105,6 +113,7 @@ jobs:
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_upgrade.py verify '/tmp/intelligence upgrade project'
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
   optional-grammars:
+    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -118,6 +127,7 @@ jobs:
           QUALITY_ALLOW_DOWNLOADS: '1'
         run: uv run --no-sync python packages/code-intel/scripts/check_optional_grammars.py --cache '${{ runner.temp }}/quality-grammars'
   real-language-servers:
+    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -154,6 +164,7 @@ jobs:
           retention-days: 7
           path: quality-artifacts/
   dashboard:
+    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -168,6 +179,7 @@ jobs:
       - run: npm run build
         working-directory: frontend
   image:
+    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -177,3 +189,21 @@ jobs:
           python-version: '3.12'
       - run: docker build -t intelligence-test -f docker/code-intel/Dockerfile .
       - run: uv run --with httpx --no-project python packages/code-intel/scripts/smoke_image.py intelligence-test
+  preview-windows:
+    if: github.event_name == 'workflow_dispatch' && inputs.experiment == 'preview-windows'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Frozen source-only preview trial (600s, 2GiB)
+        run: uv run --no-sync python -m eval.quality.preview_trial --out quality-artifacts/preview-windows
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview-windows
+          retention-days: 30
+          path: quality-artifacts/preview-windows/
