@@ -132,6 +132,7 @@ jobs:
           QUALITY_REQUIRE_REAL_LSP: '1'
           QUALITY_REAL_LSP_LANGUAGES: python,go,rust
           QUALITY_LSP_TRACE_DIR: quality-artifacts
+          RA_LOG: rust_analyzer=info
           CARGO_NET_OFFLINE: 'true'
           GOPROXY: 'off'
         run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_real_language_server.py -q --junitxml=quality-artifacts/real-servers.xml
