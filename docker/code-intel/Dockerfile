@@ -11,8 +11,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends git curl libgit2-dev npm && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pyright typescript-language-server typescript && npm cache clean --force
 
-FROM runtime-base AS context-check
+FROM runtime-base AS context-capture
 COPY . /context/
+
+FROM context-capture AS context-check
 RUN python - <<'PY'
 from pathlib import Path
 root = Path('/context')

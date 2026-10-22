@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -72,6 +73,18 @@ print(json.dumps({'python':sys.version,'dependencies':sorted(deps),
  'npm':json.loads(subprocess.check_output(['npm','list','--global','--depth=0','--json'],text=True))}))
 '''
 
+CONTEXT_PROBE = r'''
+import hashlib,json,os,pathlib
+root=pathlib.Path('/context');rows=[]
+for path in sorted(root.rglob('*')):
+    if path.is_symlink(): raw=os.readlink(path).encode();kind='symlink'
+    elif path.is_file(): raw=path.read_bytes();kind='file'
+    else: continue
+    rows.append([path.relative_to(root).as_posix(),kind,len(raw),hashlib.sha256(raw).hexdigest()])
+print(json.dumps({'files':rows,'file_count':len(rows),'logical_bytes':sum(r[2] for r in rows),
+ 'manifest_sha256':hashlib.sha256(json.dumps(rows,separators=(',',':')).encode()).hexdigest()}))
+'''
+
 
 class Measurement:
     def __init__(self, directory):
@@ -79,9 +92,9 @@ class Measurement:
         self.deadline = time.monotonic() + 12 * 60
         self.commands = []
 
-    def command(self, name, arguments, *, limit=180):
+    def command(self, name, arguments, *, limit=180, cleanup=False):
         path = self.directory / (name + '.log')
-        timeout = min(limit, self.deadline - time.monotonic())
+        timeout = limit if cleanup else min(limit, self.deadline - time.monotonic())
         if timeout <= 0:
             raise TimeoutError('image measurement deadline')
         row = {'name': name, 'arguments': arguments, 'log': path.name}
@@ -104,6 +117,24 @@ class Measurement:
     def inspect(self, image):
         return json.loads(self.command(image + '-inspect', ['docker', 'image', 'inspect', image]))[0]
 
+    def context_inventory(self, image):
+        data = json.loads(self.command(image + '-context-inventory', ['docker', 'run', '--rm',
+                          '--entrypoint', 'python', image, '-c', CONTEXT_PROBE]))
+        return {key: value for key, value in data.items() if key != 'files'}
+
+    def cleanup_owner(self, owner):
+        """The parent can remove its orphan even after a smoke worker is killed."""
+        query = ['docker', 'ps', '--all', '--quiet', '--filter', 'label=attocode.quality.owner=' + owner]
+        found = self.command(owner + '-cleanup-find', query, limit=15, cleanup=True).splitlines()
+        if not all(re.fullmatch('[0-9a-f]{12,64}', item) for item in found):
+            raise ValueError('unexpected owned-container identity')
+        if found:
+            self.command(owner + '-cleanup-remove', ['docker', 'rm', '--force', *found], limit=15, cleanup=True)
+        remaining = self.command(owner + '-cleanup-verify', query, limit=15, cleanup=True).strip()
+        if remaining:
+            raise ValueError('owned-container cleanup unverified')
+        return {'owner': owner, 'verified': True}
+
     def context_control(self, report):
         """Exercise Docker's actual matching, including private/cache exclusions."""
         names = ['frontend/src/.env.quality-context', 'frontend/src/.attocode/quality-context',
@@ -123,6 +154,7 @@ class Measurement:
                     stream.write(b'disposable context exclusion control\n')
                 files.append(path)
             self.build('intelligence-context-check', REPO / 'docker/code-intel/Dockerfile', target='context-check')
+            evidence['inventory'] = self.context_inventory('intelligence-context-check')
             evidence['status'] = 'passed'
         finally:
             for path in files:
@@ -163,13 +195,20 @@ class Measurement:
         identity['runtime_layers'] = runtime_layers
         identity['config'] = {key: info['Config'].get(key) for key in (
             'Env', 'Cmd', 'Entrypoint', 'WorkingDir', 'User', 'ExposedPorts')}
-        raw = self.command(image + '-smoke', [sys.executable, 'packages/code-intel/scripts/smoke_image.py',
-                           image, *(['--allow-build-tree'] if historical else [])], limit=300)
+        owner = 'image-smoke-' + uuid.uuid4().hex
+        try:
+            raw = self.command(image + '-smoke', [sys.executable, 'packages/code-intel/scripts/smoke_image.py',
+                               image, '--owner', owner, *(['--allow-build-tree'] if historical else [])], limit=300)
+        finally:
+            cleanup = self.cleanup_owner(owner)
         smoke = json.loads(raw.splitlines()[-1])
+        checks = {key: smoke.get(key) == 'ok' for key in CHECKS}
+        if not all(checks.values()):
+            raise ValueError('runtime summary incomplete or failed')
         return {'image': image, 'id': info['Id'], 'size_bytes': info['Size'], 'layers': layers,
                 'context_transfer_reported': context, 'identity': identity,
                 'inventory_evidence': image + '-identity.log',
-                'runtime_checks': {key: smoke.get(key) == 'ok' for key in CHECKS},
+                'runtime_checks': checks, 'container_cleanup': cleanup,
                 'build_source': smoke['build_source']}
 
 
@@ -213,6 +252,12 @@ def main():
             for relative, target in [('Dockerfile', recipe), ('Dockerfile.dockerignore', Path(str(recipe) + '.dockerignore'))]:
                 target.write_bytes(subprocess.check_output(['git', 'show', args.compare_ref + ':docker/code-intel/' + relative], cwd=REPO))
             report['baseline_recipe_commit'] = args.compare_ref
+            capture = directory / 'Dockerfile.baseline-context'
+            capture.write_bytes((REPO / 'docker/code-intel/Dockerfile').read_bytes())
+            Path(str(capture) + '.dockerignore').write_bytes(Path(str(recipe) + '.dockerignore').read_bytes())
+            measurement.build('intelligence-baseline-context', capture, target='context-capture')
+            report['baseline_context_inventory'] = measurement.context_inventory('intelligence-baseline-context')
+            write_report(args.report, report)
             baseline_context = measurement.build('intelligence-baseline', recipe)
         candidate_context = measurement.build('intelligence-test', REPO / 'docker/code-intel/Dockerfile')
         measurement.build('intelligence-runtime-base', REPO / 'docker/code-intel/Dockerfile', target='runtime-base')
@@ -224,6 +269,8 @@ def main():
         write_report(args.report, report)  # Keep actual measurements before adoption assertions.
         if args.compare_ref:
             check_comparison(report['baseline'], report['candidate'])
+            if report['context_control']['inventory']['logical_bytes'] >= report['baseline_context_inventory']['logical_bytes']:
+                raise ValueError('eligible build context did not shrink')
             report['decision'] = 'adopt'
             report['saved_bytes'] = report['baseline']['size_bytes'] - report['candidate']['size_bytes']
         else:

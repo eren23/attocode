@@ -7,12 +7,14 @@ import json
 import subprocess
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 import httpx
 
 
-def run(image, *, allow_build_tree=False):
+def run(image, *, allow_build_tree=False, owner=None):
+    owner = owner or uuid.uuid4().hex
     with tempfile.TemporaryDirectory(prefix="intelligence-image-", dir="/tmp") as temp:
         root = Path(temp).resolve()
         (root / ".attocode").mkdir()
@@ -22,6 +24,8 @@ def run(image, *, allow_build_tree=False):
                 "docker",
                 "run",
                 "--rm",
+                "--label",
+                "attocode.quality.owner=" + owner,
                 "-d",
                 "-p",
                 "127.0.0.1::8080",
@@ -108,12 +112,14 @@ def run(image, *, allow_build_tree=False):
                     )
                 )
         finally:
-            subprocess.run(["docker", "stop", container], check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["docker", "stop", "--time", "5", container], check=True,
+                           stdout=subprocess.DEVNULL, timeout=15)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("image")
     parser.add_argument("--allow-build-tree", action="store_true", help="Historical comparison only")
+    parser.add_argument("--owner", help="Unique controller-owned cleanup label")
     args = parser.parse_args()
-    run(args.image, allow_build_tree=args.allow_build_tree)
+    run(args.image, allow_build_tree=args.allow_build_tree, owner=args.owner)

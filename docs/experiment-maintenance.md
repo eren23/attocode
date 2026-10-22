@@ -42,6 +42,11 @@ retaining complete installed-file inventories once in logs and comparing their
 fingerprints, versions, base layers and dashboard content. It adopts only a
 strictly smaller image with identical runtime identity and passing smoke checks.
 Image/layer byte counts and BuildKit's rounded context-transfer measurements are
-retained with source identities. A measured passing baseline is required before
+retained with source identities. Actual eligible context file counts, logical
+bytes and source hashes are measured inside dedicated context captures; transfer
+counts alone can reflect BuildKit cache reuse. A real membership check rejects
+extra files and includes disposable private/cache exclusion sentinels. Parent
+cleanup verifies no smoke container with its unique ownership label remains.
+A measured passing baseline is required before
 the ordinary image guard can enforce its 5% growth ceiling; baseline changes
 require a reviewed explanation and source commit.

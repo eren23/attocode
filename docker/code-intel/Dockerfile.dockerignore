@@ -1,6 +1,7 @@
 # Only frontend build inputs and the standalone package enter this context.
 **
 !frontend/
+frontend/*
 !frontend/package.json
 !frontend/package-lock.json
 !frontend/tsconfig.json
@@ -11,7 +12,9 @@
 !frontend/public/
 !frontend/public/**
 !packages/
+packages/*
 !packages/code-intel/
+packages/code-intel/*
 !packages/code-intel/pyproject.toml
 !packages/code-intel/README.md
 !packages/code-intel/LICENSE
