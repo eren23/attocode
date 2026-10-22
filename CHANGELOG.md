@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Break equal symbol-search scores by source location before applying the result
+  limit, so index insertion and process hash order cannot change a tied page.
+
 ## [Intelligence 0.1.15] - 2026-10-22
 
 ### Fixed — Language-server diagnostics

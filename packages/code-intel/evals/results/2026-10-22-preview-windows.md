@@ -2,7 +2,7 @@
 
 The single [online attempt](https://github.com/eren23/attocode/actions/runs/39836664440)
 stopped on an operator decoding error. There is **no search-quality verdict**,
-and no preview or ranking change is enabled. The fixed trial is closed without
+and no preview or ranking change is enabled. The frozen trial is closed without
 a retry, retuning or replacement questions.
 
 The evaluation-only candidate keeps retrieval and result order unchanged. It

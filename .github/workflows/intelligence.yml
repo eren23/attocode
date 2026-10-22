@@ -8,10 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       experiment:
-        description: 'Run the full gate or a frozen source-only experiment'
         type: choice
         default: none
-        options: [none, cockroach-restart]
+        options: [none, symbol-order-control]
   workflow_call:
 
 permissions:
@@ -189,10 +188,10 @@ jobs:
           python-version: '3.12'
       - run: docker build -t intelligence-test -f docker/code-intel/Dockerfile .
       - run: uv run --with httpx --no-project python packages/code-intel/scripts/smoke_image.py intelligence-test
-  cockroach-restart:
-    if: github.event_name == 'workflow_dispatch' && inputs.experiment == 'cockroach-restart'
+  symbol-order-control:
+    if: github.event_name == 'workflow_dispatch' && inputs.experiment == 'symbol-order-control'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -201,11 +200,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: uv sync --locked --package attocode-code-intel --extra dev
-      - name: Frozen source-only restart comparison (1560s, 2GiB)
-        run: uv run --no-sync python -m eval.quality.restart_trial --out quality-artifacts/cockroach-restart
+      - run: uv run --no-sync python -m eval.quality.symbol_order_control
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cockroach-restart
+          name: symbol-order-control
           retention-days: 30
-          path: quality-artifacts/cockroach-restart/
+          path: quality-artifacts/symbol-order/

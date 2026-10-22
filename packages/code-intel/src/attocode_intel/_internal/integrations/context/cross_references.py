@@ -593,7 +593,12 @@ class CrossRefIndex:
                 score = _rank_score(loc, match_score)
                 scored.append((loc, score))
 
-        scored.sort(key=lambda x: -x[1])
+        # Cold indexing, persisted restoration and name-index sets can enumerate
+        # equal matches differently. Break ties before the bounded page is cut.
+        scored.sort(key=lambda x: (
+            -x[1], x[0].file_path, x[0].start_line, x[0].end_line,
+            x[0].qualified_name, x[0].name, x[0].kind, x[0].source,
+        ))
         return scored[:limit]
 
     def get_references(self, symbol_name: str) -> list[SymbolRef]:

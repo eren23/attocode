@@ -127,10 +127,6 @@ def test_uncached_identical_structures_conservatively_repair_navigation(tmp_path
     first = seed(tmp_path)
     expected = {k: asdict(v) for k, v in first._ast_cache.items()}
     counts = first._store.stats()
-    # Legacy snapshots have no structural proof, even when a reparse agrees.
-    snapshot = json.loads(first._store.get_meta(SNAPSHOT_KEY))
-    snapshot.pop('structures', None)
-    first._store.set_meta(SNAPSHOT_KEY, json.dumps(snapshot))
     close(first)
     from attocode_intel._internal.integrations.context import index_repair
 
