@@ -21,7 +21,8 @@ GIB = 1024**3
 MARKER = "attocode-quality-v1"
 LIMITS = {"quick": 120, "local": 600, "broad": 3600}
 QUICK_TESTS = ["test_search_evidence.py", "test_focused_inspection.py", "test_language_capabilities.py",
-               "test_quality_runner.py", "test_quality_cloud.py", "test_quality_lifecycle.py", "test_quality_evidence.py"]
+               "test_quality_runner.py", "test_quality_cloud.py", "test_quality_lifecycle.py", "test_quality_evidence.py",
+               "test_experiment_evidence.py"]
 LOCAL_TESTS = QUICK_TESTS + ["test_trigram_workspace.py", "test_change_focus.py", "test_change_investigation.py", "test_behavioral_negation.py", "test_chunk_identity.py", "test_query_requirements.py", "test_mcp_search_evaluation.py", "test_product.py", "test_query_ranking.py", "test_ranking_intent.py",
                            "test_compact_inspection.py", "test_lean_profile.py", "test_daily_workflows.py",
                            "test_index_reuse.py", "test_edit_restart.py", "test_navigation_evidence.py",
@@ -151,7 +152,10 @@ def stop_group(process):
 
 
 def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * GIB, log_cap=2**21,
-              wall_deadline=None):
+              wall_deadline=None, include_controller=False, evidence_root=None,
+              max_evidence_bytes=None):
+    if (evidence_root is None) != (max_evidence_bytes is None):
+        raise ValueError('Evidence root and limit must be supplied together')
     started = time.monotonic()
     wall_started = time.time()
     if wall_deadline is None:
@@ -191,7 +195,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
             try:
                 parent = psutil.Process(process.pid)
                 processes = [parent, *parent.children(recursive=True)]
-                rss = 0
+                rss = psutil.Process().memory_info().rss if include_controller else 0
                 for item in processes:
                     try:
                         owned[item.pid] = item.create_time()
@@ -204,12 +208,16 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
             except (psutil.Error, PermissionError):
                 row["reason"] = "process_inspection_unavailable"
             row["peak_disk_bytes"] = max(row["peak_disk_bytes"], disk_bytes(root))
+            if evidence_root is not None:
+                row['peak_evidence_bytes'] = max(row.get('peak_evidence_bytes', 0), disk_bytes(evidence_root))
             if time.monotonic() >= deadline or time.time() >= wall_deadline:
                 row["reason"] = "deadline"
             elif row["peak_disk_bytes"] >= max_bytes:
                 row["reason"] = "disk_budget"
             elif row["peak_rss_bytes"] >= max_rss:
                 row["reason"] = "memory_budget"
+            elif evidence_root is not None and row['peak_evidence_bytes'] >= max_evidence_bytes:
+                row['reason'] = 'evidence_budget'
             elif shutil.disk_usage(root).free < min(2 * GIB, max_bytes):
                 row["reason"] = "free_space_floor"
             if "reason" in row:
@@ -243,6 +251,12 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
                cleanup_verified=not reader.is_alive() and not cleanup_errors,
                cleanup_errors=cleanup_errors)
     row["peak_disk_bytes"] = max(row["peak_disk_bytes"], disk_bytes(root))
+    if evidence_root is not None:
+        row['peak_evidence_bytes'] = max(row.get('peak_evidence_bytes', 0), disk_bytes(evidence_root))
+        if row['peak_evidence_bytes'] >= max_evidence_bytes:
+            row.setdefault('reason', 'evidence_budget')
+    if row['peak_disk_bytes'] >= max_bytes:
+        row.setdefault('reason', 'disk_budget')
     if "reason" not in row:
         row["status"] = "passed" if process.returncode == 0 and row["cleanup_verified"] else "failed"
     return row

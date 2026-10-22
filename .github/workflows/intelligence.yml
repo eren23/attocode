@@ -44,6 +44,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
+      - name: Synthetic experiment infrastructure controls
+        run: uv run --no-sync python -m eval.quality.experiments preflight --root '${{ runner.temp }}/experiment-preflight'
       - name: Apply all migrations
         run: uv run --no-sync python -c 'import asyncio, os; from attocode_intel.api.app import _run_migrations; asyncio.run(_run_migrations(os.environ["TEST_DATABASE_URL"]))'
       - name: Product tests with PostgreSQL
@@ -79,6 +81,7 @@ jobs:
           path: |
             dist/
             quality-artifacts/
+            ${{ runner.temp }}/experiment-preflight/evidence/
             .attocode/quality/runs/*/*.json
             .attocode/quality/runs/*/*.log
             .attocode/quality/runs/*/*.xml
