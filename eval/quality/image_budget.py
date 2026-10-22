@@ -104,6 +104,33 @@ class Measurement:
     def inspect(self, image):
         return json.loads(self.command(image + '-inspect', ['docker', 'image', 'inspect', image]))[0]
 
+    def context_control(self, report):
+        """Exercise Docker's actual matching, including private/cache exclusions."""
+        names = ['frontend/src/.env.quality-context', 'frontend/src/.attocode/quality-context',
+                 'frontend/src/node_modules/quality-context',
+                 'packages/code-intel/src/attocode_intel/.env.quality-context',
+                 'packages/code-intel/src/attocode_intel/__pycache__/quality-context.pyc',
+                 'packages/code-intel/src/attocode_intel/.venv/quality-context']
+        files, directories = [], []
+        evidence = report['context_control'] = {'sentinels': names, 'status': 'incomplete'}
+        try:
+            for name in names:
+                path = REPO / name
+                if not path.parent.exists():
+                    path.parent.mkdir()
+                    directories.append(path.parent)
+                with path.open('xb') as stream:
+                    stream.write(b'disposable context exclusion control\n')
+                files.append(path)
+            self.build('intelligence-context-check', REPO / 'docker/code-intel/Dockerfile', target='context-check')
+            evidence['status'] = 'passed'
+        finally:
+            for path in files:
+                path.unlink()
+            for path in reversed(directories):
+                path.rmdir()
+            evidence['owned_sentinels_removed'] = all(not (REPO / name).exists() for name in names)
+
     def build(self, image, dockerfile, *, target=None):
         command = ['docker', 'build', '--progress=plain', '-t', image, '-f', str(dockerfile)]
         if target:
@@ -175,6 +202,8 @@ def main():
             report['inputs'][name] = hashlib.sha256((REPO / 'docker/code-intel' / name).read_bytes()).hexdigest()
         report['operator_hashes'] = {name: hashlib.sha256((REPO / name).read_bytes()).hexdigest() for name in (
             'eval/quality/image_budget.py', 'packages/code-intel/scripts/smoke_image.py')}
+        write_report(args.report, report)
+        measurement.context_control(report)
         write_report(args.report, report)
         baseline_context = None
         if args.compare_ref:
