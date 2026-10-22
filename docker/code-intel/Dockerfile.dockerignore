@@ -1,10 +1,31 @@
-.git
-.venv
+# Only frontend build inputs and the standalone package enter this context.
+**
+!frontend/
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/tsconfig.json
+!frontend/vite.config.ts
+!frontend/index.html
+!frontend/src/
+!frontend/src/**
+!frontend/public/
+!frontend/public/**
+!packages/
+!packages/code-intel/
+!packages/code-intel/pyproject.toml
+!packages/code-intel/README.md
+!packages/code-intel/LICENSE
+!packages/code-intel/src/
+!packages/code-intel/src/**
+
+# Keep private/configuration/cache exclusions last, including under allowed roots.
 **/__pycache__
 **/node_modules
 **/.attocode
 **/.env
 **/.env.*
-dist
+**/.venv
+**/.git
+**/*.pyc
 frontend/dist
 frontend/tsconfig.tsbuildinfo

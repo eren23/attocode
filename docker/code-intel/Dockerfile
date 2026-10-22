@@ -6,13 +6,18 @@ RUN npm ci --ignore-scripts
 COPY frontend/ .
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.12-slim AS runtime-base
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends git curl libgit2-dev npm && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pyright typescript-language-server typescript && npm cache clean --force
+
+FROM runtime-base AS package-build
 COPY packages/code-intel/ /build/code-intel/
 ARG ATTOCODE_INTEL_EXTRAS=service
-RUN pip install --no-cache-dir "/build/code-intel[${ATTOCODE_INTEL_EXTRAS}]"
+RUN pip install --no-cache-dir --no-compile --ignore-installed --prefix=/install "/build/code-intel[${ATTOCODE_INTEL_EXTRAS}]"
+
+FROM runtime-base
+COPY --from=package-build /install/ /usr/local/
 COPY --from=frontend /frontend/dist /app/static
 RUN mkdir -p /var/lib/code-intel/repos
 EXPOSE 8080

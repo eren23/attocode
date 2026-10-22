@@ -30,3 +30,18 @@ The next image contract checks the dashboard, authenticated MCP navigation, CLI
 entrypoints and writable service state, then requires the runtime image to omit
 the package build source. The historical comparison may explicitly allow that
 old build tree; the candidate and ordinary image gate require its absence.
+
+The image build now separates package installation from its runtime stage and
+allows only required frontend/package inputs into the build context. Runtime
+base layers, service dependencies, entrypoints and writable directories remain
+part of the comparison contract. Python bytecode is compiled on demand rather
+than retained from the package build stage.
+
+The image job compares the historical recipe and candidate on one runner,
+retaining complete installed-file inventories once in logs and comparing their
+fingerprints, versions, base layers and dashboard content. It adopts only a
+strictly smaller image with identical runtime identity and passing smoke checks.
+Image/layer byte counts and BuildKit's rounded context-transfer measurements are
+retained with source identities. A measured passing baseline is required before
+the ordinary image guard can enforce its 5% growth ceiling; baseline changes
+require a reviewed explanation and source commit.

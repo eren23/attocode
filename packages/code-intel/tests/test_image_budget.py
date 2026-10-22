@@ -1,7 +1,7 @@
 """Reject image growth and invalid comparisons using independent measured inputs."""
 import pytest
 
-from eval.quality.image_budget import check_growth, check_comparison
+from eval.quality.image_budget import check_comparison, check_growth
 
 
 def baseline():
