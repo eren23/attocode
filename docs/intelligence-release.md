@@ -2,7 +2,7 @@
 
 The standalone distribution has its own version in `packages/code-intel/pyproject.toml` and release tags named `intel-vVERSION`. Historical agent `v*` tags remain preserved; the active repository publishes intelligence only.
 
-See the [0.1.14 release notes](intelligence-0.1.14.md) for the latest changes and upgrade instructions.
+See the [0.1.15 release notes](intelligence-0.1.15.md) for the latest changes and upgrade instructions.
 
 ## Release gate
 
@@ -32,7 +32,23 @@ Previously published agent distributions depend on `attocode-code-intel>=0.1.0,<
 
 ## Release
 
-### Maintained local verification
+### Verification on GitHub runners
+
+Product CI runs the maintained candidate verifier for Python 3.12 and 3.13,
+including clean installs and upgrades from 0.1.14. The release workflow runs
+`published-verification` after PyPI publication, checking actual published artifact
+hashes, source/tag identity and both installed trees. Its
+`intelligence-published-verification` artifact retains the report and logs, even
+on failure. A failed post-publication check does not undo an uploaded PyPI version;
+preserve the tag and investigate before creating the GitHub release.
+
+The commands below describe the same maintained verifier for an explicitly chosen
+remote or disposable environment. Repository operators keep broad and release
+installation validation on runners.
+
+<a id="maintained-local-verification"></a>
+
+### Maintained verifier
 
 From the development workspace, verify a built wheel and source distribution
 before publication. Use the candidate's actual version and an older released
@@ -40,9 +56,9 @@ baseline; development source is recorded as a working tree:
 
 ```sh
 .venv/bin/python packages/code-intel/scripts/check_release.py candidate \
-  --version 0.1.14 --baseline-version 0.1.13 --source . \
-  --wheel dist/attocode_code_intel-0.1.14-py3-none-any.whl \
-  --sdist dist/attocode_code_intel-0.1.14.tar.gz \
+  --version 0.1.15 --baseline-version 0.1.14 --source . \
+  --wheel dist/attocode_code_intel-0.1.15-py3-none-any.whl \
+  --sdist dist/attocode_code_intel-0.1.15.tar.gz \
   --allow-downloads --report /tmp/intelligence-candidate.json
 ```
 
@@ -65,7 +81,7 @@ The verifier does not publish, change tags, or restart another client's MCP.
 1. Update the version in `packages/code-intel/pyproject.toml` and in `packages/code-intel/src/attocode_intel/__init__.py`. A test fails when the two differ. The CLI, the MCP server and the HTTP API read `__version__`. Refresh `uv.lock`, and merge a reviewed change with passing Intelligence checks.
 2. Tag the validated commit, for example `git tag -a intel-v0.1.0 -m 'Attocode Intelligence 0.1.0'`, then push that tag.
 3. Follow **Release intelligence** in GitHub Actions. It runs the full reusable checks: Python 3.12/3.13 product tests against migrated PostgreSQL, navigation budgets, generated catalog, standalone wheel isolation on Linux and macOS, dashboard build, and Docker runtime smoke test. It also runs the ranking gate. The release build then verifies the version/tag match and publishes the wheel and source distribution through GitHub OIDC.
-4. Verify a clean `uv tool install attocode-code-intel==0.1.0`, run `init` and `doctor` in a disposable project, then create the GitHub release with installation instructions and the validation results.
+4. Verify that `published-verification` passed on the GitHub runner, including clean installation, upgrade, `init`, `doctor`, installed identities and continuation. Download its report and exact PyPI artifacts, verify their hashes, then create the GitHub release with installation instructions and validation results.
 
 If PyPI reports `invalid-publisher`, check the exact account settings above and rerun the failed publishing job after correcting them. Do not move an already published tag or reuse a published version. A package release does not deploy a hosted service.
 

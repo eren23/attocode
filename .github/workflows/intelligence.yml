@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  INTELLIGENCE_BASELINE: '0.1.14'
+
 concurrency:
   group: intelligence-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -60,6 +63,14 @@ jobs:
           uv pip install --reinstall-package attocode-code-intel --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_upgrade.py verify '/tmp/intelligence upgrade project'
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
+      - name: Maintained clean and previous-version upgrade verification
+        run: |
+          release_version="$(python -c 'import tomllib; print(tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"])')"
+          uv run --no-sync python packages/code-intel/scripts/check_release.py candidate \
+            --version "$release_version" --baseline-version "$INTELLIGENCE_BASELINE" \
+            --source . --wheel "dist/attocode_code_intel-${release_version}-py3-none-any.whl" \
+            --sdist "dist/attocode_code_intel-${release_version}.tar.gz" \
+            --allow-downloads --report quality-artifacts/candidate-verification.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

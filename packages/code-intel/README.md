@@ -38,7 +38,9 @@ tests, such as `_test.dart` and Perl `.t` scripts and `t/` modules. Version
 0.1.12 makes `doctor --client claude` read the local-scope entry that
 `claude mcp add` writes to `~/.claude.json`. Version 0.1.13 fills compact search
 pages within their budget, offers bounded deeper searches, and repairs stale
-navigation indexes after successful restart parsing. Version 0.1.14 adds bounded
+navigation indexes after successful restart parsing. Version 0.1.15 adds parser ownership by thread, one language-server stderr
+reader, bounded native recovery without static callers and release install
+verification on GitHub runners. Version 0.1.14 adds bounded
 selected-file recovery, safe navigation publication, guarded Elixir definitions
 and doctor probe identity. See the [change investigation guide](https://github.com/eren23/attocode/blob/main/docs/guides/change-investigation.md).
 
