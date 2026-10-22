@@ -28,6 +28,9 @@ ORDER = [('baseline', 0), ('candidate', 0), ('candidate', 1),
 LIMITS = {'total_seconds': 1560, 'trial_seconds': 180, 'scored_seconds': 1200,
           'prepare_seconds': 180, 'correctness_seconds': 180,
           'rss_bytes': 2 * 2**30, 'disk_bytes': 2 * 2**30, 'evidence_bytes': 32 * 2**20}
+# The retained first attempt stopped at prechecks, before fixture acquisition or
+# a scored trial. Charge its rounded-up runtime against this same total bound.
+PRIOR_PREFLIGHT_SECONDS = 9.084
 
 
 def digest(raw):
@@ -94,6 +97,9 @@ def prepare(args):
 
 def run_tests(args):
     sys.path.insert(0, str(args.engine))
+    # Existing fresh-process regressions must inherit this same engine path;
+    # parser identities intentionally include source/binary installation paths.
+    os.environ['PYTHONPATH'] = str(args.engine) + os.pathsep + str(runner.REPO)
     import attocode_intel
     import pytest
 
@@ -139,7 +145,7 @@ def controller(args):
     env = dict(runner.environment(scratch), QUALITY_ALLOW_DOWNLOADS='1')
     env['PYTHONPATH'] = str(runner.REPO)
     started, rows = time.monotonic(), []
-    deadline = started + LIMITS['total_seconds']
+    deadline = started + LIMITS['total_seconds'] - PRIOR_PREFLIGHT_SECONDS
     guard = BudgetGuard([scratch, args.out], args.out, LIMITS, deadline)
     paths = [runner.REPO / p for p in (
         'eval/quality/restart_trial.py', 'eval/quality/restart_worker.py', 'eval/quality/experiment_budget.py',
@@ -162,6 +168,7 @@ def controller(args):
                            'attocode_intel/_internal/integrations/context/ast_service.py'}
         runner.write_json(args.out / 'freeze.json', {'baseline': BASE, 'head': head, 'engines': before,
              'operator_identity': identity, 'order': ORDER, 'limits': LIMITS,
+             'prior_preflight_seconds': PRIOR_PREFLIGHT_SECONDS,
              'gate': {'restart_median_ratio_max': .75, 'cold_median_ratio_max': 1.05},
              'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']})
         correctness_deadline = min(deadline, time.monotonic() + LIMITS['correctness_seconds'])
@@ -239,6 +246,7 @@ def controller(args):
         shutil.rmtree(scratch)
         guard.close()
         result.update(seconds=time.monotonic() - started, cleanup_verified=not scratch.exists(),
+            charged_seconds=PRIOR_PREFLIGHT_SECONDS + time.monotonic() - started,
             aggregate_sampled_peaks=guard.peaks, budget_violation=guard.violation,
             operator_identity=identity, identities_unchanged=runner.fingerprint(paths) == identity)
         if guard.violation or not result['identities_unchanged'] or time.monotonic() >= deadline:

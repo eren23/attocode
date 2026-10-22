@@ -81,6 +81,7 @@ def test_changed_extraction_with_unchanged_source_still_repairs(tmp_path, monkey
     def changed(path, *args, **kwargs):
         ast = original(path, *args, **kwargs)
         ast.functions[0].name = 'newly_extracted'
+        ast.functions[0].qualified_name = 'newly_extracted'
         return ast
 
     second = ASTService(str(tmp_path))
