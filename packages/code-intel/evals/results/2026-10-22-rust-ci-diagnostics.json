@@ -1,0 +1,223 @@
+{
+  "base": "1bb4c1e7b7a893a84bdf52beb74e42c62a2eada6",
+  "evidence_hashes": {
+    "fixture-loop-error.xml": "7c216bd42b2cb576e3a8964e28a921d6866aa6c266a6a72ffe9b1a605557af6e",
+    "focused.xml": "cfa130a50bc0a13d86a2025d38e9664645e9e5c677b065df6952d5357b5a9545",
+    "green.xml": "35fbb43f3ccba3887b9ebb7637e4d8d2c1c04f41d136e91d11b4e85c6c315731",
+    "local-freeze.json": "ed58414255b79d7bce94cf4b69c2e04dce97da924ac07fb0977ae001879c82ef",
+    "local/contracts.xml": "6c933b3740446e1b977d38415e7b8d2d26e9674e476a91310da443629c268560",
+    "local/native.xml": "b7256d7a2c0416736872f5a7b3f0928ec2b6b0fdec774b7e61025dae4a39561e",
+    "local/native/lsp-diagnostic-rust.jsonl": "36f5352714f15031a08be0f34e492bfa4a64abc1d6fb306aeb3b768661d0b74a",
+    "local/runtime.json": "8fe47785aa61976e147215a6fc7554deadd402178929b4a38722ed09631efd25",
+    "red.xml": "b99794dab6afedac9ce3f0f0aa2c73b87050020ff73e87cae0755a9ff024a54d",
+    "review/control-results.json": "f288df56dcf837b5913893d787a962573900295108f278d4d4ad4a4bf0a306da",
+    "review/controls.py": "52d1d080ffc2cb6b7a6819b4fa01fd92126692230cdffebdb6342fba6723323a",
+    "run_checks.py": "83519c74f4001389725b856095a0bdd0b9c2829a52c3063a3bda894f5295f0d4"
+  },
+  "full_suite": {
+    "failed": 0,
+    "passed": 4152,
+    "skipped_or_xfail": 15,
+    "total": 4167
+  },
+  "independent_controls": {
+    "abrupt_exit": {
+      "bytes": 826,
+      "child_returncode": 23,
+      "rows": 2
+    },
+    "concurrent_bound": {
+      "attempted_events": 1602,
+      "bytes": 28621,
+      "dropped_events": 1501,
+      "retained_rows": 102
+    },
+    "identities": {
+      "client.py": "6a1d86d7c87979f388316d210f4e622af81282e3447b4a38c3786ad668863ccc",
+      "lsp_trace.py": "8f9f7f649a4c6545cc5d787643f22f53e8ec46614a23dbef2784df151f676f05"
+    },
+    "write_error_transparency": {
+      "capture_errors": 1,
+      "hooks_restored": true,
+      "underlying_send_count": 1
+    }
+  },
+  "installed_rust": {
+    "attempts": 1,
+    "bytes": 385511,
+    "event_kinds": {
+      "inspection": 4,
+      "protocol": 82,
+      "send_returned": 41,
+      "server_stop": 1,
+      "stage": 7,
+      "stderr": 163,
+      "stderr_end": 1,
+      "trace_end": 1,
+      "trace_start": 1
+    },
+    "events": 301,
+    "footer": {
+      "capture_errors": 0,
+      "dropped_events": 0,
+      "first_failure": null,
+      "index": 301,
+      "kind": "trace_end",
+      "oversized_events": 0,
+      "stage": "shutdown",
+      "status": "passed",
+      "truncated": false
+    },
+    "inspections": [
+      {
+        "is_error": false,
+        "path": "src/first.rs",
+        "precision": "verified",
+        "stage": "selected_original"
+      },
+      {
+        "is_error": false,
+        "path": "src/second.rs",
+        "precision": "partial",
+        "stage": "unused_namesake"
+      },
+      {
+        "is_error": false,
+        "path": "src/second.rs",
+        "precision": "verified",
+        "stage": "selected_after_edit"
+      },
+      {
+        "is_error": false,
+        "path": "src/first.rs",
+        "precision": "partial",
+        "stage": "original_after_retarget"
+      }
+    ],
+    "retries": 0,
+    "server_info": {
+      "name": "rust-analyzer",
+      "version": "1.94.1 (e408947b 2026-03-25)"
+    },
+    "sha256": "36f5352714f15031a08be0f34e492bfa4a64abc1d6fb306aeb3b768661d0b74a",
+    "stages": [
+      "warmup",
+      "selected_original",
+      "unused_namesake",
+      "edit_delivery",
+      "selected_after_edit",
+      "original_after_retarget",
+      "shutdown"
+    ]
+  },
+  "limits": {
+    "event_bytes": 65536,
+    "explicit_omission_counters": true,
+    "file_bytes": 4194304,
+    "incremental_startup": true,
+    "partial_without_footer": "incomplete",
+    "startup_and_recent_tail": true
+  },
+  "local_quality": {
+    "evidence_bytes_at_export": 3966075,
+    "peak_rss_bytes": 944439296,
+    "peak_scratch_bytes": 560048622,
+    "phases": [
+      {
+        "cleanup_verified": true,
+        "name": "native",
+        "peak_disk_bytes": 2416640,
+        "peak_rss_bytes": 670400512,
+        "seconds": 5.49,
+        "status": "passed"
+      },
+      {
+        "cleanup_verified": true,
+        "name": "lint",
+        "peak_disk_bytes": 2064384,
+        "peak_rss_bytes": 4259840,
+        "seconds": 0.212,
+        "status": "passed"
+      },
+      {
+        "cleanup_verified": true,
+        "name": "contracts",
+        "peak_disk_bytes": 473893358,
+        "peak_rss_bytes": 944439296,
+        "seconds": 145.259,
+        "status": "passed"
+      },
+      {
+        "cleanup_verified": true,
+        "name": "scale",
+        "peak_disk_bytes": 560048622,
+        "peak_rss_bytes": 282312704,
+        "seconds": 10.142,
+        "status": "passed"
+      },
+      {
+        "cleanup_verified": true,
+        "name": "lifecycle",
+        "peak_disk_bytes": 471484910,
+        "peak_rss_bytes": 130514944,
+        "seconds": 3.677,
+        "status": "passed"
+      }
+    ],
+    "sampled_limits_bytes": 2147483648,
+    "scratch_removed": true,
+    "seconds": 168.20658570795786,
+    "wall_seconds": 168.20747900009155
+  },
+  "not_established": [
+    "Historical OCaml cold-parse cause or frequency",
+    "Original intermittent Rust selected-definition root cause",
+    "Uninstrumented latency or reliability improvement",
+    "Release publication or global tool/MCP upgrade"
+  ],
+  "not_rerun": [
+    "36-pack compatibility matrix",
+    "Local ranking study or consumed questions"
+  ],
+  "product_engine_sha256": "153014b3d581190ae75610b2fde7452fa26ac149fbb31d1123586c9033e2fd0f",
+  "regressions": {
+    "failure_stages": [
+      "warmup",
+      "selected_original",
+      "selected_after_edit"
+    ],
+    "final_focused": {
+      "failed": 0,
+      "passed": 9,
+      "skipped_or_xfail": 0,
+      "total": 9
+    },
+    "initial_fixture_error_retained": true,
+    "initial_green": {
+      "failed": 0,
+      "passed": 7,
+      "skipped_or_xfail": 0,
+      "total": 7
+    },
+    "other_workspace_passthrough": true,
+    "red": {
+      "failed": 1,
+      "passed": 0,
+      "skipped_or_xfail": 0,
+      "total": 1
+    }
+  },
+  "schema_version": 1,
+  "scope": "Opt-in Rust CI diagnostics only; product source and protocol behavior unchanged.",
+  "source_commit": "3e83a7bc43586f556cd127a6f0eff71f76ed27c9",
+  "sources": {
+    ".github/workflows/intelligence.yml": "db528774e515d3a1ef043c429e2e37430d361e5dc6a8ec6c4965cbe6c53e6d04",
+    "docs/intelligence-quality.md": "7e74fc7290ed22fb682a61862d78dc8d0a3ab1b87db3820105aab5dac568316e",
+    "eval/quality/lsp_trace.py": "8f9f7f649a4c6545cc5d787643f22f53e8ec46614a23dbef2784df151f676f05",
+    "packages/code-intel/src/attocode_intel/_internal/integrations/lsp/client.py": "6a1d86d7c87979f388316d210f4e622af81282e3447b4a38c3786ad668863ccc",
+    "packages/code-intel/tests/test_lsp_diagnostics.py": "5f52aeb2b037fc6f5aca71f0474565bf46ac3be390eeb44cf398bcdede277931",
+    "packages/code-intel/tests/test_real_language_server.py": "ef5c649dc92acb5e2c7bcbf9466f5789fc3569f1d220a4b6f71c59b8fd365c86"
+  },
+  "status": "local-verification-complete-unreleased",
+  "upstream": "No upstream success is inferred here. CI/artifact/merge observations remain in the private integration ledger."
+}
