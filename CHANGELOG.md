@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Native parser isolation
+
+- Keep cached native parsers separate for each thread. A worker parsing a new
+  document can no longer resume another worker's timed-out parser state before
+  its reset. The 100 ms parse limit and existing recovery behavior are unchanged.
+
 ## [Intelligence 0.1.14] - 2026-10-22
 
 ### Fixed — Local parsing and navigation
