@@ -2,7 +2,7 @@
 
 ## Current priorities — 2026-10-22
 
-This checkout targets `attocode-code-intel` **0.1.13**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.14**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
@@ -12,6 +12,7 @@ an unchecked feature shipped when its old target version was reached.
 
 | Priority | Action | Completion evidence / limits |
 | --- | --- | --- |
+| 0.1.14 | Local parse recovery, guarded definitions and runtime identity | [Release notes](intelligence-0.1.14.md); source-bound compatibility and native-workflow reports retain explicit limits. No ranking or restart-speed gain is claimed. |
 | Local development | Bound selected-file parse recovery and protect navigation generations | Record native structure/reference failures; retry a selected missing definition once per source/parser generation. Staged index writes and diagnostics remain private until source checks succeed. [Final development validation](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-local-reliability.md) includes the complete product suite and 36 pinned packs. This does not establish the original intermittent OCaml cause. |
 | Local development | Identify the doctor probe and maintain release verification | Doctor distinguishes its new connection from an existing host session. The [maintained verifier](intelligence-release.md#maintained-local-verification) compares clean/upgraded installations with source and artifact identities, without publication side effects. |
 | First-page relevance | JS/TS test-case spans rejected on development | [Corrected comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-21-test-case-spans.md): first-page labeled file matches 15→11 with four individual losses, despite excerpt gains. The initial operator-invalid attempt is retained. All 24 questions are consumed; no fresh validation, retuning or product ranking change. |

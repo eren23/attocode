@@ -4,17 +4,20 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current release:** `attocode-code-intel` 0.1.13 (2026-10-21). See the
-[0.1.13 release notes](intelligence-0.1.13.md) and
-[verified GitHub release](https://github.com/eren23/attocode/releases/tag/intel-v0.1.13).
-It ships compact-search delivery fixes, bounded deeper search and persisted
-navigation repair after successful restart parsing. Ranking remains unchanged.
+**Current release:** `attocode-code-intel` 0.1.14 (2026-10-22). See the
+[0.1.14 release notes](intelligence-0.1.14.md) and
+[GitHub release](https://github.com/eren23/attocode/releases/tag/intel-v0.1.14).
+It adds bounded selected-file recovery, safe navigation publication, guarded
+Elixir definitions and doctor probe identity. Ranking remains unchanged.
 
-**Latest compatibility evidence, 2026-10-21:** all 36 pinned packs completed,
+**Latest compatibility evidence, 2026-10-22:** all 36 pinned packs completed,
 with 157 passed, 124 limited and seven unsupported checks, and no failed or
 incomplete checks. Limited and unsupported outcomes are not verified support.
 The intermittent OCaml cold-parse trigger and Cockroach restart cost remain open;
-see the [compatibility and recovery report](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-20-search-repair.md#compatibility-and-restart-recovery--2026-10-21).
+see the [final reliability report](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-local-reliability.md).
+The six-language native-source checks pass 12 positive cases and four negative
+controls, with two dynamic/macro controls limited. The unmeasured restart shortcut
+is omitted; the single callback-span candidate is rejected on consumed development.
 
 The local `lean` profile is shipped and opt-in; daily remains the default.
 [R7](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)

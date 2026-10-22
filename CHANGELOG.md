@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.14] - 2026-10-22
+
 ### Fixed — Local parsing and navigation
 
 - Record bounded native grammar failures separately from syntax errors. An
