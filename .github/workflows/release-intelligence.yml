@@ -53,3 +53,29 @@ jobs:
           name: intelligence-dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+  published-verification:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      INTELLIGENCE_BASELINE: '0.1.14'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel
+      - name: Verify actual PyPI clean install and previous-version upgrade
+        run: |
+          release_version="$(python -c 'import tomllib; print(tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"])')"
+          uv run --no-sync python packages/code-intel/scripts/check_release.py published \
+            --version "$release_version" --baseline-version "$INTELLIGENCE_BASELINE" \
+            --source . --allow-downloads --report quality-artifacts/published-verification.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: intelligence-published-verification
+          retention-days: 30
+          path: quality-artifacts/

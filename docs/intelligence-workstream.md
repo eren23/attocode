@@ -4,25 +4,26 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current release:** `attocode-code-intel` 0.1.14 (2026-10-22). See the
-[0.1.14 release notes](intelligence-0.1.14.md) and
-[GitHub release](https://github.com/eren23/attocode/releases/tag/intel-v0.1.14).
-It adds bounded selected-file recovery, safe navigation publication, guarded
-Elixir definitions and doctor probe identity. Ranking remains unchanged.
+**Current release:** `attocode-code-intel` 0.1.15 (2026-10-22). See the
+[0.1.15 release notes](intelligence-0.1.15.md) and
+[GitHub release](https://github.com/eren23/attocode/releases/tag/intel-v0.1.15).
+It adds parser ownership by thread, one language-server stderr reader, bounded
+recovery without static callers, and release installation checks on GitHub runners.
+Ranking remains unchanged.
 
-**Unreleased follow-up:** cached native parsers are now owned by each thread.
+**Included in 0.1.15:** cached native parsers are now owned by each thread.
 A real-parser regression reproduces a separate timeout-continuation leak that
 returned a wrong function name and source span for another worker's document.
 The [investigation](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-parser-thread-isolation.md)
 distinguishes that demonstrated defect from the historical OCaml and Rust causes,
-which remain unproven. The published 0.1.14 artifact does not contain this fix.
+which remain unproven. The 0.1.14 artifact does not contain this fix.
 
 The subsequent [OCaml/Rust follow-up](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-ocaml-rust-followup.md)
 fixes competing stderr readers in the language-server client. Event-controlled
 regressions demonstrate the conflict in both reader orders. The existing bounded
 OCaml recovery also restores the exact historical source after a deliberately
 forced native interruption. Neither result establishes the original intermittent
-cause. The stderr correction is unreleased; production deadlines and recovery
+cause. The stderr correction is included in 0.1.15; production deadlines and recovery
 policy remain unchanged.
 
 **Latest compatibility evidence, 2026-10-22:** all 36 pinned packs completed,

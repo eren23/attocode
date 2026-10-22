@@ -26,7 +26,7 @@ attocode-code-intel doctor --global --client codex --project /path/to/repo
 
 Global servers select the explicit `workspace`, an advertised MCP root, or the repository containing their working directory. If a client supplies multiple roots, the agent must select one. Cursor's automatic instruction file is project-scoped even when its server connection is global; run `init --client cursor` in each project where you want those rules.
 
-The current published standalone release is [0.1.14](https://github.com/eren23/attocode/releases/tag/intel-v0.1.14),
+The current published standalone release is [0.1.15](https://github.com/eren23/attocode/releases/tag/intel-v0.1.15),
 available with `uv tool install attocode-code-intel`. The source installation above uses this checkout.
 
 ## Everyday use
@@ -60,6 +60,9 @@ OCaml cold-parse miss remains open.
 [Version 0.1.14](docs/intelligence-0.1.14.md) adds one bounded selected-file recovery
 attempt, protects repaired navigation from concurrent source changes, fixes guarded
 Elixir definitions, and identifies doctor's new server connection.
+[Version 0.1.15](docs/intelligence-0.1.15.md) isolates native parser caches by thread,
+uses one language-server stderr reader, and preserves bounded recovery without
+static callers. Release install verification runs on GitHub runners.
 
 ## Teams and remote agents
 

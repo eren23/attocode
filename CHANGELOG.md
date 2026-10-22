@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.15] - 2026-10-22
+
 ### Fixed — Language-server diagnostics
 
 - Drain each language server's stderr stream through one owned task. Competing
@@ -19,6 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep cached native parsers separate for each thread. A worker parsing a new
   document can no longer resume another worker's timed-out parser state before
   its reset. The 100 ms parse limit and existing recovery behavior are unchanged.
+
+### Fixed — Bounded precision recovery
+
+- Continue recovery after unresolved native definition/reference replies even
+  when the static index has no callers. Preserve the existing two-second deadline,
+  four-attempt cap, resolved unused-symbol fast path and partial failure results.
+
+### Diagnostics and verification
+
+- Retain bounded Rust startup/protocol/stderr history and the first failure stage
+  in CI without adding a competing reader or changing production requests.
+- Run maintained candidate clean/0.1.14-upgrade verification on GitHub runners.
+  After publication, verify the actual PyPI wheel/sdist and installed identities
+  on a runner; retain reports and logs, including unsuccessful attempts.
+- Historical intermittent Rust/OCaml causes remain unproven. Ranking defaults
+  and dependency versions are unchanged; no restart-speed gain is claimed.
 
 ## [Intelligence 0.1.14] - 2026-10-22
 
