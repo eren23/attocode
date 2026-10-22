@@ -1,0 +1,3328 @@
+{
+  "CI_gate": "Require both new exact stderr cases in combined and both primary Python product artifacts before merge; CI/install checks are separate from these local totals.",
+  "OCaml": {
+    "baseline_commit": "15e0990e25ed4fc1e12f2215f44e9f756ab37965",
+    "baseline_engine_sha256": "f67f452bc7165ac68531f16c30f46ff0e0c14bb49e22d80426b44f77e2bfed67",
+    "controller_seconds": 10.195492124999873,
+    "historical_cause_proven": false,
+    "new_OCaml_product_patch": false,
+    "observations": {
+      "forced-interruption": {
+        "checks": {
+          "forced_miss_observed": true,
+          "initial_definition_present": false,
+          "reopen": true,
+          "repeat_same_gateway": true,
+          "selected_exact_source": true
+        },
+        "file_parses": [
+          {
+            "failures": [
+              {
+                "elapsed_micros": 42,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 22,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              }
+            ],
+            "function_count": 0,
+            "phase": "initial",
+            "target_spans": [],
+            "tier": "minimal"
+          },
+          {
+            "failures": [],
+            "function_count": 934,
+            "phase": "selected-recovery",
+            "target_spans": [
+              [
+                7378,
+                7392
+              ]
+            ],
+            "tier": "tree_sitter"
+          },
+          {
+            "failures": [],
+            "function_count": 934,
+            "phase": "reopen",
+            "target_spans": [
+              [
+                7378,
+                7392
+              ]
+            ],
+            "tier": "tree_sitter"
+          }
+        ],
+        "native_calls": [
+          {
+            "caller": "ts_parse_file",
+            "declared_limit_micros": 100000,
+            "exception_message": "Parsing failed",
+            "exception_type": "ValueError",
+            "forced": true,
+            "native_limit_micros": 1,
+            "outcome": "exception",
+            "phase": "initial",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "thread_cpu_micros": 39,
+            "wall_micros": 39
+          },
+          {
+            "caller": "parse",
+            "declared_limit_micros": 100000,
+            "exception_message": "Parsing failed",
+            "exception_type": "ValueError",
+            "forced": true,
+            "native_limit_micros": 1,
+            "outcome": "exception",
+            "phase": "initial",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "thread_cpu_micros": 21,
+            "wall_micros": 21
+          },
+          {
+            "caller": "syntax_tree",
+            "declared_limit_micros": 100000,
+            "exception_message": "Parsing failed",
+            "exception_type": "ValueError",
+            "forced": true,
+            "native_limit_micros": 1,
+            "outcome": "exception",
+            "phase": "initial",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "thread_cpu_micros": 32,
+            "wall_micros": 32
+          },
+          {
+            "caller": "ts_parse_file",
+            "declared_limit_micros": 100000,
+            "forced": false,
+            "native_limit_micros": 100000,
+            "outcome": "tree",
+            "phase": "selected-recovery",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "syntax_errors": false,
+            "thread_cpu_micros": 19291,
+            "wall_micros": 19358
+          },
+          {
+            "caller": "syntax_tree",
+            "declared_limit_micros": 100000,
+            "forced": false,
+            "native_limit_micros": 100000,
+            "outcome": "tree",
+            "phase": "selected-recovery",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "syntax_errors": false,
+            "thread_cpu_micros": 19192,
+            "wall_micros": 19233
+          },
+          {
+            "caller": "ts_parse_file",
+            "declared_limit_micros": 100000,
+            "forced": false,
+            "native_limit_micros": 100000,
+            "outcome": "tree",
+            "phase": "reopen",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "syntax_errors": false,
+            "thread_cpu_micros": 18529,
+            "wall_micros": 18527
+          },
+          {
+            "caller": "syntax_tree",
+            "declared_limit_micros": 100000,
+            "forced": false,
+            "native_limit_micros": 100000,
+            "outcome": "tree",
+            "phase": "reopen",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "syntax_errors": false,
+            "thread_cpu_micros": 18712,
+            "wall_micros": 18728
+          }
+        ],
+        "raw_sha256": "96254b771c71e6024c25c3e9584cd61ac990ebca878cfe4c9abf6b270ea01b39"
+      },
+      "natural": {
+        "checks": {
+          "initial_definition_present": true,
+          "reopen": true,
+          "repeat_same_gateway": true,
+          "selected_exact_source": true
+        },
+        "file_parses": [
+          {
+            "failures": [],
+            "function_count": 934,
+            "phase": "initial",
+            "target_spans": [
+              [
+                7378,
+                7392
+              ]
+            ],
+            "tier": "tree_sitter"
+          },
+          {
+            "failures": [],
+            "function_count": 934,
+            "phase": "reopen",
+            "target_spans": [
+              [
+                7378,
+                7392
+              ]
+            ],
+            "tier": "tree_sitter"
+          }
+        ],
+        "native_calls": [
+          {
+            "caller": "ts_parse_file",
+            "declared_limit_micros": 100000,
+            "forced": false,
+            "native_limit_micros": 100000,
+            "outcome": "tree",
+            "phase": "initial",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "syntax_errors": false,
+            "thread_cpu_micros": 21083,
+            "wall_micros": 22003
+          },
+          {
+            "caller": "syntax_tree",
+            "declared_limit_micros": 100000,
+            "forced": false,
+            "native_limit_micros": 100000,
+            "outcome": "tree",
+            "phase": "initial",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "syntax_errors": false,
+            "thread_cpu_micros": 20393,
+            "wall_micros": 20922
+          },
+          {
+            "caller": "ts_parse_file",
+            "declared_limit_micros": 100000,
+            "forced": false,
+            "native_limit_micros": 100000,
+            "outcome": "tree",
+            "phase": "reopen",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "syntax_errors": false,
+            "thread_cpu_micros": 19710,
+            "wall_micros": 20138
+          },
+          {
+            "caller": "syntax_tree",
+            "declared_limit_micros": 100000,
+            "forced": false,
+            "native_limit_micros": 100000,
+            "outcome": "tree",
+            "phase": "reopen",
+            "reset_completed": true,
+            "source_bytes": 316245,
+            "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+            "syntax_errors": false,
+            "thread_cpu_micros": 19337,
+            "wall_micros": 19390
+          }
+        ],
+        "raw_sha256": "645dba09d26b54d7a766739be97edc9eacb32e57ac88f6f15e50b83e6fa66094"
+      }
+    },
+    "qualification": "Native proxy forces only initial target calls to1us while outer product diagnostics still record declared100000us. Effective limit is recorded independently. This is explicit fault injection, not an observed natural timeout or historical-cause proof. Reopen reparses uncached ASTs; no fast-reuse/performance claim.",
+    "source_commit": "5fbe515aa215909e28328a059701da430bc3cff8",
+    "source_file": "typing/typecore.ml",
+    "source_repo": "ocaml/ocaml",
+    "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010"
+  },
+  "Rust": {
+    "controller_seconds": 16.12105341698043,
+    "historical_first_selected_failure_reproduced": false,
+    "interpretation": [
+      "All three full tests pass, with exact first target and retargeted caller references and shutdown0.",
+      "Transient null/ContentModified persists on the fixed stderr-owner source; current bounded warmup/precision recovery handles these observations.",
+      "Trial1 second.rs definition7/10 success, then12ContentModified, then13same-target success; all document generations remainv1.",
+      "Trial2 warmup5 and firstselected6/7 succeed, then second.rs definition8:null, refs9/10:null, definition11ContentModified, definition12correct; all documents remainv1.",
+      "Workspace fetched-build-data/reload logs precede these transitions, but temporal association does not identify rust-analyzer internal causality.",
+      "Unused namesake empty references and old target empty references after retarget are legitimate; honest partial/no_references is retained.",
+      "No firstselected whole-request failure was reproduced, and no counterfactual baseline natural run was done. Three passes do not show the stderr fix caused success or explain the original Rust failure.",
+      "No explicit $/progress or experimental/serverStatus events were captured; initialize advertised the original client capabilities. Receipt timestamps may lag server logging; full raw stderr/server timestamps are retained.",
+      "Synchronous passive logging adds overhead; these are not uninstrumented cold-latency measurements."
+    ],
+    "natural_baseline_counterfactual": false,
+    "readiness_policy_patch": false,
+    "source_identity": "Fixed uncommitted client source on baseline; identical to validated_source_commit.",
+    "trials": [
+      {
+        "document_events": [
+          {
+            "event_index": 16,
+            "file": "first.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 2.140496875,
+            "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+            "version": 1
+          },
+          {
+            "event_index": 18,
+            "file": "second.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 2.140575083,
+            "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+            "version": 1
+          },
+          {
+            "event_index": 20,
+            "file": "lib.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 2.140658708,
+            "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+            "version": 1
+          },
+          {
+            "event_index": 361,
+            "file": "lib.rs",
+            "method": "textDocument/didChange",
+            "seconds": 4.344593666,
+            "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+            "version": 2
+          }
+        ],
+        "explicit_progress_or_server_status_events": 0,
+        "initialize_capabilities": {
+          "textDocument": {
+            "completion": {
+              "completionItem": {
+                "snippetSupport": true
+              }
+            },
+            "definition": {},
+            "hover": {},
+            "publishDiagnostics": {},
+            "references": {}
+          },
+          "workspace": {
+            "workspaceFolders": true
+          }
+        },
+        "requests": [
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 2,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.140830875,
+            "response_seconds": 2.147927833,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 3,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.248486791,
+            "response_seconds": 2.249078583,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 4,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.3502715,
+            "response_seconds": 2.350758041,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 5,
+            "kind": "null",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.451541291,
+            "response_seconds": 2.451932416,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 6,
+            "kind": "null",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.552850125,
+            "response_seconds": 2.553175,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": {
+              "code": -32801,
+              "message": "content modified"
+            },
+            "file": "first.rs",
+            "id": 7,
+            "kind": "error",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.653770833,
+            "response_seconds": 2.659316166,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": {
+              "code": -32801,
+              "message": "content modified"
+            },
+            "file": "first.rs",
+            "id": 8,
+            "kind": "error",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.760612375,
+            "response_seconds": 2.939702625,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 9,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.041014166,
+            "response_seconds": 3.950703041,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 10,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.95368975,
+            "response_seconds": 3.954206916,
+            "stage": "selected_original"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 11,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.954275583,
+            "response_seconds": 3.955090541,
+            "stage": "selected_original"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 12,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.970022666,
+            "response_seconds": 3.970850416,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 13,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.970967875,
+            "response_seconds": 3.971409125,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 14,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.971568416,
+            "response_seconds": 3.971967208,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 15,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.02316275,
+            "response_seconds": 4.024833833,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 16,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.024977125,
+            "response_seconds": 4.025258208,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 17,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.126441833,
+            "response_seconds": 4.126897625,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 18,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.12702525,
+            "response_seconds": 4.127257041,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 19,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.328480625,
+            "response_seconds": 4.329154041,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 20,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.329307375,
+            "response_seconds": 4.329860166,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 21,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.344849333,
+            "response_seconds": 4.350949208,
+            "stage": "edit_delivery"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 22,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.356840541,
+            "response_seconds": 4.357227666,
+            "stage": "selected_after_edit"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 23,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.357363208,
+            "response_seconds": 4.357627916,
+            "stage": "selected_after_edit"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 24,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.372684125,
+            "response_seconds": 4.373022458,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 25,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.373147875,
+            "response_seconds": 4.373458458,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 26,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.374000083,
+            "response_seconds": 4.374815875,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 27,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.426100708,
+            "response_seconds": 4.426580083,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 28,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.426704708,
+            "response_seconds": 4.426936791,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 29,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.528203333,
+            "response_seconds": 4.528815125,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 30,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.528943166,
+            "response_seconds": 4.529176541,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 31,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.730380291,
+            "response_seconds": 4.730839916,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 32,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.730940375,
+            "response_seconds": 4.731186916,
+            "stage": "original_after_retarget"
+          }
+        ],
+        "server_info": {
+          "name": "rust-analyzer",
+          "version": "1.94.1 (e408947b 2026-03-25)"
+        },
+        "shutdown_returncode": 0,
+        "stages": [
+          {
+            "begin_event": 302,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/first.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 317,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 1,
+                  "status": "verified",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "verified"
+            },
+            "references": [
+              {
+                "file_path": "src/lib.rs",
+                "line": 3,
+                "ref_kind": "call",
+                "resolution": "language_server",
+                "source": "lsp",
+                "symbol": "helper",
+                "syntax": "first.helper"
+              }
+            ],
+            "seconds": 0.01762787500000007,
+            "stage": "selected_original"
+          },
+          {
+            "begin_event": 318,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/second.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 360,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 0,
+                  "status": "no_references",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "partial"
+            },
+            "references": [],
+            "seconds": 0.37488658399999997,
+            "stage": "unused_namesake"
+          },
+          {
+            "begin_event": 372,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/second.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 379,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 1,
+                  "status": "verified",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "verified"
+            },
+            "references": [
+              {
+                "file_path": "src/lib.rs",
+                "line": 4,
+                "ref_kind": "call",
+                "resolution": "language_server",
+                "source": "lsp",
+                "symbol": "helper",
+                "syntax": "second.helper"
+              }
+            ],
+            "seconds": 0.018775416000000433,
+            "stage": "selected_after_edit"
+          },
+          {
+            "begin_event": 380,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/first.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 410,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 0,
+                  "status": "no_references",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "partial"
+            },
+            "references": [],
+            "seconds": 0.3744087080000007,
+            "stage": "original_after_retarget"
+          }
+        ],
+        "stderr_bytes": 32055,
+        "stderr_read_conflicts": 0,
+        "stderr_reader_methods": [
+          "read"
+        ],
+        "stderr_sha256": "eae2658f415caee69ee89864fef71b742db1030a5f528ca77e9de08abf80c320",
+        "trace_sha256": "54256904e5b3a55e8e829292c61db05e1627a9cb491f128d06b193b5e426c347",
+        "trial": 0
+      },
+      {
+        "document_events": [
+          {
+            "event_index": 14,
+            "file": "first.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 2.153631042,
+            "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+            "version": 1
+          },
+          {
+            "event_index": 16,
+            "file": "second.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 2.153709209,
+            "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+            "version": 1
+          },
+          {
+            "event_index": 18,
+            "file": "lib.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 2.153789667,
+            "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+            "version": 1
+          },
+          {
+            "event_index": 387,
+            "file": "lib.rs",
+            "method": "textDocument/didChange",
+            "seconds": 3.760495375,
+            "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+            "version": 2
+          }
+        ],
+        "explicit_progress_or_server_status_events": 0,
+        "initialize_capabilities": {
+          "textDocument": {
+            "completion": {
+              "completionItem": {
+                "snippetSupport": true
+              }
+            },
+            "definition": {},
+            "hover": {},
+            "publishDiagnostics": {},
+            "references": {}
+          },
+          "workspace": {
+            "workspaceFolders": true
+          }
+        },
+        "requests": [
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 2,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.153893875,
+            "response_seconds": 2.154986459,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 3,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.255525,
+            "response_seconds": 2.256263292,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 4,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.35753825,
+            "response_seconds": 2.359262542,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 5,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.361466875,
+            "response_seconds": 2.362256709,
+            "stage": "selected_original"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 6,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.362337875,
+            "response_seconds": 2.362872334,
+            "stage": "selected_original"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 7,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.379362125,
+            "response_seconds": 2.380413709,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 8,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.380561417,
+            "response_seconds": 2.381867334,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 9,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.3821495,
+            "response_seconds": 2.382930375,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 10,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.434124209,
+            "response_seconds": 2.434732334,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 11,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.434809125,
+            "response_seconds": 2.43544225,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": {
+              "code": -32801,
+              "message": "content modified"
+            },
+            "file": "second.rs",
+            "id": 12,
+            "kind": "error",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.536230125,
+            "response_seconds": 2.627297584,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 13,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.828434834,
+            "response_seconds": 3.747071917,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 14,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.747171459,
+            "response_seconds": 3.747625334,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 15,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.761024417,
+            "response_seconds": 3.769893292,
+            "stage": "edit_delivery"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 16,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.774104459,
+            "response_seconds": 3.774594917,
+            "stage": "selected_after_edit"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 17,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.774657709,
+            "response_seconds": 3.774978667,
+            "stage": "selected_after_edit"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 18,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.788501917,
+            "response_seconds": 3.789122375,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 19,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.789333209,
+            "response_seconds": 3.78997775,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 20,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.790374875,
+            "response_seconds": 3.795935167,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 21,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.847288417,
+            "response_seconds": 3.848334459,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 22,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.8484315,
+            "response_seconds": 3.848925334,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 23,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.949840875,
+            "response_seconds": 3.950599459,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 24,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.950679084,
+            "response_seconds": 3.951139042,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 25,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.153644667,
+            "response_seconds": 4.154462084,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 26,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.154825417,
+            "response_seconds": 4.156620709,
+            "stage": "original_after_retarget"
+          }
+        ],
+        "server_info": {
+          "name": "rust-analyzer",
+          "version": "1.94.1 (e408947b 2026-03-25)"
+        },
+        "shutdown_returncode": 0,
+        "stages": [
+          {
+            "begin_event": 121,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/first.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 136,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 1,
+                  "status": "verified",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "verified"
+            },
+            "references": [
+              {
+                "file_path": "src/lib.rs",
+                "line": 3,
+                "ref_kind": "call",
+                "resolution": "language_server",
+                "source": "lsp",
+                "symbol": "helper",
+                "syntax": "first.helper"
+              }
+            ],
+            "seconds": 0.017857375000000175,
+            "stage": "selected_original"
+          },
+          {
+            "begin_event": 137,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/second.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 386,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 0,
+                  "status": "no_references",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "partial"
+            },
+            "references": [],
+            "seconds": 1.382103292,
+            "stage": "unused_namesake"
+          },
+          {
+            "begin_event": 440,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/second.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 455,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 1,
+                  "status": "verified",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "verified"
+            },
+            "references": [
+              {
+                "file_path": "src/lib.rs",
+                "line": 4,
+                "ref_kind": "call",
+                "resolution": "language_server",
+                "source": "lsp",
+                "symbol": "helper",
+                "syntax": "second.helper"
+              }
+            ],
+            "seconds": 0.015620874999999756,
+            "stage": "selected_after_edit"
+          },
+          {
+            "begin_event": 456,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/first.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 534,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 0,
+                  "status": "no_references",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "partial"
+            },
+            "references": [],
+            "seconds": 0.40550887499999977,
+            "stage": "original_after_retarget"
+          }
+        ],
+        "stderr_bytes": 47077,
+        "stderr_read_conflicts": 0,
+        "stderr_reader_methods": [
+          "read"
+        ],
+        "stderr_sha256": "c69f6ac0461387e875365816eb23e12837653ce176dfeccb891ba860ec73f99a",
+        "trace_sha256": "7594ea49c4fed4ae906bb1a569987814fcc961c186c057bca4f6f95fd4817d53",
+        "trial": 1
+      },
+      {
+        "document_events": [
+          {
+            "event_index": 16,
+            "file": "first.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 1.969615375,
+            "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+            "version": 1
+          },
+          {
+            "event_index": 18,
+            "file": "second.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 1.969699125,
+            "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+            "version": 1
+          },
+          {
+            "event_index": 20,
+            "file": "lib.rs",
+            "method": "textDocument/didOpen",
+            "seconds": 1.969785375,
+            "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+            "version": 1
+          },
+          {
+            "event_index": 354,
+            "file": "lib.rs",
+            "method": "textDocument/didChange",
+            "seconds": 3.839118708,
+            "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+            "version": 2
+          }
+        ],
+        "explicit_progress_or_server_status_events": 0,
+        "initialize_capabilities": {
+          "textDocument": {
+            "completion": {
+              "completionItem": {
+                "snippetSupport": true
+              }
+            },
+            "definition": {},
+            "hover": {},
+            "publishDiagnostics": {},
+            "references": {}
+          },
+          "workspace": {
+            "workspaceFolders": true
+          }
+        },
+        "requests": [
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 2,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 1.969921625,
+            "response_seconds": 1.97105675,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 3,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.071484041,
+            "response_seconds": 2.07269025,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 4,
+            "kind": "null",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.174176875,
+            "response_seconds": 2.174563416,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 5,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.275724166,
+            "response_seconds": 2.276758458,
+            "stage": "warmup"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 6,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.278619708,
+            "response_seconds": 2.279000666,
+            "stage": "selected_original"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 7,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.279067916,
+            "response_seconds": 2.27948825,
+            "stage": "selected_original"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 8,
+            "kind": "null",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.292096,
+            "response_seconds": 2.301244791,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 9,
+            "kind": "null",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.301357791,
+            "response_seconds": 2.301583375,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 10,
+            "kind": "null",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.301852,
+            "response_seconds": 2.302003166,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": {
+              "code": -32801,
+              "message": "content modified"
+            },
+            "file": "second.rs",
+            "id": 11,
+            "kind": "error",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.353138541,
+            "response_seconds": 2.575033958,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 12,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 2.675663708,
+            "response_seconds": 3.620229125,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 13,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.620403375,
+            "response_seconds": 3.620929125,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 14,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.821799208,
+            "response_seconds": 3.82242525,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "592779e7636faaa1b391821e99a0f3382dd8141fa4b3a363ed76a9b3c6ed08f3",
+                "version": 1
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 15,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.822538875,
+            "response_seconds": 3.822798916,
+            "stage": "unused_namesake"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 16,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.839417708,
+            "response_seconds": 3.846964708,
+            "stage": "edit_delivery"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 17,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.853553666,
+            "response_seconds": 3.854149833,
+            "stage": "selected_after_edit"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "second.rs",
+            "id": 18,
+            "kind": "nonempty",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.854242083,
+            "response_seconds": 3.854702875,
+            "stage": "selected_after_edit"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 19,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.874667916,
+            "response_seconds": 3.876324833,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 20,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.87666375,
+            "response_seconds": 3.877281166,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 21,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.877720083,
+            "response_seconds": 3.878334958,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 22,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.929949958,
+            "response_seconds": 3.930779916,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 23,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 3.931008791,
+            "response_seconds": 3.931907666,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 24,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.033253166,
+            "response_seconds": 4.034519791,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 25,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.034757958,
+            "response_seconds": 4.035505,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 26,
+            "kind": "nonempty",
+            "method": "textDocument/definition",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.236319791,
+            "response_seconds": 4.237007166,
+            "stage": "original_after_retarget"
+          },
+          {
+            "documents": {
+              "first.rs": {
+                "text_sha256": "ef006884b3931f29b7b661d1fca60ad5400b9583508ff1292689aafe676181c9",
+                "version": 1
+              },
+              "lib.rs": {
+                "text_sha256": "7c60babe814b6ad9283f285b2b5505f049829f1e2ef7d76d2e8f2d596101355c",
+                "version": 2
+              },
+              "second.rs": {
+                "text_sha256": "76adfdd102e9a2733004632740a98a4f5eb1901b36c14d06e38e42cd5c7e0197",
+                "version": 1
+              }
+            },
+            "error": null,
+            "file": "first.rs",
+            "id": 27,
+            "kind": "empty_list",
+            "method": "textDocument/references",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "request_seconds": 4.237204916,
+            "response_seconds": 4.239299125,
+            "stage": "original_after_retarget"
+          }
+        ],
+        "server_info": {
+          "name": "rust-analyzer",
+          "version": "1.94.1 (e408947b 2026-03-25)"
+        },
+        "shutdown_returncode": 0,
+        "stages": [
+          {
+            "begin_event": 138,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/first.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 153,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 1,
+                  "status": "verified",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "verified"
+            },
+            "references": [
+              {
+                "file_path": "src/lib.rs",
+                "line": 3,
+                "ref_kind": "call",
+                "resolution": "language_server",
+                "source": "lsp",
+                "symbol": "helper",
+                "syntax": "first.helper"
+              }
+            ],
+            "seconds": 0.013994791000000006,
+            "stage": "selected_original"
+          },
+          {
+            "begin_event": 154,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/second.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 353,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 0,
+                  "status": "no_references",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "partial"
+            },
+            "references": [],
+            "seconds": 1.54698525,
+            "stage": "unused_namesake"
+          },
+          {
+            "begin_event": 369,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/second.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 380,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 1,
+                  "status": "verified",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "verified"
+            },
+            "references": [
+              {
+                "file_path": "src/lib.rs",
+                "line": 4,
+                "ref_kind": "call",
+                "resolution": "language_server",
+                "source": "lsp",
+                "symbol": "helper",
+                "syntax": "second.helper"
+              }
+            ],
+            "seconds": 0.02124570799999992,
+            "stage": "selected_after_edit"
+          },
+          {
+            "begin_event": 381,
+            "definition": {
+              "end_line": 1,
+              "file_path": "src/first.rs",
+              "kind": "function",
+              "name": "helper",
+              "qualified_name": "helper",
+              "start_line": 1
+            },
+            "end_event": 413,
+            "precision": {
+              "definitions_truncated": false,
+              "queries": [
+                {
+                  "language": "rust",
+                  "references": 0,
+                  "status": "no_references",
+                  "symbol": "helper"
+                }
+              ],
+              "status": "partial"
+            },
+            "references": [],
+            "seconds": 0.3873187500000004,
+            "stage": "original_after_retarget"
+          }
+        ],
+        "stderr_bytes": 33814,
+        "stderr_read_conflicts": 0,
+        "stderr_reader_methods": [
+          "read"
+        ],
+        "stderr_sha256": "8667dadce25123d14a94a769b547aec7e5a410aa2c574bc619541a5b77398444",
+        "trace_sha256": "b81427fd2681884327962e6d8d2ac8f4c04de39f8c31bf995c45dbb068be639c",
+        "trial": 2
+      }
+    ]
+  },
+  "baseline_commit": "15e0990e25ed4fc1e12f2215f44e9f756ab37965",
+  "cleanup_verified": true,
+  "complete_suite": {
+    "errors": 0,
+    "failures": 0,
+    "passed": 4143,
+    "sha256": "65d2d6e6babbe92943f1edab071c81390f6544ec2d44f1a408fcb0c104c001ee",
+    "skipped_or_expected_failure": 15,
+    "total": 4158
+  },
+  "correction": "Keep the existing dedicated stderr drain as sole owner; remove the nested response-loop reader.",
+  "demonstrated_defect": "Two independent tasks consume the same language-server stderr StreamReader; both wait orders reproduce concurrent-read conflicts.",
+  "evidence_sha256": {
+    "candidate.json": "0597d7624affc8ccd2c9cf6377260899e4839eaf99400fe55e9ada07e76b5b77",
+    "ocaml/freeze.json": "d308fe49465a4d619f1bdd44591ad50578f2d973b985af5d4dac5d234abda214",
+    "ocaml/run.py": "614d3b9b0c8cad77631ac548ef347f7592ad343555f1a0cabd80365efd4144dd",
+    "ocaml/runtime.json": "178889e0906bf75e005ddd8f60e89ead559c43b8dd77ac3b805a9298afe15c6d",
+    "ocaml/summary.json": "a3a215446ab73336a9140f0c35fa318edad1576ee12562e30ec060e42d91439f",
+    "ocaml/worker.py": "7e67d038b061f08065f9742e67879bd653d87910b1fd1d6919cec7f53c5e9a45",
+    "quality-freeze.json": "0d866f29a7ba5898bd53289fbe4cc2bc0b265b02e0ed0ef25c0aef65afacad65",
+    "quality-runtime.json": "dc0cb986b4c41fa01f89ba5c5f384627fb03710a9022956688cede76fb0b3b9d",
+    "review.json": "bbd78f7eb309040c4a1ab521b161b507614b301cff1b67c8ebdd3bc7a030ea9e",
+    "rust/natural-freeze.json": "9635ba6b0ed8c500761c3660d2663114b69ff55181b308af4fe10a121cdfa1e5",
+    "rust/natural/analysis.json": "d161aebee8dcc41ddb9fe88744ce6f04141f9d00b7972ad0b314c85f84e6cd00",
+    "rust/natural/completion.json": "add9fd3e86769f772bef3670078fdca69a312e2e788fd4b04dd5baeff29b7959",
+    "rust/natural_controller.py": "e536f47d351562c4a419e628b6627feaf3d83af1b19bb865506af416fa48b75a",
+    "rust/passive_trace.py": "bae67c12d85df04ab1909cf6b8767b568a2d85b05b608cada1492bceb642c89c",
+    "rust/stderr-baseline-red.json": "b2c9a854b4d11a3fac91be04d0c102a630d2ea91274a4973d6dd1c7684fced98",
+    "rust/stderr-baseline-red.xml": "1153ff9b864813fe46b00fe523bbbfd12b8f326c02a17dcb804fa6048607575c",
+    "rust/stderr-focused.xml": "a5f6954b71b784f9df5fc769b758b1056bff5d21ce873c48c8a14ebfb3aca41a",
+    "rust/stderr-green.xml": "43f5386ea86747947aa9abaebbf2bcea21e5ff3952ce1d8eb703c32c82fed8bc"
+  },
+  "global_upgrade_or_host_restart": false,
+  "model_cloud_or_grammar_acquisition_runs": 0,
+  "native_environment": {
+    "python": "3.12.12"
+  },
+  "phases": {
+    "local": {
+      "checks": [
+        {
+          "cleanup_verified": true,
+          "name": "lint",
+          "peak_disk_bytes": 0,
+          "peak_rss_bytes": 311296,
+          "seconds": 0.214,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "contracts",
+          "peak_disk_bytes": 470935995,
+          "peak_rss_bytes": 947585024,
+          "seconds": 141.971,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "scale",
+          "peak_disk_bytes": 557447611,
+          "peak_rss_bytes": 254181376,
+          "seconds": 11.043,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "lifecycle",
+          "peak_disk_bytes": 468560315,
+          "peak_rss_bytes": 125468672,
+          "seconds": 3.906,
+          "status": "passed"
+        }
+      ],
+      "report_sha256": "f786c478349fdf76a861c523cb93d6c7dabf63f2e84a89a7fafad7466d9d347b",
+      "seconds": 161.1252294590231
+    },
+    "ranking": {
+      "checks": [
+        {
+          "cleanup_verified": true,
+          "name": "ranking",
+          "peak_disk_bytes": 303677440,
+          "peak_rss_bytes": 204177408,
+          "seconds": 44.579,
+          "status": "passed"
+        }
+      ],
+      "report_sha256": "da5bb188a425aa68de8ca0c644708fb3711f6abffa89269832812eb0303fd1d7",
+      "seconds": 44.681052541942336
+    }
+  },
+  "qualifications": [
+    "The 36-pack matrix was not repeated for this LSP-only correction.",
+    "Historical ranking questions are consumed; no fresh relevance claim.",
+    "DEBUG stderr logs remain chunked and truncated; not a lossless public tracing facility.",
+    "Controlled1us target interruption differs from outer declared100000us diagnostic limit.",
+    "Private Rust passive tracing adds synchronous logging overhead and enables informational server logging.",
+    "Current permanent CI traces are rolling and start after initialize; full before-start diagnostics here are private.",
+    "Existing Starlette TestClient timeout deprecation warning retained in local suite."
+  ],
+  "quality_limit_seconds": 600,
+  "quality_shared_seconds": 206.56649562506936,
+  "release_status": "unreleased",
+  "schema": 1,
+  "source_files_sha256": {
+    "packages/code-intel/src/attocode_intel/_internal/integrations/lsp/client.py": "6a1d86d7c87979f388316d210f4e622af81282e3447b4a38c3786ad668863ccc",
+    "packages/code-intel/tests/test_lsp_stderr_lifecycle.py": "68c60170c19d1731810ce3a42fa861009cd9b71d16536586a31f448453fe26a2"
+  },
+  "source_unchanged_during_quality": true,
+  "status": "local_validation_complete",
+  "stderr_baseline_red": {
+    "errors": 0,
+    "failures": 2,
+    "passed": 0,
+    "sha256": "1153ff9b864813fe46b00fe523bbbfd12b8f326c02a17dcb804fa6048607575c",
+    "skipped_or_expected_failure": 0,
+    "total": 2
+  },
+  "stderr_focused": {
+    "errors": 0,
+    "failures": 0,
+    "passed": 103,
+    "sha256": "a5f6954b71b784f9df5fc769b758b1056bff5d21ce873c48c8a14ebfb3aca41a",
+    "skipped_or_expected_failure": 0,
+    "total": 103
+  },
+  "stderr_green": {
+    "errors": 0,
+    "failures": 0,
+    "passed": 2,
+    "sha256": "43f5386ea86747947aa9abaebbf2bcea21e5ff3952ce1d8eb703c32c82fed8bc",
+    "skipped_or_expected_failure": 0,
+    "total": 2
+  },
+  "validated_source_commit": "ac1def2972a5ea334c35b3ee00aae23da62ef54d"
+}

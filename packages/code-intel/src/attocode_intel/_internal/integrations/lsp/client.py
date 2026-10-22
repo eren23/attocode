@@ -707,32 +707,9 @@ class _LSPClient:
             logger.debug("LSP OUT: %s %s", method, params_str)
 
     async def _read_loop(self) -> None:
-        """Background loop reading LSP responses.
-
-        Also captures stderr for server diagnostics when tracing is enabled.
-        """
+        """Read LSP responses; the separate stderr task owns that stream."""
         if self._process is None:
             return
-
-        # Start stderr reader if tracing is enabled
-        stderr_task: asyncio.Task[None] | None = None
-        if self._process.stderr:
-            async def _read_stderr() -> None:
-                try:
-                    stderr_lines: list[str] = []
-                    while True:
-                        line = await self._process.stderr.readline()
-                        if not line:
-                            break
-                        decoded = line.decode(errors="replace").strip()
-                        if decoded:
-                            stderr_lines.append(decoded)
-                            if self._trace_enabled and stderr_lines:
-                                logger.debug("LSP STDERR: %s", decoded)
-                except Exception:
-                    pass
-
-            stderr_task = asyncio.create_task(_read_stderr())
 
         try:
             if self._process.stdout:
@@ -744,13 +721,6 @@ class _LSPClient:
                     self._process_buffer()
         except asyncio.CancelledError:
             pass
-        finally:
-            if stderr_task:
-                stderr_task.cancel()
-                try:
-                    await stderr_task
-                except asyncio.CancelledError:
-                    pass
 
     def _process_buffer(self) -> None:
         """Parse complete messages from the buffer."""

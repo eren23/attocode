@@ -17,6 +17,14 @@ The [investigation](https://github.com/eren23/attocode/blob/main/packages/code-i
 distinguishes that demonstrated defect from the historical OCaml and Rust causes,
 which remain unproven. The published 0.1.14 artifact does not contain this fix.
 
+The subsequent [OCaml/Rust follow-up](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-ocaml-rust-followup.md)
+fixes competing stderr readers in the language-server client. Event-controlled
+regressions demonstrate the conflict in both reader orders. The existing bounded
+OCaml recovery also restores the exact historical source after a deliberately
+forced native interruption. Neither result establishes the original intermittent
+cause. The stderr correction is unreleased; production deadlines and recovery
+policy remain unchanged.
+
 **Latest compatibility evidence, 2026-10-22:** all 36 pinned packs completed,
 with 157 passed, 124 limited and seven unsupported checks, and no failed or
 incomplete checks. Limited and unsupported outcomes are not verified support.
