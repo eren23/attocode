@@ -157,6 +157,13 @@ payload. Hooks apply only to the fixture workspace and are restored after the
 test; an existing artifact is never overwritten. This opt-in test observer adds
 logging overhead and does not establish a cause for intermittent Rust failures.
 
+Precision enrichment keeps its existing two-second deadline and four-attempt
+limit when static analysis finds no callers. An unresolved definition together
+with empty references can be transient, so that combination continues bounded
+recovery. A resolved declaration with no callers still takes the unused-symbol
+fast path. Persistent unresolved results stay partial. This correction does not
+identify the historical intermittent Rust failure's cause.
+
 The ranking gate uses its unchanged frozen baseline. A temporary local commit
 lets that gate inspect the current working input without committing or publishing
 the user's checkout. Its source snapshots are disposable and its engine hash is
