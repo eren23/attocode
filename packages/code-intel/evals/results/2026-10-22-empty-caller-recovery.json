@@ -1,0 +1,84 @@
+{
+  "base": "9c09cc8e4aa1b38812f1bb09413b7d42b8e66d61",
+  "ci_requirements": {
+    "precision_recovery": 11,
+    "real_server_workflows": 4,
+    "relevant_regressions": 165,
+    "sql_per_python": 51
+  },
+  "date": "2026-10-22",
+  "evidence_sha256": {
+    "integration/actual-inventory-audit.json": "f54d1018785da00fd0f4799878ec93bdea054737b32bb2406f19a0e41bf2e900",
+    "integration/precision-gate-proof.json": "fdfabf210ed2bab28c2e9c7843b2374366bd59157a578efb569e3de42ea8cb3c",
+    "local/contracts.xml": "27a028ba5d119719934f3b3fae5ea9ee486b1cd29f618a95da818269e9b3f946",
+    "local/runtime.json": "163359e0038d1ee2eb5bc643aa2dc92a8c6c84376b38284bb83a4a004b5958b0",
+    "ocaml/summary.json": "612373cd31b624c5bf76026642f2d40c9fc1f5dcd777ccd02b2b82d7ff937c15",
+    "review/final-baseline.xml": "7b5094ee100b3624d7b60cd13483b269db9c4eb84b8af4428b5f79137ae7b8f3",
+    "review/final-green.xml": "9cbbaed25ed0904262fa1e4a5ed0eead95ded2dbbbafb9679e585cfb0ea7df95",
+    "review/review-final.json": "54fef6da97f6dd102243066f8deb737fe496f207cb98aa24dff41b46a0b5f3e7"
+  },
+  "existing_local_verification": {
+    "expected_failures": 1,
+    "owned_scratch_removed": true,
+    "passed": 4157,
+    "peak_managed_disk_bytes": 563075651,
+    "peak_rss_bytes": 981565440,
+    "seconds": 162.7486903751269,
+    "skipped": 14,
+    "sql_passed": 50,
+    "sql_skipped": 1
+  },
+  "limits": [
+    "Historical Rust and OCaml triggers remain unproven",
+    "No ranking or Cockroach restart-speed gain",
+    "Remaining validation runs in GitHub CI; no further local test suite",
+    "No release, installation change or host MCP restart"
+  ],
+  "ocaml": {
+    "conclusion": "Both current observations pass; no native timeout, extraction loss or definition publication loss was observed. Wall and threadCPU are close for these three successful native calls. No new OCaml product patch is justified by these observations.",
+    "historical_limit": "Archived natural-1 already loses the native tree before extraction, consistent with exhaustion of the100ms native budget. Its exception/threadCPU/scheduling data are unavailable. New successful observations cannot establish the historical trigger or attribute it to scheduling, page-in, extraction, cache publication or the earlier parser-thread defect.",
+    "native_calls": [
+      {
+        "caller": "ts_parse_file",
+        "effective_limit_micros": 100000,
+        "mode": "direct",
+        "native_outcome": "tree",
+        "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+        "thread_cpu_micros": 20063,
+        "wall_micros": 20077
+      },
+      {
+        "caller": "ts_parse_file",
+        "effective_limit_micros": 100000,
+        "mode": "gateway",
+        "native_outcome": "tree",
+        "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+        "thread_cpu_micros": 18521,
+        "wall_micros": 18526
+      },
+      {
+        "caller": "syntax_tree",
+        "effective_limit_micros": 100000,
+        "mode": "gateway",
+        "native_outcome": "tree",
+        "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+        "thread_cpu_micros": 18605,
+        "wall_micros": 18626
+      }
+    ],
+    "seconds": 4.871503083966672,
+    "workers": 2
+  },
+  "regression": {
+    "attempt_limit": 4,
+    "baseline_failed": 4,
+    "baseline_ready_unused_passed": 1,
+    "deadline_seconds": 2,
+    "fixed_passed": 5
+  },
+  "scope": "Continue existing bounded recovery when both native lookups are unresolved and static callers are absent",
+  "sources": {
+    "packages/code-intel/src/attocode_intel/precision.py": "7245a019ab647448839c12bbd3043ce3d96f38640512c9ef61c75d32070cd165",
+    "packages/code-intel/tests/test_precision_recovery.py": "cc544b561735510fe168ffbfa161434070143d177b0d35ede9ccaebd7ac5be7e"
+  }
+}

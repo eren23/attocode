@@ -134,7 +134,11 @@ class PrecisionSession:
                                 if str(exc).lower() != "content modified" or attempt == 3:
                                     raise
                             else:
-                                if references or not candidates:
+                                # No syntax callers does not establish server
+                                # readiness: both native lookups may be transiently
+                                # unresolved. A resolved unused declaration can
+                                # still take the fast path.
+                                if references or (resolved is not None and not candidates):
                                     break
                             # A server can briefly return null after a successful
                             # warmup or edit. Yield before retrying, never extend
