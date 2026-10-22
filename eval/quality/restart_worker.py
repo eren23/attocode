@@ -37,7 +37,7 @@ def canonical(operation, data):
     return {key: data[key] for key in keys if key in data}
 
 
-async def navigate(root, spec):
+async def navigate(root, spec, output):
     from attocode_intel.gateway import OperationGateway
 
     gateway = OperationGateway(str(root), "daily", watch=False)
@@ -53,11 +53,34 @@ async def navigate(root, spec):
     requests += [(q["id"], "semantic_search", {"query": q["query"], "top_k": 24}) for q in spec.get("queries", [])]
     evidence, timings = {}, {}
     started = time.monotonic()
+    journal = output.with_suffix('.jsonl')
+    record = {'status': 'in_progress', 'pid': os.getpid(), 'evidence': evidence,
+              'operations_seconds': timings, 'journal': journal.name}
+
+    def checkpoint():
+        raw = json.dumps(record, indent=2) + '\n'
+        assert len(raw.encode()) <= 2 * 2**20, 'phase checkpoint evidence cap'
+        temporary = output.with_suffix('.tmp')
+        temporary.write_text(raw)
+        temporary.replace(output)
+
     try:
         for label, operation, arguments in requests:
             before = time.monotonic()
             while True:
                 response = await gateway.execute(operation, arguments)
+                # Preserve the actual response before assertions or canonical
+                # conversion, including an eventual failing/warming reply.
+                raw = (json.dumps({'label': label, 'operation': operation, 'arguments': arguments,
+                       'elapsed_seconds': time.monotonic() - before,
+                       'response': response.model_dump(mode='json')}, separators=(',', ':')) + '\n').encode()
+                if (journal.stat().st_size if journal.exists() else 0) + len(raw) > 2 * 2**20:
+                    record['omitted_response'] = {'label': label, 'operation': operation,
+                                                  'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
+                    raise AssertionError('phase response evidence cap; omitted response identity retained')
+                with journal.open('ab') as stream:
+                    stream.write(raw)
+                    stream.flush()
                 if response.isError:
                     raise AssertionError({"operation": label, "error": str(response.content)[:1500]})
                 data = response.structuredContent["data"]
@@ -80,12 +103,24 @@ async def navigate(root, spec):
                     assert all(row["file_path"] == spec["file"] for row in data["results"])
             evidence[label] = canonical(operation, data)
             timings[label] = time.monotonic() - before
+            checkpoint()
+        record['status'] = 'passed'
+    except BaseException as exc:
+        record.update(status='incomplete', failure_type=type(exc).__name__, failure=str(exc))
+        raise
     finally:
         closing = time.monotonic()
-        await gateway.close()
-        timings["close"] = time.monotonic() - closing
-    return {"seconds": time.monotonic() - started, "operations_seconds": timings,
-            "evidence": evidence, "evidence_sha256": digest(evidence)}
+        try:
+            await gateway.close()
+        except BaseException as exc:
+            record.update(status='incomplete', close_failure=type(exc).__name__)
+            raise
+        finally:
+            timings['close'] = time.monotonic() - closing
+            record.update(seconds=time.monotonic() - started, evidence_sha256=digest(evidence),
+                          journal_sha256=hashlib.sha256(journal.read_bytes()).hexdigest() if journal.exists() else None)
+            checkpoint()
+    return record
 
 
 def validate_engine(args):
@@ -100,7 +135,7 @@ def validate_engine(args):
 async def phase(args):
     validate_engine(args)
     spec = json.loads(Path(args.manifest).read_text())["spec"]
-    result = await navigate(Path(args.workspace), spec)
+    result = await navigate(Path(args.workspace), spec, Path(args.output))
     result["pid"] = os.getpid()
     Path(args.output).write_text(json.dumps(result, indent=2) + "\n")
 

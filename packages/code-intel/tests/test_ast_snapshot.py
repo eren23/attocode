@@ -122,11 +122,12 @@ def test_file_bound_and_unsupported_tier_fall_back(tmp_path, monkeypatch):
     close(first)
 
 
-def test_uncached_structures_without_fingerprints_conservatively_repair_navigation(tmp_path, monkeypatch):
+def test_uncached_identical_structures_conservatively_repair_navigation(tmp_path, monkeypatch):
     monkeypatch.setattr(ast_snapshot, 'MAX_FILE_BYTES', 10)
     first = seed(tmp_path)
     expected = {k: asdict(v) for k, v in first._ast_cache.items()}
     counts = first._store.stats()
+    # Legacy snapshots have no structural proof, even when a reparse agrees.
     snapshot = json.loads(first._store.get_meta(SNAPSHOT_KEY))
     snapshot.pop('structures', None)
     first._store.set_meta(SNAPSHOT_KEY, json.dumps(snapshot))

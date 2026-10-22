@@ -103,7 +103,8 @@ def run_tests(args):
         tests[0] += '::test_identical_reparse_reuses_navigation_without_repair'
     else:
         tests += ['packages/code-intel/tests/' + p for p in (
-            'test_ast_snapshot.py', 'test_parse_recovery.py', 'test_edit_restart.py', 'test_experiment_budget.py')]
+            'test_ast_snapshot.py', 'test_parse_recovery.py', 'test_edit_restart.py', 'test_experiment_budget.py',
+            'test_restart_evidence.py')]
     code = pytest.main(['-c', 'packages/code-intel/pyproject.toml', '--confcutdir=packages/code-intel/tests',
                        '-o', 'pythonpath=', *tests, '-q', '-p', 'eval.quality.no_agent', '--junitxml=' + str(args.out)])
     assert all(Path(module.__file__).resolve().is_relative_to(args.engine.resolve())
@@ -146,6 +147,7 @@ def controller(args):
         'eval/matrix/run.py', 'packages/code-intel/tests/test_snapshot_fingerprints.py',
         'packages/code-intel/tests/test_ast_snapshot.py', 'packages/code-intel/tests/test_parse_recovery.py',
         'packages/code-intel/tests/test_edit_restart.py', 'packages/code-intel/tests/test_experiment_budget.py',
+        'packages/code-intel/tests/test_restart_evidence.py',
         'uv.lock', 'packages/code-intel/pyproject.toml')]
     identity = runner.fingerprint(paths)
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip()
@@ -170,6 +172,9 @@ def controller(args):
             runtime = supervised([sys.executable, '-m', 'eval.quality.restart_trial', '--mode', arm + '-tests',
                 '--engine', str(scratch / arm), '--out', str(xml)], scratch, env,
                 args.out / (arm + '-tests.log'), correctness_deadline)
+            test_row = {'arm': arm, 'runtime': runtime, 'cases': None, 'failures': None}
+            tests.append(test_row)
+            runner.write_json(args.out / 'correctness.json', tests)
             cases = ET.parse(xml).findall('.//testcase')
             assert cases and not any(c.find('error') is not None or c.find('skipped') is not None for c in cases)
             failures = [c for c in cases if c.find('failure') is not None]
@@ -181,18 +186,22 @@ def controller(args):
                 assert runtime['status'] == 'passed' and not failures
                 assert sum(c.attrib['classname'].endswith('test_snapshot_fingerprints') for c in cases) == 8
                 assert sum(c.attrib['classname'].endswith('test_experiment_budget') for c in cases) == 3
-            tests.append({'arm': arm, 'runtime': runtime, 'cases': len(cases), 'failures': len(failures)})
+                assert sum(c.attrib['classname'].endswith('test_restart_evidence') for c in cases) == 2
+            test_row.update(cases=len(cases), failures=len(failures))
             runner.write_json(args.out / 'correctness.json', tests)
+        assert time.monotonic() < correctness_deadline, 'Correctness admission deadline'
         guard.check()
         manifest = args.out / 'fixture.json'
+        preparation_deadline = min(deadline, time.monotonic() + LIMITS['prepare_seconds'])
         runtime = supervised([sys.executable, '-m', 'eval.quality.restart_trial', '--mode', 'prepare',
             '--root', str(scratch), '--out', str(manifest)], scratch, env, args.out / 'prepare.log',
-            min(deadline, time.monotonic() + LIMITS['prepare_seconds']))
+            preparation_deadline)
         runner.write_json(args.out / 'preparation.json', runtime)
         assert runtime['status'] == 'passed' and runtime['cleanup_verified'], runtime
         guard.check()
         fixture = json.loads(manifest.read_text())
         assert fixture_manifest(scratch / 'fixture') == fixture['files']
+        assert time.monotonic() < preparation_deadline, 'Preparation admission deadline'
         scored_deadline = min(deadline, time.monotonic() + LIMITS['scored_seconds'])
         expected_evidence = None
         for arm, number in ORDER:
@@ -220,6 +229,7 @@ def controller(args):
             assert fixture_manifest(scratch / 'fixture') == fixture['files']
             assert engine(scratch / arm) == before[arm]
             guard.check()
+        assert time.monotonic() < scored_deadline, 'Scored comparison admission deadline'
         result = decision(rows)
         result.update(status='observed', correctness=tests, trials=rows)
     except BaseException as exc:
@@ -233,9 +243,11 @@ def controller(args):
             operator_identity=identity, identities_unchanged=runner.fingerprint(paths) == identity)
         if guard.violation or not result['identities_unchanged'] or time.monotonic() >= deadline:
             result['status'] = 'incomplete'
+        if result['status'] != 'observed':
+            result['decision'] = None
         runner.write_json(args.out / 'decision.json', result)
         if time.monotonic() >= deadline or runner.disk_bytes(args.out) >= LIMITS['evidence_bytes']:
-            result.update(status='incomplete', budget_violation=guard.violation or 'finalization_budget')
+            result.update(status='incomplete', decision=None, budget_violation=guard.violation or 'finalization_budget')
             runner.write_json(args.out / 'decision.json', result)
         print(json.dumps({'status': result['status'], 'decision': result.get('decision'),
                           'seconds': result['seconds'], 'error': result.get('error')}), flush=True)
