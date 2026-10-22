@@ -26,7 +26,7 @@ TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_
 
 def identity(design):
     """Require committed design/operators/engine; never equate a dirty tree to HEAD."""
-    roots = ['eval/quality', 'packages/code-intel',
+    roots = ['eval', 'packages/code-intel', 'pyproject.toml',
              'uv.lock', '.github/workflows/intelligence-experiments.yml', str(design.relative_to(REPO))]
     subprocess.run(['git', 'diff', '--exit-code', 'HEAD', '--', *roots], cwd=REPO,
                    check=True, stdout=subprocess.DEVNULL)
