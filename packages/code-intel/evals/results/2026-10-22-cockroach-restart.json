@@ -1,0 +1,48 @@
+{
+  "status": "incomplete",
+  "performance_verdict": null,
+  "optimization_retained": false,
+  "baseline": "eb3b21d6925d27c1addfe106cbc23b828e2bf4cc",
+  "heads": [
+    "8d7af06ec31bcfd84827fa6b084daa55d254cb48",
+    "ce2fbdad570f6a71483244886420be589d1355e1"
+  ],
+  "runs": [
+    39839300553,
+    39839922444
+  ],
+  "artifact_sha256": [
+    "072d4a4dc3e71ba747240cc5f8f0852a98020ee8f3aa241c4e01310fdceb7da4",
+    "fbe598acef5d2ac9d654ab0e7174fea5d9fe9e06dbc7647d20d85d780f9b81c5"
+  ],
+  "archive_sha256": "07171be3945857e48a115c106215e200cfe36938d39cc7caa17b193a97988a5c",
+  "first_preflight": {
+    "passed": 65,
+    "failed": 2,
+    "scored_trials": 0,
+    "seconds": 9.083793003
+  },
+  "second_preflight": {
+    "passed": 67,
+    "failed": 0,
+    "baseline_expected_assertion_failures": 1
+  },
+  "baseline_trials": 1,
+  "baseline_phases": 2,
+  "candidate_trials": 0,
+  "failure": "Baseline cold/restart search_symbols order and bounded membership differ; other nine canonical operations identical.",
+  "definition_rows_each": 30,
+  "definition_common_rows": 23,
+  "membership_difference_score": 0.53,
+  "charged_seconds": 146.83914533,
+  "aggregate_sampled_peaks": {
+    "disk_bytes": 1489010996,
+    "evidence_bytes": 3514368,
+    "rss_bytes": 934522880
+  },
+  "cleanup_verified": true,
+  "identities_unchanged": true,
+  "budget_violation": null,
+  "scored_rerun_retune_or_replacement": false,
+  "limits": "No candidate timing, median ratio, speed gain, relevance gain or general host-performance conclusion. Recorded baseline phase durations include startup/shutdown/checkpoint I/O and warm OS caches."
+}

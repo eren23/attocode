@@ -11,6 +11,27 @@ It adds parser ownership by thread, one language-server stderr reader, bounded
 recovery without static callers, and release installation checks on GitHub runners.
 Ranking remains unchanged.
 
+**Ordered follow-up, 2026-10-22:** the published 0.1.15 wheel and source
+distribution passed all 18 clean-install/previous-version-upgrade phases on a
+GitHub runner; all 18 release jobs passed. No global tool or host was restarted.
+The subsequent unreleased navigation fix makes equal-scoring symbol pages
+deterministic before their result limit, including after persisted reopening.
+Match scores and LSP priority remain unchanged. See the
+[restart investigation and ordering correction](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-cockroach-restart.md).
+Archived evaluation results stay in the tagged repository and are excluded from
+future source distributions after the new bundles exceeded the unchanged 32 MiB
+expanded-size verification limit. The online build and install checks verify
+the source distribution and the wheel built from it before integration.
+
+The [contiguous preview trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-preview-windows.md)
+closed incomplete on a validator decoding error before any candidate page.
+The matched Cockroach restart trial stopped on differing baseline cold/restart
+symbol pages before a candidate timing. Both preserve their unsuccessful
+attempts and exact source evidence. Neither establishes a quality or speed gain;
+the fingerprint optimization and experiment wiring are omitted. First-page
+relevance, restart cost and historical Rust/OCaml causes remain open. All runtime
+validation in this follow-up ran online; no scored trial was replaced or rerun.
+
 **Included in 0.1.15:** cached native parsers are now owned by each thread.
 A real-parser regression reproduces a separate timeout-continuation leak that
 returned a wrong function name and source span for another worker's document.

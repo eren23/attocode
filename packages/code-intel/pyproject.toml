@@ -141,6 +141,10 @@ packages = [
     "src/attocode_intel",
 ]
 
+[tool.hatch.build.targets.sdist]
+# Frozen experiment results remain available in the tagged Git repository.
+exclude = ["/evals/results/"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 markers = ["integration: tests that use real services", "slow: bounded slow or optional dependency checks"]
