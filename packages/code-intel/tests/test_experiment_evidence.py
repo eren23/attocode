@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from eval.quality.experiment_evidence import Journal, assert_engine, read_source, validate_excerpt
+from eval.quality.experiment_evidence import Journal, read_source, validate_excerpt
 from eval.quality.runner import GIB, environment, managed_root, supervise
 
 

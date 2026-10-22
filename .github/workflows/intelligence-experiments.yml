@@ -1,0 +1,49 @@
+name: Intelligence experiments
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: Committed experiment design (each dispatch is a new attempt)
+        type: choice
+        required: true
+        default: preflight
+        options: [preflight, native, preview, restart, broad]
+
+permissions:
+  contents: read
+
+# Never cancel a scored attempt or compete with normal intelligence CI's lock.
+concurrency:
+  group: intelligence-experiments-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      QUALITY_ALLOW_DOWNLOADS: '1'
+      ATTOCODE_LOCAL_ONLY: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Install maintained test dependencies (outside payload budget)
+        timeout-minutes: 5
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Run committed design under aggregate limits
+        env:
+          EXPERIMENT: ${{ inputs.experiment }}
+          QUALITY_EXPERIMENT_ROOT: ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}
+        run: uv run --no-sync python -m eval.quality.experiments "$EXPERIMENT" --root "$QUALITY_EXPERIMENT_ROOT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: experiment-${{ inputs.experiment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
