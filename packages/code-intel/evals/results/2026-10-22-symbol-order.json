@@ -1,0 +1,18 @@
+{
+  "baseline": "eb3b21d6925d27c1addfe106cbc23b828e2bf4cc",
+  "control_head": "89667064d047bf610bf43f1292cbda086b04f8e8",
+  "run": "https://github.com/eren23/attocode/actions/runs/39841246392",
+  "control_status": "incomplete",
+  "baseline_cases": 7,
+  "baseline_assertion_failures": 6,
+  "candidate_passed": 6,
+  "candidate_failed": 1,
+  "candidate_failure": "Test incorrectly put a lower-scoring source location before a higher-scoring LSP location. Product tie sorting and fresh-process stability assertions passed. Test corrected to retain existing LSP priority; product unchanged.",
+  "corrected_test_sha256": "89baad863c1c7e82fdff1d9a1d60c889e4619db31b0524c6acfc43c31039f8fc",
+  "control_artifact_sha256": "816ceee4e0b791324aed75b3be67bc21ead2c868f4aa4d43f87b1cef6b75c2a3",
+  "archive_sha256": "7386032ca0ecd9e1ecf2dfee03ad5aaa24b0a9935e789b163ba329f067c586f8",
+  "cleanup_verified": true,
+  "final_admission": "All seven corrected tests required in combined and both per-Python product JUnit artifacts before merge.",
+  "performance_experiment_reopened": false,
+  "local_runtime_validation": false
+}

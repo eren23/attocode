@@ -6,11 +6,6 @@ on:
     branches: [main]
     paths: ['packages/code-intel/**', 'eval/quality/**', 'frontend/**', 'docker/code-intel/**', 'pyproject.toml', 'uv.lock', 'docs/intelligence-tools.md', '.github/workflows/intelligence.yml', '.github/workflows/release-intelligence.yml']
   workflow_dispatch:
-    inputs:
-      experiment:
-        type: choice
-        default: none
-        options: [none, symbol-order-control]
   workflow_call:
 
 permissions:
@@ -20,12 +15,11 @@ env:
   INTELLIGENCE_BASELINE: '0.1.14'
 
 concurrency:
-  group: intelligence-${{ github.workflow }}-${{ github.ref }}-${{ inputs.experiment || 'none' }}
+  group: intelligence-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   product:
-    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -90,7 +84,6 @@ jobs:
             .attocode/quality/runs/*/*.xml
           include-hidden-files: true
   wheel-macos:
-    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     # The release builds on Linux. This job installs the same pure-Python wheel on macOS.
     runs-on: macos-latest
     timeout-minutes: 20
@@ -112,7 +105,6 @@ jobs:
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_upgrade.py verify '/tmp/intelligence upgrade project'
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
   optional-grammars:
-    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -126,7 +118,6 @@ jobs:
           QUALITY_ALLOW_DOWNLOADS: '1'
         run: uv run --no-sync python packages/code-intel/scripts/check_optional_grammars.py --cache '${{ runner.temp }}/quality-grammars'
   real-language-servers:
-    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -163,7 +154,6 @@ jobs:
           retention-days: 7
           path: quality-artifacts/
   dashboard:
-    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -178,7 +168,6 @@ jobs:
       - run: npm run build
         working-directory: frontend
   image:
-    if: github.event_name != 'workflow_dispatch' || inputs.experiment == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -188,22 +177,3 @@ jobs:
           python-version: '3.12'
       - run: docker build -t intelligence-test -f docker/code-intel/Dockerfile .
       - run: uv run --with httpx --no-project python packages/code-intel/scripts/smoke_image.py intelligence-test
-  symbol-order-control:
-    if: github.event_name == 'workflow_dispatch' && inputs.experiment == 'symbol-order-control'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: '3.12'
-      - run: uv sync --locked --package attocode-code-intel --extra dev
-      - run: uv run --no-sync python -m eval.quality.symbol_order_control
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: symbol-order-control
-          retention-days: 30
-          path: quality-artifacts/symbol-order/

@@ -40,7 +40,9 @@ def test_same_file_equal_score_locations_have_a_complete_tie_break():
             index.add_definition(loc)
         pages.append(index.search_definitions('NewServer'))
     assert pages[0] == pages[1], 'same-file equal-score page depends on insertion order'
-    assert pages[0][0][0].start_line == 1
+    assert pages[0][0][0].source == 'lsp'
+    assert pages[0][0][1] > pages[0][1][1]
+    assert [(loc.start_line, loc.end_line) for loc, _ in pages[0][1:]] == [(1, 2), (10, 11), (10, 12)]
 
 
 def test_match_quality_and_kind_filter_remain_primary():
