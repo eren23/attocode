@@ -21,7 +21,7 @@ env:
   INTELLIGENCE_BASELINE: '0.1.14'
 
 concurrency:
-  group: intelligence-${{ github.workflow }}-${{ github.ref }}
+  group: intelligence-${{ github.workflow }}-${{ github.ref }}-${{ inputs.experiment || 'none' }}
   cancel-in-progress: true
 
 jobs:

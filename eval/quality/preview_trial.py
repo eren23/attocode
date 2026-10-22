@@ -11,11 +11,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 
+import psutil
 from attocode_intel import output, search_evidence
 from attocode_intel.gateway import OperationGateway
 from attocode_intel.output import response_tokens
@@ -28,10 +30,70 @@ BASELINE = search_evidence.snippet_window
 GIB = 2**30
 
 
+class BudgetGuard:
+    """Sample this controller, all owned descendants, and every output root."""
+
+    def __init__(self, roots, evidence, limits, deadline):
+        self.roots, self.evidence, self.limits, self.deadline = roots, evidence, limits, deadline
+        self.owner = psutil.Process()
+        self.peaks = {'rss_bytes': 0, 'disk_bytes': 0, 'evidence_bytes': 0}
+        self.violation = None
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._watch, daemon=True)
+
+    def sample(self):
+        children = self.owner.children(recursive=True)
+        rss = self.owner.memory_info().rss
+        for child in children:
+            try:
+                rss += child.memory_info().rss
+            except psutil.NoSuchProcess:
+                pass
+        values = {'rss_bytes': rss, 'disk_bytes': sum(runner.disk_bytes(p) for p in self.roots),
+                  'evidence_bytes': runner.disk_bytes(self.evidence)}
+        self.peaks = {key: max(self.peaks[key], value) for key, value in values.items()}
+        reason = next((key + '_budget' for key, value in values.items() if value >= self.limits[key]), None)
+        if time.monotonic() >= self.deadline:
+            reason = 'complete_deadline'
+        if reason:
+            self.violation = self.violation or reason
+            # Only descendants of this specific controller are owned here.
+            for child in reversed(children):
+                try:
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
+
+    def _watch(self):
+        try:
+            while not self.stop.is_set():
+                self.sample()
+                self.stop.wait(.1)
+        except (psutil.Error, OSError) as exc:
+            self.violation = 'budget_inspection_failed:' + type(exc).__name__
+
+    def start(self):
+        self.sample()
+        self.thread.start()
+
+    def check(self):
+        self.sample()
+        if self.violation:
+            raise RuntimeError(self.violation)
+
+    def close(self):
+        self.stop.set()
+        if self.thread.ident is not None:
+            self.thread.join(timeout=2)
+        if self.thread.is_alive():
+            self.violation = self.violation or 'budget_monitor_cleanup'
+        self.sample()
+
+
 def identity():
     paths = [*sorted((runner.REPO / 'packages/code-intel/src/attocode_intel').rglob('*.py')),
              DESIGN, Path(__file__), Path(__file__).with_name('preview_windows.py'),
-             runner.REPO / 'tests/eval/test_preview_windows.py',
+             runner.REPO / 'tests/eval/test_preview_windows.py', runner.REPO / 'tests/eval/test_preview_trial.py',
              *[runner.REPO / path for path in ['eval/quality/corpus.py', 'eval/quality/sources.py',
                                                'eval/quality/runner.py', 'eval/matrix/run.py']]]
     return runner.fingerprint(paths)
@@ -42,24 +104,50 @@ def page_identity(data):
             for row in data['data']['results']]
 
 
-def judgment(page, question, root):
-    hits = page['data']['results']
-    found = [hit for hit in hits if hit['file_path'] == question['file']]
-    source = (root / question['file']).read_text().splitlines()
-    visible = False
-    for hit in found:
+def source_spans(page, root):
+    """Admit every delivered source snippet, with exact intersected line bounds."""
+    spans = []
+    for hit in page['data']['results']:
         first, last = hit.get('snippet_start_line'), hit.get('snippet_end_line')
         if first is None or last is None:
+            assert first is None and last is None
+            spans.append([])
             continue
-        assert 1 <= first <= last <= len(source)
-        # Every coordinate-bearing excerpt must be a contiguous substring of
-        # exactly its declared source range, including partial-line previews.
-        raw_lines = (root / question['file']).read_text().splitlines(keepends=True)
-        assert hit['snippet'] in ''.join(raw_lines[first - 1:last])
-        if all(first <= anchor['line'] <= last and anchor['quote'] in hit['snippet']
-               for anchor in question['anchors']):
+        path = (root / hit['file_path']).resolve()
+        assert path.is_relative_to(root.resolve())
+        source = path.read_text()
+        lines = source.splitlines(keepends=True)
+        assert hit.get('line') and 1 <= hit['line'] <= first <= last <= hit['end_line'] <= len(lines)
+        offsets = [0]
+        for line in lines:
+            offsets.append(offsets[-1] + len(line))
+        assert hit['snippet']
+        window = source[offsets[first - 1]:offsets[last]]
+        found, valid = window.find(hit['snippet']), []
+        while found >= 0:
+            begin = offsets[first - 1] + found
+            end = begin + len(hit['snippet'])
+            if begin < offsets[first] and end > offsets[last - 1]:
+                valid.append((begin, end))
+            found = window.find(hit['snippet'], found + 1)
+        assert valid, {'file': hit['file_path'], 'first': first, 'last': last}
+        spans.append(valid)
+    return spans
+
+
+def judgment(page, question, root, spans):
+    hits = page['data']['results']
+    source = (root / question['file']).read_text().splitlines(keepends=True)
+    anchors = [(sum(map(len, source[:a['line'] - 1])), len(a['quote'])) for a in question['anchors']]
+    found, visible = False, False
+    for hit, possible in zip(hits, spans, strict=True):
+        if hit['file_path'] != question['file']:
+            continue
+        found = True
+        if any(all(begin <= position and position + size <= end for position, size in anchors)
+               for begin, end in possible):
             visible = True
-    return {'file': bool(found), 'visible': visible}
+    return {'file': found, 'visible': visible}
 
 
 async def observe(spec, root, report):
@@ -101,7 +189,8 @@ async def observe(spec, root, report):
                                 decoded = current
                             pages.append({'round': round_id, 'arm': arm, 'question': question['id'],
                                           'kind': question['kind'], 'arguments': args, 'timings_ms': timings,
-                                          'judgment': judgment(decoded, question, root), 'response': decoded})
+                                          'judgment': judgment(decoded, question, root, source_spans(decoded, root)),
+                                          'response': decoded})
                             runner.write_json(report, {'status': 'in_progress', 'pack': spec['id'],
                                                        'source': before, 'warmup': warm, 'pages': pages})
     finally:
@@ -166,11 +255,13 @@ def decide(reports):
             'limits': 'Non-exhaustive implementer-authored judgments. No ranking or agent-completion gain established.'}
 
 
-def regression_phase(root, out, env, deadline):
+def regression_phase(root, out, env, deadline, guard):
     command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
-               '--confcutdir=tests/eval', 'tests/eval/test_preview_windows.py', '-q', '-p', 'eval.quality.no_agent']
+               '--confcutdir=tests/eval', 'tests/eval/test_preview_windows.py', 'tests/eval/test_preview_trial.py',
+               '-q', '-p', 'eval.quality.no_agent']
     rows = []
     for phase in ('baseline', 'candidate'):
+        guard.check()
         xml = out / f'{phase}.xml'
         phase_env = dict(env, QUALITY_PREVIEW_BASELINE='1' if phase == 'baseline' else '0')
         row = runner.supervise([*command, '--junitxml=' + str(xml)], cwd=runner.REPO, env=phase_env,
@@ -178,12 +269,14 @@ def regression_phase(root, out, env, deadline):
                                max_bytes=2 * GIB, max_rss=2 * GIB)
         cases = ET.parse(xml).findall('.//testcase')
         failed = [c for c in cases if c.find('failure') is not None]
-        assert len(cases) == 9 and not any(c.find('error') is not None or c.find('skipped') is not None for c in cases)
+        guard.check()
+        assert len(cases) == 13 and not any(c.find('error') is not None or c.find('skipped') is not None for c in cases)
         assert row['cleanup_verified'] and 'reason' not in row
         if phase == 'baseline':
             assert row['exit_code'] == 1 and len(failed) == 2
             assert all(c.attrib['name'].startswith('test_later_window_strictly_extends_baseline_positive_coverage[')
-                       and c.find('failure').attrib['type'] == 'AssertionError' for c in failed)
+                       and c.find('failure').attrib.get('message', '').startswith('assert False')
+                       for c in failed)
         else:
             assert row['status'] == 'passed' and not failed
         rows.append(dict(phase=phase, runtime=row, tests=len(cases), assertion_failures=len(failed)))
@@ -216,10 +309,13 @@ def main():
     for name in ('TMPDIR', 'TMP', 'TEMP'):
         os.environ[name] = env[name]
     error = None
+    guard = BudgetGuard([scratch, args.out], args.out, design['limits'], deadline)
     try:
-        regressions = regression_phase(scratch, args.out, env, deadline)
+        guard.start()
+        regressions = regression_phase(scratch, args.out, env, deadline, guard)
         runner.write_json(args.out / 'regressions.json', regressions)
         for spec in design['packs']:
+            guard.check()
             work = scratch / 'work' / spec['id']
             work.mkdir()
             output_file = args.out / (spec['id'] + '.json')
@@ -232,12 +328,14 @@ def main():
             runtimes.append(dict(pack=spec['id'], runtime=runtime))
             runner.write_json(args.out / 'runtime.json', runtimes)
             assert runtime['status'] == 'passed' and runtime['cleanup_verified'], runtime
+            guard.check()
             assert runner.disk_bytes(args.out) <= design['limits']['evidence_bytes']
             report = json.loads(output_file.read_text())
             assert report['status'] == 'observed'
             reports.append(report)
             shutil.rmtree(work)
         result = decide(reports)
+        guard.check()
         result.update(status='observed', runtimes=runtimes, regressions=regressions)
     except BaseException as exc:
         error = exc
@@ -246,12 +344,23 @@ def main():
         shutil.rmtree(scratch)
         result.update(seconds=time.monotonic() - started, cleanup_verified=not scratch.exists(),
                       identities_unchanged=identity() == before)
+        guard.close()
+        result.update(aggregate_sampled_peaks=guard.peaks, budget_violation=guard.violation)
+        if guard.violation or time.monotonic() >= deadline:
+            result['status'] = 'incomplete'
         if not result['identities_unchanged']:
             result['status'] = 'incomplete'
+        runner.write_json(args.out / 'decision.json', result)
+        if time.monotonic() >= deadline or runner.disk_bytes(args.out) >= design['limits']['evidence_bytes']:
+            result.update(status='incomplete', budget_violation=guard.violation or 'finalization_budget')
+            runner.write_json(args.out / 'decision.json', result)
+        result['seconds'] = time.monotonic() - started
         runner.write_json(args.out / 'decision.json', result)
         print(json.dumps(result), flush=True)
     if error:
         raise error
+    if result['status'] != 'observed':
+        raise RuntimeError('Incomplete experiment; do not infer candidate outcome')
 
 
 if __name__ == '__main__':

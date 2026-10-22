@@ -2,7 +2,7 @@
   "schema_version": 1,
   "candidate": "strict-positive-term-superset-contiguous-window",
   "base": "eb3b21d6925d27c1addfe106cbc23b828e2bf4cc",
-  "authoring": "Implementer-authored before any retrieval response; not blind. Prior repository exposure disclosed. These labels are non-exhaustive.",
+  "authoring": "Implementer-authored before any retrieval response; not blind. Prior exposure to both repositories and ripgrep tests/json.rs quiet_stats at line253 is disclosed. New question/anchor pairs concern different behaviors. These labels are non-exhaustive.",
   "rounds": [
     [
       "baseline",
@@ -34,7 +34,7 @@
     "pack_seconds": 180,
     "disk_bytes": 2147483648,
     "rss_bytes": 2147483648,
-    "evidence_bytes": 8388608
+    "evidence_bytes": 33554432
   },
   "gates": {
     "minimum_new_visible_queries_at5": 2,
