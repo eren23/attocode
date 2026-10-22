@@ -1,4 +1,6 @@
 """Minimum definition evidence for the bundled language adapters."""
+import threading
+
 import pytest
 from attocode_intel._internal.integrations.context.codebase_ast import parse_file
 from attocode_intel.analysis_coverage import language_capabilities
@@ -101,7 +103,7 @@ def test_optional_grammar_discovery_never_downloads(monkeypatch, cached, generic
     monkeypatch.setitem(sys.modules, "tree_sitter_language_pack", SimpleNamespace(
         download=lambda names: pytest.fail("Navigation must not acquire grammars"),
         downloaded_languages=lambda: ["quality_optional"] if cached else [], get_language=language))
-    monkeypatch.setattr(ts_parser, "_PARSERS", {})
+    monkeypatch.setattr(ts_parser, "_PARSERS", threading.local())
     result = (ts_parser.GenericTreeSitterExtractor()._get_language_obj(
         "quality_deliberately_absent_grammar", "quality_optional") if generic else
         ts_parser._get_parser("quality_optional"))
@@ -118,7 +120,7 @@ def test_download_capable_pack_without_cache_inventory_is_not_called(monkeypatch
         grammar_module="quality_deliberately_absent_grammar", language_func="language"))
     monkeypatch.setitem(sys.modules, "tree_sitter_language_pack", SimpleNamespace(
         download=lambda names: None, get_language=lambda name: pytest.fail("No safe cache inventory")))
-    monkeypatch.setattr(ts_parser, "_PARSERS", {})
+    monkeypatch.setattr(ts_parser, "_PARSERS", threading.local())
     assert ts_parser._get_parser("quality_optional") is None
 
 

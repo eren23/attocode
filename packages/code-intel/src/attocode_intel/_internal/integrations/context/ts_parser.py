@@ -21,6 +21,7 @@ import functools
 import inspect
 import logging
 import re
+import threading
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 # and provides node type queries for each language.
 
 _TS_AVAILABLE = False
-_PARSERS: dict[str, object] = {}  # lang -> tree_sitter.Parser
+_PARSERS = threading.local()  # Per-thread language -> stateful native Parser.
 PARSE_TIMEOUT_MICROS = 100_000
 
 
@@ -377,12 +378,17 @@ def _cached_pack_language(language: str):
 
 
 def _get_parser(language: str):
-    """Get or create a tree-sitter Parser for the given language.
+    """Get or create a thread-owned tree-sitter Parser for the given language.
 
-    Returns None if the grammar is not installed.
+    A timed-out parser retains native continuation state until reset. Sharing
+    it with another parsing thread can resume that state on a different document.
+    Returns None if the grammar is not installed; never acquires a grammar.
     """
-    if language in _PARSERS:
-        return _PARSERS[language]
+    if not hasattr(_PARSERS, 'by_language'):
+        _PARSERS.by_language = {}
+    parsers = _PARSERS.by_language
+    if language in parsers:
+        return parsers[language]
 
     if not _TS_AVAILABLE and not _try_init_tree_sitter():
         return None
@@ -400,7 +406,7 @@ def _get_parser(language: str):
         lang_fn = getattr(grammar_mod, "language_tsx" if language == "tsx" else config.language_func)
         lang = ts.Language(lang_fn())
         parser = ts.Parser(lang)
-        _PARSERS[language] = parser
+        parsers[language] = parser
         return parser
     except (ImportError, AttributeError, Exception) as e:
         logger.debug("tree-sitter grammar for %s not available via module: %s", language, e)
@@ -413,14 +419,14 @@ def _get_parser(language: str):
         import tree_sitter as ts
         lang = _cached_pack_language(language)
         if lang is None:
-            _PARSERS[language] = None
+            parsers[language] = None
             return None
         parser = ts.Parser(lang)
-        _PARSERS[language] = parser
+        parsers[language] = parser
         return parser
     except Exception as e2:
         logger.debug("tree-sitter grammar for %s not in language-pack: %s", language, e2)
-        _PARSERS[language] = None  # Cache the failure
+        parsers[language] = None  # Cache the failure for this thread.
         return None
 
 
