@@ -92,12 +92,13 @@ class Measurement:
         self.deadline = time.monotonic() + 12 * 60
         self.commands = []
 
-    def command(self, name, arguments, *, limit=180, cleanup=False):
+    def command(self, name, arguments, *, limit=180, cleanup=False, allow_failure=False):
         path = self.directory / (name + '.log')
         timeout = limit if cleanup else min(limit, self.deadline - time.monotonic())
         if timeout <= 0:
             raise TimeoutError('image measurement deadline')
-        row = {'name': name, 'arguments': arguments, 'log': path.name}
+        row = {'name': name, 'arguments': arguments, 'log': path.name,
+               'allow_failure': allow_failure}
         self.commands.append(row)
         try:
             with path.open('xb') as stream:
@@ -110,7 +111,7 @@ class Measurement:
                 row.update(log_sha256=hashlib.sha256(raw).hexdigest(), log_bytes=len(raw))
         if row['log_bytes'] > 8 * 2**20:
             raise ValueError('image evidence log exceeds 8MiB')
-        if row['exit_code']:
+        if row['exit_code'] and not allow_failure:
             raise ValueError('image command failed: ' + name)
         return raw.decode()
 
@@ -129,11 +130,19 @@ class Measurement:
         if not all(re.fullmatch('[0-9a-f]{12,64}', item) for item in found):
             raise ValueError('unexpected owned-container identity')
         if found:
-            self.command(owner + '-cleanup-remove', ['docker', 'rm', '--force', *found], limit=15, cleanup=True)
-        remaining = self.command(owner + '-cleanup-verify', query, limit=15, cleanup=True).strip()
-        if remaining:
-            raise ValueError('owned-container cleanup unverified')
-        return {'owner': owner, 'verified': True}
+            # --rm may already be removing the container after stop returns.
+            # Retain that nonzero result; only observed absence earns success.
+            self.command(owner + '-cleanup-remove', ['docker', 'rm', '--force', *found],
+                         limit=15, cleanup=True, allow_failure=True)
+        deadline, attempt = time.monotonic() + 15, 0
+        while time.monotonic() < deadline:
+            remaining = self.command(owner + f'-cleanup-verify-{attempt}', query,
+                                     limit=min(5, deadline - time.monotonic()), cleanup=True).strip()
+            if not remaining:
+                return {'owner': owner, 'verified': True}
+            attempt += 1
+            time.sleep(.1)
+        raise ValueError('owned-container cleanup unverified')
 
     def context_control(self, report):
         """Exercise Docker's actual matching, including private/cache exclusions."""
