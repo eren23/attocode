@@ -1,0 +1,2126 @@
+{
+  "CI_and_installed_artifact_gate": "Separate from local candidate evidence; require uploaded new regression in both Python product jobs and combined suite before merge.",
+  "Rust_audit": {
+    "active_client_ID_collisions": 0,
+    "hypothesis": "One successful warmup reply is not a monotonic semantic-readiness barrier: rust-analyzer can switch/reload workspace snapshots afterward without didChange, transiently returning null for a declaration that resolved earlier. The Oct20 same-file definition success8\u2192null11 on second.rs coincides with fetched-build-data workspace reload while all document versions remain1. This is a source/trace-backed hypothesis, not proof of the server-internal root cause or of the original first-target failure.",
+    "new_real_server_trials": 0,
+    "product_patch": false,
+    "qualified_result": "No new product defect/root cause reproduced. Current method-first request dispatch, document identity/order control, bounded null/content-modified recovery and honest partial status remain appropriate. No patch justified solely by these retained passes.",
+    "server_requests": 12,
+    "source_audit_sha256": "4b2f73f7d03a2754d94b3fd75e0402bde8194f463f9eed33b5c858cf75c4d7c0"
+  },
+  "baseline_commit": "44efdf68878aadb6f8abf7ece77c1465052b36fd",
+  "baseline_control": {
+    "baseline_commit": "44efdf68878aadb6f8abf7ece77c1465052b36fd",
+    "baseline_parser_sha256": "ffdf74d9eea8052b1333229ae30aaa1b1bdde4bd19c3e46d5fd3fc4d2a7765da",
+    "exit_code": 1,
+    "expected_native_document_contamination_reproduced": true,
+    "failure": "new two-line document returned fresh(value) spanning lines1-9",
+    "owned_scratch_removed": true,
+    "pinned_source_import_verified": true,
+    "test_sha256": "7c5e50eba99eb2ea18ac51c087871256f62c27dc948f91604ccb1a2cdc55f73d"
+  },
+  "cleanup_verified": true,
+  "compatibility": {
+    "outcomes": {
+      "failed": 0,
+      "incomplete": 0,
+      "limited": 124,
+      "passed": 157,
+      "unsupported": 7
+    },
+    "packs": [
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "Nim",
+        "revision": "4414b5a396fa00f2cfeca385445d0fd6077bed93"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "SwiftFormat",
+        "revision": "c8e50ff2cfc2eab46246c072a9ae25ab656c6ec3"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "acme-sh",
+        "revision": "d08b4de794c2ea0958551cde6cd906a15795a4f8"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "aspnetcore",
+        "revision": "2b1cb0a7ae862ba622fd172a960ed937063c5f08"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "cats-effect",
+        "revision": "10756cafd3ebbbd2f75c2ab2bc61fd4ab414bfb7"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "cockroach",
+        "revision": "53aadff3cedde4d810c72b69ddd96e6a735d93e7"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "unsupported"
+          },
+          {
+            "name": "source",
+            "outcome": "unsupported"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "unsupported"
+          }
+        ],
+        "id": "crystal",
+        "revision": "066c322f53676e4e59d5e495cc3fa7331c376e8a"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "dart-sdk",
+        "revision": "2a83a782138bbdac5467a54a83c994e88b84dc3b"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "deno",
+        "revision": "574272ded08b82c7dec64da2120be8442a1f7636"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "passed"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "passed"
+          },
+          {
+            "name": "impact",
+            "outcome": "passed"
+          },
+          {
+            "name": "tests",
+            "outcome": "passed"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "express",
+        "revision": "6c4249feec8ab40631817c8e7001baf2ed022224"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "passed"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "passed"
+          },
+          {
+            "name": "impact",
+            "outcome": "passed"
+          },
+          {
+            "name": "tests",
+            "outcome": "passed"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "fastapi",
+        "revision": "11614be9021aa4ac078d4d0693a8b5250a1010d8"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "framework",
+        "revision": "0ac6e5592da1a172d9685591c5f82fb1fb8995fb"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "passed"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "passed"
+          },
+          {
+            "name": "impact",
+            "outcome": "passed"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "frontend",
+        "revision": "67b9afbb7e5bc8e5939db182edc9b2973dd32523"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "fsharp",
+        "revision": "ff81858ea7eaa4631e1d1ad6aa4f61d7b8967139"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "ggplot2",
+        "revision": "6f1d98842de0489222c04bff64b3596b796d492d"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "passed"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "passed"
+          },
+          {
+            "name": "impact",
+            "outcome": "passed"
+          },
+          {
+            "name": "tests",
+            "outcome": "passed"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "gh-cli",
+        "revision": "6e49747f49f31c9c0a68cfa344df7262a684e723"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "passed"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "gson",
+        "revision": "8e01b54682612471a9ab40c73911dfbf6b5be036"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "iTerm2",
+        "revision": "b3c558ac8e0d59bceea49b4986df45cc88005839"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "julia",
+        "revision": "8493b13f44455a5f16f1f830c223845a3dacf2c8"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "luarocks",
+        "revision": "47301d83aba58925e1b9594023621ebb27070cdb"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "ocaml",
+        "revision": "5fbe515aa215909e28328a059701da430bc3cff8"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "okhttp",
+        "revision": "e2061bdd146ae3ce5f097b78fa7a731dc7638510"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "otp",
+        "revision": "1a14bac7486708dfff367d4810dfe4478f87fcef"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "pandas",
+        "revision": "0039f168fe057b945e8ec2a65c9d1e973c7c1fe9"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "unsupported"
+          },
+          {
+            "name": "source",
+            "outcome": "unsupported"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "unsupported"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "unsupported"
+          }
+        ],
+        "id": "perl5",
+        "revision": "ef53bc6892cb851320be193e8cd9b15b2494e24c"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "phoenix",
+        "revision": "850162d618cf4e31be82fb53ad6e259095fa6126"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "postgrest",
+        "revision": "58368513abdc104e377c4f358f476f49bc1dd2ba"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "prisma",
+        "revision": "33667c373c0ae84ad37c7aed2497b99452da589c"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "rails",
+        "revision": "e72eb4c20b6bb5bdc7f63a4477992209585a1fa9"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "redis",
+        "revision": "20f163eb3dcc1311cfe6c0dda5a3beef08ab1a5d"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "requests",
+        "revision": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "ring",
+        "revision": "0a36f21646232cdcaed92e55da8f31ba7f44e856"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "passed"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "passed"
+          },
+          {
+            "name": "impact",
+            "outcome": "passed"
+          },
+          {
+            "name": "tests",
+            "outcome": "passed"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "ripgrep",
+        "revision": "4519153e5e461527f4bca45b042fff45c4ec6fb9"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "spdlog",
+        "revision": "0f7562a0f9273cfc71fddc6ae52ebff7a490fa04"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "starship",
+        "revision": "6d0a1263fcc74381791805cee57fc466f6e6359c"
+      },
+      {
+        "checks": [
+          {
+            "name": "definition",
+            "outcome": "passed"
+          },
+          {
+            "name": "source",
+            "outcome": "passed"
+          },
+          {
+            "name": "scoped_search",
+            "outcome": "passed"
+          },
+          {
+            "name": "caller_syntax",
+            "outcome": "limited"
+          },
+          {
+            "name": "dependencies",
+            "outcome": "limited"
+          },
+          {
+            "name": "impact",
+            "outcome": "limited"
+          },
+          {
+            "name": "tests",
+            "outcome": "limited"
+          },
+          {
+            "name": "restart",
+            "outcome": "passed"
+          }
+        ],
+        "id": "zls",
+        "revision": "695a1d5c8a607f927b552784c2dc9f9c1d1f6130"
+      }
+    ],
+    "report_sha256": {
+      "Nim.json": "163d27ae8b1be2f46804abbe2ac99851f981fd66a9d4af1e797c208924e224f9",
+      "SwiftFormat.json": "0c47904d3fe513fc0403a53ec14797b2a00502404a5c2a6cc41a6ef4ae2094bc",
+      "acme-sh.json": "572d9deaacdadf589ed045357cc97f6aa59affdc10adeb1aea8681bae018ce86",
+      "aspnetcore.json": "eebfde6a19a7d9bfc79dd47c5ee67f31c272858ac507d6c427a0b629785e42d9",
+      "cats-effect.json": "6f41a819a587deed8da25ed221432b284c0e00b61adcd3621996251ee9052097",
+      "cockroach.json": "fda6b979eb99e89a490c614d50aae6d0c9901efe7a368836ed1832ddb78c5bf1",
+      "crystal.json": "5799d0943c07607bc4b03f185e7b54098fb2d51392ba51ed1a2bdbb16f09bdcb",
+      "dart-sdk.json": "1a44a14d681f4dad543033bc8a788695b8ba2c3d8df6afa45bdec6da5c888b12",
+      "deno.json": "e11d1b97a23b656f6d5100e55796c26a9c66c1646151faec90204033de1653bd",
+      "express.json": "304b4e450bc2aa09157b3006f018840ee79eb3876ae455d05d59bcbc78ffab87",
+      "fastapi.json": "e017c021c00d825f95b50f147142dee3e5eeb7e4718e98b224d04cf31a7fb832",
+      "framework.json": "7a2f678a474d221b6685b034c49042082c649ae36d5cfae174af911eccb88339",
+      "frontend.json": "24c8789664a83f831b2f73c3641c9c244702c31359de87ffcc2a742f9c3e804d",
+      "fsharp.json": "905ad857b90e7f14682d0340d426860d1d9715b1bd90094254e64ac8d9fe8834",
+      "ggplot2.json": "fe79dfe4b61dd18ab8630bbed1480a3f2fe66a00cfa18a90e647d764be308ec3",
+      "gh-cli.json": "e516e7f1d2f7f544a39d1f70b4485559c8cc8fef46996d2eda67a92b9ca1289b",
+      "gson.json": "cb43f4469b9d7ba8db3158e309282db3807160a35a89da627ce53852448e327e",
+      "iTerm2.json": "6ac1de364018e165ddea8f0ce7e477b9ace63b46be689cd694a22398141de0d8",
+      "julia.json": "1e9c8fedc69890791941aea0330b8106140c21b3bde15d59455cdc19ab450c3d",
+      "luarocks.json": "df5bc03bb208eb05f289a1e7b3f650e75b4aa267c3a84f8c8e2434c795e64267",
+      "ocaml.json": "80679dc6d07d1060836aeaed9737391bcd7e3b73330cd9f6d1b55c4ba826ae31",
+      "okhttp.json": "1314e36b76508fa389cdbd774d2f294e7fd2c699e27d60b1c5e1448c3cad057d",
+      "otp.json": "47d055e9387ce327605412e73892a1e1b62ba4b1f6db7e0fefb4b0158804579f",
+      "pandas.json": "1acbcedf5242abadbda5dde56261836608a2463b73e7412ded2cf5b24fee446b",
+      "perl5.json": "7085efa2eb26f6187515117a7d8859ca883248fdef78ec3e912b3a02c6c8b52e",
+      "phoenix.json": "ad0d9bd17d6997579bfd33d81b04bb19f62c83268ab2d9146a72d38aa831e9aa",
+      "postgrest.json": "ae549c59e35125d5b977b05aa551fb4322e5afa9998ab488a0fd2df8c4c7112f",
+      "prisma.json": "c7b6c27260b72ca35f9020081351fbab668ba4ded64dc6def46655761242adc5",
+      "rails.json": "32e4f4ecf0552fbdc796b1b05de1c3b76866c9146e09513ea2416f53b9df2b45",
+      "redis.json": "eea65ea149999dc18d1bea98eff6abcaedc6d74195579fd0d70a4ee6f25a48cc",
+      "requests.json": "c804bd11761e9709230f323550837cf1078fd00521279a37cbe1e6345753e62b",
+      "ring.json": "3c11ea21ec6ddbca303a67934ba1bacba469b7db4bede47999bdfb1de5c9c108",
+      "ripgrep.json": "9701a341433476e0bed55b1a922242cad11eb168469a4344a6de084f2caf590b",
+      "spdlog.json": "7e2faaf0752bc8306c839fb825194dde76851bb9598c439329afe37506d5c162",
+      "starship.json": "35192a92f0ea21899202f0c4e1bbf61732080f39b7a1747ff5c0debc41896125",
+      "zls.json": "f5433a9780687d8da8d2959591dbe69e4449635c8db92a62e68659df9df7d838"
+    }
+  },
+  "complete_suite": {
+    "errors": 0,
+    "failures": 0,
+    "passed": 4141,
+    "sha256": "76db13f482e3b2bf31ec65a36bfe26b436d50aedae2eff7cea69079553f10399",
+    "skipped_or_expected_failure": 15,
+    "total": 4156
+  },
+  "correction": "Thread-owned parser cache, reused by language within each thread.",
+  "demonstrated_defect": "Shared cached native parser can resume a timed-out document in another worker before reset.",
+  "evidence_sha256": {
+    "baseline-control.json": "ed702fb11493be7ca4ce3d02922642d7752e034ae0b85865a00bcc7dc0c8fa9b",
+    "ocaml-freeze.json": "f11ffbf725a0b6b17bb6d058f7d19f9fe9e97802e06222630c5ad304b5e779c3",
+    "ocaml-runtime.json": "66033b0811327db855d1722aad0377777337ead08cd5454367364068cf4891e9",
+    "parser-review.json": "22446dd8ad87c3f82f221deb1c0ecfe5ed15d210edd95a05b97770644ffb71ec",
+    "quality-freeze.json": "b7dc2a9abf5d29dfed8a88d9f1c093d84932c481929906e2006570abf10281f5",
+    "quality-runtime.json": "54d433f10286bd4ece73f07b98c02a01e700b72f761ae76d57bc16ddc2c8a95f",
+    "rust/audit.json": "4b2f73f7d03a2754d94b3fd75e0402bde8194f463f9eed33b5c858cf75c4d7c0",
+    "rust/protocol-controls.json": "0ba69c34b5bac2dab48bb7c971121c61dbcd856bdc47d5d52f978e3b270c025c",
+    "thread-green.xml": "7bfb33ac83064efdeb40540058cae1f4fca59be8675ff19a77da248d13d628d8"
+  },
+  "expected_new_document_definition": {
+    "end_line": 2,
+    "name": "fresh",
+    "start_line": 1
+  },
+  "focused_gate": {
+    "errors": 0,
+    "failures": 0,
+    "passed": 62,
+    "sha256": "7bfb33ac83064efdeb40540058cae1f4fca59be8675ff19a77da248d13d628d8",
+    "skipped_or_expected_failure": 1,
+    "total": 63
+  },
+  "forced_test_owner_timeout_micros": 1,
+  "global_installation_or_host_restart": false,
+  "historical_OCaml_cause_reproduced": false,
+  "independent_focused_gate": {
+    "errors": 0,
+    "failures": 0,
+    "passed": 103,
+    "sha256": "c8638d9b1a375d90441cccfd265c6727a69e2e2dc3ad25420d89cdb73d28bd6e",
+    "skipped_or_expected_failure": 1,
+    "total": 104
+  },
+  "model_cloud_or_download_runs": 0,
+  "native_environment": {
+    "python": "3.12.12",
+    "tree_sitter": "0.25.2",
+    "tree_sitter_python": "0.25.0"
+  },
+  "natural_OCaml_baseline_observations": [
+    {
+      "checks": [
+        {
+          "name": "definition",
+          "outcome": "passed"
+        },
+        {
+          "name": "source",
+          "outcome": "passed"
+        },
+        {
+          "name": "scoped_search",
+          "outcome": "passed"
+        },
+        {
+          "name": "caller_syntax",
+          "outcome": "limited"
+        },
+        {
+          "name": "dependencies",
+          "outcome": "limited"
+        },
+        {
+          "name": "impact",
+          "outcome": "limited"
+        },
+        {
+          "name": "tests",
+          "outcome": "limited"
+        },
+        {
+          "name": "restart",
+          "outcome": "passed"
+        }
+      ],
+      "raw_report_sha256": "dba0d616f0900bf1cb216a4a25bc3cbe28fa3f7c71ebc8e90112857f1041bc1c",
+      "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+      "target_native_calls": [
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18966,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18972,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18901,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18907,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18702,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18791,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18451,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18459,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        }
+      ],
+      "trial": 1
+    },
+    {
+      "checks": [
+        {
+          "name": "definition",
+          "outcome": "passed"
+        },
+        {
+          "name": "source",
+          "outcome": "passed"
+        },
+        {
+          "name": "scoped_search",
+          "outcome": "passed"
+        },
+        {
+          "name": "caller_syntax",
+          "outcome": "limited"
+        },
+        {
+          "name": "dependencies",
+          "outcome": "limited"
+        },
+        {
+          "name": "impact",
+          "outcome": "limited"
+        },
+        {
+          "name": "tests",
+          "outcome": "limited"
+        },
+        {
+          "name": "restart",
+          "outcome": "passed"
+        }
+      ],
+      "raw_report_sha256": "ed26f3390036b4c201fc45b45e34fa43bac9cde2097cb06fba6448d476cb0f6d",
+      "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+      "target_native_calls": [
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18943,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18950,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18852,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18852,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18556,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18561,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 19036,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 19042,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        }
+      ],
+      "trial": 2
+    },
+    {
+      "checks": [
+        {
+          "name": "definition",
+          "outcome": "passed"
+        },
+        {
+          "name": "source",
+          "outcome": "passed"
+        },
+        {
+          "name": "scoped_search",
+          "outcome": "passed"
+        },
+        {
+          "name": "caller_syntax",
+          "outcome": "limited"
+        },
+        {
+          "name": "dependencies",
+          "outcome": "limited"
+        },
+        {
+          "name": "impact",
+          "outcome": "limited"
+        },
+        {
+          "name": "tests",
+          "outcome": "limited"
+        },
+        {
+          "name": "restart",
+          "outcome": "passed"
+        }
+      ],
+      "raw_report_sha256": "f2d883d43ead22cdd961e9104a57d8009cb1e1254b6ea155d1c5c052d834f68a",
+      "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+      "target_native_calls": [
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 19647,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 19660,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18740,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18750,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18348,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18355,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        },
+        {
+          "configured_limit_micros": 100000,
+          "native_outcome": "tree",
+          "native_thread_cpu_micros": 18627,
+          "native_tree_has_errors": false,
+          "native_wall_micros": 18633,
+          "reset_completed": true,
+          "same_parser_overlap_count": 0,
+          "source_bytes": 316245,
+          "target": true
+        }
+      ],
+      "trial": 3
+    }
+  ],
+  "natural_diagnostic_baseline": {
+    "commit": "44efdf68878aadb6f8abf7ece77c1465052b36fd",
+    "engine_sha256": "855967d146b0ccbf2b793c1dbbabc690d08e25c565d4fc3bc230af52f7895d77",
+    "worker_sha256": "3e2afb1c0fbc1fdbe12920aa18dcd9ea4ddcca9b7c7918f3c610c4750f265772"
+  },
+  "no_performance_or_fresh_relevance_claim": true,
+  "phases": {
+    "local": {
+      "checks": [
+        {
+          "cleanup_verified": true,
+          "name": "lint",
+          "peak_disk_bytes": 0,
+          "peak_rss_bytes": 7340032,
+          "seconds": 0.218,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "contracts",
+          "peak_disk_bytes": 470297019,
+          "peak_rss_bytes": 759955456,
+          "seconds": 175.827,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "scale",
+          "peak_disk_bytes": 556968379,
+          "peak_rss_bytes": 256409600,
+          "seconds": 12.526,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "lifecycle",
+          "peak_disk_bytes": 468253115,
+          "peak_rss_bytes": 136773632,
+          "seconds": 3.743,
+          "status": "passed"
+        }
+      ],
+      "runtime_sha256": "10c18bc01dcdb63af9b1541d95463b095a0a3b1b2336f778b1254d6b3dd2d80e",
+      "seconds": 195.82852216705214
+    },
+    "ranking": {
+      "checks": [
+        {
+          "cleanup_verified": true,
+          "name": "ranking",
+          "peak_disk_bytes": 290369554,
+          "peak_rss_bytes": 204767232,
+          "seconds": 42.893,
+          "status": "passed"
+        }
+      ],
+      "runtime_sha256": "afe90dbf5541c529f5fee7b1b4755e55c5faebdb954bec72639aea7f09ba5296",
+      "seconds": 42.995653665973805
+    },
+    "workflows": {
+      "checks": [
+        {
+          "cleanup_verified": true,
+          "name": "cockroach",
+          "peak_disk_bytes": 1285640346,
+          "peak_rss_bytes": 933347328,
+          "seconds": 68.924,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "fsharp",
+          "peak_disk_bytes": 106700800,
+          "peak_rss_bytes": 344670208,
+          "seconds": 16.435,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "Nim",
+          "peak_disk_bytes": 33660928,
+          "peak_rss_bytes": 235798528,
+          "seconds": 6.109,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "SwiftFormat",
+          "peak_disk_bytes": 64204809,
+          "peak_rss_bytes": 298500096,
+          "seconds": 6.425,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "acme-sh",
+          "peak_disk_bytes": 15089664,
+          "peak_rss_bytes": 227917824,
+          "seconds": 2.34,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "aspnetcore",
+          "peak_disk_bytes": 126410752,
+          "peak_rss_bytes": 353845248,
+          "seconds": 8.517,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "cats-effect",
+          "peak_disk_bytes": 33673216,
+          "peak_rss_bytes": 247316480,
+          "seconds": 4.565,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "crystal",
+          "peak_disk_bytes": 94609421,
+          "peak_rss_bytes": 215154688,
+          "seconds": 9.43,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "dart-sdk",
+          "peak_disk_bytes": 173457408,
+          "peak_rss_bytes": 263798784,
+          "seconds": 15.68,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "deno",
+          "peak_disk_bytes": 7962624,
+          "peak_rss_bytes": 228065280,
+          "seconds": 2.324,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "express",
+          "peak_disk_bytes": 6602752,
+          "peak_rss_bytes": 216137728,
+          "seconds": 1.903,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "fastapi",
+          "peak_disk_bytes": 110723072,
+          "peak_rss_bytes": 276021248,
+          "seconds": 7.271,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "framework",
+          "peak_disk_bytes": 217628672,
+          "peak_rss_bytes": 384122880,
+          "seconds": 20.004,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "frontend",
+          "peak_disk_bytes": 6463488,
+          "peak_rss_bytes": 220430336,
+          "seconds": 1.898,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "ggplot2",
+          "peak_disk_bytes": 36564992,
+          "peak_rss_bytes": 239501312,
+          "seconds": 3.851,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "gh-cli",
+          "peak_disk_bytes": 60026880,
+          "peak_rss_bytes": 244482048,
+          "seconds": 6.451,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "gson",
+          "peak_disk_bytes": 19476480,
+          "peak_rss_bytes": 228278272,
+          "seconds": 2.8,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "iTerm2",
+          "peak_disk_bytes": 185876480,
+          "peak_rss_bytes": 346505216,
+          "seconds": 24.892,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "julia",
+          "peak_disk_bytes": 25653248,
+          "peak_rss_bytes": 240467968,
+          "seconds": 5.081,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "luarocks",
+          "peak_disk_bytes": 14708736,
+          "peak_rss_bytes": 230604800,
+          "seconds": 2.555,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "ocaml",
+          "peak_disk_bytes": 30842880,
+          "peak_rss_bytes": 264978432,
+          "seconds": 5.714,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "okhttp",
+          "peak_disk_bytes": 60567552,
+          "peak_rss_bytes": 245579776,
+          "seconds": 5.788,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "otp",
+          "peak_disk_bytes": 96133154,
+          "peak_rss_bytes": 272203776,
+          "seconds": 10.468,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "pandas",
+          "peak_disk_bytes": 305258496,
+          "peak_rss_bytes": 532054016,
+          "seconds": 19.452,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "perl5",
+          "peak_disk_bytes": 35737600,
+          "peak_rss_bytes": 246022144,
+          "seconds": 3.183,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "phoenix",
+          "peak_disk_bytes": 29384704,
+          "peak_rss_bytes": 246317056,
+          "seconds": 3.427,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "postgrest",
+          "peak_disk_bytes": 17502208,
+          "peak_rss_bytes": 230014976,
+          "seconds": 2.772,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "prisma",
+          "peak_disk_bytes": 90132542,
+          "peak_rss_bytes": 299253760,
+          "seconds": 10.394,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "rails",
+          "peak_disk_bytes": 361492480,
+          "peak_rss_bytes": 494616576,
+          "seconds": 19.769,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "redis",
+          "peak_disk_bytes": 133644288,
+          "peak_rss_bytes": 306577408,
+          "seconds": 11.428,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "requests",
+          "peak_disk_bytes": 6684672,
+          "peak_rss_bytes": 218562560,
+          "seconds": 1.696,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "ring",
+          "peak_disk_bytes": 4505600,
+          "peak_rss_bytes": 214515712,
+          "seconds": 1.688,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "ripgrep",
+          "peak_disk_bytes": 25686016,
+          "peak_rss_bytes": 246087680,
+          "seconds": 2.971,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "spdlog",
+          "peak_disk_bytes": 12595200,
+          "peak_rss_bytes": 236240896,
+          "seconds": 3.385,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "starship",
+          "peak_disk_bytes": 86106243,
+          "peak_rss_bytes": 258818048,
+          "seconds": 5.182,
+          "status": "passed"
+        },
+        {
+          "cleanup_verified": true,
+          "name": "zls",
+          "peak_disk_bytes": 17289216,
+          "peak_rss_bytes": 243859456,
+          "seconds": 2.937,
+          "status": "passed"
+        }
+      ],
+      "runtime_sha256": "15331e62478ef9ce7b2c5c52d4b3d2aaaedd940bac8c2f6c516264da0573a893",
+      "seconds": 329.65847166709136
+    }
+  },
+  "production_parse_limit_micros": 100000,
+  "quality_shared_limit_seconds": 600,
+  "quality_shared_seconds": 569.7459015829954,
+  "release_status": "unreleased",
+  "schema": 1,
+  "source_after": {
+    "engine": "f67f452bc7165ac68531f16c30f46ff0e0c14bb49e22d80426b44f77e2bfed67",
+    "source": "4e7bdf0f3da8f5d1f77735db0e144dafb5a2aea41e54fa3b98989ff88f66ed23",
+    "tests": "3e82b48095f682f280665c5fcde79468d6f3ed54fb9ac3170dc7ff92f0fce504"
+  },
+  "source_before": {
+    "engine": "f67f452bc7165ac68531f16c30f46ff0e0c14bb49e22d80426b44f77e2bfed67",
+    "source": "4e7bdf0f3da8f5d1f77735db0e144dafb5a2aea41e54fa3b98989ff88f66ed23",
+    "tests": "3e82b48095f682f280665c5fcde79468d6f3ed54fb9ac3170dc7ff92f0fce504"
+  },
+  "source_file_sha256": {
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/ts_parser.py": "31ac62674ab43217f0609da626178ecf5fef71671d7e5e6a69d9a87f8b89c072",
+    "packages/code-intel/tests/test_language_capabilities.py": "ef794480c64654bb095b8ccce081bdeb8d9a7f46bcd8b34f12ae553caa78d405",
+    "packages/code-intel/tests/test_parser_thread_isolation.py": "7c5e50eba99eb2ea18ac51c087871256f62c27dc948f91604ccb1a2cdc55f73d"
+  },
+  "source_unchanged_during_validation": true,
+  "status": "local_validation_complete",
+  "validated_source_commit": "768fbc8d09302d9276f2cb5c62f450aa92469c08"
+}

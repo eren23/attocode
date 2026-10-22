@@ -10,6 +10,13 @@ three successive groups. This is offline product evidence, not an agent study.
 It adds bounded selected-file recovery, safe navigation publication, guarded
 Elixir definitions and doctor probe identity. Ranking remains unchanged.
 
+**Unreleased follow-up:** cached native parsers are now owned by each thread.
+A real-parser regression reproduces a separate timeout-continuation leak that
+returned a wrong function name and source span for another worker's document.
+The [investigation](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-parser-thread-isolation.md)
+distinguishes that demonstrated defect from the historical OCaml and Rust causes,
+which remain unproven. The published 0.1.14 artifact does not contain this fix.
+
 **Latest compatibility evidence, 2026-10-22:** all 36 pinned packs completed,
 with 157 passed, 124 limited and seven unsupported checks, and no failed or
 incomplete checks. Limited and unsupported outcomes are not verified support.
