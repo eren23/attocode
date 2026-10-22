@@ -1,7 +1,7 @@
 # Attocode Roadmap
 
 This page preserves historical release notes and longer-term ideas. For current
-code-intelligence priorities, use the [maintained backlog](code-intel-roadmap.md#current-priorities-2026-10-21)
+code-intelligence priorities, use the [maintained backlog](code-intel-roadmap.md#current-priorities-2026-10-22)
 and [validated workstream](intelligence-workstream.md). Version targets below
 are historical plans, not evidence that all listed work shipped. Standalone
 code intelligence and the root agent have separate version numbers.

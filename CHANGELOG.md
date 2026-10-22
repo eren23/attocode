@@ -14,9 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged source and parser generation; failed recovery reports partial
   evidence and the existing file-refresh command. Recovered navigation is
   published only for the same complete workspace generation.
-- Exclude failed reference parses from reusable AST summaries and navigation
-  fingerprints, so reopening can repair degraded references.
-- Ignore Elixir definition heads as calls while preserving guard/body calls;
+- Exclude failed reference parses from reusable AST summaries, so reopening can
+  repair degraded references. Bind reusable navigation to extractor identity.
+- Recover guarded Elixir definitions and ignore declaration heads as calls while
+  preserving guard/body calls;
   prevent ordinary Ruby calls and dynamic `require_relative` expressions from
   becoming fabricated import paths.
 
@@ -24,11 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Doctor reports the configured executable, version returned by its new server
   connection, and the limit that this probe cannot verify an existing host session.
+- Add a maintained candidate/published release verifier with isolated clean and
+  upgrade installs, installed-file hashes and bounded CLI/MCP continuation checks.
 - Add cross-file navigation checks for Python, TypeScript, Go, Rust, Ruby and Elixir.
-- Investigate search-only JavaScript/TypeScript callback spans. An initial
-  path-alias wiring defect invalidated the intended representation; its counts
-  are not candidate relevance evidence. Ranking stays unchanged; see the
-  [investigation](packages/code-intel/evals/results/2026-10-21-test-case-spans.md).
+- Reject search-only JavaScript/TypeScript callback spans on consumed development:
+  first-page labeled file matches fall 15→11 despite additional matching excerpts.
+  An initial path-alias wiring failure is retained separately; no fresh validation
+  or product ranking change follows. See the [investigation](packages/code-intel/evals/results/2026-10-21-test-case-spans.md).
 
 ## [Intelligence 0.1.13] - 2026-10-21
 

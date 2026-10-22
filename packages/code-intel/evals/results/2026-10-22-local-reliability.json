@@ -1,0 +1,920 @@
+{
+  "candidate_install": {
+    "baseline_version": "0.1.12",
+    "checks": [
+      {
+        "cleanup_verified": true,
+        "name": "clean-venv",
+        "peak_disk_bytes": 176239,
+        "peak_rss_bytes": 17760256,
+        "seconds": 0.216,
+        "status": "passed",
+        "wall_seconds": 0.216
+      },
+      {
+        "cleanup_verified": true,
+        "name": "clean-install",
+        "peak_disk_bytes": 251727983,
+        "peak_rss_bytes": 130220032,
+        "seconds": 1.846,
+        "status": "passed",
+        "wall_seconds": 1.846
+      },
+      {
+        "cleanup_verified": true,
+        "name": "clean-identity",
+        "peak_disk_bytes": 251732079,
+        "peak_rss_bytes": 5390336,
+        "seconds": 0.344,
+        "status": "passed",
+        "wall_seconds": 0.344
+      },
+      {
+        "cleanup_verified": true,
+        "name": "clean-wheel",
+        "peak_disk_bytes": 263647343,
+        "peak_rss_bytes": 271155200,
+        "seconds": 12.759,
+        "status": "passed",
+        "wall_seconds": 12.759
+      },
+      {
+        "cleanup_verified": true,
+        "name": "clean-continuation",
+        "peak_disk_bytes": 263127151,
+        "peak_rss_bytes": 72810496,
+        "seconds": 0.663,
+        "status": "passed",
+        "wall_seconds": 0.663
+      },
+      {
+        "cleanup_verified": true,
+        "name": "clean-init",
+        "peak_disk_bytes": 262717551,
+        "peak_rss_bytes": 9125888,
+        "seconds": 0.379,
+        "status": "passed",
+        "wall_seconds": 0.379
+      },
+      {
+        "cleanup_verified": true,
+        "name": "clean-doctor",
+        "peak_disk_bytes": 262889583,
+        "peak_rss_bytes": 224362496,
+        "seconds": 4.241,
+        "status": "passed",
+        "wall_seconds": 4.242
+      },
+      {
+        "cleanup_verified": true,
+        "name": "clean-doctor-claude-local",
+        "peak_disk_bytes": 262963311,
+        "peak_rss_bytes": 180879360,
+        "seconds": 0.993,
+        "status": "passed",
+        "wall_seconds": 0.993
+      },
+      {
+        "cleanup_verified": true,
+        "name": "upgrade-venv",
+        "peak_disk_bytes": 262983902,
+        "peak_rss_bytes": 229376,
+        "seconds": 0.365,
+        "status": "passed",
+        "wall_seconds": 0.365
+      },
+      {
+        "cleanup_verified": true,
+        "name": "baseline-install",
+        "peak_disk_bytes": 376930526,
+        "peak_rss_bytes": 139247616,
+        "seconds": 1.064,
+        "status": "passed",
+        "wall_seconds": 1.064
+      },
+      {
+        "cleanup_verified": true,
+        "name": "baseline-version",
+        "peak_disk_bytes": 376934622,
+        "peak_rss_bytes": 7798784,
+        "seconds": 0.449,
+        "status": "passed",
+        "wall_seconds": 0.449
+      },
+      {
+        "cleanup_verified": true,
+        "name": "upgrade-prepare",
+        "peak_disk_bytes": 377143518,
+        "peak_rss_bytes": 130695168,
+        "seconds": 2.221,
+        "status": "passed",
+        "wall_seconds": 2.221
+      },
+      {
+        "cleanup_verified": true,
+        "name": "upgrade-install",
+        "peak_disk_bytes": 377172190,
+        "peak_rss_bytes": 18284544,
+        "seconds": 0.465,
+        "status": "passed",
+        "wall_seconds": 0.465
+      },
+      {
+        "cleanup_verified": true,
+        "name": "upgrade-identity",
+        "peak_disk_bytes": 377139422,
+        "peak_rss_bytes": 8306688,
+        "seconds": 0.485,
+        "status": "passed",
+        "wall_seconds": 0.485
+      },
+      {
+        "cleanup_verified": true,
+        "name": "upgrade-wheel",
+        "peak_disk_bytes": 387248350,
+        "peak_rss_bytes": 262307840,
+        "seconds": 10.37,
+        "status": "passed",
+        "wall_seconds": 10.37
+      },
+      {
+        "cleanup_verified": true,
+        "name": "upgrade-continuation",
+        "peak_disk_bytes": 386797790,
+        "peak_rss_bytes": 75956224,
+        "seconds": 0.873,
+        "status": "passed",
+        "wall_seconds": 0.873
+      },
+      {
+        "cleanup_verified": true,
+        "name": "upgrade-verify",
+        "peak_disk_bytes": 386527454,
+        "peak_rss_bytes": 169918464,
+        "seconds": 5.257,
+        "status": "passed",
+        "wall_seconds": 5.257
+      }
+    ],
+    "cleanup_verified": true,
+    "mode": "candidate",
+    "packaged_python_files": 272,
+    "report_sha256": "3b28596ea29fddf9c9cb999a15138dc213db88416f8b5f2dd9b5366d0837b6ec",
+    "seconds": 45.507,
+    "source_sha256": "932e6941f0870f25c2b9b2410c50c4f010787ae8327131de30aae7deb4099bd0",
+    "status": "passed",
+    "version": "0.1.13"
+  },
+  "compatibility": {
+    "consumed_retrieval": {
+      "labeled_hit_at_24": 127,
+      "labeled_hit_at_5": 98,
+      "observed_questions": 144
+    },
+    "outcomes": {
+      "failed": 0,
+      "incomplete": 0,
+      "limited": 124,
+      "passed": 157,
+      "unsupported": 7
+    },
+    "pack_reports": [
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "cockroach",
+        "report_sha256": "1502cc69e3deb7156733192598ab8ac3b27b78505befc2160a4edc961aaee8ef",
+        "retrieval": {
+          "labeled_hit_at_24": 1,
+          "labeled_hit_at_5": 0,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 54.087
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "fsharp",
+        "report_sha256": "dd5409904e26a7c386b35ca20b922c4ca27a6e97d9ed088cc4ed60c031d4adbf",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 15.957
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "Nim",
+        "report_sha256": "56bc15a804c6194fb47de3dc47a558629196ac15732c69e3abe1ce48cd915a0f",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 1,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 5.686
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "SwiftFormat",
+        "report_sha256": "4acceadb75a65bcae8dec03d543a19a0c7e319d632f3a1a0292cdf2ac59fb010",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 6.231
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "acme-sh",
+        "report_sha256": "c4dfdce5788701101650e4563b68730af53ea02c1a27a9851656b34ad1c65772",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 2.319
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "aspnetcore",
+        "report_sha256": "1a2471f5ddc07d122f3bede6ce5d766b65fddbbfce4e80ea249ad3b2618ca6d1",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 8.079
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "cats-effect",
+        "report_sha256": "6fb8bf0519475752bd61f751fd2ca61010b564465b308976ed240d0d96d925f1",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 4.359
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 1,
+          "unsupported": 3
+        },
+        "pack": "crystal",
+        "report_sha256": "1daf353670f4f4fa4ccfbf8ff9d97978e3bd153226d1495376cc36c5c4c8e15c",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 7.955
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "dart-sdk",
+        "report_sha256": "2c6c65a84649833ddcc9afbaa7ac1d37d36c49cd6e2432958f6deaf29d7c564b",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 15.296
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "deno",
+        "report_sha256": "d1d8ed256bcc72331dcae2a8baba79dcfad3ac11fbeeb96102cfda72d93c904b",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 2.11
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 0,
+          "passed": 8,
+          "unsupported": 0
+        },
+        "pack": "express",
+        "report_sha256": "c46ed0415e27814f77b739d1a34c75e53c1a9ad5029a5a5f968f00428aba0d01",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 1.912
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 0,
+          "passed": 8,
+          "unsupported": 0
+        },
+        "pack": "fastapi",
+        "report_sha256": "2fac4429526aaa2d2e940708e1de04fda33d39371edf09ce10b3157c97a78e82",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 6.942
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "framework",
+        "report_sha256": "542a73625c8c16c3fb61015ea9fd5dc1dc8b9ebb7abc7053f2fbbb5c775b1272",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 17.096
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 1,
+          "passed": 7,
+          "unsupported": 0
+        },
+        "pack": "frontend",
+        "report_sha256": "4488689f2e9e363268afab44e22df7778c015e45217f8c8703291e281f3abd7a",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 1.921
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "ggplot2",
+        "report_sha256": "de54d160d2d618ff4b414eb3d4fab158f5fe966120647cf9da8574a70ec8f955",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 3.89
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 0,
+          "passed": 8,
+          "unsupported": 0
+        },
+        "pack": "gh-cli",
+        "report_sha256": "61b9d80198d038b1e25092aaa5782072f5186030944a97dd2f20fecbb955fc79",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 1,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 6.057
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 3,
+          "passed": 5,
+          "unsupported": 0
+        },
+        "pack": "gson",
+        "report_sha256": "4302072bbb99118cdfcdb0ea68313adf86967134fac3a36d5246229597aaa0cd",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 2.551
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "iTerm2",
+        "report_sha256": "a007b6a94184b36b17b2ecb490e83b621ee8ced5924f678beb9851d2598b02ac",
+        "retrieval": {
+          "labeled_hit_at_24": 2,
+          "labeled_hit_at_5": 1,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 24.189
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "julia",
+        "report_sha256": "8ddb6e61fb4e08820155994887c2f579ffb22ac782f582ca4ce15895ee4dae80",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 5.071
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "luarocks",
+        "report_sha256": "a04502ce50cd476637e506d6343e329ade8e37ba0c7bf0f8a45fc3d8df5c47b7",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 2.58
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "ocaml",
+        "report_sha256": "4c20b73dd55acec211bd5f58e6af48070302be067201aaa60935b9b8894d8984",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 5.483
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "okhttp",
+        "report_sha256": "3e8551880d7ef1e1c55f26530a1f752fbd3012f3fa3156cda518f36f35d526e7",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 5.027
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "otp",
+        "report_sha256": "8c7efbe7d2897ac03f50ddb989ee49df57e71f50c16165f0c7065168c3c33285",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 9.788
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "pandas",
+        "report_sha256": "a954dd2ebe867f9aa4b8cf3b10ae1441b2bce6afa93adcb5f1561a6dfc468df9",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 18.004
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 0,
+          "unsupported": 4
+        },
+        "pack": "perl5",
+        "report_sha256": "e125376b0cee792c265789d3e9943fa08ee972ce3878dd29c6cb64bc1c76549b",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 2.974
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "phoenix",
+        "report_sha256": "52c1bece52890ae1a48813d63348b96e1667eeee1a15b5dde31f3258159a7726",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 3.405
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "postgrest",
+        "report_sha256": "8d5bb7757ba9fc4925a7e2e1eb9eb905c994f2d72a404757e47b0e0ee102b067",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 2.337
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "prisma",
+        "report_sha256": "db1e69fb776da2c74357076d5c5edaaa449190fe76fb147b7cdd11a2a255a712",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 9.568
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "rails",
+        "report_sha256": "3f33631ec9f3ae34e171b1d86fce65360af353ea102e377513608d7eb383893c",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 2,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 17.949
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "redis",
+        "report_sha256": "4a46ea1f38dd9706cea7f376ed6e7ff3936af7fc8fbe46eaf61d1bd8c3ebd0e1",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 11.093
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "requests",
+        "report_sha256": "e8950b98c2535289671e0f8ada83ef9f91d823e70866ebfe97a44bc665274106",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 1.716
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "ring",
+        "report_sha256": "15f614e9eb32a06a1ef09a771c598a1f65bda39adcfad4a0e7b4a6f40db645a3",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 1.5
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 0,
+          "passed": 8,
+          "unsupported": 0
+        },
+        "pack": "ripgrep",
+        "report_sha256": "fef83e683eac6dfa069be12b47f900bd1a3f48b388d8e46fac2854df6f421c45",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 2.986
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "spdlog",
+        "report_sha256": "0fae70c9d1938599338b06d7c01f28617e58b563200d5385d29bc6656295cfe9",
+        "retrieval": {
+          "labeled_hit_at_24": 3,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 3.427
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "starship",
+        "report_sha256": "8b298f69054ab5c6c89e0f748f0c46e9e44a168aeaf8cc39cf416004c5129176",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 3,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 4.837
+      },
+      {
+        "outcomes": {
+          "failed": 0,
+          "incomplete": 0,
+          "limited": 4,
+          "passed": 4,
+          "unsupported": 0
+        },
+        "pack": "zls",
+        "report_sha256": "e3c256ea83b24a0a7b9eb2fcdc21a11f96125ad98fc910d020931bb2e03aebff",
+        "retrieval": {
+          "labeled_hit_at_24": 4,
+          "labeled_hit_at_5": 4,
+          "missing_questions": [],
+          "observed_questions": 4,
+          "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+        },
+        "seconds": 2.768
+      }
+    ],
+    "packs": 36
+  },
+  "identities": {
+    "engine_sha256": "6d4862ad189fe959a02896363e217694a0dd1edd4a79a0467bde8571ae234460",
+    "fixtures_sha256": "9d8dd70a62de1d431fa1a8f90a8ea55f7d1b0d170dbc350ff6e9660614fc7508",
+    "harness_sha256": "2235b5b68b442708d9cfe69fb9a311e0ffd5d4cbc89da06a34270a731f745956",
+    "operator_sha256": "ed383a69e9d1824eeb7324f0c4a1d914671265ff85310b8ff0dc2ca159408bcd",
+    "source_sha256": "b261d03dd7ce5f42fb1acc02d51b3576d084e46e29eafd66197e47986bf50dab"
+  },
+  "limits": [
+    "Native cold-parse trigger and intermittent Rust readiness root cause remain unproven",
+    "Restart shortcut omitted because remote performance gate could not start",
+    "Callback span rule rejected on consumed development; no product ranking change",
+    "Earlier incomplete and source-changing attempts retained privately; this report binds only final frozen source"
+  ],
+  "phases": {
+    "local": {
+      "passed": true,
+      "report_sha256": "b691fff10e411eda815b8828388fd02475da104576c89f309b780a83d6224833",
+      "scratch_removed": true,
+      "seconds": 167.19410674995743,
+      "source_changed": false
+    },
+    "ranking": {
+      "passed": true,
+      "report_sha256": "0ae1591f8a070877a810e3a6a432164defe89c815d43b3d054dfc59b4efc5a14",
+      "scratch_removed": true,
+      "seconds": 40.39500337501522,
+      "source_changed": false
+    },
+    "workflows": {
+      "passed": true,
+      "report_sha256": "5f2fee6947e46d2cd5d0a01a8007e5daba93b64fecbf6a5f4f96832b880e2046",
+      "scratch_removed": true,
+      "seconds": 299.06874320900533,
+      "source_changed": false
+    }
+  },
+  "product": {
+    "junit": {
+      "errors": 0,
+      "failures": 0,
+      "skipped": 15,
+      "tests": 4155
+    },
+    "junit_sha256": "d554834d52e8502c95adf4ccace9e985d6d7ef2cc74792fdfb8beb9a3822f041",
+    "passed": 4140,
+    "skipped": 14,
+    "xfail": 1
+  },
+  "schema_version": 1,
+  "scope": "Local development-source validation; not publication, agent benefit, fresh retrieval relevance or a matched performance comparison",
+  "source_commit": "c3a5a392a7acbf55063c0d48b8905352d399682a"
+}
