@@ -2,10 +2,12 @@
 import json
 import subprocess
 import sys
+import time
 
 import pytest
 
 from eval.quality.experiment_evidence import Journal, assert_engine, read_source, validate_excerpt
+from eval.quality.runner import GIB, environment, managed_root, supervise
 
 
 def test_response_is_durable_before_validator_raises_and_blob_is_not_duplicated(tmp_path):
@@ -80,3 +82,36 @@ def test_wrong_engine_origin_is_rejected_in_fresh_subprocess(tmp_path):
     result = subprocess.run([sys.executable, '-c', script, str(tmp_path), '/wrong/engine'],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode != 0 and 'engine_origin' in result.stderr
+
+
+def test_malformed_source_response_is_retained_before_rejection(tmp_path):
+    journal = Journal(tmp_path, max_bytes=4096)
+    ref = journal.response('malformed', ['not an object'])
+    with pytest.raises(ValueError, match='snippet'):
+        validate_excerpt('alpha\n', ['alpha'], 1, 1)
+    assert json.loads((tmp_path / ref['path']).read_bytes()) == ['not an object']
+
+
+def test_experiment_memory_ceiling_includes_supervising_controller(tmp_path):
+    root = managed_root(tmp_path / 'managed')
+    row = supervise([sys.executable, '-c', 'import time; time.sleep(10)'],
+                    cwd=tmp_path, env=environment(root), root=root, log=root / 'log',
+                    deadline=time.monotonic() + 5, max_bytes=GIB, max_rss=1,
+                    include_controller=True)
+    assert row['reason'] == 'memory_budget' and row['cleanup_verified']
+    assert row['peak_rss_bytes'] > 1
+
+
+def test_evidence_ceiling_stops_worker_without_deleting_retained_response(tmp_path):
+    root = managed_root(tmp_path / 'managed')
+    evidence = root / 'evidence'
+    evidence.mkdir()
+    (evidence / 'retained').write_text('keep this observation')
+    script = ('import pathlib,sys,time; '
+              "pathlib.Path(sys.argv[1]).write_bytes(b'x'*65536); time.sleep(10)")
+    row = supervise([sys.executable, '-c', script, str(evidence / 'large')],
+                    cwd=tmp_path, env=environment(root), root=root, log=root / 'log',
+                    deadline=time.monotonic() + 5, max_bytes=GIB,
+                    evidence_root=evidence, max_evidence_bytes=32768)
+    assert row['reason'] == 'evidence_budget' and row['cleanup_verified']
+    assert (evidence / 'retained').read_text() == 'keep this observation'
