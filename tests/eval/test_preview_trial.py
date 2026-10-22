@@ -26,7 +26,7 @@ def test_all_hit_coordinates_reject_broad_ranges_and_unlabeled_corruption(tmp_pa
     with pytest.raises(AssertionError):
         source_spans(extra, tmp_path)
     negative = copy.deepcopy(page)
-    negative['data']['results'][0].update(line=-3, snippet_start_line=-1, snippet_end_line=-1)
+    negative['data']['results'][0].update(line=-3, snippet='last\n', snippet_start_line=-1, snippet_end_line=-1)
     with pytest.raises(AssertionError):
         source_spans(negative, tmp_path)
 
