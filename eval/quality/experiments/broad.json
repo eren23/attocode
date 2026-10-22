@@ -1,7 +1,0 @@
-{
-  "schema_version": 1,
-  "experiment": "broad",
-  "scope": "All pinned workflows.yaml source-only compatibility packs; limited and unsupported checks retain their outcome",
-  "fixtures": "Exact revisions, source anchors and hashes in committed workflows.yaml",
-  "limits": {"seconds": 600, "disk_bytes": 2147483648, "rss_bytes": 2147483648, "evidence_bytes": 67108864}
-}

@@ -6,9 +6,10 @@ selected engine and source identities, and report incomplete observations withou
 a quality verdict. Runtime work runs on disposable GitHub Actions runners.
 
 Use the manual **Intelligence experiments** workflow with a committed design.
-`preflight` runs synthetic harness controls; `broad` runs the pinned compatibility
-packs. `native`, `preview` and `restart` require their separately reviewed designs
-and operators before dispatch; a missing design fails closed. Each attempt gets
+`preflight` runs synthetic harness controls. `native`, `preview`, `restart` and
+`broad` require their separately reviewed designs and operators before dispatch;
+a missing design fails closed. The broad runner also needs response journaling
+and fail-fast admission before its design can be enabled. Each attempt gets
 a new directory and an artifact even when validation fails.
 
 The payload ceiling includes the supervising controller and its descendants:

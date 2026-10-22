@@ -115,3 +115,26 @@ def test_evidence_ceiling_stops_worker_without_deleting_retained_response(tmp_pa
                     evidence_root=evidence, max_evidence_bytes=32768)
     assert row['reason'] == 'evidence_budget' and row['cleanup_verified']
     assert (evidence / 'retained').read_text() == 'keep this observation'
+
+
+@pytest.mark.parametrize('changed', ['eval/matrix/run.py', 'pyproject.toml'])
+def test_dirty_transitive_operator_or_workspace_configuration_refuses_admission(tmp_path, monkeypatch, changed):
+    from eval.quality import experiments
+
+    for name, body in {'eval/quality/experiments/preflight.json': '{}',
+                       'eval/matrix/run.py': 'value = 1\n',
+                       'pyproject.toml': '[project]\nname = "fixture"\n'}.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+    for args in [('init', '-q'), ('add', '.'), ('commit', '-qm', 'synthetic committed inputs')]:
+        subprocess.run(['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false',
+                        '-c', 'user.name=Harness test', '-c', 'user.email=harness@example.invalid',
+                        *args], cwd=tmp_path, check=True, capture_output=True)
+    monkeypatch.setattr(experiments, 'REPO', tmp_path)
+    design = tmp_path / 'eval/quality/experiments/preflight.json'
+    assert experiments.identity(design)['files']
+    with (tmp_path / changed).open('a') as stream:
+        stream.write('\n# dirty dependency\n')
+    with pytest.raises(subprocess.CalledProcessError):
+        experiments.identity(design)

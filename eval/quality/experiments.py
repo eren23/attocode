@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -26,7 +27,7 @@ TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_
 def identity(design):
     """Require committed design/operators/engine; never equate a dirty tree to HEAD."""
     roots = ['eval/quality', 'packages/code-intel',
-             'uv.lock', str(design.relative_to(REPO))]
+             'uv.lock', '.github/workflows/intelligence-experiments.yml', str(design.relative_to(REPO))]
     subprocess.run(['git', 'diff', '--exit-code', 'HEAD', '--', *roots], cwd=REPO,
                    check=True, stdout=subprocess.DEVNULL)
     unknown = subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard',
@@ -37,6 +38,7 @@ def identity(design):
     files = {p: hashlib.sha256((REPO / p).read_bytes()).hexdigest() for p in sorted(set(paths)) if p}
     return {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
             'design_sha256': hashlib.sha256(design.read_bytes()).hexdigest(), 'files': files,
+            'python': sys.version, 'platform': platform.platform(),
             'github_run_id': os.environ.get('GITHUB_RUN_ID'),
             'github_run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT')}
 
