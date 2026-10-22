@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Doctor reports the configured executable, version returned by its new server
   connection, and the limit that this probe cannot verify an existing host session.
 - Add cross-file navigation checks for Python, TypeScript, Go, Rust, Ruby and Elixir.
+- Investigate search-only JavaScript/TypeScript callback spans. An initial
+  path-alias wiring defect invalidated the intended representation; its counts
+  are not candidate relevance evidence. Ranking stays unchanged; see the
+  [investigation](packages/code-intel/evals/results/2026-10-21-test-case-spans.md).
 
 ## [Intelligence 0.1.13] - 2026-10-21
 

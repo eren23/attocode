@@ -1,10 +1,26 @@
 """Failed grammar evidence and bounded recovery of an unchanged selected file."""
 from unittest.mock import patch
 
+import pytest
 from attocode_intel._internal.integrations.context import ast_service, ts_parser
 from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+from attocode_intel.request_context import RequestContext, bind_request, current_request
 from attocode_intel.service import CodeIntelService
 from attocode_intel.symbol_inspection import inspect_symbol_data
+
+
+@pytest.fixture(autouse=True)
+def selected_workspace(tmp_path):
+    # Match gateway dispatch so composed test suggestions use this workspace,
+    # rather than starting unrelated global/CWD hydration during a parser mock.
+    with bind_request(RequestContext(str(tmp_path), str(tmp_path))):
+        yield
+
+
+def make_service(tmp_path):
+    service = CodeIntelService(str(tmp_path))
+    current_request.get().stores['service'] = service
+    return service
 
 
 def test_native_failure_is_reported_without_calling_it_a_timeout():
@@ -22,7 +38,7 @@ def test_native_failure_is_reported_without_calling_it_a_timeout():
 
 def degraded_service(tmp_path):
     (tmp_path/'sample.lua').write_text('function target() return 1 end\n' + 'local x = 1\n'*10000 + 'function caller() return target() end\n')
-    service = CodeIntelService(str(tmp_path))
+    service = make_service(tmp_path)
     with patch.object(ts_parser, 'PARSE_TIMEOUT_MICROS', 1):
         ast = service._get_ast_service(indexing_depth='eager')
     assert not ast.find_symbol('target')
@@ -43,9 +59,13 @@ def test_selected_file_recovers_definition_and_references_without_edit(tmp_path)
         service._get_ast_service()._store.close()
 
     for _ in range(2):
-        reopened = CodeIntelService(str(tmp_path))
+        reopened = make_service(tmp_path)
+        reopened._ast_service = ast_service.ASTService(str(tmp_path))
+        reopened._ast_service.initialize_skeleton(indexing_depth='eager')
+        reopened._context_mgr = reopened._ast_service._context_mgr
         try:
             reopened._get_ast_service(indexing_depth='eager')
+            assert reopened._get_ast_service() is not ast
             result = inspect_symbol_data(reopened, 'target', 'sample.lua')
             assert result['status'] == 'found'
             assert any(r['line'] == 10002 for r in result['references'])
@@ -88,7 +108,7 @@ def test_new_parser_generation_permits_a_new_bounded_attempt(tmp_path):
 def test_empty_and_syntax_error_trees_are_not_transient_native_failures(tmp_path):
     (tmp_path/'empty.py').write_text('')
     (tmp_path/'broken.py').write_text('def broken(:\n')
-    service = CodeIntelService(str(tmp_path))
+    service = make_service(tmp_path)
     try:
         ast = service._get_ast_service(indexing_depth='eager')
         with patch.object(ast_service, 'parse_file', side_effect=AssertionError('not a transient failure')):
@@ -104,7 +124,7 @@ def test_empty_and_syntax_error_trees_are_not_transient_native_failures(tmp_path
 
 def test_missing_name_in_healthy_file_does_not_trigger_recovery(tmp_path):
     (tmp_path/'healthy.py').write_text('def present(): return 1\n')
-    service = CodeIntelService(str(tmp_path))
+    service = make_service(tmp_path)
     try:
         service._get_ast_service(indexing_depth='eager')
         with patch.object(ast_service, 'parse_file', side_effect=AssertionError('healthy file reparsed')):
@@ -140,7 +160,7 @@ def test_selected_recovery_cannot_bless_an_unrelated_concurrent_edit(tmp_path):
 def test_explicit_line_miss_recovers_even_when_another_definition_has_same_name(tmp_path):
     (tmp_path/'sample.js').write_text('function target() { return 1; }\nclass C {\ntarget(\nx\n) { return x; }\n}\n'
                                     + 'const value = 1;\n'*10000)
-    service = CodeIntelService(str(tmp_path))
+    service = make_service(tmp_path)
     try:
         with patch.object(ts_parser, 'PARSE_TIMEOUT_MICROS', 1):
             ast = service._get_ast_service(indexing_depth='eager')

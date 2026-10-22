@@ -1011,6 +1011,11 @@ def _process_elixir_call(
         # def/defp: first arg is the function head (a call node with the fn name)
         if args and args.children:
             head = args.children[0]
+            if head.type == "binary_operator":
+                operator = head.child_by_field_name("operator")
+                left = head.child_by_field_name("left")
+                if operator is not None and _node_text(operator, source_bytes) == "when" and left is not None:
+                    head = left
             name = ""
             if head.type == "call":
                 # Inner call also uses identifier children, not "target" field

@@ -1,4 +1,5 @@
 """Persisted summaries must preserve navigation and reject stale/invalid inputs."""
+import hashlib
 import json
 from dataclasses import asdict
 from unittest.mock import patch
@@ -121,7 +122,7 @@ def test_file_bound_and_unsupported_tier_fall_back(tmp_path, monkeypatch):
     close(first)
 
 
-def test_uncached_identical_structures_reuse_persisted_navigation(tmp_path, monkeypatch):
+def test_uncached_identical_structures_conservatively_repair_navigation(tmp_path, monkeypatch):
     monkeypatch.setattr(ast_snapshot, 'MAX_FILE_BYTES', 10)
     first = seed(tmp_path)
     expected = {k: asdict(v) for k, v in first._ast_cache.items()}
@@ -133,31 +134,33 @@ def test_uncached_identical_structures_reuse_persisted_navigation(tmp_path, monk
     try:
         with patch.object(index_repair, 'repair_index', wraps=index_repair.repair_index) as repair:
             assert second.initialize_skeleton().phase == 'ready'
-        assert repair.call_count == 0
+        assert repair.call_count == 1
         assert second._store.stats() == counts
         assert {k: asdict(v) for k, v in second._ast_cache.items()} == expected
     finally:
         close(second)
 
 
-@pytest.mark.parametrize('damage', ['missing', 'structure', 'extractor'])
-def test_uncached_fingerprint_mismatch_repairs_instead_of_reusing(tmp_path, monkeypatch, damage):
-    monkeypatch.setattr(ast_snapshot, 'MAX_FILE_BYTES', 10)
+@pytest.mark.parametrize('damage', ['missing', 'extractor'])
+def test_navigation_extractor_identity_change_repairs_cached_navigation(tmp_path, damage):
     first = seed(tmp_path)
     data = json.loads(first._store.get_meta(SNAPSHOT_KEY))
     if damage == 'missing':
-        data.pop('structures', None)
-    elif damage == 'structure':
-        data['structures']['file0.py'] = 'incorrect'
+        data.pop('navigation_identity', None)
     else:
         data['navigation_identity'] = 'old extractor'
-    first._store.set_meta(SNAPSHOT_KEY, json.dumps(data))
+    raw = json.dumps(data)
+    first._store.set_meta(SNAPSHOT_KEY, raw)
+    summaries = json.loads(first._store.get_meta(AST_SNAPSHOT_KEY))
+    summaries['snapshot'] = hashlib.sha256(raw.encode()).hexdigest()
+    first._store.set_meta(AST_SNAPSHOT_KEY, json.dumps(summaries))
     close(first)
     from attocode_intel._internal.integrations.context import index_repair
 
     second = ASTService(str(tmp_path))
     try:
-        with patch.object(index_repair, 'repair_index', wraps=index_repair.repair_index) as repair:
+        with (patch.object(index_repair, 'repair_index', wraps=index_repair.repair_index) as repair,
+              patch.object(ast_service, 'parse_file', side_effect=AssertionError('valid summaries reparsed'))):
             assert second.initialize_skeleton().phase == 'ready'
         assert repair.call_count == 1
         assert len(second._index.get_definitions('Sample0')) == 1
@@ -165,7 +168,7 @@ def test_uncached_fingerprint_mismatch_repairs_instead_of_reusing(tmp_path, monk
         close(second)
 
 
-def test_failed_reference_parse_is_not_blessed_by_a_healthy_ast_fingerprint(tmp_path):
+def test_failed_reference_parse_is_not_cached_as_a_healthy_ast(tmp_path):
     from attocode_intel._internal.integrations.context import syntax_evidence, ts_parser
 
     (tmp_path/'target.py').write_text('def target(): return 1\n')

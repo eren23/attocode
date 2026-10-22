@@ -206,3 +206,67 @@ def test_ruby_only_literal_receiverless_requires_are_imports():
     assert [(row["module"], row["start_line"]) for row in parsed["imports"]] == [
         ("../lib/codec", 1),
     ]
+
+
+def test_elixir_guarded_definition_heads_preserve_names_spans_and_calls():
+    from attocode_intel._internal.integrations.context.syntax_evidence import reference_candidates
+    from attocode_intel._internal.integrations.context.ts_parser import ts_parse_file
+
+    source = (
+        "defmodule Wire.Codec do\n"
+        "  def encode(value, opts \\\\ []) when is_integer(value) do\n"
+        "    finish(value, opts)\n"
+        "  end\n"
+        "  defp finish(value, _opts) when is_integer(value), do: value\n"
+        "end\n"
+    )
+    parsed = ts_parse_file("lib/codec.ex", source)
+    assert [(f["name"], f["parent_class"], f["start_line"], f["end_line"], f["visibility"])
+            for f in parsed["functions"]] == [
+        ("encode", "Wire.Codec", 2, 4, "public"),
+        ("finish", "Wire.Codec", 5, 5, "private"),
+    ]
+    assert [r for r in reference_candidates("lib/codec.ex", source, "elixir")
+            if r[0] in {"encode", "finish", "is_integer"}] == [
+        ("is_integer", "call", 2),
+        ("finish", "call", 3),
+        ("is_integer", "call", 5),
+    ]
+
+
+async def test_elixir_guarded_selected_definition_links_real_body_call(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATTOCODE_INTEL_PRECISION", "off")
+    source = (
+        "defmodule Wire.Codec do\n"
+        "  def encode(value) when is_integer(value) do\n"
+        "    finish(value)\n"
+        "  end\n"
+        "  defp finish(value) when is_integer(value), do: value\n"
+        "end\n"
+    )
+    (tmp_path / "codec.ex").write_text(source)
+    (tmp_path / "codec_test.exs").write_text(
+        "defmodule CodecTest do\n"
+        "  alias Wire.Codec\n"
+        "  def test_encode(), do: Codec.encode(2)\n"
+        "end\n"
+    )
+    gateway = OperationGateway(str(tmp_path), "daily", watch=False)
+    try:
+        for symbol, start, end, caller, call_line in [
+            ("encode", 2, 4, "codec_test.exs", 3),
+            ("finish", 5, 5, "codec.ex", 3),
+        ]:
+            response = await gateway.execute("inspect_symbol", {
+                "symbol_name": symbol, "file_path": "codec.ex", "line": start,
+            })
+            assert not response.isError, response.content
+            data = response.structuredContent["data"]
+            assert data["status"] == "found"
+            assert (data["definition"]["qualified_name"], data["definition"]["start_line"],
+                    data["definition"]["end_line"]) == (symbol, start, end)
+            assert data["source"]["text"] == "\n".join(source.splitlines()[start - 1:end])
+            assert {(r["file_path"], r["line"]) for r in data["references"]
+                    if r["ref_kind"] == "call"} == {(caller, call_line)}
+    finally:
+        await gateway.close()
