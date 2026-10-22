@@ -1,0 +1,61 @@
+{
+  "archive": {
+    "file": "2026-10-22-investigation-pilot.tar.gz",
+    "sha256": "3ddbd267583d793ef3153e88760ae5aaebe751501e2cde7f1d7ba9530324dd24"
+  },
+  "billing": "Subscription extra usage was off at preflight; reported API-equivalent cost is not an invoice. Interrupted native cost unknown.",
+  "cleanup_verified": true,
+  "cost_ratio": null,
+  "decision": "stop_without_retry_or_replacement",
+  "excluded_wiring_attempts": 2,
+  "exposure": {
+    "novelty_limit": "I07 composite primary was new; one supporting caller/function anchor was previously consumed and disclosed before launch.",
+    "other_frozen_tasks_launched": false,
+    "scored_tasks_exposed_to_client": [
+      "I07"
+    ],
+    "unlaunched_prompts_and_labels_exported": false
+  },
+  "fully_correct_delta": null,
+  "known_reported_cost_subtotal_usd": "0.1823414",
+  "no_agent_benefit_claim": true,
+  "observed_scored_attempts": 2,
+  "operators": {
+    "guard.py": "cbb68e2abafb776b5561007bb79f8fdfaf52f0902cb152031553e80d76192692",
+    "pilot.py": "2be1331af2a0276382591ea9663904c86e61592784d098ca5f4f4df4e03f4d58",
+    "proxy.py": "1ed9397130d4cb04d56884245887050945a260ad4d7aeea85344d37020f1c8ad"
+  },
+  "planned_scored_attempts": 16,
+  "release_source_head": "08319af02eeee95b88978dd126e392fec67719de",
+  "replay_scope": "Sanitized accounting and structural tool-call evidence only. No raw answer, semantic grade or causal agent-benefit estimate.",
+  "repositories": {
+    "cli/cli": {
+      "revision": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+      "sha256": "fcd228aeb35f49ec460788314c482586f1da41a4a6ebaf3632261ace87fd7468",
+      "snapshot": "sources/repo-0"
+    },
+    "fastapi/fastapi": {
+      "revision": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+      "sha256": "17063c3d3d1b1b26257e17b16128b3d1fa6f4d90cb7e1a6c93b7b62604b5fbe6",
+      "snapshot": "sources/repo-1"
+    },
+    "phoenixframework/phoenix": {
+      "revision": "850162d618cf4e31be82fb53ad6e259095fa6126",
+      "sha256": "200f91bae027b3f9d078c9a2e32795440b8fd778b5ac96b21726ba03177294db",
+      "snapshot": "sources/repo-2"
+    },
+    "psf/requests": {
+      "revision": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "sha256": "63efe90377f671ce0bfa71737de62e7545b6ed4177458033251843776023d0c4",
+      "snapshot": "sources/repo-3"
+    }
+  },
+  "schema": 1,
+  "semantic_grades": null,
+  "status": "incomplete",
+  "stop_reason": "Malformed structured-output/tool calls; frozen protocol failure cancels the active pair.",
+  "study_freeze_sha256": "b6bd8224dea8ff91e2bca7fbcd5690162290002341ad339eaa6d9b5006d47d23",
+  "time_ratio": null,
+  "total_reported_cost_usd": null,
+  "unlaunched_scored_attempts": 14
+}

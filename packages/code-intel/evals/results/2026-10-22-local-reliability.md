@@ -57,5 +57,7 @@ $0, with invoices unchecked.
 
 The single [callback-span candidate](2026-10-21-test-case-spans.md) is rejected on
 consumed development evidence after correcting an invalid operator. No ranking
-change, retuning or fresh validation follows. The conditional new investigation
-pilot has not started; these checks establish product behavior, not agent gains.
+change, retuning or fresh validation follows. The subsequent
+[investigation pilot](2026-10-22-investigation-pilot.md) stopped incomplete after
+its first pair on structured-output/tool-call protocol failures. These product
+checks establish behavior, not agent gains; the pilot adds no benefit claim.

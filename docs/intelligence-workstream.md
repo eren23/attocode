@@ -20,6 +20,11 @@ controls, with two dynamic/macro controls limited. The unmeasured restart shortc
 is omitted; the single callback-span candidate is rejected on consumed development.
 
 The local `lean` profile is shipped and opt-in; daily remains the default.
+The [2026-10-22 investigation pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-investigation-pilot.md)
+stopped incomplete after its first scored pair: malformed structured-output/tool
+calls failed the frozen protocol. Fourteen scored requests were never launched;
+there were no retries or replacements. Quality and cost/time comparisons remain
+unavailable. Beta positioning is unchanged; no agent benefit is established.
 [R7](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)
 demonstrated no completion benefit and ended with a stop decision. These product
 checks do not establish better agent outcomes or authorize further study runs.

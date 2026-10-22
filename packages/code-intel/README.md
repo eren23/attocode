@@ -90,6 +90,9 @@ Search matches the words of the code and its paths. It does not use embeddings u
 The [R6 review study](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-13-r6-review-test-note.md)
 found no demonstrated review benefit. The [completed R7 repair pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)
 also found no demonstrated benefit; its reviewed decision is to stop expansion.
+The [2026-10-22 investigation pilot](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-investigation-pilot.md)
+stopped incomplete after its first task pair because structured-output/tool calls
+failed the frozen protocol. It provides no quality, cost or time benefit evidence.
 
 ## Limits and troubleshooting
 
