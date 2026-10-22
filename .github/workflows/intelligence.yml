@@ -11,7 +11,7 @@ on:
         description: 'Run the full gate or a frozen source-only experiment'
         type: choice
         default: none
-        options: [none, preview-windows]
+        options: [none, cockroach-restart]
   workflow_call:
 
 permissions:
@@ -189,21 +189,23 @@ jobs:
           python-version: '3.12'
       - run: docker build -t intelligence-test -f docker/code-intel/Dockerfile .
       - run: uv run --with httpx --no-project python packages/code-intel/scripts/smoke_image.py intelligence-test
-  preview-windows:
-    if: github.event_name == 'workflow_dispatch' && inputs.experiment == 'preview-windows'
+  cockroach-restart:
+    if: github.event_name == 'workflow_dispatch' && inputs.experiment == 'cockroach-restart'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
       - run: uv sync --locked --package attocode-code-intel --extra dev
-      - name: Frozen source-only preview trial (600s, 2GiB)
-        run: uv run --no-sync python -m eval.quality.preview_trial --out quality-artifacts/preview-windows
+      - name: Frozen source-only restart comparison (1560s, 2GiB)
+        run: uv run --no-sync python -m eval.quality.restart_trial --out quality-artifacts/cockroach-restart
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: preview-windows
+          name: cockroach-restart
           retention-days: 30
-          path: quality-artifacts/preview-windows/
+          path: quality-artifacts/cockroach-restart/

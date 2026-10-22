@@ -1,34 +1,10 @@
-"""Admission and budget corruption controls, executed only by online CI."""
-import copy
+"""Online controller/resource accounting controls for bounded experiments."""
 import subprocess
 import sys
 import time
 
-import pytest
-
 from eval.quality import runner
-from eval.quality.preview_trial import BudgetGuard, source_spans
-
-
-def test_all_hit_coordinates_reject_broad_ranges_and_unlabeled_corruption(tmp_path):
-    (tmp_path / 'target.py').write_text('first\nalpha\nbeta\nlast\n')
-    (tmp_path / 'other.py').write_text('another\n')
-    hit = {'file_path': 'target.py', 'line': 1, 'end_line': 4, 'snippet': 'alpha\nbeta\n',
-           'snippet_start_line': 2, 'snippet_end_line': 3}
-    page = {'data': {'results': [hit]}}
-    assert source_spans(page, tmp_path) == [[(6, 17)]]
-    broad = copy.deepcopy(page)
-    broad['data']['results'][0].update(snippet_start_line=1, snippet_end_line=4)
-    with pytest.raises(AssertionError):
-        source_spans(broad, tmp_path)
-    extra = copy.deepcopy(page)
-    extra['data']['results'].append({**hit, 'file_path': 'other.py'})
-    with pytest.raises(AssertionError):
-        source_spans(extra, tmp_path)
-    negative = copy.deepcopy(page)
-    negative['data']['results'][0].update(line=-3, snippet='last\n', snippet_start_line=-1, snippet_end_line=-1)
-    with pytest.raises(AssertionError):
-        source_spans(negative, tmp_path)
+from eval.quality.experiment_budget import BudgetGuard
 
 
 def limits(**changes):

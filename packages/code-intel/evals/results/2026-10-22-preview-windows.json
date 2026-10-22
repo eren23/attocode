@@ -1,0 +1,37 @@
+{
+  "status": "incomplete",
+  "quality_verdict": null,
+  "product_change": false,
+  "head": "bbc6d52865bbbe23e0b1c93c2d83ecc7a6e6d4a4",
+  "run": "https://github.com/eren23/attocode/actions/runs/39836664440",
+  "artifact_sha256": "4e35775410b58076a51c2c9e1520caafde4cf49035e2f51628c0b9e08cd299d0",
+  "archive_sha256": "17937886efdaa7aa8cf7f5e4cda8bbd4e5dd33ae38cb09c9278618877b67d967",
+  "baseline_controls": {
+    "total": 13,
+    "expected_assertion_failures": 2
+  },
+  "candidate_controls": {
+    "passed": 13,
+    "failures": 0
+  },
+  "baseline_pages": 13,
+  "candidate_pages": 0,
+  "exposed_question_ids": [
+    "p1",
+    "p2",
+    "p3"
+  ],
+  "frozen_batch_consumed_for_freshness": true,
+  "failure": "Operator strict UTF8 read of a returned file; UnicodeDecodeError byte0xd0. Exact failing response/path was not checkpointed.",
+  "seconds": 28.865179329999997,
+  "aggregate_sampled_peaks": {
+    "disk_bytes": 239362048,
+    "evidence_bytes": 208896,
+    "rss_bytes": 276770816
+  },
+  "cleanup_verified": true,
+  "identities_unchanged": true,
+  "budget_violation": null,
+  "rerun_retune_or_replacement": false,
+  "limits": "No source-comparison verdict, semantic relevance, historical cause or agent benefit inferred. Same-file ripgrep exposure disclosed."
+}
