@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Break equal symbol-search scores by source location before applying the result
   limit, so index insertion and process hash order cannot change a tied page.
+- Exclude archived evaluation results from source distributions to keep package
+  growth within the existing release-verification size limit.
 
 ## [Intelligence 0.1.15] - 2026-10-22
 
