@@ -4,10 +4,29 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current release:** `attocode-code-intel` 0.1.12 (2026-10-20). See the
-[0.1.12 release notes](intelligence-0.1.12.md).
+**Current release:** `attocode-code-intel` 0.1.13 (2026-10-21). See the
+[0.1.13 release notes](intelligence-0.1.13.md) and
+[verified GitHub release](https://github.com/eren23/attocode/releases/tag/intel-v0.1.13).
+It ships compact-search delivery fixes, bounded deeper search and persisted
+navigation repair after successful restart parsing. Ranking remains unchanged.
 
-**Latest search batch, 2026-10-20:** [test cases before recognized support paths](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-20-test-support.md).
+**Latest compatibility evidence, 2026-10-21:** all 36 pinned packs completed,
+with 157 passed, 124 limited and seven unsupported checks, and no failed or
+incomplete checks. Limited and unsupported outcomes are not verified support.
+The intermittent OCaml cold-parse trigger and Cockroach restart cost remain open;
+see the [compatibility and recovery report](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-20-search-repair.md#compatibility-and-restart-recovery--2026-10-21).
+
+The local `lean` profile is shipped and opt-in; daily remains the default.
+[R7](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-14-r7-completion-pilot.md)
+demonstrated no completion benefit and ended with a stop decision. These product
+checks do not establish better agent outcomes or authorize further study runs.
+
+## Earlier batches and studies
+
+The dated entries below preserve their original checkpoints. Older release,
+pending-validation and proposal statements describe those checkpoints.
+
+**Earlier search batch, 2026-10-20:** [test cases before recognized support paths](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-20-test-support.md).
 The fixed candidate moved helpers off two first pages but recovered no judged test
 on 13 consumed Express/Mojo questions: files at five stayed 13, at 24 stayed 17,
 with no individual losses. The development stop rule applies. No fresh validation
@@ -147,7 +166,7 @@ There is no deletion, rebrand or agent retirement in the current batch.
 
 The entries below are historical evidence.
 
-## Milestones
+## Historical milestones (0.1.6)
 
 | Milestone | Status | Required evidence |
 | --- | --- | --- |
@@ -183,7 +202,7 @@ Temporary tools and optional grammars belong on disposable workers or CI.
 Preserve shared caches, evaluation artifacts and frozen studies. No model calls,
 model downloads or Claude usage-page checks; R7's STOP remains in force.
 
-## Progress evidence
+## Historical progress evidence
 
 Implementation starts from main `ecc2c3e19d37ed6e802e39eece30fdd5692faaa6`.
 The existing symlink fix is merged but not in released 0.1.5. The first bounded local milestone passed; broader evidence remains explicitly partial. Record each completed milestone's report location, candidate

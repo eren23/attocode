@@ -3,10 +3,17 @@
 > A broad tool suite for deep codebase understanding. This guide helps AI agents use it
 > efficiently, minimizing token usage while maximizing insight.
 >
-> These tools are available via MCP (stdio/SSE) **and** as a REST API over HTTP.
+> These tools are available via MCP (stdio and Streamable HTTP, plus legacy SSE)
+> **and** as a REST API over HTTP.
 > The HTTP API supports multi-project management, bearer token auth, and interactive
 > docs at `/docs`. Start the HTTP server with:
-> `attocode code-intel serve --transport http --project /path/to/repo`
+> `attocode-code-intel serve --transport http --project /path/to/repo`
+
+This is a reference to the broad tool catalog. New local installations use the
+`daily` profile; the shipped local `lean` profile is opt-in. Use `capabilities`
+and the advertised tool list to check what this connection exposes. Advanced
+tools in this guide may require `attocode-code-intel init --profile full --client <client>`
+and a client restart. Remote profiles are `daily` and `full`.
 
 ---
 

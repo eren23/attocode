@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 
 from .language_registry import LANG_EXTENSIONS
+from .parse_diagnostics import ParseFailure, collect_parse_failures
 
 # ---------------------------------------------------------------------------
 # Parameter and property detail types
@@ -117,6 +118,7 @@ class FileAST:
     namespaces: list[str] = field(default_factory=list)
     parsing_tier: str = ""  # "tree_sitter", "regex", "generic_ts", "ctags", "minimal"
     content_sha256: str = field(default="", repr=False, compare=False)
+    parse_failures: list[ParseFailure] = field(default_factory=list, repr=False, compare=False)
 
     @property
     def symbol_count(self) -> int:
@@ -1207,7 +1209,9 @@ def parse_file(file_path: str, content: str | None = None) -> FileAST:
         except OSError:
             return FileAST(path=file_path, language="unknown")
 
-    result = _parse_content(file_path, content)
+    with collect_parse_failures() as failures:
+        result = _parse_content(file_path, content)
+    result.parse_failures = failures
     # Bind reuse to the exact decoded input, including same-size/mtime edits.
     result.content_sha256 = hashlib.sha256(content.encode()).hexdigest()
     return result

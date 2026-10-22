@@ -26,15 +26,16 @@ attocode-code-intel doctor --global --client codex --project /path/to/repo
 
 Global servers select the explicit `workspace`, an advertised MCP root, or the repository containing their working directory. If a client supplies multiple roots, the agent must select one. Cursor's automatic instruction file is project-scoped even when its server connection is global; run `init --client cursor` in each project where you want those rules.
 
-The published standalone package is available with `uv tool install attocode-code-intel`. The source installation above uses this checkout.
+The current published standalone release is [0.1.13](https://github.com/eren23/attocode/releases/tag/intel-v0.1.13),
+available with `uv tool install attocode-code-intel`. The source installation above uses this checkout.
 
 ## Everyday use
 
 Ask your agent to start with `bootstrap(task_hint="what you are changing")`. It receives relevant code, structure, recalled knowledge, and index coverage within a token budget. Follow with symbol search, references, dependencies, impact analysis, and test suggestions. `review_change` reports structured findings and identifies failed analysis passes.
 
-Local file watchers and per-operation filesystem checks pick up edits, new files, deletions, and import-only changes. `notify_file_changed` is also available. Learnings persist in the existing `.attocode/cache/memory.db`, so different agents can reuse them. Use `record_learning`, `recall`, `update_learning`, and `learning_feedback` to maintain knowledge.
+Local file watchers and per-operation filesystem checks pick up edits, new files, deletions, and import-only changes. With watching disabled, `notify_file_changed` offers an explicit refresh. Learnings persist in the existing `.attocode/cache/memory.db`, so different agents can reuse them. The full profile provides `record_learning`, `recall`, `update_learning`, and `learning_feedback` to maintain knowledge.
 
-New installations and direct server invocations use the compact **daily** tool profile. `init --profile full` exposes the complete local catalog, including rules and security analysis, history, architecture, retrieval pins, snapshots, overlays, and cache maintenance. `capabilities` reports the actual catalog and optional enhancements.
+New installations and direct server invocations use the compact **daily** tool profile. `init --profile full` exposes the complete local catalog, including rules and security analysis, history, architecture, retrieval pins, snapshots, overlays, and cache maintenance. The shipped local `lean` profile is opt-in with `init --profile lean`; remote profiles remain daily and full. `capabilities` reports the actual catalog and optional enhancements.
 
 Version 0.1.7 adds a [change investigation workflow](docs/guides/change-investigation.md):
 `attocode-code-intel changes` combines a Git diff with changed definitions,
@@ -52,6 +53,10 @@ searches, and counts Swift `Tests/` folders as tests.
 such as `_test.dart` and Perl `.t` scripts and `t/` modules.
 [Version 0.1.12](docs/intelligence-0.1.12.md) makes `doctor --client claude` read the
 local-scope entry that `claude mcp add` writes to `~/.claude.json`.
+[Version 0.1.13](docs/intelligence-0.1.13.md) fills spare compact-search budget,
+offers bounded deeper searches up to 50 results, and repairs persisted navigation
+after successful restart parsing. Search ranking remains unchanged; an intermittent
+OCaml cold-parse miss remains open.
 
 ## Teams and remote agents
 

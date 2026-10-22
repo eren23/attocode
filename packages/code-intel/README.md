@@ -17,6 +17,8 @@ attocode-code-intel init
 Then restart your agent. `init` configures Codex, Claude Code and Cursor. Use `--client claude`, `--client codex` or `--client cursor` for one client. Codex needs a trusted project for a project configuration. Claude Code can ask you to enable the project MCP server.
 
 To check the setup, run `attocode-code-intel doctor`. It starts the configured server, calls two tools and shows the result for each client.
+Development builds also report the executable and server version returned by
+that new probe. An already running client session must be checked separately.
 
 For other clients (VS Code, Zed, Windsurf, Claude Desktop and more), run `attocode-code-intel install <target>`. `attocode-code-intel commands` lists the targets.
 
@@ -93,6 +95,11 @@ also found no demonstrated benefit; its reviewed decision is to stop expansion.
 - **Index location.** The index is in `.attocode/` in your project. When the server makes that folder, it adds a `.gitignore`, so the index stays out of commits.
 - **What the index reads.** The server reads at most 50,000 files and skips files over 1 MB. It skips files that `.gitignore` ignores, and folders that start with a dot. It also skips folders named `dist`, `build`, `out`, `output`, `target`, `env`, `tmp`, `vendor` or `coverage`, and binary, media and lock files. If a build-named folder contains real source, explicitly re-include it with a root `.gitignore` entry such as `!dist/`; discovery and edit refresh honor that override.
 - **Languages.** The base install parses Bash, C, C#, C++, CSS, Elixir, Go, HCL, HTML, Java, JavaScript, JSON, Kotlin, Lua, PHP, Python, Ruby, Rust, Scala, Swift, TOML, TypeScript, YAML and Zig. Optional grammars are loaded only when already installed or cached; installing the `tree-sitter-all` extra does not trigger grammar downloads during navigation. A slow grammar falls back after a 100 ms parse budget. Static imports and references are partial evidence, not compiler/type resolution.
+- **Degraded parsing (development builds).** Selecting a missing definition in
+  a file with a recorded native parse failure permits one bounded retry for
+  that source/parser generation. A failed retry reports partial evidence and
+  an `attocode-code-intel notify` command to queue a file refresh. Empty results
+  and ordinary syntax errors do not trigger this recovery.
 - **Test paths.** Search and test suggestions recognize conventional test folders and filenames, plus supported Kotlin/Android source sets directly under `src` (for example `commonTest`, `jvmTest`, `androidHostTest` and `androidDeviceTest`). Helpers in those sets count as test code even without a test filename. Custom target or flavor names are not inferred from a `Test` suffix alone. Short queries explicitly asking for tests put recognized test files first, preserving order within each group; longer issue descriptions keep source-first behavior. Suggestions can include helpers; verify the actual runnable tests.
 - **Remove the setup.** Run `attocode-code-intel init --remove`. It restores an entry that existed before `init`.
 - **Server does not answer.** Run `attocode-code-intel doctor`. If a client shows "not configured", run `init` for it. After a change, restart the agent. In Claude Code, `/mcp` shows the server state.

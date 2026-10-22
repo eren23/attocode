@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "scope": "Non-exhaustive source-bound static navigation; six native-file slices, not agent completion or full-project correctness.",
+  "frozen_original_labels_sha256": "0f3c4d649b44025fb6532d975ccc9bd981d562d5e85a44b1029e4d59d2d795c9",
+  "public_labels_sha256": "a6fdc9d561bafef591f9fd70581f90cb350bc40287ec9d327a224164d69e74dd",
+  "semantic_labels_sha256": "387f372ab640ee591df94c80f62f926be8f5d12c29aff1b9bf721956ef0d6765",
+  "frozen_source_manifest_sha256": "6874080f3a17961adc2bce32649c139a471b0b8c103ba59b6fda5d62f194dd50",
+  "repositories": {
+    "fastapi": {
+      "repo": "fastapi/fastapi",
+      "revision": "11614be9021aa4ac078d4d0693a8b5250a1010d8"
+    },
+    "gh-cli": {
+      "repo": "cli/cli",
+      "revision": "6e49747f49f31c9c0a68cfa344df7262a684e723"
+    },
+    "phoenix": {
+      "repo": "phoenixframework/phoenix",
+      "revision": "850162d618cf4e31be82fb53ad6e259095fa6126"
+    },
+    "prisma": {
+      "repo": "prisma/prisma",
+      "revision": "33667c373c0ae84ad37c7aed2497b99452da589c"
+    },
+    "rails": {
+      "repo": "rails/rails",
+      "revision": "e72eb4c20b6bb5bdc7f63a4477992209585a1fa9"
+    },
+    "ripgrep": {
+      "repo": "BurntSushi/ripgrep",
+      "revision": "4519153e5e461527f4bca45b042fff45c4ec6fb9"
+    }
+  },
+  "runs": {
+    "original": {
+      "counts": {
+        "passed": 13,
+        "limited": 2,
+        "failed": 3
+      },
+      "original_observations_sha256": "c5c1f5657adba13c14f1d833e46a98dafd733a7cfc9ca37ad592c02cf3eb6b0e",
+      "product_source_sha256": "dc1009e7dcbc2833adb470b2e9fcd57366afea79a2fde734c2704da80951df77",
+      "supervision": {
+        "seconds": 2.776,
+        "peak_rss_bytes": 140771328,
+        "peak_disk_bytes": 3629056,
+        "cleanup_verified": true,
+        "owned_scratch_removed": true,
+        "source_unchanged": true
+      }
+    },
+    "corrected": {
+      "counts": {
+        "passed": 16,
+        "limited": 2
+      },
+      "original_observations_sha256": "40652dc8ff86496aacb8d15b80f81fe0227db7100e5ad76ca0f163174cea4cba",
+      "product_source_sha256": "b261d03dd7ce5f42fb1acc02d51b3576d084e46e29eafd66197e47986bf50dab",
+      "supervision": {
+        "seconds": 10.527,
+        "peak_rss_bytes": 136921088,
+        "peak_disk_bytes": 3780608,
+        "cleanup_verified": true,
+        "owned_scratch_removed": true,
+        "source_unchanged": true
+      }
+    }
+  },
+  "case_partition": {
+    "positive": 12,
+    "negative": 4,
+    "limited_control": 2,
+    "positive_with_explicit_import_calls": 10,
+    "ruby_positive_definitions_source_and_literal_require_only": 2
+  },
+  "normalization": "labels.fixtures_root becomes $FIXTURES; response data temporary fixture roots become $FIXTURES; response metadata limited to analysis/coverage/truncated. Private workspace identifiers, paths, commands, operators, credentials and cloud metadata omitted. Native source bytes unchanged.",
+  "replay_limit": "Rebuilds decisive definition/source/call/dependency/test/negative checks from stored responses, plus hashes/coordinates from native files. Service AST exact-import-line flags are retained captured observations, not independently reconstructed AST objects.",
+  "limited_cases": [
+    "rust:macro-control",
+    "ruby:dynamic-predicate-control"
+  ],
+  "synthetic": "Separate owned synthetic regression suite now22tests; focused parser/navigation/workflow suite128passed/3.00s. Neither count is a real-project case count.",
+  "rust_readiness": "No real Rust LSP trial launched in this batch. Existing Oct20 traces were read only; source/toolchain-specific historical passes do not prove current readiness or fix its intermittent root cause.",
+  "archive": {
+    "file": "2026-10-22-local-workflows.tar.gz",
+    "sha256": "06de6ab3ab6bfce9d8be42e026160fb97e18c71eaa17230adb86cae9339e20d5",
+    "bytes": 88388
+  },
+  "archive_manifest_sha256": "e5aa49cc6a45cd4de35018131a3b0b637ce8c2b3dd7c552789dbd03485b881d4"
+}

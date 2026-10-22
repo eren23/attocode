@@ -46,6 +46,26 @@ def syntax_tree(path: str, content: str, language: str):
     return bounded_parse(parser, content.encode()) if parser else None
 
 
+def _elixir_definition_head(node, source: bytes) -> bool:
+    """Elixir represents a declared function head as a call inside def arguments."""
+    head = node
+    parent = head.parent
+    if parent is not None and parent.type == "binary_operator":
+        operator = parent.child_by_field_name("operator")
+        if (operator is not None and source[operator.start_byte:operator.end_byte] == b"when"
+                and parent.child_by_field_name("left") == head):
+            head, parent = parent, parent.parent
+    if (parent is None or parent.type != "arguments" or not parent.named_children
+            or parent.named_children[0] != head):
+        return False
+    declaration = parent.parent
+    target = declaration.child_by_field_name("target") if declaration is not None else None
+    return (target is not None and target.type == "identifier"
+            and source[target.start_byte:target.end_byte] in {
+                b"def", b"defp", b"defmacro", b"defmacrop", b"defguard", b"defguardp", b"defdelegate",
+            })
+
+
 def reference_candidates(path: str, content: str, language: str):
     """Return call/type candidates, or None when syntax parsing is unavailable."""
     tree = syntax_tree(path, content, language)
@@ -65,7 +85,7 @@ def reference_candidates(path: str, content: str, language: str):
                       or node.child_by_field_name("method"))
             if target is None and language in {"kotlin", "swift", "php"} and node.named_children:
                 target = node.named_children[0]
-            if target:
+            if target and not (language == "elixir" and _elixir_definition_head(node, source)):
                 # Generic Rust calls have a wrapper around their function path.
                 target = target.child_by_field_name("function") or target
                 name = source[target.start_byte:target.end_byte].decode().replace("::", ".")

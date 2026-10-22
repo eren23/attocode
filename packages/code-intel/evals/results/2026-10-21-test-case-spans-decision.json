@@ -1,0 +1,140 @@
+{
+  "status": "rejected",
+  "checks": {
+    "two_new_first_page_matches_every_round": false,
+    "gains_in_both_repositories_every_round": false,
+    "no_file_or_excerpt_loss": false,
+    "controls_identical": true,
+    "warm_p95_each_round": true,
+    "cleanup_verified": true
+  },
+  "gains": [],
+  "losses": [
+    {
+      "id": "express:fresh-test-spans-01",
+      "round": 0,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/res.status.js"
+    },
+    {
+      "id": "express:fresh-test-spans-01",
+      "round": 1,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/res.status.js"
+    },
+    {
+      "id": "express:fresh-test-spans-01",
+      "round": 2,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/res.status.js"
+    },
+    {
+      "id": "express:fresh-test-spans-04",
+      "round": 0,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/req.get.js"
+    },
+    {
+      "id": "express:fresh-test-spans-04",
+      "round": 1,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/req.get.js"
+    },
+    {
+      "id": "express:fresh-test-spans-04",
+      "round": 2,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/req.get.js"
+    },
+    {
+      "id": "express:fresh-test-spans-11",
+      "round": 0,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/res.sendStatus.js"
+    },
+    {
+      "id": "express:fresh-test-spans-11",
+      "round": 1,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/res.sendStatus.js"
+    },
+    {
+      "id": "express:fresh-test-spans-11",
+      "round": 2,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/res.sendStatus.js"
+    },
+    {
+      "id": "express:fresh-test-spans-12",
+      "round": 0,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/app.head.js"
+    },
+    {
+      "id": "express:fresh-test-spans-12",
+      "round": 1,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/app.head.js"
+    },
+    {
+      "id": "express:fresh-test-spans-12",
+      "round": 2,
+      "depth": 5,
+      "kind": "files",
+      "label": "test/app.head.js"
+    }
+  ],
+  "p95_seconds": {
+    "0": {
+      "baseline": 0.0862042079679668,
+      "candidate": 0.07823979202657938
+    },
+    "1": {
+      "baseline": 0.08303270791657269,
+      "candidate": 0.08827808301430196
+    },
+    "2": {
+      "baseline": 0.07845087500754744,
+      "candidate": 0.07912220794241875
+    }
+  },
+  "counts": {
+    "5": {
+      "baseline": {
+        "files": 15,
+        "excerpts": 4
+      },
+      "candidate": {
+        "files": 11,
+        "excerpts": 6
+      }
+    },
+    "24": {
+      "baseline": {
+        "files": 15,
+        "excerpts": 4
+      },
+      "candidate": {
+        "files": 16,
+        "excerpts": 11
+      }
+    }
+  },
+  "evidence_scope": "consumed_development",
+  "fresh_validation_performed": false,
+  "initial_attempt": "operator_invalid; zero callback units; not relevance evidence",
+  "candidate_rule_unchanged": true,
+  "archive_sha256": "c2bc98099fe2e66b7815c75ecf5395ba436ac73ade2088507d79630987df79b4",
+  "questions_sha256": "c09fd7845c4cd0477b64d60debd4ff7c523f837123f71f992557022432c3b370"
+}

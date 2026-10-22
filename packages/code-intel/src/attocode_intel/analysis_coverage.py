@@ -45,6 +45,7 @@ def analysis_report(service, precision=None):
         "absence_proven": False,
         "sources": sorted(tiers),
         "files_by_parser": dict(tiers),
+        "files_with_parse_failures": sum(bool(getattr(a, 'parse_failures', ())) for a in cache.values()),
         "unresolved_imports": sum(len(v) for v in unresolved.values()),
         "unresolved_import_samples": [
             {"file": path, "module": module}

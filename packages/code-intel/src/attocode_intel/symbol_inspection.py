@@ -23,6 +23,11 @@ def select_definitions(service, symbol_name, file_path=None, line=None):
         definitions = [d for d in definitions if d.file_path == file_path
                        and (d.qualified_name == symbol_name or d.name == symbol_name
                             or d.qualified_name.endswith(f".{symbol_name}"))]
+        definitions = [d for d in definitions if line is None or d.start_line == line]
+        if not definitions and ast.recover_failed_file(file_path):
+            definitions = [d for d in ast.get_file_symbols(file_path)
+                           if d.qualified_name == symbol_name or d.name == symbol_name
+                           or d.qualified_name.endswith(f'.{symbol_name}')]
     else:
         definitions = ast.find_symbol(symbol_name, include_shadowed=line is not None)
     return [d for d in definitions if line is None or d.start_line == line]
@@ -70,8 +75,30 @@ def scoped_references(service, symbol_name, file_path=None, line=None):
 
 def inspect_symbol_data(service, symbol_name, file_path=None, line=None, source_start_line=None, task_hint=None):
     definitions = select_definitions(service, symbol_name, file_path, line)
+    parse_state = {}
+    if file_path is not None:
+        from dataclasses import asdict
+
+        ast = service._get_ast_service()
+        rel = Path(service.project_dir, file_path).resolve().relative_to(Path(service.project_dir).resolve()).as_posix()
+        cached = ast._ast_cache.get(rel)
+        attempt = ast._parse_recovery_attempts.get(rel)
+        attempted = bool(cached and attempt and attempt[0] == cached.content_sha256)
+        if cached is not None and (cached.parse_failures or attempted):
+            parse_state = {'parse_state': {
+                'tier': cached.parsing_tier,
+                'failures': [asdict(f) for f in cached.parse_failures],
+                'recovery_attempted': attempted,
+                'absence_proven': False,
+                'refresh': {
+                    'command': 'attocode-code-intel notify',
+                    'arguments': ['--project', str(Path(service.project_dir).resolve()), '--file', rel],
+                    'note': 'Queues a file refresh for a running server; retry inspection after it is processed.',
+                } if cached.parse_failures else None,
+            }}
     if len(definitions) != 1:
         return {"status": "ambiguous" if definitions else "not_found", "symbol": symbol_name,
+                **parse_state,
                 "definitions": [location(d) for d in definitions[:10]],
                 "total_definitions": len(definitions), "ambiguous": len(definitions) > 1,
                 "follow_up": {"tool": "inspect_symbol", "select": "file_path and start_line as line"}}
@@ -113,6 +140,7 @@ def inspect_symbol_data(service, symbol_name, file_path=None, line=None, source_
     relationships = ([{"file_path": p, "kind": "imports"} for p in imports["imports"]]
                      + [{"file_path": p, "kind": "imported_by"} for p in imports["imported_by"]])
     result = {
+        **parse_state,
         "status": "found", "definition": location(definition),
         "source": {"start_line": start, "end_line": end,
                    "text": "\n".join(source[start - 1:end]),

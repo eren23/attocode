@@ -32,6 +32,36 @@ Previously published agent distributions depend on `attocode-code-intel>=0.1.0,<
 
 ## Release
 
+### Maintained local verification
+
+From the development workspace, verify a built wheel and source distribution
+before publication. Use the candidate's actual version and an older released
+baseline; development source is recorded as a working tree:
+
+```sh
+.venv/bin/python packages/code-intel/scripts/check_release.py candidate \
+  --version 0.1.14 --baseline-version 0.1.13 --source . \
+  --wheel dist/attocode_code_intel-0.1.14-py3-none-any.whl \
+  --sdist dist/attocode_code_intel-0.1.14.tar.gz \
+  --allow-downloads --report /tmp/intelligence-candidate.json
+```
+
+The verifier creates isolated clean and upgrade environments. It compares both
+installed Python trees and versions with the wheel and source, runs CLI/MCP,
+init/doctor and bounded search continuation checks, and writes a JSON report
+with identities, timings, resource limits and cleanup outcomes. It refuses to
+overwrite a report. Downloads require `--allow-downloads`; offline checks need
+`--wheelhouse` with every dependency and `--baseline-wheel`.
+
+After publication, run `published` with the same version, baseline, source and
+report options, omitting `--wheel` and `--sdist`. It fetches the exact PyPI wheel
+and sdist and checks their published hashes. Published source must be at the
+matching `intel-vVERSION` tag, with package Python inputs and `pyproject.toml`
+matching tag blobs. Local notes outside those inputs can remain untracked.
+The verifier does not publish, change tags, or restart another client's MCP.
+
+### Publication steps
+
 1. Update the version in `packages/code-intel/pyproject.toml` and in `packages/code-intel/src/attocode_intel/__init__.py`. A test fails when the two differ. The CLI, the MCP server and the HTTP API read `__version__`. Refresh `uv.lock`, and merge a reviewed change with passing Intelligence checks.
 2. Tag the validated commit, for example `git tag -a intel-v0.1.0 -m 'Attocode Intelligence 0.1.0'`, then push that tag.
 3. Follow **Release intelligence** in GitHub Actions. It runs the full reusable checks: Python 3.12/3.13 product tests against migrated PostgreSQL, navigation budgets, generated catalog, standalone wheel isolation on Linux and macOS, dashboard build, and Docker runtime smoke test. It also runs the ranking gate. The release build then verifies the version/tag match and publishes the wheel and source distribution through GitHub OIDC.

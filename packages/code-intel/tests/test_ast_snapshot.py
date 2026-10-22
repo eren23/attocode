@@ -1,4 +1,5 @@
 """Persisted summaries must preserve navigation and reject stale/invalid inputs."""
+import hashlib
 import json
 from dataclasses import asdict
 from unittest.mock import patch
@@ -119,6 +120,82 @@ def test_file_bound_and_unsupported_tier_fall_back(tmp_path, monkeypatch):
         ast.parsing_tier = 'ctags'
     assert not json.loads(ast_snapshot.encode_summaries(asts, raw))['files']
     close(first)
+
+
+def test_uncached_identical_structures_conservatively_repair_navigation(tmp_path, monkeypatch):
+    monkeypatch.setattr(ast_snapshot, 'MAX_FILE_BYTES', 10)
+    first = seed(tmp_path)
+    expected = {k: asdict(v) for k, v in first._ast_cache.items()}
+    counts = first._store.stats()
+    close(first)
+    from attocode_intel._internal.integrations.context import index_repair
+
+    second = ASTService(str(tmp_path))
+    try:
+        with patch.object(index_repair, 'repair_index', wraps=index_repair.repair_index) as repair:
+            assert second.initialize_skeleton().phase == 'ready'
+        assert repair.call_count == 1
+        assert second._store.stats() == counts
+        assert {k: asdict(v) for k, v in second._ast_cache.items()} == expected
+    finally:
+        close(second)
+
+
+@pytest.mark.parametrize('damage', ['missing', 'extractor'])
+def test_navigation_extractor_identity_change_repairs_cached_navigation(tmp_path, damage):
+    first = seed(tmp_path)
+    data = json.loads(first._store.get_meta(SNAPSHOT_KEY))
+    if damage == 'missing':
+        data.pop('navigation_identity', None)
+    else:
+        data['navigation_identity'] = 'old extractor'
+    raw = json.dumps(data)
+    first._store.set_meta(SNAPSHOT_KEY, raw)
+    summaries = json.loads(first._store.get_meta(AST_SNAPSHOT_KEY))
+    summaries['snapshot'] = hashlib.sha256(raw.encode()).hexdigest()
+    first._store.set_meta(AST_SNAPSHOT_KEY, json.dumps(summaries))
+    close(first)
+    from attocode_intel._internal.integrations.context import index_repair
+
+    second = ASTService(str(tmp_path))
+    try:
+        with (patch.object(index_repair, 'repair_index', wraps=index_repair.repair_index) as repair,
+              patch.object(ast_service, 'parse_file', side_effect=AssertionError('valid summaries reparsed'))):
+            assert second.initialize_skeleton().phase == 'ready'
+        assert repair.call_count == 1
+        assert len(second._index.get_definitions('Sample0')) == 1
+    finally:
+        close(second)
+
+
+def test_failed_reference_parse_is_not_cached_as_a_healthy_ast(tmp_path):
+    from attocode_intel._internal.integrations.context import syntax_evidence, ts_parser
+
+    (tmp_path/'target.py').write_text('def target(): return 1\n')
+    (tmp_path/'caller.py').write_text('from target import target\n' + 'value = 1\n'*10000
+                                   + 'def caller(): return target()\n')
+    original = syntax_evidence.reference_candidates
+
+    def failed_reference_parse(*args):
+        with patch.object(ts_parser, 'PARSE_TIMEOUT_MICROS', 1):
+            return original(*args)
+
+    first = ASTService(str(tmp_path))
+    try:
+        with patch.object(syntax_evidence, 'reference_candidates', side_effect=failed_reference_parse):
+            first.initialize_skeleton(indexing_depth='eager')
+        assert first._ast_cache['caller.py'].parsing_tier == 'tree_sitter'
+        assert not any(r.ref_kind == 'call' for r in first._index.get_references('target'))
+        assert any(f.stage == 'references' for f in first._ast_cache['caller.py'].parse_failures)
+    finally:
+        close(first)
+    second = ASTService(str(tmp_path))
+    try:
+        second.initialize_skeleton()
+        assert any(r.ref_kind == 'call' and r.line == 10002
+                   for r in second._index.get_references('target'))
+    finally:
+        close(second)
 
 
 def test_restart_repairs_symbols_after_transient_grammar_failure(tmp_path):
