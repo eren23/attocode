@@ -141,6 +141,22 @@ when unavailable. CI installs pinned test servers in disposable runners, never o
 the user's device. Linux/macOS wheel jobs cover Python 3.12 and 3.13 and upgrade a
 0.1.5 index/configuration before checking the candidate wheel.
 
+With `QUALITY_LSP_TRACE_DIR` set, the Rust fixture also writes
+`lsp-diagnostic-rust.jsonl` from before initialization through shutdown. It records
+the existing protocol calls, request/reply IDs, document versions and text hashes,
+stderr reads, inspection results and the first failing stage. CI enables
+`RA_LOG=rust_analyzer=info` to retain workspace reload logs. Existing per-language
+protocol artifacts remain available. No additional pipe consumer, protocol
+request, retry or deadline is introduced.
+
+The diagnostic file is limited to 4 MiB: a flushed startup prefix and a recent
+tail, followed on completion by an outcome footer with explicit dropped-event,
+oversized-event and capture-error counts. An absent footer means the capture is
+incomplete. An oversized event retains its byte count and hash instead of its
+payload. Hooks apply only to the fixture workspace and are restored after the
+test; an existing artifact is never overwritten. This opt-in test observer adds
+logging overhead and does not establish a cause for intermittent Rust failures.
+
 The ranking gate uses its unchanged frozen baseline. A temporary local commit
 lets that gate inspect the current working input without committing or publishing
 the user's checkout. Its source snapshots are disposable and its engine hash is

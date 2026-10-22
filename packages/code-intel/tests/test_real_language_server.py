@@ -83,90 +83,107 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
     monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
     gateway = OperationGateway(str(tmp_path), 'daily', watch=False)
     process = None
-    try:
-        await gateway.execute('symbols', {'path':target})
-        service = next(iter(gateway._stores.values()))['service']
-        manager = service._get_lsp_manager()
-        manager._timeout = 5
-        stores = next(iter(gateway._stores.values()))
-        worker = next(iter(gateway._workers.values()))
-        async def on_workspace_loop(coroutine):
-            def run():
-                runner = stores.setdefault('async_runner', asyncio.Runner())
-                return runner.run(coroutine)
-            return await asyncio.get_running_loop().run_in_executor(worker, run)
-        async def warm():
-            nonlocal process
-            async with asyncio.timeout(30):
-                await manager.start_server(language, tmp_path.as_uri())
-                client = manager._clients[language]
-                process = client._process
-                send, receive = client._send_message, client._handle_message
-                async def trace_send(message):
-                    protocol.append({"direction": "out", "message": message})
-                    return await send(message)
-                def trace_receive(message):
-                    protocol.append({"direction": "in", "message": message})
-                    return receive(message)
-                client._send_message = trace_send
-                client._handle_message = trace_receive
-                manager.on_result_callback = None
-                for name, content in files.items():
-                    if manager._get_client_for_file(str(tmp_path / name)):
-                        manager.notify_file_opened(str(tmp_path / name), content)
-                while True:
-                    try:
-                        refs = await manager.get_references(str(tmp_path / target), line - 1, column, include_declaration=False)
-                    except ToolError as error:
-                        if str(error).lower() != 'content modified':
-                            raise
-                        refs = []
-                    if any(r.uri == (tmp_path / caller).as_uri() and r.range.start.line == call_line - 1 for r in refs):
-                        break
-                    await asyncio.sleep(.1)
-        await on_workspace_loop(warm())
-        monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'auto')
-        async def inspect(path):
-            response = await gateway.execute('inspect_symbol', {'symbol_name':symbol, 'file_path':path, 'line':line})
-            assert not response.isError
-            return response.structuredContent
-        selected = await inspect(target)
-        assert selected['metadata']['analysis']['precision']['status'] == 'verified', {
-            'response': selected, 'protocol': list(protocol)}
-        assert any(r['file_path'] == caller and r['source'] == 'lsp' for r in selected['data']['references']), {
-            'response': selected, 'protocol': list(protocol)}
-        wrong = await inspect(other)
-        assert not any(r['file_path'] == caller for r in wrong['data']['references'])
-        (tmp_path / caller).write_text(changed)
-        # Test real protocol edit delivery independently before testing cached
-        # selected-symbol evidence. Production refresh must then evict old links.
-        async def wait_for_edit():
-            manager.notify_file_changed(str(tmp_path / caller), changed, 2)
-            async with asyncio.timeout(15):
-                while True:
-                    try:
-                        refs = await manager.get_references(str(tmp_path / other), line - 1, column, include_declaration=False)
-                    except ToolError as error:
-                        if str(error).lower() != 'content modified':
-                            raise
-                        refs = []
-                    if any(r.uri == (tmp_path / caller).as_uri() and r.range.start.line == call_line for r in refs):
-                        break
-                    await asyncio.sleep(.1)
-        await on_workspace_loop(wait_for_edit())
-        changed_result = await inspect(other)
-        assert any(r['file_path'] == caller and r['line'] == call_line + 1 and r['source'] == 'lsp'
-                   for r in changed_result['data']['references']), {
-            'response': changed_result, 'protocol': list(protocol)}
-        old = await inspect(target)
-        assert not any(r['file_path'] == caller for r in old['data']['references'])
-    finally:
-        await gateway.close()
-        if trace_dir := os.environ.get("QUALITY_LSP_TRACE_DIR"):
-            import json
+    from eval.quality.lsp_trace import LSPTrace
 
-            destination = Path(trace_dir)
-            destination.mkdir(parents=True, exist_ok=True)
-            (destination / f"real-server-{language}.json").write_text(
-                json.dumps(list(protocol), indent=2) + "\n")
-    assert process is not None and process.returncode is not None
+    trace_dir = os.environ.get("QUALITY_LSP_TRACE_DIR")
+    trace_path = Path(trace_dir) / "lsp-diagnostic-rust.jsonl" if language == "rust" and trace_dir else None
+    trace = LSPTrace(trace_path, tmp_path.as_uri())
+    with trace.capture(monkeypatch):
+        try:
+            trace.stage("warmup")
+            await gateway.execute('symbols', {'path':target})
+            service = next(iter(gateway._stores.values()))['service']
+            manager = service._get_lsp_manager()
+            manager._timeout = 5
+            stores = next(iter(gateway._stores.values()))
+            worker = next(iter(gateway._workers.values()))
+            async def on_workspace_loop(coroutine):
+                def run():
+                    runner = stores.setdefault('async_runner', asyncio.Runner())
+                    return runner.run(coroutine)
+                return await asyncio.get_running_loop().run_in_executor(worker, run)
+            async def warm():
+                nonlocal process
+                async with asyncio.timeout(30):
+                    await manager.start_server(language, tmp_path.as_uri())
+                    client = manager._clients[language]
+                    process = client._process
+                    send, receive = client._send_message, client._handle_message
+                    async def trace_send(message):
+                        protocol.append({"direction": "out", "message": message})
+                        return await send(message)
+                    def trace_receive(message):
+                        protocol.append({"direction": "in", "message": message})
+                        return receive(message)
+                    client._send_message = trace_send
+                    client._handle_message = trace_receive
+                    manager.on_result_callback = None
+                    for name, content in files.items():
+                        if manager._get_client_for_file(str(tmp_path / name)):
+                            manager.notify_file_opened(str(tmp_path / name), content)
+                    while True:
+                        try:
+                            refs = await manager.get_references(str(tmp_path / target), line - 1, column, include_declaration=False)
+                        except ToolError as error:
+                            if str(error).lower() != 'content modified':
+                                raise
+                            refs = []
+                        if any(r.uri == (tmp_path / caller).as_uri() and r.range.start.line == call_line - 1 for r in refs):
+                            break
+                        await asyncio.sleep(.1)
+            await on_workspace_loop(warm())
+            monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'auto')
+            async def inspect(path):
+                response = await gateway.execute('inspect_symbol', {'symbol_name':symbol, 'file_path':path, 'line':line})
+                trace.record("inspection", path=path, is_error=response.isError, response=response.structuredContent)
+                assert not response.isError
+                return response.structuredContent
+            trace.stage("selected_original")
+            selected = await inspect(target)
+            assert selected['metadata']['analysis']['precision']['status'] == 'verified', {
+                'response': selected, 'protocol': list(protocol)}
+            assert any(r['file_path'] == caller and r['source'] == 'lsp' for r in selected['data']['references']), {
+                'response': selected, 'protocol': list(protocol)}
+            trace.stage("unused_namesake")
+            wrong = await inspect(other)
+            assert not any(r['file_path'] == caller for r in wrong['data']['references'])
+            trace.stage("edit_delivery")
+            (tmp_path / caller).write_text(changed)
+            # Test real protocol edit delivery independently before testing cached
+            # selected-symbol evidence. Production refresh must then evict old links.
+            async def wait_for_edit():
+                manager.notify_file_changed(str(tmp_path / caller), changed, 2)
+                async with asyncio.timeout(15):
+                    while True:
+                        try:
+                            refs = await manager.get_references(str(tmp_path / other), line - 1, column, include_declaration=False)
+                        except ToolError as error:
+                            if str(error).lower() != 'content modified':
+                                raise
+                            refs = []
+                        if any(r.uri == (tmp_path / caller).as_uri() and r.range.start.line == call_line for r in refs):
+                            break
+                        await asyncio.sleep(.1)
+            await on_workspace_loop(wait_for_edit())
+            trace.stage("selected_after_edit")
+            changed_result = await inspect(other)
+            assert any(r['file_path'] == caller and r['line'] == call_line + 1 and r['source'] == 'lsp'
+                       for r in changed_result['data']['references']), {
+                'response': changed_result, 'protocol': list(protocol)}
+            trace.stage("original_after_retarget")
+            old = await inspect(target)
+            assert not any(r['file_path'] == caller for r in old['data']['references'])
+        except BaseException as error:
+            trace.failed(error)
+            raise
+        finally:
+            trace.stage("shutdown")
+            await gateway.close()
+            if trace_dir := os.environ.get("QUALITY_LSP_TRACE_DIR"):
+                import json
+
+                destination = Path(trace_dir)
+                destination.mkdir(parents=True, exist_ok=True)
+                (destination / f"real-server-{language}.json").write_text(
+                    json.dumps(list(protocol), indent=2) + "\n")
+        assert process is not None and process.returncode is not None
