@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Language-server diagnostics
+
+- Drain each language server's stderr stream through one owned task. Competing
+  readers could steal diagnostic output or terminate the drain with a concurrent
+  read error. Protocol requests, readiness deadlines and recovery policy are
+  unchanged; this is not an established fix for intermittent Rust null replies.
+
 ### Fixed — Native parser isolation
 
 - Keep cached native parsers separate for each thread. A worker parsing a new
