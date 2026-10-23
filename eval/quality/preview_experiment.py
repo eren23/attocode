@@ -11,10 +11,11 @@ import re
 import subprocess
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest.mock import patch
 
 from eval.quality.experiment_evidence import Journal, assert_engine, encode, read_source
+from eval.quality.fixture_identity import source_manifest
 from eval.quality.runner import REPO, write_json
 
 DESIGN = REPO / 'packages/code-intel/evals/designs/2026-10-23-preview-windows.json'
@@ -142,7 +143,74 @@ def verify_labels(workspace, spec):
 
 
 def admit_worker(evidence, workspace, spec, design, observation):
-    raise NotImplementedError('raw preview admission')
+    from attocode_intel.output import response_tokens
+    from mcp.types import CallToolResult
+
+    from eval.quality.preview_sources import identity, source_spans
+
+    root = evidence / 'journal'
+
+    def load(ref):
+        require(isinstance(ref, dict) and re.fullmatch('[0-9a-f]{64}', ref['sha256']), 'invalid raw reference')
+        path = PurePosixPath(ref['path'])
+        require(str(path) == f'blobs/{ref["sha256"]}.json', 'invalid blob path')
+        raw = (root / path).read_bytes()
+        require(type(ref['bytes']) is int and len(raw) == ref['bytes']
+                and hashlib.sha256(raw).hexdigest() == ref['sha256'], 'raw response identity mismatch')
+        return json.loads(raw)
+
+    require(observation['status'] == 'complete' and observation['pack'] == spec['id'], 'worker incomplete or misbound')
+    before = load(observation['fixture_ref'])
+    require(source_manifest(workspace) == before, 'fixture changed before admission')
+    policies, pending, replayed, sources, closed = {}, None, [], {}, False
+    fixture_events = set()
+    questions = {q['id']: q for q in spec['questions']}
+    for line in (root / 'events.jsonl').read_bytes().splitlines():
+        event = json.loads(line)
+        request, value = event['request'], load(event['response'])
+        kind = request['event']
+        if kind in {'fixture_pinned', 'fixture_before', 'fixture_after'}:
+            require(value == before and kind not in fixture_events, 'missing or changed pinned source inventory')
+            fixture_events.add(kind)
+        elif kind == 'source_lineage':
+            key = tuple(request['identity'])
+            if value['producer'] != 'metadata':
+                require(before[key[0]]['sha256'] == value['source_sha256'], 'source lineage differs from pinned fixture')
+            policies[key] = value
+        elif kind == 'mcp_response':
+            require(pending is None or not replayed, 'unvalidated scored raw capture')
+            response = CallToolResult.model_validate(value)
+            require(request['tool'] == 'semantic_search' and not response.isError
+                    and response_tokens(response) <= request['arguments']['max_tokens'], 'invalid raw MCP response')
+            page = json.loads(response.content[0].text)
+            index = page['data']['ranking']['index']
+            ready = index['status'] == 'ready' and index.get('warmup_stage') == 'ready'
+            spans = source_spans(page, workspace, [policies[identity(h)] for h in page['data']['results']]) if ready else None
+            pending = (request['arguments'], event['response'], page, spans)
+            policies = {}
+        elif kind == 'validated_page':
+            require(pending is not None, 'validated page has no preceding raw capture')
+            args, ref, page, spans = pending
+            require(spans is not None and value['arguments'] == args and value['response_ref'] == ref,
+                    'raw request/capture binding mismatch')
+            expected = dict(value, identity=page_identity(page),
+                            data_sha256=hashlib.sha256(encode(page['data'])).hexdigest(),
+                            judgment=judgment(page, spans, questions[value['question']], workspace, sources))
+            require(expected == value, 'derived summary differs from raw response/source replay')
+            replayed.append(expected)
+            pending = None
+        elif kind == 'gateway_close':
+            require(value['status'] == 'complete', 'gateway did not close')
+            closed = True
+    require(fixture_events == {'fixture_pinned', 'fixture_before', 'fixture_after'}, 'incomplete source identity capture')
+    require(closed and pending is None and observation['pages'] == replayed, 'missing, altered or extra capture summaries')
+    expected_grid = [(r, arm, q['id'], depth, budget, scope)
+                     for r, arms in enumerate(design['rounds']) for arm in arms
+                     for q in spec['questions'] for depth, budget, scope in requests(q, design)]
+    actual_grid = [(p['round'], p['arm'], p['question'], p['arguments']['top_k'], p['arguments']['max_tokens'],
+                    p['arguments']['file_filter']) for p in replayed]
+    require(actual_grid == expected_grid, 'worker capture sequence mismatch')
+    return observation
 
 
 def judgment(page, spans, question, workspace, sources):
@@ -170,7 +238,7 @@ def judgment(page, spans, question, workspace, sources):
     return {'file': found, 'visible': visible}
 
 
-async def observe(spec, workspace, evidence, journal, design):
+async def observe(spec, workspace, evidence, journal, design, receipt):
     from attocode_intel import output, search_evidence
     from attocode_intel.gateway import OperationGateway
 
@@ -179,6 +247,9 @@ async def observe(spec, workspace, evidence, journal, design):
 
     report = {'status': 'incomplete', 'decision': None, 'pack': spec['id'], 'pages': []}
     started = time.monotonic()
+    manifest = source_manifest(workspace)
+    require(manifest == receipt, 'materialized fixture differs from pinned blobs')
+    report['fixture_ref'] = journal.response({'event': 'fixture_before'}, manifest)
     before = verify_labels(workspace, spec)
     journal.response({'event': 'label_sources'}, before)
     gateway = OperationGateway(str(workspace), 'daily', watch=False)
@@ -224,6 +295,9 @@ async def observe(spec, workspace, evidence, journal, design):
         report['seconds'] = time.monotonic() - started
         write_json(evidence / 'pages.json', report)
     require(verify_labels(workspace, spec) == before, 'label source changed during trial')
+    after = source_manifest(workspace)
+    journal.response({'event': 'fixture_after'}, after)
+    require(after == manifest, 'fixture source changed during trial')
     report.update(status='complete', source=before)
     write_json(evidence / 'pages.json', report)
     return report
@@ -238,10 +312,12 @@ def worker(pack, workspace, evidence):
         assert_engine(selected)
         design = json.loads(DESIGN.read_bytes())
         spec = next(p for p in design['packs'] if p['id'] == pack)
-        tree = materialize(spec, workspace, workspace.parent / (pack + '-cache'))
+        receipt = {}
+        tree = materialize(spec, workspace, workspace.parent / (pack + '-cache'), receipt=receipt)
+        journal.response({'event': 'fixture_pinned'}, receipt)
         journal.response({'event': 'fixture'}, {'commit': spec['commit'], 'tree': tree,
                          'repo': spec['repo'], 'include': spec['include']})
-        asyncio.run(observe(spec, workspace, evidence, journal, design))
+        asyncio.run(observe(spec, workspace, evidence, journal, design, receipt))
         journal.response({'event': 'origin_end'}, assert_engine(selected))
     except BaseException as error:
         journal.response({'event': 'worker_failure'}, {'type': type(error).__name__, 'message': str(error)[:2000]})
@@ -273,7 +349,7 @@ def run(root):
             row['exit_code'] = result.returncode
             require(result.returncode == 0, 'preview worker failed: ' + spec['id'])
             observation = json.loads((destination / 'pages.json').read_bytes())
-            require(observation['status'] == 'complete', 'preview worker incomplete')
+            admit_worker(destination, workspace, spec, design, observation)
             row['status'] = 'complete'
             observations.append(observation)
         report.update(decide(observations, design))

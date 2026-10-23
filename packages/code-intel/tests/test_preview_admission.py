@@ -61,6 +61,8 @@ def capture(tmp_path):
     design = {'rounds': [['baseline', 'candidate']], 'requests': {'depths': [5], 'budgets': [2000],
               'scoped_depth': 5, 'scoped_budget': 2000}}
     journal = Journal(evidence / 'journal', 128 * 1024)
+    journal.response({'event': 'fixture_pinned'}, source_manifest(root))
+    fixture_ref = journal.response({'event': 'fixture_before'}, source_manifest(root))
     from eval.quality.preview_experiment import page_identity
     pages = []
     for arm in design['rounds'][0]:
@@ -81,7 +83,9 @@ def capture(tmp_path):
                    'judgment': {'file': True, 'visible': True}}
             journal.response({'event': 'validated_page'}, row)
             pages.append(row)
-    observation = {'status': 'complete', 'pack': 'toy', 'pages': pages}
+    journal.response({'event': 'gateway_close'}, {'status': 'complete'})
+    journal.response({'event': 'fixture_after'}, source_manifest(root))
+    observation = {'status': 'complete', 'pack': 'toy', 'pages': pages, 'fixture_ref': fixture_ref}
     return root, evidence, spec, design, observation
 
 
