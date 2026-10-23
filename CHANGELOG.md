@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   targets; retain complete raw observations when admission fails.
 - Preserve the incomplete file-coverage study and omit its ranking candidate.
   Full-navigation readiness controls now require exact parse/reference counts.
+- Complete a matched Cockroach restart comparison after validating each physical
+  continuation route. The fingerprint shortcut misses its adoption threshold
+  (36.67→35.60 seconds median restart, required ratio ≤0.75) and is omitted.
+  Retain full-readiness admission, routing controls and both attempt archives.
 
 ## [Intelligence 0.1.16] - 2026-10-23
 

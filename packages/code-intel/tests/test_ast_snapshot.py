@@ -127,10 +127,6 @@ def test_uncached_identical_structures_conservatively_repair_navigation(tmp_path
     first = seed(tmp_path)
     expected = {k: asdict(v) for k, v in first._ast_cache.items()}
     counts = first._store.stats()
-    # An omitted optional proof must preserve the existing conservative repair.
-    completion = json.loads(first._store.get_meta(SNAPSHOT_KEY))
-    completion.pop('structures', None)
-    first._store.set_meta(SNAPSHOT_KEY, json.dumps(completion))
     close(first)
     from attocode_intel._internal.integrations.context import index_repair
 

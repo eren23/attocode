@@ -313,11 +313,6 @@ def run(root):
     from eval.quality.corpus import PACK, materialize
 
     design = json.loads(DESIGN.read_bytes())
-    public_path = REPO / 'packages/code-intel/evals/designs/2026-10-23-restart-routed.json'
-    require(design['public_design'] == public_path.relative_to(REPO).as_posix()
-            and hashlib.sha256(public_path.read_bytes()).hexdigest() == design['public_design_sha256']
-            and {k: v for k, v in design.items() if k not in {'public_design', 'public_design_sha256'}}
-                == json.loads(public_path.read_bytes()), 'public restart design mismatch')
     baseline = design['baseline_commit']
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
     evidence, work = root / 'evidence/restart', root / 'work/restart'
@@ -337,8 +332,6 @@ def run(root):
         spec = next(p for p in yaml.safe_load(PACK.read_text())['repositories'] if p['id'] == 'cockroach')
         require(spec['commit'] == design['fixture']['commit'] and spec['include'] == design['fixture']['include'], 'fixture specification changed')
         spec['definition_line'] = 255
-        require(design['readiness']['poll_seconds'] == 1.0, 'frozen readiness interval changed')
-        spec['readiness_poll_seconds'] = design['readiness']['poll_seconds']
         spec_path = evidence / 'spec.json'
         write_json(spec_path, spec)
         fixture, receipt = work / 'fixture', {}

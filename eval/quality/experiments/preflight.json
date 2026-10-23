@@ -3,10 +3,5 @@
   "experiment": "preflight",
   "scope": "Synthetic harness controls only; no relevance or performance judgment",
   "fixtures": "Hand-authored UTF-8/CRLF/invalid-byte/long-line/overflow/child-process controls in test_experiment_evidence.py",
-  "limits": {
-    "seconds": 600,
-    "disk_bytes": 2147483648,
-    "rss_bytes": 2147483648,
-    "evidence_bytes": 67108864
-  }
+  "limits": {"seconds": 600, "disk_bytes": 2147483648, "rss_bytes": 2147483648, "evidence_bytes": 67108864}
 }
