@@ -3,5 +3,45 @@
   "experiment": "preflight",
   "scope": "Synthetic harness controls only; no relevance or performance judgment",
   "fixtures": "Hand-authored UTF-8/CRLF/invalid-byte/long-line/overflow/child-process controls in test_experiment_evidence.py",
-  "limits": {"seconds": 600, "disk_bytes": 2147483648, "rss_bytes": 2147483648, "evidence_bytes": 67108864}
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "paired_control": {
+    "baseline_commit": "3bcce24d17c43621d94a8687bac79428059f8fee",
+    "test_file": "packages/code-intel/tests/test_file_coverage_ranking.py",
+    "test_sha256": "bb8274caac7398e20078649b1c2efe291623e1676671887fa0313d1c6357d7b7",
+    "cases": [
+      "test_file_union_promotes_the_original_representative_of_distributed_evidence",
+      "test_prose_question_words_do_not_outvote_source_concepts",
+      "test_repeated_windows_do_not_turn_one_concept_into_two",
+      "test_promotion_preserves_first_twenty_four_files_scores_and_deep_prefix",
+      "test_narrow_and_ambiguous_queries_keep_existing_order[exact]",
+      "test_narrow_and_ambiguous_queries_keep_existing_order[nonquestion]",
+      "test_narrow_and_ambiguous_queries_keep_existing_order[two_concepts]",
+      "test_narrow_and_ambiguous_queries_keep_existing_order[scope]",
+      "test_narrow_and_ambiguous_queries_keep_existing_order[test_intent]",
+      "test_narrow_and_ambiguous_queries_keep_existing_order[exclusion]",
+      "test_prose_files_cannot_supply_a_source_coverage_promotion",
+      "test_equal_file_coverage_preserves_original_file_and_chunk_order",
+      "test_repeated_object_occurrences_survive_promoting_another_file",
+      "test_excessive_retained_evidence_keeps_existing_order[ascii]",
+      "test_excessive_retained_evidence_keeps_existing_order[utf8]"
+    ],
+    "baseline_failures": [
+      "test_file_union_promotes_the_original_representative_of_distributed_evidence",
+      "test_prose_question_words_do_not_outvote_source_concepts",
+      "test_repeated_object_occurrences_survive_promoting_another_file"
+    ],
+    "baseline_failure_messages": {
+      "test_file_union_promotes_the_original_representative_of_distributed_evidence": "assert 'a.py' == 'b.py'",
+      "test_prose_question_words_do_not_outvote_source_concepts": "assert 'a.py' == 'b.py'",
+      "test_repeated_object_occurrences_survive_promoting_another_file": "assert 'a.py' == 'b.py'"
+    },
+    "candidate_files": [
+      "query_ranking.py"
+    ]
+  }
 }

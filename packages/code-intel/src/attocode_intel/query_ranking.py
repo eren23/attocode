@@ -26,6 +26,48 @@ _SOURCE_EXTENSIONS = frozenset({
     ".rb", ".c", ".cc", ".cpp", ".h", ".hpp", ".cs", ".swift",
     ".kt", ".scala", ".sh",
 })
+_FILE_COVERAGE_FILLER = frozenset({
+    "where", "which", "what", "why", "when", "how", "can", "could", "would",
+    "should", "will", "did", "have", "has", "had", "they", "them", "their",
+    "that", "these", "those", "still", "then", "once", "out", "given",
+    "instead", "part", "produced", "computed",
+})
+
+
+def _file_coverage_order(query, candidates, file_filter):
+    """Stably promote source files whose retained windows cover several concepts."""
+    if (file_filter or not re.match(r"\s*(?:where|which|how|what|why|when)\b", query, re.I)
+            or re.search(r"\btest(?:s|ed|ing)?\b", query, re.I) or scope_exclusion_terms(query)):
+        return candidates
+    concepts = set(query_concepts(query)) - _FILE_COVERAGE_FILLER
+    if not 3 <= len(concepts) <= 24:
+        return candidates
+    first = {}
+    for index, row in enumerate(candidates):
+        if row.file_path not in first and len(first) < 24:
+            first[row.file_path] = index
+    retained = [row for row in candidates if row.file_path in first]
+    remaining = 2**20
+    for row in retained:
+        for value in (row.text, row.file_path, row.name):
+            if len(value) > remaining:
+                return candidates
+            for start in range(0, len(value), 4096):
+                remaining -= len(value[start:start + 4096].encode('utf-8'))
+                if remaining < 0:
+                    return candidates
+    coverage = {path: set() for path in first}
+    for row in retained:
+        if PurePosixPath(row.file_path).suffix.lower() in _SOURCE_EXTENSIONS:
+            coverage[row.file_path].update(concepts & terms(
+                f"{row.file_path} {row.name} {source_body(row)}"))
+    promoted = {path for path, matches in coverage.items() if len(matches) >= 2}
+    if not promoted or len(promoted) == len(first):
+        return candidates
+    paths = [path for path in first if path in promoted] + [path for path in first if path not in promoted]
+    heads = set(first.values())
+    return [candidates[first[path]] for path in paths] + [
+        row for index, row in enumerate(candidates) if index not in heads]
 
 
 def broad_rank_enabled() -> bool:
@@ -145,14 +187,15 @@ def rerank_broad_candidates(
 ) -> list[SemanticSearchResult]:
     """Favor multi-concept source evidence while retaining ambiguous alternatives.
 
-    Only two-concept queries with a partial top hit are reordered. Longer
-    queries already have discriminating evidence; exhaustive source-body term
-    coverage tends to over-promote incidental docs and comments in them.
+    The default path stably groups multi-concept files for guarded natural
+    language questions, then diversifies files. The optional prototype below
+    only reorders two-concept queries with a partial top hit.
     """
     if top_k <= 0 or not candidates:
         return []
     if not broad_rank_enabled():
-        return _default_file_diversity(query, candidates, top_k, file_filter)
+        return _default_file_diversity(query, _file_coverage_order(query, candidates, file_filter),
+                                       top_k, file_filter)
     concepts = query_concepts(query)
     negative = scope_exclusion_terms(query)
     if len(concepts) != 2:
