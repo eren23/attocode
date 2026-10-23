@@ -81,13 +81,21 @@ def fingerprint(paths):
 def disk_bytes(root):
     """Count logical and allocated bytes conservatively; never follow links."""
     total = 0
-    for directory, _dirs, files in os.walk(root, followlinks=False):
-        for name in files:
-            try:
-                stat = (Path(directory) / name).lstat()
-                total += max(stat.st_size, getattr(stat, "st_blocks", 0) * 512)
-            except FileNotFoundError:
-                pass
+    directories = [os.fspath(root)]
+    while directories:
+        try:
+            with os.scandir(directories.pop()) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            directories.append(entry.path)
+                        else:
+                            metadata = entry.stat(follow_symlinks=False)
+                            total += max(metadata.st_size, getattr(metadata, 'st_blocks', 0) * 512)
+                    except FileNotFoundError:
+                        pass  # A disposable entry can disappear during cleanup.
+        except (FileNotFoundError, NotADirectoryError):
+            pass
     return total
 
 

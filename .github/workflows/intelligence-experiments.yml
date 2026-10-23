@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, broad-cost]
+        options: [preflight, native, preview, restart, broad, broad-cost, disk-cost]
 
 permissions:
   contents: read
@@ -55,10 +55,11 @@ jobs:
           assert 'ocaml' in pack.downloaded_languages()
           PY
       - name: Acquire broad fixture history and grammars (outside payload budget)
-        if: inputs.experiment == 'broad' || inputs.experiment == 'broad-cost'
+        if: inputs.experiment == 'broad' || inputs.experiment == 'broad-cost' || inputs.experiment == 'disk-cost'
         timeout-minutes: 5
         env:
           QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
+          EXPERIMENT: ${{ inputs.experiment }}
         run: |
           exec > >(tee '${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log') 2>&1
           uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
@@ -71,6 +72,10 @@ jobs:
           assert frontend['repo'] == 'eren23/attocode' and re.fullmatch('[0-9a-f]{40}', frontend['commit'])
           subprocess.run(['git', 'fetch', '--no-tags', '--depth', '1', '--filter=blob:limit=1000001', 'origin', frontend['commit']], check=True)
           subprocess.run(['git', 'cat-file', '-e', frontend['commit'] + '^{commit}'], check=True)
+          if os.environ['EXPERIMENT'] == 'disk-cost':
+              baseline = json.loads(Path('eval/quality/experiments/disk-cost.json').read_bytes())['baseline_commit']
+              assert re.fullmatch('[0-9a-f]{40}', baseline)
+              subprocess.run(['git', 'fetch', '--no-tags', '--depth', '1', 'origin', baseline], check=True)
           cache = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
           cache.mkdir()
           pack.configure(cache_dir=str(cache))
