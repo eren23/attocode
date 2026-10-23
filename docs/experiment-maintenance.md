@@ -81,3 +81,37 @@ partial failures are retained under the shared limits. A complete diagnostic
 run establishes observations, rather than the historical intermittent cause
 or a failure frequency. A demonstrated defect requires a focused regression
 before a product fix; otherwise the cause remains open and maintenance proceeds.
+
+## Frozen preview evaluation
+
+The preview design freezes 24 new source-bound questions across pandas and
+ripgrep. Each development/validation split has eight behavior questions, two
+exact queries and two unrelated controls. Recorded query/anchor manifests were
+checked for prior consumption; implementer source exposure is disclosed.
+
+The candidate is the previously unmeasured whole-line window rule: it may
+replace a preview only with a strict superset of its positive query terms,
+within the same character cap. Files, scores, result identities and order stay
+part of the no-loss comparison. Three alternating baseline/candidate rounds
+cover depths 5/24, budgets 2,000/8,000 and exact-file scopes. Both splits must
+gain two distinct visible judged excerpts at five, with a gain in each
+repository in every round. Individual file/excerpt losses, delivered identity
+changes, changed controls or excessive warm p95 latency reject the candidate.
+Missing, duplicate or misbound captures are incomplete and have no verdict.
+There is no tuning, replacement or scored relaunch after a failed gate.
+
+The request pipeline retains full MCP responses by content hash before token,
+JSON, source or label validation. Internal render inputs retain fingerprints
+and pinned-fixture lineage rather than copies of undelivered whole files.
+Actual providers select replacement UTF-8/universal newlines for indexed bodies,
+strict UTF-8/raw newlines for hydrated metadata, or replacement UTF-8/raw
+newlines for exact scoped fallback. Metadata text without source coordinates
+does not count as an excerpt. Passive provider controls include actual MCP
+delivery of invalid UTF-8/CRLF source and unchanged uninstrumented result rows.
+
+Per-request timing includes the MCP call and passive source fingerprinting.
+Response retention and validation are outside that measurement and inside the
+full 600-second payload ceiling, along with startup, shutdown and evidence I/O.
+The same aggregate 2 GiB RSS/disk and 64 MiB evidence bounds apply. A complete
+run remains a bounded, non-exhaustive excerpt observation, without a ranking or
+agent-completion claim. An accepted rule still needs normal product verification.
