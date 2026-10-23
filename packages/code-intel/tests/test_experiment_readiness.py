@@ -1,5 +1,7 @@
 """Full navigation readiness is independent of body-index readiness."""
+import asyncio
 import json
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -67,3 +69,60 @@ async def test_initialization_and_every_readiness_response_are_retained_before_i
     events = [json.loads(line) for line in (journal.root / "events.jsonl").read_text().splitlines()]
     assert [e["request"]["event"] for e in events] == ["readiness_initialize", "readiness_poll"]
     assert all((journal.root / e["response"]["path"]).is_file() for e in events)
+
+
+@pytest.mark.asyncio
+async def test_navigation_barrier_waits_for_delayed_real_reference_hydration(tmp_path, monkeypatch):
+    from attocode_intel._internal.integrations.context import ast_service as module
+    from attocode_intel.gateway import OperationGateway
+
+    workspace = tmp_path / 'source'
+    workspace.mkdir()
+    for n in range(4):
+        (workspace / f'unit{n}.py').write_text(f'def unit{n}():\n    return {n}\n')
+    release = threading.Event()
+    entered = threading.Event()
+    original = module.ASTService._run_hydration
+
+    def delayed(service):
+        entered.set()
+        if not release.wait(timeout=5):
+            raise AssertionError('controlled hydration was never released')
+        return original(service)
+
+    monkeypatch.setattr(module, 'skeleton_budget', lambda tier, count: 1)
+    monkeypatch.setattr(module.ASTService, '_run_hydration', delayed)
+    gateway = OperationGateway(str(workspace), 'daily', watch=False)
+    try:
+        journal = Journal(tmp_path / 'capture', 1024 * 1024)
+        initialize = await gateway.execute('search_symbols', {'name': '__delayed_fixture_initialize__'})
+        journal.response({'event': 'control_initialize'}, initialize.model_dump(mode='json'))
+        assert not initialize.isError and entered.wait(timeout=1)
+        before = await gateway.execute('capabilities', {})
+        journal.response({'event': 'control_before'}, before.model_dump(mode='json'))
+        partial = before.structuredContent['capabilities']['coverage']
+        assert partial['phase'] == 'hydrating' and partial['total_files'] == 4
+        assert partial['reference_indexed_files'] < partial['total_files']
+        assert not coverage_ready(partial)
+        raw_response = journal.response
+        observed = []
+
+        def retain_then_release(request, value):
+            ref = raw_response(request, value)
+            if request['event'] == 'readiness_poll':
+                c = value['structuredContent']['capabilities']['coverage']
+                observed.append(c)
+                if len(observed) == 1:
+                    assert not coverage_ready(c)
+                    release.set()
+            return ref
+
+        monkeypatch.setattr(journal, 'response', retain_then_release)
+        admitted = await asyncio.wait_for(wait_ready(gateway, journal), timeout=5)
+        assert len(observed) >= 2 and admitted['polls'] == len(observed)
+        assert coverage_ready(observed[-1]) and observed[-1]['reference_indexed_files'] == 4
+        events = [json.loads(line) for line in (journal.root / 'events.jsonl').read_text().splitlines()]
+        assert all((journal.root / event['response']['path']).is_file() for event in events)
+    finally:
+        release.set()
+        await gateway.close()

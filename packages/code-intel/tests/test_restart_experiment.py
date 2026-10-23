@@ -18,6 +18,12 @@ async def test_failed_phase_retains_success_and_failing_response_before_validati
             self.calls = 0
 
         async def execute(self, operation, arguments):
+            if operation == 'search_symbols' and arguments == {'name': '__quality_initialize__'}:
+                return CallToolResult(content=[TextContent(type='text', text='initialize')])
+            if operation == 'capabilities':
+                return CallToolResult(content=[TextContent(type='text', text='ready')], structuredContent={
+                    'capabilities': {'coverage': {'phase': 'ready', 'total_files': 1,
+                    'parsed_files': 1, 'reference_indexed_files': 1, 'discovery_truncated': False}}})
             self.calls += 1
             if self.calls == 1:
                 return CallToolResult(content=[TextContent(type='text', text='definition')],
@@ -95,6 +101,13 @@ def phase_capture(tmp_path):
     journal = Journal(evidence / 'journal', 128 * 1024)
     spec = {'symbol': 'target', 'file': 'sample.go', 'definition_line': 1, 'anchor': 'func target('}
     (tmp_path / 'sample.go').write_text('func target() {}\n')
+    initialized = CallToolResult(content=[TextContent(type='text', text='initialize')]).model_dump(mode='json')
+    journal.response({'event': 'readiness_initialize', 'operation': 'search_symbols',
+                      'arguments': {'name': '__quality_initialize__'}}, initialized)
+    ready = CallToolResult(content=[TextContent(type='text', text='ready')], structuredContent={
+        'capabilities': {'coverage': {'phase': 'ready', 'total_files': 1, 'parsed_files': 1,
+                         'reference_indexed_files': 1, 'discovery_truncated': False}}}).model_dump(mode='json')
+    ready_ref = journal.response({'event': 'readiness_poll', 'operation': 'capabilities', 'arguments': {}}, ready)
     rows = []
     for label, operation, arguments in trial.navigation_requests(spec):
         if operation == 'search_symbols':
@@ -112,6 +125,7 @@ def phase_capture(tmp_path):
                      'canonical_sha256': trial.digest(trial.canonical(operation, data))})
     journal.response({'event': 'gateway_close'}, {'status': 'complete'})
     summary = {'status': 'complete', 'operations': rows,
+               'readiness': {'polls': 1, 'seconds': .25, 'poll_interval_seconds': 1.0, 'response_ref': ready_ref},
                'evidence_sha256': trial.digest({r['label']: r['canonical_sha256'] for r in rows})}
     return evidence, spec, summary
 
@@ -137,3 +151,120 @@ def test_phase_admission_rejects_damaged_or_rebound_raw_capture(tmp_path, damage
         rows[0]['canonical_sha256'] = hashlib.sha256(b'changed summary').hexdigest()
     with pytest.raises((ValueError, FileNotFoundError)):
         trial.admit_phase(evidence, tmp_path, spec, summary)
+
+
+@pytest.mark.parametrize('damage', ['missing_initialize', 'missing_poll', 'partial_reference_counts', 'late_poll'])
+def test_navigation_capture_requires_prior_complete_reference_readiness(tmp_path, damage):
+    evidence, spec, summary = phase_capture(tmp_path)
+    path = evidence / 'journal/events.jsonl'
+    events = [json.loads(line) for line in path.read_text().splitlines()]
+    if damage == 'missing_initialize':
+        events = [e for e in events if e['request']['event'] != 'readiness_initialize']
+    elif damage == 'missing_poll':
+        events = [e for e in events if e['request']['event'] != 'readiness_poll']
+    elif damage == 'late_poll':
+        index = next(i for i,e in enumerate(events) if e['request']['event'] == 'readiness_poll')
+        events.append(events.pop(index))
+    else:
+        event = next(e for e in events if e['request']['event'] == 'readiness_poll')
+        blob = evidence / 'journal' / event['response']['path']
+        value = json.loads(blob.read_bytes())
+        value['structuredContent']['capabilities']['coverage']['reference_indexed_files'] = 0
+        raw = (json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False) + '\n').encode()
+        sha = hashlib.sha256(raw).hexdigest()
+        blob = evidence / 'journal/blobs' / (sha + '.json')
+        blob.write_bytes(raw)
+        event['response'] = {'path': 'blobs/' + sha + '.json', 'bytes': len(raw), 'sha256': sha}
+        summary['readiness']['response_ref'] = event['response']
+    path.write_text(''.join(json.dumps(e) + '\n' for e in events))
+    with pytest.raises(ValueError):
+        trial.admit_phase(evidence, tmp_path, spec, summary)
+
+
+def test_correct_workspace_routes_compare_by_role_without_mutating_raw_data(tmp_path):
+    import copy
+
+    left, right = tmp_path / 'left', tmp_path / 'right'
+    a = {'results': [{'file_path': 'source.go', 'score': .5}], 'ranking': {'index': {'status': 'ready'}, 'delivered_count': 1},
+         'follow_up': {'tool': 'semantic_search', 'reruns_current_index': True,
+                       'arguments': {'workspace': str(left.resolve()), 'query': 'target', 'top_k': 11}}}
+    b = copy.deepcopy(a)
+    b['follow_up']['arguments']['workspace'] = str(right.resolve())
+    original = copy.deepcopy(a)
+    assert a != b
+    assert trial.canonical('semantic_search', a, workspace=left) == trial.canonical('semantic_search', b, workspace=right)
+    assert a == original and a['follow_up']['arguments']['workspace'] == str(left.resolve())
+
+
+@pytest.mark.parametrize('route', ['other-workspace', None, False, 7])
+def test_wrong_or_malformed_workspace_route_cannot_be_normalized(tmp_path, route):
+    data = {'results': [], 'follow_up': {'arguments': {'workspace': route}}}
+    with pytest.raises(ValueError, match='workspace route'):
+        trial.canonical('semantic_search', data, workspace=tmp_path)
+
+
+def test_workspace_role_comparison_preserves_every_other_visible_field(tmp_path):
+    import copy
+
+    original = {'results': [{'file_path': 'a.go', 'score': .5}, {'file_path': 'b.go', 'score': .4}],
+                'ranking': {'index': {'status': 'ready'}, 'candidate_pool_count': 2},
+                'follow_up': {'tool': 'semantic_search', 'reruns_current_index': True,
+                'arguments': {'workspace': str(tmp_path.resolve()), 'query': 'target', 'top_k': 11, 'max_tokens': 16000}}}
+    expected = trial.canonical('semantic_search', original, workspace=tmp_path)
+    assert expected['follow_up']['arguments']['workspace'] == '__quality_fixture_workspace__'
+    for keys, value in [(('follow_up', 'tool'), 'inspect_symbol'),
+                        (('follow_up', 'reruns_current_index'), False),
+                        (('follow_up', 'arguments', 'query'), 'other'),
+                        (('follow_up', 'arguments', 'top_k'), 12),
+                        (('ranking', 'candidate_pool_count'), 3)]:
+        changed = copy.deepcopy(original)
+        target = changed
+        for key in keys[:-1]:
+            target = target[key]
+        target[keys[-1]] = value
+        assert trial.canonical('semantic_search', changed, workspace=tmp_path) != expected
+    changed = copy.deepcopy(original)
+    changed['results'].reverse()
+    assert trial.canonical('semantic_search', changed, workspace=tmp_path) != expected
+    assert trial.canonical('inspect_symbol', original, workspace=tmp_path) == original
+    with pytest.raises(ValueError, match='workspace route'):
+        trial.canonical('semantic_search', original)
+
+
+@pytest.mark.asyncio
+async def test_real_fresh_workspace_continuations_validate_exact_routes_before_comparison(tmp_path):
+    import asyncio
+
+    from attocode_intel.gateway import OperationGateway
+
+    from eval.quality.readiness import wait_ready
+
+    peers, pages = [], []
+    journal = Journal(tmp_path / 'route-capture', 1024 * 1024)
+    try:
+        for label in ('first', 'second'):
+            workspace = tmp_path / label
+            workspace.mkdir()
+            (workspace / 'sample.py').write_text(''.join(f'def target_{n}():\n    return "target {n}"\n\n' for n in range(12)))
+            gateway = OperationGateway(str(workspace), 'daily', watch=False)
+            peers.append(gateway)
+            await asyncio.wait_for(wait_ready(gateway, journal), timeout=20)
+
+            async def capture(peer=gateway):
+                while True:
+                    args = {'query': 'target', 'file_filter': 'sample.py', 'top_k': 1, 'max_tokens': 8000}
+                    response = await peer.execute('semantic_search', args)
+                    journal.response({'event': 'routing_control', 'arguments': args}, response.model_dump(mode='json'))
+                    assert not response.isError
+                    data = response.structuredContent['data']
+                    if data.get('ranking', {}).get('index', {}).get('status') != 'warming':
+                        return data
+                    await asyncio.sleep(.1)
+
+            data = await asyncio.wait_for(capture(), timeout=20)
+            assert data['follow_up']['arguments']['workspace'] == str(workspace.resolve())
+            pages.append(trial.canonical('semantic_search', data, workspace=workspace))
+        assert pages[0] == pages[1]
+    finally:
+        for gateway in peers:
+            await gateway.close()

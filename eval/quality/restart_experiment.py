@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath
 
 from eval.quality.experiment_evidence import Journal, assert_engine, read_source
 from eval.quality.fixture_identity import source_manifest
+from eval.quality.readiness import coverage_ready, wait_ready
 from eval.quality.runner import REPO, write_json
 
 ORDER = [('baseline', 0), ('candidate', 0), ('candidate', 1),
@@ -47,12 +48,24 @@ def navigation_requests(spec):
     ]
 
 
-def canonical(operation, data):
-    # CallToolResult metadata is already outside data. Only this nested index
-    # object is readiness metadata; keep all other fields and every list order.
-    if operation == 'semantic_search' and isinstance(data.get('ranking'), dict):
-        return {**data, 'ranking': {k: v for k, v in data['ranking'].items() if k != 'index'}}
-    return data
+def canonical(operation, data, *, workspace=None):
+    # Keep all visible operation data. Readiness index diagnostics vary by phase;
+    # a continuation's physical workspace is separately validated before using
+    # its stable fixture role in this cross-workspace comparison.
+    if operation != 'semantic_search':
+        return data
+    result = dict(data)
+    if isinstance(data.get('ranking'), dict):
+        result['ranking'] = {k: v for k, v in data['ranking'].items() if k != 'index'}
+    follow = data.get('follow_up')
+    arguments = follow.get('arguments') if isinstance(follow, dict) else None
+    if isinstance(arguments, dict) and 'workspace' in arguments:
+        require(workspace is not None and type(arguments['workspace']) is str
+                and arguments['workspace'] == str(Path(workspace).resolve()),
+                'continuation workspace route differs from selected workspace')
+        result['follow_up'] = {**follow, 'arguments': {
+            **arguments, 'workspace': '__quality_fixture_workspace__'}}
+    return result
 
 
 def validate_operation(workspace, spec, label, operation, data):
@@ -83,6 +96,8 @@ async def navigate(workspace, spec, evidence, journal):
     hashes = {}
     started = time.monotonic()
     try:
+        report['readiness'] = await wait_ready(gateway, journal, poll_seconds=spec.get('readiness_poll_seconds', 1.0))
+        write_json(evidence / 'phase.json', report)
         for label, operation, arguments in navigation_requests(spec):
             before, warming = time.monotonic(), 0
             while True:
@@ -97,7 +112,7 @@ async def navigate(workspace, spec, evidence, journal):
                 warming += 1
                 await asyncio.sleep(.1)
             validate_operation(workspace, spec, label, operation, data)
-            hashes[label] = digest(canonical(operation, data))
+            hashes[label] = digest(canonical(operation, data, workspace=workspace))
             report['operations'].append({'label': label, 'operation': operation, 'arguments': arguments,
                 'response_ref': ref, 'canonical_sha256': hashes[label],
                 'seconds': time.monotonic() - before, 'warming_responses': warming})
@@ -127,6 +142,7 @@ def admit_phase(evidence, workspace, spec, summary, *, engine=None):
     require(summary['status'] == 'complete', 'phase incomplete')
     journal = evidence / 'journal'
     completed, hashes, closed, runtime = [], {}, False, {}
+    initialized, ready, polls, ready_ref = False, False, 0, None
     expected = navigation_requests(spec)
     for event in map(json.loads, (journal / 'events.jsonl').read_text().splitlines()):
         ref = event['response']
@@ -137,7 +153,24 @@ def admit_phase(evidence, workspace, spec, summary, *, engine=None):
         raw = (journal / ref['path']).read_bytes()
         require(len(raw) == ref['bytes'] and hashlib.sha256(raw).hexdigest() == ref['sha256'], 'response bytes changed')
         request, value = event['request'], json.loads(raw)
-        if request['event'] == 'operation':
+        if request['event'] == 'readiness_initialize':
+            require(not initialized and not completed and not closed and request == {
+                'event': 'readiness_initialize', 'operation': 'search_symbols',
+                'arguments': {'name': '__quality_initialize__'}}, 'late, repeated or misbound initialization')
+            require(not CallToolResult.model_validate(value).isError, 'readiness initialization failed')
+            initialized = True
+        elif request['event'] == 'readiness_poll':
+            require(initialized and not ready and not completed and not closed and request == {
+                'event': 'readiness_poll', 'operation': 'capabilities', 'arguments': {}},
+                'late, repeated or misbound readiness poll')
+            response = CallToolResult.model_validate(value)
+            require(not response.isError, 'readiness poll failed')
+            polls += 1
+            ready = coverage_ready(response.structuredContent['capabilities']['coverage'])
+            if ready:
+                ready_ref = ref
+        elif request['event'] == 'operation':
+            require(ready and not closed, 'scored navigation before full reference readiness')
             require(len(completed) < len(expected), 'extra operation capture')
             label, operation, arguments = expected[len(completed)]
             require(request == {'event': 'operation', 'label': label, 'operation': operation, 'arguments': arguments},
@@ -150,7 +183,7 @@ def admit_phase(evidence, workspace, spec, summary, *, engine=None):
                 continue
             validate_operation(workspace, spec, label, operation, data)
             row = summary['operations'][len(completed)]
-            sha = digest(canonical(operation, data))
+            sha = digest(canonical(operation, data, workspace=workspace))
             require(all(row[k] == v for k, v in {'label': label, 'operation': operation,
                     'arguments': arguments, 'response_ref': ref, 'canonical_sha256': sha}.items()), 'phase summary/raw mismatch')
             hashes[label] = sha
@@ -161,6 +194,12 @@ def admit_phase(evidence, workspace, spec, summary, *, engine=None):
         elif request['event'] in {'origin_start', 'origin_end', 'source_before', 'source_after', 'grammar_navigation'}:
             require(request['event'] not in runtime, 'duplicate runtime identity')
             runtime[request['event']] = value
+    readiness = summary.get('readiness', {})
+    require(ready and polls > 0 and readiness.get('polls') == polls
+            and readiness.get('response_ref') == ready_ref
+            and readiness.get('poll_interval_seconds') == spec.get('readiness_poll_seconds', 1.0)
+            and type(readiness.get('seconds')) in (int, float) and math.isfinite(readiness['seconds'])
+            and readiness['seconds'] >= 0, 'readiness summary differs from raw capture')
     require(closed and len(completed) == len(expected) == len(summary['operations'])
             and summary['evidence_sha256'] == digest(hashes), 'missing or changed canonical phase evidence')
     if engine is not None:

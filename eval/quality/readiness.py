@@ -21,7 +21,7 @@ def coverage_ready(coverage):
     )
 
 
-async def wait_ready(gateway, journal):
+async def wait_ready(gateway, journal, *, poll_seconds=0.1):
     started, polls = time.monotonic(), 0
     response = await gateway.execute("search_symbols", {"name": "__quality_initialize__"})
     journal.response(
@@ -45,5 +45,6 @@ async def wait_ready(gateway, journal):
         coverage = response.structuredContent["capabilities"]["coverage"]
         polls += 1
         if coverage_ready(coverage):
-            return {"polls": polls, "seconds": time.monotonic() - started, "response_ref": ref}
-        await asyncio.sleep(0.1)
+            return {"polls": polls, "seconds": time.monotonic() - started, "response_ref": ref,
+                    "poll_interval_seconds": poll_seconds}
+        await asyncio.sleep(poll_seconds)
