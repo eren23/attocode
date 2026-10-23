@@ -40,6 +40,8 @@ jobs:
         env:
           QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
+          exec > >(tee '${{ runner.temp }}/native-setup-${{ github.run_id }}-${{ github.run_attempt }}.log') 2>&1
+          uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
           rustup toolchain install 1.94.1 --profile minimal --component rust-analyzer --component rust-src
           rustup default 1.94.1
           uv run --no-sync python - <<'PY'
@@ -66,3 +68,4 @@ jobs:
           if-no-files-found: error
           path: |
             ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+            ${{ runner.temp }}/native-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
