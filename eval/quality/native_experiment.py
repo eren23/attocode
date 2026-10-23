@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import patch
@@ -71,17 +72,22 @@ def grammar_identity(cache):
         raise ValueError('CI optional OCaml grammar was not acquired')
     files = {p.relative_to(cache).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in sorted(cache.rglob('*')) if p.is_file()}
+    if not files:
+        raise ValueError('empty optional grammar identity')
+    return {'cache_files': files, 'distributions': distribution_identity(
+        ('tree-sitter', 'tree-sitter-language-pack'))}
+
+
+def distribution_identity(names):
     distributions = {}
-    for name in ('tree-sitter', 'tree-sitter-language-pack'):
+    for name in names:
         dist = importlib.metadata.distribution(name)
         rows = [[str(item), hashlib.sha256(Path(dist.locate_file(item)).read_bytes()).hexdigest()]
                 for item in sorted(dist.files or [], key=str)
                 if str(item).endswith(('.py', '.so', '.dll', '.pyd', '.dylib'))
                 and Path(dist.locate_file(item)).is_file()]
         distributions[name] = {'version': dist.version, 'files': rows}
-    if not files:
-        raise ValueError('empty optional grammar identity')
-    return {'cache_files': files, 'distributions': distributions}
+    return distributions
 
 
 async def observe_ocaml(mode, workspace, spec, record):
@@ -186,17 +192,64 @@ def worker(mode, workspace, evidence):
         write_json(evidence / 'result.json', outcome)
 
 
+def admit_rust(trial):
+    from eval.quality.lsp_admission import expected_sources, verify_diagnostic
+    verdict = {'status': 'incomplete', 'decision': None}
+    try:
+        verdict['capture'] = verify_diagnostic((trial / 'lsp-diagnostic-rust.jsonl').read_bytes(), expected_sources())
+        raw = (trial / 'rust.xml').read_bytes()
+        if len(raw) > 2**20 or b'<!DOCTYPE' in raw.upper():
+            raise ValueError('unsafe Rust JUnit')
+        tree = ET.fromstring(raw)
+        cases = list(tree.iter('testcase'))
+        if (len(cases) != 1 or cases[0].get('name') != 'test_real_server_warmed_selected_definition_and_edit[rust]'
+                or not cases[0].get('classname', '').endswith('test_real_language_server')
+                or any(list(tree.iter(kind)) for kind in ('failure', 'error', 'skipped'))):
+            raise ValueError('Rust fixture did not pass its required case')
+        origins = json.loads((trial / 'pytest-origin.json').read_bytes())
+        if origins['exitstatus'] != 0 or origins['origins'].get('attocode_intel') != '__init__.py':
+            raise ValueError('Rust origin outcome incomplete')
+        selected = Path(os.environ['ATTOCODE_EXPERIMENT_ENGINE']).resolve()
+        for name, relative in origins['origins'].items():
+            path = (selected / relative).resolve()
+            if not name.startswith('attocode_intel') or not path.is_relative_to(selected) or not path.is_file():
+                raise ValueError('Rust origin outside selected engine')
+        identity = json.loads((trial / 'rust-native-identity.json').read_bytes())
+        if (identity['exitstatus'] != 0 or identity['distributions'] !=
+                distribution_identity(('tree-sitter', 'tree-sitter-rust'))):
+            raise ValueError('Rust installed native identity changed')
+        files = {path: sha for d in identity['distributions'].values() for path, sha in d['files']}
+        loaded = identity['loaded']
+        if not loaded or not any(name.startswith('tree_sitter_rust') for name in loaded):
+            raise ValueError('Rust native module was not observed in worker')
+        for name, row in loaded.items():
+            if (not (name == 'tree_sitter' or name.startswith('tree_sitter.')
+                     or name == 'tree_sitter_rust' or name.startswith('tree_sitter_rust.'))
+                    or files.get(row['path']) != row['sha256']):
+                raise ValueError('Rust loaded module identity mismatch')
+        verdict['status'] = 'complete'
+    except Exception as error:
+        verdict['error'] = {'type': type(error).__name__, 'message': str(error)[:2000]}
+        raise ValueError('Rust evidence admission failed: ' + str(error)) from error
+    finally:
+        write_json(trial / 'admission.json', verdict)
+    return verdict
+
+
 def run_rust_trials(frozen, evidence, work, command):
     for number in range(1, frozen['rust']['processes'] + 1):
         name = f'rust-{number}'
         env = {**os.environ, 'QUALITY_REQUIRE_REAL_LSP': '1', 'QUALITY_REAL_LSP_LANGUAGES': 'rust',
                'QUALITY_LSP_TRACE_DIR': str(evidence / name), 'ATTOCODE_EXPERIMENT_EVIDENCE': str(evidence / name),
                'RA_LOG': 'rust_analyzer=info', 'CARGO_NET_OFFLINE': 'true'}
-        command(name, [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
+        trial, row = command(name, [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
                 '--confcutdir=packages/code-intel/tests', '-q', '--basetemp=' + str(work / name),
                 '-o', 'cache_dir=' + str(work / (name + '-cache')),
-                '-p', 'eval.quality.experiment_origin', '--junitxml=' + str(evidence / name / 'rust.xml'),
+                '-p', 'eval.quality.experiment_origin', '-p', 'eval.quality.native_origin',
+                '--junitxml=' + str(evidence / name / 'rust.xml'),
                 frozen['rust']['test']], env)
+        row['admission'] = admit_rust(trial)
+        row['status'] = 'complete'
 
 
 def run(root):
@@ -220,7 +273,6 @@ def run(root):
         write_json(evidence / 'summary.json', report)
         if result.returncode:
             raise ValueError('native trial failed: ' + name)
-        row['status'] = 'complete'
         return trial, row
 
     try:
@@ -255,7 +307,7 @@ def run(root):
                 result = json.loads((trial / 'result.json').read_bytes())
                 if result['status'] != 'complete':
                     raise ValueError('incomplete OCaml worker')
-                row['result'] = result
+                row.update(result=result, status='complete')
         run_rust_trials(frozen, evidence, work, command)
         report.update(status='complete', conclusion='Observed 12 fresh OCaml and 6 fresh Rust processes; '
                       'historical causes remain open. No parser or precision limit was changed.')
