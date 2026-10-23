@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad]
+        options: [preflight, native, preview, restart, broad, broad-cost]
 
 permissions:
   contents: read
@@ -55,7 +55,7 @@ jobs:
           assert 'ocaml' in pack.downloaded_languages()
           PY
       - name: Acquire broad fixture history and grammars (outside payload budget)
-        if: inputs.experiment == 'broad'
+        if: inputs.experiment == 'broad' || inputs.experiment == 'broad-cost'
         timeout-minutes: 5
         env:
           QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}

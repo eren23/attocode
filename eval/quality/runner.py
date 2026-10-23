@@ -164,6 +164,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
         wall_deadline = min(wall_deadline, wall_started + max(0, deadline - started))
     row = {"command": command, "status": "incomplete", "peak_rss_bytes": 0,
            "peak_disk_bytes": disk_bytes(root), "log_truncated": False}
+    monitoring = {"samples": 0, "wall_seconds": 0.0, "controller_cpu_seconds": 0.0}
     if row["peak_disk_bytes"] >= max_bytes or started >= deadline or wall_started >= wall_deadline:
         return {**row, "reason": "admission_budget", "seconds": 0}
     try:
@@ -192,6 +193,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
     reader.start()
     try:
         while process.poll() is None:
+            sample_wall, sample_cpu = time.monotonic(), time.process_time()
             try:
                 parent = psutil.Process(process.pid)
                 processes = [parent, *parent.children(recursive=True)]
@@ -210,6 +212,9 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
             row["peak_disk_bytes"] = max(row["peak_disk_bytes"], disk_bytes(root))
             if evidence_root is not None:
                 row['peak_evidence_bytes'] = max(row.get('peak_evidence_bytes', 0), disk_bytes(evidence_root))
+            monitoring['samples'] += 1
+            monitoring['wall_seconds'] += time.monotonic() - sample_wall
+            monitoring['controller_cpu_seconds'] += time.process_time() - sample_cpu
             if time.monotonic() >= deadline or time.time() >= wall_deadline:
                 row["reason"] = "deadline"
             elif row["peak_disk_bytes"] >= max_bytes:
@@ -248,6 +253,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
             process.stdout.close()
     row.update(seconds=round(time.monotonic() - started, 3),
                wall_seconds=round(time.time() - wall_started, 3), exit_code=process.returncode,
+               monitoring=monitoring,
                cleanup_verified=not reader.is_alive() and not cleanup_errors,
                cleanup_errors=cleanup_errors)
     row["peak_disk_bytes"] = max(row["peak_disk_bytes"], disk_bytes(root))
