@@ -48,16 +48,11 @@ def navigation_requests(spec):
 
 
 def canonical(operation, data):
-    if operation == 'search_symbols':
-        return data
-    keys = {
-        'inspect_symbol': ('status', 'definition', 'source', 'references', 'reference_candidates', 'tests', 'ambiguous'),
-        'cross_references': ('definitions', 'references', 'reference_candidates', 'total_references', 'total_reference_candidates'),
-        'dependencies': ('path', 'imports', 'imported_by', 'absence_proven'),
-        'suggest_tests': ('candidates', 'absence_proven', 'evidence'),
-        'semantic_search': ('results',),
-    }[operation]
-    return {key: data[key] for key in keys if key in data}
+    # CallToolResult metadata is already outside data. Only this nested index
+    # object is readiness metadata; keep all other fields and every list order.
+    if operation == 'semantic_search' and isinstance(data.get('ranking'), dict):
+        return {**data, 'ranking': {k: v for k, v in data['ranking'].items() if k != 'index'}}
+    return data
 
 
 def validate_operation(workspace, spec, label, operation, data):
