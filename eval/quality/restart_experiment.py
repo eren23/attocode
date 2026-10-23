@@ -48,12 +48,24 @@ def navigation_requests(spec):
     ]
 
 
-def canonical(operation, data):
-    # CallToolResult metadata is already outside data. Only this nested index
-    # object is readiness metadata; keep all other fields and every list order.
-    if operation == 'semantic_search' and isinstance(data.get('ranking'), dict):
-        return {**data, 'ranking': {k: v for k, v in data['ranking'].items() if k != 'index'}}
-    return data
+def canonical(operation, data, *, workspace=None):
+    # Keep all visible operation data. Readiness index diagnostics vary by phase;
+    # a continuation's physical workspace is separately validated before using
+    # its stable fixture role in this cross-workspace comparison.
+    if operation != 'semantic_search':
+        return data
+    result = dict(data)
+    if isinstance(data.get('ranking'), dict):
+        result['ranking'] = {k: v for k, v in data['ranking'].items() if k != 'index'}
+    follow = data.get('follow_up')
+    arguments = follow.get('arguments') if isinstance(follow, dict) else None
+    if isinstance(arguments, dict) and 'workspace' in arguments:
+        require(workspace is not None and type(arguments['workspace']) is str
+                and arguments['workspace'] == str(Path(workspace).resolve()),
+                'continuation workspace route differs from selected workspace')
+        result['follow_up'] = {**follow, 'arguments': {
+            **arguments, 'workspace': '__quality_fixture_workspace__'}}
+    return result
 
 
 def validate_operation(workspace, spec, label, operation, data):
@@ -100,7 +112,7 @@ async def navigate(workspace, spec, evidence, journal):
                 warming += 1
                 await asyncio.sleep(.1)
             validate_operation(workspace, spec, label, operation, data)
-            hashes[label] = digest(canonical(operation, data))
+            hashes[label] = digest(canonical(operation, data, workspace=workspace))
             report['operations'].append({'label': label, 'operation': operation, 'arguments': arguments,
                 'response_ref': ref, 'canonical_sha256': hashes[label],
                 'seconds': time.monotonic() - before, 'warming_responses': warming})
@@ -171,7 +183,7 @@ def admit_phase(evidence, workspace, spec, summary, *, engine=None):
                 continue
             validate_operation(workspace, spec, label, operation, data)
             row = summary['operations'][len(completed)]
-            sha = digest(canonical(operation, data))
+            sha = digest(canonical(operation, data, workspace=workspace))
             require(all(row[k] == v for k, v in {'label': label, 'operation': operation,
                     'arguments': arguments, 'response_ref': ref, 'canonical_sha256': sha}.items()), 'phase summary/raw mismatch')
             hashes[label] = sha
@@ -301,7 +313,7 @@ def run(root):
     from eval.quality.corpus import PACK, materialize
 
     design = json.loads(DESIGN.read_bytes())
-    public_path = REPO / 'packages/code-intel/evals/designs/2026-10-23-restart-ready.json'
+    public_path = REPO / 'packages/code-intel/evals/designs/2026-10-23-restart-routed.json'
     require(design['public_design'] == public_path.relative_to(REPO).as_posix()
             and hashlib.sha256(public_path.read_bytes()).hexdigest() == design['public_design_sha256']
             and {k: v for k, v in design.items() if k not in {'public_design', 'public_design_sha256'}}

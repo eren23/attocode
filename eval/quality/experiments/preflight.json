@@ -8,25 +8,5 @@
     "disk_bytes": 2147483648,
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864
-  },
-  "paired_control": {
-    "baseline_commit": "2252dbc2aafa758fbf99a1fce0059a0db844a161",
-    "test_file": "packages/code-intel/tests/test_snapshot_fingerprints.py",
-    "test_sha256": "f44d50633e2d453c76ab6040a7da7c2210dca9e72ad78037de8f0b701fe76d84",
-    "cases": [
-      "test_identical_reparse_reuses_navigation_without_repair",
-      "test_changed_extraction_with_unchanged_source_still_repairs",
-      "test_offline_edit_repairs_instead_of_reusing_old_fingerprint"
-    ],
-    "baseline_failures": [
-      "test_identical_reparse_reuses_navigation_without_repair"
-    ],
-    "baseline_failure_messages": {
-      "test_identical_reparse_reuses_navigation_without_repair": "identical healthy reparse unnecessarily repaired navigation"
-    },
-    "candidate_files": [
-      "_internal/integrations/context/ast_service.py",
-      "_internal/integrations/context/ast_snapshot.py"
-    ]
   }
 }

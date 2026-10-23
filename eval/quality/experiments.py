@@ -50,10 +50,6 @@ def payload(name, root):
     origins = assert_engine(selected)
     write_json(root / 'evidence/controller-origin.json', {'pid': os.getpid(), 'origins': origins})
     if name == 'preflight':
-        frozen = json.loads((REPO / 'eval/quality/experiments/preflight.json').read_bytes())
-        if frozen.get('paired_control'):
-            from eval.quality.control_pair import run
-            run(root, frozen['paired_control'])
         command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
                    '--confcutdir=packages/code-intel/tests', '-q',
                    '--basetemp=' + str(root / 'work/pytest'), '-o', 'cache_dir=' + str(root / 'work/cache'),

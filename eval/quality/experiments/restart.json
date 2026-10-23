@@ -61,8 +61,10 @@
     "cold_median_ratio_max": 1.05,
     "incomplete_decision": null,
     "no_posthoc_result_sorting": true,
-    "no_scored_retry_or_replacement": true,
-    "readiness_admitted_before_first_scored_operation": true
+    "readiness_admitted_before_first_scored_operation": true,
+    "no_resuming_or_replacing_existing_phases": true,
+    "max_attempts_under_this_design": 1,
+    "every_actual_workspace_route_correct": true
   },
   "metadata_caps": {
     "optional_structural_fingerprints": 2097152,
@@ -76,8 +78,8 @@
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "study": "2026-10-23-full-navigation-readiness",
-  "earlier_attempts": "Prior incomplete studies remain closed/null; no candidate benchmark phase was observed. This new comparison adds predeclared full-reference admission before any scored navigation.",
+  "study": "2026-10-23-validated-workspace-routing",
+  "earlier_attempts": "All prior incomplete studies remain closed/null. R1 full-readiness self-pair passes, then rejects a fresh baseline solely for its correctly different physical continuation workspace. No candidate benchmark has been observed. R2 is a separately frozen corrected comparator; no prior phase is resumed or relabeled.",
   "readiness": {
     "initialization": "search_symbols(name=__quality_initialize__)",
     "operation": "capabilities",
@@ -91,6 +93,25 @@
     "phase_journal_bytes": 4194304,
     "rationale": "Polling interval declared before any new runtime; limits duplicated capabilities observer/evidence overhead within unchanged phase/aggregate journal caps. Default remains0.1s elsewhere."
   },
-  "public_design": "packages/code-intel/evals/designs/2026-10-23-restart-ready.json",
-  "public_design_sha256": "b2533224e9a826b6560ebd913eaaf3b946342f607508c667b9c82c9e25075d89"
+  "protocol_revision": {
+    "prior_run": 39970434388,
+    "prior_commit": "38528b64bb906a3013d31bd1c13196f90593ca97",
+    "prior_status": "incomplete",
+    "prior_decision": null,
+    "prior_candidate_benchmark_phases": 0,
+    "prior_canonical_policy_preserved": true,
+    "reason": "Correct physical workspace routes vary across fresh workspaces. R2 validates the exact selected-workspace route before replacing only this provenance value with a fixture-role marker. No candidate performance-dependent change or phase replacement."
+  },
+  "canonical_policy": {
+    "all_operation_data_preserved": true,
+    "excluded_diagnostic_object": "semantic_search.data.ranking.index",
+    "validated_route_field": "semantic_search.data.follow_up.arguments.workspace",
+    "validation": "When present, exact string must equal the actual selected workspace resolved absolute path; malformed/wrong route fails before hashing.",
+    "canonical_role": "__quality_fixture_workspace__",
+    "raw_route_retained": true,
+    "all_other_follow_up_arguments_tool_flags_preserved": true,
+    "no_result_sorting_or_count_projection": true
+  },
+  "public_design": "packages/code-intel/evals/designs/2026-10-23-restart-routed.json",
+  "public_design_sha256": "9a2a6ec60a6e1ff1dc7d12a36fc76b496c3d247121ea73e90eb3e090c75874c0"
 }
