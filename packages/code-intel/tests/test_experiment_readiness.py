@@ -67,4 +67,3 @@ async def test_initialization_and_every_readiness_response_are_retained_before_i
     events = [json.loads(line) for line in (journal.root / "events.jsonl").read_text().splitlines()]
     assert [e["request"]["event"] for e in events] == ["readiness_initialize", "readiness_poll"]
     assert all((journal.root / e["response"]["path"]).is_file() for e in events)
-
