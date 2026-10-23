@@ -1,0 +1,309 @@
+{
+  "date": "2026-10-23",
+  "status": "complete",
+  "decision": "reject",
+  "product_change": false,
+  "scored_head": "f34661699db7bcf515cb05115d5255941bbcdad8",
+  "run": 39888662258,
+  "design": "../designs/2026-10-23-preview-windows.json",
+  "questions_consumed": 24,
+  "pages": 720,
+  "paired_requests": 360,
+  "distinct_judged_excerpt_gains_at5": 0,
+  "individual_excerpt_losses": 12,
+  "distinct_question_excerpt_losses": 1,
+  "exact_control_changed_pairs": 6,
+  "delivered_identity_changes": 0,
+  "warm_p95_ms": {
+    "baseline": 409.6111909999962,
+    "candidate": 412.41412700000524
+  },
+  "gain_gate": false,
+  "latency_gate": true,
+  "seconds": 167.310424463,
+  "supervision": {
+    "cleanup_errors": [],
+    "cleanup_verified": true,
+    "command": [
+      "/home/runner/work/attocode/attocode/.venv/bin/python",
+      "-m",
+      "eval.quality.experiments",
+      "preview",
+      "--root",
+      "/home/runner/work/_temp/intelligence-experiment-39888662258-1",
+      "--payload"
+    ],
+    "exit_code": 0,
+    "log_truncated": false,
+    "peak_disk_bytes": 183787520,
+    "peak_evidence_bytes": 16662528,
+    "peak_rss_bytes": 317378560,
+    "seconds": 166.394,
+    "status": "passed",
+    "wall_seconds": 166.394
+  },
+  "fixture_sizes": {
+    "pandas": {
+      "bytes": 33313776,
+      "entries": 2017,
+      "manifest_sha256": "229003a6c8a4547593a4476e37b825b00e29caaae38feb2b58bbfc6475fed70c"
+    },
+    "ripgrep": {
+      "bytes": 1950756,
+      "entries": 153,
+      "manifest_sha256": "a0f0249876724b91bbdb6409055f2794662bc15dfba7080cd10f0801e98fcf07"
+    }
+  },
+  "archive": {
+    "path": "packages/code-intel/evals/results/2026-10-23-preview-windows.tar.gz",
+    "bytes": 2781675,
+    "members": 2246,
+    "sha256": "4acedfc207905f34fe23a59f8d42ba8e4db4212d8e899842fc9c73216e8450dd"
+  },
+  "artifact_sha256": "81326de9cb1a1609ad552116d8cee0cec2b386d1f1141480dde352750b4025e4",
+  "qualifications": [
+    "Implementer source exposure disclosed; non-exhaustive source-bound labels, no agent-task completion claim.",
+    "No tuning, replacement or scored relaunch. All24 questions now consumed.",
+    "Latency includes MCP and passive fingerprints, excludes retention/replay; all I/O inside full payload ceiling."
+  ],
+  "full_decision": {
+    "control_changes": [
+      [
+        "ripgrep",
+        0,
+        "v-r5",
+        24,
+        2000,
+        ""
+      ],
+      [
+        "ripgrep",
+        0,
+        "v-r5",
+        24,
+        8000,
+        ""
+      ],
+      [
+        "ripgrep",
+        1,
+        "v-r5",
+        24,
+        2000,
+        ""
+      ],
+      [
+        "ripgrep",
+        1,
+        "v-r5",
+        24,
+        8000,
+        ""
+      ],
+      [
+        "ripgrep",
+        2,
+        "v-r5",
+        24,
+        2000,
+        ""
+      ],
+      [
+        "ripgrep",
+        2,
+        "v-r5",
+        24,
+        8000,
+        ""
+      ]
+    ],
+    "decision": "reject",
+    "gain_gate": false,
+    "gains_by_round_and_split": {
+      "0:development": [],
+      "0:validation": [],
+      "1:development": [],
+      "1:validation": [],
+      "2:development": [],
+      "2:validation": []
+    },
+    "identity_changes": [],
+    "latency_gate": true,
+    "losses": [
+      {
+        "key": [
+          "ripgrep",
+          0,
+          "v-r1",
+          5,
+          2000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          0,
+          "v-r1",
+          5,
+          8000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          0,
+          "v-r1",
+          24,
+          8000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          0,
+          "v-r1",
+          5,
+          2000,
+          "crates/globset/src/glob.rs"
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          1,
+          "v-r1",
+          5,
+          2000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          1,
+          "v-r1",
+          5,
+          8000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          1,
+          "v-r1",
+          24,
+          8000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          1,
+          "v-r1",
+          5,
+          2000,
+          "crates/globset/src/glob.rs"
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          2,
+          "v-r1",
+          5,
+          2000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          2,
+          "v-r1",
+          5,
+          8000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          2,
+          "v-r1",
+          24,
+          8000,
+          ""
+        ],
+        "metric": "visible"
+      },
+      {
+        "key": [
+          "ripgrep",
+          2,
+          "v-r1",
+          5,
+          2000,
+          "crates/globset/src/glob.rs"
+        ],
+        "metric": "visible"
+      }
+    ],
+    "pairs": 360,
+    "qualification": "Source-bound non-exhaustive excerpt judgments; no ranking or agent-completion gain.",
+    "seconds": 166.08645582399998,
+    "status": "complete",
+    "warm_p95_ms": {
+      "baseline": 409.6111909999962,
+      "candidate": 412.41412700000524
+    },
+    "workers": [
+      {
+        "command": [
+          "/home/runner/work/attocode/attocode/.venv/bin/python",
+          "-m",
+          "eval.quality.preview_experiment",
+          "--worker",
+          "pandas",
+          "--workspace",
+          "/home/runner/work/_temp/intelligence-experiment-39888662258-1/work/preview/pandas",
+          "--evidence",
+          "/home/runner/work/_temp/intelligence-experiment-39888662258-1/evidence/preview/pandas"
+        ],
+        "exit_code": 0,
+        "pack": "pandas",
+        "status": "complete"
+      },
+      {
+        "command": [
+          "/home/runner/work/attocode/attocode/.venv/bin/python",
+          "-m",
+          "eval.quality.preview_experiment",
+          "--worker",
+          "ripgrep",
+          "--workspace",
+          "/home/runner/work/_temp/intelligence-experiment-39888662258-1/work/preview/ripgrep",
+          "--evidence",
+          "/home/runner/work/_temp/intelligence-experiment-39888662258-1/evidence/preview/ripgrep"
+        ],
+        "exit_code": 0,
+        "pack": "ripgrep",
+        "status": "complete"
+      }
+    ]
+  }
+}

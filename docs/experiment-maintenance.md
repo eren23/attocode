@@ -115,3 +115,15 @@ full 600-second payload ceiling, along with startup, shutdown and evidence I/O.
 The same aggregate 2 GiB RSS/disk and 64 MiB evidence bounds apply. A complete
 run remains a bounded, non-exhaustive excerpt observation, without a ranking or
 agent-completion claim. An accepted rule still needs normal product verification.
+
+Before advancing to the next preview worker, the controller admits every journal
+reference by content hash and size, binds each capture to its preceding request,
+and recomputes delivered identities, data hashes and source judgments from raw
+responses. Full materialized source inventories are checked against committed Git
+blobs before retrieval and checked again afterward; only the generated root
+`.attocode` index directory is excluded. Missing captures or fixture drift stop
+the attempt without a quality verdict.
+
+The [2026-10-23 frozen trial](../packages/code-intel/evals/results/2026-10-23-preview-windows.md)
+rejected the preview rule: zero judged excerpt gains, one distinct question lost
+in every round, and one changed exact control. Product previews remain unchanged.
