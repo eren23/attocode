@@ -499,7 +499,6 @@ class ASTService:
             from .ast_snapshot import (
                 navigation_identity,
                 restore_summaries,
-                structural_fingerprints,
             )
 
             if summaries is None or snapshot != raw:
@@ -517,13 +516,6 @@ class ASTService:
                 return False
             self._index.load_from_store()
             verified_navigation = saved.get('navigation_identity') == navigation_identity()
-            if verified_navigation and reparsed:
-                fingerprints = structural_fingerprints({path: cached[path] for path in reparsed})
-                previous = saved.get('structures', {})
-                if not isinstance(previous, dict):
-                    previous = {}
-                reparsed = {path for path in reparsed if not fingerprints.get(path)
-                            or fingerprints[path] != previous.get(path)}
             # A missing summary can follow a transient grammar failure or a
             # parser upgrade. Unchanged source does not prove that the freshly
             # parsed definitions/references match the persisted index.
@@ -593,7 +585,7 @@ class ASTService:
             (source, target) for source, targets in index.file_dependencies.items()
             for target in targets
         ])
-        from .ast_snapshot import encode_summaries, navigation_identity, structural_fingerprints
+        from .ast_snapshot import encode_summaries, navigation_identity
 
         snapshot = json.dumps({
             "identity": identity,
@@ -602,7 +594,6 @@ class ASTService:
             "counts": self._store.stats(),
             "unresolved": graph.unresolved if graph else {},
             "navigation_identity": navigation_identity(),
-            "structures": structural_fingerprints(asts),
         }, separators=(",", ":"))
 
         # Bind the disposable payload to the completion record; publish it first.

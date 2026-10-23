@@ -53,6 +53,17 @@ def test_canonical_evidence_preserves_symbol_and_retrieval_result_order():
     assert first != second
 
 
+@pytest.mark.parametrize('operation,data,expected', [
+    ('inspect_symbol', {'status': 'found', 'total_reference_candidates': 70},
+     {'status': 'found', 'total_reference_candidates': 70}),
+    ('dependencies', {'path': 'source.py', 'total_imports': 3}, {'path': 'source.py', 'total_imports': 3}),
+    ('semantic_search', {'results': [], 'ranking': {'method': 'keyword', 'index': {'status': 'warming'}}},
+     {'results': [], 'ranking': {'method': 'keyword'}}),
+])
+def test_canonical_retains_visible_counts_and_ranking_evidence(operation, data, expected):
+    assert trial.canonical(operation, data) == expected
+
+
 def records(*, cold=105, restart=30):
     return [{'arm': arm, 'number': number, 'phases': {
         phase: {'seconds': value, 'evidence_sha256': 'a' * 64} for phase, value in

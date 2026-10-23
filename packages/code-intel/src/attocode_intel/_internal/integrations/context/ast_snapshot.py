@@ -14,7 +14,6 @@ from .index_store import AST_SNAPSHOT_KEY
 
 MAX_CACHE_BYTES = 32 * 2**20
 MAX_FILE_BYTES = 2**20
-MAX_FINGERPRINT_BYTES = 2 * 2**20
 
 
 @lru_cache(maxsize=128)
@@ -79,30 +78,6 @@ def navigation_identity() -> str:
         digest.update(name.encode())
         digest.update(_file_hash(str(path), stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size).encode())
     return digest.hexdigest()
-
-
-def structural_fingerprints(asts: dict[str, FileAST]) -> dict[str, str]:
-    """Bounded proof of complete extraction when a full summary does not fit.
-
-    Only healthy ASTs with verifiable installed direct grammars qualify. The
-    complete record includes source identity; omitted records require repair.
-    """
-    signatures = {language: parser_identity(language) for language in {a.language for a in asts.values()}}
-    result, size = {}, 2
-    for path, ast in sorted(asts.items()):
-        signature = signatures.get(ast.language)
-        if not signature or not ast.content_sha256 or ast.parsing_tier != 'tree_sitter' or ast.parse_failures:
-            continue
-        cost = len(json.dumps(path, ensure_ascii=True)) + 68
-        if size + cost > MAX_FINGERPRINT_BYTES:
-            continue
-        digest = hashlib.sha256(signature.encode())
-        for chunk in json.JSONEncoder(default=_fields, separators=(',', ':'), sort_keys=True,
-                                      ensure_ascii=True).iterencode(ast):
-            digest.update(chunk.encode())
-        result[path] = digest.hexdigest()
-        size += cost
-    return result
 
 
 def _bounded_json(value, limit):
