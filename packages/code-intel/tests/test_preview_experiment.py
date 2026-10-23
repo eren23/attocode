@@ -87,3 +87,24 @@ def test_warm_latency_gate_has_the_frozen_hundred_millisecond_floor(milliseconds
     frozen, rows = reports(candidate_ms=milliseconds)
     result = decide(rows, frozen)
     assert result['decision'] == decision
+
+
+async def test_malformed_actual_mcp_shape_is_durable_before_json_rejection(tmp_path):
+    from mcp import types
+
+    from eval.quality.experiment_evidence import Journal
+    from eval.quality.preview_experiment import request_page
+    from eval.quality.preview_sources import SourceTracker
+
+    class ExternalGateway:
+        async def execute_mcp(self, name, arguments):
+            assert name == 'semantic_search' and arguments == {'query': 'alpha', 'top_k': 5, 'max_tokens': 2000}
+            return types.CallToolResult(content=[types.TextContent(type='text', text='{broken')])
+    journal = Journal(tmp_path / 'evidence', 64 * 1024)
+    tracker = SourceTracker(tmp_path, journal)
+    with pytest.raises(json.JSONDecodeError):
+        await request_page(ExternalGateway(), tracker, journal, {'query': 'alpha', 'top_k': 5, 'max_tokens': 2000})
+    events = [json.loads(line) for line in (tmp_path / 'evidence/events.jsonl').read_text().splitlines()]
+    response = next(e for e in events if e['request'].get('event') == 'mcp_response')
+    raw = json.loads((tmp_path / 'evidence' / response['response']['path']).read_bytes())
+    assert raw['content'][0]['text'] == '{broken' and raw['isError'] is False

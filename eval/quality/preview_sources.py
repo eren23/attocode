@@ -78,10 +78,13 @@ class SourceTracker:
     def _record(self, row, producer):
         policy = {'producer': producer, **POLICIES.get(producer, {})}
         key = identity(row)
-        # Store large bodies only once by content hash; pages retain references.
-        ref = self.journal.response({'event': 'preview_input', 'identity': key},
-                                    {'body': search_evidence.source_body(row)})
-        policy['body_ref'] = ref
+        # Internal render inputs are reconstructible from the pinned source.
+        # Retain their identity, while the caller retains complete MCP responses.
+        body = search_evidence.source_body(row)
+        ref = self.journal.response({'event': 'preview_input_identity', 'identity': key},
+                                    {'sha256': hashlib.sha256(body.encode()).hexdigest(),
+                                     'characters': len(body)})
+        policy['input_identity_ref'] = ref
         if producer != 'metadata':
             path = (self.root / row.file_path).resolve()
             if not path.is_relative_to(self.root):
