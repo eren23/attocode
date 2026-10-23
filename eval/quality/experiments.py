@@ -22,7 +22,7 @@ from eval.quality.runner import GIB, REPO, environment, managed_root, supervise,
 SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 600, 'broad-cost': 600}
 ENGINE = REPO / 'packages/code-intel/src/attocode_intel'
 TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_evidence.py',
-         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py']
+         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py', 'test_broad_cost.py']
 
 
 def identity(design):
