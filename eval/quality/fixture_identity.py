@@ -43,3 +43,54 @@ def pinned_manifest(cache, tree):
         result[name] = ({'kind': 'symlink', 'target': os.fsdecode(body)} if mode == '120000' else
                         {'kind': 'file', 'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest()})
     return result
+
+
+
+def source_entry(manifest, name):
+    """Resolve aliases through captured entries, following filesystem path order.
+
+    Expand each symlink before interpreting a following parent component. Every
+    link, directory and final file belongs to this inventory; never read the
+    host filesystem or accept a path escaping the fixture.
+    """
+    if not isinstance(name, str) or not name or len(name) > 4096 or name.startswith('/'):
+        raise ValueError('invalid source path')
+    if all(part not in ('', '.', '..') for part in name.split('/')):
+        direct = manifest.get(name)
+        if isinstance(direct, dict) and direct.get('kind') == 'file':
+            return direct
+    pending, resolved, seen, links = name.split('/'), [], set(), 0
+    while pending:
+        state = (tuple(resolved), tuple(pending))
+        if state in seen:
+            raise ValueError('cyclic source alias')
+        seen.add(state)
+        if len('/'.join([*resolved, *pending])) > 4096:
+            raise ValueError('oversized source alias')
+        part, pending = pending[0], pending[1:]
+        if part in ('', '.'):
+            continue
+        if part == '..':
+            if not resolved:
+                raise ValueError('source alias escapes fixture')
+            resolved.pop()
+            continue
+        key = '/'.join([*resolved, part])
+        entry = manifest.get(key)
+        if isinstance(entry, dict) and entry.get('kind') == 'symlink':
+            links += 1
+            if links > 40:
+                raise ValueError('source alias chain exceeds forty links')
+            target = entry.get('target')
+            if not isinstance(target, str) or not target or len(target) > 4096 or target.startswith('/'):
+                raise ValueError('invalid source alias target')
+            pending = [*target.split('/'), *pending]
+        elif isinstance(entry, dict) and entry.get('kind') == 'file':
+            if pending:
+                raise ValueError('source alias traverses a regular file')
+            return entry
+        elif pending and any(path.startswith(key + '/') for path in manifest):
+            resolved.append(part)
+        else:
+            raise ValueError('source alias target is missing from fixture')
+    raise ValueError('source alias does not end at a regular file')

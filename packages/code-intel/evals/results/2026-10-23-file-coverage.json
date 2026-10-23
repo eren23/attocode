@@ -1,0 +1,123 @@
+{
+  "status": "incomplete",
+  "decision": null,
+  "baseline_commit": "3bcce24d17c43621d94a8687bac79428059f8fee",
+  "candidate_commit": "1dc918963df3993828fbab7bbe3e946baa08a3ed",
+  "candidate_sha256": "feb344afbddd7fb0f8e2166b8b100f6ef1946dd799f560ec088714e1dd55fcf9",
+  "functional_control": {
+    "run": 39961832265,
+    "expected_baseline_assertion_failures": 3,
+    "baseline_passed": 12,
+    "candidate_passed": 15,
+    "preflight_passed": 207,
+    "archive_sha256": "ee6fea38b21d790a7de11883aa9e753aafa8288c2935a99bb0d19bd18efedcdc"
+  },
+  "operator_control": {
+    "run": 39963391839,
+    "preflight_passed": 240,
+    "includes_fresh_toy_gateway_protocol": true,
+    "archive_sha256": "02db2e2fcbbd10eead98c637aa8795670049d409fdc2acb8276532ec5f48c342"
+  },
+  "development": {
+    "run": 39963795700,
+    "archive_sha256": "79a6e6721b96dc85c63448ec8d32bead28ac0e59ce75ee76f801eb1533e2edf2",
+    "seconds": 156.930502198,
+    "pages_retained_and_source_replayed": 126,
+    "arms": [
+      {
+        "pack": "pandas",
+        "arm": "baseline",
+        "status": "complete",
+        "pages": 54,
+        "rounds": 3,
+        "close_verified": true
+      },
+      {
+        "pack": "pandas",
+        "arm": "candidate",
+        "status": "complete",
+        "pages": 54,
+        "rounds": 3,
+        "close_verified": true
+      },
+      {
+        "pack": "prisma",
+        "arm": "baseline",
+        "status": "incomplete",
+        "pages": 18,
+        "rounds": 1,
+        "close_verified": false
+      },
+      {
+        "pack": "prisma",
+        "arm": "candidate",
+        "status": "incomplete",
+        "pages": 0,
+        "rounds": 0,
+        "close_verified": false
+      }
+    ],
+    "first_failure": {
+      "pack": "prisma",
+      "arm": "baseline",
+      "event_index": 264,
+      "identity": [
+        "CLAUDE.md",
+        "CLAUDE.md",
+        "file",
+        80,
+        97
+      ],
+      "entry": {
+        "kind": "symlink",
+        "target": "AGENTS.md"
+      },
+      "resolved_sha256": "5af933b4e2d24aca450438a09d227c808332192efe2adf6fb4d7c0eb27dff309"
+    },
+    "supervision": {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "command": [
+        "/home/runner/work/attocode/attocode/.venv/bin/python",
+        "-m",
+        "eval.quality.experiments",
+        "preview",
+        "--root",
+        "/home/runner/work/_temp/intelligence-experiment-39963795700-1",
+        "--payload"
+      ],
+      "exit_code": 1,
+      "log_truncated": false,
+      "monitoring": {
+        "controller_cpu_seconds": 46.038233703999985,
+        "samples": 549,
+        "wall_seconds": 46.05109680099983
+      },
+      "peak_disk_bytes": 655900672,
+      "peak_evidence_bytes": 22458368,
+      "peak_rss_bytes": 996536320,
+      "seconds": 155.935,
+      "status": "failed",
+      "wall_seconds": 155.935
+    }
+  },
+  "validation": {
+    "source_authored_questions": 24,
+    "questions_issued": 0,
+    "status": "not_started",
+    "author_exposure": "Not blind; implementer authored after source review. Candidate frozen before authoring outputs.",
+    "freshness_records_scanned": 36190,
+    "query_or_judged_anchor_collisions": 0,
+    "unparsed_JSONC_records": 1
+  },
+  "qualification": "Incomplete development due to a harness symlink-entry hash lookup. No ranking quality verdict, performance gain, validation run, scored retry or candidate adoption. All earlier rejected/incomplete studies remain unchanged.",
+  "retained_change": "Source admission resolves aliases through the pinned fixture inventory, with path-order, root, missing-target, cycle, 40-link and 4096-character bounds; public full-navigation readiness barrier and controls retained.",
+  "product": "The file-coverage candidate is withheld; all349 product files equal merged native-fixed baseline3bcce24. Native PR265 remains unreleased; published0.1.16 is unchanged.",
+  "verification": "Independent private stdlib Git/blob/hash/raw/source-coordinate/policy/judgment/order replay. Interrupted Prisma arms lack final identity/close admission. Actual serialized token counting delegated to frozen online checks.",
+  "public_archive": {
+    "path": "packages/code-intel/evals/results/2026-10-23-file-coverage.tar.gz",
+    "bytes": 4142817,
+    "sha256": "09a3374693386e599e6a5d8d7d1a613a05c3f6e44033c34aa6c89777f85ceca7",
+    "members": 728
+  }
+}
