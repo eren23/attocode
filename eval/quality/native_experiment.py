@@ -186,6 +186,19 @@ def worker(mode, workspace, evidence):
         write_json(evidence / 'result.json', outcome)
 
 
+def run_rust_trials(frozen, evidence, work, command):
+    for number in range(1, frozen['rust']['processes'] + 1):
+        name = f'rust-{number}'
+        env = {**os.environ, 'QUALITY_REQUIRE_REAL_LSP': '1', 'QUALITY_REAL_LSP_LANGUAGES': 'rust',
+               'QUALITY_LSP_TRACE_DIR': str(evidence / name), 'ATTOCODE_EXPERIMENT_EVIDENCE': str(evidence / name),
+               'RA_LOG': 'rust_analyzer=info', 'CARGO_NET_OFFLINE': 'true'}
+        command(name, [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
+                '--confcutdir=packages/code-intel/tests', '-q', '--basetemp=' + str(work / name),
+                '-o', 'cache_dir=' + str(work / (name + '-cache')),
+                '-p', 'eval.quality.experiment_origin', '--junitxml=' + str(evidence / name / 'rust.xml'),
+                frozen['rust']['test']], env)
+
+
 def run(root):
     frozen = json.loads(DESIGN.read_bytes())
     evidence, work = root / 'evidence/native', root / 'work/native'
@@ -243,16 +256,7 @@ def run(root):
                 if result['status'] != 'complete':
                     raise ValueError('incomplete OCaml worker')
                 row['result'] = result
-        for number in range(1, frozen['rust']['processes'] + 1):
-            name = f'rust-{number}'
-            env = {**os.environ, 'QUALITY_REQUIRE_REAL_LSP': '1', 'QUALITY_REAL_LSP_LANGUAGES': 'rust',
-                   'QUALITY_LSP_TRACE_DIR': str(evidence / name), 'ATTOCODE_EXPERIMENT_EVIDENCE': str(evidence / name),
-                   'RA_LOG': 'rust_analyzer=info', 'CARGO_NET_OFFLINE': 'true'}
-            command(name, [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
-                    '--confcutdir=packages/code-intel/tests', '-q', '--basetemp=' + str(work / name),
-                    '-o', 'cache_dir=' + str(work / (name + '-cache')),
-                    '-p', 'eval.quality.experiment_origin', '--junitxml=' + str(evidence / name / 'rust.xml'),
-                    frozen['rust']['test']], env)
+        run_rust_trials(frozen, evidence, work, command)
         report.update(status='complete', conclusion='Observed 12 fresh OCaml and 6 fresh Rust processes; '
                       'historical causes remain open. No parser or precision limit was changed.')
     finally:

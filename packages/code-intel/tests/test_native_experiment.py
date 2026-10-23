@@ -1,6 +1,8 @@
 """CI observer controls, with a native double and the real bounded wrapper."""
 import hashlib
 import json
+import subprocess
+import sys
 import threading
 
 import pytest
@@ -48,3 +50,52 @@ def test_native_observer_retains_actual_outcome_before_bounded_fallback(tmp_path
     assert parsed['error'] == ({'type': outcome, 'message': 'native diagnostic'}
                                if outcome in {'ValueError', 'RuntimeError'} else None)
     assert [r['stage'] for r in rows] == ['timeout_set', 'parse', 'reset']
+
+
+@pytest.mark.parametrize('corruption', [None, 'truncated', 'source_identity', 'selected_caller'])
+async def test_native_rust_trace_admission_checks_actual_fixture_capture(tmp_path, monkeypatch, corruption):
+    from test_lsp_diagnostics import existing_flow
+
+    from eval.quality.lsp_admission import expected_sources, verify_diagnostic
+
+    monkeypatch.setenv('RA_LOG', 'rust_analyzer=info')
+    _peer, path = await existing_flow(tmp_path, monkeypatch)
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    if corruption == 'truncated':
+        rows[-1]['truncated'] = True
+    elif corruption == 'source_identity':
+        rows[0]['sources']['eval/quality/lsp_trace.py'] = '0' * 64
+    elif corruption == 'selected_caller':
+        selected = next(row for row in rows if row['kind'] == 'inspection' and row['stage'] == 'selected_original')
+        selected['response']['data']['references'] = []
+    raw = ''.join(json.dumps(row) + '\n' for row in rows).encode()
+    if corruption:
+        with pytest.raises(ValueError):
+            verify_diagnostic(raw, expected_sources())
+    else:
+        result = verify_diagnostic(raw, expected_sources())
+        assert result['status'] == 'passed' and result['inspections'] == 4
+
+
+def test_zero_exit_rust_worker_with_incomplete_capture_stops_before_next_launch(tmp_path):
+    from eval.quality.native_experiment import run_rust_trials
+
+    evidence, work = tmp_path / 'evidence', tmp_path / 'work'
+    evidence.mkdir()
+    work.mkdir()
+    def command(name, arguments, env):
+        # Only the external worker is replaced; launch/zero-exit and emitted
+        # incomplete evidence are real, and sequencing/admission stay real.
+        trial = evidence / name
+        result = subprocess.run([sys.executable, '-c',
+            'import pathlib,sys; p=pathlib.Path(sys.argv[1]); p.mkdir(); '
+            '(p/"lsp-diagnostic-rust.jsonl").write_text(\'{"kind":"trace_start"}\\n\'); '
+            '(p/"rust.xml").write_text(\'<testsuite><testcase classname="test_real_language_server" '
+            'name="test_real_server_warmed_selected_definition_and_edit[rust]"/></testsuite>\')',
+            str(trial)], env=env, check=True)
+        return trial, {'name': name, 'exit_code': result.returncode, 'status': 'incomplete'}
+    frozen = {'rust': {'processes': 6, 'test': 'required-rust-test'}}
+    with pytest.raises(ValueError):
+        run_rust_trials(frozen, evidence, work, command)
+    assert sorted(p.name for p in evidence.iterdir()) == ['rust-1']
+    assert (evidence / 'rust-1/lsp-diagnostic-rust.jsonl').read_bytes() == b'{"kind":"trace_start"}\n'
