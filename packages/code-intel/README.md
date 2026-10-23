@@ -38,7 +38,9 @@ tests, such as `_test.dart` and Perl `.t` scripts and `t/` modules. Version
 0.1.12 makes `doctor --client claude` read the local-scope entry that
 `claude mcp add` writes to `~/.claude.json`. Version 0.1.13 fills compact search
 pages within their budget, offers bounded deeper searches, and repairs stale
-navigation indexes after successful restart parsing. Version 0.1.16 stabilizes tied symbol pages and reduces the Docker image while
+navigation indexes after successful restart parsing. Version 0.1.17 lets a later explicit inspection retry a failed selected-file parse
+after a one-second cooldown, preserving immediate-repeat and source guards.
+Version 0.1.16 stabilizes tied symbol pages and reduces the Docker image while
 preserving runtime contracts. It adds bounded online maintenance evidence; the
 preview and restart experiments did not justify product changes.
 Version 0.1.15 adds parser ownership by thread, one language-server stderr

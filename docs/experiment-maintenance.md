@@ -188,7 +188,7 @@ relevance, performance or agent-benefit evidence.
 
 The final operational matrix targets the standard GitHub-hosted `ubuntu-latest`
 x86_64 runner, with an explicit Linux/x86_64 assertion and a separate five-minute
-160-control preflight gate before the 1,200-second payload. Its control artifact
+277-control preflight gate before the 1,200-second payload. Its control artifact
 is separate and bound to the same source head. Ordinary product CI, real servers,
 Docker and published-install verification retain their Linux runner contracts.
 A successful matrix does not establish any cross-platform speed improvement.

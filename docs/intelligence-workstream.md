@@ -4,12 +4,17 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current release:** `attocode-code-intel` 0.1.15 (2026-10-22). See the
-[0.1.15 release notes](intelligence-0.1.15.md) and
-[GitHub release](https://github.com/eren23/attocode/releases/tag/intel-v0.1.15).
-It adds parser ownership by thread, one language-server stderr reader, bounded
-recovery without static callers, and release installation checks on GitHub runners.
-Ranking remains unchanged.
+**Current version:** `attocode-code-intel` 0.1.17 (2026-10-23). See the
+[0.1.17 release notes](intelligence-0.1.17.md). Published 0.1.16 remains immutable.
+The patch delivers the already-merged selected-file recovery cooldown, with
+unchanged dependencies, native100ms and Rust2s/four-attempt bounds. The original
+intermittent triggers remain unproven. The [completed relevance comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-file-coverage-routed.md)
+and [matched restart comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-restart-routed.md)
+reject their candidates; neither optimization ships. The release gate requires
+fresh36-pack compatibility on an identical final tree, all normal CI and actual
+PyPI install/0.1.16-upgrade verification. The GitHub release records publication.
+
+The following checkpoints preserve earlier release and experiment history.
 
 **Ordered follow-up, 2026-10-22:** the published 0.1.15 wheel and source
 distribution passed all 18 clean-install/previous-version-upgrade phases on a
