@@ -1,0 +1,356 @@
+{
+  "status": "complete",
+  "decision": "reject",
+  "baseline_commit": "a2c91df0062ed380d35c9fd50dc4cdb679cc7cdd",
+  "candidate_commit": "c613670883d51e730edbadd9c0c0e68df6e99fb3",
+  "candidate_sha256": "feb344afbddd7fb0f8e2166b8b100f6ef1946dd799f560ec088714e1dd55fcf9",
+  "operator_control": {
+    "run": 39981351386,
+    "cases_passed": 404,
+    "archive_sha256": "2d1222720d4d08a32fe09c4f29c0bf8e31d1952c6e7e14a648f39ab0cb326ee7"
+  },
+  "development": {
+    "stage": "development",
+    "pages": 438,
+    "decision": {
+      "status": "complete",
+      "decision": "reject",
+      "gain_gate": false,
+      "latency_gate": true,
+      "losses": [],
+      "control_changes": [
+        [
+          "prisma",
+          0,
+          "prisma:search-batch-development-3",
+          5,
+          2000,
+          ""
+        ],
+        [
+          "prisma",
+          0,
+          "prisma:search-batch-development-3",
+          5,
+          8000,
+          ""
+        ],
+        [
+          "prisma",
+          0,
+          "prisma:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "prisma",
+          0,
+          "prisma:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ],
+        [
+          "prisma",
+          1,
+          "prisma:search-batch-development-3",
+          5,
+          2000,
+          ""
+        ],
+        [
+          "prisma",
+          1,
+          "prisma:search-batch-development-3",
+          5,
+          8000,
+          ""
+        ],
+        [
+          "prisma",
+          1,
+          "prisma:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "prisma",
+          1,
+          "prisma:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ],
+        [
+          "prisma",
+          2,
+          "prisma:search-batch-development-3",
+          5,
+          2000,
+          ""
+        ],
+        [
+          "prisma",
+          2,
+          "prisma:search-batch-development-3",
+          5,
+          8000,
+          ""
+        ],
+        [
+          "prisma",
+          2,
+          "prisma:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "prisma",
+          2,
+          "prisma:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ],
+        [
+          "starship",
+          0,
+          "starship:search-batch-development-3",
+          5,
+          2000,
+          ""
+        ],
+        [
+          "starship",
+          0,
+          "starship:search-batch-development-3",
+          5,
+          8000,
+          ""
+        ],
+        [
+          "starship",
+          0,
+          "starship:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "starship",
+          0,
+          "starship:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ],
+        [
+          "starship",
+          1,
+          "starship:search-batch-development-3",
+          5,
+          2000,
+          ""
+        ],
+        [
+          "starship",
+          1,
+          "starship:search-batch-development-3",
+          5,
+          8000,
+          ""
+        ],
+        [
+          "starship",
+          1,
+          "starship:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "starship",
+          1,
+          "starship:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ],
+        [
+          "starship",
+          2,
+          "starship:search-batch-development-3",
+          5,
+          2000,
+          ""
+        ],
+        [
+          "starship",
+          2,
+          "starship:search-batch-development-3",
+          5,
+          8000,
+          ""
+        ],
+        [
+          "starship",
+          2,
+          "starship:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "starship",
+          2,
+          "starship:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ],
+        [
+          "gh-cli",
+          0,
+          "gh-cli:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "gh-cli",
+          0,
+          "gh-cli:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ],
+        [
+          "gh-cli",
+          1,
+          "gh-cli:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "gh-cli",
+          1,
+          "gh-cli:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ],
+        [
+          "gh-cli",
+          2,
+          "gh-cli:search-batch-development-3",
+          24,
+          2000,
+          ""
+        ],
+        [
+          "gh-cli",
+          2,
+          "gh-cli:search-batch-development-3",
+          24,
+          8000,
+          ""
+        ]
+      ],
+      "gains_by_round": {
+        "0": [
+          [
+            "starship",
+            "starship:search-batch-development-2",
+            "src/modules/utils/directory.rs"
+          ]
+        ],
+        "1": [
+          [
+            "starship",
+            "starship:search-batch-development-2",
+            "src/modules/utils/directory.rs"
+          ]
+        ],
+        "2": [
+          [
+            "starship",
+            "starship:search-batch-development-2",
+            "src/modules/utils/directory.rs"
+          ]
+        ]
+      },
+      "warm_p95_ms": {
+        "baseline": 341.6069499999992,
+        "candidate": 348.2142489999944
+      },
+      "pairs": 219,
+      "qualification": "Implementer-authored non-exhaustive labeled file/excerpt coverage; no agent-completion claim."
+    },
+    "archive_sha256": "af4fd15fc5d04d521712390d1557ce5536c03aa018019de1befe950bc9ec1778",
+    "unique_worker_pids": [
+      2466,
+      2506,
+      2710,
+      2718,
+      2912,
+      2921,
+      3089,
+      3095
+    ]
+  },
+  "development_run": 39981842460,
+  "development_seconds": 254.14556702000002,
+  "development_supervision": {
+    "cleanup_errors": [],
+    "cleanup_verified": true,
+    "command": [
+      "/home/runner/work/attocode/attocode/.venv/bin/python",
+      "-m",
+      "eval.quality.experiments",
+      "preview",
+      "--root",
+      "/home/runner/work/_temp/intelligence-experiment-39981842460-1",
+      "--payload"
+    ],
+    "exit_code": 0,
+    "log_truncated": false,
+    "monitoring": {
+      "controller_cpu_seconds": 73.759048598,
+      "samples": 895,
+      "wall_seconds": 73.77246730200031
+    },
+    "peak_disk_bytes": 665141248,
+    "peak_evidence_bytes": 23953408,
+    "peak_rss_bytes": 956608512,
+    "seconds": 252.895,
+    "status": "passed",
+    "wall_seconds": 252.895
+  },
+  "validation": {
+    "questions": 24,
+    "questions_issued": 0,
+    "status": "not_started_development_rejected"
+  },
+  "exposure": "Development12 questions are consumed. The24 Gson/Redis validation questions are precommitted and previously unissued, source-authored and publicly archived; not newly authored or blind.",
+  "original_attempt": {
+    "run": 39963795700,
+    "status": "incomplete",
+    "decision": null,
+    "archive_path": "packages/code-intel/evals/results/2026-10-23-file-coverage.tar.gz",
+    "archive_sha256": "09a3374693386e599e6a5d8d7d1a613a05c3f6e44033c34aa6c89777f85ceca7",
+    "qualification": "Preserved unchanged. No old phase resumed or reclassified; candidate and labels remain untuned."
+  },
+  "product_candidate_retained": false,
+  "verification": "Independent ZIP/Git/pinned source/decoding/coordinates/judgment/origin/route/request/temporal-order/quality-arithmetic/latency replay. Full serialized MCP token counting delegated to the frozen online implementation. No tested imports on the Mac.",
+  "published0.1.16": "unchanged",
+  "public_archive": {
+    "path": "packages/code-intel/evals/results/2026-10-23-file-coverage-routed.tar.gz",
+    "bytes": 5182092,
+    "sha256": "29c681b4afece81f9f215a51153cdde0d0bc9f1e022c9bf34f9ae17ef975392b",
+    "members": 727
+  }
+}

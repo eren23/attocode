@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   continuation route. The fingerprint shortcut misses its adoption threshold
   (36.67→35.60 seconds median restart, required ratio ≤0.75) and is omitted.
   Retain full-readiness admission, routing controls and both attempt archives.
+- Complete the corrected file-coverage comparison: 438 pages yield one distinct
+  judged-file gain per round (required two), zero judged losses and 30 changes
+  to exact-question controls. Reject and remove the candidate; the 24 reserved
+  validation questions remain unissued. Preserve the raw/source evidence.
 
 ## [Intelligence 0.1.16] - 2026-10-23
 
