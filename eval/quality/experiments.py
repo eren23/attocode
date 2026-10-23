@@ -58,6 +58,7 @@ def payload(name, root):
                    *['packages/code-intel/tests/' + test for test in TESTS]]
         subprocess.run(command, cwd=REPO, check=True)
     elif name == 'broad':
+        os.environ['ATTOCODE_CORPUS_EVIDENCE'] = str(root / 'evidence/broad')
         subprocess.run([sys.executable, '-m', 'eval.quality.corpus', '--output',
                         str(root / 'evidence/workflows.json')], cwd=REPO, check=True)
         result = json.loads((root / 'evidence/workflows.json').read_text())

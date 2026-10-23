@@ -335,7 +335,14 @@ def main():
     parser.add_argument("--spec", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     capture_root = os.environ.get("ATTOCODE_CORPUS_EVIDENCE")
+    if capture_root:
+        grammar_cache = os.environ.get("QUALITY_GRAMMAR_CACHE")
+        if grammar_cache and Path(grammar_cache).is_dir():
+            import tree_sitter_language_pack as grammar_pack
+            grammar_pack.configure(cache_dir=grammar_cache)
     if args.worker:
+        if not args.spec:
+            parser.error("Worker requires a source specification")
         journal = None
         if capture_root:
             from eval.quality.corpus_capture import digest
@@ -386,6 +393,12 @@ def main():
               "model_runs": 0, "scope": "Development evidence anchors, not exhaustive recall or agent benefit"}
     report["git_version"] = subprocess.check_output(["git", "--version"], text=True).strip()
     workspace_root = None
+    controller_journal = None
+    if capture_root:
+        from eval.quality.experiment_evidence import Journal, assert_engine
+        selected_engine = Path(os.environ["ATTOCODE_EXPERIMENT_ENGINE"])
+        controller_journal = Journal(Path(capture_root) / "controller", 2 * 2**20)
+        controller_journal.response({"event": "origin_start"}, {"pid": os.getpid(), "origins": assert_engine(selected_engine)})
     try:
         with tempfile.TemporaryDirectory(prefix="quality-corpus-") as tmp:
             workspace_root = Path(tmp)
@@ -452,6 +465,12 @@ def main():
     finally:
         if not args.ranking:
             report.update(summarize(report["repositories"], selected_ids))
+        if controller_journal is not None:
+            try:
+                controller_journal.response({"event": "origin_end"}, {"pid": os.getpid(), "origins": assert_engine(selected_engine)})
+            except Exception as error:
+                report.update(status="incomplete", passed=False, complete=False, reason="engine_origin",
+                              origin_error=str(error)[:2000])
         report["cleanup_verified"] = workspace_root is not None and not workspace_root.exists()
         if not report["cleanup_verified"]:
             report.update(status="incomplete", passed=False, complete=False, reason="cleanup_unverified")

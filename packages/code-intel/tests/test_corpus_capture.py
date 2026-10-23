@@ -2,6 +2,7 @@
 import hashlib
 import json
 import sys
+from pathlib import Path
 
 import pytest
 from mcp.types import CallToolResult, TextContent
@@ -18,7 +19,7 @@ def journal_rows(root):
 async def test_broad_raw_mcp_is_durable_before_json_and_budget_rejection(tmp_path, failure):
     from eval.quality.corpus_capture import RecordedGateway
 
-    text = '{broken' if failure == 'malformed' else json.dumps({'data': 'x' * 10000})
+    text = '{broken' if failure == 'malformed' else json.dumps({'data': 'x' * 100000})
     class ExternalPeer:
         async def execute_mcp(self, tool, arguments):
             return CallToolResult(content=[TextContent(type='text', text=text)])
@@ -119,10 +120,11 @@ async def test_broad_unsupported_and_limited_checks_remain_honest_outcomes(tmp_p
 @pytest.mark.parametrize('status', ['failed', 'incomplete'])
 def test_broad_first_bad_pack_prevents_second_pack_launch(tmp_path, monkeypatch, status):
     import yaml
+    from attocode_intel import __file__ as package_file
 
     from eval.quality import corpus
-
     monkeypatch.setenv('ATTOCODE_CORPUS_EVIDENCE', str(tmp_path / 'captures'))
+    monkeypatch.setenv('ATTOCODE_EXPERIMENT_ENGINE', str(Path(package_file).parent))
     specs = [{'id': n, 'repo': 'owner/' + n, 'commit': 'a' * 40, 'language': 'python',
               'file': 'source.py', 'source_sha256': hashlib.sha256(b'pass\n').hexdigest(), 'queries': []} for n in ('one', 'two')]
     manifest = tmp_path / 'packs.yaml'
@@ -181,7 +183,7 @@ async def test_broad_worker_admission_replays_actual_capture_before_advancing(tm
     spec = {'id': 'toy', 'repo': 'owner/toy', 'commit': 'a' * 40, 'file': 'main.py',
             'symbol': 'helper', 'anchor': 'def helper(', 'language': 'python', 'caller': 'main.py',
             'importer': None, 'test': None, 'queries': []}
-    selected = __import__('pathlib').Path(package_file).parent
+    selected = Path(package_file).parent
     fixture = Journal(evidence / 'fixture', 2**20)
     fixture_ref = fixture.response({'event': 'fixture_pinned', 'repo': spec['repo'],
                                    'commit': spec['commit'], 'tree': 'toy-tree'}, source_manifest(root))
