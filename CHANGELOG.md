@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   native parse after a one-second cooldown. Immediate repeats remain bounded;
   source/parser guards, the 100 ms parse limit and Rust precision limits remain.
 
+### Evaluation maintenance
+
+- Resolve returned source aliases through the pinned fixture inventory before
+  checking their hashes. Reject escaped, missing, cyclic and invalid traversal
+  targets; retain complete raw observations when admission fails.
+- Preserve the incomplete file-coverage study and omit its ranking candidate.
+  Full-navigation readiness controls now require exact parse/reference counts.
+
 ## [Intelligence 0.1.16] - 2026-10-23
 
 ### Maintenance and verification

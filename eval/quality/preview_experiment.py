@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 from unittest.mock import patch
 
 from eval.quality.experiment_evidence import Journal, assert_engine, encode, read_source
-from eval.quality.fixture_identity import source_manifest
+from eval.quality.fixture_identity import source_entry, source_manifest
 from eval.quality.runner import REPO, write_json
 
 DESIGN = REPO / 'packages/code-intel/evals/designs/2026-10-23-preview-windows.json'
@@ -175,7 +175,7 @@ def admit_worker(evidence, workspace, spec, design, observation):
         elif kind == 'source_lineage':
             key = tuple(request['identity'])
             if value['producer'] != 'metadata':
-                require(before[key[0]]['sha256'] == value['source_sha256'], 'source lineage differs from pinned fixture')
+                require(source_entry(before, key[0])['sha256'] == value['source_sha256'], 'source lineage differs from pinned fixture')
             policies[key] = value
         elif kind == 'mcp_response':
             require(pending is None or not replayed, 'unvalidated scored raw capture')

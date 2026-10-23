@@ -52,12 +52,15 @@ def test_actual_inventory_matches_committed_blobs_and_link_targets(tmp_path):
     assert source_manifest(root) == pinned_manifest(cache, {'entries': entries})
 
 
-def capture(tmp_path):
+def capture(tmp_path, *, alias=False):
     root, evidence = tmp_path / 'work', tmp_path / 'evidence'
     root.mkdir()
     (root / 'test.py').write_bytes(b'alpha\n')
+    selected = 'alias.py' if alias else 'test.py'
+    if alias:
+        (root / 'alias.py').symlink_to('test.py')
     spec = {'id': 'toy', 'questions': [{'id': 'q', 'query': 'alpha', 'kind': 'behavior',
-            'split': 'development', 'file': 'test.py', 'anchors': [{'line': 1, 'quote': 'alpha'}]}]}
+            'split': 'development', 'file': selected, 'anchors': [{'line': 1, 'quote': 'alpha'}]}]}
     design = {'rounds': [['baseline', 'candidate']], 'requests': {'depths': [5], 'budgets': [2000],
               'scoped_depth': 5, 'scoped_budget': 2000}}
     journal = Journal(evidence / 'journal', 128 * 1024)
@@ -66,10 +69,10 @@ def capture(tmp_path):
     from eval.quality.preview_experiment import page_identity
     pages = []
     for arm in design['rounds'][0]:
-        for scope in ('', 'test.py'):
-            hit = {'file_path': 'test.py', 'name': 'alpha', 'chunk_type': 'function', 'score': 1,
+        for scope in ('', selected):
+            hit = {'file_path': selected, 'name': 'alpha', 'chunk_type': 'function', 'score': 1,
                    'line': 1, 'end_line': 1, 'snippet_start_line': 1, 'snippet_end_line': 1, 'snippet': 'alpha'}
-            identity = ['test.py', 'alpha', 'function', 1, 1]
+            identity = [selected, 'alpha', 'function', 1, 1]
             policy = {'producer': 'body_index', 'errors': 'replace', 'newlines': 'universal',
                       'source_sha256': hashlib.sha256(b'alpha\n').hexdigest()}
             journal.response({'event': 'source_lineage', 'identity': identity}, policy)
@@ -115,3 +118,8 @@ def test_raw_capture_damage_is_incomplete_before_next_worker(tmp_path, damage):
         row['arguments']['query'] = 'beta'
     with pytest.raises((ValueError, FileNotFoundError)):
         admit_worker(evidence, root, spec, design, observation)
+
+
+def test_source_alias_hash_is_checked_against_its_pinned_target(tmp_path):
+    root, evidence, spec, design, observation = capture(tmp_path, alias=True)
+    assert admit_worker(evidence, root, spec, design, observation) == observation
