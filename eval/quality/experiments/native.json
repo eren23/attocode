@@ -1,7 +1,12 @@
 {
   "experiment": "native",
   "schema_version": 1,
-  "limits": {"seconds": 1200, "disk_bytes": 2147483648, "rss_bytes": 2147483648, "evidence_bytes": 67108864},
+  "limits": {
+    "seconds": 1200,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
   "ocaml": {
     "repo": "ocaml/ocaml",
     "commit": "5fbe515aa215909e28328a059701da430bc3cff8",
@@ -9,14 +14,21 @@
     "sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
     "symbol": "type_expression",
     "line": 7378,
-    "direct_processes": 6,
-    "gateway_processes": 6,
+    "direct_processes": 0,
+    "gateway_processes": 2,
     "profile": "daily",
     "watch": false,
-    "decode": {"errors": "replace", "newlines": "universal"}
+    "decode": {
+      "errors": "replace",
+      "newlines": "universal"
+    },
+    "recovery_control": {
+      "injected_timeout_micros": 1,
+      "cooldown_wait_seconds": 1.1
+    }
   },
   "rust": {
-    "processes": 6,
+    "processes": 0,
     "test": "packages/code-intel/tests/test_real_language_server.py::test_real_server_warmed_selected_definition_and_edit[rust]",
     "toolchain": "1.94.1",
     "warmup_seconds": 30,
@@ -25,9 +37,33 @@
     "production_precision_seconds": 2,
     "production_attempts": 4,
     "unused_partial_allowed": true,
-    "required": ["selected original verified with caller", "unused namesake has no caller", "version2 edit moves caller to second target at line4", "old target has no caller", "bounded protocol and existing-consumer stderr", "clean shutdown"]
+    "required": [
+      "selected original verified with caller",
+      "unused namesake has no caller",
+      "version2 edit moves caller to second target at line4",
+      "old target has no caller",
+      "bounded protocol and existing-consumer stderr",
+      "clean shutdown"
+    ]
   },
   "parser_timeout_micros": 100000,
-  "evidence": ["exact source/operator/fixture identity", "parent and child origins", "grammar and installed parser hashes", "real parser and thread identity", "wall and thread CPU durations", "native outcome and exception before fallback", "raw gateway responses before validation", "close and partial failure evidence"],
-  "decision": "Diagnostics only. Natural misses and exceptions remain observations. A completed run does not establish the historical cause or a failure frequency. Fix only a demonstrated product defect with a separate focused RED; otherwise leave the cause open and continue. Stop on first harness, correctness or resource fault; incomplete decision is null. No limit or retry changes."
+  "evidence": [
+    "exact source/operator/fixture identity",
+    "parent and child origins",
+    "grammar and installed parser hashes",
+    "real parser and thread identity",
+    "wall and thread CPU durations",
+    "native outcome and exception before fallback",
+    "raw gateway responses before validation",
+    "close and partial failure evidence"
+  ],
+  "decision": "Controlled native recovery proof only: first raw partial response preserved, later explicit baseline remains partial and candidate recovers identical definition/source at normal100ms. No retries of a failed trial, no inference about historical native exception/scheduling cause. Rust unchanged; existing actual native CI remains required.",
+  "recovery_pair": {
+    "baseline_commit": "303dbbb42e9c6a54c138c7a3efcfc2a0524b0aec",
+    "arms": [
+      "baseline",
+      "candidate"
+    ],
+    "scope": "Two fresh native gateway processes on identical pinned OCaml source; injected1us fault is a diagnostic control, normal recovery budget100000us. No historical CPU/scheduling attribution."
+  }
 }
