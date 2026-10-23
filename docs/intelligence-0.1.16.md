@@ -24,10 +24,17 @@ Restart the MCP connection after upgrading so it loads the new package.
   validation, source identities and decoding policies, loaded package origins,
   first failures, resource observations and owned-workspace cleanup. The full
   compatibility operator uses these checks without changing ordinary output.
-  The full matrix targets a GitHub-hosted ARM64 Mac with a platform preflight;
-  ordinary product and release checks retain Linux coverage. Two initial Linux
-  matrix attempts remain incomplete, including a 600-second deadline after
-  twenty-five packs; no Linux full-matrix or cross-platform speed claim follows.
+  The full matrix targets GitHub-hosted Linux with a same-source platform
+  preflight. Three initial attempts remain incomplete: missing fixture history,
+  then Linux and Mac deadlines after twenty-five and twenty-two packs.
+  The 600-second ceiling remains unchanged.
+- **Less expensive resource observation.** Disk accounting uses directory-entry
+  metadata and includes directory symlinks themselves without following their
+  targets. On one pinned source-only tree, median counter CPU time falls
+  153→54 ms while byte totals match. This is a counter measurement, with no
+  full-matrix speed forecast or product performance claim. The
+  [diagnostic report](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-maintenance-cost.md)
+  preserves the failed setups, real filesystem controls and frozen comparison.
 - **Bounded distributions.** Source distributions exclude archived evaluation
   results; the tagged repository retains those public reports and raw archives.
 - **Installation verification.** Candidate and actual PyPI checks compare source,

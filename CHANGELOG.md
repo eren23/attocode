@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Maintain bounded online diagnostics with durable raw responses, explicit
   source decoding and coordinates, selected-engine checks and first-failure
   stopping. Preserve incomplete and rejected attempts.
+- Reduce resource-observer traversal overhead and count directory symlinks
+  themselves without following targets. A pinned source-only counter comparison
+  measures 153→54 ms median CPU time; resource caps and sampling are unchanged.
 - The fresh contiguous-preview candidate is rejected: no judged gains, twelve
   excerpt losses and six exact-control changes. The new restart comparison stops
   incomplete on baseline reference differences, before any candidate benchmark

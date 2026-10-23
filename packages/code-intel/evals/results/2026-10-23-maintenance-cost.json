@@ -1,0 +1,234 @@
+{
+  "archive": {
+    "bytes": 6190911,
+    "members": 618,
+    "path": "packages/code-intel/evals/results/2026-10-23-maintenance-cost.tar.gz",
+    "sha256": "53ada823c40915f73733e28fd760f66a26bbb78a1e8197d98e69550b1c8daad7"
+  },
+  "archive_builder_sha256": "dd95bcb9216e35af126ce4c38a662b913a2c4b2b578b8ae560916c90d45d025a",
+  "artifacts": [
+    {
+      "cleanup_verified": true,
+      "conclusion": "failure",
+      "head": "f8c2cca1b6710d6fdef369fa041d55d9c4d9825d",
+      "name": "cost-controls-attempt-1",
+      "run": 39906589946,
+      "seconds": 21.863582298999994,
+      "sha256": "e65f177f09ba4745d9813da74c8adfc6f313ecc09c782c4a4a2e30993a947c26",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39906589946",
+      "xml": [
+        {
+          "cases": 158,
+          "failed": [
+            {
+              "message": "AttributeError: 'types.SimpleNamespace' object has no attribute 'process_time'",
+              "name": "test_wall_deadline_stops_child_when_monotonic_clock_does_not_advance"
+            }
+          ],
+          "passed": 157,
+          "path": "intelligence-experiment-39906589946-1/evidence/preflight.xml"
+        }
+      ]
+    },
+    {
+      "cleanup_verified": true,
+      "conclusion": "success",
+      "head": "03645eec84007d776ad0670a0afa593c973f3455",
+      "name": "cost-controls-green",
+      "run": 39906755502,
+      "seconds": 19.911656591999996,
+      "sha256": "7ef4ae175854c37d8c23c9a1e8f3ae45a43973046e2c05145b8d1491e209e18c",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39906755502",
+      "xml": [
+        {
+          "cases": 158,
+          "passed": 158,
+          "path": "intelligence-experiment-39906755502-1/evidence/preflight.xml"
+        }
+      ]
+    },
+    {
+      "cleanup_verified": true,
+      "conclusion": "failure",
+      "head": "03645eec84007d776ad0670a0afa593c973f3455",
+      "name": "cost-attempt-1",
+      "run": 39907009591,
+      "seconds": 17.692397420999953,
+      "sha256": "6a306b39c15c08d74e2c67c7763af1a4481b2398d985e4d19ccb1b8965b3fa89",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39907009591",
+      "xml": []
+    },
+    {
+      "cleanup_verified": true,
+      "conclusion": "failure",
+      "head": "7a05673ab7b00f1996146cf68bbbef8e20526af3",
+      "name": "cost-profiler-red",
+      "run": 39907256283,
+      "seconds": 19.125818334999963,
+      "sha256": "1398146551fea54c751653d80bc7aec95ee23312bbb0acdcba22691005dfadab",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39907256283",
+      "xml": [
+        {
+          "cases": 159,
+          "failed": [
+            {
+              "message": "TypeError: Cannot create or construct a <class 'pstats.Stats'> object from 'Fri Oct 23 05:43:02 2026    /home/runner/work/_temp/intelligence-experiment-39907256283-1/work/pytest/test_executor_profiles_forward0/workspace-0000.prof'",
+              "name": "test_executor_profiles_forward_results_and_errors_without_competing_profiler"
+            }
+          ],
+          "passed": 158,
+          "path": "intelligence-experiment-39907256283-1/evidence/preflight.xml"
+        }
+      ]
+    },
+    {
+      "cleanup_verified": true,
+      "conclusion": "success",
+      "head": "8db85eb0006b4cfa975b90ad3b091624c7256155",
+      "name": "cost-profiler-green",
+      "run": 39907471196,
+      "seconds": 21.25244021200001,
+      "sha256": "289438f4824963680e7eaf24bd02e9b81bddd4a38a05e64ad0077de438067a0f",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39907471196",
+      "xml": [
+        {
+          "cases": 159,
+          "passed": 159,
+          "path": "intelligence-experiment-39907471196-1/evidence/preflight.xml"
+        }
+      ]
+    },
+    {
+      "cleanup_verified": true,
+      "conclusion": "success",
+      "head": "8db85eb0006b4cfa975b90ad3b091624c7256155",
+      "name": "cost-attempt-2",
+      "run": 39907601223,
+      "seconds": 191.537095355,
+      "sha256": "8282fe3bcbfcc0fb6dc2cfa10ea9ecb879c501acfa7c1bd64f3782bc8f44141f",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39907601223",
+      "xml": []
+    },
+    {
+      "cleanup_verified": true,
+      "conclusion": "failure",
+      "head": "7d9184a9361ced1d4826c98f6db703ecbedea1f2",
+      "name": "disk-counter-red",
+      "run": 39908299593,
+      "seconds": 20.571115180000007,
+      "sha256": "233dfdafeb05a01cac40b821456cadace6428df24a3eaa34e076d01d854e6cf3",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39908299593",
+      "xml": [
+        {
+          "cases": 161,
+          "failed": [
+            {
+              "message": "AssertionError: assert 1048576 == 1052672\n +  where 1048576 = <function disk_bytes at 0x7efdbf6de3e0>(PosixPath('/home/runner/work/_temp/intelligence-experiment-39908299593-1/work/pytest/test_disk_accounting_counts_li1/owned'))",
+              "name": "test_disk_accounting_counts_links_without_following_external_targets[directory]"
+            }
+          ],
+          "passed": 160,
+          "path": "intelligence-experiment-39908299593-1/evidence/preflight.xml"
+        }
+      ]
+    },
+    {
+      "cleanup_verified": true,
+      "conclusion": "success",
+      "head": "f826bfeace21944204bdb0694b6face1e3e1c5cd",
+      "name": "disk-counter-green",
+      "run": 39908755587,
+      "seconds": 17.82420448000005,
+      "sha256": "393f42373547c06da2d13844c6982df766ff4679e582ccd6f7b334c5a374542c",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39908755587",
+      "xml": [
+        {
+          "cases": 161,
+          "passed": 161,
+          "path": "intelligence-experiment-39908755587-1/evidence/preflight.xml"
+        }
+      ]
+    },
+    {
+      "cleanup_verified": true,
+      "conclusion": "success",
+      "head": "f826bfeace21944204bdb0694b6face1e3e1c5cd",
+      "name": "disk-cost-attempt-1",
+      "run": 39908894535,
+      "seconds": 20.521201531000003,
+      "sha256": "6931d622966eb67e4a7873dec0fbd2ec9de295d9f335f77ab412f744862cca1d",
+      "workflow": "https://github.com/eren23/attocode/actions/runs/39908894535",
+      "xml": []
+    }
+  ],
+  "counter": {
+    "archive_sha256": "6931d622966eb67e4a7873dec0fbd2ec9de295d9f335f77ab412f744862cca1d",
+    "decision": "retain_counter",
+    "delegations": [
+      "Physical allocated-byte and symlink-directory observations come from the source-bound online independent filesystem oracle; host replay does not recreate the fixture.",
+      "Pinned Git materialization and complete fixture before/after equality are source-bound online checks."
+    ],
+    "fixture_entries": 9758,
+    "head": "f826bfeace21944204bdb0694b6face1e3e1c5cd",
+    "measurements": 16,
+    "medians": {
+      "baseline": {
+        "cpu_seconds": 0.15295172700000048,
+        "wall_seconds": 0.15297253499999997
+      },
+      "candidate": {
+        "cpu_seconds": 0.05447424699999903,
+        "wall_seconds": 0.05447360550000013
+      }
+    },
+    "oracle": {
+      "baseline": 156958874,
+      "candidate": 156958874,
+      "directory_symlink_bytes": 0,
+      "entries": 9758
+    },
+    "owned_cleanup_verified": true,
+    "ratios": {
+      "cpu_seconds": 0.35615319989161587,
+      "wall_seconds": 0.3561005607967479
+    },
+    "run": 39908894535,
+    "warmups": 2
+  },
+  "decision": "retain_harness_counter",
+  "failure_retention": "All failed clock/profiler/accounting attempts and corrected GREEN artifacts retained; no failed attempt relabeled as passing.",
+  "full_matrix": "Three prior incomplete attempts remain separate and incomplete. No full matrix rerun or release pass is claimed here.",
+  "producer_heads": [
+    "f8c2cca1b6710d6fdef369fa041d55d9c4d9825d",
+    "03645eec84007d776ad0670a0afa593c973f3455",
+    "7a05673ab7b00f1996146cf68bbbef8e20526af3",
+    "8db85eb0006b4cfa975b90ad3b091624c7256155",
+    "7d9184a9361ced1d4826c98f6db703ecbedea1f2",
+    "f826bfeace21944204bdb0694b6face1e3e1c5cd"
+  ],
+  "profile": {
+    "archive_sha256": "8282fe3bcbfcc0fb6dc2cfa10ea9ecb879c501acfa7c1bd64f3782bc8f44141f",
+    "checks": 8,
+    "consumed_questions": 4,
+    "head": "8db85eb0006b4cfa975b90ad3b091624c7256155",
+    "limits": [
+      "Global CPython3.12 profile callbacks include concurrent-thread activity; cumulative profile attribution is not isolated CPU time.",
+      "Direct thread CPU/scope wall counters exclude profile serialization but profiling itself changes timings.",
+      "Diagnostic retains source blob cache unlike the full matrix; monitor-cost magnitude cannot be projected directly to full-matrix speed.",
+      "Exact fixture/source/origin/check/source-span and token-budget semantics are delegated to the source-bound online admit_worker."
+    ],
+    "monitoring": {
+      "controller_cpu_seconds": 94.684515435,
+      "samples": 466,
+      "wall_seconds": 95.00822050599987
+    },
+    "owned_cleanup_verified": true,
+    "profiles": 106,
+    "raw_mcp_responses": 52,
+    "run": 39907601223,
+    "seconds": 191.537095355
+  },
+  "schema_version": 1,
+  "scope": "Metadata-counter comparison only; no product, restart, relevance or full-matrix speed benefit.",
+  "status": "complete"
+}

@@ -186,19 +186,30 @@ admitted result and exact source-tree equivalence rather than changing the
 candidate to add a passing report. This is compatibility evidence, not fresh
 relevance, performance or agent-benefit evidence.
 
-The final operational matrix targets the standard GitHub-hosted `macos-15`
-ARM64 runner, with an explicit Darwin/ARM64 assertion and a separate five-minute
-158-control preflight gate before the 600-second payload. Its control artifact
+The final operational matrix targets the standard GitHub-hosted `ubuntu-latest`
+x86_64 runner, with an explicit Linux/x86_64 assertion and a separate five-minute
+160-control preflight gate before the 600-second payload. Its control artifact
 is separate and bound to the same source head. Ordinary product CI, real servers,
 Docker and published-install verification retain their Linux runner contracts.
-A successful Mac matrix does not establish Linux full-matrix completion or any
-cross-platform speed improvement.
+A successful matrix does not establish any cross-platform speed improvement.
 
 The first Linux attempt stopped after twelve packs because its shallow checkout
 lacked the pinned historical frontend commit. Exact-commit setup corrected that
 fault. The second Linux attempt hit the 600-second deadline after twenty-five
 admitted packs (200 checks: 109 passed, 84 limited, seven unsupported) and 100
-retrieval observations. Both attempts remain incomplete, with raw artifacts and
-cleanup evidence retained. The runtime-target adjustment preserves all source
-anchors, fresh processes, request grids, resource caps and first-failure rules;
-it does not enable the withheld structural-fingerprint optimization.
+retrieval observations. A subsequent Mac attempt also hit the deadline after
+twenty-two admitted packs (176 checks: 101 passed, 72 limited, three unsupported)
+and 88 observations. All three attempts remain incomplete, with raw artifacts
+and cleanup evidence retained; the platform change did not solve the ceiling.
+
+The [resource-observer investigation](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-maintenance-cost.md)
+then measured substantial monitor CPU cost and separately compared metadata
+counters on one pinned source-only tree. The retained traversal uses fresh
+directory entries, preserves conservative logical/allocated byte accounting and
+includes directory-link objects without following targets. Median counter CPU
+time falls 153→54 ms across eight alternating pairs, with matching byte totals;
+this is no full-matrix speed prediction. Real filesystem RED/GREEN controls and
+all failed diagnostic setups are archived. Temporary diagnostic entry points
+were removed after use. The resulting Linux retry preserves all source anchors,
+fresh processes, request grids, resource caps and first-failure rules; it does
+not enable the withheld structural-fingerprint optimization.
