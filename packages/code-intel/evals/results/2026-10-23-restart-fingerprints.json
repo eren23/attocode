@@ -1,0 +1,91 @@
+{
+  "date": "2026-10-23",
+  "status": "incomplete",
+  "decision": null,
+  "candidate_shipped": false,
+  "candidate_benchmark_phases": 0,
+  "candidate_source_head": "498599b429d60f45bfc189457901227ddce313fc",
+  "baseline_commit": "cc0b52dee916d94359473f3bd3b082ab73ed87f0",
+  "run": 39893315367,
+  "baseline_self_pair_equal": true,
+  "first_scored_baseline_cold_equal": false,
+  "changed_operation": "inspect_symbol",
+  "changed_canonical_fields": [
+    "reference_candidates"
+  ],
+  "reference_coverage_at_source": {
+    "baseline-self-consistency-cold": 1.0,
+    "baseline-self-consistency-restart": 1.0,
+    "baseline-0-cold": 0.869
+  },
+  "native_identities_equal_in_all_observed_phases": true,
+  "cause_qualification": "Only the bounded same-name syntax candidate list changed in the legacy canonical projection; the raw total_reference_candidates also changed70\u219256. Coverage metadata showed incomplete reference hydration in the later cold workspace. A specific causal fix is not established. No posthoc sorting/waiting or scored relaunch.",
+  "performance_verdict": null,
+  "seconds": 229.77388544800002,
+  "supervision": {
+    "cleanup_errors": [],
+    "cleanup_verified": true,
+    "command": [
+      "/home/runner/work/attocode/attocode/.venv/bin/python",
+      "-m",
+      "eval.quality.experiments",
+      "restart",
+      "--root",
+      "/home/runner/work/_temp/intelligence-experiment-39893315367-1",
+      "--payload"
+    ],
+    "exit_code": 1,
+    "log_truncated": false,
+    "peak_disk_bytes": 1483452724,
+    "peak_evidence_bytes": 3801088,
+    "peak_rss_bytes": 987869184,
+    "seconds": 226.683,
+    "status": "failed",
+    "wall_seconds": 226.683
+  },
+  "independent_replay": {
+    "outcome": "incomplete_evidence_verified",
+    "head": "498599b429d60f45bfc189457901227ddce313fc",
+    "run": 39893315367,
+    "decision": null,
+    "fixture_entries": 9758,
+    "logical_bytes": 133715342,
+    "raw_responses": 118,
+    "completed_navigation_captures": 30,
+    "completed_baseline_self_pair": true,
+    "candidate_benchmark_phases": 0,
+    "changed_operation": [
+      "source"
+    ],
+    "changed_canonical_fields": [
+      "reference_candidates"
+    ],
+    "reference_coverage_at_source": {
+      "baseline-self-consistency-cold": 1.0,
+      "baseline-self-consistency-restart": 1.0,
+      "baseline-0-cold": 0.869
+    },
+    "all_observed_native_identities_equal": true,
+    "source_native_cause": "not established; differences coincide with incomplete reference hydration",
+    "operator_sha256": "b59f55501daedb6243af5e22744cfc123a64f25df8eca7aa625f98b762b2e1ab"
+  },
+  "archive": {
+    "path": "packages/code-intel/evals/results/2026-10-23-restart-fingerprints.tar.gz",
+    "bytes": 1842698,
+    "members": 527,
+    "sha256": "4a36d607b2585c7f3c8e83f71bc5f65f4d505600d3b4edacfcb0e34674d265d8"
+  },
+  "artifact_sha256": "73c094ec508c605b893b2b3184380e0765f91d9a6b120e0dcd06e01186da456b",
+  "product_state": "Original conservative snapshot repair; optional fingerprint candidate omitted.",
+  "closed_designs": "Manual preview and restart design wrappers removed; new dispatches fail closed until a new approved design is committed.",
+  "canonical_audit": {
+    "legacy_projection_omitted_visible_fields": true,
+    "maintained_operator_corrected_commit": "0584397d37a52d322ab05fe8064cdebc132470ce",
+    "correction": "Retain all operation data except semantic ranking.index readiness metadata; preserve list order.",
+    "red_run": 39894407900,
+    "green_run": 39894590066,
+    "active_controls_passed": 141,
+    "archived_trial_operator_unchanged": true,
+    "scored_relaunch": false
+  }
+}

@@ -127,3 +127,35 @@ the attempt without a quality verdict.
 The [2026-10-23 frozen trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-preview-windows.md)
 rejected the preview rule: zero judged excerpt gains, one distinct question lost
 in every round, and one changed exact control. Product previews remain unchanged.
+
+## Restart fingerprint trial
+
+The restart design uses the committed baseline after the preceding maintenance
+changes. A fresh baseline-only cold/restart pair must first return identical
+canonical navigation and search evidence. Only then may the six alternating
+baseline/candidate workspaces run, each with two fresh phase processes. Every
+phase is replayed and admitted before the next starts; the canonical result
+lists retain their original order.
+
+The archived candidate adds at most 2 MiB of complete structural fingerprints and
+keeps the existing 32 MiB AST-summary limit. A matching source, installed direct
+grammar, navigation identity and full healthy FileAST may avoid redundant index
+repair after a missing summary is reparsed. Missing, malformed, failed, changed,
+capped and legacy evidence conservatively follows the existing repair path.
+
+All 12 scored canonical hashes must match the admitted baseline pair. Retention
+also requires median restart time at most 75% of baseline and median cold time
+at most 105%. Phase elapsed times include subprocess startup/shutdown, evidence
+I/O/admission and source/engine rechecks. Fixture copy/setup is outside phase
+medians and inside the shared 1,800-second payload; one workspace is removed
+before creating the next. The observation uses one runner with warm OS caches,
+without a general host-performance or fresh-relevance claim. Any incomplete
+capture stops the comparison with no performance verdict or scored retry.
+
+The [restart observation](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-restart-fingerprints.md)
+stopped with incomplete baseline evidence before any candidate benchmark phase.
+The optimization is omitted. The completed preview and restart wrappers have
+been removed to prevent scored relaunches; their frozen designs and responses
+remain archived. A future trial needs a new approved design. The maintained
+canonical comparison retains all data fields except semantic index readiness
+metadata; result order, visible counts and ranking evidence remain comparable.
