@@ -1,0 +1,57 @@
+{
+  "head": "ffdaa6b56b4507e579c1d252028693a8a23a1402",
+  "run": 39879850033,
+  "archive_sha256": "dc78598e6fc2074bc8d956a0654e4b446cf86002f1751752abb4f9d64ef92578",
+  "fixture": {
+    "commit": "5fbe515aa215909e28328a059701da430bc3cff8",
+    "file": "typing/typecore.ml",
+    "repo": "ocaml/ocaml",
+    "sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+    "tree": "2f611a9946f0c55a489a96a64c3cdbcf1ac1b590"
+  },
+  "native_parse_calls": 18,
+  "native_wall_ms": [
+    28.576409,
+    30.141671
+  ],
+  "native_thread_cpu_ms": [
+    28.575752,
+    30.141657
+  ],
+  "historical_causes": "open",
+  "decision": null,
+  "seconds": 44.21089069400001,
+  "supervision": {
+    "cleanup_errors": [],
+    "cleanup_verified": true,
+    "command": [
+      "/home/runner/work/attocode/attocode/.venv/bin/python",
+      "-m",
+      "eval.quality.experiments",
+      "native",
+      "--root",
+      "/home/runner/work/_temp/intelligence-experiment-39879850033-1",
+      "--payload"
+    ],
+    "exit_code": 0,
+    "log_truncated": false,
+    "peak_disk_bytes": 14045184,
+    "peak_evidence_bytes": 3645440,
+    "peak_rss_bytes": 1143422976,
+    "seconds": 43.939,
+    "status": "passed",
+    "wall_seconds": 43.939
+  },
+  "status": "complete",
+  "ocaml_direct_found": 6,
+  "ocaml_gateway_found": 6,
+  "rust_capture_admitted": 6,
+  "public_archive_sha256": "f88ce4c723a6eea1beeba71937a11a572c18146fb71df507b69dbf5c546d5d77",
+  "first_attempt": {
+    "run": 39879638024,
+    "status": "incomplete",
+    "decision": null,
+    "payload_started": false,
+    "reason": "setup omitted optional grammar extra; corrected without payload changes"
+  }
+}
