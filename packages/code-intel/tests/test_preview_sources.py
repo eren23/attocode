@@ -1,5 +1,7 @@
 """Real source bytes and provider calls must survive encoding and metadata cases."""
+import asyncio
 import copy
+import json
 
 import pytest
 from attocode_intel import gateway as gateway_module
@@ -84,3 +86,33 @@ def test_passive_provider_tracking_preserves_results_and_source_lineage(tmp_path
     validated = source_spans(page, tmp_path, policies)
     assert validated[0]['kind'] == ('metadata_only' if producer == 'metadata' else 'source')
     assert (tmp_path / 'evidence/events.jsonl').read_bytes()
+
+
+async def test_actual_mcp_preview_keeps_invalid_utf8_source_and_passive_results(tmp_path):
+    source = tmp_path / 'source'
+    source.mkdir()
+    (source / 'target.py').write_bytes(b'def alpha():\r\n    # \xff beta\r\n    return 1\r\n')
+    journal = Journal(tmp_path / 'evidence', 2**20)
+    tracker = SourceTracker(source, journal)
+    gateway = gateway_module.OperationGateway(str(source), 'daily', watch=False)
+    arguments = {'query': 'alpha beta', 'top_k': 5, 'max_tokens': 2000}
+    try:
+        async with asyncio.timeout(20):
+            while True:
+                with tracker.capture():
+                    response = await gateway.execute_mcp('semantic_search', arguments)
+                journal.response({'tool': 'semantic_search', 'arguments': arguments}, response.model_dump(mode='json'))
+                assert not response.isError
+                page = json.loads(response.content[0].text)
+                if page['data']['ranking']['index']['status'] != 'warming':
+                    break
+                await asyncio.sleep(.05)
+        policies = tracker.policies(page)
+        checked = source_spans(page, source, policies)
+        assert any(row['kind'] == 'source' for row in checked)
+        assert any('\ufffd' in row['snippet'] for row in page['data']['results'])
+        plain = await gateway.execute_mcp('semantic_search', arguments)
+        journal.response({'tool': 'semantic_search', 'passive_control': False}, plain.model_dump(mode='json'))
+        assert json.loads(plain.content[0].text)['data']['results'] == page['data']['results']
+    finally:
+        await gateway.close()
