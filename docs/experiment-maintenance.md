@@ -124,6 +124,6 @@ blobs before retrieval and checked again afterward; only the generated root
 `.attocode` index directory is excluded. Missing captures or fixture drift stop
 the attempt without a quality verdict.
 
-The [2026-10-23 frozen trial](../packages/code-intel/evals/results/2026-10-23-preview-windows.md)
+The [2026-10-23 frozen trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-preview-windows.md)
 rejected the preview rule: zero judged excerpt gains, one distinct question lost
 in every round, and one changed exact control. Product previews remain unchanged.
