@@ -12,13 +12,13 @@ import runpy
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from unittest.mock import patch
 
 import yaml
 
-from eval.quality.corpus import PACK, materialize
 from eval.quality.corpus_capture import admit_worker
 from eval.quality.experiment_evidence import Journal
 from eval.quality.fixture_identity import source_manifest
@@ -49,28 +49,31 @@ def worker_entry(evidence, arguments):
                     name += ':' + args[2]
             def observed():
                 profiler = cProfile.Profile()
+                wall, cpu = time.perf_counter(), time.thread_time()
                 try:
                     return profiler.runcall(function, *args, **kwargs)
                 finally:
+                    elapsed, used_cpu = time.perf_counter() - wall, time.thread_time() - cpu
                     path = evidence / f'workspace-{number:04d}.prof'
                     profiler.dump_stats(str(path))
                     write_json(path.with_suffix('.json'), {'operation': name, 'sequence': number,
+                        'executor_thread_id': threading.get_ident(), 'scope_wall_seconds': elapsed,
+                        'executor_thread_cpu_seconds': used_cpu,
                         'diagnostic_only': True, **profile_summary(path)})
             return super().submit(observed)
-    profiler = cProfile.Profile()
     sys.argv = ['corpus', *arguments]
     try:
         with patch.object(gateway_module, 'ThreadPoolExecutor', ProfiledExecutor):
-            profiler.runcall(runpy.run_module, 'eval.quality.corpus', run_name='__main__')
+            runpy.run_module('eval.quality.corpus', run_name='__main__')
     finally:
-        path = evidence / 'worker.prof'
-        profiler.dump_stats(str(path))
         write_json(evidence / 'profile.json', {'diagnostic_only': True,
-            'limitations': 'cProfile changes timings. Main and actual workspace executor operations are profiled separately; other index threads/native internals are not independently sampled. No speed or full compatibility verdict.',
-            **profile_summary(path)})
+            'workspace_profiles': len(list(evidence.glob('workspace-*.prof'))),
+            'limitations': 'One cProfile instance at a time in the serial actual workspace executor; main thread is not separately profiled. CPython3.12 global monitoring callbacks can include concurrent-thread activity, so profile attribution is diagnostic, not isolated CPU time. Separate executor-thread CPU and scope wall counters exclude profile serialization. Native internals are not independently sampled. No speed or full compatibility verdict.'})
 
 
 def run(root):
+    from eval.quality.corpus import PACK, materialize
+
     design = json.loads((Path(__file__).with_name('experiments') / 'broad-cost.json').read_bytes())
     if not design['diagnostic_only'] or hashlib.sha256(PACK.read_bytes()).hexdigest() != design['workflow_manifest_sha256']:
         raise ValueError('diagnostic source design changed')
