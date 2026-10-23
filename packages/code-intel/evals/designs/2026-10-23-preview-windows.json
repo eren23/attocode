@@ -11,7 +11,8 @@
     "record_inventory_sha256": "2b450659d8727348dc883aa520288979a91f4996dae4b87dd4ac1988c33c6eae",
     "query_or_judged_anchor_collisions": [],
     "skipped_records": 1,
-    "qualification": "Checks recorded query strings and structured judged file/line anchors. Repository/source exposure is disclosed, not blind. Skipped large response/report bodies and unstructured notes are not proof of no exposure; their frozen manifests are scanned where present."
+    "qualification": "Checks recorded query strings and structured judged file/line anchors. Repository/source exposure is disclosed, not blind. Skipped large response/report bodies and unstructured notes are not proof of no exposure; their frozen manifests are scanned where present.",
+    "skipped_detail": "One JSONC tsconfig template in historical fixture source is not JSON; it is not a question manifest. No oversized record was skipped."
   },
   "rounds": [
     [
