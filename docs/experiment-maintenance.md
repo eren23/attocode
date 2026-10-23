@@ -47,6 +47,15 @@ bytes and source hashes are measured inside dedicated context captures; transfer
 counts alone can reflect BuildKit cache reuse. A real membership check rejects
 extra files and includes disposable private/cache exclusion sentinels. Parent
 cleanup verifies no smoke container with its unique ownership label remains.
-A measured passing baseline is required before
-the ordinary image guard can enforce its 5% growth ceiling; baseline changes
-require a reviewed explanation and source commit.
+The passing same-runner comparison at `4233a2f` (Actions run `39874866186`)
+measured 879,136,629 → 775,865,818 image bytes, saving 103,270,811 bytes (11.7%).
+All 101 installed distribution identities and the runtime checks matched.
+Eligible context fell from 40,957,156 to 4,120,661 logical bytes. These are
+uncompressed image and logical input sizes, rather than registry transfer sizes.
+Earlier incomplete attempts remain diagnostic evidence and do not set the budget.
+
+Ordinary image CI now enforces the reviewed baseline in
+`docker/code-intel/image-budget.json` with a 5% growth ceiling, while retaining
+runtime, source-absence and context checks. A change to that baseline requires
+a new measurement, source commit and reviewed explanation. Reproduce a historical
+comparison online with `--compare-ref <exact-commit>`; normal CI uses the guard.

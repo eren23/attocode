@@ -181,7 +181,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compare equivalent runtime images on this runner
-        run: uv run --with httpx --no-project python -m eval.quality.image_budget --compare-ref a7dd331d4ede4a6369a88ab1a9c11546b679b5bf --report '${{ runner.temp }}/image-budget/report.json'
+        run: uv run --with httpx --no-project python -m eval.quality.image_budget --report '${{ runner.temp }}/image-budget/report.json'
       - uses: actions/upload-artifact@v4
         if: always()
         with:

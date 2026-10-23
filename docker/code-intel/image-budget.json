@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "image_size_bytes": 775865818,
+  "allowed_growth_percent": 5,
+  "source_commit": "4233a2fedc868368f5d0b10ef28d68287db50646",
+  "review": "Reviewed same-runner comparison preserves all 101 installed distribution identities, runtime base layers, service configuration and dashboard content; all six runtime contracts and owned-container cleanup pass. Package build source is absent. The image is 103270811 bytes smaller than the historical recipe. Growth above 5% requires a new measured baseline with an explanation reviewed in the PR.",
+  "comparison": {
+    "run_id": 39874866186,
+    "artifact_id": 12468590133,
+    "historical_recipe_commit": "a7dd331d4ede4a6369a88ab1a9c11546b679b5bf",
+    "historical_image_size_bytes": 879136629,
+    "eligible_context_bytes": 4120661,
+    "historical_eligible_context_bytes": 40957156,
+    "artifact_sha256": "8531a6fe55836ce17af6d7dce8d7141922c62b62e6fbc1968eb108c9fe8bbf1e"
+  }
+}
