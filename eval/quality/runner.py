@@ -22,7 +22,7 @@ MARKER = "attocode-quality-v1"
 LIMITS = {"quick": 120, "local": 600, "broad": 3600}
 QUICK_TESTS = ["test_search_evidence.py", "test_focused_inspection.py", "test_language_capabilities.py",
                "test_quality_runner.py", "test_quality_cloud.py", "test_quality_lifecycle.py", "test_quality_evidence.py",
-               "test_experiment_evidence.py", "test_image_budget.py", "test_native_experiment.py", "test_preview_windows.py", "test_preview_sources.py", "test_preview_experiment.py", "test_preview_admission.py", "test_restart_experiment.py"]
+               "test_experiment_evidence.py", "test_image_budget.py", "test_native_experiment.py", "test_preview_windows.py", "test_preview_sources.py", "test_preview_experiment.py", "test_preview_admission.py", "test_restart_experiment.py", "test_corpus_capture.py"]
 LOCAL_TESTS = QUICK_TESTS + ["test_trigram_workspace.py", "test_change_focus.py", "test_change_investigation.py", "test_behavioral_negation.py", "test_chunk_identity.py", "test_query_requirements.py", "test_mcp_search_evaluation.py", "test_product.py", "test_query_ranking.py", "test_ranking_intent.py",
                            "test_compact_inspection.py", "test_lean_profile.py", "test_daily_workflows.py",
                            "test_index_reuse.py", "test_edit_restart.py", "test_navigation_evidence.py",

@@ -90,7 +90,7 @@ async def ready_search(gateway, arguments, *, timeout=90):
         await asyncio.sleep(.1)
 
 
-async def evaluate(root, spec, *, observations=None, checkpoint=None):
+async def evaluate(root, spec, *, observations=None, checkpoint=None, journal=None):
     source = root / spec["file"]
     content = source.read_text()
     if spec["anchor"] not in content or (spec.get("source_sha256") and
