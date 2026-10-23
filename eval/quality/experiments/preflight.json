@@ -3,5 +3,31 @@
   "experiment": "preflight",
   "scope": "Synthetic harness controls only; no relevance or performance judgment",
   "fixtures": "Hand-authored UTF-8/CRLF/invalid-byte/long-line/overflow/child-process controls in test_experiment_evidence.py",
-  "limits": {"seconds": 600, "disk_bytes": 2147483648, "rss_bytes": 2147483648, "evidence_bytes": 67108864}
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "paired_control": {
+    "baseline_commit": "303dbbb42e9c6a54c138c7a3efcfc2a0524b0aec",
+    "test_file": "packages/code-intel/tests/test_parse_recovery.py",
+    "test_sha256": "f617b5e4e84153461069ac54f4e19d1ac3364feabed6e55c26b698b10098872f",
+    "cases": [
+      "test_failed_selected_recovery_retries_after_cooldown_without_edit",
+      "test_persistent_selected_parse_failure_is_limited_to_one_attempt_per_cooldown",
+      "test_expired_parse_recovery_cooldown_cannot_bless_an_unrelated_edit"
+    ],
+    "baseline_failures": [
+      "test_failed_selected_recovery_retries_after_cooldown_without_edit",
+      "test_persistent_selected_parse_failure_is_limited_to_one_attempt_per_cooldown"
+    ],
+    "candidate_files": [
+      "_internal/integrations/context/ast_service.py"
+    ],
+    "baseline_failure_messages": {
+      "test_failed_selected_recovery_retries_after_cooldown_without_edit": "assert 'not_found' == 'found'",
+      "test_persistent_selected_parse_failure_is_limited_to_one_attempt_per_cooldown": "assert 1 == 2"
+    }
+  }
 }
