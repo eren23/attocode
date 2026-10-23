@@ -141,9 +141,11 @@ def admit_worker(workspace, spec, evidence, summary, selected):
         elif kind == 'source_validation':
             require(pending is not None, 'validation has no preceding raw response')
             capture = {k: pending[k] for k in ('gateway', 'sequence', 'response_ref')}
-            require(request == {'event': kind, **capture, 'policies': pending['policies']}
-                    and value == validate_sources(pending['request']['tool'], pending['page'], workspace,
-                                                   pending['policies']), 'source validation/raw binding mismatch')
+            require(request == {'event': kind, **capture, 'policies': pending['policies']},
+                    'source validation/raw binding mismatch')
+            expected_validation = validate_sources(pending['request']['tool'], pending['page'], workspace,
+                                                   pending['policies'])
+            require(value == json.loads(json.dumps(expected_validation)), 'source validation replay mismatch')
             captures.append(pending)
             pending = None
         elif kind == 'gateway_close':

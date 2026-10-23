@@ -58,6 +58,20 @@ def payload(name, root):
                    *['packages/code-intel/tests/' + test for test in TESTS]]
         subprocess.run(command, cwd=REPO, check=True)
     elif name == 'broad':
+        import tomllib
+
+        import yaml
+        frozen = json.loads((REPO / 'eval/quality/experiments/broad.json').read_bytes())
+        pack_path = REPO / frozen['workflow_manifest']
+        specs = yaml.safe_load(pack_path.read_text())['repositories']
+        version = tomllib.loads((REPO / 'packages/code-intel/pyproject.toml').read_text())['project']['version']
+        if (version != frozen['version'] or hashlib.sha256(pack_path.read_bytes()).hexdigest() != frozen['workflow_manifest_sha256']
+                or len(specs) != frozen['expected_packs'] or sum(len(s['queries']) for s in specs) != frozen['expected_questions']):
+            raise ValueError('broad version/fixture identity mismatch')
+        acquired = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
+        managed = root / 'cache/grammars'
+        shutil.copytree(acquired, managed)
+        os.environ['QUALITY_GRAMMAR_CACHE'] = str(managed)
         os.environ['ATTOCODE_CORPUS_EVIDENCE'] = str(root / 'evidence/broad')
         subprocess.run([sys.executable, '-m', 'eval.quality.corpus', '--output',
                         str(root / 'evidence/workflows.json')], cwd=REPO, check=True)
