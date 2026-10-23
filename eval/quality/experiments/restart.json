@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "experiment": "restart",
+  "baseline_commit": "2252dbc2aafa758fbf99a1fce0059a0db844a161",
+  "candidate_origin_archive_sha256": "4a36d607b2585c7f3c8e83f71bc5f65f4d505600d3b4edacfcb0e34674d265d8",
+  "candidate_files": [
+    "_internal/integrations/context/ast_service.py",
+    "_internal/integrations/context/ast_snapshot.py"
+  ],
+  "candidate_file_sha256": {
+    "_internal/integrations/context/ast_service.py": "1ec541a36a81244e420e6bb4c7c93d9ba4faf871c7a03b94ff60a0d19d2dacdb",
+    "_internal/integrations/context/ast_snapshot.py": "0d7c12e2d7a97de07058c51793685bd9e90f59c5d43e462c03d943b4b390e899"
+  },
+  "fixture": {
+    "id": "cockroach",
+    "repo": "cockroachdb/cockroach",
+    "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+    "include": [
+      "pkg/server",
+      "pkg/cli",
+      "pkg/sql",
+      "pkg/kv"
+    ],
+    "entries": 9758,
+    "regular_files": 9748,
+    "logical_bytes_including_link_targets": 133715342,
+    "file": "pkg/server/server.go",
+    "definition_line": 255,
+    "source_sha256": "a7047e6e34cb7143a9fc2550ff2dd947007870f0861d0bfae42d65eba8e9bfa1"
+  },
+  "self_consistency": "Baseline-only fresh cold/restart pair first; no candidate phase may start until its raw/fixture/origin/canonical evidence is admitted. No performance verdict for this pair.",
+  "order": [
+    [
+      "baseline",
+      0
+    ],
+    [
+      "candidate",
+      0
+    ],
+    [
+      "candidate",
+      1
+    ],
+    [
+      "baseline",
+      1
+    ],
+    [
+      "baseline",
+      2
+    ],
+    [
+      "candidate",
+      2
+    ]
+  ],
+  "gates": {
+    "all_twelve_scored_canonical_hashes_equal_admitted_baseline_pair": true,
+    "restart_median_ratio_max": 0.75,
+    "cold_median_ratio_max": 1.05,
+    "incomplete_decision": null,
+    "no_posthoc_result_sorting": true,
+    "no_scored_retry_or_replacement": true,
+    "readiness_admitted_before_first_scored_operation": true
+  },
+  "metadata_caps": {
+    "optional_structural_fingerprints": 2097152,
+    "unchanged_AST_summaries": 33554432
+  },
+  "timing": "Each phase from fresh subprocess start through shutdown, raw admission and post-phase source/engine checks. Fixture copy/setup outside phase medians, inside total payload. Same-runner warm OS caches; no general host-performance claim. Public capabilities polling is predeclared1.0s for both arms, every response retained, all waits charged; default0.1s elsewhere.",
+  "questions": "Existing four consumed Cockroach queries are operational repeat checks, no fresh relevance observations.",
+  "limits": {
+    "seconds": 1800,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "study": "2026-10-23-full-navigation-readiness",
+  "earlier_attempts": "Prior incomplete studies remain closed/null; no candidate benchmark phase was observed. This new comparison adds predeclared full-reference admission before any scored navigation.",
+  "readiness": {
+    "initialization": "search_symbols(name=__quality_initialize__)",
+    "operation": "capabilities",
+    "response_field": "structuredContent.capabilities.coverage",
+    "require_phase": "ready",
+    "require_discovery_truncated": false,
+    "exact_integer_counts": "parsed_files and reference_indexed_files >= total_files > 0",
+    "poll_seconds": 1.0,
+    "raw_every_response": true,
+    "all_waiting_in_phase_clock": true,
+    "phase_journal_bytes": 4194304,
+    "rationale": "Polling interval declared before any new runtime; limits duplicated capabilities observer/evidence overhead within unchanged phase/aggregate journal caps. Default remains0.1s elsewhere."
+  },
+  "public_design": "packages/code-intel/evals/designs/2026-10-23-restart-ready.json",
+  "public_design_sha256": "b2533224e9a826b6560ebd913eaaf3b946342f607508c667b9c82c9e25075d89"
+}

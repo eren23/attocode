@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath
 
 from eval.quality.experiment_evidence import Journal, assert_engine, read_source
 from eval.quality.fixture_identity import source_manifest
+from eval.quality.readiness import coverage_ready, wait_ready
 from eval.quality.runner import REPO, write_json
 
 ORDER = [('baseline', 0), ('candidate', 0), ('candidate', 1),
@@ -83,6 +84,8 @@ async def navigate(workspace, spec, evidence, journal):
     hashes = {}
     started = time.monotonic()
     try:
+        report['readiness'] = await wait_ready(gateway, journal, poll_seconds=spec.get('readiness_poll_seconds', 1.0))
+        write_json(evidence / 'phase.json', report)
         for label, operation, arguments in navigation_requests(spec):
             before, warming = time.monotonic(), 0
             while True:
@@ -127,6 +130,7 @@ def admit_phase(evidence, workspace, spec, summary, *, engine=None):
     require(summary['status'] == 'complete', 'phase incomplete')
     journal = evidence / 'journal'
     completed, hashes, closed, runtime = [], {}, False, {}
+    initialized, ready, polls, ready_ref = False, False, 0, None
     expected = navigation_requests(spec)
     for event in map(json.loads, (journal / 'events.jsonl').read_text().splitlines()):
         ref = event['response']
@@ -137,7 +141,24 @@ def admit_phase(evidence, workspace, spec, summary, *, engine=None):
         raw = (journal / ref['path']).read_bytes()
         require(len(raw) == ref['bytes'] and hashlib.sha256(raw).hexdigest() == ref['sha256'], 'response bytes changed')
         request, value = event['request'], json.loads(raw)
-        if request['event'] == 'operation':
+        if request['event'] == 'readiness_initialize':
+            require(not initialized and not completed and not closed and request == {
+                'event': 'readiness_initialize', 'operation': 'search_symbols',
+                'arguments': {'name': '__quality_initialize__'}}, 'late, repeated or misbound initialization')
+            require(not CallToolResult.model_validate(value).isError, 'readiness initialization failed')
+            initialized = True
+        elif request['event'] == 'readiness_poll':
+            require(initialized and not ready and not completed and not closed and request == {
+                'event': 'readiness_poll', 'operation': 'capabilities', 'arguments': {}},
+                'late, repeated or misbound readiness poll')
+            response = CallToolResult.model_validate(value)
+            require(not response.isError, 'readiness poll failed')
+            polls += 1
+            ready = coverage_ready(response.structuredContent['capabilities']['coverage'])
+            if ready:
+                ready_ref = ref
+        elif request['event'] == 'operation':
+            require(ready and not closed, 'scored navigation before full reference readiness')
             require(len(completed) < len(expected), 'extra operation capture')
             label, operation, arguments = expected[len(completed)]
             require(request == {'event': 'operation', 'label': label, 'operation': operation, 'arguments': arguments},
@@ -161,6 +182,12 @@ def admit_phase(evidence, workspace, spec, summary, *, engine=None):
         elif request['event'] in {'origin_start', 'origin_end', 'source_before', 'source_after', 'grammar_navigation'}:
             require(request['event'] not in runtime, 'duplicate runtime identity')
             runtime[request['event']] = value
+    readiness = summary.get('readiness', {})
+    require(ready and polls > 0 and readiness.get('polls') == polls
+            and readiness.get('response_ref') == ready_ref
+            and readiness.get('poll_interval_seconds') == spec.get('readiness_poll_seconds', 1.0)
+            and type(readiness.get('seconds')) in (int, float) and math.isfinite(readiness['seconds'])
+            and readiness['seconds'] >= 0, 'readiness summary differs from raw capture')
     require(closed and len(completed) == len(expected) == len(summary['operations'])
             and summary['evidence_sha256'] == digest(hashes), 'missing or changed canonical phase evidence')
     if engine is not None:
@@ -274,6 +301,11 @@ def run(root):
     from eval.quality.corpus import PACK, materialize
 
     design = json.loads(DESIGN.read_bytes())
+    public_path = REPO / 'packages/code-intel/evals/designs/2026-10-23-restart-ready.json'
+    require(design['public_design'] == public_path.relative_to(REPO).as_posix()
+            and hashlib.sha256(public_path.read_bytes()).hexdigest() == design['public_design_sha256']
+            and {k: v for k, v in design.items() if k not in {'public_design', 'public_design_sha256'}}
+                == json.loads(public_path.read_bytes()), 'public restart design mismatch')
     baseline = design['baseline_commit']
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
     evidence, work = root / 'evidence/restart', root / 'work/restart'
@@ -293,6 +325,8 @@ def run(root):
         spec = next(p for p in yaml.safe_load(PACK.read_text())['repositories'] if p['id'] == 'cockroach')
         require(spec['commit'] == design['fixture']['commit'] and spec['include'] == design['fixture']['include'], 'fixture specification changed')
         spec['definition_line'] = 255
+        require(design['readiness']['poll_seconds'] == 1.0, 'frozen readiness interval changed')
+        spec['readiness_poll_seconds'] = design['readiness']['poll_seconds']
         spec_path = evidence / 'spec.json'
         write_json(spec_path, spec)
         fixture, receipt = work / 'fixture', {}
