@@ -21,6 +21,7 @@ import re
 import sqlite3
 import threading
 from pathlib import Path
+from time import monotonic as _parse_recovery_now
 from types import SimpleNamespace
 from typing import Any
 
@@ -59,6 +60,7 @@ _instances: dict[str, ASTService] = {}
 # Default location for the persistent index
 _INDEX_DIR = ".attocode/index"
 _INDEX_DB = "symbols.db"
+_PARSE_RECOVERY_COOLDOWN_SECONDS = 1.0
 
 
 class ASTService:
@@ -99,6 +101,7 @@ class ASTService:
         self._last_snapshot_repair = None
         self._parse_lock = threading.RLock()
         self._parse_recovery_attempts = {}
+        self._parse_recovery_retry_after = {}
 
     @classmethod
     def get_instance(cls, root_dir: str) -> ASTService:
@@ -657,11 +660,13 @@ class ASTService:
             return True
 
     def recover_failed_file(self, rel_path: str) -> bool:
-        """Retry one degraded selected file once for this source/parser identity.
+        """Retry a degraded selected file on a later explicit inspection.
 
         Reuse the completed-index repair path so callers and persisted navigation
         are reconciled before publishing the replacement AST. Partial hydration
         keeps its normal path; a later request may recover after it completes.
+        Repeated requests share a cooldown for the same source/parser identity;
+        a transient second parse failure must not prevent recovery indefinitely.
         """
         from .ast_snapshot import parser_identity
         from .index_repair import repair_index
@@ -684,20 +689,25 @@ class ASTService:
                 if digest != previous.content_sha256:
                     return False
                 key = (digest, parser_identity(previous.language))
-                if self._parse_recovery_attempts.get(rel_path) == key:
+                if (self._parse_recovery_attempts.get(rel_path) == key
+                        and _parse_recovery_now() < self._parse_recovery_retry_after.get(rel_path, 0)):
                     return False
                 self._parse_recovery_attempts[rel_path] = key
-                parsed = parse_file(str(path))
-                if parsed.parse_failures or parsed.parsing_tier == 'minimal':
-                    return False
-                if hashlib.sha256(path.read_text(encoding='utf-8', errors='replace').encode()).hexdigest() != digest:
-                    return False
-                if self._snapshot_identity() != identity:
-                    return False
-                asts = dict(self._ast_cache)
-                asts[rel_path] = parsed
-                self._last_snapshot_repair = repair_index(self, asts, identity, {rel_path})
-                return True
+                try:
+                    parsed = parse_file(str(path))
+                    if parsed.parse_failures or parsed.parsing_tier == 'minimal':
+                        return False
+                    if hashlib.sha256(path.read_text(encoding='utf-8', errors='replace').encode()).hexdigest() != digest:
+                        return False
+                    if self._snapshot_identity() != identity:
+                        return False
+                    asts = dict(self._ast_cache)
+                    asts[rel_path] = parsed
+                    self._last_snapshot_repair = repair_index(self, asts, identity, {rel_path})
+                    return True
+                finally:
+                    self._parse_recovery_retry_after[rel_path] = (
+                        _parse_recovery_now() + _PARSE_RECOVERY_COOLDOWN_SECONDS)
             except (OSError, ValueError, sqlite3.Error):
                 logger.debug('Cannot recover selected parse for %s', rel_path, exc_info=True)
                 return False
@@ -911,6 +921,7 @@ class ASTService:
         # Handle deletion
         if not Path(abs_path).exists():
             self._parse_recovery_attempts.pop(rel, None)
+            self._parse_recovery_retry_after.pop(rel, None)
             self._index.remove_file(rel)
             old_ast = self._ast_cache.pop(rel, None)
             if old_ast is None:

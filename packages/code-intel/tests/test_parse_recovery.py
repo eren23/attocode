@@ -89,6 +89,70 @@ def test_failed_selected_recovery_is_not_repeated_for_same_source(tmp_path):
         service._get_ast_service()._store.close()
 
 
+def test_failed_selected_recovery_retries_after_cooldown_without_edit(tmp_path, monkeypatch):
+    service, ast = degraded_service(tmp_path)
+    clock = [100.0]
+    monkeypatch.setattr(ast_service, '_parse_recovery_now', lambda: clock[0], raising=False)
+    original = ast_service.parse_file
+    try:
+        with patch.object(ast_service, 'parse_file', wraps=original) as parse:
+            with patch.object(ts_parser, 'PARSE_TIMEOUT_MICROS', 1):
+                assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'not_found'
+            assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'not_found'
+            clock[0] = 100.999
+            assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'not_found'
+            assert parse.call_count == 1
+            clock[0] = 101.0
+            recovered = inspect_symbol_data(service, 'target', 'sample.lua')
+            assert recovered['status'] == 'found'
+            assert any(row['line'] == 10002 for row in recovered['references'])
+            assert parse.call_count == 2
+            assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'found'
+            assert parse.call_count == 2
+    finally:
+        ast.stop_hydration()
+        ast._store.close()
+
+
+def test_persistent_selected_parse_failure_is_limited_to_one_attempt_per_cooldown(tmp_path, monkeypatch):
+    service, ast = degraded_service(tmp_path)
+    clock = [100.0]
+    monkeypatch.setattr(ast_service, '_parse_recovery_now', lambda: clock[0], raising=False)
+    try:
+        with patch.object(ast_service, 'parse_file', return_value=ast._ast_cache['sample.lua']) as parse:
+            for _ in range(3):
+                assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'not_found'
+            assert parse.call_count == 1
+            clock[0] = 101.0
+            assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'not_found'
+            assert parse.call_count == 2
+            for _ in range(3):
+                assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'not_found'
+            assert parse.call_count == 2
+    finally:
+        ast.stop_hydration()
+        ast._store.close()
+
+
+def test_expired_parse_recovery_cooldown_cannot_bless_an_unrelated_edit(tmp_path, monkeypatch):
+    other = tmp_path / 'other.py'
+    other.write_text('def before(): return 1\n')
+    service, ast = degraded_service(tmp_path)
+    clock = [100.0]
+    monkeypatch.setattr(ast_service, '_parse_recovery_now', lambda: clock[0], raising=False)
+    try:
+        with patch.object(ast_service, 'parse_file', return_value=ast._ast_cache['sample.lua']) as parse:
+            assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'not_found'
+            assert parse.call_count == 1
+            other.write_text('def after(): return 2\n')
+            clock[0] = 101.0
+            assert inspect_symbol_data(service, 'target', 'sample.lua')['status'] == 'not_found'
+            assert parse.call_count == 1
+    finally:
+        ast.stop_hydration()
+        ast._store.close()
+
+
 def test_new_parser_generation_permits_a_new_bounded_attempt(tmp_path):
     from attocode_intel._internal.integrations.context import ast_snapshot
 
