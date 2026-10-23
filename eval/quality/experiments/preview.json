@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "experiment": "preview",
+  "study": "file_coverage",
+  "stage": "development",
+  "design_sha256": "03fda6791827d637a200b780dc28e89c8273a89e0a0e8ec51b4c94b5439904f4",
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  }
+}
