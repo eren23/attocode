@@ -26,7 +26,6 @@ jobs:
       ATTOCODE_LOCAL_ONLY: '1'
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
-      QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
@@ -38,6 +37,8 @@ jobs:
       - name: Acquire native diagnostic tools (outside payload budget)
         if: inputs.experiment == 'native'
         timeout-minutes: 5
+        env:
+          QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           rustup toolchain install 1.94.1 --profile minimal --component rust-analyzer --component rust-src
           rustup default 1.94.1
@@ -55,6 +56,7 @@ jobs:
         env:
           EXPERIMENT: ${{ inputs.experiment }}
           QUALITY_EXPERIMENT_ROOT: ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}
+          QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
         run: uv run --no-sync python -m eval.quality.experiments "$EXPERIMENT" --root "$QUALITY_EXPERIMENT_ROOT"
       - uses: actions/upload-artifact@v4
         if: always()
