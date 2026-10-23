@@ -54,7 +54,7 @@ jobs:
           pack.download(['ocaml'])
           assert 'ocaml' in pack.downloaded_languages()
           PY
-      - name: Acquire broad compatibility grammars (outside payload budget)
+      - name: Acquire broad fixture history and grammars (outside payload budget)
         if: inputs.experiment == 'broad'
         timeout-minutes: 5
         env:
@@ -63,9 +63,14 @@ jobs:
           exec > >(tee '${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log') 2>&1
           uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
           uv run --no-sync python - <<'PYSETUP'
-          import json, os
+          import json, os, re, subprocess
           from pathlib import Path
+          import yaml
           import tree_sitter_language_pack as pack
+          frontend = next(s for s in yaml.safe_load(Path('eval/quality/workflows.yaml').read_text())['repositories'] if s['id'] == 'frontend')
+          assert frontend['repo'] == 'eren23/attocode' and re.fullmatch('[0-9a-f]{40}', frontend['commit'])
+          subprocess.run(['git', 'fetch', '--no-tags', '--depth', '1', '--filter=blob:limit=1000001', 'origin', frontend['commit']], check=True)
+          subprocess.run(['git', 'cat-file', '-e', frontend['commit'] + '^{commit}'], check=True)
           cache = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
           cache.mkdir()
           pack.configure(cache_dir=str(cache))
