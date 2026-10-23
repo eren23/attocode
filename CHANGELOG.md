@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.16] - 2026-10-23
+
+### Maintenance and verification
+
+- Build the Docker package in a separate stage and restrict the build context.
+  A same-runner comparison reduced the image by 103,270,811 bytes (11.7%) with
+  equivalent installed files, dependencies and runtime contracts. A reviewed
+  5% growth guard now runs in CI.
+- Maintain bounded online diagnostics with durable raw responses, explicit
+  source decoding and coordinates, selected-engine checks and first-failure
+  stopping. Preserve incomplete and rejected attempts.
+- The fresh contiguous-preview candidate is rejected: no judged gains, twelve
+  excerpt losses and six exact-control changes. The new restart comparison stops
+  incomplete on baseline reference differences, before any candidate benchmark
+  phase. Neither optimization ships.
+- Twelve fresh OCaml and six Rust diagnostics pass their recorded contracts;
+  the historical intermittent causes remain open. Parser limits and recovery
+  policy are unchanged.
+- Verify candidate installs and actual PyPI upgrades from 0.1.15 on GitHub runners.
+
 ### Fixed
 
 - Break equal symbol-search scores by source location before applying the result

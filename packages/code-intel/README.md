@@ -17,7 +17,7 @@ attocode-code-intel init
 Then restart your agent. `init` configures Codex, Claude Code and Cursor. Use `--client claude`, `--client codex` or `--client cursor` for one client. Codex needs a trusted project for a project configuration. Claude Code can ask you to enable the project MCP server.
 
 To check the setup, run `attocode-code-intel doctor`. It starts the configured server, calls two tools and shows the result for each client.
-Development builds also report the executable and server version returned by
+The probe also reports the executable and server version returned by
 that new probe. An already running client session must be checked separately.
 
 For other clients (VS Code, Zed, Windsurf, Claude Desktop and more), run `attocode-code-intel install <target>`. `attocode-code-intel commands` lists the targets.
@@ -38,7 +38,10 @@ tests, such as `_test.dart` and Perl `.t` scripts and `t/` modules. Version
 0.1.12 makes `doctor --client claude` read the local-scope entry that
 `claude mcp add` writes to `~/.claude.json`. Version 0.1.13 fills compact search
 pages within their budget, offers bounded deeper searches, and repairs stale
-navigation indexes after successful restart parsing. Version 0.1.15 adds parser ownership by thread, one language-server stderr
+navigation indexes after successful restart parsing. Version 0.1.16 stabilizes tied symbol pages and reduces the Docker image while
+preserving runtime contracts. It adds bounded online maintenance evidence; the
+preview and restart experiments did not justify product changes.
+Version 0.1.15 adds parser ownership by thread, one language-server stderr
 reader, bounded native recovery without static callers and release install
 verification on GitHub runners. Version 0.1.14 adds bounded
 selected-file recovery, safe navigation publication, guarded Elixir definitions

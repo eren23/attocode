@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  INTELLIGENCE_BASELINE: '0.1.14'
+  INTELLIGENCE_BASELINE: '0.1.15'
 
 concurrency:
   group: intelligence-${{ github.workflow }}-${{ github.ref }}

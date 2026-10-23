@@ -162,3 +162,61 @@ def test_broad_wrong_worker_engine_stops_before_evaluate(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match='engine_origin'):
         corpus.main()
     assert called == []
+
+
+@pytest.mark.parametrize('damage', [None, 'raw', 'request', 'summary', 'origin', 'source', 'missing_validation'])
+async def test_broad_worker_admission_replays_actual_capture_before_advancing(tmp_path, monkeypatch, damage):
+    from attocode_intel import __file__ as package_file
+
+    from eval.quality.corpus import evaluate
+    from eval.quality.corpus_capture import admit_worker, digest
+    from eval.quality.experiment_evidence import assert_engine
+    from eval.quality.fixture_identity import source_manifest
+
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    root, evidence = tmp_path / 'project', tmp_path / 'evidence'
+    root.mkdir()
+    text = 'def helper(): return 1\nhelper()\n'
+    (root / 'main.py').write_text(text)
+    spec = {'id': 'toy', 'repo': 'owner/toy', 'commit': 'a' * 40, 'file': 'main.py',
+            'symbol': 'helper', 'anchor': 'def helper(', 'language': 'python', 'caller': 'main.py',
+            'importer': None, 'test': None, 'queries': []}
+    selected = __import__('pathlib').Path(package_file).parent
+    fixture = Journal(evidence / 'fixture', 2**20)
+    fixture_ref = fixture.response({'event': 'fixture_pinned', 'repo': spec['repo'],
+                                   'commit': spec['commit'], 'tree': 'toy-tree'}, source_manifest(root))
+    journal = Journal(evidence / 'journal', 2**20)
+    journal.response({'event': 'origin_start'}, {'pid': 123, 'origins': assert_engine(selected)})
+    journal.response({'event': 'source_before'}, {'sha256': digest(source_manifest(root))})
+    checks = await evaluate(root, spec, observations=[], journal=journal)
+    journal.response({'event': 'source_after'}, {'sha256': digest(source_manifest(root))})
+    journal.response({'event': 'origin_end'}, {'pid': 123, 'origins': assert_engine(selected)})
+    summary = {'checks': checks, 'retrieval': [], 'tree': 'toy-tree', 'fixture_ref': fixture_ref}
+    events_path = evidence / 'journal/events.jsonl'
+    events = list(map(json.loads, events_path.read_text().splitlines()))
+    first = next(e for e in events if e['request']['event'] == 'mcp_response')
+    if damage == 'raw':
+        (evidence / 'journal' / first['response']['path']).write_bytes(b'{}')
+    elif damage == 'request':
+        first['request']['arguments']['name'] = 'another_symbol'
+        events_path.write_text(''.join(json.dumps(e) + '\n' for e in events))
+    elif damage == 'summary':
+        summary['checks'][0]['pages_requested'] += 1
+    elif damage == 'origin':
+        journal.response({'event': 'origin_end'}, {'pid': 123, 'origins': {'attocode_intel': '../other.py'}})
+    elif damage == 'source':
+        (root / 'unlabelled.py').write_text('drift\n')
+    elif damage == 'missing_validation':
+        removed = False
+        kept = []
+        for event in events:
+            if event['request']['event'] == 'source_validation' and not removed:
+                removed = True
+            else:
+                kept.append(event)
+        events_path.write_text(''.join(json.dumps(e) + '\n' for e in kept))
+    if damage is None:
+        assert admit_worker(root, spec, evidence, summary, selected)['responses'] >= 8
+    else:
+        with pytest.raises(ValueError):
+            admit_worker(root, spec, evidence, summary, selected)
