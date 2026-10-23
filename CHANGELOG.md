@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.17] - 2026-10-23
+
 ### Fixed
 
 - Allow a later explicit symbol inspection to recover from a failed selected-file
