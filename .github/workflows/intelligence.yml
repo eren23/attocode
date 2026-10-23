@@ -175,8 +175,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
-      - run: docker build -t intelligence-test -f docker/code-intel/Dockerfile .
-      - run: uv run --with httpx --no-project python packages/code-intel/scripts/smoke_image.py intelligence-test
+      - name: Compare equivalent runtime images on this runner
+        run: uv run --with httpx --no-project python -m eval.quality.image_budget --report '${{ runner.temp }}/image-budget/report.json'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: intelligence-image-results
+          retention-days: 14
+          path: ${{ runner.temp }}/image-budget/
