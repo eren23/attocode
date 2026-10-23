@@ -42,7 +42,7 @@ def definition_matches(row, spec):
         or ("." not in expected and name.split(".")[-1] == expected))
 
 
-def materialize(spec, destination, cache):
+def materialize(spec, destination, cache, *, receipt=None):
     name, commit = spec["repo"], spec["commit"]
     historical = matrix._tree_file(HISTORY, name, commit)
     if historical.exists():
@@ -63,6 +63,9 @@ def materialize(spec, destination, cache):
         blob_root = cache
     if tree.get("error"):
         raise ValueError(tree["error"])
+    if receipt is not None:
+        from eval.quality.fixture_identity import pinned_manifest
+        receipt.update(pinned_manifest(blob_root, tree))
     matrix._materialize(blob_root, tree, destination)
     return tree.get("tree")
 

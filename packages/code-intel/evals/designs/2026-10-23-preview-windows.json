@@ -1,0 +1,512 @@
+{
+  "schema_version": 1,
+  "candidate": "strict-positive-term-superset-contiguous-window",
+  "baseline_commit": "d328ed923a277ae5361b2ba90bd409e2144c819b",
+  "candidate_origin": "Unmeasured candidate preserved in 2026-10-22-preview-windows.tar.gz; prior attempt incomplete before any candidate page. Its 12 old questions are consumed and excluded. No new rule/tuning.",
+  "authoring": "Implementer-authored before product retrieval; not blind. Existing repository/source exposure and prior consumed anchors are disclosed in the audit. Labels are non-exhaustive.",
+  "freshness": {
+    "queries": 24,
+    "judged_anchors": 51,
+    "scanned_records": 4345,
+    "record_inventory_sha256": "2b450659d8727348dc883aa520288979a91f4996dae4b87dd4ac1988c33c6eae",
+    "query_or_judged_anchor_collisions": [],
+    "skipped_records": 1,
+    "qualification": "Checks recorded query strings and structured judged file/line anchors. Repository/source exposure is disclosed, not blind. Skipped large response/report bodies and unstructured notes are not proof of no exposure; their frozen manifests are scanned where present.",
+    "skipped_detail": "One JSONC tsconfig template in historical fixture source is not JSON; it is not a question manifest. No oversized record was skipped."
+  },
+  "rounds": [
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ]
+  ],
+  "requests": {
+    "depths": [
+      5,
+      24
+    ],
+    "budgets": [
+      2000,
+      8000
+    ],
+    "scoped_depth": 5,
+    "scoped_budget": 2000,
+    "samples_per_request": 1
+  },
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "gates": {
+    "each_split_minimum_distinct_visible_question_gains_at5": 2,
+    "each_split_minimum_repositories_with_gains": 2,
+    "apply_gain_gate_in_each_round": true,
+    "no_individual_file_or_excerpt_loss": true,
+    "no_delivered_identity_loss": true,
+    "exact_and_unrelated_controls_unchanged": true,
+    "global_unscoped_warm_p95": "max(100ms,1.5*baseline)",
+    "incomplete_decision": null,
+    "failed_gate": "reject without tuning, replacement or scored relaunch"
+  },
+  "packs": [
+    {
+      "id": "pandas",
+      "repo": "pandas-dev/pandas",
+      "commit": "0039f168fe057b945e8ec2a65c9d1e973c7c1fe9",
+      "include": [
+        "pandas"
+      ],
+      "source_sha256": {
+        "pandas/tests/groupby/test_filters.py": "ac691d20a5e735b875a25b2b4dae508e5ad946da8579b1e58db5e40c36944a38",
+        "pandas/tests/groupby/methods/test_quantile.py": "fa179ee498a30b9c7782709a2a6d9edc0b6acf71cac01d0288d8ae2b139a6083",
+        "pandas/tests/groupby/methods/test_groupby_shift_diff.py": "6d95df3c6f9afc73db338d7af5a64c2be48f50803fd3c9bb5c078859bc9e9dab",
+        "pandas/tests/groupby/methods/test_rank.py": "0db9146d3fb8618d4a8ad405c2e2973919dc0319b1eaf29bf926f3d36f9b734b"
+      },
+      "questions": [
+        {
+          "id": "d-p1",
+          "split": "development",
+          "kind": "behavior",
+          "query": "Find grouped Series filtering on duplicate string indexes keeping failed rows as NaN instead of dropping them",
+          "file": "pandas/tests/groupby/test_filters.py",
+          "anchors": [
+            {
+              "line": 528,
+              "quote": "    actual = grouped_ser.filter(lambda x: len(x) > 1, dropna=False)"
+            },
+            {
+              "line": 529,
+              "quote": "    expected = Series([np.nan, 1, 1, np.nan, 2, np.nan, np.nan, 3], index, name=\"pid\")"
+            },
+            {
+              "line": 531,
+              "quote": "    tm.assert_series_equal(actual, expected)"
+            }
+          ]
+        },
+        {
+          "id": "d-p2",
+          "split": "development",
+          "kind": "behavior",
+          "query": "Find groupby quantile test constructing a MultiIndex from group labels and array-like probability values",
+          "file": "pandas/tests/groupby/methods/test_quantile.py",
+          "anchors": [
+            {
+              "line": 140,
+              "quote": "    idx_levels = [np.arange(min(nrow, 4))] * len(groupby) + [q]"
+            },
+            {
+              "line": 144,
+              "quote": "    expected_index = pd.MultiIndex("
+            },
+            {
+              "line": 145,
+              "quote": "        levels=idx_levels, codes=idx_codes, names=[*groupby, None]"
+            }
+          ]
+        },
+        {
+          "id": "d-p3",
+          "split": "development",
+          "kind": "behavior",
+          "query": "Find groupby shift producing separate columns for zero and one periods with minus-one fill values",
+          "file": "pandas/tests/groupby/methods/test_groupby_shift_diff.py",
+          "anchors": [
+            {
+              "line": 235,
+              "quote": "    shifted_df = df.groupby(\"b\")[[\"a\"]].shift([0, 1], fill_value=-1)"
+            },
+            {
+              "line": 237,
+              "quote": "        {\"a_0\": [1, 2, 3, 4, 5], \"a_1\": [-1, 1, -1, 3, 2]},"
+            },
+            {
+              "line": 239,
+              "quote": "    tm.assert_frame_equal(shifted_df, expected_df)"
+            }
+          ]
+        },
+        {
+          "id": "d-p4",
+          "split": "development",
+          "kind": "behavior",
+          "query": "Find rank test checking tied values restart independently for each group with percentile mode",
+          "file": "pandas/tests/groupby/methods/test_rank.py",
+          "anchors": [
+            {
+              "line": 458,
+              "quote": "    result = df.groupby(\"key\").rank(pct=pct)"
+            },
+            {
+              "line": 459,
+              "quote": "    exp_df = DataFrame(exp * 2, columns=[\"val\"])"
+            },
+            {
+              "line": 460,
+              "quote": "    tm.assert_frame_equal(result, exp_df)"
+            }
+          ]
+        },
+        {
+          "id": "d-p5",
+          "split": "development",
+          "kind": "exact",
+          "query": "test_empty_shift_with_fill",
+          "file": "pandas/tests/groupby/methods/test_groupby_shift_diff.py",
+          "anchors": [
+            {
+              "line": 143,
+              "quote": "def test_empty_shift_with_fill():"
+            }
+          ]
+        },
+        {
+          "id": "d-p6",
+          "split": "development",
+          "kind": "unrelated",
+          "query": "indigo teapot observatory",
+          "file": "pandas/tests/groupby/test_filters.py",
+          "anchors": []
+        },
+        {
+          "id": "v-p1",
+          "split": "validation",
+          "kind": "behavior",
+          "query": "Find groupby filter rejecting numeric mean return values instead of a boolean predicate",
+          "file": "pandas/tests/groupby/test_filters.py",
+          "anchors": [
+            {
+              "line": 581,
+              "quote": "    with pytest.raises(TypeError, match=\"filter function returned a.*\"):"
+            },
+            {
+              "line": 582,
+              "quote": "        df.groupby(\"a\").filter(lambda g: g.c.mean())"
+            }
+          ]
+        },
+        {
+          "id": "v-p2",
+          "split": "validation",
+          "kind": "behavior",
+          "query": "Find quantile tests rejecting probabilities 50 and -1 with the reported invalid value",
+          "file": "pandas/tests/groupby/methods/test_quantile.py",
+          "anchors": [
+            {
+              "line": 171,
+              "quote": "    with pytest.raises(ValueError, match=\"Got '50.0' instead\"):"
+            },
+            {
+              "line": 172,
+              "quote": "        g.quantile(50)"
+            },
+            {
+              "line": 174,
+              "quote": "    with pytest.raises(ValueError, match=\"Got '-1.0' instead\"):"
+            },
+            {
+              "line": 175,
+              "quote": "        g.quantile(-1)"
+            }
+          ]
+        },
+        {
+          "id": "v-p3",
+          "split": "validation",
+          "kind": "behavior",
+          "query": "Find groupby shift regression for partially missing keys whose labels use minus one",
+          "file": "pandas/tests/groupby/methods/test_groupby_shift_diff.py",
+          "anchors": [
+            {
+              "line": 20,
+              "quote": "    # values in column `B`, and then group by [`A`, `B`]. This should"
+            },
+            {
+              "line": 21,
+              "quote": "    # force `-1` in `labels` array of `g._grouper.group_info` exactly"
+            },
+            {
+              "line": 22,
+              "quote": "    # at those places, where the group-by key is partially missing."
+            },
+            {
+              "line": 24,
+              "quote": "        [(i % 12, i % 3 if i % 3 else np.nan, i) for i in range(n_rows)],"
+            }
+          ]
+        },
+        {
+          "id": "v-p4",
+          "split": "validation",
+          "kind": "behavior",
+          "query": "Find groupby quantile with nullable numeric dtype keeping an all-missing group masked for two probabilities",
+          "file": "pandas/tests/groupby/methods/test_quantile.py",
+          "anchors": [
+            {
+              "line": 309,
+              "quote": "        {\"a\": [1, 1, 1, 2], \"b\": [1, 2, 3, pd.NA]}, dtype=any_numeric_ea_dtype"
+            },
+            {
+              "line": 311,
+              "quote": "    result = df.groupby(\"a\").quantile(q=[0.5, 0.7], interpolation=interpolation)"
+            },
+            {
+              "line": 313,
+              "quote": "        {\"b\": [val1, val2, pd.NA, pd.NA]},"
+            },
+            {
+              "line": 314,
+              "quote": "        dtype=any_numeric_ea_dtype,"
+            }
+          ]
+        },
+        {
+          "id": "v-p5",
+          "split": "validation",
+          "kind": "exact",
+          "query": "test_rank_zero_div",
+          "file": "pandas/tests/groupby/methods/test_rank.py",
+          "anchors": [
+            {
+              "line": 552,
+              "quote": "def test_rank_zero_div(input_key, input_value, output_value):"
+            }
+          ]
+        },
+        {
+          "id": "v-p6",
+          "split": "validation",
+          "kind": "unrelated",
+          "query": "tulip concerto semaphore",
+          "file": "pandas/tests/groupby/methods/test_rank.py",
+          "anchors": []
+        }
+      ]
+    },
+    {
+      "id": "ripgrep",
+      "repo": "BurntSushi/ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "include": [
+        "crates",
+        "tests",
+        "Cargo.toml"
+      ],
+      "source_sha256": {
+        "crates/globset/src/glob.rs": "052a203ccf1ab7d729c98e9090dc357a0baf4e6367cde6a873c4214b30dd62be",
+        "crates/globset/src/pathutil.rs": "46ceaa902960b72c2048a6d68422a5a620e80d216fc0d7723063911132eb073a",
+        "crates/ignore/src/types.rs": "a8d515917dbcf21f6d92f42d9dacb75013a71c91394dfd68677c5d1c15cda706"
+      },
+      "questions": [
+        {
+          "id": "d-r1",
+          "split": "development",
+          "kind": "behavior",
+          "query": "Find glob parsing where a trailing backslash becomes a DanglingEscape error instead of a literal character",
+          "file": "crates/globset/src/glob.rs",
+          "anchors": [
+            {
+              "line": 888,
+              "quote": "        if self.opts.backslash_escape {"
+            },
+            {
+              "line": 889,
+              "quote": "            match self.bump() {"
+            },
+            {
+              "line": 890,
+              "quote": "                None => Err(self.error(ErrorKind::DanglingEscape)),"
+            }
+          ]
+        },
+        {
+          "id": "d-r2",
+          "split": "development",
+          "kind": "behavior",
+          "query": "Where does a glob character class reject reversed ranges when the lower endpoint exceeds the upper endpoint",
+          "file": "crates/globset/src/glob.rs",
+          "anchors": [
+            {
+              "line": 974,
+              "quote": "            if r.1 < r.0 {"
+            },
+            {
+              "line": 977,
+              "quote": "                    kind: ErrorKind::InvalidRange(r.0, r.1),"
+            }
+          ]
+        },
+        {
+          "id": "d-r3",
+          "split": "development",
+          "kind": "behavior",
+          "query": "Find file extension extraction preserving the leading dot for dotfiles and using the final embedded dot",
+          "file": "crates/globset/src/pathutil.rs",
+          "anchors": [
+            {
+              "line": 50,
+              "quote": "    let last_dot_at = match name.rfind_byte(b'.') {"
+            },
+            {
+              "line": 52,
+              "quote": "        Some(i) => i,"
+            },
+            {
+              "line": 55,
+              "quote": "        Cow::Borrowed(name) => Cow::Borrowed(&name[last_dot_at..]),"
+            }
+          ]
+        },
+        {
+          "id": "d-r4",
+          "split": "development",
+          "kind": "behavior",
+          "query": "Find file type tests rejecting invalid include definitions without partially mutating the original definitions",
+          "file": "crates/ignore/src/types.rs",
+          "anchors": [
+            {
+              "line": 579,
+              "quote": "            assert!(btypes.add_def(def).is_err());"
+            },
+            {
+              "line": 581,
+              "quote": "            assert_eq!(btypes.definitions(), original_defs);"
+            }
+          ]
+        },
+        {
+          "id": "d-r5",
+          "split": "development",
+          "kind": "exact",
+          "query": "starts_with",
+          "file": "crates/globset/src/glob.rs",
+          "anchors": [
+            {
+              "line": 1066,
+              "quote": "fn starts_with(needle: &[u8], haystack: &[u8]) -> bool {"
+            }
+          ]
+        },
+        {
+          "id": "d-r6",
+          "split": "development",
+          "kind": "unrelated",
+          "query": "amber harpsichord lighthouse",
+          "file": "crates/ignore/src/types.rs",
+          "anchors": []
+        },
+        {
+          "id": "v-r1",
+          "split": "validation",
+          "kind": "behavior",
+          "query": "Find glob parser treating comma as literal outside alternates but starting another branch inside braces",
+          "file": "crates/globset/src/glob.rs",
+          "anchors": [
+            {
+              "line": 880,
+              "quote": "        if self.alternates_stack.is_empty() {"
+            },
+            {
+              "line": 881,
+              "quote": "            self.push_token(Token::Literal(','))"
+            },
+            {
+              "line": 883,
+              "quote": "            Ok(self.branches.push(Tokens::default()))"
+            }
+          ]
+        },
+        {
+          "id": "v-r2",
+          "split": "validation",
+          "kind": "behavior",
+          "query": "Find suffix optimization rejecting case insensitive glob matching",
+          "file": "crates/globset/src/glob.rs",
+          "anchors": [
+            {
+              "line": 462,
+              "quote": "    fn suffix(&self) -> Option<(String, bool)> {"
+            },
+            {
+              "line": 463,
+              "quote": "        if self.opts.case_insensitive {"
+            },
+            {
+              "line": 464,
+              "quote": "            return None;"
+            }
+          ]
+        },
+        {
+          "id": "v-r3",
+          "split": "validation",
+          "kind": "behavior",
+          "query": "Find filename extraction returning no normal component when a path ends in the parent directory dot-dot",
+          "file": "crates/globset/src/pathutil.rs",
+          "anchors": [
+            {
+              "line": 22,
+              "quote": "    if got == &b\"..\"[..] {"
+            },
+            {
+              "line": 23,
+              "quote": "        return None;"
+            }
+          ]
+        },
+        {
+          "id": "v-r4",
+          "split": "validation",
+          "kind": "behavior",
+          "query": "Find the glob builder setting that lets an empty brace alternate match both the bare filename and its dotted extension",
+          "file": "crates/globset/src/glob.rs",
+          "anchors": [
+            {
+              "line": 643,
+              "quote": "    /// For example, if this is set then the glob `foo{,.txt}` will match both"
+            },
+            {
+              "line": 644,
+              "quote": "    /// `foo` and `foo.txt`."
+            },
+            {
+              "line": 648,
+              "quote": "        self.opts.empty_alternates = yes;"
+            }
+          ]
+        },
+        {
+          "id": "v-r5",
+          "split": "validation",
+          "kind": "exact",
+          "query": "bytes_to_escaped_literal",
+          "file": "crates/globset/src/glob.rs",
+          "anchors": [
+            {
+              "line": 776,
+              "quote": "fn bytes_to_escaped_literal(bs: &[u8]) -> String {"
+            }
+          ]
+        },
+        {
+          "id": "v-r6",
+          "split": "validation",
+          "kind": "unrelated",
+          "query": "violet astrolabe marzipan",
+          "file": "crates/globset/src/pathutil.rs",
+          "anchors": []
+        }
+      ]
+    }
+  ]
+}
