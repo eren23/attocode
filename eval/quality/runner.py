@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from time import perf_counter, process_time
 
 import psutil
 from filelock import FileLock
@@ -193,7 +194,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
     reader.start()
     try:
         while process.poll() is None:
-            sample_wall, sample_cpu = time.monotonic(), time.process_time()
+            sample_wall, sample_cpu = perf_counter(), process_time()
             try:
                 parent = psutil.Process(process.pid)
                 processes = [parent, *parent.children(recursive=True)]
@@ -213,8 +214,8 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
             if evidence_root is not None:
                 row['peak_evidence_bytes'] = max(row.get('peak_evidence_bytes', 0), disk_bytes(evidence_root))
             monitoring['samples'] += 1
-            monitoring['wall_seconds'] += time.monotonic() - sample_wall
-            monitoring['controller_cpu_seconds'] += time.process_time() - sample_cpu
+            monitoring['wall_seconds'] += perf_counter() - sample_wall
+            monitoring['controller_cpu_seconds'] += process_time() - sample_cpu
             if time.monotonic() >= deadline or time.time() >= wall_deadline:
                 row["reason"] = "deadline"
             elif row["peak_disk_bytes"] >= max_bytes:
