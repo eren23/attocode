@@ -24,6 +24,10 @@ Restart the MCP connection after upgrading so it loads the new package.
   validation, source identities and decoding policies, loaded package origins,
   first failures, resource observations and owned-workspace cleanup. The full
   compatibility operator uses these checks without changing ordinary output.
+  The full matrix targets a GitHub-hosted ARM64 Mac with a platform preflight;
+  ordinary product and release checks retain Linux coverage. Two initial Linux
+  matrix attempts remain incomplete, including a 600-second deadline after
+  twenty-five packs; no Linux full-matrix or cross-platform speed claim follows.
 - **Bounded distributions.** Source distributions exclude archived evaluation
   results; the tagged repository retains those public reports and raw archives.
 - **Installation verification.** Candidate and actual PyPI checks compare source,

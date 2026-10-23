@@ -68,6 +68,11 @@ def payload(name, root):
         if (version != frozen['version'] or hashlib.sha256(pack_path.read_bytes()).hexdigest() != frozen['workflow_manifest_sha256']
                 or len(specs) != frozen['expected_packs'] or sum(len(s['queries']) for s in specs) != frozen['expected_questions']):
             raise ValueError('broad version/fixture identity mismatch')
+        target = frozen['runtime_target']
+        actual = {'sys_platform': sys.platform, 'machine': platform.machine(), 'platform': platform.platform()}
+        if any(actual[key] != target[key] for key in ('sys_platform', 'machine')):
+            raise ValueError('broad runtime target mismatch')
+        write_json(root / 'evidence/runtime-platform.json', {'target': target, 'actual': actual})
         acquired = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
         managed = root / 'cache/grammars'
         shutil.copytree(acquired, managed)

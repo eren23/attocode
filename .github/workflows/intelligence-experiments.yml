@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   experiment:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.experiment == 'broad' && 'macos-15' || 'ubuntu-latest' }}
     timeout-minutes: 40
     env:
       QUALITY_ALLOW_DOWNLOADS: '1'
@@ -82,6 +82,19 @@ jobs:
           assert set(requested) <= set(pack.downloaded_languages())
           print(json.dumps({'requested': requested, 'unsupported': sorted(names - available)}))
           PYSETUP
+      - name: Require broad platform controls before compatibility
+        if: inputs.experiment == 'broad'
+        timeout-minutes: 5
+        run: |
+          uv run --no-sync python -c "import sys, platform; assert sys.platform == 'darwin' and platform.machine() == 'arm64'"
+          uv run --no-sync python -m eval.quality.experiments preflight --root '${{ runner.temp }}/broad-platform-controls-${{ github.run_id }}-${{ github.run_attempt }}'
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.experiment == 'broad'
+        with:
+          name: experiment-broad-platform-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: ${{ runner.temp }}/broad-platform-controls-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
       - name: Run committed design under aggregate limits
         env:
           EXPERIMENT: ${{ inputs.experiment }}

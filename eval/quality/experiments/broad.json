@@ -16,5 +16,18 @@
   },
   "per_pack_seconds": 180,
   "optional_grammars": "Explicit bounded online setup; copy acquired bytes into managed cache before payload use; no acquisition during navigation",
-  "pass_rule": "All 36 packs complete, 288 checks only passed/limited/unsupported, all144 existing retrieval observations, exact source/origin/raw request admission, limits and owned cleanup; no performance or relevance improvement claim"
+  "pass_rule": "All 36 packs complete, 288 checks only passed/limited/unsupported, all144 existing retrieval observations, exact source/origin/raw request admission, limits and owned cleanup; no performance or relevance improvement claim",
+  "runtime_target": {
+    "runner": "macos-15",
+    "sys_platform": "darwin",
+    "machine": "arm64",
+    "scope": "GitHub-hosted ARM64 macOS operational compatibility only; normal17 Linux CI gates remain required; no cross-platform timing comparison"
+  },
+  "platform_preflight": {
+    "experiment": "preflight",
+    "required_controls": 158,
+    "step_minutes": 5,
+    "artifact": "experiment-broad-platform-preflight-RUN-ATTEMPT",
+    "same_head_required": true
+  }
 }
