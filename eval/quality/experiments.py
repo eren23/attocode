@@ -22,7 +22,7 @@ from eval.quality.runner import GIB, REPO, environment, managed_root, supervise,
 SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200}
 ENGINE = REPO / 'packages/code-intel/src/attocode_intel'
 TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_evidence.py',
-         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py', 'test_parse_recovery.py', 'test_file_coverage_ranking.py', 'test_query_ranking.py']
+         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py', 'test_parse_recovery.py', 'test_file_coverage_ranking.py', 'test_query_ranking.py', 'test_relevance_experiment.py']
 
 
 def identity(design):
@@ -90,7 +90,11 @@ def payload(name, root):
     else:
         # Each scored design and operator is introduced/reviewed before dispatch.
         import importlib
-        module = importlib.import_module('eval.quality.' + name + '_experiment')
+        frozen = json.loads((REPO / 'eval/quality/experiments' / (name + '.json')).read_bytes())
+        if name == 'preview' and frozen.get('study') == 'file_coverage':
+            module = importlib.import_module('eval.quality.relevance_experiment')
+        else:
+            module = importlib.import_module('eval.quality.' + name + '_experiment')
         module.run(root)
     write_json(root / 'evidence/controller-complete.json', {
         'complete': True, 'origins': assert_engine(selected)})
