@@ -9,7 +9,7 @@
   "scope": "Operational compatibility of existing consumed source-bound development anchors; not fresh relevance judgments or agent benefit",
   "policy": "Full fresh manifest, no shards/resume/ranking; durable raw MCP before validation; stop first failed/incomplete check or pack; each worker admitted before next pack",
   "limits": {
-    "seconds": 600,
+    "seconds": 1200,
     "disk_bytes": 2147483648,
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864

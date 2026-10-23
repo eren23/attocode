@@ -15,7 +15,7 @@ and an artifact even when validation fails.
 
 The payload ceiling includes the supervising controller and its descendants:
 2 GiB aggregate RSS, 2 GiB managed disk and 64 MiB retained evidence. Payload
-deadlines are 600 seconds for preflight/preview/broad, 1,200 for native and 1,800
+deadlines are 600 seconds for preflight/preview, 1,200 for native/broad and 1,800
 for restart. CI dependency setup has a separate five-minute limit. Monitoring is
 sampled; these bounds are admission/termination limits, not OS allocation quotas.
 
@@ -188,7 +188,7 @@ relevance, performance or agent-benefit evidence.
 
 The final operational matrix targets the standard GitHub-hosted `ubuntu-latest`
 x86_64 runner, with an explicit Linux/x86_64 assertion and a separate five-minute
-160-control preflight gate before the 600-second payload. Its control artifact
+160-control preflight gate before the 1,200-second payload. Its control artifact
 is separate and bound to the same source head. Ordinary product CI, real servers,
 Docker and published-install verification retain their Linux runner contracts.
 A successful matrix does not establish any cross-platform speed improvement.
@@ -213,3 +213,11 @@ all failed diagnostic setups are archived. Temporary diagnostic entry points
 were removed after use. The resulting Linux retry preserves all source anchors,
 fresh processes, request grids, resource caps and first-failure rules; it does
 not enable the withheld structural-fingerprint optimization.
+
+The corrected counter retry also reached the original 600-second deadline after
+twenty-six admitted packs (208 checks: 113 passed, 88 limited, seven unsupported)
+and 104 observations. It remains incomplete, with cleanup verified. The complete
+matrix uses a separately approved 1,200-second overall window; its 180-second
+per-pack timeout, full fresh manifest, first-failure stopping, source/origin/raw
+admission and RSS/disk/evidence ceilings remain unchanged. Earlier attempts are
+not reclassified. This budget change is not a product performance improvement.

@@ -25,9 +25,10 @@ Restart the MCP connection after upgrading so it loads the new package.
   first failures, resource observations and owned-workspace cleanup. The full
   compatibility operator uses these checks without changing ordinary output.
   The full matrix targets GitHub-hosted Linux with a same-source platform
-  preflight. Three initial attempts remain incomplete: missing fixture history,
-  then Linux and Mac deadlines after twenty-five and twenty-two packs.
-  The 600-second ceiling remains unchanged.
+  preflight. Four attempts remain incomplete: missing fixture history, then
+  deadlines after twenty-five Linux, twenty-two Mac and twenty-six corrected
+  Linux packs. The complete matrix has a 1,200-second ceiling; the 180-second
+  per-pack bound, 2 GiB RSS/disk and 64 MiB evidence ceilings remain unchanged.
 - **Less expensive resource observation.** Disk accounting uses directory-entry
   metadata and includes directory symlinks themselves without following their
   targets. On one pinned source-only tree, median counter CPU time falls
