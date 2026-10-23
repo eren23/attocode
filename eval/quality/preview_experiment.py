@@ -141,6 +141,10 @@ def verify_labels(workspace, spec):
     return hashes
 
 
+def admit_worker(evidence, workspace, spec, design, observation):
+    raise NotImplementedError('raw preview admission')
+
+
 def judgment(page, spans, question, workspace, sources):
     found, visible = False, False
     for hit, evidence in zip(page['data']['results'], spans, strict=True):
