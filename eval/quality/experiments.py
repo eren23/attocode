@@ -19,10 +19,10 @@ from pathlib import Path
 from eval.quality.experiment_evidence import assert_engine
 from eval.quality.runner import GIB, REPO, environment, managed_root, supervise, write_json
 
-SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 600}
+SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200}
 ENGINE = REPO / 'packages/code-intel/src/attocode_intel'
 TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_evidence.py',
-         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py']
+         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py']
 
 
 def identity(design):
@@ -58,6 +58,26 @@ def payload(name, root):
                    *['packages/code-intel/tests/' + test for test in TESTS]]
         subprocess.run(command, cwd=REPO, check=True)
     elif name == 'broad':
+        import tomllib
+
+        import yaml
+        frozen = json.loads((REPO / 'eval/quality/experiments/broad.json').read_bytes())
+        pack_path = REPO / frozen['workflow_manifest']
+        specs = yaml.safe_load(pack_path.read_text())['repositories']
+        version = tomllib.loads((REPO / 'packages/code-intel/pyproject.toml').read_text())['project']['version']
+        if (version != frozen['version'] or hashlib.sha256(pack_path.read_bytes()).hexdigest() != frozen['workflow_manifest_sha256']
+                or len(specs) != frozen['expected_packs'] or sum(len(s['queries']) for s in specs) != frozen['expected_questions']):
+            raise ValueError('broad version/fixture identity mismatch')
+        target = frozen['runtime_target']
+        actual = {'sys_platform': sys.platform, 'machine': platform.machine(), 'platform': platform.platform()}
+        if any(actual[key] != target[key] for key in ('sys_platform', 'machine')):
+            raise ValueError('broad runtime target mismatch')
+        write_json(root / 'evidence/runtime-platform.json', {'target': target, 'actual': actual})
+        acquired = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
+        managed = root / 'cache/grammars'
+        shutil.copytree(acquired, managed)
+        os.environ['QUALITY_GRAMMAR_CACHE'] = str(managed)
+        os.environ['ATTOCODE_CORPUS_EVIDENCE'] = str(root / 'evidence/broad')
         subprocess.run([sys.executable, '-m', 'eval.quality.corpus', '--output',
                         str(root / 'evidence/workflows.json')], cwd=REPO, check=True)
         result = json.loads((root / 'evidence/workflows.json').read_text())

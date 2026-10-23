@@ -63,6 +63,25 @@ def test_disk_admission_does_not_start_process(tmp_path):
     assert row["reason"] == "admission_budget"
 
 
+@pytest.mark.parametrize('target_kind', ['file', 'directory'])
+def test_disk_accounting_counts_links_without_following_external_targets(tmp_path, target_kind):
+    from eval.quality.runner import disk_bytes
+
+    root, external = tmp_path / 'owned', tmp_path / 'outside'
+    root.mkdir()
+    external.mkdir()
+    data = root / 'sparse.bin'
+    with data.open('wb') as stream:
+        stream.truncate(2**20)
+    (external / 'large.bin').write_bytes(b'x' * (2**20))
+    link = root / 'alias'
+    link.symlink_to(external if target_kind == 'directory' else external / 'large.bin',
+                    target_is_directory=target_kind == 'directory')
+    expected = sum(max(p.lstat().st_size, getattr(p.lstat(), 'st_blocks', 0) * 512)
+                   for p in (data, link))
+    assert disk_bytes(root) == expected
+
+
 def test_wall_deadline_stops_child_when_monotonic_clock_does_not_advance(tmp_path, monkeypatch):
     from eval.quality import runner
 

@@ -107,8 +107,10 @@ def test_worker_command_uses_independent_cgroup_and_preserves_shell_text():
 def test_worker_apt_lock_wait_with_isolated_package_database(tmp_path, release):
     """Use actual apt/fcntl contention without touching the host package database."""
     import fcntl
+    import pwd
 
     from eval.quality.cloud import WORKER_APT_INSTALL
+    from eval.quality.runner import disk_bytes
 
     if os.environ.get('QUALITY_TEST_SYSTEMD') != '1':
         pytest.skip('Dedicated Linux CI enables worker package-manager checks')
@@ -124,6 +126,8 @@ def test_worker_apt_lock_wait_with_isolated_package_database(tmp_path, release):
     assert args[2] == 'DPkg::Lock::Timeout=120'
     args[2] = 'DPkg::Lock::Timeout=2'  # Exercise the same apt option without a two-minute test.
     settings = {
+        # Keep this disposable cache visible to its unprivileged resource monitor.
+        'APT::Sandbox::User': pwd.getpwuid(os.getuid()).pw_name,
         'Dir::State::status': status,
         'Dir::State::lists': tmp_path / 'lists',
         'Dir::State::extended_states': tmp_path / 'extended_states',
@@ -162,6 +166,9 @@ def test_worker_apt_lock_wait_with_isolated_package_database(tmp_path, release):
                 assert time.monotonic() - started >= 1
                 assert 'Unable to acquire the dpkg frontend lock' in output
             assert status.read_text().count('Package:') == 1
+            for name in ('lists/partial', 'archives/partial'):
+                assert (tmp_path / name).stat().st_uid == os.getuid()
+            assert disk_bytes(tmp_path) > 0
         finally:
             if process.poll() is None:
                 process.kill()

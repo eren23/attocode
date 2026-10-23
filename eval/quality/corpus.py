@@ -90,7 +90,7 @@ async def ready_search(gateway, arguments, *, timeout=90):
         await asyncio.sleep(.1)
 
 
-async def evaluate(root, spec, *, observations=None, checkpoint=None):
+async def evaluate(root, spec, *, observations=None, checkpoint=None, journal=None):
     source = root / spec["file"]
     content = source.read_text()
     if spec["anchor"] not in content or (spec.get("source_sha256") and
@@ -98,7 +98,13 @@ async def evaluate(root, spec, *, observations=None, checkpoint=None):
         raise ValueError("Pinned source definition changed: invalid fixture")
     line = content[:content.index(spec["anchor"])].count("\n") + 1
     selection = {"symbol_name": spec["symbol"], "file_path": spec["file"], "line": line}
-    gateway = OperationGateway(str(root), "daily", watch=False)
+    def open_gateway(generation):
+        peer = OperationGateway(str(root), "daily", watch=False)
+        if journal is None:
+            return peer
+        from eval.quality.corpus_capture import RecordedGateway
+        return RecordedGateway(peer, root, journal, generation=generation)
+    gateway = open_gateway(0)
     rows = []
     from attocode_intel._internal.integrations.context.ts_parser import is_available
     unavailable = (spec.get("parser_requirement") == "optional"
@@ -108,6 +114,7 @@ async def evaluate(root, spec, *, observations=None, checkpoint=None):
                        or any(part.startswith('.') for part in Path(spec["file"]).parts))
     async def check(name, tool, arguments, predicate, *, paginate=False, limited=None):
         start = time.monotonic()
+        capture_start = len(gateway.captures) if journal is not None else 0
         warmup = {}
         if tool == "semantic_search":
             response, warmup = await ready_search(gateway, {"max_tokens": 4000, **arguments})
@@ -135,9 +142,13 @@ async def evaluate(root, spec, *, observations=None, checkpoint=None):
             limited = "Labeled source is excluded by workspace discovery policy; explicit project inclusion is required"
         rows.append({"name": name, "passed": outcome == "passed", "outcome": outcome,
                      "contract_passed": passed, "limitation": limited, "seconds": time.monotonic() - start,
-                     "response": decoded, "tool": tool, "pages_requested": len(pages), **warmup})
+                     "response": ({"ref": gateway.captures[-1]["response_ref"]} if journal is not None else decoded),
+                     "tool": tool, "pages_requested": len(pages), **warmup,
+                     **({"response_refs": gateway.captures[capture_start:]} if journal is not None else {})})
         if checkpoint:
             checkpoint(rows, observations or [])
+        if journal is not None and outcome == "failed":
+            raise ValueError("failed compatibility check: " + name)
         return data
     try:
         definitions = await check("definition", "search_symbols", {"name": spec["symbol"]},
@@ -183,6 +194,7 @@ async def evaluate(root, spec, *, observations=None, checkpoint=None):
                     if label["quote"] not in text:
                         raise ValueError("Query evidence anchor missing: " + label["file"])
                 started = time.monotonic()
+                capture_start = len(gateway.captures) if journal is not None else 0
                 response, warmup = await ready_search(gateway, {
                     "query": question["query"], "top_k": 24, "max_tokens": 8000})
                 decoded = json.loads(response.content[0].text)
@@ -198,11 +210,12 @@ async def evaluate(root, spec, *, observations=None, checkpoint=None):
                                      "hit_at_24": any(rank <= 24 for rank in ranks),
                                      "delivered_files": len(files),
                                      "metadata": decoded.get("metadata", {}),
-                                     "seconds": time.monotonic() - started, **warmup})
+                                     "seconds": time.monotonic() - started, **warmup,
+                                     **({"response_refs": gateway.captures[capture_start:]} if journal is not None else {})})
                 if checkpoint:
                     checkpoint(rows, observations)
         await gateway.close()
-        gateway = OperationGateway(str(root), "daily", watch=False)
+        gateway = open_gateway(1)
         await check("restart", "inspect_symbol", selection,
                     lambda d: d.get("status") == "found" and d["definition"]["file_path"] == spec["file"])
     finally:
@@ -321,15 +334,33 @@ def main():
     parser.add_argument("--worker", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--spec", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    capture_root = os.environ.get("ATTOCODE_CORPUS_EVIDENCE")
+    if capture_root:
+        grammar_cache = os.environ.get("QUALITY_GRAMMAR_CACHE")
+        if grammar_cache and Path(grammar_cache).is_dir():
+            import tree_sitter_language_pack as grammar_pack
+            grammar_pack.configure(cache_dir=grammar_cache)
     if args.worker:
         if not args.spec:
             parser.error("Worker requires a source specification")
+        journal = None
+        if capture_root:
+            from eval.quality.corpus_capture import digest
+            from eval.quality.experiment_evidence import Journal, assert_engine
+            from eval.quality.fixture_identity import source_manifest
+            selected_engine = Path(os.environ["ATTOCODE_EXPERIMENT_ENGINE"])
+            origins = assert_engine(selected_engine)
+            worker_spec = json.loads(args.spec.read_bytes())
+            journal = Journal(Path(capture_root) / worker_spec["id"] / "journal", 32 * 2**20)
+            journal.response({"event": "origin_start"}, {"pid": os.getpid(), "origins": origins})
+            journal.response({"event": "source_before"}, {"sha256": digest(source_manifest(args.worker))})
         observations = []
         def checkpoint(checks, retrieval):
             write_json(args.output, {"checks": checks, "retrieval": retrieval})
         try:
             checks = asyncio.run(evaluate(args.worker, json.loads(args.spec.read_text()),
-                                          observations=observations, checkpoint=checkpoint))
+                                          observations=observations, checkpoint=checkpoint,
+                                          **({"journal": journal} if journal is not None else {})))
         except Exception as exc:
             # Preserve diagnostics even before the parent log reader reaches EOF.
             result = json.loads(args.output.read_text()) if args.output.is_file() else {
@@ -338,8 +369,14 @@ def main():
             result["worker_error"] = {"type": type(exc).__name__, "message": str(exc)[:4000]}
             write_json(args.output, result)
             raise
+        finally:
+            if journal is not None:
+                journal.response({"event": "source_after"}, {"sha256": digest(source_manifest(args.worker))})
+                journal.response({"event": "origin_end"}, {"pid": os.getpid(), "origins": assert_engine(selected_engine)})
         write_json(args.output, {"checks": checks, "retrieval": observations})
         return 0
+    if capture_root and (args.ranking or args.pack or args.shard or args.resume):
+        parser.error("Bounded compatibility requires the complete fresh manifest")
     if args.ranking and (args.pack or args.shard or args.resume):
         parser.error("Ranking uses its unchanged complete frozen gate")
     specs = yaml.safe_load(PACK.read_text())["repositories"]
@@ -354,6 +391,12 @@ def main():
               "model_runs": 0, "scope": "Development evidence anchors, not exhaustive recall or agent benefit"}
     report["git_version"] = subprocess.check_output(["git", "--version"], text=True).strip()
     workspace_root = None
+    controller_journal = None
+    if capture_root:
+        from eval.quality.experiment_evidence import Journal, assert_engine
+        selected_engine = Path(os.environ["ATTOCODE_EXPERIMENT_ENGINE"])
+        controller_journal = Journal(Path(capture_root) / "controller", 2 * 2**20)
+        controller_journal.response({"event": "origin_start"}, {"pid": os.getpid(), "origins": assert_engine(selected_engine)})
     try:
         with tempfile.TemporaryDirectory(prefix="quality-corpus-") as tmp:
             workspace_root = Path(tmp)
@@ -375,7 +418,18 @@ def main():
                             started = time.monotonic()
                             # Blob copies belong to this pack, not the entire matrix.
                             with tempfile.TemporaryDirectory(prefix="blobs-", dir=tmp) as cache:
-                                row["tree"] = materialize(spec, Path(workspace), Path(cache))
+                                if capture_root:
+                                    from eval.quality.experiment_evidence import Journal
+                                    from eval.quality.fixture_identity import source_manifest
+                                    receipt = {}
+                                    row["tree"] = materialize(spec, Path(workspace), Path(cache), receipt=receipt)
+                                    fixture_journal = Journal(Path(capture_root) / spec["id"] / "fixture", 8 * 2**20)
+                                    row["fixture_ref"] = fixture_journal.response({"event": "fixture_pinned",
+                                        "repo": spec["repo"], "commit": spec["commit"], "tree": row["tree"]}, receipt)
+                                    if source_manifest(Path(workspace)) != receipt:
+                                        raise ValueError("materialized fixture differs from pinned blobs")
+                                else:
+                                    row["tree"] = materialize(spec, Path(workspace), Path(cache))
                             row["setup_seconds"] = time.monotonic() - started
                             row["phase"] = "evaluate"
                             write_json(args.output, report)
@@ -386,6 +440,11 @@ def main():
                                              "passed" if row["checks"] and all(c["outcome"] in {"passed", "limited", "unsupported"}
                                                                   for c in row["checks"]) else "failed")
                             row["passed"] = row["status"] == "passed"
+                            if capture_root and row["passed"]:
+                                from eval.quality.corpus_capture import admit_worker
+                                row["admission"] = admit_worker(Path(workspace), spec,
+                                    Path(capture_root) / spec["id"], row,
+                                    Path(os.environ["ATTOCODE_EXPERIMENT_ENGINE"]))
                             row["limited_checks"] = [c["name"] for c in row["checks"] if c["outcome"] == "limited"]
                         except Exception as exc:
                             row.update(passed=False, status="incomplete", error=f"{type(exc).__name__}: {exc}")
@@ -398,10 +457,18 @@ def main():
                     report.update(summarize(report["repositories"], selected_ids))
                     write_json(args.output, report)
                     print(json.dumps({"repository": spec["id"], "status": row["status"]}), flush=True)
+                    if capture_root and row["status"] != "passed":
+                        break
                 report.update(summarize(report["repositories"], selected_ids))
     finally:
         if not args.ranking:
             report.update(summarize(report["repositories"], selected_ids))
+        if controller_journal is not None:
+            try:
+                controller_journal.response({"event": "origin_end"}, {"pid": os.getpid(), "origins": assert_engine(selected_engine)})
+            except Exception as error:
+                report.update(status="incomplete", passed=False, complete=False, reason="engine_origin",
+                              origin_error=str(error)[:2000])
         report["cleanup_verified"] = workspace_root is not None and not workspace_root.exists()
         if not report["cleanup_verified"]:
             report.update(status="incomplete", passed=False, complete=False, reason="cleanup_unverified")

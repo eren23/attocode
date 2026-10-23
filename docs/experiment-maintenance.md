@@ -8,13 +8,14 @@ a quality verdict. Runtime work runs on disposable GitHub Actions runners.
 Use the manual **Intelligence experiments** workflow with a committed design.
 `preflight` runs synthetic harness controls. `native`, `preview`, `restart` and
 `broad` require their separately reviewed designs and operators before dispatch;
-a missing design fails closed. The broad runner also needs response journaling
-and fail-fast admission before its design can be enabled. Each attempt gets
-a new directory and an artifact even when validation fails.
+a missing design fails closed. The broad operator now retains every raw MCP
+response, validates each worker's evidence before the next pack, and stops on
+the first failed or incomplete check/pack. Each attempt gets a new directory
+and an artifact even when validation fails.
 
 The payload ceiling includes the supervising controller and its descendants:
 2 GiB aggregate RSS, 2 GiB managed disk and 64 MiB retained evidence. Payload
-deadlines are 600 seconds for preflight/preview/broad, 1,200 for native and 1,800
+deadlines are 600 seconds for preflight/preview, 1,200 for native/broad and 1,800
 for restart. CI dependency setup has a separate five-minute limit. Monitoring is
 sampled; these bounds are admission/termination limits, not OS allocation quotas.
 
@@ -159,3 +160,64 @@ been removed to prevent scored relaunches; their frozen designs and responses
 remain archived. A future trial needs a new approved design. The maintained
 canonical comparison retains all data fields except semantic index readiness
 metadata; result order, visible counts and ranking evidence remain comparable.
+
+## Final compatibility admission
+
+The versioned broad design fixes the existing 36-pack manifest and its 144
+consumed development questions. It runs the complete fresh set without resume,
+shards or ranking experiments. Optional grammars are acquired during the bounded
+online setup, then copied into the managed cache before payload use. Every
+worker checks the selected package and all loaded children at start and end.
+
+Full pinned Git inventories must match the materialized tree before evaluation
+and the unchanged source afterwards. All compact, warming and paginated MCP
+responses are fsynced once before budget, JSON, source or result validation.
+Primary symbol source follows replacement UTF-8/universal newlines with complete
+LF-joined lines. Semantic previews follow their observed producer policies;
+metadata descriptions never count as source spans.
+
+Before starting the next pack, the controller checks every raw reference hash,
+request sequence, source policy, response budget, gateway shutdown, origin and
+source identity, and recomputes check outcomes and retrieval summaries. A first
+failure leaves its raw capture and checkpoint, then stops the matrix. Limited
+and unsupported checks retain those labels. The final source remains unchanged
+after dispatch; the release verification asset records the independently
+admitted result and exact source-tree equivalence rather than changing the
+candidate to add a passing report. This is compatibility evidence, not fresh
+relevance, performance or agent-benefit evidence.
+
+The final operational matrix targets the standard GitHub-hosted `ubuntu-latest`
+x86_64 runner, with an explicit Linux/x86_64 assertion and a separate five-minute
+160-control preflight gate before the 1,200-second payload. Its control artifact
+is separate and bound to the same source head. Ordinary product CI, real servers,
+Docker and published-install verification retain their Linux runner contracts.
+A successful matrix does not establish any cross-platform speed improvement.
+
+The first Linux attempt stopped after twelve packs because its shallow checkout
+lacked the pinned historical frontend commit. Exact-commit setup corrected that
+fault. The second Linux attempt hit the 600-second deadline after twenty-five
+admitted packs (200 checks: 109 passed, 84 limited, seven unsupported) and 100
+retrieval observations. A subsequent Mac attempt also hit the deadline after
+twenty-two admitted packs (176 checks: 101 passed, 72 limited, three unsupported)
+and 88 observations. All three attempts remain incomplete, with raw artifacts
+and cleanup evidence retained; the platform change did not solve the ceiling.
+
+The [resource-observer investigation](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-maintenance-cost.md)
+then measured substantial monitor CPU cost and separately compared metadata
+counters on one pinned source-only tree. The retained traversal uses fresh
+directory entries, preserves conservative logical/allocated byte accounting and
+includes directory-link objects without following targets. Median counter CPU
+time falls 153→54 ms across eight alternating pairs, with matching byte totals;
+this is no full-matrix speed prediction. Real filesystem RED/GREEN controls and
+all failed diagnostic setups are archived. Temporary diagnostic entry points
+were removed after use. The resulting Linux retry preserves all source anchors,
+fresh processes, request grids, resource caps and first-failure rules; it does
+not enable the withheld structural-fingerprint optimization.
+
+The corrected counter retry also reached the original 600-second deadline after
+twenty-six admitted packs (208 checks: 113 passed, 88 limited, seven unsupported)
+and 104 observations. It remains incomplete, with cleanup verified. The complete
+matrix uses a separately approved 1,200-second overall window; its 180-second
+per-pack timeout, full fresh manifest, first-failure stopping, source/origin/raw
+admission and RSS/disk/evidence ceilings remain unchanged. Earlier attempts are
+not reclassified. This budget change is not a product performance improvement.

@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from time import perf_counter, process_time
 
 import psutil
 from filelock import FileLock
@@ -22,7 +23,7 @@ MARKER = "attocode-quality-v1"
 LIMITS = {"quick": 120, "local": 600, "broad": 3600}
 QUICK_TESTS = ["test_search_evidence.py", "test_focused_inspection.py", "test_language_capabilities.py",
                "test_quality_runner.py", "test_quality_cloud.py", "test_quality_lifecycle.py", "test_quality_evidence.py",
-               "test_experiment_evidence.py", "test_image_budget.py", "test_native_experiment.py", "test_preview_windows.py", "test_preview_sources.py", "test_preview_experiment.py", "test_preview_admission.py", "test_restart_experiment.py"]
+               "test_experiment_evidence.py", "test_image_budget.py", "test_native_experiment.py", "test_preview_windows.py", "test_preview_sources.py", "test_preview_experiment.py", "test_preview_admission.py", "test_restart_experiment.py", "test_corpus_capture.py"]
 LOCAL_TESTS = QUICK_TESTS + ["test_trigram_workspace.py", "test_change_focus.py", "test_change_investigation.py", "test_behavioral_negation.py", "test_chunk_identity.py", "test_query_requirements.py", "test_mcp_search_evaluation.py", "test_product.py", "test_query_ranking.py", "test_ranking_intent.py",
                            "test_compact_inspection.py", "test_lean_profile.py", "test_daily_workflows.py",
                            "test_index_reuse.py", "test_edit_restart.py", "test_navigation_evidence.py",
@@ -80,13 +81,21 @@ def fingerprint(paths):
 def disk_bytes(root):
     """Count logical and allocated bytes conservatively; never follow links."""
     total = 0
-    for directory, _dirs, files in os.walk(root, followlinks=False):
-        for name in files:
-            try:
-                stat = (Path(directory) / name).lstat()
-                total += max(stat.st_size, getattr(stat, "st_blocks", 0) * 512)
-            except FileNotFoundError:
-                pass
+    directories = [os.fspath(root)]
+    while directories:
+        try:
+            with os.scandir(directories.pop()) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            directories.append(entry.path)
+                        else:
+                            metadata = entry.stat(follow_symlinks=False)
+                            total += max(metadata.st_size, getattr(metadata, 'st_blocks', 0) * 512)
+                    except FileNotFoundError:
+                        pass  # A disposable entry can disappear during cleanup.
+        except (FileNotFoundError, NotADirectoryError):
+            pass
     return total
 
 
@@ -164,6 +173,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
         wall_deadline = min(wall_deadline, wall_started + max(0, deadline - started))
     row = {"command": command, "status": "incomplete", "peak_rss_bytes": 0,
            "peak_disk_bytes": disk_bytes(root), "log_truncated": False}
+    monitoring = {"samples": 0, "wall_seconds": 0.0, "controller_cpu_seconds": 0.0}
     if row["peak_disk_bytes"] >= max_bytes or started >= deadline or wall_started >= wall_deadline:
         return {**row, "reason": "admission_budget", "seconds": 0}
     try:
@@ -192,6 +202,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
     reader.start()
     try:
         while process.poll() is None:
+            sample_wall, sample_cpu = perf_counter(), process_time()
             try:
                 parent = psutil.Process(process.pid)
                 processes = [parent, *parent.children(recursive=True)]
@@ -210,6 +221,9 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
             row["peak_disk_bytes"] = max(row["peak_disk_bytes"], disk_bytes(root))
             if evidence_root is not None:
                 row['peak_evidence_bytes'] = max(row.get('peak_evidence_bytes', 0), disk_bytes(evidence_root))
+            monitoring['samples'] += 1
+            monitoring['wall_seconds'] += perf_counter() - sample_wall
+            monitoring['controller_cpu_seconds'] += process_time() - sample_cpu
             if time.monotonic() >= deadline or time.time() >= wall_deadline:
                 row["reason"] = "deadline"
             elif row["peak_disk_bytes"] >= max_bytes:
@@ -248,6 +262,7 @@ def supervise(command, *, cwd, env, root, log, deadline, max_bytes, max_rss=4 * 
             process.stdout.close()
     row.update(seconds=round(time.monotonic() - started, 3),
                wall_seconds=round(time.time() - wall_started, 3), exit_code=process.returncode,
+               monitoring=monitoring,
                cleanup_verified=not reader.is_alive() and not cleanup_errors,
                cleanup_errors=cleanup_errors)
     row["peak_disk_bytes"] = max(row["peak_disk_bytes"], disk_bytes(root))

@@ -54,6 +54,47 @@ jobs:
           pack.download(['ocaml'])
           assert 'ocaml' in pack.downloaded_languages()
           PY
+      - name: Acquire broad fixture history and grammars (outside payload budget)
+        if: inputs.experiment == 'broad'
+        timeout-minutes: 5
+        env:
+          QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          exec > >(tee '${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log') 2>&1
+          uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+          uv run --no-sync python - <<'PYSETUP'
+          import json, os, re, subprocess
+          from pathlib import Path
+          import yaml
+          import tree_sitter_language_pack as pack
+          frontend = next(s for s in yaml.safe_load(Path('eval/quality/workflows.yaml').read_text())['repositories'] if s['id'] == 'frontend')
+          assert frontend['repo'] == 'eren23/attocode' and re.fullmatch('[0-9a-f]{40}', frontend['commit'])
+          subprocess.run(['git', 'fetch', '--no-tags', '--depth', '1', '--filter=blob:limit=1000001', 'origin', frontend['commit']], check=True)
+          subprocess.run(['git', 'cat-file', '-e', frontend['commit'] + '^{commit}'], check=True)
+          cache = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
+          cache.mkdir()
+          pack.configure(cache_dir=str(cache))
+          names = {'haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal'}
+          available = set(pack.manifest_languages())
+          assert not (names - available - {'crystal'})
+          requested = sorted(names & available)
+          pack.download(requested)
+          assert set(requested) <= set(pack.downloaded_languages())
+          print(json.dumps({'requested': requested, 'unsupported': sorted(names - available)}))
+          PYSETUP
+      - name: Require broad platform controls before compatibility
+        if: inputs.experiment == 'broad'
+        timeout-minutes: 5
+        run: |
+          uv run --no-sync python -c "import sys, platform; assert sys.platform == 'linux' and platform.machine() == 'x86_64'"
+          uv run --no-sync python -m eval.quality.experiments preflight --root '${{ runner.temp }}/broad-platform-controls-${{ github.run_id }}-${{ github.run_attempt }}'
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.experiment == 'broad'
+        with:
+          name: experiment-broad-platform-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: ${{ runner.temp }}/broad-platform-controls-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
       - name: Run committed design under aggregate limits
         env:
           EXPERIMENT: ${{ inputs.experiment }}
@@ -69,3 +110,4 @@ jobs:
           path: |
             ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
             ${{ runner.temp }}/native-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
+            ${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
