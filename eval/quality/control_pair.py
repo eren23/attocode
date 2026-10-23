@@ -37,6 +37,7 @@ def run(root, design):
         dest = evidence / arm
         dest.mkdir()
         scratch = work / (arm + '-tests')
+        scratch.mkdir()
         env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(engine.parent), str(REPO)]),
                    ATTOCODE_EXPERIMENT_ENGINE=str(engine), ATTOCODE_EXPERIMENT_EVIDENCE=str(dest))
         command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
