@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "broad",
+  "version": "0.1.16",
+  "workflow_manifest": "eval/quality/workflows.yaml",
+  "workflow_manifest_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+  "expected_packs": 36,
+  "expected_questions": 144,
+  "scope": "Operational compatibility of existing consumed source-bound development anchors; not fresh relevance judgments or agent benefit",
+  "policy": "Full fresh manifest, no shards/resume/ranking; durable raw MCP before validation; stop first failed/incomplete check or pack; each worker admitted before next pack",
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "per_pack_seconds": 180,
+  "optional_grammars": "Explicit bounded online setup; copy acquired bytes into managed cache before payload use; no acquisition during navigation",
+  "pass_rule": "All 36 packs complete, 288 checks only passed/limited/unsupported, all144 existing retrieval observations, exact source/origin/raw request admission, limits and owned cleanup; no performance or relevance improvement claim"
+}

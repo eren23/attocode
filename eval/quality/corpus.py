@@ -354,8 +354,6 @@ def main():
             journal = Journal(Path(capture_root) / worker_spec["id"] / "journal", 32 * 2**20)
             journal.response({"event": "origin_start"}, {"pid": os.getpid(), "origins": origins})
             journal.response({"event": "source_before"}, {"sha256": digest(source_manifest(args.worker))})
-        if not args.spec:
-            parser.error("Worker requires a source specification")
         observations = []
         def checkpoint(checks, retrieval):
             write_json(args.output, {"checks": checks, "retrieval": retrieval})

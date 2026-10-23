@@ -8,9 +8,10 @@ a quality verdict. Runtime work runs on disposable GitHub Actions runners.
 Use the manual **Intelligence experiments** workflow with a committed design.
 `preflight` runs synthetic harness controls. `native`, `preview`, `restart` and
 `broad` require their separately reviewed designs and operators before dispatch;
-a missing design fails closed. The broad runner also needs response journaling
-and fail-fast admission before its design can be enabled. Each attempt gets
-a new directory and an artifact even when validation fails.
+a missing design fails closed. The broad operator now retains every raw MCP
+response, validates each worker's evidence before the next pack, and stops on
+the first failed or incomplete check/pack. Each attempt gets a new directory
+and an artifact even when validation fails.
 
 The payload ceiling includes the supervising controller and its descendants:
 2 GiB aggregate RSS, 2 GiB managed disk and 64 MiB retained evidence. Payload
@@ -159,3 +160,28 @@ been removed to prevent scored relaunches; their frozen designs and responses
 remain archived. A future trial needs a new approved design. The maintained
 canonical comparison retains all data fields except semantic index readiness
 metadata; result order, visible counts and ranking evidence remain comparable.
+
+## Final compatibility admission
+
+The versioned broad design fixes the existing 36-pack manifest and its 144
+consumed development questions. It runs the complete fresh set without resume,
+shards or ranking experiments. Optional grammars are acquired during the bounded
+online setup, then copied into the managed cache before payload use. Every
+worker checks the selected package and all loaded children at start and end.
+
+Full pinned Git inventories must match the materialized tree before evaluation
+and the unchanged source afterwards. All compact, warming and paginated MCP
+responses are fsynced once before budget, JSON, source or result validation.
+Primary symbol source follows replacement UTF-8/universal newlines with complete
+LF-joined lines. Semantic previews follow their observed producer policies;
+metadata descriptions never count as source spans.
+
+Before starting the next pack, the controller checks every raw reference hash,
+request sequence, source policy, response budget, gateway shutdown, origin and
+source identity, and recomputes check outcomes and retrieval summaries. A first
+failure leaves its raw capture and checkpoint, then stops the matrix. Limited
+and unsupported checks retain those labels. The final source remains unchanged
+after dispatch; the release verification asset records the independently
+admitted result and exact source-tree equivalence rather than changing the
+candidate to add a passing report. This is compatibility evidence, not fresh
+relevance, performance or agent-benefit evidence.
