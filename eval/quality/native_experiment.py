@@ -133,26 +133,6 @@ async def observe_ocaml(mode, workspace, spec, record):
             gateway = OperationGateway(str(workspace), spec['profile'], watch=spec['watch'])
             try:
                 arguments = {'symbol_name': spec['symbol'], 'file_path': spec['file'], 'line': spec['line']}
-                recovery = spec.get('recovery_control')
-                if recovery:
-                    if (recovery['injected_timeout_micros'] != 1
-                            or recovery['cooldown_wait_seconds'] != 1.1):
-                        raise ValueError('unfrozen recovery control')
-                    with patch.object(ts_parser, 'PARSE_TIMEOUT_MICROS', 1):
-                        initial = await gateway.execute('inspect_symbol', arguments)
-                    record({'event': 'forced_failure_response', 'tool': 'inspect_symbol', 'arguments': arguments,
-                            'injected_timeout_micros': 1}, initial.model_dump(mode='json'))
-                    initial_data = initial.structuredContent['data'] if not initial.isError else {}
-                    parse_state = initial_data.get('parse_state', {})
-                    if (initial.isError or initial_data.get('status') != 'not_found'
-                            or parse_state.get('recovery_attempted') is not True or not parse_state.get('failures')):
-                        raise ValueError('forced native failure did not produce the expected partial lookup')
-                    if ts_parser.PARSE_TIMEOUT_MICROS != 100000:
-                        raise ValueError('normal parser limit was not restored')
-                    record({'event': 'normal_timeout_restored'}, {
-                        'limit_micros': ts_parser.PARSE_TIMEOUT_MICROS,
-                        'cooldown_wait_seconds': recovery['cooldown_wait_seconds']})
-                    await asyncio.sleep(recovery['cooldown_wait_seconds'])
                 response = await gateway.execute('inspect_symbol', arguments)
                 record({'event': 'gateway_response', 'tool': 'inspect_symbol', 'arguments': arguments},
                        response.model_dump(mode='json'))
@@ -166,9 +146,6 @@ async def observe_ocaml(mode, workspace, spec, record):
                             or definition['name'] != spec['symbol']):
                         raise ValueError('OCaml selected definition identity mismatch')
                     excerpt = data.get('source')
-                    if recovery and (not excerpt or not excerpt.get('text')
-                                     or excerpt.get('start_line') != spec['line']):
-                        raise ValueError('recovered selected source is missing')
                     if excerpt and excerpt.get('text'):
                         validate_excerpt(content, excerpt['text'], excerpt['start_line'], excerpt['end_line'])
             finally:
@@ -180,8 +157,7 @@ async def observe_ocaml(mode, workspace, spec, record):
                     raise
                 record({'event': 'gateway_close'}, {'status': 'complete'})
     selected = [r for r in native_rows if r['source_sha256'] == canonical]
-    limits = {1, 100000} if spec.get('recovery_control') else {100000}
-    if not selected or any(r['limit_micros'] not in limits for r in native_rows):
+    if not selected or any(r['limit_micros'] != 100000 for r in native_rows):
         raise ValueError('missing native observation or changed parser limit')
     return {'mode': mode, 'found': found, 'native_outcomes': [r['outcome'] for r in selected],
             'native_calls': len(native_rows), 'source_sha256': spec['sha256'],
@@ -278,9 +254,6 @@ def run_rust_trials(frozen, evidence, work, command):
 
 def run(root):
     frozen = json.loads(DESIGN.read_bytes())
-    if frozen.get('recovery_pair'):
-        from eval.quality.native_recovery_probe import run as run_recovery_probe
-        return run_recovery_probe(root, frozen)
     evidence, work = root / 'evidence/native', root / 'work/native'
     evidence.mkdir()
     work.mkdir(parents=True)

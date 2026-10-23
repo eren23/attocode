@@ -1,0 +1,84 @@
+{
+  "status": "controlled_recovery_verified",
+  "baseline": "303dbbb42e9c6a54c138c7a3efcfc2a0524b0aec",
+  "paired_head": "29c62ceebaecd414f6d43bb6616444c8874f5d37",
+  "native_head": "e0423cabbd2d61d535b2e7fd6a8843e751ae1561",
+  "paired_run": 39953820545,
+  "native_run": 39955155607,
+  "baseline_regressions_failed": 2,
+  "baseline_safety_control_passed": 1,
+  "candidate_regressions_passed": 3,
+  "maintained_preflight_passed": 172,
+  "paired_seconds": 28.808470950999997,
+  "native_seconds": 11.425136130999995,
+  "controlled_ocaml": [
+    {
+      "arm": "baseline",
+      "initial": "not_found",
+      "later": "not_found",
+      "pid": 2481,
+      "native_calls": 2
+    },
+    {
+      "arm": "candidate",
+      "initial": "not_found",
+      "later": "found",
+      "pid": 2514,
+      "native_calls": 4
+    }
+  ],
+  "parser_timeout_micros": 100000,
+  "explicit_request_cooldown_seconds": 1,
+  "background_retries": false,
+  "rust_precision_limit_seconds": 2,
+  "rust_attempt_limit": 4,
+  "historical_native_scheduling_cause": "not inferred; old failure lacks native exception/thread CPU fields",
+  "first_setup_failure": {
+    "run": 39953263811,
+    "head": "9ebf2f94350d7e7cc2dca15eeba71708bfca723c",
+    "archive_sha256": "966cb269b7e71e687db6930465164e34f3d858804c1637f134794cdee7f407b7",
+    "native_tests_executed": 0,
+    "candidate_started": false,
+    "reason": "pytest scratch parent directory absent",
+    "cleanup_verified": true
+  },
+  "paired_archive_sha256": "74d45259319551bc624fbba3ef05b464e60d7bfbff7b0b503466122e2e3f2d99",
+  "native_archive_sha256": "9fe00ca9fc9c1b815c0a98065eff96b27b9d6ab7aadf9515f8651a13f8f3f729",
+  "native_supervision": {
+    "cleanup_errors": [],
+    "cleanup_verified": true,
+    "command": [
+      "/home/runner/work/attocode/attocode/.venv/bin/python",
+      "-m",
+      "eval.quality.experiments",
+      "native",
+      "--root",
+      "/home/runner/work/_temp/intelligence-experiment-39955155607-1",
+      "--payload"
+    ],
+    "exit_code": 0,
+    "log_truncated": false,
+    "monitoring": {
+      "controller_cpu_seconds": 0.31422587200000013,
+      "samples": 53,
+      "wall_seconds": 0.31428238600000924
+    },
+    "peak_disk_bytes": 12701696,
+    "peak_evidence_bytes": 446464,
+    "peak_rss_bytes": 253124608,
+    "seconds": 10.951,
+    "status": "passed",
+    "wall_seconds": 10.951
+  },
+  "archive": {
+    "archive": "packages/code-intel/evals/results/2026-10-23-native-recovery-cooldown.tar.gz",
+    "sha256": "675ae32a22c9f505e7c53cefadd5fe78ee38b048ab7162a93c57de0dd2b00be0",
+    "bytes": 2064020,
+    "members": 729,
+    "manifest_entries": 728,
+    "all_member_bytes_verified": true,
+    "no_local_fixture_materialization": true
+  },
+  "normal_ci": "Separate exact-head PR gate; diagnostic counts do not replace it",
+  "publication": "Unreleased follow-up; immutable0.1.16 unchanged"
+}

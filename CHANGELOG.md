@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Allow a later explicit symbol inspection to recover from a failed selected-file
+  native parse after a one-second cooldown. Immediate repeats remain bounded;
+  source/parser guards, the 100 ms parse limit and Rust precision limits remain.
+
 ## [Intelligence 0.1.16] - 2026-10-23
 
 ### Maintenance and verification
