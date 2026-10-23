@@ -26,6 +26,7 @@ jobs:
       ATTOCODE_LOCAL_ONLY: '1'
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
+      QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
@@ -34,6 +35,22 @@ jobs:
       - name: Install maintained test dependencies (outside payload budget)
         timeout-minutes: 5
         run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Acquire native diagnostic tools (outside payload budget)
+        if: inputs.experiment == 'native'
+        timeout-minutes: 5
+        run: |
+          rustup toolchain install 1.94.1 --profile minimal --component rust-analyzer --component rust-src
+          rustup default 1.94.1
+          uv run --no-sync python - <<'PY'
+          import os
+          from pathlib import Path
+          import tree_sitter_language_pack as pack
+          cache = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
+          cache.mkdir()
+          pack.configure(cache_dir=str(cache))
+          pack.download(['ocaml'])
+          assert 'ocaml' in pack.downloaded_languages()
+          PY
       - name: Run committed design under aggregate limits
         env:
           EXPERIMENT: ${{ inputs.experiment }}

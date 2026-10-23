@@ -136,7 +136,8 @@ async def observe_ocaml(mode, workspace, spec, record):
                 found = data['status'] == 'found'
                 if found:
                     definition = data['definition']
-                    if definition['file_path'] != spec['file'] or definition['start_line'] != spec['line']:
+                    if (definition['file_path'] != spec['file'] or definition['start_line'] != spec['line']
+                            or definition['name'] != spec['symbol']):
                         raise ValueError('OCaml selected definition identity mismatch')
                     excerpt = data.get('source')
                     if excerpt and excerpt.get('text'):
@@ -168,6 +169,10 @@ def worker(mode, workspace, evidence):
     started = time.monotonic()
     try:
         record({'event': 'origin_start'}, assert_engine(selected))
+        if (workspace / '.attocode').exists():
+            raise ValueError('OCaml workspace already has an index')
+        record({'event': 'fresh_workspace'}, {'files': [p.relative_to(workspace).as_posix()
+               for p in sorted(workspace.rglob('*')) if p.is_file()]})
         record({'event': 'grammar_identity'}, grammar_identity(Path(os.environ['QUALITY_GRAMMAR_CACHE'])))
         spec = json.loads(DESIGN.read_bytes())['ocaml']
         result = asyncio.run(observe_ocaml(mode, workspace, spec, record))
@@ -206,6 +211,18 @@ def run(root):
         return trial, row
 
     try:
+        environment = Journal(evidence / 'environment', 2**20)
+        for arguments in (['rustc', '--version', '--verbose'], ['rust-analyzer', '--version'],
+                          ['rustup', 'which', 'rust-analyzer']):
+            result = subprocess.run(arguments, capture_output=True, check=False)
+            environment.response({'arguments': arguments}, {'exit_code': result.returncode,
+                'stdout': result.stdout.decode(errors='replace'), 'stderr': result.stderr.decode(errors='replace')})
+            if result.returncode:
+                raise ValueError('native tool identity failed')
+            if arguments[0] == 'rustup':
+                binary = Path(result.stdout.decode().strip())
+                environment.response({'event': 'rust_analyzer_binary'}, {
+                    'path': str(binary), 'sha256': hashlib.sha256(binary.read_bytes()).hexdigest()})
         from eval.quality.corpus import materialize
         assert_engine(os.environ['ATTOCODE_EXPERIMENT_ENGINE'])
         spec = frozen['ocaml']

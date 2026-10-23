@@ -59,3 +59,25 @@ Ordinary image CI now enforces the reviewed baseline in
 runtime, source-absence and context checks. A change to that baseline requires
 a new measurement, source commit and reviewed explanation. Reproduce a historical
 comparison online with `--compare-ref <exact-commit>`; normal CI uses the guard.
+
+## Native diagnostic design
+
+The manual `native` design observes six fresh direct OCaml processes and six
+fresh selected-symbol gateway processes against the historical pinned
+`typing/typecore.ml` source. A CI observer forwards the parser's unchanged
+100 ms limit and reset while retaining actual native outcomes, parser/thread
+identities, source hashes, wall time and thread CPU time before fallback.
+Wall minus thread CPU time is not evidence of a particular scheduling cause.
+
+Six separate Rust pytest processes use the existing real-server fixture and
+protocol/stderr consumer. They check the selected caller, unused namesake,
+version-2 edit, moved caller and shutdown. The unused symbol may remain partial.
+The fixture's bounded server warmup is recorded separately from production's
+unchanged two-second precision limit and four attempts. Tools and the optional
+OCaml grammar are acquired only on the disposable runner before the payload.
+
+Fresh workspaces, engine origins, grammar/tool identities, raw responses and
+partial failures are retained under the shared limits. A complete diagnostic
+run establishes observations, rather than the historical intermittent cause
+or a failure frequency. A demonstrated defect requires a focused regression
+before a product fix; otherwise the cause remains open and maintenance proceeds.
