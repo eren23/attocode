@@ -16,6 +16,14 @@ PyPI install/0.1.16-upgrade verification. The GitHub release records publication
 
 The following checkpoints preserve earlier release and experiment history.
 
+**Single repair index, 2026-10-24:** the [matched comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-single-rebuild.md)
+rejects the candidate: median restart 28.622→26.718s,
+ratio 0.933462; every matched restart faster true,
+cold ratio 1.011936. All fourteen fresh phases preserve complete navigation
+and valid routes at full 4,980-file readiness; 351 online controls pass. The rejected candidate bypassed old-index construction only during persisted repair; all parsing, validation,
+LSP and staged-publication guards remain. The product candidate is removed.
+Original attempts/source are retained and temporary trial wiring retired.
+
 **Unprofiled stages, 2026-10-24:** the [three-process unchanged-engine diagnostic](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-unprofiled-stages.md)
 measures 14.268s restart initialization task: persisted index load 3.750s followed by
 repair 6.480s, which includes 1.074s encoding. Raw clocks distinguish nested work,

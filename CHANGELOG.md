@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Evaluation maintenance
 
+- Preserve the single-rebuild restart comparison and reject the candidate.
+  Matched Cockroach median restart 28.62→26.72s
+  (ratio 0.933, short of the required 10% reduction); every restart round
+  is faster and cold ratio is 1.012. All parsing,
+  source, repair and cache guards remain; preserve original evidence and retire
+  temporary trial wiring. Product source remains unchanged.
+
 - Measure unchanged-engine startup stages without profiling. Persisted index load
   takes 3.75 seconds and repair 6.48 seconds within a 14.27-second restart
   initialization task; encoding is 1.07 seconds inside repair. Preserve raw clocks,

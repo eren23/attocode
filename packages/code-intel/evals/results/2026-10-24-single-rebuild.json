@@ -1,0 +1,333 @@
+{
+  "status": "complete",
+  "decision": "reject",
+  "run": 40110984481,
+  "head": "a16b32ce9c3fd75a7bbfc123c143cbcb8a630e61",
+  "baseline_commit": "6143d0d05d296fbc1c32046952b7904f22ca0120",
+  "engine_files_per_arm": 349,
+  "changed_product_files": [
+    "_internal/integrations/context/ast_service.py",
+    "_internal/integrations/context/index_repair.py",
+    "_internal/integrations/context/index_store.py"
+  ],
+  "mechanism": "Load persisted old qualified names and ordered SymbolRef groups directly; build one final replacement index with all existing parse, source, repair and staged publication guards.",
+  "prospective_gates": {
+    "restart_median_ratio_max": 0.9,
+    "cold_median_ratio_max": 1.05,
+    "every_restart_round_faster": true
+  },
+  "prior_fingerprint_and_json_rejections_unchanged": true,
+  "trial_archive_sha256": "4989504b4dde23a41ea8c6f992d0a9763297ac1eee708a6da05629e6d3f184d0",
+  "scored_phases": 12,
+  "fresh_processes": 14,
+  "all_fourteen_canonical_data_equal": true,
+  "canonical_operations": 10,
+  "fixture_entries": 9758,
+  "fixture_logical_bytes": 133715342,
+  "full_readiness_files": 4980,
+  "actual_workspace_routes_validated": true,
+  "medians_seconds": {
+    "baseline": {
+      "cold": 79.521855237,
+      "restart": 28.622458432
+    },
+    "candidate": {
+      "cold": 80.471043473,
+      "restart": 26.71796879
+    }
+  },
+  "ratios": {
+    "cold": 1.0119361933039805,
+    "restart": 0.9334617029307737
+  },
+  "every_restart_round_faster": true,
+  "phases": [
+    {
+      "arm": "baseline",
+      "label": "baseline-self-consistency",
+      "phase": "cold",
+      "pid": 2349,
+      "process_seconds": 78.916993451,
+      "admission_seconds": 0.895612135,
+      "navigation_seconds": 71.762586237,
+      "readiness_seconds": 55.86172354,
+      "readiness_polls": 38,
+      "raw_operations": 37,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "33d9efc2e8ed160b7cb2f87ff507da0c5e2eadd872ca12b9cc379f134cd30b4b",
+      "go_direct": "35e242fc3daa473aefc7c53fa70009c1c23b14cb7f5a48006a5c2a4163ef4efd"
+    },
+    {
+      "arm": "baseline",
+      "label": "baseline-self-consistency",
+      "phase": "restart",
+      "pid": 2398,
+      "process_seconds": 29.572889013,
+      "admission_seconds": 0.891789466,
+      "navigation_seconds": 24.083739347000005,
+      "readiness_seconds": 17.45529183000002,
+      "readiness_polls": 1,
+      "raw_operations": 19,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "33d9efc2e8ed160b7cb2f87ff507da0c5e2eadd872ca12b9cc379f134cd30b4b",
+      "go_direct": "35e242fc3daa473aefc7c53fa70009c1c23b14cb7f5a48006a5c2a4163ef4efd"
+    },
+    {
+      "arm": "baseline",
+      "label": "baseline-0",
+      "phase": "cold",
+      "pid": 2413,
+      "process_seconds": 80.317587009,
+      "admission_seconds": 0.897367622,
+      "navigation_seconds": 73.087045991,
+      "readiness_seconds": 53.85317569,
+      "readiness_polls": 36,
+      "raw_operations": 43,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "33d9efc2e8ed160b7cb2f87ff507da0c5e2eadd872ca12b9cc379f134cd30b4b",
+      "go_direct": "35e242fc3daa473aefc7c53fa70009c1c23b14cb7f5a48006a5c2a4163ef4efd"
+    },
+    {
+      "arm": "baseline",
+      "label": "baseline-0",
+      "phase": "restart",
+      "pid": 2436,
+      "process_seconds": 29.12418151,
+      "admission_seconds": 0.876793763,
+      "navigation_seconds": 23.669714070000026,
+      "readiness_seconds": 18.04655735,
+      "readiness_polls": 1,
+      "raw_operations": 10,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "33d9efc2e8ed160b7cb2f87ff507da0c5e2eadd872ca12b9cc379f134cd30b4b",
+      "go_direct": "35e242fc3daa473aefc7c53fa70009c1c23b14cb7f5a48006a5c2a4163ef4efd"
+    },
+    {
+      "arm": "candidate",
+      "label": "candidate-0",
+      "phase": "cold",
+      "pid": 2451,
+      "process_seconds": 80.471043473,
+      "admission_seconds": 0.886075792,
+      "navigation_seconds": 73.22196243900004,
+      "readiness_seconds": 55.06273108100004,
+      "readiness_polls": 38,
+      "raw_operations": 42,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "b020d9af11426a6d829b2fce8b8905217b6e837dadd54fa8a0b776071f539394",
+      "go_direct": "38caf1eb66260fdfb90d573f42a6c20ca5f7a490e77bb3d224e0ab802cd5fe8c"
+    },
+    {
+      "arm": "candidate",
+      "label": "candidate-0",
+      "phase": "restart",
+      "pid": 2506,
+      "process_seconds": 26.568481256,
+      "admission_seconds": 0.880334842,
+      "navigation_seconds": 21.015222025999947,
+      "readiness_seconds": 14.781320423000011,
+      "readiness_polls": 1,
+      "raw_operations": 10,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "b020d9af11426a6d829b2fce8b8905217b6e837dadd54fa8a0b776071f539394",
+      "go_direct": "38caf1eb66260fdfb90d573f42a6c20ca5f7a490e77bb3d224e0ab802cd5fe8c"
+    },
+    {
+      "arm": "candidate",
+      "label": "candidate-1",
+      "phase": "cold",
+      "pid": 2525,
+      "process_seconds": 79.573195271,
+      "admission_seconds": 0.88984249,
+      "navigation_seconds": 72.34569389399996,
+      "readiness_seconds": 56.226493406999964,
+      "readiness_polls": 39,
+      "raw_operations": 38,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "b020d9af11426a6d829b2fce8b8905217b6e837dadd54fa8a0b776071f539394",
+      "go_direct": "38caf1eb66260fdfb90d573f42a6c20ca5f7a490e77bb3d224e0ab802cd5fe8c"
+    },
+    {
+      "arm": "candidate",
+      "label": "candidate-1",
+      "phase": "restart",
+      "pid": 2549,
+      "process_seconds": 26.71796879,
+      "admission_seconds": 0.883336337,
+      "navigation_seconds": 21.16577607800002,
+      "readiness_seconds": 15.037699651000025,
+      "readiness_polls": 1,
+      "raw_operations": 10,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "b020d9af11426a6d829b2fce8b8905217b6e837dadd54fa8a0b776071f539394",
+      "go_direct": "38caf1eb66260fdfb90d573f42a6c20ca5f7a490e77bb3d224e0ab802cd5fe8c"
+    },
+    {
+      "arm": "baseline",
+      "label": "baseline-1",
+      "phase": "cold",
+      "pid": 2563,
+      "process_seconds": 79.521855237,
+      "admission_seconds": 0.897625857,
+      "navigation_seconds": 72.45150942500004,
+      "readiness_seconds": 53.260846825000044,
+      "readiness_polls": 36,
+      "raw_operations": 45,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "33d9efc2e8ed160b7cb2f87ff507da0c5e2eadd872ca12b9cc379f134cd30b4b",
+      "go_direct": "35e242fc3daa473aefc7c53fa70009c1c23b14cb7f5a48006a5c2a4163ef4efd"
+    },
+    {
+      "arm": "baseline",
+      "label": "baseline-1",
+      "phase": "restart",
+      "pid": 2582,
+      "process_seconds": 28.073515674,
+      "admission_seconds": 0.881072684,
+      "navigation_seconds": 22.539761272999954,
+      "readiness_seconds": 16.906812131999914,
+      "readiness_polls": 1,
+      "raw_operations": 10,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "33d9efc2e8ed160b7cb2f87ff507da0c5e2eadd872ca12b9cc379f134cd30b4b",
+      "go_direct": "35e242fc3daa473aefc7c53fa70009c1c23b14cb7f5a48006a5c2a4163ef4efd"
+    },
+    {
+      "arm": "baseline",
+      "label": "baseline-2",
+      "phase": "cold",
+      "pid": 2605,
+      "process_seconds": 78.667744103,
+      "admission_seconds": 0.886375916,
+      "navigation_seconds": 71.579519914,
+      "readiness_seconds": 54.49126583999998,
+      "readiness_polls": 37,
+      "raw_operations": 40,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "33d9efc2e8ed160b7cb2f87ff507da0c5e2eadd872ca12b9cc379f134cd30b4b",
+      "go_direct": "35e242fc3daa473aefc7c53fa70009c1c23b14cb7f5a48006a5c2a4163ef4efd"
+    },
+    {
+      "arm": "baseline",
+      "label": "baseline-2",
+      "phase": "restart",
+      "pid": 2627,
+      "process_seconds": 28.622458432,
+      "admission_seconds": 0.927285329,
+      "navigation_seconds": 23.116570748999948,
+      "readiness_seconds": 17.617251614999986,
+      "readiness_polls": 1,
+      "raw_operations": 10,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "33d9efc2e8ed160b7cb2f87ff507da0c5e2eadd872ca12b9cc379f134cd30b4b",
+      "go_direct": "35e242fc3daa473aefc7c53fa70009c1c23b14cb7f5a48006a5c2a4163ef4efd"
+    },
+    {
+      "arm": "candidate",
+      "label": "candidate-2",
+      "phase": "cold",
+      "pid": 2638,
+      "process_seconds": 80.979920621,
+      "admission_seconds": 0.888376705,
+      "navigation_seconds": 73.60104079400003,
+      "readiness_seconds": 56.520187297999996,
+      "readiness_polls": 38,
+      "raw_operations": 40,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "b020d9af11426a6d829b2fce8b8905217b6e837dadd54fa8a0b776071f539394",
+      "go_direct": "38caf1eb66260fdfb90d573f42a6c20ca5f7a490e77bb3d224e0ab802cd5fe8c"
+    },
+    {
+      "arm": "candidate",
+      "label": "candidate-2",
+      "phase": "restart",
+      "pid": 2657,
+      "process_seconds": 27.624762877,
+      "admission_seconds": 0.882492687,
+      "navigation_seconds": 21.822070586999985,
+      "readiness_seconds": 15.295014799,
+      "readiness_polls": 1,
+      "raw_operations": 10,
+      "canonical_sha256": "ad925c28e6525127507878cd5b9c4c54b0cfd2a6ac13f241f7afab4ef2960c32",
+      "navigation_identity": "b020d9af11426a6d829b2fce8b8905217b6e837dadd54fa8a0b776071f539394",
+      "go_direct": "38caf1eb66260fdfb90d573f42a6c20ca5f7a490e77bb3d224e0ab802cd5fe8c"
+    }
+  ],
+  "controls": [
+    {
+      "outcome": "passed",
+      "archive_sha256": "60b1726f65974a75ae527851da4de5767f0ddd6cb795c49420a67b887fa39124",
+      "run_id": 40110387805,
+      "head": "6aaf9b4d6009d1b691405dc6029e1e3c5a878614",
+      "stage": "baseline",
+      "cases": 1,
+      "passed": 0,
+      "expected_assertion_failures": 1
+    },
+    {
+      "outcome": "retained-failed",
+      "archive_sha256": "6229ed857503112e3e23fc130eb025208efcb81363fa160986a81594e4c5681d",
+      "run_id": 40110512685,
+      "head": "2a31f56bc7232523cd78de90bd32139ea19347b8"
+    },
+    {
+      "outcome": "retained-failed",
+      "archive_sha256": "74c080a50ff02d5851a0c7c458f8ae169ab6f4416435be263ce7079bf8217d38",
+      "run_id": 40110668259,
+      "head": "7f69c3097efb222b889c8d6b8e49c203479fc7d2"
+    },
+    {
+      "outcome": "passed",
+      "archive_sha256": "abab3b60c6adcabd84e618f238929e2d07f100c3db3341b98dcc5a96b791caba",
+      "run_id": 40110861588,
+      "head": "a16b32ce9c3fd75a7bbfc123c143cbcb8a630e61",
+      "stage": "candidate",
+      "cases": 351,
+      "passed": 351,
+      "expected_assertion_failures": 0
+    }
+  ],
+  "limits": {
+    "seconds": 1800,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "supervision": {
+    "cleanup_errors": [],
+    "cleanup_verified": true,
+    "command": [
+      "/home/runner/work/attocode/attocode/.venv/bin/python",
+      "-m",
+      "eval.quality.experiments",
+      "rebuild",
+      "--root",
+      "/home/runner/work/_temp/intelligence-experiment-40110984481-1",
+      "--payload"
+    ],
+    "exit_code": 0,
+    "log_truncated": false,
+    "monitoring": {
+      "controller_cpu_seconds": 349.069288757001,
+      "samples": 2358,
+      "wall_seconds": 351.28921804400125
+    },
+    "peak_disk_bytes": 1501090100,
+    "peak_evidence_bytes": 21860352,
+    "peak_rss_bytes": 990388224,
+    "seconds": 823.195,
+    "status": "passed",
+    "wall_seconds": 823.195
+  },
+  "native_identity_policy": "Navigation recomputed from eleven frozen engine source hashes; Go identity stable per arm; loaded core/Go bytes identical across all phases. Opaque Go hashes may differ between engine archives.",
+  "cleanup_verified": true,
+  "timing": "Primary process lifetime is parent launch through wait/owned cleanup, without profiler. Raw admission and post-validation clocks are retained separately, outside medians and within aggregate payload. Same runner warm OS caches, no general-host timing claim.",
+  "scope": "One same-runner matched Cockroach trial with warm OS caches. No general-host/relevance/model-quality claim. Existing parsing/source/parser/schema/navigation/repair/publication/32MiB1MiB gates preserved. No dependencies/version/publication/global/MCP/Docker changes.",
+  "fallback_phase_followup": "Existing SQL error fallback reconstructs full coverage but retains skeleton phase; new controls assert actual reconstruction and coverage, not a changed phase policy.",
+  "public_archive": {
+    "path": "packages/code-intel/evals/results/2026-10-24-single-rebuild.tar.gz",
+    "sha256": "852d3453180c15a7ab5309a2e2b306c59bd67921dc6401ab6f013d94a5b709c4",
+    "bytes": 4627102,
+    "members": 754
+  }
+}
