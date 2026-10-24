@@ -517,6 +517,7 @@ class ASTService:
                     reparsed.add(fi.relative_path)
             if self._snapshot_identity() != self._snapshot_start:
                 return False
+            self._index.load_from_store()
             verified_navigation = saved.get('navigation_identity') == navigation_identity()
             # A missing summary can follow a transient grammar failure or a
             # parser upgrade. Unchanged source does not prove that the freshly
@@ -531,11 +532,8 @@ class ASTService:
                 changed |= reparsed
                 if not verified_navigation:
                     changed |= cached.keys()
-                self._last_snapshot_repair = repair_index(
-                    self, cached, self._snapshot_start, changed, persisted=True,
-                )
+                self._last_snapshot_repair = repair_index(self, cached, self._snapshot_start, changed)
                 return True
-            self._index.load_from_store()
             from attocode_intel._internal.integrations.context.codebase_context import (
                 DependencyGraph,
             )
