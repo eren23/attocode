@@ -37,7 +37,7 @@ def reference_bounded(value, limit):
 @pytest.mark.parametrize('value', [
     None, True, False, 0, -19, 10**80, -0.0, 1.25, float('inf'), float('nan'),
     '', 'a"\\\n\t\x00é𝄞\ud800', [], {}, [1, False, None, 'é'],
-    {'z': [1, {'é': '\udfff'}], 'a': True}, (1, 'x'),
+    {'z': [1, {'é': '\udfff'}], 'a': True, 1: 'integer', '1': 'text', None: 'null', 'null': 'text'}, (1, 'x'),
 ], ids=['null', 'true', 'false', 'zero', 'negative', 'large-int', 'negative-zero', 'float',
         'infinity', 'nan', 'empty-string', 'escaped-unicode', 'empty-list', 'empty-dict',
         'mixed-list', 'ordered-dict', 'tuple'])
