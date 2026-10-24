@@ -1,0 +1,52 @@
+{
+  "status": "fixed",
+  "scope": "Completed snapshot-fallback readiness only; no native, retry, performance, ranking, release, dependency, schema or cache-bound change.",
+  "root_cause": "Restore exception resets phase to skeleton; a successful full fallback did not republish ready.",
+  "fix": "After existing graph and persistence work, publish ready only for full fallback with exact complete parsed and reference-indexed counts.",
+  "controls": {
+    "baseline": {
+      "run": 40115985938,
+      "head": "201a2ba96d9e6fe1e25cf3fa532b08a19410e8ee",
+      "cases": 1,
+      "passed": 0,
+      "expected_assertion_failures": 1,
+      "archive_sha256": "703bc19094daa759dce1883a2e8448a8cc3fcb8be2e9679937510cc921f82bf5"
+    },
+    "fixed": {
+      "run": 40116296386,
+      "head": "675480afc5e2a1463aeb1c1e1932df6a4e3a4e48",
+      "cases": 313,
+      "passed": 313,
+      "expected_assertion_failures": 0,
+      "archive_sha256": "344bbb5dd6543743b2763a0fe071113915f07c3c436b2aa62064172c1f3f440b"
+    }
+  },
+  "new_regressions": 9,
+  "selected_existing_controls": 27,
+  "maintained_before": 277,
+  "maintained_after": 286,
+  "required_regressions_after": 299,
+  "all_runtime_online": true,
+  "version": "0.1.17",
+  "released": false,
+  "engine_files_per_arm": 349,
+  "changed_product_files": [
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/ast_service.py"
+  ],
+  "coverage": [
+    "SQLite read failure",
+    "malformed/null checkpoint",
+    "full AST/navigation/checkpoint parity and healthy reopen",
+    "partial parse/budget fallback",
+    "minimal initialization",
+    "empty completed fallback",
+    "interrupted persistence",
+    "service avoids redundant background hydration"
+  ],
+  "public_archive": {
+    "path": "packages/code-intel/evals/results/2026-10-24-recovery-readiness.tar.gz",
+    "sha256": "87f6aecdf217ad6401b3ba625d4ebb83bf9b756f7f4007b04a611ad01b99477a",
+    "bytes": 1851331,
+    "members": 722
+  }
+}

@@ -16,6 +16,16 @@ PyPI install/0.1.16-upgrade verification. The GitHub release records publication
 
 The following checkpoints preserve earlier release and experiment history.
 
+**Recovery readiness, 2026-10-24:** [the correction](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-recovery-readiness.md)
+republishes ready when a failed snapshot restore is followed by a completed full
+fallback rebuild. The phase previously stayed skeleton despite complete parsed
+and reference counts, causing stale readiness and unnecessary hydration scheduling.
+Nine regressions and 313 online controls preserve reconstruction/checkpoints,
+partial recovery, minimal/empty initialization and interrupted-write behavior.
+Temporary causal-control wiring is retired; maintained preflight now has 286 cases.
+Parsing, native limits, retry and source/cache validation policy remain unchanged.
+The fix is unreleased on development; it makes no performance or relevance claim.
+
 **Single repair index, 2026-10-24:** the [matched comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-single-rebuild.md)
 rejects the candidate: median restart 28.622→26.718s,
 ratio 0.933462; every matched restart faster true,
