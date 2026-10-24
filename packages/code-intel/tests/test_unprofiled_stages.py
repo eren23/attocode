@@ -216,3 +216,19 @@ def test_external_callable_source_does_not_change_its_result(tmp_path):
     exec(compile('def value(): return 42', '/outside/source.py', 'exec'), namespace)
     assert clocks.call('external', namespace['value']) == 42
     clocks.close()
+
+
+@pytest.mark.parametrize('kind', ['timeout', 'launch'])
+def test_failed_process_retains_attempt_boundaries(tmp_path, kind):
+    import subprocess
+
+    from eval.quality import stages_experiment as trial
+
+    row, saved = {}, []
+    command = ([sys.executable, '-c', 'import time;time.sleep(30)'] if kind == 'timeout'
+               else [str(tmp_path / 'missing-command')])
+    with pytest.raises(subprocess.TimeoutExpired if kind == 'timeout' else FileNotFoundError):
+        trial.run_process(command, tmp_path, .1, row, lambda: saved.append(dict(row)))
+    assert saved and row['status'] == 'incomplete' and row['error_type']
+    assert row['parent_exit_ns'] > row['parent_spawn_ns']
+    assert row['timed_out'] is (kind == 'timeout')
