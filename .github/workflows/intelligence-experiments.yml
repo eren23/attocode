@@ -34,6 +34,18 @@ jobs:
       - name: Install maintained test dependencies (outside payload budget)
         timeout-minutes: 5
         run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Acquire exact encoding baseline source (outside payload budget)
+        if: inputs.experiment == 'encoding'
+        timeout-minutes: 5
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json, re, subprocess
+          from pathlib import Path
+          baseline = json.loads(Path('eval/quality/experiments/encoding.json').read_bytes())['baseline_commit']
+          assert re.fullmatch('[0-9a-f]{40}', baseline)
+          subprocess.run(['git', 'fetch', '--no-tags', '--depth', '1', '--filter=blob:limit=1000001', 'origin', baseline], check=True)
+          subprocess.run(['git', 'archive', baseline, 'packages/code-intel/src/attocode_intel'], stdout=subprocess.DEVNULL, check=True)
+          PY
       - name: Acquire native diagnostic tools (outside payload budget)
         if: inputs.experiment == 'native'
         timeout-minutes: 5

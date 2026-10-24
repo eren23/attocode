@@ -17,7 +17,7 @@ def run(root):
     evidence = root / 'evidence/controls'
     evidence.mkdir()
     baseline = design['stage'] == 'baseline'
-    names = ['test_snapshot_encoding.py'] if baseline else [*TESTS, 'test_snapshot_encoding.py']
+    names = ['test_snapshot_encoding.py'] if baseline else [*TESTS, 'test_snapshot_encoding.py', 'test_encoding_trial.py']
     env = dict(os.environ, ATTOCODE_EXPERIMENT_EVIDENCE=str(evidence),
                ENCODING_CONTROL_EVIDENCE=str(evidence / 'work'))
     command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',

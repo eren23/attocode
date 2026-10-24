@@ -129,7 +129,7 @@ def test_total_and_per_file_bounds_preserve_partial_cache_selection(monkeypatch)
 
 def test_serializer_reduces_interpreted_call_work(tmp_path):
     # Break caught: a replacement preserves bytes but retains the original generator-call overhead.
-    # This work bound is not a wall-time/performance assertion; the real trial is unprofiled.
+    # Total cProfile calls include builtins; this is a work proxy, not a wall-time claim.
     value = FileAST('many.py', 'python', functions=[FunctionDef(f'fn{i}', i+1, i+2,
                     params=['value'], docstring='Example') for i in range(1000)])
     destination = Path(os.environ.get('ENCODING_CONTROL_EVIDENCE', str(tmp_path)))
