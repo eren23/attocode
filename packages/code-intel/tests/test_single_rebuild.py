@@ -245,7 +245,8 @@ def test_sql_read_failure_falls_back_to_full_initialization(tmp_path):
               patch.object(second, '_index_references', wraps=second._index_references) as extracted):
             state = second.initialize_skeleton()
         assert extracted.call_count == state.parsed_files == state.reference_indexed_files == len(expected)
-        assert second.hydration_snapshot()['phase'] == 'ready'
+        coverage = second.hydration_snapshot()
+        assert coverage['parse_coverage'] == coverage['reference_coverage'] == 1.0
         assert {p: asdict(ast) for p, ast in second._ast_cache.items()} == expected
     finally:
         close(second)
