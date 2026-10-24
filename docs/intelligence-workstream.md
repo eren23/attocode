@@ -16,6 +16,15 @@ PyPI install/0.1.16-upgrade verification. The GitHub release records publication
 
 The following checkpoints preserve earlier release and experiment history.
 
+**Bounded JSON, 2026-10-24:** the [new unprofiled comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-bounded-json.md)
+rejects the serializer candidate: median restart 30.332→30.034s,
+ratio 0.990178, short of the required ≤0.90; one candidate restart round is
+slower. Cold ratio 1.001210 passes. All 14 fresh phases have equal navigation data,
+full 4,980-file readiness and validated physical routes. The distinct prospective
+10% / all-round / cold 5% rule is unchanged; the older fingerprint rejection remains.
+Cache bounds and validation/repair policy stay unchanged. The active study wiring
+is retired, original evidence retained, and no new release is published.
+
 **Startup attribution, 2026-10-24:** the [single online diagnostic](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-startup-cost.md)
 uses the unchanged 0.1.17 engine and admits equal data for all ten cold/restart
 navigation operations. Snapshot repair and bounded summary re-encoding dominate

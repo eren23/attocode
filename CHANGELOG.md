@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Evaluation maintenance
 
+- Preserve the bounded snapshot JSON trial and reject its serializer candidate
+  after missing the frozen 10% median and every-round restart guards. Product
+  and validation policy remain unchanged.
+
 - Isolate Cockroach restart costs with one source-bound online diagnostic.
   Snapshot repair and repeated bounded AST summary encoding dominate the
   initialization profile; retain raw task profiles, failure controls and
