@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad]
+        options: [preflight, native, preview, restart, broad, encoding_control, encoding]
 
 permissions:
   contents: read
