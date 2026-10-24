@@ -4,15 +4,14 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** `attocode-code-intel` 0.1.17 (2026-10-23). See the
-[0.1.17 release notes](intelligence-0.1.17.md). Published 0.1.16 remains immutable.
-The patch delivers the already-merged selected-file recovery cooldown, with
-unchanged dependencies, native100ms and Rust2s/four-attempt bounds. The original
-intermittent triggers remain unproven. The [completed relevance comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-file-coverage-routed.md)
-and [matched restart comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-restart-routed.md)
-reject their candidates; neither optimization ships. The release gate requires
-fresh36-pack compatibility on an identical final tree, all normal CI and actual
-PyPI install/0.1.16-upgrade verification. The GitHub release records publication.
+**Current version:** this checkout targets `attocode-code-intel` 0.1.18 (2026-10-24).
+See the [0.1.18 release notes](intelligence-0.1.18.md). Published 0.1.17 remains immutable.
+The patch publishes ready after a caught snapshot restore failure is followed by a
+complete fallback rebuild. Native limits, retries, source/cache guards and dependencies
+remain unchanged. Rejected restart and relevance candidates remain omitted. Publication
+requires fresh36-pack compatibility on this exact versioned tree, normal CI, actual
+PyPI clean-install/0.1.17-upgrade verification and all18release jobs. The GitHub release
+records publication; it does not upgrade a global tool or restart an existing MCP host.
 
 The following checkpoints preserve earlier release and experiment history.
 
