@@ -16,6 +16,15 @@ PyPI install/0.1.16-upgrade verification. The GitHub release records publication
 
 The following checkpoints preserve earlier release and experiment history.
 
+**Unprofiled stages, 2026-10-24:** the [three-process unchanged-engine diagnostic](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-unprofiled-stages.md)
+measures 14.268s restart initialization: persisted index load 3.750s followed by
+repair 6.480s, which includes 1.074s encoding. Raw clocks distinguish nested work,
+thread CPU, hydration and selected background calls; whole lexical CPU remains
+unmeasured. The source suggests reducing redundant index/object construction as
+an independently testable next candidate. No speed benefit is proven or adopted.
+All 298 controls, source/raw/canonical/route/readiness/resource/cleanup checks pass;
+temporary instrumentation is retired, with all 349 engine files and version unchanged.
+
 **Bounded JSON, 2026-10-24:** the [new unprofiled comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-bounded-json.md)
 rejects the serializer candidate: median restart 30.332→30.034s,
 ratio 0.990178, short of the required ≤0.90; one candidate restart round is
