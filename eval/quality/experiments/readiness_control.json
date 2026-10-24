@@ -1,0 +1,14 @@
+{
+  "experiment": "readiness_control",
+  "stage": "baseline",
+  "extra_tests": [
+    "test_edit_restart.py",
+    "unit/integrations/context/test_ast_service_hydration.py"
+  ],
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  }
+}
