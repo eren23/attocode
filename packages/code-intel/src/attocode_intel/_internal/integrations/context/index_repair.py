@@ -16,7 +16,7 @@ def changed_paths(before: dict, after: dict) -> set[str]:
     return {path for path in old.keys() | new.keys() if old.get(path) != new.get(path)}
 
 
-def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict:
+def repair_index(service, asts: dict, identity: dict, changed: set[str], *, persisted: bool = False) -> dict:
     """Keep unaffected references; rebuild graph resolution from current ASTs.
 
     A definition added or removed can affect calls in unchanged source files.
@@ -29,10 +29,15 @@ def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict
     for path, ast in asts.items():
         service._index_definitions(path, ast, index=new)
 
-    names = {name.rsplit(".", 1)[-1] for name in old.definitions.keys() ^ new.definitions.keys()}
+    if persisted:
+        old_names, old_references = service._store.load_repair_state()
+    else:
+        # Live repairs must retain unpersisted precision results for invalidation.
+        old_names, old_references = old.definitions.keys(), old.references
+    names = {name.rsplit(".", 1)[-1] for name in old_names ^ new.definitions.keys()}
     affected = changed & asts.keys()
     # Precision is tied to a complete workspace generation, including target edits.
-    affected |= {ref.file_path for refs in old.references.values() for ref in refs
+    affected |= {ref.file_path for refs in old_references.values() for ref in refs
                  if ref.source == "lsp" and ref.file_path in asts}
     if names:
         # Broad refactors fall back to complete reference extraction. Small
@@ -44,7 +49,7 @@ def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict
             ):
                 affected.add(path)
 
-    for refs in old.references.values():
+    for refs in old_references.values():
         for ref in refs:
             if ref.file_path in asts and ref.file_path not in affected:
                 new.add_reference(ref)

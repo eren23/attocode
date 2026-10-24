@@ -15,9 +15,12 @@ import threading
 import time
 from dataclasses import dataclass, field
 from itertools import islice
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from filelock import FileLock
+
+if TYPE_CHECKING:
+    from .cross_references import SymbolRef
 
 logger = logging.getLogger(__name__)
 
@@ -507,6 +510,31 @@ class IndexStore:
     # ------------------------------------------------------------------
     # Dependencies
     # ------------------------------------------------------------------
+
+    def load_repair_state(self) -> tuple[set[str], dict[str, list[SymbolRef]]]:
+        """Read old repair inputs without constructing a complete navigation index.
+
+        Keep the legacy reference SELECT and grouping order, including duplicates
+        and precision metadata. Repair constructs the final definitions and graph.
+        """
+        from .cross_references import SymbolRef
+
+        conn = self._get_conn()
+        with self._lock:
+            names = {row[0] for row in conn.execute("SELECT DISTINCT qualified_name FROM symbols")}
+            rows = conn.execute(
+                "SELECT id, file_path, symbol_name, ref_kind, line, col, "
+                "source, syntax_name, caller_qualified_name, definition_key FROM refs"
+            ).fetchall()
+        references: dict[str, list[SymbolRef]] = {}
+        for row in rows:
+            ref = SymbolRef(
+                symbol_name=row[2], ref_kind=row[3], file_path=row[1], line=row[4],
+                source=row[6], syntax_name=row[7], caller_qualified_name=row[8],
+                definition_key=row[9],
+            )
+            references.setdefault(ref.symbol_name, []).append(ref)
+        return names, references
 
     def save_dependencies(self, source_path: str, targets: set[str]) -> None:
         """Save dependency edges from source to targets (replaces existing)."""

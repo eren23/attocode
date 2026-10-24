@@ -1,6 +1,6 @@
 {
   "experiment": "rebuild_control",
-  "stage": "baseline",
+  "stage": "candidate",
   "extra_tests": [
     "test_edit_restart.py",
     "test_file_symbol_scope.py",
