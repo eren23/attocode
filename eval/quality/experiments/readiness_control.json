@@ -1,6 +1,6 @@
 {
   "experiment": "readiness_control",
-  "stage": "baseline",
+  "stage": "candidate",
   "extra_tests": [
     "test_edit_restart.py",
     "unit/integrations/context/test_ast_service_hydration.py"
