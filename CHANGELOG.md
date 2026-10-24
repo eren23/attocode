@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Evaluation maintenance
 
+- Measure unchanged-engine startup stages without profiling. Persisted index load
+  takes 3.75 seconds and repair 6.48 seconds within a 14.27-second restart
+  initialization task; encoding is 1.07 seconds inside repair. Preserve raw clocks,
+  source and failure controls, then retire instrumentation. No speedup is adopted.
 - Preserve the bounded snapshot JSON trial and reject its serializer candidate
   after missing the frozen 10% median and every-round restart guards. Product
   and validation policy remain unchanged.
