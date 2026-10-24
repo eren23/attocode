@@ -227,9 +227,10 @@ class WorkspaceStages:
                 if len(args) > 2 and isinstance(args[2], str):
                     name += ':' + args[2]
                 label = f'executor:{number:04d}:' + name
+                metadata = clocks._target(target)
                 submitted = time.monotonic_ns()
                 future = super().submit(lambda: clocks.call(label, function, *args, **kwargs))
-                pending.append(({'sequence': number, 'label': label, 'target': describe(target),
+                pending.append(({'sequence': number, 'label': label, 'target': metadata,
                                  'submitted_ns': submitted}, future))
                 return future
 

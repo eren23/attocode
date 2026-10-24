@@ -1,6 +1,6 @@
 {
   "experiment": "stage_control",
-  "stage": "executor-regression",
+  "stage": "candidate",
   "limits": {
     "seconds": 600,
     "disk_bytes": 2147483648,
