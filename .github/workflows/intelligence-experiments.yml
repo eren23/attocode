@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, startup-control, startup-cost]
+        options: [preflight, native, preview, restart, broad]
 
 permissions:
   contents: read

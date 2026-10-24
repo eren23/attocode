@@ -1,0 +1,204 @@
+{
+  "status": "complete",
+  "scope": "Diagnostic attribution only; no product change or performance/relevance verdict.",
+  "run": 40076699285,
+  "head": "c3d65b00681c867bd0d714b439071ee257152fc0",
+  "engine_commit": "3cdaa03aaa4c01412cd2c58ec7801341ad25376c",
+  "engine_files": 349,
+  "archive_sha256": "82da7ae9388e8a7fe1f390fa78ab45920e7c3198fd69f67d84816c6423ee70a2",
+  "seconds": 182.57109036699995,
+  "fresh_processes": 2,
+  "canonical_operations_equal": 10,
+  "raw_responses": 108,
+  "profiles": {
+    "workspace": 25,
+    "main": 4,
+    "all_intervals_disjoint": true
+  },
+  "controls": {
+    "legacy_run": 40075744057,
+    "review_regression_red_run": 40076357308,
+    "paired_green_run": 40076530465,
+    "positive_passed": 287,
+    "legacy_expected_assertions": 2,
+    "review_fault_assertions_proven_red_then_green": 3
+  },
+  "limits": {
+    "seconds": 600,
+    "rss_bytes": 2147483648,
+    "disk_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "resources": {
+    "cleanup_errors": [],
+    "cleanup_verified": true,
+    "command": [
+      "/home/runner/work/attocode/attocode/.venv/bin/python",
+      "-m",
+      "eval.quality.experiments",
+      "startup-cost",
+      "--root",
+      "/home/runner/work/_temp/intelligence-experiment-40076699285-1",
+      "--payload"
+    ],
+    "exit_code": 0,
+    "log_truncated": false,
+    "monitoring": {
+      "controller_cpu_seconds": 43.575014052000036,
+      "samples": 676,
+      "wall_seconds": 43.66869552699933
+    },
+    "peak_disk_bytes": 1318658202,
+    "peak_evidence_bytes": 7581696,
+    "peak_rss_bytes": 1000198144,
+    "seconds": 178.962,
+    "status": "passed",
+    "wall_seconds": 178.962
+  },
+  "analysis": {
+    "scope": "One instrumented unchanged-engine restart; nested function costs not additive, not isolated CPU or unprofiled speedup.",
+    "run": 40076699285,
+    "initial_task": {
+      "wall_seconds": 44.041663085,
+      "thread_cpu_seconds": 42.56423114,
+      "calls": 109807412
+    },
+    "initialization_calls": [
+      {
+        "file": "_internal/integrations/context/ast_service.py",
+        "line": 358,
+        "function": "initialize_skeleton",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.026423447000000003,
+        "inclusive_seconds": 43.036494485000006
+      },
+      {
+        "file": "_internal/integrations/context/ast_service.py",
+        "line": 488,
+        "function": "_restore_snapshot",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.08729231300000001,
+        "inclusive_seconds": 38.193677088
+      },
+      {
+        "file": "_internal/integrations/context/index_repair.py",
+        "line": 19,
+        "function": "repair_index",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.20950469000000002,
+        "inclusive_seconds": 28.089935608
+      },
+      {
+        "file": "_internal/integrations/context/ast_service.py",
+        "line": 569,
+        "function": "_save_snapshot",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.007038446,
+        "inclusive_seconds": 16.737292878
+      },
+      {
+        "file": "_internal/integrations/context/ast_snapshot.py",
+        "line": 122,
+        "function": "encode_summaries",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.045852824,
+        "inclusive_seconds": 16.086069848
+      },
+      {
+        "file": "_internal/integrations/context/ast_snapshot.py",
+        "line": 83,
+        "function": "_bounded_json",
+        "primitive_calls": 4979,
+        "calls": 4979,
+        "self_seconds": 2.6204887830000003,
+        "inclusive_seconds": 16.008921035
+      },
+      {
+        "file": "_internal/integrations/context/cross_references.py",
+        "line": 212,
+        "function": "load_from_store",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.035416879000000005,
+        "inclusive_seconds": 7.456562818
+      },
+      {
+        "file": "_internal/integrations/context/ast_service.py",
+        "line": 1475,
+        "function": "_index_references",
+        "primitive_calls": 770,
+        "calls": 770,
+        "self_seconds": 0.33306772,
+        "inclusive_seconds": 4.042861736
+      },
+      {
+        "file": "_internal/integrations/context/codebase_ast.py",
+        "line": 1194,
+        "function": "parse_file",
+        "primitive_calls": 770,
+        "calls": 770,
+        "self_seconds": 0.006781687000000001,
+        "inclusive_seconds": 2.4554839580000003
+      },
+      {
+        "file": "_internal/integrations/context/codebase_context.py",
+        "line": 868,
+        "function": "discover_files",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.12239573100000001,
+        "inclusive_seconds": 2.1599398610000002
+      },
+      {
+        "file": "_internal/integrations/context/ast_snapshot.py",
+        "line": 147,
+        "function": "restore_summaries",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.029726496,
+        "inclusive_seconds": 2.111522049
+      }
+    ],
+    "restart_clocks": {
+      "process_lifetime_seconds": 65.852645418,
+      "navigate_including_close_seconds": 55.514149822000036,
+      "readiness_seconds": 44.48032681400002,
+      "source_identity_profile_seconds": 5.759949086000001,
+      "imports_profile_seconds": 1.312541202,
+      "raw_admission_seconds": 0.988929541,
+      "parent_after_exit_harness_seconds": 2.349554099,
+      "entry_delay_seconds": 0.01938572,
+      "finish_to_parent_exit_seconds": 2.901260516
+    },
+    "cache": {
+      "summary_bytes": 33554416,
+      "bound_bytes": 33554432,
+      "cached_files": 4210,
+      "missing_files": 770,
+      "parsed_files": 4980,
+      "before_after_compact_metadata_identical": true,
+      "before_after_summary_sha256_identical": true,
+      "before_after_snapshot_sha256_identical": true,
+      "qualification": "source-bound online metadata observation; rawSQLite not retained; per-file omission causes not measured"
+    },
+    "initial_task_finished_before_lexical_thread": true,
+    "next_mechanism": "Target bounded snapshot summary serialization/republication during repair. Preserve exact source/parser/schema/navigation validation and32MiB/1MiB limits; test a distinct encoding/reuse mechanism with correctness first and a new unprofiled cold/restart design before adoption. Do not revive rejected fingerprints or enlarge cache as a shortcut.",
+    "other_targets": "Persisted cross-reference loading/rebuild and parent harness identity/admission are separately measured; not all of the prior parent-minus-inner gap is startup.",
+    "performance_or_relevance_verdict": null
+  },
+  "qualification": "Instrumented diagnostic only; no performance or relevance improvement verdict. Native interiors opaque. Cumulative times nest and must not be added. Direct per-thread CPU/wall counters differ from profiler callbacks. Unprofiled main async/catalog work, JSON/hash/audit and process/harness gaps remain explicit residuals. Compact SQLite metadata is delegated to source-bound online observer; raw cache DB not retained or replayed locally.",
+  "retired": "Temporary dispatch choices, designs, diagnostic operators and their10controls removed after evidence; all349enginefiles and dependencies unchanged from0.1.17. Prior fingerprint/relevance rejections unchanged.",
+  "cleanup_verified": true,
+  "performance_or_relevance_verdict": null,
+  "public_archive": {
+    "path": "packages/code-intel/evals/results/2026-10-24-startup-cost.tar.gz",
+    "sha256": "c59db8240a81faaeccfe1634812cb1a6e08209f9b887205f9eff42fdeeb42365",
+    "bytes": 2895234,
+    "members": 395
+  }
+}

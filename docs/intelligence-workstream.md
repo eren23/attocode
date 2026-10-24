@@ -16,6 +16,15 @@ PyPI install/0.1.16-upgrade verification. The GitHub release records publication
 
 The following checkpoints preserve earlier release and experiment history.
 
+**Startup attribution, 2026-10-24:** the [single online diagnostic](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-startup-cost.md)
+uses the unchanged 0.1.17 engine and admits equal data for all ten cold/restart
+navigation operations. Snapshot repair and bounded summary re-encoding dominate
+the initialization profile. Source-bound cache observations record identical
+before/after hashes despite a repair/save pass. Main, executor, process and
+parent-admission clocks are separate; raw profiles and all failure controls are
+retained. The next target is bounded snapshot JSON encoding, followed by a new
+unprofiled comparison. No product optimization or release is adopted here.
+
 **Ordered follow-up, 2026-10-22:** the published 0.1.15 wheel and source
 distribution passed all 18 clean-install/previous-version-upgrade phases on a
 GitHub runner; all 18 release jobs passed. No global tool or host was restarted.
