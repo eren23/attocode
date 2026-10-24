@@ -152,6 +152,7 @@ def run(root):
         for name in ('cold', 'restart'):
             dest = evidence / name
             dest.mkdir()
+            validation_start = time.monotonic_ns()
             require(source_manifest(workspace) == receipt and digest(engine_files(engine)) == design['engine_files_sha256'], 'phase input changed')
             if name == 'restart':
                 before_cache = cache_inventory(workspace)
@@ -172,12 +173,16 @@ def run(root):
                         stop_group(process)
             exited = time.monotonic_ns()
             row = {'exit_code': code, 'parent_spawn_ns': spawned, 'parent_exit_ns': exited,
+                   'pre_spawn_validation_start_ns': validation_start,
+                   'pre_spawn_validation_seconds': (spawned - validation_start) / 1e9,
                    'parent_wall_seconds': (exited - spawned) / 1e9, 'status': 'incomplete'}
             report['phases'][name] = row
             write_json(evidence / 'diagnostic.json', report)
             require(code == 0, 'diagnostic phase failed: ' + name)
             captured = json.loads((dest / 'phase.json').read_bytes())
+            row['admission_start_ns'] = time.monotonic_ns()
             observed = admit_phase(dest, workspace, spec, captured, engine=engine)
+            row['admission_end_ns'] = time.monotonic_ns()
             require(captured['pid'] not in pids and captured['source_sha256'] == digest(receipt), 'worker PID/source mismatch')
             pids.add(captured['pid'])
             expected = observed if expected is None else expected
@@ -200,6 +205,8 @@ def run(root):
                 require({'_execute_sync', '_warm_search', '_close_stores'} <= names, 'executor coverage incomplete')
                 write_json(evidence / 'cache-after-restart.json', cache_inventory(workspace))
             require(source_manifest(workspace) == receipt and digest(engine_files(engine)) == design['engine_files_sha256'], 'phase inputs changed')
+            row['post_validation_end_ns'] = time.monotonic_ns()
+            row['harness_after_process_exit_seconds'] = (row['post_validation_end_ns'] - exited) / 1e9
             write_json(evidence / 'diagnostic.json', report)
         report.update(status='complete', all_canonical_data_equal=True)
     finally:
