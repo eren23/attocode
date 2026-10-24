@@ -34,3 +34,20 @@ def run(root):
     write_json(evidence / 'admission.json', {'complete': True, 'diagnostic_only': True,
                'legacy_expected_failures_observed': design['legacy_expected_failures'],
                'pytest_exit_code': result.returncode, 'stage': design['stage']})
+    if design['stage'] == 'paired':
+        from eval.quality.experiments import TESTS
+
+        evidence = root / 'evidence/green'
+        evidence.mkdir()
+        env = dict(os.environ, ATTOCODE_EXPERIMENT_EVIDENCE=str(evidence))
+        env.pop('STARTUP_LEGACY_CONTROL', None)
+        command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
+                   '--confcutdir=packages/code-intel/tests', '-q', '-p', 'eval.quality.experiment_origin',
+                   '--basetemp=' + str(root / 'work/green'), '-o', 'cache_dir=' + str(root / 'work/green-cache'),
+                   '--junitxml=' + str(evidence / 'controls.xml'),
+                   *['packages/code-intel/tests/' + name for name in [*TESTS, 'test_startup_profile.py']]]
+        subprocess.run(command, cwd=REPO, env=env, check=True)
+        tree = ET.parse(evidence / 'controls.xml').getroot()
+        if (len(list(tree.iter('testcase'))) != 277 + len(design['positive_controls']) or
+                any(list(tree.iter(k)) for k in ('failure', 'error', 'skipped'))):
+            raise ValueError('missing, skipped or failing positive controls')

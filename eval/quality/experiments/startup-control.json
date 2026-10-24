@@ -1,7 +1,7 @@
 {
   "experiment": "startup-control",
   "diagnostic_only": true,
-  "stage": "legacy",
+  "stage": "paired",
   "legacy_expected_failures": [
     "test_actual_gateway_dispatch_warm_and_close_are_all_observed",
     "test_actual_failed_warm_task_is_retained_without_changing_response"
@@ -10,5 +10,14 @@
     "test_actual_gateway_dispatch_warm_and_close_are_all_observed": "missing dispatch/warm/close profile coverage",
     "test_actual_failed_warm_task_is_retained_without_changing_response": "failed warm task was not retained"
   },
+  "positive_controls": [
+    "test_actual_gateway_dispatch_warm_and_close_are_all_observed",
+    "test_actual_failed_warm_task_is_retained_without_changing_response",
+    "test_executor_preserves_return_and_exception_after_dumping_profile",
+    "test_raw_profile_summary_matches_saved_function_statistics",
+    "test_overlapping_main_and_workspace_profiles_are_rejected",
+    "test_profile_serialization_time_is_separate_from_task_clocks",
+    "test_profile_output_refuses_overwrite"
+  ],
   "limits": {"seconds": 600, "disk_bytes": 2147483648, "rss_bytes": 2147483648, "evidence_bytes": 67108864}
 }
