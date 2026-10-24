@@ -1,0 +1,16 @@
+{
+  "experiment": "rebuild_control",
+  "stage": "baseline",
+  "extra_tests": [
+    "test_edit_restart.py",
+    "test_file_symbol_scope.py",
+    "test_navigation_evidence.py",
+    "test_symbol_order.py"
+  ],
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  }
+}
