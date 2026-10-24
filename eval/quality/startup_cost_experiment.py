@@ -115,23 +115,38 @@ def cache_inventory(workspace):
 
 
 def run_process(command, evidence, timeout, row, persist):
-    """Existing launch behavior extracted unchanged for real timeout/launch controls."""
+    """Persist attempted phase boundaries even if launch, timeout or cleanup raises."""
     from eval.quality.runner import REPO, stop_group
 
     spawned, process = time.monotonic_ns(), None
-    with (evidence / 'process.log').open('xb') as log:
-        try:
+    row.update(parent_spawn_ns=spawned, worker_pid=None, status='incomplete', timed_out=False)
+    persist()
+    failed = False
+    try:
+        with (evidence / 'process.log').open('xb') as log:
             process = subprocess.Popen(command, cwd=REPO, env=dict(os.environ), stdout=log,
                                        stderr=subprocess.STDOUT, start_new_session=True)
+            row['worker_pid'] = process.pid
+            persist()
             code = process.wait(timeout=timeout)
-        finally:
+        return code
+    except BaseException as error:
+        failed = True
+        row.update(error_type=type(error).__name__, timed_out=isinstance(error, subprocess.TimeoutExpired))
+        raise
+    finally:
+        try:
             if process is not None:
                 stop_group(process)
-    exited = time.monotonic_ns()
-    row.update(exit_code=code, parent_spawn_ns=spawned, parent_exit_ns=exited,
-               parent_wall_seconds=(exited - spawned) / 1e9, status='incomplete')
-    persist()
-    return code
+        except BaseException as cleanup:
+            row['cleanup_error'] = type(cleanup).__name__
+            if not failed:
+                raise
+        finally:
+            exited = time.monotonic_ns()
+            row.update(exit_code=process.poll() if process is not None else None,
+                       parent_exit_ns=exited, parent_wall_seconds=(exited - spawned) / 1e9)
+            persist()
 
 
 def run(root):
@@ -209,6 +224,11 @@ def run(root):
                         'missing or non-monotonic worker timeline')
                 paths = sorted((dest / 'profiles').glob('task-*.json'))
                 tasks = [json.loads(p.read_bytes()) for p in paths]
+                manifest = json.loads((dest / 'profiles/manifest.json').read_bytes())
+                require(manifest['complete'] and not manifest['observer_error_sequences']
+                        and len(manifest['tasks']) == len(tasks)
+                        and [t['sequence'] for t in manifest['tasks']] == list(range(len(tasks))),
+                        'submitted task/profile inventory incomplete')
                 require(tasks and all(t['status'] == 'passed' for t in tasks), 'missing or failed executor profiles')
                 names = {t['task'].split(':')[0].split('.')[-1] for t in tasks}
                 require({'_execute_sync', '_warm_search', '_close_stores'} <= names, 'executor coverage incomplete')

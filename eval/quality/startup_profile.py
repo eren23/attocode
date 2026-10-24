@@ -4,6 +4,7 @@ from __future__ import annotations
 import cProfile
 import hashlib
 import itertools
+import json
 import os
 import pstats
 import threading
@@ -53,7 +54,7 @@ def profile_call(path, task, function, *args, **kwargs):
             'status': 'failed' if error else 'passed', 'error_type': error,
             'started_ns': started, 'finished_ns': finished, 'profile_dump_finished_ns': dumped,
             'scope_wall_seconds': (finished - started) / 1e9, 'thread_cpu_seconds': used_cpu / 1e9,
-            'profile_serialization_seconds': (dumped - finished) / 1e9,
+            'dump_and_summary_seconds': (dumped - finished) / 1e9,
             'profile_sha256': hashlib.sha256(path.read_bytes()).hexdigest(), **summary})
 
 
@@ -62,6 +63,7 @@ class WorkspaceProfiles:
     def __init__(self, evidence):
         self.evidence = Path(evidence)
         self.sequence = itertools.count()
+        self.pending = []
 
     def __enter__(self):
         from attocode_intel import gateway
@@ -81,7 +83,11 @@ class WorkspaceProfiles:
                     return profile_call(observer.evidence / f'task-{number:04d}.prof',
                                         name, function, *args, **kwargs)
 
-                return super().submit(observed)
+                submitted = time.monotonic_ns()
+                future = super().submit(observed)
+                observer.pending.append(({'sequence': number, 'task': name, 'submitted_ns': submitted,
+                    'profile': f'task-{number:04d}.prof', 'metadata': f'task-{number:04d}.json'}, future))
+                return future
 
         self.patcher = patch.object(gateway, 'ThreadPoolExecutor', ProfiledExecutor)
         self.patcher.start()
@@ -89,3 +95,36 @@ class WorkspaceProfiles:
 
     def __exit__(self, *exc):
         self.patcher.stop()
+        records, errors = [], []
+        for declared, future in self.pending:
+            row = dict(declared)
+            try:
+                if not future.done() or future.cancelled():
+                    raise ValueError('task future incomplete or cancelled')
+                raw = (self.evidence / row['metadata']).read_bytes()
+                metadata = json.loads(raw)
+                path = self.evidence / row['profile']
+                if (metadata['task'] != row['task'] or metadata['pid'] != os.getpid() or
+                        metadata['profile_sha256'] != hashlib.sha256(path.read_bytes()).hexdigest()):
+                    raise ValueError('task/profile identity mismatch')
+                summary = profile_summary(path)
+                if any(metadata[k] != v for k, v in summary.items()):
+                    raise ValueError('raw profile statistics differ from summary')
+                failure = future.exception()
+                expected_error = type(failure).__name__ if failure is not None else None
+                if (metadata['error_type'] != expected_error or
+                        metadata['status'] != ('failed' if failure else 'passed')):
+                    raise ValueError('future outcome differs from task record')
+                row.update(status='verified', metadata_sha256=hashlib.sha256(raw).hexdigest(),
+                           profile_sha256=metadata['profile_sha256'])
+            except Exception as error:
+                row.update(status='incomplete', observer_error=type(error).__name__)
+                errors.append(row['sequence'])
+            records.append(row)
+        expected_files = {row['metadata'] for row in records} | {row['profile'] for row in records}
+        observed_files = {p.name for p in self.evidence.glob('task-*')}
+        complete = bool(records) and not errors and expected_files == observed_files
+        write_json(self.evidence / 'manifest.json', {'complete': complete, 'tasks': records,
+                   'observer_error_sequences': errors, 'unexpected_or_missing_files': sorted(expected_files ^ observed_files)})
+        if not complete and exc[0] is None:
+            raise RuntimeError('incomplete task profile inventory or raw statistics')

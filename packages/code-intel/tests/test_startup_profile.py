@@ -149,7 +149,7 @@ def test_profile_serialization_time_is_separate_from_task_clocks(tmp_path, monke
     assert observer.profile_call(tmp_path / 'timing.prof', 'timing', lambda: 42) == 42
     row = json.loads((tmp_path / 'timing.json').read_bytes())
     assert row['finished_ns'] <= points[0] < points[1] <= row['profile_dump_finished_ns']
-    assert row['profile_serialization_seconds'] >= .03
+    assert row['dump_and_summary_seconds'] >= .03
 
 
 def test_profile_output_refuses_overwrite(tmp_path):

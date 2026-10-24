@@ -1,20 +1,14 @@
 {
   "experiment": "startup-control",
   "diagnostic_only": true,
-  "stage": "legacy",
+  "stage": "paired",
   "legacy_expected_failures": [
     "test_actual_gateway_dispatch_warm_and_close_are_all_observed",
-    "test_actual_failed_warm_task_is_retained_without_changing_response",
-    "test_missing_warm_profile_cannot_be_silently_admitted",
-    "test_timeout_retains_spawn_pid_exit_and_incomplete_phase",
-    "test_launch_failure_retains_attempt_metadata"
+    "test_actual_failed_warm_task_is_retained_without_changing_response"
   ],
   "legacy_failure_markers": {
     "test_actual_gateway_dispatch_warm_and_close_are_all_observed": "missing dispatch/warm/close profile coverage",
-    "test_actual_failed_warm_task_is_retained_without_changing_response": "failed warm task was not retained",
-    "test_missing_warm_profile_cannot_be_silently_admitted": "missing warm profile was silently admitted",
-    "test_timeout_retains_spawn_pid_exit_and_incomplete_phase": "timeout attempt metadata was lost",
-    "test_launch_failure_retains_attempt_metadata": "launch attempt metadata was lost"
+    "test_actual_failed_warm_task_is_retained_without_changing_response": "failed warm task was not retained"
   },
   "positive_controls": [
     "test_actual_gateway_dispatch_warm_and_close_are_all_observed",
