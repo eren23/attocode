@@ -114,6 +114,26 @@ def cache_inventory(workspace):
             'saved_counts': snapshot['counts']}
 
 
+def run_process(command, evidence, timeout, row, persist):
+    """Existing launch behavior extracted unchanged for real timeout/launch controls."""
+    from eval.quality.runner import REPO, stop_group
+
+    spawned, process = time.monotonic_ns(), None
+    with (evidence / 'process.log').open('xb') as log:
+        try:
+            process = subprocess.Popen(command, cwd=REPO, env=dict(os.environ), stdout=log,
+                                       stderr=subprocess.STDOUT, start_new_session=True)
+            code = process.wait(timeout=timeout)
+        finally:
+            if process is not None:
+                stop_group(process)
+    exited = time.monotonic_ns()
+    row.update(exit_code=code, parent_spawn_ns=spawned, parent_exit_ns=exited,
+               parent_wall_seconds=(exited - spawned) / 1e9, status='incomplete')
+    persist()
+    return code
+
+
 def run(root):
     import yaml
 
@@ -121,7 +141,7 @@ def run(root):
     from eval.quality.experiment_evidence import Journal
     from eval.quality.fixture_identity import source_manifest
     from eval.quality.restart_experiment import admit_phase, digest, engine_files, require
-    from eval.quality.runner import REPO, stop_group, write_json
+    from eval.quality.runner import REPO, write_json
 
     design_path = REPO / 'eval/quality/experiments/startup-cost.json'
     design = json.loads(design_path.read_bytes())
@@ -161,23 +181,12 @@ def run(root):
             else:
                 module = 'eval.quality.restart_experiment'
             command = [sys.executable, '-m', module, '--workspace', str(workspace), '--spec', str(spec_path), '--evidence', str(dest)]
-            spawned = time.monotonic_ns()
-            process = None
-            with (dest / 'process.log').open('xb') as log:
-                try:
-                    process = subprocess.Popen(command, cwd=REPO, env=dict(os.environ), stdout=log,
-                                               stderr=subprocess.STDOUT, start_new_session=True)
-                    code = process.wait(timeout=design['phase_seconds'][name])
-                finally:
-                    if process is not None:
-                        stop_group(process)
-            exited = time.monotonic_ns()
-            row = {'exit_code': code, 'parent_spawn_ns': spawned, 'parent_exit_ns': exited,
-                   'pre_spawn_validation_start_ns': validation_start,
-                   'pre_spawn_validation_seconds': (spawned - validation_start) / 1e9,
-                   'parent_wall_seconds': (exited - spawned) / 1e9, 'status': 'incomplete'}
+            row = {'pre_spawn_validation_start_ns': validation_start}
             report['phases'][name] = row
-            write_json(evidence / 'diagnostic.json', report)
+            code = run_process(command, dest, design['phase_seconds'][name], row,
+                               lambda: write_json(evidence / 'diagnostic.json', report))
+            spawned, exited = row['parent_spawn_ns'], row['parent_exit_ns']
+            row['pre_spawn_validation_seconds'] = (spawned - validation_start) / 1e9
             require(code == 0, 'diagnostic phase failed: ' + name)
             captured = json.loads((dest / 'phase.json').read_bytes())
             row['admission_start_ns'] = time.monotonic_ns()

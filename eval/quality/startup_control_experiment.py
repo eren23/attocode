@@ -23,11 +23,11 @@ def run(root):
                *[tests + '::' + name for name in design['legacy_expected_failures']]]
     result = subprocess.run(command, cwd=REPO, env=env, check=False)
     cases = list(ET.parse(evidence / 'controls.xml').getroot().iter('testcase'))
-    if (result.returncode != 1 or len(cases) != 2 or
+    if (result.returncode != 1 or len(cases) != len(design['legacy_expected_failures']) or
             [c.get('name') for c in cases] != design['legacy_expected_failures'] or
             any(len(c.findall('failure')) != 1 or c.find('error') is not None or
                 c.find('skipped') is not None for c in cases)):
-        raise ValueError('legacy scope control did not produce the exact two expected assertion failures')
+        raise ValueError('legacy scope control did not produce the exact expected assertion failures')
     for case in cases:
         if design['legacy_failure_markers'][case.get('name')] not in case.find('failure').get('message', ''):
             raise ValueError('legacy failed for an unrelated setup/runtime reason')

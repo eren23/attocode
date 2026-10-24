@@ -162,3 +162,62 @@ def test_profile_output_refuses_overwrite(tmp_path):
     with pytest.raises(FileExistsError):
         profile_call(path, 'replacement', lambda: called.append(True))
     assert path.read_bytes() == b'original evidence' and not called
+
+
+@pytest.mark.asyncio
+async def test_missing_warm_profile_cannot_be_silently_admitted(tmp_path, monkeypatch):
+    # Break caught: an ignored warm future loses its record while later warm records hide it.
+    from attocode_intel.gateway import OperationGateway
+
+    from eval.quality import startup_profile as observer
+
+    original = observer.profile_summary
+
+    def failed_dump(path):
+        if path.name == 'task-0001.prof':
+            raise OSError('controlled profile serialization failure')
+        return original(path)
+
+    monkeypatch.setattr(observer, 'profile_summary', failed_dump)
+    (tmp_path / 'sample.py').write_text('def sample():\n    return 1\n')
+    rejected = False
+    try:
+        with observer.WorkspaceProfiles(tmp_path / '.attocode/profiles'):
+            peer = OperationGateway(str(tmp_path), 'daily', watch=False)
+            try:
+                assert not (await peer.execute('search_symbols', {'name': 'sample'})).isError
+                assert not (await peer.execute('capabilities', {})).isError
+            finally:
+                await peer.close()
+    except RuntimeError as exc:
+        assert 'task profile' in str(exc)
+        rejected = True
+    assert rejected, 'missing warm profile was silently admitted'
+
+
+def test_timeout_retains_spawn_pid_exit_and_incomplete_phase(tmp_path):
+    # Break caught: TimeoutExpired exits before any attempted-phase record is persisted.
+    import subprocess
+    import sys
+
+    from eval.quality.startup_cost_experiment import run_process
+
+    row, snapshots = {}, []
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_process([sys.executable, '-c', 'import time; time.sleep(30)'], tmp_path, .1,
+                    row, lambda: snapshots.append(dict(row)))
+    assert snapshots and row.get('timed_out') is True and row.get('worker_pid'), 'timeout attempt metadata was lost'
+    assert row['status'] == 'incomplete' and row['parent_exit_ns'] > row['parent_spawn_ns']
+
+
+def test_launch_failure_retains_attempt_metadata(tmp_path):
+    # Break caught: an executable launch failure loses even the known spawn/exit/error boundary.
+    from eval.quality.startup_cost_experiment import run_process
+
+    row, snapshots = {}, []
+    with pytest.raises(FileNotFoundError):
+        run_process([str(tmp_path / 'missing-executable')], tmp_path, 1,
+                    row, lambda: snapshots.append(dict(row)))
+    assert snapshots and row.get('error_type') == 'FileNotFoundError', 'launch attempt metadata was lost'
+    assert row['status'] == 'incomplete' and row['worker_pid'] is None
+    assert row['parent_exit_ns'] > row['parent_spawn_ns']
