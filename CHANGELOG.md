@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Publish ready after a failed snapshot restore is followed by a complete fallback
+  rebuild. Require actual full parse/reference counts; incomplete recovery and
+  minimal initialization keep their existing guards. Preserve a healthy checkpoint
+  and avoid redundant background hydration after successful recovery.
+
 ### Evaluation maintenance
 
 - Preserve the single-rebuild restart comparison and reject the candidate.

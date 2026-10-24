@@ -471,6 +471,9 @@ class ASTService:
                 for target in targets:
                     self._index.add_file_dependency(src, target)
             state.dep_graph_files = len(dep_graph.forward)
+        if is_full_parse and state.parsed_files == state.reference_indexed_files == source_count:
+            # A failed restore can reset the phase before the full rebuild.
+            state.phase = "ready"
         self._initialized = True
         return state
 
