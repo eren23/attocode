@@ -188,3 +188,31 @@ def test_stage_patch_restores_original_function_identity(tmp_path):
     assert ASTService._save_snapshot is original
     # No executor task submitted in this focused patch-restoration control.
     assert clocks.close()['complete'] is True
+
+
+def test_metadata_failure_keeps_original_result_and_blocks_completion(tmp_path, monkeypatch):
+    module = observer()
+    clocks = module.StageClocks(tmp_path / 'clock')
+
+    def broken_metadata(function):
+        raise OSError('metadata unavailable')
+
+    monkeypatch.setattr(module, 'describe', broken_metadata)
+    assert clocks.call('metadata', lambda: 42) == 42
+    with pytest.raises(ValueError):
+        clocks.close()
+
+
+def test_keyword_arguments_are_forwarded_without_reserved_names(tmp_path):
+    clocks = observer().StageClocks(tmp_path / 'clock')
+    token = object()
+    assert clocks.call('keyword', lambda **values: values['function'], function=token, label='original') is token
+    clocks.close()
+
+
+def test_external_callable_source_does_not_change_its_result(tmp_path):
+    clocks = observer().StageClocks(tmp_path / 'clock')
+    namespace = {}
+    exec(compile('def value(): return 42', '/outside/source.py', 'exec'), namespace)
+    assert clocks.call('external', namespace['value']) == 42
+    clocks.close()
