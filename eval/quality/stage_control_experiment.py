@@ -15,7 +15,10 @@ def run(root):
     evidence = root / 'evidence/controls'
     evidence.mkdir()
     test = 'packages/code-intel/tests/test_unprofiled_stages.py'
-    selected = [test + '::test_stage_observer_captures_real_nested_calls'] if design['stage'] == 'baseline' else [
+    negative = design['stage'] in ('baseline', 'executor-regression')
+    expected_name = 'test_stage_observer_captures_real_nested_calls' if design['stage'] == 'baseline' else 'test_executor_metadata_failure_cannot_lose_scheduled_future'
+    expected_message = 'unprofiled stage clock observer is unavailable' if design['stage'] == 'baseline' else 'executor metadata failure lost the scheduled future'
+    selected = [test + '::' + expected_name] if negative else [
         *['packages/code-intel/tests/' + name for name in TESTS], test]
     command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
                '--confcutdir=packages/code-intel/tests', '-q', '--basetemp=' + str(root / 'work/pytest'),
@@ -27,10 +30,10 @@ def run(root):
     failures = [(c, c.find('failure')) for c in cases if c.find('failure') is not None]
     if any(list(tree.iter(key)) for key in ('error', 'skipped')):
         raise ValueError('control errors or skips')
-    if design['stage'] == 'baseline':
+    if negative:
         if not (result.returncode == 1 and len(cases) == len(failures) == 1
-                and failures[0][0].get('name') == 'test_stage_observer_captures_real_nested_calls'
-                and 'unprofiled stage clock observer is unavailable' in failures[0][1].get('message', '')):
+                and failures[0][0].get('name') == expected_name
+                and expected_message in failures[0][1].get('message', '')):
             raise ValueError('baseline absence assertion differs')
     elif result.returncode or failures or not cases:
         raise ValueError('positive observer controls failed')

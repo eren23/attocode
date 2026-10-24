@@ -232,3 +232,32 @@ def test_failed_process_retains_attempt_boundaries(tmp_path, kind):
     assert saved and row['status'] == 'incomplete' and row['error_type']
     assert row['parent_exit_ns'] > row['parent_spawn_ns']
     assert row['timed_out'] is (kind == 'timeout')
+
+
+def test_executor_metadata_failure_cannot_lose_scheduled_future(tmp_path, monkeypatch):
+    from attocode_intel import gateway
+
+    module = observer()
+    clocks = module.StageClocks(tmp_path / 'clock')
+    token, executed, future = object(), [], None
+
+    def work():
+        executed.append(token)
+        return token
+
+    def broken_metadata(function):
+        raise OSError('executor metadata unavailable')
+
+    monkeypatch.setattr(module, 'describe', broken_metadata)
+    try:
+        with module.WorkspaceStages(clocks), gateway.ThreadPoolExecutor(max_workers=1) as pool:
+            try:
+                future = pool.submit(work)
+            except OSError:
+                pass
+        assert executed == [token]
+        assert future is not None, 'executor metadata failure lost the scheduled future'
+        assert future.result(timeout=10) is token
+    finally:
+        with pytest.raises(ValueError):
+            clocks.close()
