@@ -5,7 +5,8 @@
     "test_edit_restart.py",
     "test_file_symbol_scope.py",
     "test_navigation_evidence.py",
-    "test_symbol_order.py"
+    "test_symbol_order.py",
+    "test_rebuild_trial.py"
   ],
   "limits": {
     "seconds": 600,
