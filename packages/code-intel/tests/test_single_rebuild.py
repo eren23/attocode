@@ -241,8 +241,11 @@ def test_sql_read_failure_falls_back_to_full_initialization(tmp_path):
     close(first)
     second = ASTService(str(root))
     try:
-        with patch.object(IndexStore, 'load_repair_state', side_effect=sqlite3.DatabaseError('read failed')):
-            assert second.initialize_skeleton().phase == 'ready'
+        with (patch.object(IndexStore, 'load_repair_state', side_effect=sqlite3.DatabaseError('read failed')),
+              patch.object(second, '_index_references', wraps=second._index_references) as extracted):
+            state = second.initialize_skeleton()
+        assert extracted.call_count == state.parsed_files == state.reference_indexed_files == len(expected)
+        assert second.hydration_snapshot()['phase'] == 'ready'
         assert {p: asdict(ast) for p, ast in second._ast_cache.items()} == expected
     finally:
         close(second)
