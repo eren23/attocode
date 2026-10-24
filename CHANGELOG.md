@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.18] - 2026-10-24
+
 ### Fixed
 
 - Publish ready after a failed snapshot restore is followed by a complete fallback
