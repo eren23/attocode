@@ -19,8 +19,7 @@ from pathlib import Path
 from eval.quality.experiment_evidence import assert_engine
 from eval.quality.runner import GIB, REPO, environment, managed_root, supervise, write_json
 
-SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200,
-           'encoding_control': 600, 'encoding': 1800}
+SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200}
 ENGINE = REPO / 'packages/code-intel/src/attocode_intel'
 TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_evidence.py',
          'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py', 'test_parse_recovery.py', 'test_experiment_readiness.py', 'test_fixture_source_alias.py', 'test_ast_snapshot.py', 'test_discovery_reuse.py', 'test_index_reuse.py', 'test_cold_index_cost.py']

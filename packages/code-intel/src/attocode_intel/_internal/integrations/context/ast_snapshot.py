@@ -60,6 +60,12 @@ def parser_identity(language: str) -> str | None:
         return None
 
 
+def _fields(value):
+    if not is_dataclass(value):
+        raise TypeError(type(value).__name__)
+    return {f.name: getattr(value, f.name) for f in fields(value)}
+
+
 def navigation_identity() -> str:
     """Bind reuse to the code that extracts/resolves persisted navigation."""
     digest = hashlib.sha256(b'navigation-fingerprint-v1')
@@ -74,89 +80,14 @@ def navigation_identity() -> str:
     return digest.hexdigest()
 
 
-@lru_cache(maxsize=32)
-def _json_fields(kind):
-    return tuple((f.name, len(json.encoder.encode_basestring_ascii(f.name)) + 1) for f in fields(kind))
-
-
-class _JsonOverflowError(Exception):
-    pass
-
-
 def _bounded_json(value, limit):
-    """Admit a bounded builtin structure, then encode without Python chunk yields.
-
-    Preparation shares scalar values and stops at the byte bound, so an oversized
-    AST is never copied or encoded in full. ASCII output makes character and byte
-    lengths identical. The final C-backed encoder preserves the existing wire.
-    """
-    remaining, active = limit, set()
-
-    def charge(size):
-        nonlocal remaining
-        remaining -= size
-        if remaining < 0:
-            raise _JsonOverflowError
-
-    def prepare(item):
-        if isinstance(item, str):
-            charge(len(json.encoder.encode_basestring_ascii(item)))
-            return item
-        if item is None or isinstance(item, bool):
-            charge(4 if item is None or item is True else 5)
-            return item
-        if isinstance(item, int):
-            charge(len(int.__repr__(item)))
-            return item
-        if isinstance(item, float):
-            charge(len(json.dumps(item)))
-            return item
-        record = is_dataclass(item)
-        sequence = isinstance(item, (list, tuple))
-        if not record and not sequence and not isinstance(item, dict):
-            raise TypeError(type(item).__name__)
-        marker = id(item)
-        if marker in active:
-            raise ValueError('Circular reference detected')
-        active.add(marker)
-        try:
-            charge(1)
-            if sequence:
-                result = []
-                for value in item:
-                    if result:
-                        charge(1)
-                    result.append(prepare(value))
-            else:
-                result = {}
-                if record:
-                    for name, cost in _json_fields(type(item)):
-                        charge(cost + bool(result))
-                        result[name] = prepare(getattr(item, name))
-                else:
-                    for name, value in item.items():
-                        if isinstance(name, str):
-                            key = name
-                        elif name is None or isinstance(name, (bool, int, float)):
-                            key = json.dumps(name)
-                        else:
-                            raise TypeError(type(name).__name__)
-                        charge(len(json.encoder.encode_basestring_ascii(key)) + 1 + bool(result))
-                        # Keep numeric/null keys distinct from equal-looking string keys.
-                        result[name] = prepare(value)
-            charge(1)
-            return result
-        finally:
-            active.remove(marker)
-
-    try:
-        prepared = prepare(value)
-    except _JsonOverflowError:
-        return None
-    encoded = json.dumps(prepared, separators=(',', ':'), ensure_ascii=True)
-    if len(encoded) != limit - remaining:
-        raise ValueError('Bounded JSON size accounting mismatch')
-    return encoded
+    chunks, size = [], 0
+    for chunk in json.JSONEncoder(default=_fields, separators=(',', ':'), ensure_ascii=True).iterencode(value):
+        size += len(chunk)
+        if size > limit:
+            return None
+        chunks.append(chunk)
+    return ''.join(chunks)
 
 
 @lru_cache(maxsize=32)
