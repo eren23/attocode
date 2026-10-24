@@ -1,7 +1,7 @@
 # Unprofiled startup stages — 2026-10-24
 
 **Next target: persisted cross-reference restoration and conservative repair.**
-In this single unchanged-engine diagnostic, restart initialization takes 14.268s:
+In this single unchanged-engine diagnostic, the first restart initialization task takes 14.268s:
 index loading takes 3.750s, followed by 6.480s of repair. Summary encoding takes 1.074s
 inside repair. These clocks identify a better next investigation target than the
 previous profile's encoding call counts; they do not establish an optimization gain.
@@ -115,6 +115,8 @@ executor inventory, clock arithmetic and cross-phase chronology.
 The [machine report](2026-10-24-unprofiled-stages.json) and
 [archive](2026-10-24-unprofiled-stages.tar.gz) retain all six original Actions archives,
 executed designs/operators/tests, the unchanged engine, raw spans and admissions.
+The public machine summary lists root counts; full per-root timestamps remain in
+the archive semantic report and original span logs.
 Archive SHA-256 `2461e36c91a916d034445d58b355798c41ecf012a38823124bce3b18403f98a1`;
 3,281,123 bytes / 410 members. Every member and executed source is checked against its
 manifest and pinned Git bytes.

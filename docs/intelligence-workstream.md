@@ -17,7 +17,7 @@ PyPI install/0.1.16-upgrade verification. The GitHub release records publication
 The following checkpoints preserve earlier release and experiment history.
 
 **Unprofiled stages, 2026-10-24:** the [three-process unchanged-engine diagnostic](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-unprofiled-stages.md)
-measures 14.268s restart initialization: persisted index load 3.750s followed by
+measures 14.268s restart initialization task: persisted index load 3.750s followed by
 repair 6.480s, which includes 1.074s encoding. Raw clocks distinguish nested work,
 thread CPU, hydration and selected background calls; whole lexical CPU remains
 unmeasured. The source suggests reducing redundant index/object construction as
