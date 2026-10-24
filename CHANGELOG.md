@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Evaluation maintenance
+
+- Isolate Cockroach restart costs with one source-bound online diagnostic.
+  Snapshot repair and repeated bounded AST summary encoding dominate the
+  initialization profile; retain raw task profiles, failure controls and
+  separate process/harness clocks. Retire temporary instrumentation without
+  changing product behavior or claiming an unprofiled speed improvement.
+
 ## [Intelligence 0.1.17] - 2026-10-23
 
 ### Fixed

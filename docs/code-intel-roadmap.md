@@ -1,6 +1,6 @@
 # Code Intelligence Roadmap
 
-## Current priorities — 2026-10-23
+## Current priorities — 2026-10-24
 
 This checkout targets `attocode-code-intel` **0.1.17**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
@@ -12,6 +12,7 @@ an unchecked feature shipped when its old target version was reached.
 
 | Priority | Action | Completion evidence / limits |
 | --- | --- | --- |
+| Restart cost attribution | Target bounded snapshot encoding during conservative repair | The [startup diagnostic](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-startup-cost.md) admits one unchanged-engine cold/restart pair and all ten logical operations. Initialization profiles at 44.04 seconds, with nested repair28.09/summary encoding16.09; the full32MiB cache omits770 summaries. Re-encoding produces identical observed cache hashes. Profiled timings do not predict unprofiled savings; the next candidate needs preserved bounds/correctness and a new unprofiled comparison. Temporary instrumentation is retired. |
 | 0.1.17 native recovery | Recover on a later explicit request after a transient selected-file failure | [Paired controls and pinned OCaml proof](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-native-recovery-cooldown.md): the baseline stays partial, the candidate recovers after a one-second cooldown at the unchanged 100 ms limit. Immediate retries and unrelated source edits stay guarded. This does not infer the missing historical native exception or scheduling cause. |
 | 0.1.16 navigation fix | Stabilize equal-scoring symbol pages before their limit | The [restart investigation](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-22-cockroach-restart.md) exposed ordering and membership changes after persisted reopening. A complete source-location tie-break preserves match scores, LSP priority and kind filters. Seven regressions include actual reopening across three fresh processes/hash seeds; this is not a relevance or performance gain. |
 | First-page relevance follow-up | Complete corrected comparison rejects file-coverage promotion | The [438-page comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-23-file-coverage-routed.md) gains one distinct judged file per round (required two), loses no judged files/excerpts and changes 30 exact-question control pages. Latency passes. The candidate is removed and all 24 reserved validation questions remain unissued. The original source-alias attempt retains its incomplete/null verdict; source-alias, readiness and routing corrections are preserved. |
