@@ -1563,6 +1563,7 @@ class CodeIntelService:
             arguments = {"query": query, "top_k": follow_up, "file_filter": file_filter}
             if context_file:
                 arguments["context_file"] = context_file
+                arguments["mode"] = mode
             if branch:
                 arguments["branch"] = branch
             response["follow_up"] = {

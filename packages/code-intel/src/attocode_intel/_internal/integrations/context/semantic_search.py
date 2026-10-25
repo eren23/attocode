@@ -1642,7 +1642,7 @@ class SemanticSearchManager:
         *, allowed_paths: frozenset[str] | None = None,
     ) -> list[SemanticSearchResult]:
         """Find body-only implementations; all MATCH terms are tokenizer-made."""
-        if top_k <= 0:
+        if top_k <= 0 or allowed_paths == frozenset():
             return []
         if not self._body_index_built or self._source_revision() != self._body_revision:
             self._body_index_built = False
@@ -1653,8 +1653,6 @@ class SemanticSearchManager:
             return []
         import fnmatch
 
-        if allowed_paths == frozenset():
-            return []
         tokens = list(dict.fromkeys(t for term in query_terms for t in _tokenize(term)))
         if not tokens:
             conn.close()
