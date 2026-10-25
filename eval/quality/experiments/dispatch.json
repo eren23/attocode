@@ -1,0 +1,31 @@
+{
+  "experiment": "dispatch",
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "expected_cases": 327,
+  "expected_failures": [
+    "test_explicit_alias_uses_registered_module",
+    "test_unregistered_conventional_module_never_runs",
+    "test_invalid_entrypoint_rejected_before_body[missing]",
+    "test_invalid_entrypoint_rejected_before_body[noncallable]",
+    "test_invalid_entrypoint_rejected_before_body[no-root]",
+    "test_invalid_entrypoint_rejected_before_body[extra-required]",
+    "test_invalid_entrypoint_rejected_before_body[keyword-required]",
+    "test_invalid_entrypoint_rejected_before_body[async]",
+    "test_invalid_entrypoint_rejected_before_body[async-callable]",
+    "test_missing_module_is_explicit_binding_error",
+    "test_import_error_keeps_original_cause",
+    "test_shadow_module_cannot_execute_body",
+    "test_maintained_operator_qualifies_without_running[native]",
+    "test_maintained_operator_qualifies_without_running[preview]",
+    "test_maintained_operator_qualifies_without_running[restart]",
+    "test_inline_handler_qualification_needs_no_operator[preflight]",
+    "test_inline_handler_qualification_needs_no_operator[broad]",
+    "test_workflow_choices_and_registered_targets_qualify"
+  ],
+  "purpose": "Synthetic dispatcher binding causal controls only; no corpus/native/scored trial"
+}
