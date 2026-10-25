@@ -15,6 +15,8 @@ def run(root):
     tests = ['packages/code-intel/tests/test_context_search.py']
     if design['expected'] != 'feature_absent':
         tests += ['packages/code-intel/tests/' + name for name in TESTS]
+    if design.get('include_trial_guards'):
+        tests.append('packages/code-intel/tests/test_context_experiment.py')
     xml = root / 'evidence/context-controls.xml'
     result = subprocess.run([sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
         '--confcutdir=packages/code-intel/tests', *tests,
@@ -34,6 +36,9 @@ def run(root):
         assert len(cases)==design['expected_cases'] and result.returncode==1
         assert len(failures)==1 and failures[0].attrib['name']=='test_compact_context_metadata_preserves_budget_with_long_neighbor_names'
         assert 'max_tokens is too small' in ''.join(failures[0].find('failure').itertext())
+    elif design['expected']=='trial_guards_absent':
+        assert len(cases)==design['expected_cases'] and result.returncode==1 and len(failures)==14
+        assert all('test_context_experiment' in c.attrib['classname'] and 'eval.quality.context_experiment' in ''.join(c.find('failure').itertext()) for c in failures)
     else:
         assert design['expected']=='all_pass' and result.returncode==0 and not failures and len(cases)==design['expected_cases']
     write_json(root/'evidence/context-control-verdict.json', {'expected':design['expected'], 'cases':len(cases), 'failed':len(failures), 'exit_code':result.returncode})

@@ -1,0 +1,1851 @@
+{
+  "schema_version": 1,
+  "experiment": "context_search",
+  "baseline_commit": "ffe0b3d6cb1f97107bf3d4251d61e7a6092bd6c6",
+  "candidate_runtime_files": {
+    "__init__.py": "3c24544ff80b60fd7bc13ebfdc80e971b5650ce3e4d1331338b2557b5135772f",
+    "_internal/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/errors/__init__.py": "686bf1fc27c3e0aab95611c39327f1282dd35d0e369fe5eb42763e43185b4b46",
+    "_internal/integrations/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/context/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/context/architecture_drift.py": "914220882f48b346b3187ce4796be2d6526d158d08a45a78ddaf8851d25e4de5",
+    "_internal/integrations/context/ast_chunker.py": "bf11468010786e52f59c81d6c7c7650b0b44cbbc6fc514c40cc7d7ddb26f6639",
+    "_internal/integrations/context/ast_service.py": "08d2dd7eddea35efe89995827ef8be96068374889475695d4f811d7c83e9b467",
+    "_internal/integrations/context/ast_snapshot.py": "fa95484ec0e690ecd2b961c0d8c16a0454073703d841f12a339297d95c578eaa",
+    "_internal/integrations/context/blob_oid.py": "297c62dc6e6324874aea9157213b4290b29ec7711cd37568e1eaaa75269d8b69",
+    "_internal/integrations/context/cache_manifest.py": "c22889e1493c5c8e6d45d69e6827a5b4a1b2b5343ce12d35245c4bbd4fffb6f0",
+    "_internal/integrations/context/cas.py": "1c93c059bf83e4ec09ee88fef628091dd496e338fbb6b8f5956ac1fa82d09d94",
+    "_internal/integrations/context/code_analyzer.py": "0fabbfa9138c470e1a377de4577e599b69bb4963fec3561efa7fbd26fc27d45d",
+    "_internal/integrations/context/codebase_ast.py": "7178e4948c245cc3dfed24186eea9fd9bc0f8973feecc4bf994395e91d697df2",
+    "_internal/integrations/context/codebase_context.py": "061b9c9077921c3d1e957c2fa6095bd6024d8603d5c2b37650091d390f74f559",
+    "_internal/integrations/context/cross_mode.py": "5baf4f9b560a73faa98e31dbd969b6feb0af435843f4c0e5f2ea0459694f4f93",
+    "_internal/integrations/context/cross_references.py": "98b3add564d30c4e3e366fc271af9f01e404e8730a791685dc60b6968821d79a",
+    "_internal/integrations/context/discovery_snapshot.py": "42ae4f6e1ead4b580c20f2ca8a0fbc8594bd2cddd59a922acfbd1a7889e734d4",
+    "_internal/integrations/context/embedding_rotation.py": "da9548eea624cd542e5920f4c6f3423bd145b4ab1631720b0de3817a6da33e2f",
+    "_internal/integrations/context/embeddings.py": "80cca4b5c64c35a60a052e621bd5b47970e668b65951dc922158d411040ecd49",
+    "_internal/integrations/context/frecency.py": "6c63d5ecddd586fac1a60bb556289dbcee9a1ece02baff6b1a126dcca90a6106",
+    "_internal/integrations/context/fuzzy.py": "247504f4e2fb5e4190200daf44055e58a7163cf2b5c846ec7ffef5aa9cb88766",
+    "_internal/integrations/context/hierarchical_explorer.py": "7f6a0fb336f1fbe5b3afa07e585cc3712c144c5cba8a06c2838a5d2b3f76b86e",
+    "_internal/integrations/context/hydration.py": "5094ceca0d16fcbef0fedc8e2d2f841bd4c88f1c69bada4c60e63cc2596b93df",
+    "_internal/integrations/context/index_probe.py": "6652c07cafba7b3cd0eb924406920883ea678db746826eaf6ee8c0c53bc316d0",
+    "_internal/integrations/context/index_repair.py": "749b763d1cbce8c239efa381f1660918b87edacb672fe751e4a23e5d234c4736",
+    "_internal/integrations/context/index_store.py": "a65c04d9b468030eb227b49e5939e3d7d22c966a48bc75b0a383bd91edcb4538",
+    "_internal/integrations/context/language_registry.py": "1216b62cc8c5a04457304a83b0cd9b49a9b556b616daf8caf836ade0979d2795",
+    "_internal/integrations/context/memory_store.py": "23907b9357d571e4d2204382a60c51b40d58abd9e2fa1e1b5e30c37113621101",
+    "_internal/integrations/context/module_resolution.py": "788e5404beed67520d2df573b09dbab4946ff49aba68dae4d6b88cd33f9c39d7",
+    "_internal/integrations/context/parse_diagnostics.py": "1f6ea4c962d07c0b39d1577c466384ceaf765d8ba21b8f38a6982addb15ae3ab",
+    "_internal/integrations/context/query_constraints.py": "6cb471b94159fe784a1896c281bee5521d6fe5dbd08c67dfbbd961f25adca795",
+    "_internal/integrations/context/query_history.py": "20663225aa2abd46c656766847ebe61e6c9b2900b10b9505ad1fc13e3c05ee77",
+    "_internal/integrations/context/reranker.py": "edf9e955caf72528c1ed0a3f9185b2dc8532af9ef7ae49352c08b3e2dd117a48",
+    "_internal/integrations/context/semantic_search.py": "239bae0956ca33c3f506f3e7f5d4f21626a4dc2439bff4b59580fc78a514fa4c",
+    "_internal/integrations/context/syntax_evidence.py": "2b16c83a0a59c21e86d812aba459a9b11c2b5be6bf89e7ba9524b9f8aaada73e",
+    "_internal/integrations/context/systemone_ranker.py": "041f4bdc75f3e2f110ce81909b0d6199d1bfdc84be7cb9cbe763a2dbb37043d7",
+    "_internal/integrations/context/temporal_coupling.py": "d9bb1a9a1bcaa6e04c5486cd4634ad8f6305b86ec18152a479909fc604f0c2c3",
+    "_internal/integrations/context/trigram_index.py": "b8b8deb64c0bbd907a4c6cc5583668e2211beabd490a2ae9c04902ea6cb57318",
+    "_internal/integrations/context/trigram_regex.py": "94e5e0d7391a20a14889e4bf207c6c1b308d8fcace9175ae5d586865058409b5",
+    "_internal/integrations/context/ts_parser.py": "31ac62674ab43217f0609da626178ecf5fef71671d7e5e6a69d9a87f8b89c072",
+    "_internal/integrations/context/vector_store.py": "27dd61f3ef42993f258236f528cec69c2dcf9cace5a46a7730b972eb7e6a548f",
+    "_internal/integrations/feature_flags/__init__.py": "af2746daa3a3e7603eff9604531c83f564e04ade9e02c180e5b85e6834bf3ba4",
+    "_internal/integrations/lsp/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/lsp/client.py": "6a1d86d7c87979f388316d210f4e622af81282e3447b4a38c3786ad668863ccc",
+    "_internal/integrations/mcp/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/mcp/client.py": "4cb83bbc4d328e1277bbcfd70485032c9484c864872b64ff352ea529204ff3f2",
+    "_internal/integrations/security/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/security/custom_rules.py": "7556d9085751f23d7eac7444f4d0f179a7e948f956d08c2fbd28a86b2dd987fa",
+    "_internal/integrations/security/dataflow.py": "06bd83bcaa0aa18819ef4eeed5ff319783a8f3fa9fbc91a5c41f59c00eefc449",
+    "_internal/integrations/security/dependency_audit.py": "b2bcd321cde7874d4b2c92c20ebbba12c82644f9ea297b78c93e5e7e237b8c57",
+    "_internal/integrations/security/matcher.py": "cf0a2b67643ca40ef38c43b03591a46d4ee33975b8a5529e8c73a1b9104820cf",
+    "_internal/integrations/security/patterns.py": "73837271d3acabcdecb0e36fd69482065817c59957636cf3cdf074eb7a6d66c8",
+    "_internal/integrations/security/scanner.py": "ab312c3e804aecffed34876732a65f0c193dc7f1f9ef2e317fdddc61b8716f11",
+    "_internal/integrations/utilities/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/utilities/ignore.py": "7b7e23062d60de4e74c4aceaeff9123c1472b1e2b55b76b96c51ffc8b8fcc1c9",
+    "_internal/integrations/utilities/token_estimate.py": "061a2ef4c1935582e4f9716e37fb8d33dc09b09dd09e5777d378ca5059da89ae",
+    "_internal/tricks/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/tricks/recursive_context.py": "5090b527895cda605fabd1883c25f4d59d51ba7a8017f67de9dd51f4c87c6afc",
+    "_internal/types/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/types/events.py": "859bb588ad03a8769235f687a8154c6881f13bc42bcfe4b89383e95eca77bc2c",
+    "_internal/types/severity.py": "7c851293282175ad82293c5ade5bbcb05346041c0f07702cd75cea23b3c6dd64",
+    "_shared.py": "fc52ca020009b23922afe6ce1799cff19af57e7e35dbbe2b90acb38973d10dc4",
+    "analysis_coverage.py": "53333aee96bd4728b2be0ee449bac07d3fb027387fb6963d4382de333ad11c95",
+    "api/__init__.py": "f5f58ce9aa3583b4287d300fcf3f0d3644dd46da0834a2a47927cb0df1ce5f6f",
+    "api/access.py": "1908d5cceae6970f230b080a142fa28991990a40bcdd6cc746005fa6923ece07",
+    "api/app.py": "c2181cd9cee440084ca219b85170867a3bbc49aecec9dfe647a5c122ee2f7345",
+    "api/auth/__init__.py": "f00326a929f82b59f229ae7439cf538f93a1eaa227f4d4174839a334a61bfaea",
+    "api/auth/api_keys.py": "0b235ca4a4cbbb81a8598b4060b23efe99f049bca858ae2128e6ec2a11c7a4bc",
+    "api/auth/context.py": "411152cd816d158d5e7fa5a33cee7227e8f1cf0b9aa3645bead4c429a98245fa",
+    "api/auth/jwt.py": "0c2ba3eb6d2197a3d7a57ca155462cf404364e475c1fb80de66e264bfdfd2be3",
+    "api/auth/oauth.py": "d4ea456f1584be171f0b5809e1777b39fbf81369967d2dd15ddcd2e0f05d47b0",
+    "api/auth/passwords.py": "aa99849dc6f781128623b3a3aebadb76962070e730271b0fa9beb718e4aa170d",
+    "api/deps.py": "8ef8151a5acb53518c9a88be4101e4f2c36586748bfc898e6f9af7bec9bf263e",
+    "api/knowledge_bridge.py": "3fc9af46dcf7147c49f6b609812ffd4da645aa6db00f8d22e6f0b3c0565af9d5",
+    "api/mcp_transport.py": "075d0d122b94def49b958bb4bf0eb4369d8fcf674e84f7a662047eb4baa55217",
+    "api/middleware.py": "6c39222990655c43d2fb0a078fb1a0b4ab1723b922283ba51c1d8f3105215530",
+    "api/models.py": "64e881c68ab7e3adb1fc1d44544d51a7ce7d62dce4b985146979f8be789ec6fc",
+    "api/providers/__init__.py": "fec6ddb054d07f06db089251952070aef479bd6f379c9b50a421da7756d71f08",
+    "api/providers/db_provider.py": "05387fe0156b5b35ae191aa919b2cc1b9f369945c7669f65d0e2ea75442198a5",
+    "api/providers/local_provider.py": "4232cd42f27e19c99a05ec9c2e5659f98677e5309a5ceae0d2d146bda36e29c6",
+    "api/providers/remote_provider.py": "1a241bf0a3de457d1ef3369e314af755c3cbb38afb509d093901bf825e949400",
+    "api/repository_source.py": "e701fb315674f4c7a23d2aed46187ece260e3144762b2a76520d2873638fbe5d",
+    "api/routes/__init__.py": "51bf83470168d705beb38744164cc071189699478cdb8ceebd28fd927f332148",
+    "api/routes/_pin_helper.py": "777b02b9f9c69027625ad16044840aff65ca340bed99c63fe0fd8653c845c369",
+    "api/routes/activity.py": "c6d4548ce0f3b6d301e0c40f2fffd1c7ca67dc9629ac6c5cab10dc0c0f1bddb8",
+    "api/routes/adr.py": "a1d3bf4ef67cb6b9be1285299a4e35e0963a56c53d1169b7972559cadd6a42a6",
+    "api/routes/analysis.py": "abb80fdec7c47dea41fb063b79f132025645c07d487c83f803cbea2e2140e289",
+    "api/routes/api_keys.py": "bc10d8938ecfe74ee5fb82b7f0721275f2dc410a3b4357c01891d6928f519e88",
+    "api/routes/auth.py": "787a60d50e36f30b3217a1a76a9c08d27c5ebf42b23e466c336f88600e47b101",
+    "api/routes/branches.py": "de3e05b575e918af3ec3fddd832eecb08271fe8819faa32c55bb5d322c5121d1",
+    "api/routes/cross_repo_search.py": "64649a53d59fdf2c2a3f74f7ee5810da5777bf57159f97fbc428f07122e216cb",
+    "api/routes/embeddings.py": "bd297d6150395065cd725c407d54a919652b98372284e30397969124c2a252d3",
+    "api/routes/files.py": "b356624623f9bf95a2675147bfcb67dab299187aedb9e6f2ac1d89b26959eb0e",
+    "api/routes/files_v2.py": "3047d45160f0965d971a2f33380a3b8cdc03739448deb841819946cb290afb11",
+    "api/routes/gc.py": "5a394e7c9b195470c87ad3284605b907128209bdaeb84b034b25acec6416cf3f",
+    "api/routes/git_v2.py": "7c36ec3151fee893b3352371f31123e1d223e7726f0532c71682d04a71e596d7",
+    "api/routes/graph.py": "14ddf78d19730c135ccbb327cebcffefafd9dbf495c1d548650ac4cbb85f99ed",
+    "api/routes/graph_viz.py": "b7d256c98b406f9898ebc18cd419663b04ab90507fca6757ac6ec7c8e460544a",
+    "api/routes/health.py": "00d855206ca39133947586a71a8c9b399282b6bd197bd0a322df59addfedd5a0",
+    "api/routes/history.py": "cf8c67c973c2b074315e470ed902cffe27b2d9822f089e84dbbddd8b6f3f7850",
+    "api/routes/jobs.py": "0ce11e7e944d1d0584881b5fb92e1c7ddaad840e9eac083d08baa80ff9d79afc",
+    "api/routes/learning.py": "af9347757a67139e8b26a99b94aa347ec0e78e02a37c7986409a13bb01d8e194",
+    "api/routes/lsp.py": "9121467807da755135ba4285f246ae06b29a9ae37c652212dd9d20eb4611356d",
+    "api/routes/notify.py": "fe9ed80a6f2155ed8ac0472cc93c88669f21696ee5321f70efa62fa896f8679a",
+    "api/routes/operations.py": "b32103c4a115df34d881bafe72dd59ed7d5f1e9582c8edd9c4ddf2e67b8a8e44",
+    "api/routes/orgs.py": "1320a02e6825aaf9d642a70475929c865315c0ac1bc09f5eb8d810ada3e78afa",
+    "api/routes/preferences.py": "af3b526e5e78042e722349f706e0ac7357b8a6dc8c0675e23b2a40195e069fdb",
+    "api/routes/presence.py": "223b056722a90a3aa2d24e618f2315ed2eaec383a6fd75fd267f136fa29f7445",
+    "api/routes/projects.py": "030699f50e0a9fee5e78c2ab837913a78de9e31f92b94fa1be6204d114db3a02",
+    "api/routes/repos.py": "701c57a429c2dd39b99c5ba456fe1df1abbaf752bea500e64bc808a5fb40756e",
+    "api/routes/search.py": "bc186e5a62f64250988c418d54198d0b771180b348937ebf91f7335c387cf8b1",
+    "api/routes/snapshots.py": "8159458a15461ad927c666c30c0c5b3fb4dbe96beebe1b07dd1bd6ad1568b219",
+    "api/routes/webhooks.py": "214297cefe71ec4870b7324758ba242f83a046ff1aaed10c8c20d518d8f306fd",
+    "api/routes/websocket.py": "ede8340cf07f3d1f8233a52e9a589cc21fa938780cffbf49e898e2b017fe0a96",
+    "api/utils.py": "ef554c59085195557af917d9d2167199c8af55f1abb8867f8386da4a6f406b50",
+    "artifacts/__init__.py": "0374927867b798c10ae637002df6201532fb3168aa5051661825836d6a38d66d",
+    "artifacts/hashing.py": "ee7b39ec5c87d7588a55ead338b5da3472a617863be333aed5437dd5b82e9bec",
+    "artifacts/provenance.py": "97148a279837e643559e791d142b0c5771d44434d47196e71053856fec589f65",
+    "artifacts/retrieval_pin.py": "158e928458979698094951a1a0074f1e5a1266b6fe00a4e79109f9a701aae535",
+    "audit.py": "b0a043340d240eaacf130b33df1455ba924bc4638dbcd36f19940c33a0dc254c",
+    "bug_finder.py": "f8f74084d511014026b9b03728068d4faaabffd05bf8e913b7eb75f407d26c5c",
+    "bundle.py": "48b7b975b2756c2075bf3ddd06db729d552cb9d418f9862e060797fc1cbd7c61",
+    "catalog.py": "ebe448a869f24a55b760b9bc53c7660683e0b615bc3571d2b2c8e8299eb1c4ad",
+    "change_evidence.py": "895e73ba04bdca75b6f86ee00ec2c0e656d30d195981b3a8c5a81c5effcdc54b",
+    "change_investigation.py": "9c18cda0b7adf6cba1c8c3e9e564c01eed2f39737e2b83540400f56876d7a75c",
+    "change_review.py": "5354e2f13737dbd7352131c1b34f59a81e4676553fdc94ae817aac98c223ee83",
+    "cli.py": "b7d6d70cfced32f8483b248c009733315658b5aa2e1ac9c515431227475d1210",
+    "community.py": "df54c150c0435d909025e1868d41afdef230a680adc8180e406f8519ff6079fb",
+    "confidence/__init__.py": "495aacf113a63b444170698fe79a19c5ee92b6992c21ce2c3c5735e782275e30",
+    "confidence/jev.py": "b1e9a644aff809826279dfa266c1912229d126ecf1a469fcd24124880d081f27",
+    "confidence/llm.py": "1732ea52ae89353927d91e3aff1393c8aa9a13bd93b0b8d24f870ea5bcf3d993",
+    "confidence/redact.py": "17bf0bce9769346e07f1000dca57778cc301330302ce5ec768417b291a1b806b",
+    "confidence/settings.py": "363abc1cbd9768a3310a86039bf73c9ab2ec60f41cd3ca8041643e6cbdad86a1",
+    "config.py": "72f159f6842be888c0592cb70f99dca522b797450f0ed3c877e940b48230aa92",
+    "context_search.py": "ef62f6f44ffd6fa155ec868d73fd0236e3451679db428eb8072925891bcff6c9",
+    "crypto.py": "0517f526f7129bf26e7ed496f0992a1881db2a162620061fd9cf77fd4df0eee8",
+    "db/__init__.py": "706d28918a4f5b6c15b21d2843597bb124eb95021023af1cd3355f241c2ba0c3",
+    "db/base.py": "cc1cda44a518c87db02fea2adaa23200d7449186705289db549ea09b4f0f7886",
+    "db/engine.py": "e3ae49f686cf71b9b10e9c92352f42d914568a66df43c24e76f2b20370fc2a3c",
+    "db/models.py": "2802fb86b6701a296c05ba8fbad20787a6744bdda38e2ce7ddc744e4f7e060cb",
+    "entrypoint.py": "1a548287141d3c8153854c1254396ff80672d3c902007aa749c302e04442dfce",
+    "focused_evidence.py": "04a51864308b63456559d01a4302cf6c6094dbc450ea74de9efbc3b731a82418",
+    "freshness.py": "5cd82da82d73c4db6d61b25f34fde0525ffc66f5f3b97ea6b74bb1c0838518c2",
+    "gateway.py": "66d9ce8c6c987fa6a847e4966c6c96ee44cc0c80249f5f11223c5a879401265f",
+    "git/__init__.py": "d9ee34688a30daab3c12035f99e98bc812d63d8440d922993e23987ae440aaf3",
+    "git/credentials.py": "46e4ef7b458ec11f70d50d0a828ce0bc00eca64c33ec2ad9ecc0502569de9dac",
+    "git/manager.py": "bf9519ebefb604e7edd2520a8a9a7b4d7d0bfcd97e00685fdff304309ddb27f3",
+    "git/models.py": "916f5a9b3f21829e306ce494368a1c144d45b2d4c85328a44ab16cd6a14c97de",
+    "git/storage.py": "10f300580d25ad22912c434b2ac970b7dcbbc81924024bfe58cf57e3df9f89ac",
+    "graph_query_parser.py": "2b2bcc2b7ce78f5eb8a51e0d8252252915af4bf3ebd99680d61b5afdb9c610cb",
+    "helpers.py": "e39f836153fcc0ca7d391e4aa9ce61b4bd9d9f696393f9885bdb7b768ac0364a",
+    "indexing/__init__.py": "8377825e22f6e86e0a15234cba7a672fc596a95b62c6c071dc8d1c71705ea2ad",
+    "indexing/debouncer.py": "8a508389e7d1598d8a1a9862e722dba12afea8a78f6dc893cd48a378512709d6",
+    "indexing/delta_indexer.py": "8e29b25caf9eb2b24809fe6efe8f1bbea3af849f43985b33eeb1127277e2da91",
+    "indexing/full_indexer.py": "e853e211b39a233f0383b6779610416799f90f82f6a1bab6a6e01c32fb8bcd60",
+    "indexing/incremental.py": "23f1f3a45ed442ca6bea5265bb46ec2e6c2c48d72578f2062209c214a96065f5",
+    "indexing/parser.py": "56a548802b5901a0517ab5415e53d15c3ff3c02604880ebddbb11cdc91846348",
+    "indexing/summarizer.py": "ff1df2dbd43c57a5af909805c449ad64c4b497fb5fc67e06c341c4a999eb8a70",
+    "installer.py": "1e87072ab052a1740eaeedd01bec01ab0ec8e7b08f7bbe8aabdcc45b20b06b51",
+    "investigation_cli.py": "be7a0aeb20a44634f0c94a5eb90bb70d5c15ac08aa557c26578b76e108a3d8c7",
+    "knowledge.py": "4ed8596ba0e42bdb06887db1877c88e932a77b9610b1d5afe80d7375ffd8331c",
+    "local_knowledge.py": "d8a986cc7991d35fa09bf667069dcf647920e9b5dc2249ac8e0898ed0e356e5f",
+    "migrations/env.py": "844cbb386bc0044e37360634c26ce9bc2260af6bccad00f01ce1afecde9aac82",
+    "migrations/versions/001_initial_schema.py": "122f4b5d48c106a7b990ed5e7eaf66b9b2d045b277f7a839f51e7451c96a813a",
+    "migrations/versions/002_branch_version_and_embeddings.py": "06653e163c068a4b5d5b782e5e9dfb45cea62aca9192121b65c1b87c147d9e30",
+    "migrations/versions/003_embedding_uniqueness_and_cascade.py": "fd130da454658de31ba0cdd891b9e48dd479ba3c9bd7b1091cb0db82ffda55fb",
+    "migrations/versions/004_audit_events.py": "185d8ca267fd146ff44750a443cefae23c5a3682d68430c1dd1931337398c14e",
+    "migrations/versions/005_user_preferences.py": "d1d6ed1f8f58dd73b7392a5ba516a7742da678718945e889c3cf12f5287d9c9f",
+    "migrations/versions/006_google_oauth.py": "4c065db954d07cf6e0269079632d8bf417923fc3ca82fd9b77f6d803c265efb9",
+    "migrations/versions/007_pgvector_embeddings.py": "45c565b9393c8b2584e520dd4d2a05d482623640f10263311a48cf7fa7b26a2f",
+    "migrations/versions/008_symbol_references.py": "901bfac820bdcdf64ee19dd7a7cb4f184656b0afe00c97da7df69d827f024210",
+    "migrations/versions/009_webhook_secret_encryption.py": "eeb5883d3c1aed4f58ccc849fdb5c4dca6450ea68318a52a2ab94cd3e8329c59",
+    "migrations/versions/010_add_commits_table.py": "60fb309a65dd835447af2a31a871c47733d77ef86ceb7a0f6aefced65a070862",
+    "migrations/versions/011_commit_changed_files.py": "8463f1fcbab1f71abc19cd8345f8f12da9062eff318ef4d46941d37c069b54e0",
+    "migrations/versions/012_branch_merged_at.py": "88fb05dfa8d9bd2c1339fe9b016e1222d5c8e4d4118282120995d9ec6708eb5e",
+    "migrations/versions/013_revoked_tokens.py": "30708e3c66b234d18101b235003e17d126ed1f45b2ee7dc18bc4ebc48e3ef9da",
+    "migrations/versions/014_blame_hunks.py": "fdf4ab2e60ad8250acba47b2b9042c1867af38e114a5365768047242052c7599",
+    "migrations/versions/015_commit_file_stats.py": "ff57a71da6a30ecec81590c4c1fb7c3005722dc9c2b8b9a8d2400bad1b6ece9c",
+    "migrations/versions/016_embedding_provenance_columns.py": "e834a35d3e1b82762bbc99042a57d41bd9a92951764ab235eba2353aec17bb09",
+    "migrations/versions/017_provenance_table.py": "2d4f963fb502a43f3d0900892a2d08873fc3d9858fa05858745b66f665f061ba",
+    "migrations/versions/018_repo_snapshots.py": "f856caef774a95b998d21f30e49cb8446f1b5f2ebc136b82aa8b79e8522d661b",
+    "migrations/versions/019_symref_caller.py": "ea8055b835e2f6afbdc21ddb15c9fe71576eab0b94c3babaf8d225ebd188fc2b",
+    "migrations/versions/020_shared_knowledge.py": "afff70a991cceec4f6808782bd93368b17b3c9affad5a561e296dcbc36a965fc",
+    "onboarding.py": "8c67a41ff999cf680b53963f997b45560232efb7085954f8e96464a10cff485d",
+    "output.py": "95083022ae4917e0076fd0560d6d3f706be2693b750010c718e64588ff87690d",
+    "precision.py": "7245a019ab647448839c12bbd3043ce3d96f38640512c9ef61c75d32070cd165",
+    "presence.py": "e06d00d6d0ea8fe349d462191e07e7a6d431e43b523760d40713bf465b2b4601",
+    "probe.py": "fb5069ad1da62d304cced09d62308d79ebf5253d7d6875caa83f92bc44e18b96",
+    "project_dir.py": "63c349bd8db11441154f5b1384efbf100260ecad76883a69b933c0afca73ed9c",
+    "pubsub.py": "d792d7a490641d02c6c63a4a4fa25e3a896c4a9ef16b8ef2d68bfd5493445a01",
+    "query_ranking.py": "366c71ce4ce3bcd887d91b4d29197c4e15aeca206d4ee19a19a371eaab4abee4",
+    "readiness.py": "bc97f8d81f3e599b7ab62b269bf99792985c2ff6fde95c2aaee66c6db883006d",
+    "redis.py": "a2d913969ecdf5dc9dfea40f80f9f75c251cfefae7ce37e2b40143d0f50b6456",
+    "reference_pages.py": "161bc4c1c8470f82d1b3cb939ad9d3863c3220b72c281212aa0be8ccc9e23406",
+    "remote.py": "90d2b04ced16d013cf59e7a189164d30d27fce37b9709f0d05a9d98a6834024b",
+    "repo_ranker.py": "8558b21aa8aa8dbbb42566f717f6e78071de3bfe210d86993f58a88c291eed22",
+    "request_context.py": "fbf1b8b4b6711ac4edb095946fe6c67e3ea9183273c9a053666d5a6532444cc9",
+    "rules/__init__.py": "4ec00e08a85df1e4d25837ddc8c7d1a264022f284f591dfaa73acce1ee497819",
+    "rules/ci.py": "5f239920ef62b996650a6e9d9dcf9221f14f3bec3b3a3b3aab77572aba7cb3e4",
+    "rules/combinators.py": "c318cb4ce29a92830e8f3dc96929819a5b3369b1bcb732a884e9bfdf2da44ef7",
+    "rules/enricher.py": "0062d03be79ace2b92e2061d958f574305d8be69a8e1d88b3b767518b8922269",
+    "rules/evolution.py": "133d037bc6b69614affcaf78cffbda98eaf883fe7803acfbd6a229972e5935a5",
+    "rules/executor.py": "41b34f7ceb104d33dec6a397ce9f46fc6db89defd7dd9cbf9cc01e844397d968",
+    "rules/filters/__init__.py": "35c4da8cc35100f1ecb113dfe67501b46fad49a91a13376a74da4317146875e2",
+    "rules/filters/pipeline.py": "649878f5b1bd779ffaf45a6b7837d9a9facc53daf5e25e4621121eaf0b37b4ba",
+    "rules/formatter.py": "612e328f60590ebb85389da640fc4e23fdcd6f7284176813924ea9357736c9b5",
+    "rules/hygiene.py": "c2d5b2354698136bd01f14a518ec7fe8e15bb7d6d4ba186fad5b32029f08fafe",
+    "rules/importers/__init__.py": "37af21ad3a0d90cc7b152865cd738f4470d24847b3eab6dfe027628c804b83e2",
+    "rules/importers/semgrep.py": "cd131382f245fb5f89a4a7e3331fa40e31cb0bbe8f37daae8495c5d21dad3223",
+    "rules/loader.py": "bff2ddef81a34da0f23c76722e3cec84869bd0d98b5aacaa4dee19025b0cb2e9",
+    "rules/marketplace.py": "dcddc10d37e3b6e57821af740122b1b901805b16101309200e7df08bb4a895ac",
+    "rules/metavar.py": "d9509b53f32f9378d73666a537d17b19eb21f252fd28e1061f54d0115e124148",
+    "rules/model.py": "26509ac1fd7303018ee9a92e622f4603185e5550e85df569a85be30c2b58db87",
+    "rules/packs/__init__.py": "a4bbc1645a44b6a80fc7aceaa6437224fd4be8c4c7d99b95baec14eb14b29284",
+    "rules/packs/pack_loader.py": "2b934e1a05bbc92712c9522e109c5090ddc8d2c2b7d8da308c31675adfb5039b",
+    "rules/plugins/__init__.py": "48032255e0ce1966fa1b94b7219ada74e6a1648a6d9fc7403a0a82ae28188d16",
+    "rules/plugins/plugin_loader.py": "47debe54f8e6cab2f0fff657047eb28b8049abb4547e5ad0e26a77993844a34a",
+    "rules/profiling.py": "b12b32bdfb4fd1fbd1f39a15d9d5258d197d37b8637fd51055971f023af246c9",
+    "rules/registry.py": "4f5da10848fc90d24ea64d6b7cc3a6a781f76af3ba660f1c4d593381cf15ada0",
+    "rules/sarif.py": "d91908a08bb5c8fce98a7b73a90318fbdde054448f6bc430f95fff4883ce1b0d",
+    "rules/synthesis.py": "b0188df61442f1a864f264e8c029482ffc903876ba39c6f751d0bc6f5010f6ac",
+    "rules/testing.py": "accdf58ab0bdcadf441efb51de819fd94a8bc7913490f58efc771e17e8c3b4b6",
+    "search_evidence.py": "956ed1bf38d6fdf74a1abd2c8e336ac3fefb7db1b62c3f4e4ff0e41ae087663b",
+    "server.py": "a3452cc9738d759a4272a66b11d9b8173de3940d94c236b6500065db9c46fae7",
+    "service.py": "9cd6aeab2fdfd0ae51e1e50ce75ef98efa18fa74fd41836a80a669cf7c7a23e3",
+    "sharing.py": "75aa0424cc7a8f306afbc77ebc15a4296dbad3a1bd3b80de5617d285b8dccd65",
+    "storage/__init__.py": "c923d1f30528c7a7dcf1b1bdafc0f6cf2a10e32fd072039280076423984b1067",
+    "storage/branch_overlay.py": "aaa136ee1a12e9c2d3a39d478c3f394038a78b7a8a4128318d453aa9c69e4bc1",
+    "storage/content_store.py": "505e6dfeca6e53e3e89b0f1400510de14ee3abcd1acdd91dd13179621b46e37b",
+    "storage/dependency_store.py": "cecaa71423ae23f28124485e8892a6fda5c5dc6683b60d95379e6b0696c4d56a",
+    "storage/diff_engine.py": "19538828dcecbfe3aff44abf8ee2ee0bde3846720c6f2583f80c8b7c366773d8",
+    "storage/embedding_store.py": "53051c51550eafe006ba0fd77e5419052578effee849e3f68829857752bfd535",
+    "storage/provenance_store.py": "056681b92aaf2de146e2084ef7c1c258ab49b40f3009c084c5ddbf707e03ea14",
+    "storage/security_scanner_db.py": "efec48a5021475a94f2b88fd0e1e4fb7311b5206f2f00f46e0ddf74a8bacfc8c",
+    "storage/symbol_store.py": "a538879e43e07b6fa46ff9d526ec47935a22942853dccdf6fccb22be682dfd89",
+    "structural_evidence.py": "a29c11858824c74952a2886c57e00183108ae5aecba964357db54d8458ee690c",
+    "symbol_inspection.py": "d6f43df2382fa13e676ad6b66990647a5cd27c98703bd3fa2d0603aeb13de3c3",
+    "symbol_links.py": "9f0ce1c7df192fc386ebb59a0cec13f55c452705a0aa56f0080e8c78ea1a56fb",
+    "telemetry.py": "eee7540607c3eafdb3f5ecc0b1370a7c333feed080bf2b8664282e372db777ff",
+    "test_ranking.py": "f6e3e01278f6e728a212310b53c7a4823d7119f537770b17c298d14e41ad142c",
+    "testing/__init__.py": "6c17362721343eba9cbcb27800b17def30e254a8c8d86d03d1a6b8b5fea9f4f4",
+    "testing/fixtures.py": "cd26ddfa81f1bd8ff75f76d6cc3686cc20ffc78a6c93380b92cd2e09fd21e529",
+    "testing/helpers.py": "1ed701d451311b4e7e721a4a1f191eacd37408367786eab341c49ae06d3c03cf",
+    "testing/mocks.py": "eff15d26e388742b59c2c525fe8a5ca5ae5595f1a5827ba490172dfb77c708e5",
+    "tools/__init__.py": "d8d606b9c15c33fad11845251bc35b7820f1edd532fd15df2d1c31beaee3234b",
+    "tools/adr_tools.py": "308f67bd5e11e8833857296b86d28cb50a5d4cc90a0bb276fe3b3cd3b6fe69fc",
+    "tools/analysis_tools.py": "d526bc7a7520c73d9c22a4a0fea5b8525c84691f0edc1a3ec725a2498fed4625",
+    "tools/composite_tools.py": "9a8633f94ec633a88e03570f414c662e33262e280259a4051b871127333fc213",
+    "tools/cross_mode_tools.py": "bcdc5301f07d7282d996cf69c69cf9cd5adff64e641484eed2fb88a48103bcc3",
+    "tools/dead_code_tools.py": "22e06c2be9d2335b3f2624b5024185cf49149a4f256e91bdec65449568d3f775",
+    "tools/distill_tools.py": "79e3f9b6aa3c5e698a88838b17fa64b68d9ab7f01b7e6da51f807ded2230463e",
+    "tools/frecency_tools.py": "f0be1bff9bb0396bb395e9ea0c130c54463beb7841f63ef85f3ff119f92819ce",
+    "tools/fuzzy_tools.py": "ca260bd44a7118c0cd87b63d9b408cd9df5f277c8024fe5b42b14f59a8fa05ca",
+    "tools/history_tools.py": "a82d727b1533471b96692c4a8ed55112d7d2428e37f69340ce41bc4c830f410e",
+    "tools/learning_tools.py": "a2d2c241e888befeaa752aaa15d55e736f2a75ed30954385553d77b979fa1c3b",
+    "tools/lsp_tools.py": "e40af75dcbb8af674cd4dc79924e8bcbf463e1789bc56b4262bfe6f5647611ee",
+    "tools/maintenance_tools.py": "ac1f0085113e9a5369810e6480ae32cdca3a9bc199f9926d289fd18fc32867fb",
+    "tools/navigation_tools.py": "ebd0f614e49a46e3103293fa0bf1a2d0b5884d910ac56c5e6b26cf57d27c6a9a",
+    "tools/overlay_tools.py": "3dfaf373f944bfb85a7df4f67f04684cd027a3664e59b860a4d36014262bba8c",
+    "tools/pin_store.py": "fa3695e5f46d704cbde191c600eddc5c1adfa799a7b1555f0c1c4d5ac7002ae3",
+    "tools/pin_tools.py": "5d66aafdf8ddbf067366060662a926348faa2daa9e4fb55763a5f23d6d79a18e",
+    "tools/query_constraints_tools.py": "324240c7c20bcbb9f670a44336f3d050497006fe1385147c8cb4680cfb15e99c",
+    "tools/query_history_tools.py": "00d5011e9cc490e7d6eebcac78e19ce9ec29fc08a50494fde9e03194b65221de",
+    "tools/readiness_tools.py": "816911f8c3658fbc95829522620ac992f8c012c0e04a680aac6ef8007285c8c2",
+    "tools/rule_tools.py": "042be6b736ad10e2aea5dc17bc0f36a08008f0113a0015c38d839354db526fed",
+    "tools/search_tools.py": "a8585505ceb7753cefd2ab321ba153ac5578c9087b99152f44f1d5ec33da91e4",
+    "tools/snapshot_tools.py": "f626e79377d8e2684c7c3d17815fdbf9c3887610c2c49697c1c38a64624d773a",
+    "workers/__init__.py": "ddbada50ce3569b6fbdec29bd0b574329d6335a035a2d33ed9b88f9d140469c2",
+    "workers/job_utils.py": "40b364428ba56cacef1d75fbb533036fe41b331ac90445eda21c229445c62fe4",
+    "workers/jobs.py": "74cc1ebfb4b664009c58452dd9e239e23231948dbce7b5411a0d9cf7f671403b",
+    "workers/run.py": "3a7f3c6bf1c5297f2636fc4fd0f4de8e1756e55540d989fbfc610bef9f358c31",
+    "workers/settings.py": "8a5dd77fd684362b229e0fa62d88e64d236750db3e80bca3874f82cafc7cac73"
+  },
+  "scope": "New optional local file context capability; implementer-authored non-exhaustive source judgments on previously exposed pinned repositories. Not blind, not default-ranking or agent-outcome evidence. No retrieval before this freeze.",
+  "rounds": [
+    [
+      "baseline",
+      "candidate_plain",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "candidate_plain",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate_plain",
+      "candidate"
+    ]
+  ],
+  "requests": {
+    "depths": [
+      5,
+      24
+    ],
+    "budgets": [
+      2000,
+      8000
+    ],
+    "scoped_depth": 5,
+    "scoped_budget": 8000
+  },
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "gates": {
+    "distinct_file_and_visible_gains_at_5_each_round": 2,
+    "repositories_with_gains_each_round": 2,
+    "individual_file_or_visible_losses": 0,
+    "noncontext_control_changes": 0,
+    "warm_p95_floor_ms": 250,
+    "warm_p95_ratio": 2
+  },
+  "packs": [
+    {
+      "id": "fastapi",
+      "repo": "fastapi/fastapi",
+      "commit": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+      "questions": [
+        {
+          "id": "development-fastapi-implementation-1",
+          "split": "development",
+          "kind": "implementation",
+          "query": "Where does an optional absent API key avoid raising an authentication error?",
+          "context_file": "tests/test_security_api_key_header_optional.py",
+          "file": "fastapi/security/api_key.py",
+          "anchors": [
+            {
+              "line": 45,
+              "quote": "    def check_api_key(self, api_key: str | None) -> str | None:"
+            }
+          ],
+          "source_sha256": "d817af2a2b5201a14a69a61e2450b89d780a38d8bdfe8cd4fc1857fb4719e9c3",
+          "evidence": [
+            {
+              "file": "fastapi/security/api_key.py",
+              "source_sha256": "d817af2a2b5201a14a69a61e2450b89d780a38d8bdfe8cd4fc1857fb4719e9c3",
+              "line": 45,
+              "quote": "    def check_api_key(self, api_key: str | None) -> str | None:"
+            }
+          ]
+        },
+        {
+          "id": "development-fastapi-test-1",
+          "split": "development",
+          "kind": "test",
+          "query": "Which tests allow an omitted optional key header to return an anonymous current user?",
+          "context_file": "fastapi/security/api_key.py",
+          "file": "tests/test_security_api_key_header_optional.py",
+          "anchors": [
+            {
+              "line": 39,
+              "quote": "def test_security_api_key_no_key():"
+            }
+          ],
+          "source_sha256": "ccb242bc6abcce6fc77c747ca63aa91b5c3c4a3190c7edaea3ef15dbfdee2491",
+          "evidence": [
+            {
+              "file": "tests/test_security_api_key_header_optional.py",
+              "source_sha256": "ccb242bc6abcce6fc77c747ca63aa91b5c3c4a3190c7edaea3ef15dbfdee2491",
+              "line": 39,
+              "quote": "def test_security_api_key_no_key():"
+            }
+          ]
+        },
+        {
+          "id": "development-fastapi-implementation-2",
+          "split": "development",
+          "kind": "implementation",
+          "query": "Where does a default placeholder delegate boolean conversion to its wrapped value?",
+          "context_file": "tests/test_datastructures.py",
+          "file": "fastapi/datastructures.py",
+          "anchors": [
+            {
+              "line": 165,
+              "quote": "        return bool(self.value)"
+            }
+          ],
+          "source_sha256": "3c7fc72c9aa064f8efe7694e98cd12f97fe29dded2fa4396129475935033660f",
+          "evidence": [
+            {
+              "file": "fastapi/datastructures.py",
+              "source_sha256": "3c7fc72c9aa064f8efe7694e98cd12f97fe29dded2fa4396129475935033660f",
+              "line": 165,
+              "quote": "        return bool(self.value)"
+            }
+          ]
+        },
+        {
+          "id": "development-fastapi-test-2",
+          "split": "development",
+          "kind": "test",
+          "query": "Which tests verify uploaded file handles are closed after the request handler exits?",
+          "context_file": "fastapi/datastructures.py",
+          "file": "tests/test_datastructures.py",
+          "anchors": [
+            {
+              "line": 48,
+              "quote": "    assert testing_file_store[0].file.closed"
+            }
+          ],
+          "source_sha256": "cfe6f3331acbde23c59e7052f47a68cf1715907bf4fc14ef806653f051cb49e7",
+          "evidence": [
+            {
+              "file": "tests/test_datastructures.py",
+              "source_sha256": "cfe6f3331acbde23c59e7052f47a68cf1715907bf4fc14ef806653f051cb49e7",
+              "line": 48,
+              "quote": "    assert testing_file_store[0].file.closed"
+            }
+          ]
+        },
+        {
+          "id": "development-fastapi-exact",
+          "split": "development",
+          "kind": "exact",
+          "query": "Locate the precise declaration of APIKeyBase.check_api_key",
+          "context_file": null,
+          "file": "fastapi/security/api_key.py",
+          "anchors": [
+            {
+              "line": 45,
+              "quote": "    def check_api_key(self, api_key: str | None) -> str | None:"
+            }
+          ],
+          "source_sha256": "d817af2a2b5201a14a69a61e2450b89d780a38d8bdfe8cd4fc1857fb4719e9c3",
+          "evidence": [
+            {
+              "file": "fastapi/security/api_key.py",
+              "source_sha256": "d817af2a2b5201a14a69a61e2450b89d780a38d8bdfe8cd4fc1857fb4719e9c3",
+              "line": 45,
+              "quote": "    def check_api_key(self, api_key: str | None) -> str | None:"
+            }
+          ]
+        },
+        {
+          "id": "development-fastapi-unrelated",
+          "split": "development",
+          "kind": "unrelated",
+          "query": "Find the checks that verify uploaded file handles are closed after the request handler exits?",
+          "context_file": null,
+          "file": "tests/test_datastructures.py",
+          "anchors": [
+            {
+              "line": 48,
+              "quote": "    assert testing_file_store[0].file.closed"
+            }
+          ],
+          "source_sha256": "cfe6f3331acbde23c59e7052f47a68cf1715907bf4fc14ef806653f051cb49e7",
+          "evidence": [
+            {
+              "file": "tests/test_datastructures.py",
+              "source_sha256": "cfe6f3331acbde23c59e7052f47a68cf1715907bf4fc14ef806653f051cb49e7",
+              "line": 48,
+              "quote": "    assert testing_file_store[0].file.closed"
+            }
+          ]
+        },
+        {
+          "id": "validation-fastapi-implementation-1",
+          "split": "validation",
+          "kind": "implementation",
+          "query": "Where are decoded basic credentials rejected when they contain no colon separator?",
+          "context_file": "tests/test_security_http_basic_optional.py",
+          "file": "fastapi/security/http.py",
+          "anchors": [
+            {
+              "line": 216,
+              "quote": "        username, separator, password = data.partition(\":\")"
+            }
+          ],
+          "source_sha256": "1e8f6a16e45f15e2c9a23f745185728de288cc67d8d39261505cbb21f679f69c",
+          "evidence": [
+            {
+              "file": "fastapi/security/http.py",
+              "source_sha256": "1e8f6a16e45f15e2c9a23f745185728de288cc67d8d39261505cbb21f679f69c",
+              "line": 216,
+              "quote": "        username, separator, password = data.partition(\":\")"
+            }
+          ]
+        },
+        {
+          "id": "validation-fastapi-test-1",
+          "split": "validation",
+          "kind": "test",
+          "query": "Which tests permit missing basic credentials when authentication errors are disabled?",
+          "context_file": "fastapi/security/http.py",
+          "file": "tests/test_security_http_basic_optional.py",
+          "anchors": [
+            {
+              "line": 29,
+              "quote": "def test_security_http_basic_no_credentials():"
+            }
+          ],
+          "source_sha256": "cdcfadefab1706b41277ebb21b17e2234b9ff0a38e2885c5abd399ed0df2a191",
+          "evidence": [
+            {
+              "file": "tests/test_security_http_basic_optional.py",
+              "source_sha256": "cdcfadefab1706b41277ebb21b17e2234b9ff0a38e2885c5abd399ed0df2a191",
+              "line": 29,
+              "quote": "def test_security_http_basic_no_credentials():"
+            }
+          ]
+        },
+        {
+          "id": "validation-fastapi-implementation-2",
+          "split": "validation",
+          "kind": "implementation",
+          "query": "Where are dataclass instances converted into dictionaries before recursive JSON encoding?",
+          "context_file": "tests/test_jsonable_encoder.py",
+          "file": "fastapi/encoders.py",
+          "anchors": [
+            {
+              "line": 244,
+              "quote": "        obj_dict = dataclasses.asdict(obj)"
+            }
+          ],
+          "source_sha256": "5cfb185964b4018bf3ef0ff05cfb225ed53c3af3f7f19bef21cc12c3d5b38c56",
+          "evidence": [
+            {
+              "file": "fastapi/encoders.py",
+              "source_sha256": "5cfb185964b4018bf3ef0ff05cfb225ed53c3af3f7f19bef21cc12c3d5b38c56",
+              "line": 244,
+              "quote": "        obj_dict = dataclasses.asdict(obj)"
+            }
+          ]
+        },
+        {
+          "id": "validation-fastapi-test-2",
+          "split": "validation",
+          "kind": "test",
+          "query": "Which tests check dataclass encoding honors include and exclude selections?",
+          "context_file": "fastapi/encoders.py",
+          "file": "tests/test_jsonable_encoder.py",
+          "anchors": [
+            {
+              "line": 125,
+              "quote": "def test_encode_dataclass():"
+            }
+          ],
+          "source_sha256": "597e741a7c04858c9fb6dce06eccba522f113fb6004dc1e4b5e6ec3a316ee1a5",
+          "evidence": [
+            {
+              "file": "tests/test_jsonable_encoder.py",
+              "source_sha256": "597e741a7c04858c9fb6dce06eccba522f113fb6004dc1e4b5e6ec3a316ee1a5",
+              "line": 125,
+              "quote": "def test_encode_dataclass():"
+            }
+          ]
+        },
+        {
+          "id": "validation-fastapi-exact",
+          "split": "validation",
+          "kind": "exact",
+          "query": "Locate the precise declaration of HTTPBasic.make_authenticate_headers",
+          "context_file": null,
+          "file": "fastapi/security/http.py",
+          "anchors": [
+            {
+              "line": 216,
+              "quote": "        username, separator, password = data.partition(\":\")"
+            }
+          ],
+          "source_sha256": "1e8f6a16e45f15e2c9a23f745185728de288cc67d8d39261505cbb21f679f69c",
+          "evidence": [
+            {
+              "file": "fastapi/security/http.py",
+              "source_sha256": "1e8f6a16e45f15e2c9a23f745185728de288cc67d8d39261505cbb21f679f69c",
+              "line": 216,
+              "quote": "        username, separator, password = data.partition(\":\")"
+            }
+          ]
+        },
+        {
+          "id": "validation-fastapi-unrelated",
+          "split": "validation",
+          "kind": "unrelated",
+          "query": "Find the checks that check dataclass encoding honors include and exclude selections?",
+          "context_file": null,
+          "file": "tests/test_jsonable_encoder.py",
+          "anchors": [
+            {
+              "line": 125,
+              "quote": "def test_encode_dataclass():"
+            }
+          ],
+          "source_sha256": "597e741a7c04858c9fb6dce06eccba522f113fb6004dc1e4b5e6ec3a316ee1a5",
+          "evidence": [
+            {
+              "file": "tests/test_jsonable_encoder.py",
+              "source_sha256": "597e741a7c04858c9fb6dce06eccba522f113fb6004dc1e4b5e6ec3a316ee1a5",
+              "line": 125,
+              "quote": "def test_encode_dataclass():"
+            }
+          ]
+        }
+      ],
+      "source_sha256": {
+        "fastapi/security/api_key.py": "d817af2a2b5201a14a69a61e2450b89d780a38d8bdfe8cd4fc1857fb4719e9c3",
+        "tests/test_security_api_key_header_optional.py": "ccb242bc6abcce6fc77c747ca63aa91b5c3c4a3190c7edaea3ef15dbfdee2491",
+        "fastapi/datastructures.py": "3c7fc72c9aa064f8efe7694e98cd12f97fe29dded2fa4396129475935033660f",
+        "tests/test_datastructures.py": "cfe6f3331acbde23c59e7052f47a68cf1715907bf4fc14ef806653f051cb49e7",
+        "fastapi/security/http.py": "1e8f6a16e45f15e2c9a23f745185728de288cc67d8d39261505cbb21f679f69c",
+        "tests/test_security_http_basic_optional.py": "cdcfadefab1706b41277ebb21b17e2234b9ff0a38e2885c5abd399ed0df2a191",
+        "fastapi/encoders.py": "5cfb185964b4018bf3ef0ff05cfb225ed53c3af3f7f19bef21cc12c3d5b38c56",
+        "tests/test_jsonable_encoder.py": "597e741a7c04858c9fb6dce06eccba522f113fb6004dc1e4b5e6ec3a316ee1a5"
+      }
+    },
+    {
+      "id": "requests",
+      "repo": "psf/requests",
+      "commit": "ebf71906798ec82f34e07d3168f8b8aecaf8a3be",
+      "questions": [
+        {
+          "id": "development-requests-implementation-1",
+          "split": "development",
+          "kind": "implementation",
+          "query": "Where are member paths inside ZIP archives extracted into reusable temporary locations?",
+          "context_file": "tests/test_utils.py",
+          "file": "src/requests/utils.py",
+          "anchors": [
+            {
+              "line": 256,
+              "quote": "def extract_zipped_paths(path):"
+            }
+          ],
+          "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+          "evidence": [
+            {
+              "file": "src/requests/utils.py",
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+              "line": 256,
+              "quote": "def extract_zipped_paths(path):"
+            }
+          ]
+        },
+        {
+          "id": "development-requests-test-1",
+          "split": "development",
+          "kind": "test",
+          "query": "Which tests leave invalid Windows UNC archive paths unchanged?",
+          "context_file": "src/requests/utils.py",
+          "file": "tests/test_utils.py",
+          "anchors": [
+            {
+              "line": 368,
+              "quote": "    def test_invalid_unc_path(self):"
+            }
+          ],
+          "source_sha256": "749c36bc574e3e796ddb78bbdc91b0d92fccf703a39c6d21f5afbfa7b28f50f8",
+          "evidence": [
+            {
+              "file": "tests/test_utils.py",
+              "source_sha256": "749c36bc574e3e796ddb78bbdc91b0d92fccf703a39c6d21f5afbfa7b28f50f8",
+              "line": 368,
+              "quote": "    def test_invalid_unc_path(self):"
+            }
+          ]
+        },
+        {
+          "id": "development-requests-implementation-2",
+          "split": "development",
+          "kind": "implementation",
+          "query": "Where can a case insensitive mapping iterate keys normalized to lowercase?",
+          "context_file": "tests/test_structures.py",
+          "file": "src/requests/structures.py",
+          "anchors": [
+            {
+              "line": 63,
+              "quote": "    def lower_items(self):"
+            }
+          ],
+          "source_sha256": "f886e6855cf4e92fb968f499b94b6167afba0fd5ce8d1b935c739a6d8d38d573",
+          "evidence": [
+            {
+              "file": "src/requests/structures.py",
+              "source_sha256": "f886e6855cf4e92fb968f499b94b6167afba0fd5ce8d1b935c739a6d8d38d573",
+              "line": 63,
+              "quote": "    def lower_items(self):"
+            }
+          ]
+        },
+        {
+          "id": "development-requests-test-2",
+          "split": "development",
+          "kind": "test",
+          "query": "Which tests check copying a case insensitive dictionary preserves its contents?",
+          "context_file": "src/requests/structures.py",
+          "file": "tests/test_structures.py",
+          "anchors": [
+            {
+              "line": 37,
+              "quote": "    def test_copy(self):"
+            }
+          ],
+          "source_sha256": "f7b80e00888105ae80312203279e0cf9256726740bcaa15c6cee7c2c07d33d60",
+          "evidence": [
+            {
+              "file": "tests/test_structures.py",
+              "source_sha256": "f7b80e00888105ae80312203279e0cf9256726740bcaa15c6cee7c2c07d33d60",
+              "line": 37,
+              "quote": "    def test_copy(self):"
+            }
+          ]
+        },
+        {
+          "id": "development-requests-exact",
+          "split": "development",
+          "kind": "exact",
+          "query": "Locate the precise declaration of extract_zipped_paths",
+          "context_file": null,
+          "file": "src/requests/utils.py",
+          "anchors": [
+            {
+              "line": 256,
+              "quote": "def extract_zipped_paths(path):"
+            }
+          ],
+          "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+          "evidence": [
+            {
+              "file": "src/requests/utils.py",
+              "source_sha256": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+              "line": 256,
+              "quote": "def extract_zipped_paths(path):"
+            }
+          ]
+        },
+        {
+          "id": "development-requests-unrelated",
+          "split": "development",
+          "kind": "unrelated",
+          "query": "Find the checks that check copying a case insensitive dictionary preserves its contents?",
+          "context_file": null,
+          "file": "tests/test_structures.py",
+          "anchors": [
+            {
+              "line": 37,
+              "quote": "    def test_copy(self):"
+            }
+          ],
+          "source_sha256": "f7b80e00888105ae80312203279e0cf9256726740bcaa15c6cee7c2c07d33d60",
+          "evidence": [
+            {
+              "file": "tests/test_structures.py",
+              "source_sha256": "f7b80e00888105ae80312203279e0cf9256726740bcaa15c6cee7c2c07d33d60",
+              "line": 37,
+              "quote": "    def test_copy(self):"
+            }
+          ]
+        },
+        {
+          "id": "validation-requests-implementation-1",
+          "split": "validation",
+          "kind": "implementation",
+          "query": "Where does proxy basic authentication set the proxy authorization header?",
+          "context_file": "tests/test_requests.py",
+          "file": "src/requests/auth.py",
+          "anchors": [
+            {
+              "line": 103,
+              "quote": "        r.headers[\"Proxy-Authorization\"] = _basic_auth_str(self.username, self.password)"
+            }
+          ],
+          "source_sha256": "2875df9db347d857b8add1892b7ada2f83b79f1917c9494b8b324904482e8527",
+          "evidence": [
+            {
+              "file": "src/requests/auth.py",
+              "source_sha256": "2875df9db347d857b8add1892b7ada2f83b79f1917c9494b8b324904482e8527",
+              "line": 103,
+              "quote": "        r.headers[\"Proxy-Authorization\"] = _basic_auth_str(self.username, self.password)"
+            }
+          ]
+        },
+        {
+          "id": "validation-requests-test-1",
+          "split": "validation",
+          "kind": "test",
+          "query": "Which tests require basic authorization strings to use native text for varied credential types?",
+          "context_file": "src/requests/auth.py",
+          "file": "tests/test_requests.py",
+          "anchors": [
+            {
+              "line": 2094,
+              "quote": "    def test_basic_auth_str_is_always_native(self, username, password, auth_str):"
+            }
+          ],
+          "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+          "evidence": [
+            {
+              "file": "tests/test_requests.py",
+              "source_sha256": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+              "line": 2094,
+              "quote": "    def test_basic_auth_str_is_always_native(self, username, password, auth_str):"
+            }
+          ]
+        },
+        {
+          "id": "validation-requests-implementation-2",
+          "split": "validation",
+          "kind": "implementation",
+          "query": "Where is the outbound request target built from a URL path and query?",
+          "context_file": "tests/test_lowlevel.py",
+          "file": "src/requests/models.py",
+          "anchors": [
+            {
+              "line": 88,
+              "quote": "    def path_url(self):"
+            }
+          ],
+          "source_sha256": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc",
+          "evidence": [
+            {
+              "file": "src/requests/models.py",
+              "source_sha256": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc",
+              "line": 88,
+              "quote": "    def path_url(self):"
+            }
+          ]
+        },
+        {
+          "id": "validation-requests-test-2",
+          "split": "validation",
+          "kind": "test",
+          "query": "Which tests ensure a chunked upload sends the custom Host header exactly once?",
+          "context_file": "src/requests/models.py",
+          "file": "tests/test_lowlevel.py",
+          "anchors": [
+            {
+              "line": 78,
+              "quote": "    assert r.content.count(b\"Host: \") == 1"
+            }
+          ],
+          "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+          "evidence": [
+            {
+              "file": "tests/test_lowlevel.py",
+              "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+              "line": 78,
+              "quote": "    assert r.content.count(b\"Host: \") == 1"
+            }
+          ]
+        },
+        {
+          "id": "validation-requests-exact",
+          "split": "validation",
+          "kind": "exact",
+          "query": "Locate the precise declaration of HTTPProxyAuth",
+          "context_file": null,
+          "file": "src/requests/auth.py",
+          "anchors": [
+            {
+              "line": 103,
+              "quote": "        r.headers[\"Proxy-Authorization\"] = _basic_auth_str(self.username, self.password)"
+            }
+          ],
+          "source_sha256": "2875df9db347d857b8add1892b7ada2f83b79f1917c9494b8b324904482e8527",
+          "evidence": [
+            {
+              "file": "src/requests/auth.py",
+              "source_sha256": "2875df9db347d857b8add1892b7ada2f83b79f1917c9494b8b324904482e8527",
+              "line": 103,
+              "quote": "        r.headers[\"Proxy-Authorization\"] = _basic_auth_str(self.username, self.password)"
+            }
+          ]
+        },
+        {
+          "id": "validation-requests-unrelated",
+          "split": "validation",
+          "kind": "unrelated",
+          "query": "Find the checks that require exactly one custom Host header during chunked upload",
+          "context_file": null,
+          "file": "tests/test_lowlevel.py",
+          "anchors": [
+            {
+              "line": 78,
+              "quote": "    assert r.content.count(b\"Host: \") == 1"
+            }
+          ],
+          "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+          "evidence": [
+            {
+              "file": "tests/test_lowlevel.py",
+              "source_sha256": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65",
+              "line": 78,
+              "quote": "    assert r.content.count(b\"Host: \") == 1"
+            }
+          ]
+        }
+      ],
+      "source_sha256": {
+        "src/requests/utils.py": "91302671e03442e8247a091049fc0d725dc4970f5306bbbb167f128f75d67309",
+        "tests/test_utils.py": "749c36bc574e3e796ddb78bbdc91b0d92fccf703a39c6d21f5afbfa7b28f50f8",
+        "src/requests/structures.py": "f886e6855cf4e92fb968f499b94b6167afba0fd5ce8d1b935c739a6d8d38d573",
+        "tests/test_structures.py": "f7b80e00888105ae80312203279e0cf9256726740bcaa15c6cee7c2c07d33d60",
+        "src/requests/auth.py": "2875df9db347d857b8add1892b7ada2f83b79f1917c9494b8b324904482e8527",
+        "tests/test_requests.py": "4cf9f82316f6b4183c720b089b6c100c0eea2da30557e4a6eef42c69b801228e",
+        "src/requests/models.py": "24733d202d7636316123a24a838d51d5d664326798dfc840695876eb2989fadc",
+        "tests/test_lowlevel.py": "db5fac7340c49c49551e3e41679a8ee6e385c56054f84073932354a8da87df65"
+      }
+    },
+    {
+      "id": "express",
+      "repo": "expressjs/express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "questions": [
+        {
+          "id": "development-express-implementation-1",
+          "split": "development",
+          "kind": "implementation",
+          "query": "Where does normalizing a MIME type fall back to application octet stream?",
+          "context_file": "test/utils.js",
+          "file": "lib/utils.js",
+          "anchors": [
+            {
+              "line": 61,
+              "quote": "exports.normalizeType = function(type){"
+            }
+          ],
+          "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+          "evidence": [
+            {
+              "file": "lib/utils.js",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+              "line": 61,
+              "quote": "exports.normalizeType = function(type){"
+            }
+          ]
+        },
+        {
+          "id": "development-express-test-1",
+          "split": "development",
+          "kind": "test",
+          "query": "Which tests prevent malformed MIME parameters from looping during accept parameter parsing?",
+          "context_file": "lib/utils.js",
+          "file": "test/utils.js",
+          "anchors": [
+            {
+              "line": 30,
+              "quote": "  it('should handle a type with a malformed parameter and break the loop in acceptParams', () => {"
+            }
+          ],
+          "source_sha256": "022f171575ba38ed5f595ec8080da0bb4578130d280942a0d4aea019a172711e",
+          "evidence": [
+            {
+              "file": "test/utils.js",
+              "source_sha256": "022f171575ba38ed5f595ec8080da0bb4578130d280942a0d4aea019a172711e",
+              "line": 30,
+              "quote": "  it('should handle a type with a malformed parameter and break the loop in acceptParams', () => {"
+            }
+          ]
+        },
+        {
+          "id": "development-express-implementation-2",
+          "split": "development",
+          "kind": "implementation",
+          "query": "Where does changing trust proxy compile its function and disable inherited default behavior?",
+          "context_file": "test/app.js",
+          "file": "lib/application.js",
+          "anchors": [
+            {
+              "line": 370,
+              "quote": "    case 'trust proxy':"
+            }
+          ],
+          "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+          "evidence": [
+            {
+              "file": "lib/application.js",
+              "source_sha256": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+              "line": 370,
+              "quote": "    case 'trust proxy':"
+            }
+          ]
+        },
+        {
+          "id": "development-express-test-2",
+          "split": "development",
+          "kind": "test",
+          "query": "Which tests verify a mounted child application reports its parent application?",
+          "context_file": "lib/application.js",
+          "file": "test/app.js",
+          "anchors": [
+            {
+              "line": 36,
+              "quote": "    assert.strictEqual(blog.parent, app)"
+            }
+          ],
+          "source_sha256": "826034bcb123e71507dc0070cc7d6223c6944eb72c0f76fce47d931a577e96dc",
+          "evidence": [
+            {
+              "file": "test/app.js",
+              "source_sha256": "826034bcb123e71507dc0070cc7d6223c6944eb72c0f76fce47d931a577e96dc",
+              "line": 36,
+              "quote": "    assert.strictEqual(blog.parent, app)"
+            }
+          ]
+        },
+        {
+          "id": "development-express-exact",
+          "split": "development",
+          "kind": "exact",
+          "query": "Locate the precise declaration of normalizeType",
+          "context_file": null,
+          "file": "lib/utils.js",
+          "anchors": [
+            {
+              "line": 61,
+              "quote": "exports.normalizeType = function(type){"
+            }
+          ],
+          "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+          "evidence": [
+            {
+              "file": "lib/utils.js",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+              "line": 61,
+              "quote": "exports.normalizeType = function(type){"
+            }
+          ]
+        },
+        {
+          "id": "development-express-unrelated",
+          "split": "development",
+          "kind": "unrelated",
+          "query": "Find the checks that verify a mounted child application reports its parent application?",
+          "context_file": null,
+          "file": "test/app.js",
+          "anchors": [
+            {
+              "line": 36,
+              "quote": "    assert.strictEqual(blog.parent, app)"
+            }
+          ],
+          "source_sha256": "826034bcb123e71507dc0070cc7d6223c6944eb72c0f76fce47d931a577e96dc",
+          "evidence": [
+            {
+              "file": "test/app.js",
+              "source_sha256": "826034bcb123e71507dc0070cc7d6223c6944eb72c0f76fce47d931a577e96dc",
+              "line": 36,
+              "quote": "    assert.strictEqual(blog.parent, app)"
+            }
+          ]
+        },
+        {
+          "id": "validation-express-implementation-1",
+          "split": "validation",
+          "kind": "implementation",
+          "query": "Where does reading a request header accept both referer and referrer spellings?",
+          "context_file": "test/req.get.js",
+          "file": "lib/request.js",
+          "anchors": [
+            {
+              "line": 77,
+              "quote": "    case 'referrer':"
+            }
+          ],
+          "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d",
+          "evidence": [
+            {
+              "file": "lib/request.js",
+              "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d",
+              "line": 77,
+              "quote": "    case 'referrer':"
+            }
+          ]
+        },
+        {
+          "id": "validation-express-test-1",
+          "split": "validation",
+          "kind": "test",
+          "query": "Which tests reject numeric rather than string request header names?",
+          "context_file": "lib/request.js",
+          "file": "test/req.get.js",
+          "anchors": [
+            {
+              "line": 48,
+              "quote": "    it('should throw for non-string header name', function (done) {"
+            }
+          ],
+          "source_sha256": "49e423b6803afffbf996f619c4213f98099b201c0c2ec75feb1ba8acf604deb7",
+          "evidence": [
+            {
+              "file": "test/req.get.js",
+              "source_sha256": "49e423b6803afffbf996f619c4213f98099b201c0c2ec75feb1ba8acf604deb7",
+              "line": 48,
+              "quote": "    it('should throw for non-string header name', function (done) {"
+            }
+          ]
+        },
+        {
+          "id": "validation-express-implementation-2",
+          "split": "validation",
+          "kind": "implementation",
+          "query": "Where does appending a response header concatenate old values with new arrays?",
+          "context_file": "test/res.append.js",
+          "file": "lib/response.js",
+          "anchors": [
+            {
+              "line": 635,
+              "quote": "    value = Array.isArray(prev) ? prev.concat(val)"
+            }
+          ],
+          "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+          "evidence": [
+            {
+              "file": "lib/response.js",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "line": 635,
+              "quote": "    value = Array.isArray(prev) ? prev.concat(val)"
+            }
+          ]
+        },
+        {
+          "id": "validation-express-test-2",
+          "split": "validation",
+          "kind": "test",
+          "query": "Which tests check resetting a header discards previously appended values?",
+          "context_file": "lib/response.js",
+          "file": "test/res.append.js",
+          "anchors": [
+            {
+              "line": 44,
+              "quote": "    it('should get reset by res.set(field, val)', function (done) {"
+            }
+          ],
+          "source_sha256": "35f0e842b50fef2ed332de2bc48e74bc16c17f8eeafbe6505c3977b36f5516fe",
+          "evidence": [
+            {
+              "file": "test/res.append.js",
+              "source_sha256": "35f0e842b50fef2ed332de2bc48e74bc16c17f8eeafbe6505c3977b36f5516fe",
+              "line": 44,
+              "quote": "    it('should get reset by res.set(field, val)', function (done) {"
+            }
+          ]
+        },
+        {
+          "id": "validation-express-exact",
+          "split": "validation",
+          "kind": "exact",
+          "query": "Locate the precise declaration of acceptsCharsets",
+          "context_file": null,
+          "file": "lib/request.js",
+          "anchors": [
+            {
+              "line": 77,
+              "quote": "    case 'referrer':"
+            }
+          ],
+          "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d",
+          "evidence": [
+            {
+              "file": "lib/request.js",
+              "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d",
+              "line": 77,
+              "quote": "    case 'referrer':"
+            }
+          ]
+        },
+        {
+          "id": "validation-express-unrelated",
+          "split": "validation",
+          "kind": "unrelated",
+          "query": "Find the checks that check resetting a header discards previously appended values?",
+          "context_file": null,
+          "file": "test/res.append.js",
+          "anchors": [
+            {
+              "line": 44,
+              "quote": "    it('should get reset by res.set(field, val)', function (done) {"
+            }
+          ],
+          "source_sha256": "35f0e842b50fef2ed332de2bc48e74bc16c17f8eeafbe6505c3977b36f5516fe",
+          "evidence": [
+            {
+              "file": "test/res.append.js",
+              "source_sha256": "35f0e842b50fef2ed332de2bc48e74bc16c17f8eeafbe6505c3977b36f5516fe",
+              "line": 44,
+              "quote": "    it('should get reset by res.set(field, val)', function (done) {"
+            }
+          ]
+        }
+      ],
+      "source_sha256": {
+        "lib/utils.js": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+        "test/utils.js": "022f171575ba38ed5f595ec8080da0bb4578130d280942a0d4aea019a172711e",
+        "lib/application.js": "505ba52497bd41ef401f04a2c0cb4d16fcfbd6d490bb0e0420a4637a79a794ab",
+        "test/app.js": "826034bcb123e71507dc0070cc7d6223c6944eb72c0f76fce47d931a577e96dc",
+        "lib/request.js": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d",
+        "test/req.get.js": "49e423b6803afffbf996f619c4213f98099b201c0c2ec75feb1ba8acf604deb7",
+        "lib/response.js": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+        "test/res.append.js": "35f0e842b50fef2ed332de2bc48e74bc16c17f8eeafbe6505c3977b36f5516fe"
+      }
+    },
+    {
+      "id": "prisma",
+      "repo": "prisma/prisma",
+      "commit": "33667c373c0ae84ad37c7aed2497b99452da589c",
+      "questions": [
+        {
+          "id": "development-prisma-implementation-1",
+          "split": "development",
+          "kind": "implementation",
+          "query": "Where is a nested object value obtained by reducing a sequence of path keys?",
+          "context_file": "packages/client/src/__tests__/deepGet.test.ts",
+          "file": "packages/client/src/runtime/utils/deep-set.ts",
+          "anchors": [
+            {
+              "line": 11,
+              "quote": "export const deepGet = (o, kp: string[]) => keys(kp).reduce((o, k) => o && o[k], o)"
+            }
+          ],
+          "source_sha256": "759383e1afa7570176545c17b55845be2fbad799850f956af755d556fccf3435",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/utils/deep-set.ts",
+              "source_sha256": "759383e1afa7570176545c17b55845be2fbad799850f956af755d556fccf3435",
+              "line": 11,
+              "quote": "export const deepGet = (o, kp: string[]) => keys(kp).reduce((o, k) => o && o[k], o)"
+            }
+          ]
+        },
+        {
+          "id": "development-prisma-test-1",
+          "split": "development",
+          "kind": "test",
+          "query": "Which tests retrieve zero from a nested object without treating it as absent?",
+          "context_file": "packages/client/src/runtime/utils/deep-set.ts",
+          "file": "packages/client/src/__tests__/deepGet.test.ts",
+          "anchors": [
+            {
+              "line": 4,
+              "quote": "  test('work with 0', () => {"
+            }
+          ],
+          "source_sha256": "ef16d8c647107c14a702185b3124be6987c3e67adc4aa826022236ca9cafa7f6",
+          "evidence": [
+            {
+              "file": "packages/client/src/__tests__/deepGet.test.ts",
+              "source_sha256": "ef16d8c647107c14a702185b3124be6987c3e67adc4aa826022236ca9cafa7f6",
+              "line": 4,
+              "quote": "  test('work with 0', () => {"
+            }
+          ]
+        },
+        {
+          "id": "development-prisma-implementation-2",
+          "split": "development",
+          "kind": "implementation",
+          "query": "Where does decoding raw SQL parameters reject serialized JSON that is not an array?",
+          "context_file": "packages/client/src/__tests__/deserializeRawParameters.test.ts",
+          "file": "packages/client/src/runtime/utils/deserializeRawParameters.ts",
+          "anchors": [
+            {
+              "line": 24,
+              "quote": "    throw new Error('Received invalid serialized parameters: expected an array')"
+            }
+          ],
+          "source_sha256": "5dbbf4a6b4963bdff9a7e665a4427070f6921fd902532ef49dda05a5dadba5b3",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/utils/deserializeRawParameters.ts",
+              "source_sha256": "5dbbf4a6b4963bdff9a7e665a4427070f6921fd902532ef49dda05a5dadba5b3",
+              "line": 24,
+              "quote": "    throw new Error('Received invalid serialized parameters: expected an array')"
+            }
+          ]
+        },
+        {
+          "id": "development-prisma-test-2",
+          "split": "development",
+          "kind": "test",
+          "query": "Which tests reject a typed raw parameter value when its type tag is missing?",
+          "context_file": "packages/client/src/runtime/utils/deserializeRawParameters.ts",
+          "file": "packages/client/src/__tests__/deserializeRawParameters.test.ts",
+          "anchors": [
+            {
+              "line": 129,
+              "quote": "  test('throws error for prisma__value without prisma__type', () => {"
+            }
+          ],
+          "source_sha256": "5f045121da71fe1ad93c15835d1d9b0132d18d9121421b1fbf1279959e603890",
+          "evidence": [
+            {
+              "file": "packages/client/src/__tests__/deserializeRawParameters.test.ts",
+              "source_sha256": "5f045121da71fe1ad93c15835d1d9b0132d18d9121421b1fbf1279959e603890",
+              "line": 129,
+              "quote": "  test('throws error for prisma__value without prisma__type', () => {"
+            }
+          ]
+        },
+        {
+          "id": "development-prisma-exact",
+          "split": "development",
+          "kind": "exact",
+          "query": "Locate the precise declaration of deepGet",
+          "context_file": null,
+          "file": "packages/client/src/runtime/utils/deep-set.ts",
+          "anchors": [
+            {
+              "line": 11,
+              "quote": "export const deepGet = (o, kp: string[]) => keys(kp).reduce((o, k) => o && o[k], o)"
+            }
+          ],
+          "source_sha256": "759383e1afa7570176545c17b55845be2fbad799850f956af755d556fccf3435",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/utils/deep-set.ts",
+              "source_sha256": "759383e1afa7570176545c17b55845be2fbad799850f956af755d556fccf3435",
+              "line": 11,
+              "quote": "export const deepGet = (o, kp: string[]) => keys(kp).reduce((o, k) => o && o[k], o)"
+            }
+          ]
+        },
+        {
+          "id": "development-prisma-unrelated",
+          "split": "development",
+          "kind": "unrelated",
+          "query": "Find the checks that reject a typed raw parameter value when its type tag is missing?",
+          "context_file": null,
+          "file": "packages/client/src/__tests__/deserializeRawParameters.test.ts",
+          "anchors": [
+            {
+              "line": 129,
+              "quote": "  test('throws error for prisma__value without prisma__type', () => {"
+            }
+          ],
+          "source_sha256": "5f045121da71fe1ad93c15835d1d9b0132d18d9121421b1fbf1279959e603890",
+          "evidence": [
+            {
+              "file": "packages/client/src/__tests__/deserializeRawParameters.test.ts",
+              "source_sha256": "5f045121da71fe1ad93c15835d1d9b0132d18d9121421b1fbf1279959e603890",
+              "line": 129,
+              "quote": "  test('throws error for prisma__value without prisma__type', () => {"
+            }
+          ]
+        },
+        {
+          "id": "validation-prisma-implementation-1",
+          "split": "validation",
+          "kind": "implementation",
+          "query": "Where does raw SQL result decoding turn base64 bytes into an unsigned byte array?",
+          "context_file": "packages/client/src/__tests__/deserializeRawResults.test.ts",
+          "file": "packages/client/src/runtime/utils/deserializeRawResults.ts",
+          "anchors": [
+            {
+              "line": 19,
+              "quote": "    case 'bytes': {"
+            }
+          ],
+          "source_sha256": "d99bccc4e6ef192b2e0c353fabb5fe0ff2bd6514f7ba028454b602c2a05c6949",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/utils/deserializeRawResults.ts",
+              "source_sha256": "d99bccc4e6ef192b2e0c353fabb5fe0ff2bd6514f7ba028454b602c2a05c6949",
+              "line": 19,
+              "quote": "    case 'bytes': {"
+            }
+          ]
+        },
+        {
+          "id": "validation-prisma-test-1",
+          "split": "validation",
+          "kind": "test",
+          "query": "Which tests preserve null values across several raw result column types?",
+          "context_file": "packages/client/src/runtime/utils/deserializeRawResults.ts",
+          "file": "packages/client/src/__tests__/deserializeRawResults.test.ts",
+          "anchors": [
+            {
+              "line": 82,
+              "quote": "  test('null', () => {"
+            }
+          ],
+          "source_sha256": "339f92969ab077ca03bb9a8e72140f96bbcff21012257bf754fc0d44b369e3e5",
+          "evidence": [
+            {
+              "file": "packages/client/src/__tests__/deserializeRawResults.test.ts",
+              "source_sha256": "339f92969ab077ca03bb9a8e72140f96bbcff21012257bf754fc0d44b369e3e5",
+              "line": 82,
+              "quote": "  test('null', () => {"
+            }
+          ]
+        },
+        {
+          "id": "validation-prisma-implementation-2",
+          "split": "validation",
+          "kind": "implementation",
+          "query": "Where are date arguments serialized as ISO strings with a DateTime protocol tag?",
+          "context_file": "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.test.ts",
+          "file": "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.ts",
+          "anchors": [
+            {
+              "line": 286,
+              "quote": "      return { $type: 'DateTime', value: jsValue.toISOString() }"
+            }
+          ],
+          "source_sha256": "524998bf23dada4b82ed2eb542c15372aff2f34d8d0d370e0ff6491eb5470212",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.ts",
+              "source_sha256": "524998bf23dada4b82ed2eb542c15372aff2f34d8d0d370e0ff6491eb5470212",
+              "line": 286,
+              "quote": "      return { $type: 'DateTime', value: jsValue.toISOString() }"
+            }
+          ]
+        },
+        {
+          "id": "validation-prisma-test-2",
+          "split": "validation",
+          "kind": "test",
+          "query": "Which tests serialize a birthday Date argument in a findMany request?",
+          "context_file": "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.ts",
+          "file": "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.test.ts",
+          "anchors": [
+            {
+              "line": 394,
+              "quote": "test('args - Date', () => {"
+            }
+          ],
+          "source_sha256": "870f3d1ac5af32a6f8fe04fc763428573fb6a41beefb3eab7c95bce526261bc1",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.test.ts",
+              "source_sha256": "870f3d1ac5af32a6f8fe04fc763428573fb6a41beefb3eab7c95bce526261bc1",
+              "line": 394,
+              "quote": "test('args - Date', () => {"
+            }
+          ]
+        },
+        {
+          "id": "validation-prisma-exact",
+          "split": "validation",
+          "kind": "exact",
+          "query": "Locate the precise declaration of deserializeRawResult",
+          "context_file": null,
+          "file": "packages/client/src/runtime/utils/deserializeRawResults.ts",
+          "anchors": [
+            {
+              "line": 19,
+              "quote": "    case 'bytes': {"
+            }
+          ],
+          "source_sha256": "d99bccc4e6ef192b2e0c353fabb5fe0ff2bd6514f7ba028454b602c2a05c6949",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/utils/deserializeRawResults.ts",
+              "source_sha256": "d99bccc4e6ef192b2e0c353fabb5fe0ff2bd6514f7ba028454b602c2a05c6949",
+              "line": 19,
+              "quote": "    case 'bytes': {"
+            }
+          ]
+        },
+        {
+          "id": "validation-prisma-unrelated",
+          "split": "validation",
+          "kind": "unrelated",
+          "query": "Find the checks that serialize a birthday Date argument in a findMany request?",
+          "context_file": null,
+          "file": "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.test.ts",
+          "anchors": [
+            {
+              "line": 394,
+              "quote": "test('args - Date', () => {"
+            }
+          ],
+          "source_sha256": "870f3d1ac5af32a6f8fe04fc763428573fb6a41beefb3eab7c95bce526261bc1",
+          "evidence": [
+            {
+              "file": "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.test.ts",
+              "source_sha256": "870f3d1ac5af32a6f8fe04fc763428573fb6a41beefb3eab7c95bce526261bc1",
+              "line": 394,
+              "quote": "test('args - Date', () => {"
+            }
+          ]
+        }
+      ],
+      "source_sha256": {
+        "packages/client/src/runtime/utils/deep-set.ts": "759383e1afa7570176545c17b55845be2fbad799850f956af755d556fccf3435",
+        "packages/client/src/__tests__/deepGet.test.ts": "ef16d8c647107c14a702185b3124be6987c3e67adc4aa826022236ca9cafa7f6",
+        "packages/client/src/runtime/utils/deserializeRawParameters.ts": "5dbbf4a6b4963bdff9a7e665a4427070f6921fd902532ef49dda05a5dadba5b3",
+        "packages/client/src/__tests__/deserializeRawParameters.test.ts": "5f045121da71fe1ad93c15835d1d9b0132d18d9121421b1fbf1279959e603890",
+        "packages/client/src/runtime/utils/deserializeRawResults.ts": "d99bccc4e6ef192b2e0c353fabb5fe0ff2bd6514f7ba028454b602c2a05c6949",
+        "packages/client/src/__tests__/deserializeRawResults.test.ts": "339f92969ab077ca03bb9a8e72140f96bbcff21012257bf754fc0d44b369e3e5",
+        "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.ts": "524998bf23dada4b82ed2eb542c15372aff2f34d8d0d370e0ff6491eb5470212",
+        "packages/client/src/runtime/core/jsonProtocol/serializeJsonQuery.test.ts": "870f3d1ac5af32a6f8fe04fc763428573fb6a41beefb3eab7c95bce526261bc1"
+      }
+    }
+  ],
+  "candidate_engine_files": {
+    "GUIDELINES.md": "c2db845a6a39fd4589badb69d81978e97fd38c68cdd92d3735e786c2037ae308",
+    "__init__.py": "3c24544ff80b60fd7bc13ebfdc80e971b5650ce3e4d1331338b2557b5135772f",
+    "_internal/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/errors/__init__.py": "686bf1fc27c3e0aab95611c39327f1282dd35d0e369fe5eb42763e43185b4b46",
+    "_internal/integrations/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/context/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/context/architecture_drift.py": "914220882f48b346b3187ce4796be2d6526d158d08a45a78ddaf8851d25e4de5",
+    "_internal/integrations/context/ast_chunker.py": "bf11468010786e52f59c81d6c7c7650b0b44cbbc6fc514c40cc7d7ddb26f6639",
+    "_internal/integrations/context/ast_service.py": "08d2dd7eddea35efe89995827ef8be96068374889475695d4f811d7c83e9b467",
+    "_internal/integrations/context/ast_snapshot.py": "fa95484ec0e690ecd2b961c0d8c16a0454073703d841f12a339297d95c578eaa",
+    "_internal/integrations/context/blob_oid.py": "297c62dc6e6324874aea9157213b4290b29ec7711cd37568e1eaaa75269d8b69",
+    "_internal/integrations/context/cache_manifest.py": "c22889e1493c5c8e6d45d69e6827a5b4a1b2b5343ce12d35245c4bbd4fffb6f0",
+    "_internal/integrations/context/cas.py": "1c93c059bf83e4ec09ee88fef628091dd496e338fbb6b8f5956ac1fa82d09d94",
+    "_internal/integrations/context/code_analyzer.py": "0fabbfa9138c470e1a377de4577e599b69bb4963fec3561efa7fbd26fc27d45d",
+    "_internal/integrations/context/codebase_ast.py": "7178e4948c245cc3dfed24186eea9fd9bc0f8973feecc4bf994395e91d697df2",
+    "_internal/integrations/context/codebase_context.py": "061b9c9077921c3d1e957c2fa6095bd6024d8603d5c2b37650091d390f74f559",
+    "_internal/integrations/context/cross_mode.py": "5baf4f9b560a73faa98e31dbd969b6feb0af435843f4c0e5f2ea0459694f4f93",
+    "_internal/integrations/context/cross_references.py": "98b3add564d30c4e3e366fc271af9f01e404e8730a791685dc60b6968821d79a",
+    "_internal/integrations/context/discovery_snapshot.py": "42ae4f6e1ead4b580c20f2ca8a0fbc8594bd2cddd59a922acfbd1a7889e734d4",
+    "_internal/integrations/context/embedding_rotation.py": "da9548eea624cd542e5920f4c6f3423bd145b4ab1631720b0de3817a6da33e2f",
+    "_internal/integrations/context/embeddings.py": "80cca4b5c64c35a60a052e621bd5b47970e668b65951dc922158d411040ecd49",
+    "_internal/integrations/context/frecency.py": "6c63d5ecddd586fac1a60bb556289dbcee9a1ece02baff6b1a126dcca90a6106",
+    "_internal/integrations/context/fuzzy.py": "247504f4e2fb5e4190200daf44055e58a7163cf2b5c846ec7ffef5aa9cb88766",
+    "_internal/integrations/context/hierarchical_explorer.py": "7f6a0fb336f1fbe5b3afa07e585cc3712c144c5cba8a06c2838a5d2b3f76b86e",
+    "_internal/integrations/context/hydration.py": "5094ceca0d16fcbef0fedc8e2d2f841bd4c88f1c69bada4c60e63cc2596b93df",
+    "_internal/integrations/context/index_probe.py": "6652c07cafba7b3cd0eb924406920883ea678db746826eaf6ee8c0c53bc316d0",
+    "_internal/integrations/context/index_repair.py": "749b763d1cbce8c239efa381f1660918b87edacb672fe751e4a23e5d234c4736",
+    "_internal/integrations/context/index_store.py": "a65c04d9b468030eb227b49e5939e3d7d22c966a48bc75b0a383bd91edcb4538",
+    "_internal/integrations/context/language_registry.py": "1216b62cc8c5a04457304a83b0cd9b49a9b556b616daf8caf836ade0979d2795",
+    "_internal/integrations/context/memory_store.py": "23907b9357d571e4d2204382a60c51b40d58abd9e2fa1e1b5e30c37113621101",
+    "_internal/integrations/context/module_resolution.py": "788e5404beed67520d2df573b09dbab4946ff49aba68dae4d6b88cd33f9c39d7",
+    "_internal/integrations/context/parse_diagnostics.py": "1f6ea4c962d07c0b39d1577c466384ceaf765d8ba21b8f38a6982addb15ae3ab",
+    "_internal/integrations/context/query_constraints.py": "6cb471b94159fe784a1896c281bee5521d6fe5dbd08c67dfbbd961f25adca795",
+    "_internal/integrations/context/query_history.py": "20663225aa2abd46c656766847ebe61e6c9b2900b10b9505ad1fc13e3c05ee77",
+    "_internal/integrations/context/reranker.py": "edf9e955caf72528c1ed0a3f9185b2dc8532af9ef7ae49352c08b3e2dd117a48",
+    "_internal/integrations/context/semantic_search.py": "239bae0956ca33c3f506f3e7f5d4f21626a4dc2439bff4b59580fc78a514fa4c",
+    "_internal/integrations/context/syntax_evidence.py": "2b16c83a0a59c21e86d812aba459a9b11c2b5be6bf89e7ba9524b9f8aaada73e",
+    "_internal/integrations/context/systemone_ranker.py": "041f4bdc75f3e2f110ce81909b0d6199d1bfdc84be7cb9cbe763a2dbb37043d7",
+    "_internal/integrations/context/temporal_coupling.py": "d9bb1a9a1bcaa6e04c5486cd4634ad8f6305b86ec18152a479909fc604f0c2c3",
+    "_internal/integrations/context/trigram_index.py": "b8b8deb64c0bbd907a4c6cc5583668e2211beabd490a2ae9c04902ea6cb57318",
+    "_internal/integrations/context/trigram_regex.py": "94e5e0d7391a20a14889e4bf207c6c1b308d8fcace9175ae5d586865058409b5",
+    "_internal/integrations/context/ts_parser.py": "31ac62674ab43217f0609da626178ecf5fef71671d7e5e6a69d9a87f8b89c072",
+    "_internal/integrations/context/vector_store.py": "27dd61f3ef42993f258236f528cec69c2dcf9cace5a46a7730b972eb7e6a548f",
+    "_internal/integrations/feature_flags/__init__.py": "af2746daa3a3e7603eff9604531c83f564e04ade9e02c180e5b85e6834bf3ba4",
+    "_internal/integrations/lsp/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/lsp/client.py": "6a1d86d7c87979f388316d210f4e622af81282e3447b4a38c3786ad668863ccc",
+    "_internal/integrations/mcp/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/mcp/client.py": "4cb83bbc4d328e1277bbcfd70485032c9484c864872b64ff352ea529204ff3f2",
+    "_internal/integrations/security/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/security/custom_rules.py": "7556d9085751f23d7eac7444f4d0f179a7e948f956d08c2fbd28a86b2dd987fa",
+    "_internal/integrations/security/dataflow.py": "06bd83bcaa0aa18819ef4eeed5ff319783a8f3fa9fbc91a5c41f59c00eefc449",
+    "_internal/integrations/security/dependency_audit.py": "b2bcd321cde7874d4b2c92c20ebbba12c82644f9ea297b78c93e5e7e237b8c57",
+    "_internal/integrations/security/matcher.py": "cf0a2b67643ca40ef38c43b03591a46d4ee33975b8a5529e8c73a1b9104820cf",
+    "_internal/integrations/security/patterns.py": "73837271d3acabcdecb0e36fd69482065817c59957636cf3cdf074eb7a6d66c8",
+    "_internal/integrations/security/scanner.py": "ab312c3e804aecffed34876732a65f0c193dc7f1f9ef2e317fdddc61b8716f11",
+    "_internal/integrations/utilities/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/integrations/utilities/ignore.py": "7b7e23062d60de4e74c4aceaeff9123c1472b1e2b55b76b96c51ffc8b8fcc1c9",
+    "_internal/integrations/utilities/token_estimate.py": "061a2ef4c1935582e4f9716e37fb8d33dc09b09dd09e5777d378ca5059da89ae",
+    "_internal/tricks/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/tricks/recursive_context.py": "5090b527895cda605fabd1883c25f4d59d51ba7a8017f67de9dd51f4c87c6afc",
+    "_internal/types/__init__.py": "d7b3854fb83528b672279d72a5249de023e38ada32ba2ad45626ac11d2222a9e",
+    "_internal/types/events.py": "859bb588ad03a8769235f687a8154c6881f13bc42bcfe4b89383e95eca77bc2c",
+    "_internal/types/severity.py": "7c851293282175ad82293c5ade5bbcb05346041c0f07702cd75cea23b3c6dd64",
+    "_shared.py": "fc52ca020009b23922afe6ce1799cff19af57e7e35dbbe2b90acb38973d10dc4",
+    "analysis_coverage.py": "53333aee96bd4728b2be0ee449bac07d3fb027387fb6963d4382de333ad11c95",
+    "api/__init__.py": "f5f58ce9aa3583b4287d300fcf3f0d3644dd46da0834a2a47927cb0df1ce5f6f",
+    "api/access.py": "1908d5cceae6970f230b080a142fa28991990a40bcdd6cc746005fa6923ece07",
+    "api/app.py": "c2181cd9cee440084ca219b85170867a3bbc49aecec9dfe647a5c122ee2f7345",
+    "api/auth/__init__.py": "f00326a929f82b59f229ae7439cf538f93a1eaa227f4d4174839a334a61bfaea",
+    "api/auth/api_keys.py": "0b235ca4a4cbbb81a8598b4060b23efe99f049bca858ae2128e6ec2a11c7a4bc",
+    "api/auth/context.py": "411152cd816d158d5e7fa5a33cee7227e8f1cf0b9aa3645bead4c429a98245fa",
+    "api/auth/jwt.py": "0c2ba3eb6d2197a3d7a57ca155462cf404364e475c1fb80de66e264bfdfd2be3",
+    "api/auth/oauth.py": "d4ea456f1584be171f0b5809e1777b39fbf81369967d2dd15ddcd2e0f05d47b0",
+    "api/auth/passwords.py": "aa99849dc6f781128623b3a3aebadb76962070e730271b0fa9beb718e4aa170d",
+    "api/deps.py": "8ef8151a5acb53518c9a88be4101e4f2c36586748bfc898e6f9af7bec9bf263e",
+    "api/knowledge_bridge.py": "3fc9af46dcf7147c49f6b609812ffd4da645aa6db00f8d22e6f0b3c0565af9d5",
+    "api/mcp_transport.py": "075d0d122b94def49b958bb4bf0eb4369d8fcf674e84f7a662047eb4baa55217",
+    "api/middleware.py": "6c39222990655c43d2fb0a078fb1a0b4ab1723b922283ba51c1d8f3105215530",
+    "api/models.py": "64e881c68ab7e3adb1fc1d44544d51a7ce7d62dce4b985146979f8be789ec6fc",
+    "api/providers/__init__.py": "fec6ddb054d07f06db089251952070aef479bd6f379c9b50a421da7756d71f08",
+    "api/providers/db_provider.py": "05387fe0156b5b35ae191aa919b2cc1b9f369945c7669f65d0e2ea75442198a5",
+    "api/providers/local_provider.py": "4232cd42f27e19c99a05ec9c2e5659f98677e5309a5ceae0d2d146bda36e29c6",
+    "api/providers/remote_provider.py": "1a241bf0a3de457d1ef3369e314af755c3cbb38afb509d093901bf825e949400",
+    "api/repository_source.py": "e701fb315674f4c7a23d2aed46187ece260e3144762b2a76520d2873638fbe5d",
+    "api/routes/__init__.py": "51bf83470168d705beb38744164cc071189699478cdb8ceebd28fd927f332148",
+    "api/routes/_pin_helper.py": "777b02b9f9c69027625ad16044840aff65ca340bed99c63fe0fd8653c845c369",
+    "api/routes/activity.py": "c6d4548ce0f3b6d301e0c40f2fffd1c7ca67dc9629ac6c5cab10dc0c0f1bddb8",
+    "api/routes/adr.py": "a1d3bf4ef67cb6b9be1285299a4e35e0963a56c53d1169b7972559cadd6a42a6",
+    "api/routes/analysis.py": "abb80fdec7c47dea41fb063b79f132025645c07d487c83f803cbea2e2140e289",
+    "api/routes/api_keys.py": "bc10d8938ecfe74ee5fb82b7f0721275f2dc410a3b4357c01891d6928f519e88",
+    "api/routes/auth.py": "787a60d50e36f30b3217a1a76a9c08d27c5ebf42b23e466c336f88600e47b101",
+    "api/routes/branches.py": "de3e05b575e918af3ec3fddd832eecb08271fe8819faa32c55bb5d322c5121d1",
+    "api/routes/cross_repo_search.py": "64649a53d59fdf2c2a3f74f7ee5810da5777bf57159f97fbc428f07122e216cb",
+    "api/routes/embeddings.py": "bd297d6150395065cd725c407d54a919652b98372284e30397969124c2a252d3",
+    "api/routes/files.py": "b356624623f9bf95a2675147bfcb67dab299187aedb9e6f2ac1d89b26959eb0e",
+    "api/routes/files_v2.py": "3047d45160f0965d971a2f33380a3b8cdc03739448deb841819946cb290afb11",
+    "api/routes/gc.py": "5a394e7c9b195470c87ad3284605b907128209bdaeb84b034b25acec6416cf3f",
+    "api/routes/git_v2.py": "7c36ec3151fee893b3352371f31123e1d223e7726f0532c71682d04a71e596d7",
+    "api/routes/graph.py": "14ddf78d19730c135ccbb327cebcffefafd9dbf495c1d548650ac4cbb85f99ed",
+    "api/routes/graph_viz.py": "b7d256c98b406f9898ebc18cd419663b04ab90507fca6757ac6ec7c8e460544a",
+    "api/routes/health.py": "00d855206ca39133947586a71a8c9b399282b6bd197bd0a322df59addfedd5a0",
+    "api/routes/history.py": "cf8c67c973c2b074315e470ed902cffe27b2d9822f089e84dbbddd8b6f3f7850",
+    "api/routes/jobs.py": "0ce11e7e944d1d0584881b5fb92e1c7ddaad840e9eac083d08baa80ff9d79afc",
+    "api/routes/learning.py": "af9347757a67139e8b26a99b94aa347ec0e78e02a37c7986409a13bb01d8e194",
+    "api/routes/lsp.py": "9121467807da755135ba4285f246ae06b29a9ae37c652212dd9d20eb4611356d",
+    "api/routes/notify.py": "fe9ed80a6f2155ed8ac0472cc93c88669f21696ee5321f70efa62fa896f8679a",
+    "api/routes/operations.py": "b32103c4a115df34d881bafe72dd59ed7d5f1e9582c8edd9c4ddf2e67b8a8e44",
+    "api/routes/orgs.py": "1320a02e6825aaf9d642a70475929c865315c0ac1bc09f5eb8d810ada3e78afa",
+    "api/routes/preferences.py": "af3b526e5e78042e722349f706e0ac7357b8a6dc8c0675e23b2a40195e069fdb",
+    "api/routes/presence.py": "223b056722a90a3aa2d24e618f2315ed2eaec383a6fd75fd267f136fa29f7445",
+    "api/routes/projects.py": "030699f50e0a9fee5e78c2ab837913a78de9e31f92b94fa1be6204d114db3a02",
+    "api/routes/repos.py": "701c57a429c2dd39b99c5ba456fe1df1abbaf752bea500e64bc808a5fb40756e",
+    "api/routes/search.py": "bc186e5a62f64250988c418d54198d0b771180b348937ebf91f7335c387cf8b1",
+    "api/routes/snapshots.py": "8159458a15461ad927c666c30c0c5b3fb4dbe96beebe1b07dd1bd6ad1568b219",
+    "api/routes/webhooks.py": "214297cefe71ec4870b7324758ba242f83a046ff1aaed10c8c20d518d8f306fd",
+    "api/routes/websocket.py": "ede8340cf07f3d1f8233a52e9a589cc21fa938780cffbf49e898e2b017fe0a96",
+    "api/static/graph.html": "348d62bc9c171a6d9a9cf921a8052303286e31b6f68471b333787b63381c0c37",
+    "api/utils.py": "ef554c59085195557af917d9d2167199c8af55f1abb8867f8386da4a6f406b50",
+    "artifacts/__init__.py": "0374927867b798c10ae637002df6201532fb3168aa5051661825836d6a38d66d",
+    "artifacts/hashing.py": "ee7b39ec5c87d7588a55ead338b5da3472a617863be333aed5437dd5b82e9bec",
+    "artifacts/provenance.py": "97148a279837e643559e791d142b0c5771d44434d47196e71053856fec589f65",
+    "artifacts/retrieval_pin.py": "158e928458979698094951a1a0074f1e5a1266b6fe00a4e79109f9a701aae535",
+    "audit.py": "b0a043340d240eaacf130b33df1455ba924bc4638dbcd36f19940c33a0dc254c",
+    "bug_finder.py": "f8f74084d511014026b9b03728068d4faaabffd05bf8e913b7eb75f407d26c5c",
+    "bundle.py": "48b7b975b2756c2075bf3ddd06db729d552cb9d418f9862e060797fc1cbd7c61",
+    "catalog.py": "ebe448a869f24a55b760b9bc53c7660683e0b615bc3571d2b2c8e8299eb1c4ad",
+    "change_evidence.py": "895e73ba04bdca75b6f86ee00ec2c0e656d30d195981b3a8c5a81c5effcdc54b",
+    "change_investigation.py": "9c18cda0b7adf6cba1c8c3e9e564c01eed2f39737e2b83540400f56876d7a75c",
+    "change_review.py": "5354e2f13737dbd7352131c1b34f59a81e4676553fdc94ae817aac98c223ee83",
+    "cli.py": "b7d6d70cfced32f8483b248c009733315658b5aa2e1ac9c515431227475d1210",
+    "community.py": "df54c150c0435d909025e1868d41afdef230a680adc8180e406f8519ff6079fb",
+    "confidence/__init__.py": "495aacf113a63b444170698fe79a19c5ee92b6992c21ce2c3c5735e782275e30",
+    "confidence/jev.py": "b1e9a644aff809826279dfa266c1912229d126ecf1a469fcd24124880d081f27",
+    "confidence/llm.py": "1732ea52ae89353927d91e3aff1393c8aa9a13bd93b0b8d24f870ea5bcf3d993",
+    "confidence/redact.py": "17bf0bce9769346e07f1000dca57778cc301330302ce5ec768417b291a1b806b",
+    "confidence/settings.py": "363abc1cbd9768a3310a86039bf73c9ab2ec60f41cd3ca8041643e6cbdad86a1",
+    "config.py": "72f159f6842be888c0592cb70f99dca522b797450f0ed3c877e940b48230aa92",
+    "context_search.py": "ef62f6f44ffd6fa155ec868d73fd0236e3451679db428eb8072925891bcff6c9",
+    "crypto.py": "0517f526f7129bf26e7ed496f0992a1881db2a162620061fd9cf77fd4df0eee8",
+    "db/__init__.py": "706d28918a4f5b6c15b21d2843597bb124eb95021023af1cd3355f241c2ba0c3",
+    "db/base.py": "cc1cda44a518c87db02fea2adaa23200d7449186705289db549ea09b4f0f7886",
+    "db/engine.py": "e3ae49f686cf71b9b10e9c92352f42d914568a66df43c24e76f2b20370fc2a3c",
+    "db/models.py": "2802fb86b6701a296c05ba8fbad20787a6744bdda38e2ce7ddc744e4f7e060cb",
+    "entrypoint.py": "1a548287141d3c8153854c1254396ff80672d3c902007aa749c302e04442dfce",
+    "focused_evidence.py": "04a51864308b63456559d01a4302cf6c6094dbc450ea74de9efbc3b731a82418",
+    "freshness.py": "5cd82da82d73c4db6d61b25f34fde0525ffc66f5f3b97ea6b74bb1c0838518c2",
+    "gateway.py": "66d9ce8c6c987fa6a847e4966c6c96ee44cc0c80249f5f11223c5a879401265f",
+    "git/__init__.py": "d9ee34688a30daab3c12035f99e98bc812d63d8440d922993e23987ae440aaf3",
+    "git/credentials.py": "46e4ef7b458ec11f70d50d0a828ce0bc00eca64c33ec2ad9ecc0502569de9dac",
+    "git/manager.py": "bf9519ebefb604e7edd2520a8a9a7b4d7d0bfcd97e00685fdff304309ddb27f3",
+    "git/models.py": "916f5a9b3f21829e306ce494368a1c144d45b2d4c85328a44ab16cd6a14c97de",
+    "git/storage.py": "10f300580d25ad22912c434b2ac970b7dcbbc81924024bfe58cf57e3df9f89ac",
+    "graph_query_parser.py": "2b2bcc2b7ce78f5eb8a51e0d8252252915af4bf3ebd99680d61b5afdb9c610cb",
+    "helpers.py": "e39f836153fcc0ca7d391e4aa9ce61b4bd9d9f696393f9885bdb7b768ac0364a",
+    "indexing/__init__.py": "8377825e22f6e86e0a15234cba7a672fc596a95b62c6c071dc8d1c71705ea2ad",
+    "indexing/debouncer.py": "8a508389e7d1598d8a1a9862e722dba12afea8a78f6dc893cd48a378512709d6",
+    "indexing/delta_indexer.py": "8e29b25caf9eb2b24809fe6efe8f1bbea3af849f43985b33eeb1127277e2da91",
+    "indexing/full_indexer.py": "e853e211b39a233f0383b6779610416799f90f82f6a1bab6a6e01c32fb8bcd60",
+    "indexing/incremental.py": "23f1f3a45ed442ca6bea5265bb46ec2e6c2c48d72578f2062209c214a96065f5",
+    "indexing/parser.py": "56a548802b5901a0517ab5415e53d15c3ff3c02604880ebddbb11cdc91846348",
+    "indexing/summarizer.py": "ff1df2dbd43c57a5af909805c449ad64c4b497fb5fc67e06c341c4a999eb8a70",
+    "installer.py": "1e87072ab052a1740eaeedd01bec01ab0ec8e7b08f7bbe8aabdcc45b20b06b51",
+    "investigation_cli.py": "be7a0aeb20a44634f0c94a5eb90bb70d5c15ac08aa557c26578b76e108a3d8c7",
+    "knowledge.py": "4ed8596ba0e42bdb06887db1877c88e932a77b9610b1d5afe80d7375ffd8331c",
+    "local_knowledge.py": "d8a986cc7991d35fa09bf667069dcf647920e9b5dc2249ac8e0898ed0e356e5f",
+    "migrations/alembic.ini": "dbe404bdb2ee9d45d391679ec9fa3dd35f8c5cf90aa0ed7d7a62636fb956f60c",
+    "migrations/env.py": "844cbb386bc0044e37360634c26ce9bc2260af6bccad00f01ce1afecde9aac82",
+    "migrations/script.py.mako": "9124c647355e88b2cc8bddaafe2db585a71189f7a10de1e5127e4dd8aaf794f0",
+    "migrations/versions/001_initial_schema.py": "122f4b5d48c106a7b990ed5e7eaf66b9b2d045b277f7a839f51e7451c96a813a",
+    "migrations/versions/002_branch_version_and_embeddings.py": "06653e163c068a4b5d5b782e5e9dfb45cea62aca9192121b65c1b87c147d9e30",
+    "migrations/versions/003_embedding_uniqueness_and_cascade.py": "fd130da454658de31ba0cdd891b9e48dd479ba3c9bd7b1091cb0db82ffda55fb",
+    "migrations/versions/004_audit_events.py": "185d8ca267fd146ff44750a443cefae23c5a3682d68430c1dd1931337398c14e",
+    "migrations/versions/005_user_preferences.py": "d1d6ed1f8f58dd73b7392a5ba516a7742da678718945e889c3cf12f5287d9c9f",
+    "migrations/versions/006_google_oauth.py": "4c065db954d07cf6e0269079632d8bf417923fc3ca82fd9b77f6d803c265efb9",
+    "migrations/versions/007_pgvector_embeddings.py": "45c565b9393c8b2584e520dd4d2a05d482623640f10263311a48cf7fa7b26a2f",
+    "migrations/versions/008_symbol_references.py": "901bfac820bdcdf64ee19dd7a7cb4f184656b0afe00c97da7df69d827f024210",
+    "migrations/versions/009_webhook_secret_encryption.py": "eeb5883d3c1aed4f58ccc849fdb5c4dca6450ea68318a52a2ab94cd3e8329c59",
+    "migrations/versions/010_add_commits_table.py": "60fb309a65dd835447af2a31a871c47733d77ef86ceb7a0f6aefced65a070862",
+    "migrations/versions/011_commit_changed_files.py": "8463f1fcbab1f71abc19cd8345f8f12da9062eff318ef4d46941d37c069b54e0",
+    "migrations/versions/012_branch_merged_at.py": "88fb05dfa8d9bd2c1339fe9b016e1222d5c8e4d4118282120995d9ec6708eb5e",
+    "migrations/versions/013_revoked_tokens.py": "30708e3c66b234d18101b235003e17d126ed1f45b2ee7dc18bc4ebc48e3ef9da",
+    "migrations/versions/014_blame_hunks.py": "fdf4ab2e60ad8250acba47b2b9042c1867af38e114a5365768047242052c7599",
+    "migrations/versions/015_commit_file_stats.py": "ff57a71da6a30ecec81590c4c1fb7c3005722dc9c2b8b9a8d2400bad1b6ece9c",
+    "migrations/versions/016_embedding_provenance_columns.py": "e834a35d3e1b82762bbc99042a57d41bd9a92951764ab235eba2353aec17bb09",
+    "migrations/versions/017_provenance_table.py": "2d4f963fb502a43f3d0900892a2d08873fc3d9858fa05858745b66f665f061ba",
+    "migrations/versions/018_repo_snapshots.py": "f856caef774a95b998d21f30e49cb8446f1b5f2ebc136b82aa8b79e8522d661b",
+    "migrations/versions/019_symref_caller.py": "ea8055b835e2f6afbdc21ddb15c9fe71576eab0b94c3babaf8d225ebd188fc2b",
+    "migrations/versions/020_shared_knowledge.py": "afff70a991cceec4f6808782bd93368b17b3c9affad5a561e296dcbc36a965fc",
+    "onboarding.py": "8c67a41ff999cf680b53963f997b45560232efb7085954f8e96464a10cff485d",
+    "output.py": "95083022ae4917e0076fd0560d6d3f706be2693b750010c718e64588ff87690d",
+    "precision.py": "7245a019ab647448839c12bbd3043ce3d96f38640512c9ef61c75d32070cd165",
+    "presence.py": "e06d00d6d0ea8fe349d462191e07e7a6d431e43b523760d40713bf465b2b4601",
+    "probe.py": "fb5069ad1da62d304cced09d62308d79ebf5253d7d6875caa83f92bc44e18b96",
+    "project_dir.py": "63c349bd8db11441154f5b1384efbf100260ecad76883a69b933c0afca73ed9c",
+    "pubsub.py": "d792d7a490641d02c6c63a4a4fa25e3a896c4a9ef16b8ef2d68bfd5493445a01",
+    "query_ranking.py": "366c71ce4ce3bcd887d91b4d29197c4e15aeca206d4ee19a19a371eaab4abee4",
+    "readiness.py": "bc97f8d81f3e599b7ab62b269bf99792985c2ff6fde95c2aaee66c6db883006d",
+    "redis.py": "a2d913969ecdf5dc9dfea40f80f9f75c251cfefae7ce37e2b40143d0f50b6456",
+    "reference_pages.py": "161bc4c1c8470f82d1b3cb939ad9d3863c3220b72c281212aa0be8ccc9e23406",
+    "remote.py": "90d2b04ced16d013cf59e7a189164d30d27fce37b9709f0d05a9d98a6834024b",
+    "repo_ranker.py": "8558b21aa8aa8dbbb42566f717f6e78071de3bfe210d86993f58a88c291eed22",
+    "request_context.py": "fbf1b8b4b6711ac4edb095946fe6c67e3ea9183273c9a053666d5a6532444cc9",
+    "rules/__init__.py": "4ec00e08a85df1e4d25837ddc8c7d1a264022f284f591dfaa73acce1ee497819",
+    "rules/ci.py": "5f239920ef62b996650a6e9d9dcf9221f14f3bec3b3a3b3aab77572aba7cb3e4",
+    "rules/combinators.py": "c318cb4ce29a92830e8f3dc96929819a5b3369b1bcb732a884e9bfdf2da44ef7",
+    "rules/enricher.py": "0062d03be79ace2b92e2061d958f574305d8be69a8e1d88b3b767518b8922269",
+    "rules/evolution.py": "133d037bc6b69614affcaf78cffbda98eaf883fe7803acfbd6a229972e5935a5",
+    "rules/executor.py": "41b34f7ceb104d33dec6a397ce9f46fc6db89defd7dd9cbf9cc01e844397d968",
+    "rules/filters/__init__.py": "35c4da8cc35100f1ecb113dfe67501b46fad49a91a13376a74da4317146875e2",
+    "rules/filters/pipeline.py": "649878f5b1bd779ffaf45a6b7837d9a9facc53daf5e25e4621121eaf0b37b4ba",
+    "rules/formatter.py": "612e328f60590ebb85389da640fc4e23fdcd6f7284176813924ea9357736c9b5",
+    "rules/hygiene.py": "c2d5b2354698136bd01f14a518ec7fe8e15bb7d6d4ba186fad5b32029f08fafe",
+    "rules/importers/__init__.py": "37af21ad3a0d90cc7b152865cd738f4470d24847b3eab6dfe027628c804b83e2",
+    "rules/importers/semgrep.py": "cd131382f245fb5f89a4a7e3331fa40e31cb0bbe8f37daae8495c5d21dad3223",
+    "rules/loader.py": "bff2ddef81a34da0f23c76722e3cec84869bd0d98b5aacaa4dee19025b0cb2e9",
+    "rules/marketplace.py": "dcddc10d37e3b6e57821af740122b1b901805b16101309200e7df08bb4a895ac",
+    "rules/metavar.py": "d9509b53f32f9378d73666a537d17b19eb21f252fd28e1061f54d0115e124148",
+    "rules/model.py": "26509ac1fd7303018ee9a92e622f4603185e5550e85df569a85be30c2b58db87",
+    "rules/packs/__init__.py": "a4bbc1645a44b6a80fc7aceaa6437224fd4be8c4c7d99b95baec14eb14b29284",
+    "rules/packs/community/_license_templates/Apache-2.0.txt": "2e1d12d17c1aa314db0cfbd9d6d48e81c9c4ac96e86fc695a1600a7f257af023",
+    "rules/packs/community/_license_templates/MIT.txt": "b3f1c302471e8d3cfd653700728e3e52bcefc0306359e7d52eb04b5018d8a4fa",
+    "rules/packs/community/bandit-python/LICENSE": "2e1d12d17c1aa314db0cfbd9d6d48e81c9c4ac96e86fc695a1600a7f257af023",
+    "rules/packs/community/bandit-python/NOTICE": "ee5cb66f3cb6a74c1ca640460f0d75ed2bdf26f5add84ebb1cb3cf109c375e8a",
+    "rules/packs/community/bandit-python/PORTING.md": "6596968bc38a44b7dd680394b930d8460cbbaa0e36a7e74f341a04fb3bcc4ee1",
+    "rules/packs/community/bandit-python/manifest.yaml": "f722768d5569b14a20922c6fe3ead6e2cbba32f3f4a245c309c6ead434f3a4ea",
+    "rules/packs/community/bandit-python/rules/B105-hardcoded-password.yaml": "2abc7ba36ec8d4b737453fc168dedeed97d34f0939aff9dd81c426f3e87736b1",
+    "rules/packs/community/bandit-python/rules/B303-weak-md5.yaml": "e237b11423e66b7e7fce091aafec3b62b7a21dfb0697f06dbe12828c223ea115",
+    "rules/packs/community/bandit-python/rules/B304-weak-des.yaml": "17d93fa0021264f20a9f6f56ad48e3b790b51ee5d62dfc042f4cc8873ed329d1",
+    "rules/packs/community/bandit-python/rules/B307-use-of-eval.yaml": "3c7b9a4a1be52b624b34c578ced263112a75ffa2bfe0736a3310e88f876d0a4a",
+    "rules/packs/community/bandit-python/rules/B324-weak-sha1.yaml": "801257a70dfc280bb3603ff7ca166c7c35ebf89490bc9c79885555f44ad229d3",
+    "rules/packs/community/bandit-python/rules/B501-no-cert-validation.yaml": "cebcbf03ffaa23f4da2be20b42986c9e18b3a080b15b78aed5fdc45eb6b93e0d",
+    "rules/packs/community/bandit-python/rules/B602-shell-true.yaml": "fc2031c9c0bc0775051fe57f494f3fffc5ec1c0d90bf3b29ce893ae07b8675c3",
+    "rules/packs/community/bandit-python/rules/B608-sqli.yaml": "dcd7e9b3f6a0e4964e35e80250c939c37c0f1c3954aca6ca02d19d8f5ee8bf09",
+    "rules/packs/community/eslint-typescript/LICENSE": "b3f1c302471e8d3cfd653700728e3e52bcefc0306359e7d52eb04b5018d8a4fa",
+    "rules/packs/community/eslint-typescript/NOTICE": "8f1677232fdbd4f04f82a3daff002cfee08c1bafe66e7477c58350638bbe0302",
+    "rules/packs/community/eslint-typescript/PORTING.md": "e958ca5e51e4fa493ac4de35f2e9f35757233fd333349033693e9f1639257d52",
+    "rules/packs/community/eslint-typescript/manifest.yaml": "d7252007beb8251410578265bbd6d7ca4a2b59a6413df06ef66550029143f17d",
+    "rules/packs/community/eslint-typescript/rules/eqeqeq.yaml": "a305c21c1c0ce46540719b1b7183fc72d497c792aff3708c5635ebecb17f7ad0",
+    "rules/packs/community/eslint-typescript/rules/no-eval.yaml": "d7ad8925e23c40660afae6652f7aa474bc9837243baa88e22fb7a8791b00997c",
+    "rules/packs/community/eslint-typescript/rules/no-implied-eval.yaml": "1a677e775b9d95ed1018d3726bff90a8b98cf7e46ef9bceb6c5a0ef0a79aaf99",
+    "rules/packs/community/eslint-typescript/rules/no-new-func.yaml": "b6f67ad772fababba4d77c9ba132a422f8cd72f6a4ca885369745dfe6b0ce431",
+    "rules/packs/community/eslint-typescript/rules/no-throw-literal.yaml": "e469a7db982ff203be7f845fe1b825dc1f3cde50bcead8e61d2e2c8549f76d2a",
+    "rules/packs/community/eslint-typescript/rules/no-var.yaml": "d28c05131fdbcf2d63433dabb1150e4aed407f6c8407bf0f4ac4a64c1a24ffb1",
+    "rules/packs/community/eslint-typescript/rules/no-with.yaml": "bc7acda1ce70f76b2bd7e4c676f5037c3f4c35334a36eb6bff85e160686dc329",
+    "rules/packs/community/gosec-go/LICENSE": "2e1d12d17c1aa314db0cfbd9d6d48e81c9c4ac96e86fc695a1600a7f257af023",
+    "rules/packs/community/gosec-go/NOTICE": "ef14eb15b6926fd7e249a78074dbee0a301b6e0cf21d44c1a50c59aff5de283e",
+    "rules/packs/community/gosec-go/PORTING.md": "a28734bc7a142ce4c8b9da55c397bc0e523845aa28f3bd8f930c6c6ea4170e43",
+    "rules/packs/community/gosec-go/manifest.yaml": "b7ae7ca0c8abf72c01513128a10ff8eec9e528dd61011ae7a70a72a559bfbbf5",
+    "rules/packs/community/gosec-go/rules/G101-hardcoded-credentials.yaml": "65d04000d932582f073868f72450b8105788ea1a2540a7a1693dd06ca59a6a55",
+    "rules/packs/community/gosec-go/rules/G102-bind-all-interfaces.yaml": "a9d51978fb15795b69ed241986bcdcca47b5210e3d454fe03f34c778c2fc86a0",
+    "rules/packs/community/gosec-go/rules/G103-unsafe-block.yaml": "ae0447cb6f8424bb18b57fbf2545a9d68914a320aa216fb71e608eb21df93423",
+    "rules/packs/community/gosec-go/rules/G201-sql-format.yaml": "644888f1d6f5ed19331c44f836cf4a6a28c5e3ef771cc27e46c70255c42e15f4",
+    "rules/packs/community/gosec-go/rules/G304-file-inclusion.yaml": "df183e7ac02c7a64727b74dd2074f532e0145553a785e2263a307cfb3999c24d",
+    "rules/packs/community/gosec-go/rules/G401-weak-cipher.yaml": "ad40a17e08cb8291a376f2561263b17bb0b8fa02605adf9439e9632b6d40cfc0",
+    "rules/packs/community/gosec-go/rules/G402-tls-min-version.yaml": "b10a9e5e7bcf4216c39987666e06b198c3337eb28fbf929d08f1f3e1202e549e",
+    "rules/packs/community/gosec-go/rules/G501-md5-import.yaml": "f36944181f0c1e152e46341f10599d4791675315d804355d654dbc2aab5f6614",
+    "rules/packs/examples/cpp/manifest.yaml": "36105c4ec5edbba838e9db1c925dd64cb1a2aa0e1fc0ab48e42f813606c097a3",
+    "rules/packs/examples/cpp/rules/security.yaml": "9d5f156d662875ec64551fba0d5202aa1cd5cec424531315cd9841d1868baba0",
+    "rules/packs/examples/cpp/rules/structural.yaml": "7b14b759aa4a422e1fc5237dc4b7c714ff69c578d5cecfd1f69974d4abb45f2c",
+    "rules/packs/examples/csharp/manifest.yaml": "a12b8352abb0d6c27db26114d0c318d462263f947b83ced7dda7521a913fecfa",
+    "rules/packs/examples/csharp/rules/security.yaml": "180d9f1f474fdace4d58c9935b730843b66905f8e52160c775a0aa3fa4881003",
+    "rules/packs/examples/csharp/rules/structural.yaml": "7c7df5b8b9d7f852b364fce0c8c496f5cf614dac51dce07d75fc1ca3802b6f02",
+    "rules/packs/examples/go/manifest.yaml": "5fe458aa13c31cc97a08832f46745da2fb9cf12b3e10292aa5195e0568b568a6",
+    "rules/packs/examples/go/rules/performance.yaml": "3b3084c844afaf9ec7b60fd99c1f81dc9a8871a218e881d8fe5e1ad9ea2133b0",
+    "rules/packs/examples/go/rules/security.yaml": "7c414b3e970b79fdaacb3176ac513488d973fa0f9636109e4a037a2aec1ed12b",
+    "rules/packs/examples/go/rules/structural.yaml": "7f08763604e6f12088fd2d5e9d912ab2585144fb568a6458cedc27223151a2a3",
+    "rules/packs/examples/go/taint/sanitizers.yaml": "e2c4da87c5f9d81dfb6d7269395dbdb1a195aa0df8a69d35614247a37dd06a0a",
+    "rules/packs/examples/go/taint/sinks.yaml": "c75f2af89c1b56bcb8bacb52fbf3231337341e39cd85a3e7882d4c60b4f27323",
+    "rules/packs/examples/go/taint/sources.yaml": "f4ef73efc8dac2c963b097e8210aec905e1d8d57ba6dca596cace4dfdffd44ae",
+    "rules/packs/examples/java/manifest.yaml": "5088932e4b9ba6acfc96691cd37e4af250e0077d664fa2348d2adc116e6d7c0b",
+    "rules/packs/examples/java/rules/correctness.yaml": "db3d9e8dc3a6048d77d9dd0f37be55b449d725ac8e11dcdb9add28f9b01f88ca",
+    "rules/packs/examples/java/rules/structural.yaml": "43afee72ee9eff3fae7fbd38967b58c937d572f8e75c285179c18698b9ca0929",
+    "rules/packs/examples/java/taint/sinks.yaml": "6aa97b6bf79274aa7231448f13280bb376a3e001f45795afae5f8f08726f32d6",
+    "rules/packs/examples/java/taint/sources.yaml": "f7bb70c9198203c0b28b39ca79f3dc6040a6ee1ae7409bfde4c00e6c4829f1ad",
+    "rules/packs/examples/kotlin/manifest.yaml": "4e5de3fb6b78225585befc7403692525330becf54d29ea4d837fc3b830c75495",
+    "rules/packs/examples/kotlin/rules/correctness.yaml": "5a716224efb583d5c0acc26c3321ac580253d5658cff2bfdc8aadc3ce7c25419",
+    "rules/packs/examples/kotlin/rules/structural.yaml": "f4244ec763d1d3086ed01d86229c921d5b779d16fc3f4d625a42e7d4d5d96e2c",
+    "rules/packs/examples/php/manifest.yaml": "a34dce84355028d7dcab1f0e27387dd1685d53879a22e6a4f20f59d0d055420b",
+    "rules/packs/examples/php/rules/security.yaml": "97b070655183e18e757ebc9f5c689ef70c74c50a7b1a5b70c81f34df0a810ee3",
+    "rules/packs/examples/php/rules/structural.yaml": "6a7ad41d019f53d8d4464d0f93acdded27d08c87c5326fd4a55f9e912a4003d5",
+    "rules/packs/examples/python/manifest.yaml": "c26f47159bb67bcda6fa3d5e2ab4d5b90471d8b07850907c160df19c26785997",
+    "rules/packs/examples/python/rules/performance.yaml": "4456d1aa86d757452e75bd22d2d1ae09791c73c762f6a91bd345ed7245863c6b",
+    "rules/packs/examples/python/rules/structural.yaml": "b28b8a88e6c8482be0642984471a83023965df38a1ede6bd4b75c8389d8b9e35",
+    "rules/packs/examples/ruby/manifest.yaml": "97c66b308c3573118ddc434561540bfeff52bfef0b7c1624bf9afb4997484b15",
+    "rules/packs/examples/ruby/rules/security.yaml": "96a06fb6cffe59f248d05203782c501fd477953b85594f5eaa81b5cf3f1e3d8e",
+    "rules/packs/examples/ruby/rules/structural.yaml": "a7659d03edf8a25b16bcfbf5715d25c658a0916d58150994c7f477a72fb51679",
+    "rules/packs/examples/rust/manifest.yaml": "e27d8571d46627c7402ad7dca3b835afcab9322b66d83d009b18c7e84d273d92",
+    "rules/packs/examples/rust/rules/correctness.yaml": "8ccf9ad82635e95c005d4d6b4ac4c088fd6f7cf03ea2d02d784d55ad8d99ad98",
+    "rules/packs/examples/rust/rules/structural.yaml": "261b1cd4df66734e50f440c86721913b80c444293fab105c8def18e152b04c5a",
+    "rules/packs/examples/typescript/manifest.yaml": "3b9b608217181d0038b2ad92e43bdc4852b10f66776f88c180243c3ca25be079",
+    "rules/packs/examples/typescript/rules/performance.yaml": "3f803f24d9b3e63107344370fa65f2e88fe5c5c0212aa3b126df6182382f9b1b",
+    "rules/packs/examples/typescript/rules/structural.yaml": "ab122e1e20df8320a80b2da1817566c02e903503465d53942445ca9820249670",
+    "rules/packs/pack_loader.py": "2b934e1a05bbc92712c9522e109c5090ddc8d2c2b7d8da308c31675adfb5039b",
+    "rules/plugins/__init__.py": "48032255e0ce1966fa1b94b7219ada74e6a1648a6d9fc7403a0a82ae28188d16",
+    "rules/plugins/plugin_loader.py": "47debe54f8e6cab2f0fff657047eb28b8049abb4547e5ad0e26a77993844a34a",
+    "rules/profiling.py": "b12b32bdfb4fd1fbd1f39a15d9d5258d197d37b8637fd51055971f023af246c9",
+    "rules/registry.py": "4f5da10848fc90d24ea64d6b7cc3a6a781f76af3ba660f1c4d593381cf15ada0",
+    "rules/sarif.py": "d91908a08bb5c8fce98a7b73a90318fbdde054448f6bc430f95fff4883ce1b0d",
+    "rules/synthesis.py": "b0188df61442f1a864f264e8c029482ffc903876ba39c6f751d0bc6f5010f6ac",
+    "rules/testing.py": "accdf58ab0bdcadf441efb51de819fd94a8bc7913490f58efc771e17e8c3b4b6",
+    "search_evidence.py": "956ed1bf38d6fdf74a1abd2c8e336ac3fefb7db1b62c3f4e4ff0e41ae087663b",
+    "server.py": "a3452cc9738d759a4272a66b11d9b8173de3940d94c236b6500065db9c46fae7",
+    "service.py": "9cd6aeab2fdfd0ae51e1e50ce75ef98efa18fa74fd41836a80a669cf7c7a23e3",
+    "sharing.py": "75aa0424cc7a8f306afbc77ebc15a4296dbad3a1bd3b80de5617d285b8dccd65",
+    "storage/__init__.py": "c923d1f30528c7a7dcf1b1bdafc0f6cf2a10e32fd072039280076423984b1067",
+    "storage/branch_overlay.py": "aaa136ee1a12e9c2d3a39d478c3f394038a78b7a8a4128318d453aa9c69e4bc1",
+    "storage/content_store.py": "505e6dfeca6e53e3e89b0f1400510de14ee3abcd1acdd91dd13179621b46e37b",
+    "storage/dependency_store.py": "cecaa71423ae23f28124485e8892a6fda5c5dc6683b60d95379e6b0696c4d56a",
+    "storage/diff_engine.py": "19538828dcecbfe3aff44abf8ee2ee0bde3846720c6f2583f80c8b7c366773d8",
+    "storage/embedding_store.py": "53051c51550eafe006ba0fd77e5419052578effee849e3f68829857752bfd535",
+    "storage/provenance_store.py": "056681b92aaf2de146e2084ef7c1c258ab49b40f3009c084c5ddbf707e03ea14",
+    "storage/security_scanner_db.py": "efec48a5021475a94f2b88fd0e1e4fb7311b5206f2f00f46e0ddf74a8bacfc8c",
+    "storage/symbol_store.py": "a538879e43e07b6fa46ff9d526ec47935a22942853dccdf6fccb22be682dfd89",
+    "structural_evidence.py": "a29c11858824c74952a2886c57e00183108ae5aecba964357db54d8458ee690c",
+    "symbol_inspection.py": "d6f43df2382fa13e676ad6b66990647a5cd27c98703bd3fa2d0603aeb13de3c3",
+    "symbol_links.py": "9f0ce1c7df192fc386ebb59a0cec13f55c452705a0aa56f0080e8c78ea1a56fb",
+    "telemetry.py": "eee7540607c3eafdb3f5ecc0b1370a7c333feed080bf2b8664282e372db777ff",
+    "test_ranking.py": "f6e3e01278f6e728a212310b53c7a4823d7119f537770b17c298d14e41ad142c",
+    "testing/__init__.py": "6c17362721343eba9cbcb27800b17def30e254a8c8d86d03d1a6b8b5fea9f4f4",
+    "testing/fixtures.py": "cd26ddfa81f1bd8ff75f76d6cc3686cc20ffc78a6c93380b92cd2e09fd21e529",
+    "testing/helpers.py": "1ed701d451311b4e7e721a4a1f191eacd37408367786eab341c49ae06d3c03cf",
+    "testing/mocks.py": "eff15d26e388742b59c2c525fe8a5ca5ae5595f1a5827ba490172dfb77c708e5",
+    "tools/__init__.py": "d8d606b9c15c33fad11845251bc35b7820f1edd532fd15df2d1c31beaee3234b",
+    "tools/adr_tools.py": "308f67bd5e11e8833857296b86d28cb50a5d4cc90a0bb276fe3b3cd3b6fe69fc",
+    "tools/analysis_tools.py": "d526bc7a7520c73d9c22a4a0fea5b8525c84691f0edc1a3ec725a2498fed4625",
+    "tools/composite_tools.py": "9a8633f94ec633a88e03570f414c662e33262e280259a4051b871127333fc213",
+    "tools/cross_mode_tools.py": "bcdc5301f07d7282d996cf69c69cf9cd5adff64e641484eed2fb88a48103bcc3",
+    "tools/dead_code_tools.py": "22e06c2be9d2335b3f2624b5024185cf49149a4f256e91bdec65449568d3f775",
+    "tools/distill_tools.py": "79e3f9b6aa3c5e698a88838b17fa64b68d9ab7f01b7e6da51f807ded2230463e",
+    "tools/frecency_tools.py": "f0be1bff9bb0396bb395e9ea0c130c54463beb7841f63ef85f3ff119f92819ce",
+    "tools/fuzzy_tools.py": "ca260bd44a7118c0cd87b63d9b408cd9df5f277c8024fe5b42b14f59a8fa05ca",
+    "tools/history_tools.py": "a82d727b1533471b96692c4a8ed55112d7d2428e37f69340ce41bc4c830f410e",
+    "tools/learning_tools.py": "a2d2c241e888befeaa752aaa15d55e736f2a75ed30954385553d77b979fa1c3b",
+    "tools/lsp_tools.py": "e40af75dcbb8af674cd4dc79924e8bcbf463e1789bc56b4262bfe6f5647611ee",
+    "tools/maintenance_tools.py": "ac1f0085113e9a5369810e6480ae32cdca3a9bc199f9926d289fd18fc32867fb",
+    "tools/navigation_tools.py": "ebd0f614e49a46e3103293fa0bf1a2d0b5884d910ac56c5e6b26cf57d27c6a9a",
+    "tools/overlay_tools.py": "3dfaf373f944bfb85a7df4f67f04684cd027a3664e59b860a4d36014262bba8c",
+    "tools/pin_store.py": "fa3695e5f46d704cbde191c600eddc5c1adfa799a7b1555f0c1c4d5ac7002ae3",
+    "tools/pin_tools.py": "5d66aafdf8ddbf067366060662a926348faa2daa9e4fb55763a5f23d6d79a18e",
+    "tools/query_constraints_tools.py": "324240c7c20bcbb9f670a44336f3d050497006fe1385147c8cb4680cfb15e99c",
+    "tools/query_history_tools.py": "00d5011e9cc490e7d6eebcac78e19ce9ec29fc08a50494fde9e03194b65221de",
+    "tools/readiness_tools.py": "816911f8c3658fbc95829522620ac992f8c012c0e04a680aac6ef8007285c8c2",
+    "tools/rule_tools.py": "042be6b736ad10e2aea5dc17bc0f36a08008f0113a0015c38d839354db526fed",
+    "tools/search_tools.py": "a8585505ceb7753cefd2ab321ba153ac5578c9087b99152f44f1d5ec33da91e4",
+    "tools/snapshot_tools.py": "f626e79377d8e2684c7c3d17815fdbf9c3887610c2c49697c1c38a64624d773a",
+    "workers/__init__.py": "ddbada50ce3569b6fbdec29bd0b574329d6335a035a2d33ed9b88f9d140469c2",
+    "workers/job_utils.py": "40b364428ba56cacef1d75fbb533036fe41b331ac90445eda21c229445c62fe4",
+    "workers/jobs.py": "74cc1ebfb4b664009c58452dd9e239e23231948dbce7b5411a0d9cf7f671403b",
+    "workers/run.py": "3a7f3c6bf1c5297f2636fc4fd0f4de8e1756e55540d989fbfc610bef9f358c31",
+    "workers/settings.py": "8a5dd77fd684362b229e0fa62d88e64d236750db3e80bca3874f82cafc7cac73"
+  },
+  "candidate_sha256": "ff6b054d98d43a14bcb0eea4304be9e4f0e85e1d5286524edf3f90526871f46c"
+}
