@@ -140,6 +140,73 @@ def _fill_search_prefix(metadata, data, rows, total, max_tokens, *, upstream_tru
     return compact_result(metadata, data)
 
 
+
+_SEARCH_SNIPPET_PROBES = 12
+_SNIPPET_FIELDS = ("snippet", "snippet_start_line", "snippet_end_line", "snippet_truncated")
+
+
+def _restore_search_snippets(result, originals, max_tokens, *, upstream_truncated=False):
+    """Spend spare space without replacing any evidence on the fitted page.
+
+    BPE counts and anchored windows need not be monotone. These are bounded
+    probes, not a maximality search; every accepted page is checked in full.
+    """
+    page = json.loads(result.content[0].text)
+    remaining = _SEARCH_SNIPPET_PROBES
+    for index, original in enumerate(originals[:len(page["data"]["results"])]):
+        if not remaining:
+            break
+        delivered = page["data"]["results"][index]
+        if (not all(key in original and key in delivered for key in _SNIPPET_FIELDS)
+                or {k: v for k, v in original.items() if k not in _SNIPPET_FIELDS}
+                != {k: v for k, v in delivered.items() if k not in _SNIPPET_FIELDS}):
+            continue
+        body = original["snippet"]
+        if (not isinstance(body, str) or not isinstance(delivered["snippet"], str)
+                or len(body) <= len(delivered["snippet"])):
+            continue
+
+        def probe(window):
+            nonlocal remaining, page, result
+            remaining -= 1
+            current = page["data"]["results"][index]
+            if (len(window["snippet"]) <= len(current["snippet"])
+                    or current["snippet"] not in window["snippet"]):
+                return "skip"
+            old_first, old_last = current["snippet_start_line"], current["snippet_end_line"]
+            first, last = window["snippet_start_line"], window["snippet_end_line"]
+            if old_first is None and old_last is None:
+                if first is not None or last is not None:
+                    return "skip"
+            elif (not all(type(n) is int for n in (old_first, old_last, first, last))
+                  or not 1 <= first <= old_first <= old_last <= last):
+                return "skip"
+            trial = deepcopy(page)
+            trial["data"]["results"][index].update(window)
+            _search_truncation(trial["metadata"], trial["data"], upstream_truncated)
+            candidate = compact_result(trial["metadata"], trial["data"])
+            if response_tokens(candidate) > max_tokens:
+                return "over"
+            page, result = trial, candidate
+            return "fit"
+
+        # The original window is the only source of additional text. Check it
+        # first, then retain the best tested larger anchored window that fits.
+        if probe({key: original[key] for key in _SNIPPET_FIELDS}) == "fit":
+            continue
+        lo, hi = len(delivered["snippet"]) + 1, len(body) - 1
+        while lo <= hi and remaining:
+            cap = (lo + hi) // 2
+            window = snippet_window(body, page["data"].get("query", ""), cap,
+                                    original["snippet_start_line"])
+            window["snippet_truncated"] |= original["snippet_truncated"]
+            if probe(window) == "over":
+                hi = cap - 1
+            else:
+                lo = cap + 1
+    return result
+
+
 def bounded_search(metadata, data, max_tokens, *, all_results, follow_up=None):
     """Fit search delivery, reserving a progressing retry after final omissions."""
     payload = deepcopy(data)
@@ -179,7 +246,8 @@ def bounded_search(metadata, data, max_tokens, *, all_results, follow_up=None):
             and len(delivered["data"]["results"]) >= delivered["data"]["ranking"]["candidate_pool_count"]):
         delivered["data"].pop("follow_up", None)
         result = compact_result(delivered["metadata"], delivered["data"])
-    return result
+    return _restore_search_snippets(result, all_results, max_tokens,
+                                    upstream_truncated=metadata.get("truncated", False))
 
 
 def bounded_compact(metadata: dict, data, max_tokens: int, *, search_results=None) -> types.CallToolResult:
