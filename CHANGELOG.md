@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Evaluation maintenance
+
+- Preserve the optional local file-context search development comparison and reject
+  its candidate: one distinct visible-file gain per round misses the two-file,
+  two-repository guard, with excerpt losses and ordinary-control snippet changes.
+  Keep validation unissued and restore product source to published 0.1.18.
+  Retain the original import abort, approved corrected launch and all raw evidence.
+
 ## [Intelligence 0.1.18] - 2026-10-24
 
 ### Fixed

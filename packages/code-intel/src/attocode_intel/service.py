@@ -1509,12 +1509,7 @@ class CodeIntelService:
             candidates = run()
         return candidates
 
-    def _contextual_search(self, query, top_k, file_filter, context_file, mode="auto"):
-        from attocode_intel.context_search import search
-        return search(self, query, top_k, file_filter, context_file, mode)
-
-    def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "", branch: str = "",
-                             context_file: str = "", mode: str = "auto") -> dict:
+    def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "", branch: str = "") -> dict:
         """Return structured semantic search results.
 
         Args:
@@ -1525,15 +1520,9 @@ class CodeIntelService:
                 local mode automatically scopes to working-directory files).
         """
         mgr = self._get_semantic_search()
-        if context_file:
-            from attocode_intel.context_search import context_reason
-            candidates, results, ranking = self._contextual_search(query, top_k, file_filter, context_file, mode)
-            from attocode_intel.search_evidence import hydrate_selected_sources
-            results = hydrate_selected_sources(self.project_dir, results)
-        else:
-            candidates = self._search_after_warmup(
-                mgr, lambda: mgr.search(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter))
-            results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
+        candidates = self._search_after_warmup(
+            mgr, lambda: mgr.search(query, top_k=self._retrieval_depth(top_k), file_filter=file_filter))
+        results, ranking = self._rank_search_results(query, candidates, top_k, file_filter)
         ranking["candidate_pool_count"] = len(candidates)
         if hasattr(mgr, "candidate_diagnostics"):
             ranking["index"] = mgr.candidate_diagnostics()
@@ -1551,7 +1540,6 @@ class CodeIntelService:
                     "line": r.start_line or None,
                     "end_line": r.end_line or None,
                     **hit_evidence(query, r),
-                    **(context_reason(ranking["context"], r.file_path) if context_file else {}),
                 }
                 for r in results
             ],
@@ -1561,9 +1549,6 @@ class CodeIntelService:
         }
         if follow_up is not None:
             arguments = {"query": query, "top_k": follow_up, "file_filter": file_filter}
-            if context_file:
-                arguments["context_file"] = context_file
-                arguments["mode"] = mode
             if branch:
                 arguments["branch"] = branch
             response["follow_up"] = {
@@ -3072,15 +3057,7 @@ class CodeIntelService:
         return scanner.format_report(report)
 
     def semantic_search(self, query: str, top_k: int = 10,
-                        file_filter: str = "", branch: str = "", mode: str = "auto", context_file: str = "") -> str:
-        if context_file:
-            import json
-            if mode not in {"auto", "keyword"}:
-                raise ValueError("context_file search does not support vector mode")
-            from attocode_intel.context_search import public_context
-            data = self.semantic_search_data(query, top_k, file_filter, branch, context_file, mode)
-            data["ranking"]["context"] = public_context(data["ranking"]["context"])
-            return json.dumps(data)
+                        file_filter: str = "", branch: str = "", mode: str = "auto") -> str:
         mgr = self._get_semantic_search()
 
         if mode == "keyword":

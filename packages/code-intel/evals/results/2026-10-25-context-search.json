@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "experiment": "optional-local-context-search",
+  "date": "2026-10-25",
+  "status": "complete",
+  "decision": "reject",
+  "retained_product": false,
+  "baseline_commit": "ffe0b3d6cb1f97107bf3d4251d61e7a6092bd6c6",
+  "candidate_commit": "24529ec200ed3eb1b99af2d0f254d1bfe720e877",
+  "public_design_sha256": "639d9c3d86938d3f12ba04003361036dffb6b52fc68042867e3a5b32ffe96e3b",
+  "candidate_engine_sha256": "25fd4b78ca14435675c5885faee703479e7ef3544bfa5f08f15f65455777fa63",
+  "version": "0.1.18",
+  "new_publication": false,
+  "development": {
+    "run": 40209678957,
+    "archive_sha256": "515f1d15fe95387894671ee9edf231fbc682ee053a94a496d07c3a2cc7caabaa",
+    "seconds": 234.21450878199997,
+    "raw_scored_pages": 1080,
+    "paired_triples": 360,
+    "fresh_worker_pids": [
+      2237,
+      2245,
+      2253,
+      2627,
+      2633,
+      2639,
+      3007,
+      3013,
+      3019,
+      3432,
+      3445,
+      3480
+    ],
+    "decision": {
+      "status": "complete",
+      "decision": "reject",
+      "gain_gate": false,
+      "latency_gate": true,
+      "losses": [
+        {
+          "key": [
+            "requests",
+            0,
+            "development-requests-test-1",
+            24,
+            2000,
+            ""
+          ],
+          "metric": "visible",
+          "lost": [
+            0
+          ]
+        },
+        {
+          "key": [
+            "requests",
+            1,
+            "development-requests-test-1",
+            24,
+            2000,
+            ""
+          ],
+          "metric": "visible",
+          "lost": [
+            0
+          ]
+        },
+        {
+          "key": [
+            "requests",
+            2,
+            "development-requests-test-1",
+            24,
+            2000,
+            ""
+          ],
+          "metric": "visible",
+          "lost": [
+            0
+          ]
+        },
+        {
+          "key": [
+            "express",
+            0,
+            "development-express-test-2",
+            24,
+            2000,
+            ""
+          ],
+          "metric": "visible",
+          "lost": [
+            0
+          ]
+        },
+        {
+          "key": [
+            "express",
+            1,
+            "development-express-test-2",
+            24,
+            2000,
+            ""
+          ],
+          "metric": "visible",
+          "lost": [
+            0
+          ]
+        },
+        {
+          "key": [
+            "express",
+            2,
+            "development-express-test-2",
+            24,
+            2000,
+            ""
+          ],
+          "metric": "visible",
+          "lost": [
+            0
+          ]
+        }
+      ],
+      "control_changes": [
+        {
+          "key": [
+            "requests",
+            0,
+            "development-requests-test-1",
+            24,
+            2000,
+            ""
+          ],
+          "role": "candidate_plain"
+        },
+        {
+          "key": [
+            "requests",
+            1,
+            "development-requests-test-1",
+            24,
+            2000,
+            ""
+          ],
+          "role": "candidate_plain"
+        },
+        {
+          "key": [
+            "requests",
+            2,
+            "development-requests-test-1",
+            24,
+            2000,
+            ""
+          ],
+          "role": "candidate_plain"
+        }
+      ],
+      "gains_by_round": {
+        "0": [
+          [
+            "prisma",
+            "packages/client/src/runtime/utils/deep-set.ts"
+          ]
+        ],
+        "1": [
+          [
+            "prisma",
+            "packages/client/src/runtime/utils/deep-set.ts"
+          ]
+        ],
+        "2": [
+          [
+            "prisma",
+            "packages/client/src/runtime/utils/deep-set.ts"
+          ]
+        ]
+      },
+      "warm_p95_ms": {
+        "baseline": 234.02283799998713,
+        "candidate": 221.5402599999834
+      },
+      "pairs": 360,
+      "qualification": "Optional context adds supplied task information; non-exhaustive source labels, not default-ranking or agent-outcome evidence."
+    },
+    "limits": {
+      "disk_bytes": 2147483648,
+      "evidence_bytes": 67108864,
+      "rss_bytes": 2147483648,
+      "seconds": 600
+    },
+    "supervision": {
+      "cleanup_errors": [],
+      "cleanup_verified": true,
+      "command": [
+        "/home/runner/work/attocode/attocode/.venv/bin/python",
+        "-m",
+        "eval.quality.experiments",
+        "context_search",
+        "--root",
+        "/home/runner/work/_temp/intelligence-experiment-40209678957-1",
+        "--payload"
+      ],
+      "exit_code": 0,
+      "log_truncated": false,
+      "monitoring": {
+        "controller_cpu_seconds": 77.00550889399999,
+        "samples": 769,
+        "wall_seconds": 78.8105652669997
+      },
+      "peak_disk_bytes": 365490424,
+      "peak_evidence_bytes": 41226240,
+      "peak_rss_bytes": 825511936,
+      "seconds": 232.714,
+      "status": "passed",
+      "wall_seconds": 232.714
+    }
+  },
+  "initial_launch_abort": {
+    "status": "admitted-incomplete",
+    "run": 40209109644,
+    "head": "c2ce94960aed30c49951cd9df3d34b06e66bbb6b",
+    "archive_sha256": "fdba72ecf320946c73afd508b26a0186050d693ac48b869f9b109c2ceb910812",
+    "seconds": 0.5914344669999991,
+    "quality_decision": null,
+    "fixture_materialization_started": false,
+    "query_or_worker_started": false,
+    "all48_questions_unissued": true,
+    "cause": "Dispatcher inferred context_search_experiment; committed operator is context_experiment. Abort occurred at import before operator.run.",
+    "all_archive_extracted_bytes_equal": true,
+    "all_recorded_source_hashes_match_Git": true,
+    "cleanup_verified": true,
+    "local_product_operator_execution": false
+  },
+  "validation": {
+    "questions": 24,
+    "issued": false,
+    "decision": null,
+    "reason": "Development failed frozen gain, excerpt-preservation and ordinary-control gates."
+  },
+  "question_scope": "New optional local file context capability; implementer-authored non-exhaustive source judgments on previously exposed pinned repositories. Not blind, not default-ranking or agent-outcome evidence. No retrieval before this freeze.",
+  "development_questions_consumed": 24,
+  "validation_questions_unissued": 24,
+  "candidate_controls": {
+    "run": 40209436905,
+    "cases_passed": 337,
+    "seconds": 29.991824129999998,
+    "archive_sha256": "a7ad794f3c1799d8a5cb400d92774babcf02681d6d98b47ef6882969ff2b1ff0"
+  },
+  "raw_source_admission": {
+    "original_archive_and_consumed_members_equal": true,
+    "raw_source_origin_order_replayed": true,
+    "pinned_source_entries": 7434,
+    "source_trees": [
+      {
+        "pack": "fastapi",
+        "entries": 2679,
+        "receipt_sha256": "707732805ddc4de9600e6892cd84933933de6baf3309f0be3f8992165fbbae75",
+        "tree": "ed4cc219ce1c8f8bddd88a60c52a701fef3b5f64"
+      },
+      {
+        "pack": "requests",
+        "entries": 112,
+        "receipt_sha256": "dad9142d36d845faea64de0ee3d57586368849a7abdc007828a4f49f1efa770d",
+        "tree": "47afbe2faf7c7f036f5a292092f5f8231ff830bd"
+      },
+      {
+        "pack": "express",
+        "entries": 211,
+        "receipt_sha256": "7be3b1247b1bdbf426d5fb071a4464d7417b15315c5bb62c63369386c3d312f8",
+        "tree": "54c892ea11cf7a6d1dc508ffc05da08e6ba94b3a"
+      },
+      {
+        "pack": "prisma",
+        "entries": 4432,
+        "receipt_sha256": "f1281977946d931117e33dda929121a8d048cf8ef7e2f46e8e77cf2003e634fd",
+        "tree": "cb89ddf8cbf1671c84cf07291ab0c5cde862a645"
+      }
+    ],
+    "private_adversarial_data_controls": 54,
+    "local_product_operator_execution": false
+  },
+  "control_drift": {
+    "observations": 3,
+    "distinct_questions": 1,
+    "setting": {
+      "pack": "requests",
+      "question": "development-requests-test-1",
+      "top_k": 24,
+      "max_tokens": 2000,
+      "file_filter": ""
+    },
+    "difference": "Only final returned snippet differs in compared semantic data: baseline tly throw an InvalidHeader error if multiple newline; candidate_plain w an InvalidHeader err.",
+    "qualification": "Role workspaces have different-length physical paths; normalization occurs after rendering/budget trimming. No independent attribution of this snippet difference to product ranking. Frozen control gate remains failed without waiver."
+  },
+  "limitations": [
+    "Implementer-authored non-exhaustive source labels; previously exposed repositories, not blind judgments.",
+    "Context supplies extra task information. No default-ranking, compiler-resolution, absence, agent-outcome or speedup claim.",
+    "Graph relations and eligibility are observations of unchanged source-bound AST behavior, not independently verified compiler resolution.",
+    "Token counting is admitted by source-bound online code; host replay validates original responses, policies, coordinates and visible quotes without importing tested code.",
+    "Development is consumed; validation remains unissued after rejection. No scored rerun, validation, retuning or product adoption follows the completed corrected attempt."
+  ],
+  "final_source": {
+    "baseline_exact": true,
+    "baseline_commit": "ffe0b3d6cb1f97107bf3d4251d61e7a6092bd6c6",
+    "engine_files": 349,
+    "product_tests_and_maintained_harness_exact": true,
+    "dependencies_and_version_exact": true,
+    "temporary_operators_designs_choices_and_regressions_retired": true
+  },
+  "evidence_archive": {
+    "path": "packages/code-intel/evals/results/2026-10-25-context-search.tar.gz",
+    "sha256": "dc8031709bbb5d274a2592eed004208ef395776b6360b84a8a770c56a8ba1679",
+    "bytes": 9928493,
+    "members": 819,
+    "retained_attempt_records": 18,
+    "unique_original_zips": 17,
+    "source_commits": 16,
+    "all_original_and_source_bytes_replayed": true
+  }
+}

@@ -272,8 +272,6 @@ class OperationGateway:
                 },
             )
         if self.resolver:
-            if name == "semantic_search" and args.get("context_file"):
-                raise ValueError("context_file search is supported only in local workspaces")
             context = await self.resolver(workspace, revision, name)
             if compact and is_write(name):
                 self._check_write_budget(context, args["max_tokens"])
@@ -474,21 +472,16 @@ class OperationGateway:
                     text = json.dumps(payload, default=str, indent=2)
                 elif name == "semantic_search":
                     mgr = service._get_semantic_search()
-                    context_file = args.get("context_file", "")
-                    if context_file:
-                        candidates, results, ranking = service._contextual_search(
-                            args["query"], args["top_k"], args["file_filter"], context_file, args.get("mode", "auto"))
-                    else:
-                        candidates = service._search_after_warmup(mgr, lambda: (
-                            mgr.search_candidates(args["query"], service._retrieval_depth(args["top_k"]), args["file_filter"])
-                            if args.get("mode") == "keyword"
-                            else mgr.search(
-                                args["query"], top_k=service._retrieval_depth(args["top_k"]), file_filter=args["file_filter"]
-                            )
-                        ))
-                        results, ranking = service._rank_search_results(
-                            args["query"], candidates, args["top_k"], args["file_filter"],
+                    candidates = service._search_after_warmup(mgr, lambda: (
+                        mgr.search_candidates(args["query"], service._retrieval_depth(args["top_k"]), args["file_filter"])
+                        if args.get("mode") == "keyword"
+                        else mgr.search(
+                            args["query"], top_k=service._retrieval_depth(args["top_k"]), file_filter=args["file_filter"]
                         )
+                    ))
+                    results, ranking = service._rank_search_results(
+                        args["query"], candidates, args["top_k"], args["file_filter"],
+                    )
                     ranking["candidate_pool_count"] = len(candidates)
                     if hasattr(mgr, "candidate_diagnostics"):
                         ranking["index"] = mgr.candidate_diagnostics()
@@ -503,10 +496,6 @@ class OperationGateway:
                         ranking["omitted_results_due_to_budget"] = omitted_results
                     snippet_cap = max(32, min(320, budget // max(1, len(results))))
                     hits = []
-                    if context_file:
-                        from attocode_intel.context_search import context_reason, public_context
-                        context_evidence = ranking["context"]
-                        ranking["context"] = public_context(context_evidence)
                     for result in selected_results:
                         hits.append({
                             "file_path": result.file_path,
@@ -517,7 +506,6 @@ class OperationGateway:
                             "line": result.start_line or None,
                             "end_line": result.end_line or None,
                             **hit_evidence(args["query"], result),
-                            **(context_reason(context_evidence, result.file_path) if context_file else {}),
                         })
                     payload = {
                         "query": args["query"],
@@ -550,8 +538,6 @@ class OperationGateway:
                                 request["branch"] = args["branch"]
                             if context.source == "remote":
                                 request["revision"] = context.revision
-                            if context_file:
-                                request["context_file"] = context_file
                             search_follow_up = {
                                 "tool": "semantic_search", "arguments": request,
                                 "reruns_current_index": True,

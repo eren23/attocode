@@ -13,6 +13,15 @@ requires fresh36-pack compatibility on this exact versioned tree, normal CI, act
 PyPI clean-install/0.1.17-upgrade verification and all18release jobs. The GitHub release
 records publication; it does not upgrade a global tool or restart an existing MCP host.
 
+**Optional local file context, 2026-10-25:** the [completed development comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-context-search.md)
+rejects the candidate after 1,080 pages/12 fresh workers: one distinct visible-file
+gain per round in one repository misses the two-file/two-repository requirement;
+six excerpt-loss observations and three ordinary-control snippet changes also fail
+guards. Latency passes. Original zero-query import abort and explicitly approved
+corrected launch remain separate. All 24 validation questions are unissued.
+Candidate/tests/temporary trial wiring are removed; product and version remain
+published 0.1.18 exact. No publication or agent-quality/speed claim follows.
+
 The following checkpoints preserve earlier release and experiment history.
 
 **Recovery readiness, 2026-10-24:** [the correction](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-recovery-readiness.md)

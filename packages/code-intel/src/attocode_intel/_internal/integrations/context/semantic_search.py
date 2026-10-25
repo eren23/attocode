@@ -1026,20 +1026,17 @@ class SemanticSearchManager:
 
         return merged
 
-    def _scoped_literal_results(self, query, file_filter, *, allowed_paths=None):
+    def _scoped_literal_results(self, query, file_filter):
         if not file_filter or not self._kw_index_built:
             return []
         from attocode_intel.search_evidence import exact_scoped_source
         hit = exact_scoped_source(self.root_dir, query, file_filter,
-                                  {doc.file_path for doc in self._kw_docs}
-                                  if allowed_paths is None else
-                                  {doc.file_path for doc in self._kw_docs} & allowed_paths)
+                                  {doc.file_path for doc in self._kw_docs})
         return [hit] if hit is not None else []
 
     def search_candidates(
         self, query: str, top_k: int = 50, file_filter: str = "",
         trace: dict[str, list[str]] | None = None, tests_last: bool = True,
-        *, allowed_paths: frozenset[str] | None = None,
     ) -> list[SemanticSearchResult]:
         """Return local lexical candidates without initializing an embedding model.
 
@@ -1055,9 +1052,8 @@ class SemanticSearchManager:
         source first normally, tests first for short explicit test requests.
         Task scores for test suggestions turn it off.
         """
-        if top_k <= 0 or allowed_paths == frozenset():
+        if top_k <= 0:
             return []
-        mask = {} if allowed_paths is None else {"allowed_paths": allowed_paths}
         from attocode_intel.focused_evidence import scope_exclusion_terms, task_terms
 
         positive, _ = task_terms(query)
@@ -1068,16 +1064,16 @@ class SemanticSearchManager:
         if not terms:
             if not self._kw_index_built:
                 self._schedule_body_index()
-            return self._scoped_literal_results(query, file_filter, **mask)
+            return self._scoped_literal_results(query, file_filter)
         if not self._kw_index_built:
             self._schedule_body_index()
             return []
         cfg = self.scoring_config
         lexical_query = " ".join(terms)
         wide_k = max(top_k * 3, 60)
-        keyword = self._keyword_search(lexical_query, wide_k, file_filter, **mask)
-        body = self._body_search(terms, wide_k, file_filter, **mask)
-        files = self._file_search(terms, cfg.file_fusion_depth, file_filter, **mask)
+        keyword = self._keyword_search(lexical_query, wide_k, file_filter)
+        body = self._body_search(terms, wide_k, file_filter)
+        files = self._file_search(terms, cfg.file_fusion_depth, file_filter)
         if not self._kw_index_built:
             # A body hit failed freshness validation while keyword results
             # were being scored. Do not expose potentially stale candidates.
@@ -1087,7 +1083,7 @@ class SemanticSearchManager:
             trace.update(keyword=_file_order(keyword), body=_file_order(body), file_bm25=files)
         if not body and not files:
             if not keyword:
-                keyword = self._scoped_literal_results(query, file_filter, **mask)
+                keyword = self._scoped_literal_results(query, file_filter)
             keyword = self._penalize_exclusions(keyword, negative)
             if trace is not None:
                 trace["chunk_fused"] = _file_order(keyword)
@@ -1639,10 +1635,9 @@ class SemanticSearchManager:
 
     def _body_search(
         self, query_terms: list[str], top_k: int, file_filter: str,
-        *, allowed_paths: frozenset[str] | None = None,
     ) -> list[SemanticSearchResult]:
         """Find body-only implementations; all MATCH terms are tokenizer-made."""
-        if top_k <= 0 or allowed_paths == frozenset():
+        if top_k <= 0:
             return []
         if not self._body_index_built or self._source_revision() != self._body_revision:
             self._body_index_built = False
@@ -1665,10 +1660,6 @@ class SemanticSearchManager:
             if file_filter:
                 where += " AND body_fts.file_path GLOB ?"
                 parameters.append(file_filter.replace("[!", "[^"))
-            if allowed_paths is not None:
-                paths = sorted(allowed_paths)
-                where += " AND body_fts.file_path IN (" + ",".join("?" for _ in paths) + ")"
-                parameters.extend(paths)
             parameters.append(max(top_k * 8, 120))
             limit = self.scoring_config.body_max_tokens
             with self._kw_cache_lock:
@@ -1734,16 +1725,13 @@ class SemanticSearchManager:
             return []
         return list(selected.values())
 
-    def _file_search(self, query_terms: list[str], top_k: int, file_filter: str,
-                     *, allowed_paths: frozenset[str] | None = None) -> list[str]:
+    def _file_search(self, query_terms: list[str], top_k: int, file_filter: str) -> list[str]:
         """Rank whole source files by BM25 over their terms; fresh files only.
 
         Only for a query of more than 20 words, where the chunk search keeps
         only part of the query. On a short query, BM25 length normalization
         prefers tiny files that mention a name over the file that defines it.
         """
-        if allowed_paths == frozenset():
-            return []
         tokens = list(dict.fromkeys(t for term in query_terms for t in _tokenize(term)))
         if (top_k <= 0 or len(tokens) <= self.scoring_config.file_bm25_min_tokens
                 or not self._body_index_built):
@@ -1764,10 +1752,6 @@ class SemanticSearchManager:
             if file_filter:
                 where += " AND body_file_fts.file_path GLOB ?"
                 parameters.append(file_filter.replace("[!", "[^"))
-            if allowed_paths is not None:
-                paths = sorted(allowed_paths)
-                where += " AND body_file_fts.file_path IN (" + ",".join("?" for _ in paths) + ")"
-                parameters.extend(paths)
             parameters.append(top_k)
             with self._kw_cache_lock:
                 if len(tokens) > 64:
@@ -1998,7 +1982,6 @@ class SemanticSearchManager:
         query: str,
         top_k: int,
         file_filter: str,
-        *, allowed_paths: frozenset[str] | None = None,
     ) -> list[SemanticSearchResult]:
         """BM25 content-aware keyword search using AST-extracted data."""
         if not self._kw_index_built:
@@ -2037,8 +2020,6 @@ class SemanticSearchManager:
 
         scored: list[tuple[float, _KeywordDoc]] = []
         for doc in docs_to_score:
-            if allowed_paths is not None and doc.file_path not in allowed_paths:
-                continue
             if file_filter and not fnmatch.fnmatch(doc.file_path, file_filter):
                 continue
 
