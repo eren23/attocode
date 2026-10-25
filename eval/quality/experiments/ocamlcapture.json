@@ -2,12 +2,51 @@
   "experiment": "ocamlcapture",
   "limits": {
     "seconds": 600,
-    "disk_bytes": 2147483648,
     "rss_bytes": 2147483648,
+    "disk_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "expected_cases": 370,
-  "expected_failures": [],
-  "stage": "synthetic",
-  "scope": "Synthetic OCaml capture control only; no actual pinned native/corpus trial"
+  "stage": "smoke",
+  "qualified_controls_run": 40232339776,
+  "qualified_controls_head": "21dad67d8f11c3f8f4e6a7f98ee4d6987bc9ce7d",
+  "capture_source_sha256": {
+    "eval/quality/native_capture.py": "7928d8039506109fce665d9816539d665acf3b52276a483e3492f56ff7a06fb5",
+    "eval/quality/native_experiment.py": "7d0c901a5e5cca6b3cd3ffe63d65e694f6f0f172222b3379e44ffdb4fa33704b",
+    "eval/quality/corpus.py": "fecc8a0d662097296e4cbf5789c95e7efe357b8f9598b2473da64b99f3f60590",
+    "eval/quality/corpus_capture.py": "9c6bddfdcf946bf84c5cc73b8369d7a76ce355011bdd66ee27154458fc0d229f",
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/ts_parser.py": "31ac62674ab43217f0609da626178ecf5fef71671d7e5e6a69d9a87f8b89c072"
+  },
+  "smoke": {
+    "stage": "pinned_ocaml_capture_smoke",
+    "limits": {
+      "seconds": 600,
+      "rss_bytes": 2147483648,
+      "disk_bytes": 2147483648,
+      "evidence_bytes": 67108864
+    },
+    "worker_seconds": 180,
+    "max_trace_bytes": 4194304,
+    "routine_worker_processes": 1,
+    "fixture": {
+      "id": "ocaml",
+      "repo": "ocaml/ocaml",
+      "commit": "5fbe515aa215909e28328a059701da430bc3cff8",
+      "language": "ocaml",
+      "file": "typing/typecore.ml",
+      "symbol": "type_expression",
+      "anchor": "let type_expression env sexp =",
+      "caller": null,
+      "importer": null,
+      "test": null,
+      "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+      "queries": [],
+      "include": [
+        "typing",
+        "stdlib"
+      ],
+      "parser_requirement": "optional"
+    },
+    "source_manifest_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+    "scope": "One pinned routine OCaml worker/8existingchecks, retrievalquestionsomitted. No matched timing/frequency/relevance/nativecause claim. Freezequalifiedsource+operator beforefirstlaunch. Stop/preserve firstfault; no replacement/rerun/capwaiver."
+  }
 }
