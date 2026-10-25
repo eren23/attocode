@@ -413,10 +413,10 @@ def test_keyword_context_followup_preserves_mode(project):
 def test_empty_body_mask_does_not_open_database(project, monkeypatch):
     _, mgr, _ = project
 
-    def forbidden():
+    def forbidden(self):
         raise AssertionError("empty mask must not open database")
 
-    monkeypatch.setattr(mgr, "_open_body_db", forbidden)
+    monkeypatch.setattr(type(mgr), "_open_body_db", forbidden)
     assert mgr._body_search(["needle"], 5, "", allowed_paths=frozenset()) == []
 
 
