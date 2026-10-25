@@ -14,6 +14,9 @@ source/cache guards and dependencies remain unchanged. Publication requires a fr
 preflight, normal CI, actual PyPI clean-install/0.1.18-upgrade verification and all
 18 release jobs. Publication does not upgrade a global tool or restart an MCP host.
 
+**Maintained dispatcher qualification, 2026-10-25:** [causal online controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-dispatch-bindings.md)
+replace inferred operator filenames with explicit source-bound handlers. Preflight validates every registration without running trial bodies; invalid synchronous signatures, async/generator entrypoints, missing modules and shadowed origins are rejected. Keep 26 regressions in 331-case maintained preflight and 344 required regressions. All 349 product runtime files/version/dependencies remain published 0.1.19 exact; this harness correction publishes no package or new experiment result. Earlier release counts below remain historical.
+
 **Compact search snippet budgets, 2026-10-25:** the [online correction](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-snippet-budget.md)
 restores source text only after the complete page is fitted. Four causal boundary
 cases pass and all 380 online controls preserve delivered hits/text/coordinates,
