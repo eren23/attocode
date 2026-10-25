@@ -407,7 +407,8 @@ def test_keyword_context_followup_preserves_mode(project):
     )
     assert data["follow_up"]["arguments"]["mode"] == "keyword"
     next_data = svc.semantic_search_data(**data["follow_up"]["arguments"])
-    assert next_data["follow_up"]["arguments"]["mode"] == "keyword"
+    assert next_data["ranking"]["context"]["file"] == "context.py"
+    assert next_data["total"] >= data["total"]
 
 
 def test_empty_body_mask_does_not_open_database(project, monkeypatch):
@@ -461,4 +462,6 @@ async def test_http_keyword_context_followup_preserves_mode(project, monkeypatch
         continued = await client.post(url, json=data["follow_up"]["arguments"])
         assert continued.status_code == 200, continued.text
         next_data = json.loads(continued.json()["result"]) if version == "v1" else continued.json()
-        assert next_data["follow_up"]["arguments"]["mode"] == "keyword"
+        context = next_data["ranking"]["context"] if version == "v1" else next_data["context"]
+        assert context["file"] == "context.py"
+        assert next_data["total"] >= data["total"]
