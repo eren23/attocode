@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
+import importlib.util
+import inspect
 import json
 import os
 import platform
@@ -20,9 +23,15 @@ from eval.quality.experiment_evidence import assert_engine
 from eval.quality.runner import GIB, REPO, environment, managed_root, supervise, write_json
 
 SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200, 'dispatch': 600}
+OPERATORS = {
+    'native': 'eval.quality.native_experiment',
+    'preview': 'eval.quality.preview_experiment',
+    'restart': 'eval.quality.restart_experiment',
+    'dispatch': 'eval.quality.dispatch_experiment',
+}
 ENGINE = REPO / 'packages/code-intel/src/attocode_intel'
 TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_evidence.py',
-         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py', 'test_parse_recovery.py', 'test_experiment_readiness.py', 'test_fixture_source_alias.py', 'test_ast_snapshot.py', 'test_discovery_reuse.py', 'test_index_reuse.py', 'test_cold_index_cost.py', 'test_recovery_readiness.py', 'test_snippet_budget.py']
+         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py', 'test_parse_recovery.py', 'test_experiment_readiness.py', 'test_fixture_source_alias.py', 'test_ast_snapshot.py', 'test_discovery_reuse.py', 'test_index_reuse.py', 'test_cold_index_cost.py', 'test_recovery_readiness.py', 'test_snippet_budget.py', 'test_experiment_dispatch.py']
 
 
 def identity(design):
@@ -44,11 +53,44 @@ def identity(design):
             'github_run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT')}
 
 
+def load_operator(name):
+    """Qualify a declared synchronous run(root) without executing its body.
+
+    Maintained preflight checks every registration before future manual launches.
+    Runtime qualification stays inside the supervised controller and follows its
+    selected-engine guard, rather than importing operators in an unbounded parent.
+    """
+    if name in {'preflight', 'broad'}:
+        return None
+    module_name = OPERATORS.get(name)
+    if module_name is None:
+        raise ValueError(f'undeclared experiment operator: {name}')
+    try:
+        expected = (REPO / Path(*module_name.split('.'))).with_suffix('.py').resolve()
+        spec = importlib.util.find_spec(module_name)
+        if spec is None:
+            raise ModuleNotFoundError(module_name)
+        if spec.origin is None or Path(spec.origin).resolve() != expected:
+            raise ValueError('operator module is outside its declared source')
+        module = importlib.import_module(module_name)
+        if Path(module.__file__).resolve() != expected:
+            raise ValueError('imported operator source differs from registration')
+        operator = getattr(module, 'run', None)
+        if (not callable(operator) or inspect.iscoroutinefunction(operator)
+                or inspect.iscoroutinefunction(operator.__call__)):
+            raise ValueError('operator must provide synchronous run(root)')
+        inspect.signature(operator).bind(Path('.'))
+        return operator
+    except Exception as error:
+        raise ValueError(f'invalid experiment operator {name} ({module_name}): {error}') from error
+
+
 def payload(name, root):
     """Every controller checks its selected engine before importing an operator."""
     selected = Path(os.environ['ATTOCODE_EXPERIMENT_ENGINE'])
     origins = assert_engine(selected)
     write_json(root / 'evidence/controller-origin.json', {'pid': os.getpid(), 'origins': origins})
+    operator = load_operator(name)
     if name == 'preflight':
         command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
                    '--confcutdir=packages/code-intel/tests', '-q',
@@ -85,9 +127,7 @@ def payload(name, root):
             raise ValueError('incomplete broad compatibility')
     else:
         # Each scored design and operator is introduced/reviewed before dispatch.
-        import importlib
-        module = importlib.import_module('eval.quality.' + name + '_experiment')
-        module.run(root)
+        operator(root)
     write_json(root / 'evidence/controller-complete.json', {
         'complete': True, 'origins': assert_engine(selected)})
 
