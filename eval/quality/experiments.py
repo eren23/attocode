@@ -76,9 +76,12 @@ def load_operator(name):
         if Path(module.__file__).resolve() != expected:
             raise ValueError('imported operator source differs from registration')
         operator = getattr(module, 'run', None)
-        if (not callable(operator) or inspect.iscoroutinefunction(operator)
-                or inspect.iscoroutinefunction(operator.__call__)):
-            raise ValueError('operator must provide synchronous run(root)')
+        if not callable(operator) or any(
+            check(target)
+            for target in (operator, operator.__call__)
+            for check in (inspect.iscoroutinefunction, inspect.isgeneratorfunction, inspect.isasyncgenfunction)
+        ):
+            raise ValueError('operator must provide synchronous non-generator run(root)')
         inspect.signature(operator).bind(Path('.'))
         return operator
     except Exception as error:

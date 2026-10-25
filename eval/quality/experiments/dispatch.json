@@ -7,11 +7,6 @@
     "evidence_bytes": 67108864
   },
   "expected_cases": 331,
-  "expected_failures": [
-    "test_invalid_entrypoint_rejected_before_body[generator]",
-    "test_invalid_entrypoint_rejected_before_body[generator-callable]",
-    "test_invalid_entrypoint_rejected_before_body[async-generator]",
-    "test_invalid_entrypoint_rejected_before_body[async-generator-callable]"
-  ],
+  "expected_failures": [],
   "purpose": "Synthetic dispatcher binding causal controls only; no corpus/native/scored trial"
 }
