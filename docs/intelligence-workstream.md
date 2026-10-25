@@ -4,21 +4,22 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** this checkout targets `attocode-code-intel` 0.1.18 (2026-10-24).
-See the [0.1.18 release notes](intelligence-0.1.18.md). Published 0.1.17 remains immutable.
-The patch publishes ready after a caught snapshot restore failure is followed by a
-complete fallback rebuild. Native limits, retries, source/cache guards and dependencies
-remain unchanged. Rejected restart and relevance candidates remain omitted. Publication
-requires fresh36-pack compatibility on this exact versioned tree, normal CI, actual
-PyPI clean-install/0.1.17-upgrade verification and all18release jobs. The GitHub release
-records publication; it does not upgrade a global tool or restart an existing MCP host.
+**Current version:** this checkout targets `attocode-code-intel` 0.1.19 (2026-10-25).
+See the [0.1.19 release notes](intelligence-0.1.19.md). Published 0.1.18 remains immutable.
+The patch restores source snippets into spare serialized space after fitting the
+complete compact search page. Existing hits, visible text, source coordinates,
+provenance and continuations stay protected. Ranking, retrieval, native limits,
+source/cache guards and dependencies remain unchanged. Publication requires a fresh
+36-pack compatibility run on this exact versioned tree, same-head 305-case Linux
+preflight, normal CI, actual PyPI clean-install/0.1.18-upgrade verification and all
+18 release jobs. Publication does not upgrade a global tool or restart an MCP host.
 
 **Compact search snippet budgets, 2026-10-25:** the [online correction](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-snippet-budget.md)
 restores source text only after the complete page is fitted. Four causal boundary
 cases pass and all 380 online controls preserve delivered hits/text/coordinates,
 continuations, actual budgets and bounded probe work. Keep 19 new regressions in
 maintained preflight (305 cases). Temporary control wiring is retired. The change
-is unreleased on 0.1.18 development; no ranking, relevance or speed claim follows.
+is included in the 0.1.19 target; no ranking, relevance or speed claim follows.
 
 **Optional local file context, 2026-10-25:** the [completed development comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-context-search.md)
 rejects the candidate after 1,080 pages/12 fresh workers: one distinct visible-file

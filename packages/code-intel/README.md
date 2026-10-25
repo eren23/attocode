@@ -26,6 +26,10 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.19 restores source text into spare space after fitting a complete
+compact search page. Existing hits, visible text, source lines and continuations
+remain protected within the same response budget; ranking and retrieval are unchanged.
+
 Version 0.1.7 also provides `changes` and `trace` commands: investigate a diff,
 follow source-backed caller paths, export JSON/Markdown, and check or refresh saved
 evidence. MCP equivalents `change_context` and `trace_flow` are local full-profile
