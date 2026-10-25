@@ -25,7 +25,7 @@
   },
   "platform_preflight": {
     "experiment": "preflight",
-    "required_controls": 331,
+    "required_controls": 373,
     "step_minutes": 5,
     "artifact": "experiment-broad-platform-preflight-RUN-ATTEMPT",
     "same_head_required": true

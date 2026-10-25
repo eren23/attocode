@@ -1,0 +1,158 @@
+{
+  "status": "complete",
+  "scope": "Harness-only opt-in routine OCaml native capture; no new package release or historical-cause/frequency/performance/relevance verdict",
+  "baseline": "56409dd97c745a58dd184b06017324f9daf923ca",
+  "version": "0.1.19",
+  "new_publication": false,
+  "engine_files_unchanged": 349,
+  "dependencies_unchanged": true,
+  "rust_trace_unchanged": true,
+  "maintained_cases": 42,
+  "required_preflight_controls": 373,
+  "required_regressions": 386,
+  "capture_limits": {
+    "max_bytes": 4194304,
+    "event_bytes": 65536,
+    "footer_bytes": 4096
+  },
+  "attempts": [
+    {
+      "attempt": "red-1",
+      "run": 40231397146,
+      "head": "50d4773fb96bc0e47ca7bd15cdd9be83fa034950",
+      "outcome": "passed",
+      "archive_sha256": "b72c1b86bef394ac0dcfe7648e7c588945d12a3b906d6c219f3fb8869bc63b90",
+      "seconds": 28.144131325000103,
+      "controls": [
+        {
+          "path": "intelligence-experiment-40231397146-1/evidence/ocamlcapture-controls.xml",
+          "cases": 370,
+          "passed": 334
+        }
+      ]
+    },
+    {
+      "attempt": "green-1",
+      "run": 40232339776,
+      "head": "21dad67d8f11c3f8f4e6a7f98ee4d6987bc9ce7d",
+      "outcome": "passed",
+      "archive_sha256": "071a5fcb132755b34137e3a9fde8af75ccfedb56b85fca86a9d32460e2e6868d",
+      "seconds": 29.30405494099999,
+      "controls": [
+        {
+          "path": "intelligence-experiment-40232339776-1/evidence/ocamlcapture-controls.xml",
+          "cases": 370,
+          "passed": 370
+        }
+      ]
+    },
+    {
+      "attempt": "route-red-1",
+      "run": 40234300356,
+      "head": "e2179775135cd34ade55bb99f73ac0f144d38301",
+      "outcome": "passed",
+      "archive_sha256": "980285e51cbe868fe419d80c53d90c3cbc5121e9d27cc903c8ebda63f0ab77a6",
+      "seconds": 30.068808810999997,
+      "controls": [
+        {
+          "path": "intelligence-experiment-40234300356-1/evidence/ocamlcapture-controls.xml",
+          "cases": 373,
+          "passed": 370
+        }
+      ]
+    },
+    {
+      "attempt": "route-green-1",
+      "run": 40234802568,
+      "head": "471cb53f51d2743d03ab2ada27b734fb0913d502",
+      "outcome": "passed",
+      "archive_sha256": "93b80b64638ca5d3e27000dcf017767d224c36dd9e7dc6e667acaf61b040d97e",
+      "seconds": 29.380035690999996,
+      "controls": [
+        {
+          "path": "intelligence-experiment-40234802568-1/evidence/ocamlcapture-controls.xml",
+          "cases": 373,
+          "passed": 373
+        }
+      ]
+    },
+    {
+      "attempt": "smoke-1",
+      "run": 40234957048,
+      "head": "9942edb7e481177fa1d413508a31435e351f7c09",
+      "outcome": "passed",
+      "archive_sha256": "da0b20ad2e38559e27a575c6828cc775579f13483b6e3f9d3f30a7b8e14c6ebf",
+      "seconds": 18.643320306,
+      "controls": []
+    }
+  ],
+  "single_native_smoke": {
+    "head": "9942edb7e481177fa1d413508a31435e351f7c09",
+    "run": 40234957048,
+    "archive_sha256": "da0b20ad2e38559e27a575c6828cc775579f13483b6e3f9d3f30a7b8e14c6ebf",
+    "raw_responses": 8,
+    "packs": 1,
+    "outcomes": {
+      "failed": 0,
+      "incomplete": 0,
+      "limited": 4,
+      "passed": 4,
+      "unsupported": 0
+    },
+    "retrieval": {
+      "labeled_hit_at_24": 0,
+      "labeled_hit_at_5": 0,
+      "missing_questions": [],
+      "observed_questions": 0
+    },
+    "fixtures": {
+      "ocaml": {
+        "entries": 274,
+        "bytes": 4302004,
+        "sha256": "e62e7311ee54f9838407784cefbe4a62a7d4b48e062c88df7adb223a34f1fbb5"
+      }
+    },
+    "worker_origins": 1,
+    "controller_origins": true,
+    "cleanup_verified": true,
+    "native_capture": {
+      "status": "passed",
+      "parse_calls": 1028,
+      "native_failures": 0,
+      "selected_source_parses": 4,
+      "parser_generation_thread_pairs": 3,
+      "threads": 1,
+      "worker_pid": 2205,
+      "trace_sha256": "e508c9346a5e18ccfc5f84788b8779ce2cb57c4dcb9c859edb773070b5bf7970",
+      "trace_bytes": 977405,
+      "source_origin_clock_lifecycle_verified": true
+    },
+    "issued_retrieval_questions": 0,
+    "scope": "One pinned OCaml routine-worker capture smoke; no breadth/relevance/performance/nativecause verdict"
+  },
+  "archive": {
+    "path": "packages/code-intel/evals/results/2026-10-25-ocaml-native-capture.tar.gz",
+    "sha256": "e488d4911e3919a0815e5a453602cfadb68c3368595daab9fe358c6c192054d4",
+    "bytes": 2935510,
+    "members": 719,
+    "original_zips": 5,
+    "source_commits": 6,
+    "all_original_and_Git_source_bytes_replayed": true,
+    "both_equal_engine_files": 349
+  },
+  "temporary_wiring_retired": true,
+  "native_policy": {
+    "timeout_micros": 100000,
+    "selected_failure_cooldown_seconds": 1,
+    "rust_deadline_seconds": 2,
+    "rust_attempt_limit": 4,
+    "unchanged": true
+  },
+  "limits_of_evidence": [
+    "Native smoke observes 1028 trees and zero native failures; original intermittent causes remain unproven.",
+    "Fault controls inject deterministic native outcomes and sink failures; they do not establish failure frequency.",
+    "Observer wall/thread CPU spans include observer cost and are not uninstrumented performance measurements.",
+    "Grammar cache/distribution hashes are source-bound online observations; host replay does not run native binaries.",
+    "One pack/eight existing checks, with retrieval questions omitted, is not a fresh36-pack compatibility or relevance study."
+  ]
+}

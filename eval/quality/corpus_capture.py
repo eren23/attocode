@@ -100,6 +100,12 @@ def admit_worker(workspace, spec, evidence, summary, selected):
     from eval.quality.fixture_identity import source_manifest
     from eval.quality.preview_sources import identity
 
+    native_capture = None
+    if spec.get('language') == 'ocaml':
+        from eval.quality.native_capture import read_capture
+        native_capture = read_capture(evidence / 'native-ocaml.jsonl', workspace, spec, summary.get('native_capture'))
+        require(native_capture['worker_error'] is None, 'native trace records failed worker')
+
     fixtures = journal_events(evidence / 'fixture')
     require(len(fixtures) == 1, 'missing pinned fixture')
     request, ref, manifest = fixtures[0]
@@ -167,6 +173,8 @@ def admit_worker(workspace, spec, evidence, summary, selected):
     require(runtime['origin_start']['pid'] == runtime['origin_end']['pid']
             and runtime['source_before'] == runtime['source_after'] == {'sha256': digest(manifest)},
             'worker source/process identity changed')
+    if native_capture is not None:
+        require(native_capture['worker_pid'] == runtime['origin_start']['pid'], 'native capture worker mismatch')
     unavailable = spec.get('parser_requirement') == 'optional' and not is_available(spec['language'])
     excluded = IgnoreManager(workspace).is_ignored(spec['file']) or any(p.startswith('.') for p in Path(spec['file']).parts)
     text = (workspace / spec['file']).read_text()
@@ -274,4 +282,5 @@ def admit_worker(workspace, spec, evidence, summary, selected):
     consume(summary['checks'][-1], 'inspect_symbol', selection, 1, 'restart')
     require(at == len(captures), 'unclaimed raw responses')
     return {'responses': at, 'source_sha256': digest(manifest), 'worker_pid': runtime['origin_start']['pid'],
-            'checks': len(expected_checks), 'questions': len(summary['retrieval'])}
+            'checks': len(expected_checks), 'questions': len(summary['retrieval']),
+            **({'native_capture': native_capture} if native_capture is not None else {})}

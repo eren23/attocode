@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 import yaml
@@ -354,26 +355,37 @@ def main():
             journal = Journal(Path(capture_root) / worker_spec["id"] / "journal", 32 * 2**20)
             journal.response({"event": "origin_start"}, {"pid": os.getpid(), "origins": origins})
             journal.response({"event": "source_before"}, {"sha256": digest(source_manifest(args.worker))})
+        native_trace = None
+        if journal is not None and worker_spec.get("language") == "ocaml":
+            from eval.quality.native_capture import NativeCapture
+            native_trace = NativeCapture(Path(capture_root) / worker_spec["id"] / "native-ocaml.jsonl",
+                                         args.worker, worker_spec)
         observations = []
         def checkpoint(checks, retrieval):
             write_json(args.output, {"checks": checks, "retrieval": retrieval})
         try:
-            checks = asyncio.run(evaluate(args.worker, json.loads(args.spec.read_text()),
-                                          observations=observations, checkpoint=checkpoint,
-                                          **({"journal": journal} if journal is not None else {})))
+            with native_trace.capture() if native_trace is not None else nullcontext():
+                checks = asyncio.run(evaluate(args.worker, json.loads(args.spec.read_text()),
+                                              observations=observations, checkpoint=checkpoint,
+                                              **({"journal": journal} if journal is not None else {})))
+            if native_trace is not None:
+                native_trace.require_complete()
         except Exception as exc:
             # Preserve diagnostics even before the parent log reader reaches EOF.
             result = json.loads(args.output.read_text()) if args.output.is_file() else {
                 "checks": [], "retrieval": observations,
             }
             result["worker_error"] = {"type": type(exc).__name__, "message": str(exc)[:4000]}
+            if native_trace is not None:
+                result["native_capture"] = native_trace.summary()
             write_json(args.output, result)
             raise
         finally:
             if journal is not None:
                 journal.response({"event": "source_after"}, {"sha256": digest(source_manifest(args.worker))})
                 journal.response({"event": "origin_end"}, {"pid": os.getpid(), "origins": assert_engine(selected_engine)})
-        write_json(args.output, {"checks": checks, "retrieval": observations})
+        write_json(args.output, {"checks": checks, "retrieval": observations,
+                                **({"native_capture": native_trace.summary()} if native_trace is not None else {})})
         return 0
     if capture_root and (args.ranking or args.pack or args.shard or args.resume):
         parser.error("Bounded compatibility requires the complete fresh manifest")
