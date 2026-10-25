@@ -2,7 +2,7 @@
   "schema_version": 1,
   "experiment": "snippet",
   "expected": "all_pass",
-  "expected_cases": 368,
+  "expected_cases": 380,
   "limits": {
     "seconds": 600,
     "disk_bytes": 2147483648,

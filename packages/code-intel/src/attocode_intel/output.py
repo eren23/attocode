@@ -166,10 +166,10 @@ def _restore_search_snippets(result, originals, max_tokens, *, upstream_truncate
                 or len(body) <= len(delivered["snippet"])):
             continue
 
-        def probe(window):
+        def probe(window, *, position=index):
             nonlocal remaining, page, result
             remaining -= 1
-            current = page["data"]["results"][index]
+            current = page["data"]["results"][position]
             if (len(window["snippet"]) <= len(current["snippet"])
                     or current["snippet"] not in window["snippet"]):
                 return "skip"
@@ -182,7 +182,7 @@ def _restore_search_snippets(result, originals, max_tokens, *, upstream_truncate
                   or not 1 <= first <= old_first <= old_last <= last):
                 return "skip"
             trial = deepcopy(page)
-            trial["data"]["results"][index].update(window)
+            trial["data"]["results"][position].update(window)
             _search_truncation(trial["metadata"], trial["data"], upstream_truncated)
             candidate = compact_result(trial["metadata"], trial["data"])
             if response_tokens(candidate) > max_tokens:
