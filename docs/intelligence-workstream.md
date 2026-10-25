@@ -14,6 +14,16 @@ source/cache guards and dependencies remain unchanged. Publication requires a fr
 preflight, normal CI, actual PyPI clean-install/0.1.18-upgrade verification and all
 18 release jobs. Publication does not upgrade a global tool or restart an MCP host.
 
+**Routine OCaml native evidence, 2026-10-25:** [bounded capture and its original proof](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-ocaml-native-capture.md)
+retain native outcomes before fallback/reset in opt-in fixture workers, including
+generic parsers and sequential thread handoffs. All 373 controls pass; keep 42 new
+regressions and 386 required regressions. One separately frozen pinned OCaml worker
+completes eight existing checks (four passed/four limited), zero retrieval questions,
+and 1,028 native parses with no capture loss. All native results are trees: the
+historical failure causes remain unproven. Raw/source/grammar/origin/resource/cleanup
+proof is archived and temporary wiring retired. Product 0.1.19, dependencies, native
+policy and Rust tracing remain unchanged; no package is published by this change.
+
 **Maintained dispatcher qualification, 2026-10-25:** [causal online controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-dispatch-bindings.md)
 replace inferred operator filenames with explicit source-bound handlers. Preflight validates every registration without running trial bodies; invalid synchronous signatures, async/generator entrypoints, missing modules and shadowed origins are rejected. Keep 26 regressions in 331-case maintained preflight and 344 required regressions. All 349 product runtime files/version/dependencies remain published 0.1.19 exact; this harness correction publishes no package or new experiment result. Earlier release counts below remain historical.
 
