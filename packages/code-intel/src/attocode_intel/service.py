@@ -1514,7 +1514,7 @@ class CodeIntelService:
         return search(self, query, top_k, file_filter, context_file, mode)
 
     def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "", branch: str = "",
-                             context_file: str = "") -> dict:
+                             context_file: str = "", mode: str = "auto") -> dict:
         """Return structured semantic search results.
 
         Args:
@@ -1527,7 +1527,7 @@ class CodeIntelService:
         mgr = self._get_semantic_search()
         if context_file:
             from attocode_intel.context_search import context_reason
-            candidates, results, ranking = self._contextual_search(query, top_k, file_filter, context_file)
+            candidates, results, ranking = self._contextual_search(query, top_k, file_filter, context_file, mode)
             from attocode_intel.search_evidence import hydrate_selected_sources
             results = hydrate_selected_sources(self.project_dir, results)
         else:
@@ -3077,7 +3077,7 @@ class CodeIntelService:
             if mode not in {"auto", "keyword"}:
                 raise ValueError("context_file search does not support vector mode")
             from attocode_intel.context_search import public_context
-            data = self.semantic_search_data(query, top_k, file_filter, branch, context_file)
+            data = self.semantic_search_data(query, top_k, file_filter, branch, context_file, mode)
             data["ranking"]["context"] = public_context(data["ranking"]["context"])
             return json.dumps(data)
         mgr = self._get_semantic_search()

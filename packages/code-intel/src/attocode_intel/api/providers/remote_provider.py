@@ -698,7 +698,7 @@ class RemoteSearchProvider:
     def __init__(self, client: RemoteClient) -> None:
         self._client = client
 
-    async def semantic_search(self, query: str, top_k: int, file_filter: str, branch: str, context_file: str = "") -> dict:
+    async def semantic_search(self, query: str, top_k: int, file_filter: str, branch: str, context_file: str = "", mode: str = "auto") -> dict:
         if context_file:
             from fastapi import HTTPException
             raise HTTPException(422, "context_file search is supported only in local workspaces")

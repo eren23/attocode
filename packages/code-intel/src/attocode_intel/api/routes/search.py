@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from attocode_intel.api.auth import verify_auth
@@ -57,6 +57,15 @@ class IndexStatusResponse(BaseModel):
     last_error: str = ""
 
 
+async def _context_options(req, request):
+    if not req.context_file:
+        return {}
+    mode = (await request.json()).get("mode", "auto")
+    if not isinstance(mode, str) or mode not in {"auto", "keyword"}:
+        raise HTTPException(422, "context_file search does not support vector or unknown modes")
+    return {"context_file": req.context_file, "mode": mode}
+
+
 # ===================================================================
 # v1 endpoints
 # ===================================================================
@@ -66,6 +75,7 @@ class IndexStatusResponse(BaseModel):
 async def semantic_search_v1(
     project_id: str,
     req: SemanticSearchRequest,
+    request: Request,
     branch: BranchParam = "",
 ) -> TextResult:
     """Semantic search (vector + keyword RRF)."""
@@ -75,7 +85,7 @@ async def semantic_search_v1(
         svc = await get_service_or_404(project_id)
         return TextResult(result=svc.semantic_search(
             query=req.query, top_k=req.top_k, file_filter=req.file_filter,
-            **({"context_file": req.context_file} if req.context_file else {}),
+            **(await _context_options(req, request)),
         ))
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -145,6 +155,7 @@ async def fast_search_v1(
 async def semantic_search_v2(
     project_id: str,
     req: SemanticSearchRequest,
+    request: Request,
     branch: BranchParam = "",
 ) -> SearchResultsResponse:
     """Semantic search (structured).
@@ -158,7 +169,7 @@ async def semantic_search_v2(
         provider = await get_search_provider(project_id)
         return await provider.semantic_search(
             query=req.query, top_k=req.top_k, file_filter=req.file_filter, branch=branch,
-            **({"context_file": req.context_file} if req.context_file else {}),
+            **(await _context_options(req, request)),
         )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "experiment": "context_search",
   "stage": "development",
-  "design_sha256": "38bc5e177ff1b8ed57c55ecc77fa1fd8901cee49549fd5559fe55e428a7d1bb9",
+  "design_sha256": "8096485fa4e9fa545e0c7a381e7e6a49f9eb9b51b231aeef216552935da69b1c",
   "limits": {
     "seconds": 600,
     "disk_bytes": 2147483648,

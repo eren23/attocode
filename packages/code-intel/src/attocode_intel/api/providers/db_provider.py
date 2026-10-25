@@ -558,7 +558,7 @@ class DbSearchProvider:
         self._project_id = project_id
 
     async def semantic_search(
-        self, query: str, top_k: int, file_filter: str, branch: str, context_file: str = "",
+        self, query: str, top_k: int, file_filter: str, branch: str, context_file: str = "", mode: str = "auto",
     ) -> SearchResultsResponse:
         """Run pgvector cosine similarity search."""
         if context_file:
