@@ -1,0 +1,86 @@
+{
+  "status": "fixed",
+  "scope": "Maintained experiment dispatcher; harness-only",
+  "version": "0.1.19",
+  "new_publication": false,
+  "baseline": "92550f533818cae57d2170439e3d02753e0ddac9",
+  "qualified_head": "28f76c6ec8e741053c8cb0c4bc281cabfe42720f",
+  "trials": [
+    {
+      "stage": "red-1",
+      "run": 40227104023,
+      "head": "ce726ac78a7ae20f518b3a9d6c591457767e7d92",
+      "archive_sha256": "65788261967ff3ba43ff65db39a3fa190bc6faf0b8547783fbd2950b2d91d2ef",
+      "cases": 327,
+      "passed": 309,
+      "expected_failures": [
+        "test_explicit_alias_uses_registered_module",
+        "test_unregistered_conventional_module_never_runs",
+        "test_invalid_entrypoint_rejected_before_body[missing]",
+        "test_invalid_entrypoint_rejected_before_body[noncallable]",
+        "test_invalid_entrypoint_rejected_before_body[no-root]",
+        "test_invalid_entrypoint_rejected_before_body[extra-required]",
+        "test_invalid_entrypoint_rejected_before_body[keyword-required]",
+        "test_invalid_entrypoint_rejected_before_body[async]",
+        "test_invalid_entrypoint_rejected_before_body[async-callable]",
+        "test_missing_module_is_explicit_binding_error",
+        "test_import_error_keeps_original_cause",
+        "test_shadow_module_cannot_execute_body",
+        "test_maintained_operator_qualifies_without_running[native]",
+        "test_maintained_operator_qualifies_without_running[preview]",
+        "test_maintained_operator_qualifies_without_running[restart]",
+        "test_inline_handler_qualification_needs_no_operator[preflight]",
+        "test_inline_handler_qualification_needs_no_operator[broad]",
+        "test_workflow_choices_and_registered_targets_qualify"
+      ],
+      "seconds": 26.78928447000004,
+      "source_origin_caps_cleanup_admitted": true
+    },
+    {
+      "stage": "shape-red-1",
+      "run": 40227400476,
+      "head": "e144c3caf9e673b490e16fce1ae59af16d0e91ca",
+      "archive_sha256": "23b96c12d2b2e1cb4aa7046bb67771299fa4ddca7b5e877cf4b7894c20e483bc",
+      "cases": 331,
+      "passed": 327,
+      "expected_failures": [
+        "test_invalid_entrypoint_rejected_before_body[generator]",
+        "test_invalid_entrypoint_rejected_before_body[generator-callable]",
+        "test_invalid_entrypoint_rejected_before_body[async-generator]",
+        "test_invalid_entrypoint_rejected_before_body[async-generator-callable]"
+      ],
+      "seconds": 27.325391723999928,
+      "source_origin_caps_cleanup_admitted": true
+    },
+    {
+      "stage": "green-1",
+      "run": 40227553074,
+      "head": "28f76c6ec8e741053c8cb0c4bc281cabfe42720f",
+      "archive_sha256": "6e35b297ccbcd9e9325ff3ccb5fd6f8c79e07dcd4aba30d7df21c589ab9f916e",
+      "cases": 331,
+      "passed": 331,
+      "expected_failures": [],
+      "seconds": 26.499734705999998,
+      "source_origin_caps_cleanup_admitted": true
+    }
+  ],
+  "new_retained_cases": 26,
+  "maintained_preflight": 331,
+  "required_regressions": 344,
+  "product_runtime_files_unchanged": 349,
+  "dependencies_unchanged": true,
+  "handler_validation": "Explicit mapped source; pre-import and post-import origin; callable one-root synchronous non-generator entrypoint; original import failures chained",
+  "qualification_boundary": "Maintained preflight qualifies every registered target without body execution before future manual launches. Runtime qualification follows engine origin guard inside existing supervised payload, before operator body/fixture/query work. No unbounded parent imports.",
+  "evidence_archive": {
+    "path": "packages/code-intel/evals/results/2026-10-25-dispatch-bindings.tar.gz",
+    "sha256": "d4adf4ffc7fa5e7c9b145646c50b9d32f5a86042ea6f354bb2e95ccc5f1d38ab",
+    "bytes": 2396595,
+    "members": 695,
+    "original_zips": 3,
+    "source_commits": 4,
+    "both_equal_engine_files": 349,
+    "all_original_and_Git_source_bytes_replayed": true
+  },
+  "integration": "All17normalCI/artifacts/install/preflight/image and whole-tree/postmerge admissions required",
+  "historical_native_causes": "Unproven; no native or scored trial run in this work"
+}
