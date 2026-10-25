@@ -2,7 +2,7 @@
 
 ## Current priorities — 2026-10-25
 
-This checkout targets `attocode-code-intel` **0.1.18**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.19**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
@@ -12,7 +12,7 @@ an unchecked feature shipped when its old target version was reached.
 
 | Priority | Action | Completion evidence / limits |
 | --- | --- | --- |
-| Compact search budgets | Restore spare-space source text after fitting the complete page; unreleased | [Four causal boundary cases and 380 online controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-snippet-budget.md) preserve all delivered hits/text/source coordinates and continuations with the same serialized limit. Keep 19 regressions in 305-case maintained preflight; bounded global fitting probes, no ranking/relevance/speed claim. |
+| 0.1.19 compact search budgets | Restore spare-space source text after fitting the complete page | [Four causal boundary cases and 380 online controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-snippet-budget.md) preserve all delivered hits/text/source coordinates and continuations with the same serialized limit. Keep 19 regressions in 305-case maintained preflight; bounded global fitting probes, no ranking/relevance/speed claim. |
 | Optional local file context | Development rejects candidate; validation unissued | The [1,080-page comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-context-search.md) gains one distinct visible file in one repository per round (required two in two), loses excerpts and changes three ordinary-control snippets. Latency passes. Preserve the original zero-query import abort and explicitly approved corrected launch; remove the candidate and temporary wiring. All product/tests/harness/version remain published 0.1.18 exact. |
 | 0.1.18 recovery readiness | Publish ready after a completed fallback rebuild | [Online causal controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-recovery-readiness.md) reproduce complete fallback reconstruction stuck in skeleton phase. Publish ready after existing work only at full actual parse/reference counts. Nine new regressions and 313 online controls pass; incomplete recovery, minimal initialization, native limits and cache/source policy remain guarded. |
 | Single final repair index | Completed trial rejects candidate | The [matched trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-single-rebuild.md) completes 14 fresh processes with equal data/routes and full 4,980-file readiness. Median restart 28.62→26.72s (ratio 0.933, required ≤.90); all rounds faster: true; cold ratio 1.012 (required ≤1.05). The rejected candidate reduced redundant old-index construction; final product source is restored to baseline; existing validation, LSP and cache bounds remain. |
