@@ -1,12 +1,52 @@
 {
   "experiment": "ocamlcapture",
+  "stage": "smoke",
   "limits": {
     "seconds": 600,
     "rss_bytes": 2147483648,
     "disk_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "stage": "synthetic",
-  "expected_cases": 373,
-  "expected_failures": []
+  "qualified_controls_run": 40234802568,
+  "qualified_head": "471cb53f51d2743d03ab2ada27b734fb0913d502",
+  "capture_source_sha256": {
+    "eval/quality/native_capture.py": "4672fd851ea052c01d873f6bfc247388f2eff75848bb32b503378a08bef86b13",
+    "eval/quality/native_experiment.py": "7d0c901a5e5cca6b3cd3ffe63d65e694f6f0f172222b3379e44ffdb4fa33704b",
+    "eval/quality/corpus.py": "fecc8a0d662097296e4cbf5789c95e7efe357b8f9598b2473da64b99f3f60590",
+    "eval/quality/corpus_capture.py": "9c6bddfdcf946bf84c5cc73b8369d7a76ce355011bdd66ee27154458fc0d229f",
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/ts_parser.py": "31ac62674ab43217f0609da626178ecf5fef71671d7e5e6a69d9a87f8b89c072"
+  },
+  "smoke": {
+    "stage": "pinned_ocaml_capture_smoke",
+    "limits": {
+      "seconds": 600,
+      "rss_bytes": 2147483648,
+      "disk_bytes": 2147483648,
+      "evidence_bytes": 67108864
+    },
+    "worker_seconds": 180,
+    "max_trace_bytes": 4194304,
+    "routine_worker_processes": 1,
+    "fixture": {
+      "id": "ocaml",
+      "repo": "ocaml/ocaml",
+      "commit": "5fbe515aa215909e28328a059701da430bc3cff8",
+      "language": "ocaml",
+      "file": "typing/typecore.ml",
+      "symbol": "type_expression",
+      "anchor": "let type_expression env sexp =",
+      "caller": null,
+      "importer": null,
+      "test": null,
+      "source_sha256": "c3abd2af1040c9d1ad305f76b7f6f9f2e8243d45af2b862b10906ee7bd629010",
+      "queries": [],
+      "include": [
+        "typing",
+        "stdlib"
+      ],
+      "parser_requirement": "optional"
+    },
+    "source_manifest_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a",
+    "scope": "One pinned routine OCaml worker/8existingchecks, retrievalquestionsomitted. No matched timing/frequency/relevance/nativecause claim. Freezequalifiedsource+operator beforefirstlaunch. Stop/preserve firstfault; no replacement/rerun/capwaiver."
+  }
 }
