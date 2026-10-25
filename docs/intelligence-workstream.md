@@ -13,6 +13,13 @@ requires fresh36-pack compatibility on this exact versioned tree, normal CI, act
 PyPI clean-install/0.1.17-upgrade verification and all18release jobs. The GitHub release
 records publication; it does not upgrade a global tool or restart an existing MCP host.
 
+**Compact search snippet budgets, 2026-10-25:** the [online correction](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-snippet-budget.md)
+restores source text only after the complete page is fitted. Four causal boundary
+cases pass and all 380 online controls preserve delivered hits/text/coordinates,
+continuations, actual budgets and bounded probe work. Keep 19 new regressions in
+maintained preflight (305 cases). Temporary control wiring is retired. The change
+is unreleased on 0.1.18 development; no ranking, relevance or speed claim follows.
+
 **Optional local file context, 2026-10-25:** the [completed development comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-context-search.md)
 rejects the candidate after 1,080 pages/12 fresh workers: one distinct visible-file
 gain per round in one repository misses the two-file/two-repository requirement;

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Restore compact-search snippet text into spare serialized response space after
+  fitting the complete page. Preserve existing hits, visible excerpts, source
+  coordinates, provenance and continuations; bound extra fitting work globally.
+  Ranking, retrieval and response limits remain unchanged.
+
 ### Evaluation maintenance
 
 - Preserve the optional local file-context search development comparison and reject

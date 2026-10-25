@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from attocode_intel.output import bounded_compact, bounded_search, compact_result, response_tokens
@@ -90,21 +89,6 @@ def test_delivered_floor_and_source_coordinates_remain_valid():
         assert before["snippet"] in after["snippet"] in data["results"][0]["snippet"]
         assert after["snippet_start_line"] == after["snippet_end_line"] == 10
     assert response_tokens(response) <= budget
-
-
-def test_snippet_dispatch_reaches_committed_operator(tmp_path, monkeypatch):
-    import attocode_intel
-
-    from eval.quality import experiments, snippet_experiment
-
-    root = tmp_path / "dispatch"
-    (root / "evidence").mkdir(parents=True)
-    monkeypatch.setenv("ATTOCODE_EXPERIMENT_ENGINE", str(Path(attocode_intel.__file__).parent))
-    calls = []
-    monkeypatch.setattr(snippet_experiment, "run", lambda selected: calls.append(selected))
-    experiments.payload("snippet", root)
-    assert calls == [root]
-    assert json.loads((root / "evidence/controller-complete.json").read_bytes())["complete"] is True
 
 
 def legacy_search(monkeypatch, metadata, data, budget, follow_up=None):

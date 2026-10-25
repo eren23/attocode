@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "kind": "correctness-correction",
+  "date": "2026-10-25",
+  "status": "fixed",
+  "release_status": "unreleased",
+  "version_at_validation": "0.1.18",
+  "baseline_commit": "3b7e8de1e6c5af7a608528d1ebbd259a6cbfb952",
+  "qualified_runtime_commit": "5e8e0197884193d5be8edfdd0c561623e8a467ea",
+  "runtime_files_changed": [
+    "packages/code-intel/src/attocode_intel/output.py"
+  ],
+  "behavior": "Keep final fitted compact-search page, restore larger source windows only through validated full-envelope probes preserving every delivered hit and current excerpt.",
+  "global_additional_probe_attempt_limit": 12,
+  "maximal_fit_claim": false,
+  "ranking_or_retrieval_change": false,
+  "historical_workspace_drift_cause_proven": false,
+  "online_controls": {
+    "expected_red": {
+      "run": 40218132299,
+      "cases": 368,
+      "passed": 364,
+      "exact_expected_failures": 4,
+      "seconds": 33.112199872000005,
+      "archive_sha256": "166b7d04872dcf2f305a679536fc081f1599e69568226ce0a3750ee40679a2e7"
+    },
+    "first_integration": {
+      "run": 40218361154,
+      "status": "retained-incomplete",
+      "cases": 368,
+      "passed": 364,
+      "failures": 4,
+      "cause": "Four old no-crowding assertions compared identical snippet dictionaries and rejected strictly larger snippets that contained the full previous text.",
+      "original_boundary_cases_passed": 4,
+      "archive_sha256": "82b3857e85fc1778083cce0c8262dc36d809b5616164dcd8bd54f7ff92c0efe3"
+    },
+    "qualified_green": {
+      "run": 40218793000,
+      "cases": 380,
+      "passed": 380,
+      "seconds": 32.576676154,
+      "archive_sha256": "6d1134c2b0d2853edaa1f36daf4a9f1832b207b4c70c59a0a6ff9b9c9fede1c6"
+    }
+  },
+  "causal_boundary": "Four frozen Unicode/escaped-text short/long-workspace cases discard at least half the original window on baseline. Corrected delivery preserves more than three quarters at the same full serialized budget, retaining previous text and source coordinates.",
+  "assertion_update": "All16 existing no-crowding variants remain. Their guard now requires same full non-preview identity, previous snippet containment and nonshrinking source lines instead of forbidding any excerpt extension.",
+  "new_maintained_regression_cases": 19,
+  "maintained_preflight_cases": 305,
+  "controls": [
+    "whole fitted hit prefix and continuation protected at four budgets",
+    "global12 additional serialized-probe bound",
+    "conservative nonmonotone counts never admit an overbudget page",
+    "upstream/unrelated omission flags preserved and own stale flags cleared",
+    "repeated source fragments retain corresponding rows/coordinates",
+    "actual gateway source-backed output within budget",
+    "fitting payload byte identity and caller nonmutation"
+  ],
+  "limitations": [
+    "No new corpus relevance queries, held-out labels, native cause attribution, optimality or speedup claim.",
+    "BPE counts and anchor windows can be nonmonotone; only the best observed protected actual fit is accepted.",
+    "Long workspace paths still consume the same response budget; path-independent output is not promised.",
+    "Only compact search rendering changes, using already rendered original windows; no extra retrieval or parsing.",
+    "All actual tests/runtime/fixtures/build/install/native execution was online GHA. Host work is static and private stdlib retained-data/Git/XML/tar analysis only."
+  ],
+  "evidence_archive": {
+    "path": "packages/code-intel/evals/results/2026-10-25-snippet-budget.tar.gz",
+    "sha256": "232435490969266f5be82168f27b9f0334249018a5e491c2f98c7054c05e21c1",
+    "bytes": 2400764,
+    "members": 695,
+    "original_zips": 3,
+    "source_commits": 4,
+    "both_full_engine_files": 349,
+    "all_original_and_Git_source_bytes_replayed": true
+  }
+}

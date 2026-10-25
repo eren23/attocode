@@ -1,5 +1,13 @@
 # Search and navigation details
 
+After fitting the full compact search page, delivery can restore additional text
+from the already selected source windows into spare response space. It preserves
+all delivered hits, previously visible text, source lines and continuations, and
+checks the complete serialized response against the same token limit. This can
+avoid excessive loss from coarse snippet halving. It does not change retrieval or
+ranking, and longer workspace routes still leave less space for evidence.
+
+
 Search previews select a contiguous window around the line with the most positive query terms; ties use the earliest line. This is a lexical aid, not a relevance judgment. With no source match, or for symbol metadata, the preview remains a prefix. MCP hits include `name` and `chunk_type`; `line`/`end_line` identify the original chunk, while `snippet_start_line`/`snippet_end_line` identify the source lines actually shown. Metadata-only previews have null snippet coordinates. A long line can be shown partially. `snippet_truncated` is true whenever any chunk content is omitted, including after final budget trimming. `matched_terms` and `match_fields` still describe the original hit and can include evidence outside the preview. Compact output shortens previews before dropping whole hits; delivered/omitted counts describe the final response. Retrieval, ranking, and scores are unchanged.
 
 For selected local metadata-only hits, the gateway can recover current source
