@@ -281,3 +281,26 @@ async def test_remote_gateway_rejects_context_before_resolving_a_snapshot(projec
             await gateway.execute_mcp('semantic_search',{'query':'needle','context_file':'source.py'})
     finally:
         await gateway.close()
+
+
+async def test_compact_context_metadata_preserves_budget_with_long_neighbor_names(project):
+    _, mgr, root=project
+    names=[f'neighbor_{n:02}_'+('shared_'*22) for n in range(31)]
+    for name in names:
+        (root/(name+'.py')).write_text('def needle_cache(): return "cache needle"\n')
+    (root/'fanout.py').write_text('\n'.join('import '+name for name in names))
+    mgr.invalidate_file(str(root/'fanout.py'))
+    from attocode_intel.gateway import OperationGateway
+    from attocode_intel.output import response_tokens
+    gateway=OperationGateway(str(root),'daily',watch=False)
+    try:
+        response=await gateway.execute_mcp('semantic_search',{'query':'cache needle','top_k':5,
+                                            'context_file':'fanout.py','max_tokens':2000})
+        assert not response.isError
+        data=json.loads(response.content[0].text)['data']
+        assert data['results'] and data['ranking']['context']['applied']
+        assert 'relations' not in data['ranking']['context']
+        assert 'paths' not in data['ranking']['context']
+        assert response_tokens(response)<=2000
+    finally:
+        await gateway.close()

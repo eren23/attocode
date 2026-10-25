@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "experiment": "context_control",
-  "expected": "all_pass",
+  "expected": "compact_provenance_absent",
   "limits": {
     "seconds": 600,
     "disk_bytes": 2147483648,
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "expected_cases": 315
+  "expected_cases": 316
 }
