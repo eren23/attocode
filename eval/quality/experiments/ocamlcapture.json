@@ -8,9 +8,5 @@
   },
   "stage": "synthetic",
   "expected_cases": 373,
-  "expected_failures": [
-    "test_generic_ocaml_native_failure_is_retained_before_fallback[no_tree]",
-    "test_generic_ocaml_native_failure_is_retained_before_fallback[ValueError]",
-    "test_cross_thread_parser_handoff_is_observed_without_changing_outcome"
-  ]
+  "expected_failures": []
 }

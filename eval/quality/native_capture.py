@@ -10,6 +10,7 @@ import threading
 import time
 from collections import deque
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from unittest.mock import patch
 
@@ -61,6 +62,8 @@ class NativeCapture:
         self._prefix_bytes = self._tail_bytes = self._index = 0
         self._overflow = self._sink_failed = self._closed = self._footer_written = False
         self._pending = {}
+        self._registered = set()
+        self._generation = 0
         self.worker_error = None
         self.parse_calls = self.native_failures = self.capture_errors = 0
         self.dropped_events = self.oversized_events = self.protocol_errors = 0
@@ -111,8 +114,10 @@ class NativeCapture:
                 return
             try:
                 stage = value['stage']
-                key = value.get('parser_id'), value['thread_id']
+                key = value.get('parser_generation'), value.get('parser_id'), value['thread_id']
                 if stage == 'timeout_set':
+                    if key not in self._registered:
+                        self._register(key, 'use')
                     self.protocol_errors += int(key in self._pending)
                     self._pending[key] = 'timeout'
                 elif stage == 'parse':
@@ -122,10 +127,31 @@ class NativeCapture:
                     self.native_failures += int(value['outcome'] != 'tree')
                 elif stage == 'reset':
                     self.protocol_errors += int(self._pending.pop(key, None) != 'parse')
+                    self._registered.discard(key)
                 self._emit('native', native=value,
                            failure=stage == 'parse' and value['outcome'] != 'tree')
             except Exception:
                 self._io_failure()
+
+    def _register(self, key, origin):
+        self._registered.add(key)
+        self._emit('native', native={'stage': 'parser', 'origin': origin, 'language': 'ocaml',
+                   'parser_generation': key[0], 'parser_id': key[1], 'thread_id': key[2]})
+
+    def _observe(self, parser, origin):
+        """Assign a capture-local generation without retaining transient C parsers."""
+        with self._lock:
+            self._generation += 1
+            generation = self._generation
+            try:
+                self._register((generation, id(parser), threading.get_ident()), origin)
+            except Exception:
+                self._io_failure()
+
+        def record(request, value):
+            self.record(request, {**value, 'parser_generation': generation})
+
+        return ParserObserver(parser, record, 'ocaml')
 
     def _counts(self):
         return {**{key: getattr(self, key) for key in _COUNTERS if key != 'unfinished_parsers'},
@@ -182,12 +208,16 @@ class NativeCapture:
 
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._file = self.path.open('xb')
-            self._emit('trace_start', schema_version=1, workspace=str(self.workspace),
+            self._emit('trace_start', schema_version=2, workspace=str(self.workspace),
                        fixture=fixture_identity(self.spec), sources=source_identity(),
                        runtime={'pid': os.getpid(), 'python': sys.version, 'platform': platform.platform()},
                        limits={'max_bytes': self.max_bytes, 'event_bytes': self.event_bytes,
                                'prefix_bytes': self.prefix_limit, 'tail_bytes': self.tail_limit})
             original, proxies = ts_parser._get_parser, {}
+            original_bounded = ts_parser.bounded_parse
+            original_generic = ts_parser._generic_extractor.parse
+            generic_ocaml = ContextVar('native_capture_generic_ocaml', default=False)
+            proxy_ids = set()
 
             def get_parser(language):
                 parser = original(language)
@@ -200,12 +230,26 @@ class NativeCapture:
                                     'language': language, 'thread_id': key[1]})
                         return None
                     if key not in proxies:
-                        proxies[key] = ParserObserver(parser, self.record, language)
-                        self.record({'event': 'native'}, {'stage': 'lookup', 'available': True,
-                                    'language': language, 'parser_id': key[0], 'thread_id': key[1]})
+                        proxies[key] = self._observe(parser, 'primary')
+                        proxy_ids.add(id(proxies[key]))
                     return proxies[key]
 
-            with patch.object(ts_parser, '_get_parser', get_parser):
+            def generic_parse(file_path, content, grammar_module, language=''):
+                selected = language == 'ocaml' or (not language and grammar_module == 'tree_sitter_ocaml')
+                token = generic_ocaml.set(selected)
+                try:
+                    return original_generic(file_path, content, grammar_module, language)
+                finally:
+                    generic_ocaml.reset(token)
+
+            def bounded_parse(parser, *args, **kwargs):
+                if generic_ocaml.get() and id(parser) not in proxy_ids:
+                    parser = self._observe(parser, 'generic')
+                return original_bounded(parser, *args, **kwargs)
+
+            with (patch.object(ts_parser, '_get_parser', get_parser),
+                  patch.object(ts_parser._generic_extractor, 'parse', generic_parse),
+                  patch.object(ts_parser, 'bounded_parse', bounded_parse)):
                 try:
                     yield self
                 except BaseException as error:
@@ -246,7 +290,7 @@ def read_capture(path, workspace, spec, producer_summary):
         lines = raw.splitlines()
         data = [json.loads(line) for line in lines]
         header, footer = data[0], data[-1]
-        require(header['kind'] == 'trace_start' and type(header['schema_version']) is int and header['schema_version'] == 1
+        require(header['kind'] == 'trace_start' and type(header['schema_version']) is int and header['schema_version'] == 2
                 and footer['kind'] == 'trace_end' and footer['status'] == 'complete', 'header/footer')
         require(header['workspace'] == str(Path(workspace).resolve())
                 and header['fixture'] == fixture_identity(spec) and header['sources'] == source_identity(),
@@ -288,10 +332,11 @@ def read_capture(path, workspace, spec, producer_summary):
                 if native['stage'] == 'lookup' and native['available'] is False:
                     require(native['language'] == 'ocaml', 'lookup language')
                     continue
-                key = native['parser_id'], native['thread_id']
-                require(type(key[0]) is int and key[0] > 0, 'parser identity')
-                if native['stage'] == 'lookup':
-                    require(native['available'] is True and native['language'] == 'ocaml' and key not in states, 'lookup')
+                key = native['parser_generation'], native['parser_id'], native['thread_id']
+                require(all(type(part) is int and part > 0 for part in key), 'parser identity')
+                if native['stage'] == 'parser':
+                    require(native['origin'] in {'primary', 'generic', 'use'} and native['language'] == 'ocaml'
+                            and states.get(key) in {None, 'idle'}, 'parser registration')
                     states[key] = 'idle'
                 elif native['stage'] == 'timeout_set':
                     require(states.get(key) == 'idle' and type(native['value']) is int
@@ -317,7 +362,7 @@ def read_capture(path, workspace, spec, producer_summary):
                     selected += int(native['source_sha256'] == spec.get('source_sha256'))
                 elif native['stage'] == 'reset':
                     require(states.get(key) == 'parse', 'reset/state')
-                    states[key] = 'idle'
+                    states.pop(key)
                 else:
                     raise ValueError('native capture: unknown native stage')
         require(all(s == 'idle' for s in states.values()) and parses == footer['parse_calls']
