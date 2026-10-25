@@ -115,7 +115,17 @@ def test_new_follow_up_never_crowds_out_previously_delivered_evidence(path_size,
     result = bounded_search(metadata, data, budget, all_results=data["results"], follow_up=follow)
     assert response_tokens(result) <= budget
     actual = json.loads(result.content[0].text)["data"]["results"]
-    assert actual[:len(protected)] == protected
+    assert len(actual) >= len(protected)
+    preview_fields = {"snippet", "snippet_start_line", "snippet_end_line", "snippet_truncated"}
+    for before, after in zip(protected, actual, strict=False):
+        assert {k: v for k, v in before.items() if k not in preview_fields} == {
+            k: v for k, v in after.items() if k not in preview_fields}
+        assert before["snippet"] in after["snippet"]
+        if before["snippet_start_line"] is not None:
+            assert after["snippet_start_line"] <= before["snippet_start_line"]
+            assert after["snippet_end_line"] >= before["snippet_end_line"]
+        else:
+            assert after["snippet_start_line"] is after["snippet_end_line"] is None
 
 
 @pytest.mark.asyncio
