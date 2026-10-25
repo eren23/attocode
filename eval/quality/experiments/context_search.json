@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "experiment": "context_search",
+  "stage": "development",
+  "design_sha256": "38bc5e177ff1b8ed57c55ecc77fa1fd8901cee49549fd5559fe55e428a7d1bb9",
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  }
+}

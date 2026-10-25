@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [context_control, preflight, native, preview, restart, broad]
+        options: [context_search, context_control, preflight, native, preview, restart, broad]
 
 permissions:
   contents: read

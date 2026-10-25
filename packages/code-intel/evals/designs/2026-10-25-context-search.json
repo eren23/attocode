@@ -1847,5 +1847,7 @@
     "workers/run.py": "3a7f3c6bf1c5297f2636fc4fd0f4de8e1756e55540d989fbfc610bef9f358c31",
     "workers/settings.py": "8a5dd77fd684362b229e0fa62d88e64d236750db3e80bca3874f82cafc7cac73"
   },
-  "candidate_sha256": "ff6b054d98d43a14bcb0eea4304be9e4f0e85e1d5286524edf3f90526871f46c"
+  "candidate_sha256": "ff6b054d98d43a14bcb0eea4304be9e4f0e85e1d5286524edf3f90526871f46c",
+  "latency_method": "Nearest-rank p95 of all unscoped paired behavior pages across frozen settings/rounds; passive source/graph capture included, later raw/source admission excluded but charged to stage.",
+  "fixture_manifest_sha256": "e254cb987f782483d241d93b929d24d2582d74c51627a223638a489d4ff4bc9a"
 }
