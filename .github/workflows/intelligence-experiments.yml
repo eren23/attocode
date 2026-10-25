@@ -34,6 +34,10 @@ jobs:
       - name: Install maintained test dependencies (outside payload budget)
         timeout-minutes: 5
         run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Install context HTTP control dependencies (outside payload budget)
+        if: inputs.experiment == 'context_control'
+        timeout-minutes: 5
+        run: uv sync --locked --package attocode-code-intel --extra dev --extra service
       - name: Acquire native diagnostic tools (outside payload budget)
         if: inputs.experiment == 'native'
         timeout-minutes: 5

@@ -57,8 +57,8 @@ def test_allowed_paths_intersects_scope_before_all_limits(project, mask):
 
 def test_literal_fallback_cannot_escape_allowed_paths(project):
     _, mgr, _ = project
-    assert mgr._scoped_literal_results('cache needle', 'z_target.py')
-    assert mgr._scoped_literal_results('cache needle', 'z_target.py', allowed_paths=frozenset({'context.py'})) == []
+    assert mgr._scoped_literal_results('needle_cache', 'z_target.py')
+    assert mgr._scoped_literal_results('needle_cache', 'z_target.py', allowed_paths=frozenset({'context.py'})) == []
 
 
 def test_context_import_adds_a_real_target_outside_the_ordinary_pool(project):

@@ -20,7 +20,7 @@ def run(root):
         assert {c.attrib['name'] for c in cases if c.find('failure') is None}=={'test_ordinary_search_needs_no_structural_initialization'}
         for c in failures:
             text=''.join(c.find('failure').itertext())
-            assert any(t in text for t in ('context_file', 'allowed_paths')), (c.attrib,text)
+            assert any(t in text for t in ('context_file', 'allowed_paths', "KeyError: 'context'")), (c.attrib,text)
     else:
         assert design['expected']=='all_pass' and result.returncode==0 and not failures and len(cases)==20
     write_json(root/'evidence/context-control-verdict.json', {'expected':design['expected'], 'cases':len(cases), 'failed':len(failures), 'exit_code':result.returncode})
