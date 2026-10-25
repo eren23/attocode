@@ -3076,7 +3076,10 @@ class CodeIntelService:
             import json
             if mode not in {"auto", "keyword"}:
                 raise ValueError("context_file search does not support vector mode")
-            return json.dumps(self.semantic_search_data(query, top_k, file_filter, branch, context_file))
+            from attocode_intel.context_search import public_context
+            data = self.semantic_search_data(query, top_k, file_filter, branch, context_file)
+            data["ranking"]["context"] = public_context(data["ranking"]["context"])
+            return json.dumps(data)
         mgr = self._get_semantic_search()
 
         if mode == "keyword":

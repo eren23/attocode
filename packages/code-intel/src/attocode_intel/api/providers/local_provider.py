@@ -228,12 +228,14 @@ class LocalSearchProvider:
             manifest_hash = server_pin.manifest_hash
         except Exception:
             pass
+        if context_file:
+            from attocode_intel.context_search import public_context
         return SearchResultsResponse(
             query=data["query"],
             results=[SearchResultItem(**r) if context_file else SearchResultItem(
                 **{k: v for k, v in r.items() if k not in {"end_line", "context_reason"}})
                 for r in data["results"]],
-            **({"context": data["ranking"]["context"], "follow_up": data.get("follow_up")} if context_file else {}),
+            **({"context": public_context(data["ranking"]["context"]), "follow_up": data.get("follow_up")} if context_file else {}),
             total=data["total"],
             pin_id=pin_id,
             manifest_hash=manifest_hash,

@@ -504,7 +504,9 @@ class OperationGateway:
                     snippet_cap = max(32, min(320, budget // max(1, len(results))))
                     hits = []
                     if context_file:
-                        from attocode_intel.context_search import context_reason
+                        from attocode_intel.context_search import context_reason, public_context
+                        context_evidence = ranking["context"]
+                        ranking["context"] = public_context(context_evidence)
                     for result in selected_results:
                         hits.append({
                             "file_path": result.file_path,
@@ -515,7 +517,7 @@ class OperationGateway:
                             "line": result.start_line or None,
                             "end_line": result.end_line or None,
                             **hit_evidence(args["query"], result),
-                            **(context_reason(ranking["context"], result.file_path) if context_file else {}),
+                            **(context_reason(context_evidence, result.file_path) if context_file else {}),
                         })
                     payload = {
                         "query": args["query"],

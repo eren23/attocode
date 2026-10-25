@@ -17,6 +17,12 @@ def context_reason(context, path):
     return {'context_reason': {'context_file': context['file'], 'relation': relation}} if relation else {}
 
 
+def public_context(context):
+    """Spend response space on source evidence, not internal graph inventories."""
+    return {**{k: v for k, v in context.items() if k not in {'paths', 'relations'}},
+            'candidate_files': len(context['paths']), 'neighborhood_limit': 32}
+
+
 def search(service, query, top_k, file_filter, context_file, mode='auto'):
     if mode not in {'auto', 'keyword'}:
         raise ValueError('context_file search does not support vector mode')
