@@ -34,8 +34,20 @@ jobs:
       - name: Install maintained test dependencies (outside payload budget)
         timeout-minutes: 5
         run: uv sync --locked --package attocode-code-intel --extra dev
-      - name: Acquire OCaml capture smoke grammar (outside payload budget)
+      - name: Select OCaml capture qualification stage
         if: inputs.experiment == 'ocamlcapture'
+        id: ocaml_capture_stage
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          stage = json.loads(Path('eval/quality/experiments/ocamlcapture.json').read_bytes())['stage']
+          assert stage in {'synthetic', 'smoke'}
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as stream:
+              stream.write('native_smoke=' + str(stage == 'smoke').lower() + '\n')
+          PY
+      - name: Acquire OCaml capture smoke grammar (outside payload budget)
+        if: inputs.experiment == 'ocamlcapture' && steps.ocaml_capture_stage.outputs.native_smoke == 'true'
         timeout-minutes: 5
         env:
           QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}

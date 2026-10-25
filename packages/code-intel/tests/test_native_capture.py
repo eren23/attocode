@@ -333,6 +333,42 @@ def test_nested_active_capture_is_rejected_without_replacing_outer_hook(fixture_
         parse(native)
 
 
+@pytest.mark.parametrize("outcome", ["no_tree", "ValueError"])
+def test_generic_ocaml_native_failure_is_retained_before_fallback(fixture_case, monkeypatch, outcome):
+    import tree_sitter
+
+    root, spec, path = fixture_case
+    native = Native(outcome, path)
+    monkeypatch.setattr(ts_parser._generic_extractor, "_get_language_obj", lambda *a, **k: object())
+    monkeypatch.setattr(tree_sitter, "Parser", lambda language: native)
+    trace = capture_type()(path, root, spec)
+    with trace.capture():
+        for _ in range(2):
+            assert ts_parser._generic_extractor.parse("source.ml", SOURCE.decode(), "tree_sitter_ocaml", "ocaml") is None
+    assert native.raw_before_reset == [True, True], "OCaml capture: generic parser lost raw failures before fallback"
+    assert native.calls == native.resets == 2
+    assert trace.require_complete()["parse_calls"] == 2
+    parsed = [r["native"] for r in rows(path) if r.get("native", {}).get("stage") == "parse"]
+    assert len({r["parser_generation"] for r in parsed}) == 2
+
+
+def test_cross_thread_parser_handoff_is_observed_without_changing_outcome(fixture_case, monkeypatch):
+    root, spec, path = fixture_case
+    native = Native("ValueError", path)
+    monkeypatch.setattr(ts_parser, "_get_parser", lambda language: native)
+    trace = capture_type()(path, root, spec)
+    with trace.capture(), ThreadPoolExecutor(max_workers=1) as pool:
+        proxy = ts_parser._get_parser("ocaml")
+        assert pool.submit(ts_parser.bounded_parse, proxy, SOURCE).result(timeout=10) is None
+    error = None
+    try:
+        trace.require_complete()
+    except Exception as caught:
+        error = caught
+    assert error is None, "OCaml capture: cross-thread handoff rejected otherwise lossless observation"
+    assert native.calls == native.resets == 1 and native.raw_before_reset == [True]
+
+
 @pytest.mark.parametrize("damage", [None, "footer", "source", "fixture", "root", "clock", "reset"])
 def test_raw_native_capture_admission_checks_source_lifecycle_and_clocks(fixture_case, monkeypatch, damage):
     root, spec, path = fixture_case
