@@ -98,6 +98,14 @@ def run(root):
                 if "empty_body" in c.attrib["name"]
                 else "KeyError: 'mode'"
             ) in "".join(c.find("failure").itertext())
+    elif design["expected"] == "dispatch_binding_absent":
+        assert (
+            len(cases) == design["expected_cases"] and result.returncode == 1 and len(failures) == 1
+        )
+        assert failures[0].attrib["name"] == "test_context_dispatch_reaches_the_committed_operator"
+        assert "No module named 'eval.quality.context_search_experiment'" in "".join(
+            failures[0].find("failure").itertext()
+        )
     else:
         assert (
             design["expected"] == "all_pass"

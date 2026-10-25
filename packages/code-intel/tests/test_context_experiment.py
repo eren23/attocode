@@ -192,3 +192,20 @@ def test_context_cannot_supply_the_judged_answer_file():
     q["context_file"] = q["evidence"][0]["file"]
     with pytest.raises(ValueError, match="context"):
         validate_design(design)
+
+
+def test_context_dispatch_reaches_the_committed_operator(tmp_path, monkeypatch):
+    from pathlib import Path
+    import attocode_intel
+    from eval.quality import context_experiment, experiments
+
+    root = tmp_path / "dispatch"
+    (root / "evidence").mkdir(parents=True)
+    monkeypatch.setenv("ATTOCODE_EXPERIMENT_ENGINE", str(Path(attocode_intel.__file__).parent))
+    calls = []
+    monkeypatch.setattr(context_experiment, "run", lambda selected: calls.append(selected))
+    experiments.payload("context_search", root)
+    assert calls == [root]
+    import json
+
+    assert json.loads((root / "evidence/controller-complete.json").read_bytes())["complete"] is True
