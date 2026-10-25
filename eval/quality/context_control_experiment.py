@@ -11,9 +11,13 @@ from eval.quality.runner import REPO, write_json
 
 def run(root):
     design = json.loads((REPO / 'eval/quality/experiments/context_control.json').read_bytes())
+    from eval.quality.experiments import TESTS
+    tests = ['packages/code-intel/tests/test_context_search.py']
+    if design['expected'] == 'all_pass':
+        tests += ['packages/code-intel/tests/' + name for name in TESTS]
     xml = root / 'evidence/context-controls.xml'
     result = subprocess.run([sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
-        '--confcutdir=packages/code-intel/tests', 'packages/code-intel/tests/test_context_search.py',
+        '--confcutdir=packages/code-intel/tests', *tests,
         '-p', 'eval.quality.experiment_origin', '-q', '--basetemp='+str(root/'work/pytest'),
         '-o', 'cache_dir='+str(root/'work/cache'), '--junitxml='+str(xml)], cwd=REPO)
     tree=ET.fromstring(xml.read_bytes())
@@ -27,5 +31,5 @@ def run(root):
             text=''.join(c.find('failure').itertext())
             assert any(t in text for t in ('context_file', 'allowed_paths', "KeyError: 'context'")), (c.attrib,text)
     else:
-        assert design['expected']=='all_pass' and result.returncode==0 and not failures and len(cases)==20
+        assert design['expected']=='all_pass' and result.returncode==0 and not failures and len(cases)==design['expected_cases']
     write_json(root/'evidence/context-control-verdict.json', {'expected':design['expected'], 'cases':len(cases), 'failed':len(failures), 'exit_code':result.returncode})

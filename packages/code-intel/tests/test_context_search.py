@@ -173,3 +173,111 @@ async def test_compact_mcp_budget_and_followup_keep_context(project):
         assert response_tokens(response) <= 2000
     finally:
         await gateway.close()
+
+
+def test_no_context_payload_remains_identical_after_context_search(project):
+    svc, _, _ = project
+    before = svc.semantic_search_data('cache needle', top_k=5)
+    svc.semantic_search_data('cache needle', top_k=5, context_file='context.py')
+    assert svc.semantic_search_data('cache needle', top_k=5) == before
+
+
+def test_duplicate_global_hits_keep_their_original_scores(project):
+    svc, mgr, _ = project
+    global_rows = mgr.search_candidates('cache needle', 24)
+    rows, _, _ = svc._contextual_search('cache needle', 24, '', 'z_target.py', 'keyword')
+    def identity(r):
+        return r.file_path, r.name, r.start_line, r.end_line
+    scores = {identity(r): r.score for r in global_rows}
+    shared = [r for r in rows if identity(r) in scores]
+    assert shared and all(r.score == scores[identity(r)] for r in shared)
+    assert len(rows) == len({identity(r) for r in rows})
+
+
+def test_context_uses_one_hop_even_when_imports_form_a_cycle(project):
+    svc, mgr, root = project
+    (root / 'third.py').write_text('def needle_cache(): return "cache needle"\n')
+    (root / 'z_target.py').write_text('import context\nimport third\ndef needle_cache(): return "cache needle"\n')
+    mgr.invalidate_file(str(root / 'z_target.py'))
+    mgr.warm()
+    assert mgr.wait_for_body_index(timeout=10)
+    data = svc.semantic_search_data('cache needle', context_file='context.py')
+    assert data['ranking']['context']['paths'] == ['context.py', 'z_target.py']
+    assert all(r.get('context_reason') is None for r in data['results'] if r['file_path']=='third.py')
+
+
+def test_typescript_alias_import_is_a_real_file_relationship(project):
+    svc, mgr, root = project
+    (root/'target.ts').write_text('export function needleCache() { return "cache needle"; }\n')
+    (root/'caller.ts').write_text('import { needleCache as selected } from "./target";\nexport function use() { return selected(); }\n')
+    mgr.invalidate_file(str(root/'caller.ts'))
+    mgr.warm()
+    assert mgr.wait_for_body_index(timeout=10)
+    data=svc.semantic_search_data('cache needle', context_file='caller.ts')
+    row=next(r for r in data['results'] if r['file_path']=='target.ts')
+    assert row['context_reason']['relation']=='imports'
+
+
+def test_minimal_graph_stays_partial_without_forced_hydration(project):
+    svc, _, root=project
+    from attocode_intel._internal.integrations.context.ast_service import ASTService
+    ast=ASTService(str(root))
+    ast.initialize_skeleton(indexing_depth='minimal')
+    svc._ast_service=ast
+    before=ast.hydration_snapshot()
+    data=svc.semantic_search_data('cache needle', context_file='context.py')
+    context=data['ranking']['context']
+    assert context['status']=='partial' and context['absence_proven'] is False
+    assert ast.hydration_snapshot()['parsed_files']==before['parsed_files']
+
+
+def test_source_edit_refreshes_the_observed_import_neighborhood(project):
+    svc, mgr, root=project
+    assert 'z_target.py' in svc.semantic_search_data('cache needle', context_file='context.py')['ranking']['context']['paths']
+    (root/'context.py').write_text('from a00 import needle_cache\ndef execute(): return needle_cache()\n')
+    svc.notify_file_changed(['context.py'])
+    mgr.warm()
+    assert mgr.wait_for_body_index(timeout=10)
+    data=svc.semantic_search_data('cache needle', context_file='context.py')
+    assert data['ranking']['context']['paths']==['context.py', 'a00.py']
+
+
+@pytest.mark.parametrize('version', ['v1', 'v2'])
+async def test_actual_local_http_routes_preserve_context_and_reject_invalid_paths(project, monkeypatch, version):
+    import httpx
+    from attocode_intel.api.auth import verify_auth
+    from attocode_intel.api.providers.local_provider import LocalSearchProvider
+    from attocode_intel.api.routes import search as routes
+    from fastapi import FastAPI
+    svc, _, _=project
+    async def service(_project): return svc
+    async def provider(_project): return LocalSearchProvider(svc)
+    monkeypatch.setattr(routes,'get_service_or_404',service)
+    monkeypatch.setattr(routes,'get_search_provider',provider)
+    app=FastAPI()
+    app.dependency_overrides[verify_auth]=lambda: True
+    app.include_router(routes.router_v1)
+    app.include_router(routes.router_v2)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+        url=f'/api/{version}/projects/local/search'
+        response=await client.post(url,json={'query':'cache needle','top_k':1,'context_file':'context.py'})
+        assert response.status_code==200, response.text
+        body=response.json()
+        data=json.loads(body['result']) if version=='v1' else body
+        context=data['ranking']['context'] if version=='v1' else data['context']
+        assert context['applied'] is True
+        assert data['follow_up']['arguments']['context_file']=='context.py'
+        bad=await client.post(url,json={'query':'needle','context_file':'../outside.py'})
+        assert bad.status_code==422
+
+
+async def test_remote_gateway_rejects_context_before_resolving_a_snapshot(project):
+    from attocode_intel.gateway import OperationGateway
+    async def forbidden(*args):
+        raise AssertionError('unsupported context must not open a snapshot')
+    gateway=OperationGateway(resolver=forbidden)
+    try:
+        with pytest.raises(ValueError,match='context_file.*local'):
+            await gateway.execute_mcp('semantic_search',{'query':'needle','context_file':'source.py'})
+    finally:
+        await gateway.close()
