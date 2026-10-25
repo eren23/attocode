@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "experiment": "snippet",
+  "expected": "restoration_absent",
+  "expected_cases": 368,
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  }
+}
