@@ -196,7 +196,9 @@ def test_context_cannot_supply_the_judged_answer_file():
 
 def test_context_dispatch_reaches_the_committed_operator(tmp_path, monkeypatch):
     from pathlib import Path
+
     import attocode_intel
+
     from eval.quality import context_experiment, experiments
 
     root = tmp_path / "dispatch"

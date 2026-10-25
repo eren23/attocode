@@ -86,7 +86,8 @@ def payload(name, root):
     else:
         # Each scored design and operator is introduced/reviewed before dispatch.
         import importlib
-        module = importlib.import_module('eval.quality.' + name + '_experiment')
+        operator = 'context' if name == 'context_search' else name
+        module = importlib.import_module('eval.quality.' + operator + '_experiment')
         module.run(root)
     write_json(root / 'evidence/controller-complete.json', {
         'complete': True, 'origins': assert_engine(selected)})
