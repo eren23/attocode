@@ -398,3 +398,67 @@ async def test_http_context_vector_is_rejected_instead_of_ignored(project, monke
             json={"query": "cache needle", "context_file": "context.py", "mode": "vector"},
         )
         assert response.status_code == 422, response.text
+
+
+def test_keyword_context_followup_preserves_mode(project):
+    svc, _, _ = project
+    data = svc.semantic_search_data(
+        "cache needle", top_k=1, context_file="context.py", mode="keyword"
+    )
+    assert data["follow_up"]["arguments"]["mode"] == "keyword"
+    next_data = svc.semantic_search_data(**data["follow_up"]["arguments"])
+    assert next_data["follow_up"]["arguments"]["mode"] == "keyword"
+
+
+def test_empty_body_mask_does_not_open_database(project, monkeypatch):
+    _, mgr, _ = project
+
+    def forbidden():
+        raise AssertionError("empty mask must not open database")
+
+    monkeypatch.setattr(mgr, "_open_body_db", forbidden)
+    assert mgr._body_search(["needle"], 5, "", allowed_paths=frozenset()) == []
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+async def test_http_keyword_context_followup_preserves_mode(project, monkeypatch, version):
+    import httpx
+    from attocode_intel.api.auth import verify_auth
+    from attocode_intel.api.providers.local_provider import LocalSearchProvider
+    from attocode_intel.api.routes import search as routes
+    from fastapi import FastAPI
+
+    svc, _, _ = project
+
+    async def service(_project):
+        return svc
+
+    async def provider(_project):
+        return LocalSearchProvider(svc)
+
+    monkeypatch.setattr(routes, "get_service_or_404", service)
+    monkeypatch.setattr(routes, "get_search_provider", provider)
+    app = FastAPI()
+    app.dependency_overrides[verify_auth] = lambda: True
+    app.include_router(routes.router_v1)
+    app.include_router(routes.router_v2)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        url = f"/api/{version}/projects/local/search"
+        response = await client.post(
+            url,
+            json={
+                "query": "cache needle",
+                "top_k": 1,
+                "context_file": "context.py",
+                "mode": "keyword",
+            },
+        )
+        assert response.status_code == 200, response.text
+        data = json.loads(response.json()["result"]) if version == "v1" else response.json()
+        assert data["follow_up"]["arguments"]["mode"] == "keyword"
+        continued = await client.post(url, json=data["follow_up"]["arguments"])
+        assert continued.status_code == 200, continued.text
+        next_data = json.loads(continued.json()["result"]) if version == "v1" else continued.json()
+        assert next_data["follow_up"]["arguments"]["mode"] == "keyword"

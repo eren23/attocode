@@ -81,6 +81,23 @@ def run(root):
             and "200 == 422" in "".join(c.find("failure").itertext())
             for c in failures
         )
+    elif design["expected"] == "review_faults":
+        assert (
+            len(cases) == design["expected_cases"] and result.returncode == 1 and len(failures) == 4
+        )
+        names = {c.attrib["name"] for c in failures}
+        assert names == {
+            "test_keyword_context_followup_preserves_mode",
+            "test_empty_body_mask_does_not_open_database",
+            "test_http_keyword_context_followup_preserves_mode[v1]",
+            "test_http_keyword_context_followup_preserves_mode[v2]",
+        }
+        for c in failures:
+            assert (
+                "empty mask must not open database"
+                if "empty_body" in c.attrib["name"]
+                else "KeyError: 'mode'"
+            ) in "".join(c.find("failure").itertext())
     else:
         assert (
             design["expected"] == "all_pass"

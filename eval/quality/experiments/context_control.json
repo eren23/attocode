@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "experiment": "context_control",
-  "expected": "all_pass",
+  "expected": "review_faults",
   "limits": {
     "seconds": 600,
     "disk_bytes": 2147483648,
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "expected_cases": 332,
+  "expected_cases": 336,
   "include_trial_guards": true
 }
