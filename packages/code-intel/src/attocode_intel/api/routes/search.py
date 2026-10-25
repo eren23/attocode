@@ -70,10 +70,16 @@ async def semantic_search_v1(
 ) -> TextResult:
     """Semantic search (vector + keyword RRF)."""
     ensure_branch_supported(branch)
-    svc = await get_service_or_404(project_id)
-    return TextResult(result=svc.semantic_search(
-        query=req.query, top_k=req.top_k, file_filter=req.file_filter,
-    ))
+    from fastapi import HTTPException
+    try:
+        svc = await get_service_or_404(project_id)
+        return TextResult(result=svc.semantic_search(
+            query=req.query, top_k=req.top_k, file_filter=req.file_filter,
+            **({"context_file": req.context_file} if req.context_file else {}),
+        ))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
 
 
 @router_v1.post("/index", response_model=IndexStatusResponse)
@@ -152,7 +158,10 @@ async def semantic_search_v2(
         provider = await get_search_provider(project_id)
         return await provider.semantic_search(
             query=req.query, top_k=req.top_k, file_filter=req.file_filter, branch=branch,
+            **({"context_file": req.context_file} if req.context_file else {}),
         )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     except (RuntimeError, ImportError) as exc:
         logger.warning("Search unavailable for project %s: %s", project_id, exc)
         raise HTTPException(

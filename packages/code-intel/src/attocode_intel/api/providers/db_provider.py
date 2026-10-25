@@ -558,9 +558,12 @@ class DbSearchProvider:
         self._project_id = project_id
 
     async def semantic_search(
-        self, query: str, top_k: int, file_filter: str, branch: str,
+        self, query: str, top_k: int, file_filter: str, branch: str, context_file: str = "",
     ) -> SearchResultsResponse:
         """Run pgvector cosine similarity search."""
+        if context_file:
+            from fastapi import HTTPException
+            raise HTTPException(422, "context_file search is supported only in local workspaces")
         import uuid as _uuid
 
         from attocode_intel._internal.integrations.context.embeddings import (

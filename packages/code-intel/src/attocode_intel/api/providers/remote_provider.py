@@ -274,7 +274,10 @@ class RemoteTextService:
         file_filter: str = "",
         branch: str = "",
         mode: str = "auto",
+        context_file: str = "",
     ) -> str:
+        if context_file:
+            raise ValueError("context_file search is supported only in local workspaces")
         payload = self._post_json(
             f"/api/v1/projects/{self._repo_id}/search",
             json={
@@ -695,7 +698,10 @@ class RemoteSearchProvider:
     def __init__(self, client: RemoteClient) -> None:
         self._client = client
 
-    async def semantic_search(self, query: str, top_k: int, file_filter: str, branch: str) -> dict:
+    async def semantic_search(self, query: str, top_k: int, file_filter: str, branch: str, context_file: str = "") -> dict:
+        if context_file:
+            from fastapi import HTTPException
+            raise HTTPException(422, "context_file search is supported only in local workspaces")
         payload: dict[str, Any] = {"query": query, "top_k": top_k, "file_filter": file_filter}
         return await self._client.post(
             f"/api/v2/projects/{self._client.repo_id}/search",

@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
-from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
 from attocode_intel.service import CodeIntelService
 
 

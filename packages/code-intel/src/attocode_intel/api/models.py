@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 T = TypeVar("T")
 
@@ -137,6 +137,7 @@ class SemanticSearchRequest(BaseModel):
     query: str
     top_k: int = 10
     file_filter: str = ""
+    context_file: str = ""
 
 
 class FastSearchRequest(BaseModel):
@@ -372,17 +373,31 @@ class FileAnalysisResponse(BaseModel):
     chunks: list[CodeChunkItem] = []
 
 
-class SearchResultItem(BaseModel):
+class _ContextSearchResponse(BaseModel):
+    @model_serializer(mode="wrap")
+    def omit_unused_context_fields(self, handler):
+        data = handler(self)
+        for field in ("context", "context_reason", "end_line", "follow_up"):
+            if field in data and getattr(self, field, None) is None:
+                data.pop(field)
+        return data
+
+
+class SearchResultItem(_ContextSearchResponse):
     file_path: str = ""
     score: float = 0.0
     snippet: str = ""
     line: int | None = None
+    end_line: int | None = None
+    context_reason: dict | None = None
 
 
-class SearchResultsResponse(BaseModel):
+class SearchResultsResponse(_ContextSearchResponse):
     query: str
     results: list[SearchResultItem]
     total: int
+    context: dict | None = None
+    follow_up: dict | None = None
     # Server-side search responses expose the same ``pin_id`` /
     # ``manifest_hash`` pair that local ``_stamp_pin`` emits in the MCP
     # tool footer. Clients round-trip them via ``pin_resolve``. Both

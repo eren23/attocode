@@ -1,7 +1,11 @@
 """Temporary causal controls: expected feature absence is retained as successful data."""
 from __future__ import annotations
-import json, subprocess, sys, xml.etree.ElementTree as ET
-from pathlib import Path
+
+import json
+import subprocess
+import sys
+import xml.etree.ElementTree as ET
+
 from eval.quality.runner import REPO, write_json
 
 
@@ -12,7 +16,8 @@ def run(root):
         '--confcutdir=packages/code-intel/tests', 'packages/code-intel/tests/test_context_search.py',
         '-p', 'eval.quality.experiment_origin', '-q', '--basetemp='+str(root/'work/pytest'),
         '-o', 'cache_dir='+str(root/'work/cache'), '--junitxml='+str(xml)], cwd=REPO)
-    tree=ET.fromstring(xml.read_bytes());cases=list(tree.iter('testcase'))
+    tree=ET.fromstring(xml.read_bytes())
+    cases=list(tree.iter('testcase'))
     assert cases and not list(tree.iter('error'))
     failures=[c for c in cases if c.find('failure') is not None]
     if design['expected']=='feature_absent':

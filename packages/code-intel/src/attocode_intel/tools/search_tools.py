@@ -147,6 +147,7 @@ def semantic_search(
     file_filter: str = "",
     branch: str = "",
     mode: str = "auto",
+    context_file: str = "",
 ) -> str:
     """Search the code by meaning with a natural-language query. Returns files, functions and classes, best first.
 
@@ -155,6 +156,7 @@ def semantic_search(
         file_filter: Optional glob, for example "*.py".
         branch: Remote service only. Local search reads the working tree.
         mode: "auto" (default), "keyword", or "vector" (waits for embeddings).
+        context_file: Optional workspace-relative file; local lexical search prioritizes its direct imports/importers.
     """
     return _get_service().semantic_search(
         query=query,
@@ -162,6 +164,7 @@ def semantic_search(
         file_filter=file_filter,
         branch=branch,
         mode=mode,
+        **({"context_file": context_file} if context_file else {}),
     )
 
 

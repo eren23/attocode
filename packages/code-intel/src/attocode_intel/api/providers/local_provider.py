@@ -193,11 +193,12 @@ class LocalSearchProvider:
         self._svc = svc
 
     async def semantic_search(
-        self, query: str, top_k: int, file_filter: str, branch: str,
+        self, query: str, top_k: int, file_filter: str, branch: str, context_file: str = "",
     ) -> SearchResultsResponse:
         ensure_branch_supported(branch)
         data = self._svc.semantic_search_data(
             query=query, top_k=top_k, file_filter=file_filter,
+            **({"context_file": context_file} if context_file else {}),
         )
         # Codex M4 (round 3): produce a pin compatible with the stdio
         # MCP's ``_stamp_pin`` footer so local-mode HTTP clients see the
@@ -229,7 +230,10 @@ class LocalSearchProvider:
             pass
         return SearchResultsResponse(
             query=data["query"],
-            results=[SearchResultItem(**r) for r in data["results"]],
+            results=[SearchResultItem(**r) if context_file else SearchResultItem(
+                **{k: v for k, v in r.items() if k not in {"end_line", "context_reason"}})
+                for r in data["results"]],
+            **({"context": data["ranking"]["context"], "follow_up": data.get("follow_up")} if context_file else {}),
             total=data["total"],
             pin_id=pin_id,
             manifest_hash=manifest_hash,
