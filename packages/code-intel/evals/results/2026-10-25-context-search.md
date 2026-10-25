@@ -70,7 +70,7 @@ visible quotes, graph observations, resource limits and cleanup.
 The excerpt losses affect Requests `development-requests-test-1` and Express
 `development-express-test-2` at depth 24, budget 2,000 in every round. The ordinary
 Requests differences affect that same setting/question. Original raw comparison
-shows only the final snippet shortening from `tly throw an InvalidHeader error if multiple`
+shows one returned snippet shortening from `tly throw an InvalidHeader error if multiple`
 (with newline) to `w an InvalidHeader err`. Role workspaces have different-length
 physical paths and normalization occurs after budget rendering. This does **not**
 independently attribute the difference to a ranking regression. The frozen control

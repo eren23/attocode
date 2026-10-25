@@ -291,7 +291,7 @@
       "max_tokens": 2000,
       "file_filter": ""
     },
-    "difference": "Only final returned snippet differs in compared semantic data: baseline tly throw an InvalidHeader error if multiple newline; candidate_plain w an InvalidHeader err.",
+    "difference": "One returned snippet differs in compared semantic data: baseline tly throw an InvalidHeader error if multiple newline; candidate_plain w an InvalidHeader err.",
     "qualification": "Role workspaces have different-length physical paths; normalization occurs after rendering/budget trimming. No independent attribution of this snippet difference to product ranking. Frozen control gate remains failed without waiver."
   },
   "limitations": [
