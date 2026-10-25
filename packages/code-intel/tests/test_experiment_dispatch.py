@@ -97,7 +97,12 @@ def test_unregistered_conventional_module_never_runs(operator_case):
     "def run(root, *, required):\n    (root / 'body-ran').touch()\n",
     "async def run(root):\n    (root / 'body-ran').touch()\n",
     "class Runner:\n    async def __call__(self, root):\n        (root / 'body-ran').touch()\nrun = Runner()\n",
-], ids=["missing", "noncallable", "no-root", "extra-required", "keyword-required", "async", "async-callable"])
+    "def run(root):\n    (root / 'body-ran').touch()\n    yield None\n",
+    "class Runner:\n    def __call__(self, root):\n        (root / 'body-ran').touch()\n        yield None\nrun = Runner()\n",
+    "async def run(root):\n    (root / 'body-ran').touch()\n    yield None\n",
+    "class Runner:\n    async def __call__(self, root):\n        (root / 'body-ran').touch()\n        yield None\nrun = Runner()\n",
+], ids=["missing", "noncallable", "no-root", "extra-required", "keyword-required", "async", "async-callable",
+        "generator", "generator-callable", "async-generator", "async-generator-callable"])
 def test_invalid_entrypoint_rejected_before_body(operator_case, source):
     name, root, _ = operator_case(source)
     rejection(name, root)
