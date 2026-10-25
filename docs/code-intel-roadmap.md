@@ -1,6 +1,6 @@
 # Code Intelligence Roadmap
 
-## Current priorities — 2026-10-24
+## Current priorities — 2026-10-25
 
 This checkout targets `attocode-code-intel` **0.1.18**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
@@ -12,6 +12,7 @@ an unchecked feature shipped when its old target version was reached.
 
 | Priority | Action | Completion evidence / limits |
 | --- | --- | --- |
+| Optional local file context | Development rejects candidate; validation unissued | The [1,080-page comparison](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-context-search.md) gains one distinct visible file in one repository per round (required two in two), loses excerpts and changes three ordinary-control snippets. Latency passes. Preserve the original zero-query import abort and explicitly approved corrected launch; remove the candidate and temporary wiring. All product/tests/harness/version remain published 0.1.18 exact. |
 | 0.1.18 recovery readiness | Publish ready after a completed fallback rebuild | [Online causal controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-recovery-readiness.md) reproduce complete fallback reconstruction stuck in skeleton phase. Publish ready after existing work only at full actual parse/reference counts. Nine new regressions and 313 online controls pass; incomplete recovery, minimal initialization, native limits and cache/source policy remain guarded. |
 | Single final repair index | Completed trial rejects candidate | The [matched trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-single-rebuild.md) completes 14 fresh processes with equal data/routes and full 4,980-file readiness. Median restart 28.62→26.72s (ratio 0.933, required ≤.90); all rounds faster: true; cold ratio 1.012 (required ≤1.05). The rejected candidate reduced redundant old-index construction; final product source is restored to baseline; existing validation, LSP and cache bounds remain. |
 | Unprofiled startup stages | Attribution followed by the single-index comparison above | The [unchanged-engine diagnostic](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-24-unprofiled-stages.md) completes cold/reference/restart with equal navigation data. Restart initialization is 14.27s: index load 3.75s, then repair 6.48s including 1.07s encoding. Source creates intermediate stored records and navigation objects, then rebuilds the index during repair. The resulting candidate is rejected in the comparison above; the diagnostic alone establishes no speed benefit. Parsing and all source/parser/schema/navigation/repair guards remain. Instrumentation is retired. |
