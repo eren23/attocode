@@ -46,7 +46,7 @@ def run(root):
     assert len({(c.attrib["classname"], c.attrib["name"]) for c in cases}) == len(cases)
     expected = set(design["expected_failures"])
     assert {c.attrib["name"] for c in failures} == expected
-    assert all("ocamlcaptureer binding guard:" in "".join(c.find("failure").itertext()) for c in failures)
+    assert all("OCaml capture:" in "".join(c.find("failure").itertext()) for c in failures)
     assert result.returncode == (1 if expected else 0)
     write_json(
         root / "evidence/ocamlcapture-control-verdict.json",

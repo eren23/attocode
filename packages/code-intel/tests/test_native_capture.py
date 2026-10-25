@@ -179,6 +179,9 @@ def test_sink_fault_never_replaces_native_outcome(fixture_case, monkeypatch, fau
     assert trace.summary()["capture_errors"] > 0
     with pytest.raises(ValueError):
         trace.require_complete()
+    from eval.quality.native_capture import read_capture
+    with pytest.raises(ValueError):
+        read_capture(path, root, spec, trace.summary())
 
 
 @pytest.mark.parametrize("budget", [8192, 16384])
@@ -237,7 +240,7 @@ with NativeCapture(Path(sys.argv[1]),Path(sys.argv[2]),json.loads(sys.argv[3])).
     assert any(r.get("native", {}).get("error", {}).get("message") == "abrupt native trigger" for r in data if r.get("native", {}).get("error"))
     from eval.quality.native_capture import read_capture
     with pytest.raises(ValueError):
-        read_capture(path, root, spec)
+        read_capture(path, root, spec, {"status": "incomplete"})
 
 
 def test_existing_capture_is_never_overwritten(fixture_case):
@@ -335,7 +338,8 @@ def test_raw_native_capture_admission_checks_source_lifecycle_and_clocks(fixture
     root, spec, path = fixture_case
     native = Native("ValueError")
     monkeypatch.setattr(ts_parser, "_get_parser", lambda language: native)
-    with capture_type()(path, root, spec).capture():
+    trace = capture_type()(path, root, spec)
+    with trace.capture():
         parse(native)
     from eval.quality.native_capture import read_capture
     data = rows(path)
@@ -355,11 +359,11 @@ def test_raw_native_capture_admission_checks_source_lifecycle_and_clocks(fixture
             row["index"] = number
     path.write_text("".join(json.dumps(r) + "\n" for r in data))
     if damage is None:
-        result = read_capture(path, root, spec)
+        result = read_capture(path, root, spec, trace.summary())
         assert result["status"] == "complete" and result["parse_calls"] == result["native_failures"] == 1
     else:
         with pytest.raises(ValueError):
-            read_capture(path, root, spec)
+            read_capture(path, root, spec, trace.summary())
 
 
 @pytest.mark.parametrize("damage", [None, "missing", "footer", "source", "worker-failure"])
@@ -390,8 +394,9 @@ async def test_parent_admission_requires_complete_native_artifact(fixture_case, 
     journal = Journal(evidence / "journal", 2**20)
     journal.response({"event": "origin_start"}, {"pid": os.getpid(), "origins": assert_engine(selected)})
     journal.response({"event": "source_before"}, {"sha256": digest(source_manifest(root))})
+    trace = cls(path, root, spec)
     try:
-        with cls(path, root, spec).capture():
+        with trace.capture():
             checks = await corpus.evaluate(root, spec, observations=[], journal=journal)
             if damage == "worker-failure":
                 raise RuntimeError("worker failed after checks")
@@ -399,7 +404,8 @@ async def test_parent_admission_requires_complete_native_artifact(fixture_case, 
         assert damage == "worker-failure" and str(error) == "worker failed after checks"
     journal.response({"event": "source_after"}, {"sha256": digest(source_manifest(root))})
     journal.response({"event": "origin_end"}, {"pid": os.getpid(), "origins": assert_engine(selected)})
-    summary = {"checks": checks, "retrieval": [], "tree": "fixture-tree", "fixture_ref": ref}
+    summary = {"checks": checks, "retrieval": [], "tree": "fixture-tree", "fixture_ref": ref,
+               "native_capture": trace.summary()}
     if damage == "missing":
         path.unlink()
     elif damage in {"footer", "source"}:
