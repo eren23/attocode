@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "experiment": "context_control",
+  "expected": "feature_absent",
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  }
+}
