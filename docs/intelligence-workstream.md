@@ -14,6 +14,15 @@ source/cache guards and dependencies remain unchanged. Publication requires a fr
 preflight, normal CI, actual PyPI clean-install/0.1.18-upgrade verification and all
 18 release jobs. Publication does not upgrade a global tool or restart an MCP host.
 
+**Routine compatibility with native capture, 2026-10-28:** [one unchanged-engine run](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-28-native-compatibility.md)
+completes same-run 373 Linux controls and all 36 packs/288 checks/144 existing
+operational anchors. OCaml capture retains 1047 native calls,
+0 failures and a complete 1000162-byte trace with no loss.
+The original payload and preflight ZIPs, executed source and independent raw/source/
+Git/origin/lifecycle/resource/cleanup admissions are archived. Historical causes
+remain unproven; consumed questions provide no fresh relevance evidence. Runtime,
+harness, tests, dependencies and version019 remain unchanged; no release follows.
+
 **Routine OCaml native evidence, 2026-10-25:** [bounded capture and its original proof](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-ocaml-native-capture.md)
 retain native outcomes before fallback/reset in opt-in fixture workers, including
 generic parsers and sequential thread handoffs. All 373 controls pass; keep 42 new
