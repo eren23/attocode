@@ -1,0 +1,294 @@
+{
+  "status": "complete",
+  "scope": "ONE unchanged-engine routine full compatibility run with maintained OCaml capture; operational consumed anchors only",
+  "run": 40750355272,
+  "source_commit": "5d34e37c114ba2f05d76b91905086b310e6aab18",
+  "source_tree": "27ad76209a104a56461a0d001349394a0f330343",
+  "version": "0.1.19",
+  "new_publication": false,
+  "product_files_unchanged": 349,
+  "harness_tests_workflows_dependencies_unchanged": true,
+  "same_run_platform": {
+    "controls": 373,
+    "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+    "seconds": 27.950553861999992,
+    "cleanup_verified": true
+  },
+  "full_matrix": {
+    "packs": 36,
+    "outcomes": {
+      "failed": 0,
+      "incomplete": 0,
+      "limited": 124,
+      "passed": 157,
+      "unsupported": 7
+    },
+    "retrieval": {
+      "labeled_hit_at_24": 128,
+      "labeled_hit_at_5": 98,
+      "missing_questions": [],
+      "observed_questions": 144,
+      "scope": "Non-exhaustive development labels; missing questions are not zero-hit observations"
+    },
+    "raw_responses": 521,
+    "worker_origins": 36,
+    "controller_origins": true,
+    "fixtures": {
+      "Nim": {
+        "entries": 174,
+        "bytes": 3734355,
+        "sha256": "5673c6dc0810637926d8ac6717710f156cf42442c391cc06157dff8c1f467624"
+      },
+      "SwiftFormat": {
+        "entries": 670,
+        "bytes": 6922357,
+        "sha256": "8bbba63836edd600decc4caa1c4685a986701a08d5e980ea67f87628669cedfe"
+      },
+      "acme-sh": {
+        "entries": 275,
+        "bytes": 1709337,
+        "sha256": "1a716a7ae679a01477a1a4849c423425dd04aba711316485073cf1776bc3d634"
+      },
+      "aspnetcore": {
+        "entries": 1223,
+        "bytes": 9184144,
+        "sha256": "306d2ea19fced5b99e443a11676cca64d00498ca8289329dae3ea8465f4b210c"
+      },
+      "cats-effect": {
+        "entries": 559,
+        "bytes": 2709789,
+        "sha256": "1a1fd5654b9a97a18292c963e1a4dd79555eae09618c2100411240351a383e44"
+      },
+      "cockroach": {
+        "entries": 9758,
+        "bytes": 133715342,
+        "sha256": "27f8d2b43dee9a28bace9f276e5b996f39e5cc614fbf72c17b9e34d8017114ae"
+      },
+      "crystal": {
+        "entries": 2639,
+        "bytes": 18623480,
+        "sha256": "2c27ead50729c18e6303030e048d2123c76b0095455a8c1a3e4a3db6d60fddcc"
+      },
+      "dart-sdk": {
+        "entries": 1647,
+        "bytes": 29392260,
+        "sha256": "55cd0b474f7f003436d0b649d6913b2b0b99d2b11eb7198b2d85a84be31f7ccd"
+      },
+      "deno": {
+        "entries": 68,
+        "bytes": 726161,
+        "sha256": "d4b9b3081406d643e5c655fad8c95235496dd6a83c02a7d81cefaa128599c389"
+      },
+      "express": {
+        "entries": 211,
+        "bytes": 706550,
+        "sha256": "b7b17c2b6f6e7284bdaf992b0548d26e19b2efb958a0d7025f49c16b08577f0f"
+      },
+      "fastapi": {
+        "entries": 2679,
+        "bytes": 15525416,
+        "sha256": "40d3c9d371c173a7b35b7a39568c3cfac52f576b6f7b4adcba3da68176308be7"
+      },
+      "framework": {
+        "entries": 3074,
+        "bytes": 16753756,
+        "sha256": "a34cd05175a44d3446e2010d6afae4680ea986fa2f9b0e136246edb3bfbd6624"
+      },
+      "frontend": {
+        "entries": 93,
+        "bytes": 682378,
+        "sha256": "16eb4e5698d09dfee1ffc7bf0905e298f53b6b508b1a02bf88a0efcd4b9d7432"
+      },
+      "fsharp": {
+        "entries": 440,
+        "bytes": 22039084,
+        "sha256": "d8a0c2a2220571bd397442dad4f380c8f574ee830b819d54f52fa7d0e4af3988"
+      },
+      "ggplot2": {
+        "entries": 759,
+        "bytes": 5563282,
+        "sha256": "3454f060a9535421016b14832ce35c03088f2860774b7d8c189a69c12e301ffd"
+      },
+      "gh-cli": {
+        "entries": 1094,
+        "bytes": 7259088,
+        "sha256": "eda51e426112b728af4b07615406978d042c876835caa03de4997258548caebf"
+      },
+      "gson": {
+        "entries": 264,
+        "bytes": 1486203,
+        "sha256": "03a0c877b581c1b84a2161335ce2cdebc8c04c4414cdd35c421c7284eeba035c"
+      },
+      "iTerm2": {
+        "entries": 2457,
+        "bytes": 23797645,
+        "sha256": "df43cc79c0a2850b4a592684430779c1f5c22be9b769db9eebdd04949426e7e8"
+      },
+      "julia": {
+        "entries": 198,
+        "bytes": 4256607,
+        "sha256": "3e95832853d25854513ebde1a9cc604f20b32336650e927fdca39d03e78520fc"
+      },
+      "luarocks": {
+        "entries": 472,
+        "bytes": 2196468,
+        "sha256": "51fe25958d1a9781c74637968dda9bf6b10c111dd204d5095a990d1676175b16"
+      },
+      "ocaml": {
+        "entries": 274,
+        "bytes": 4302004,
+        "sha256": "e62e7311ee54f9838407784cefbe4a62a7d4b48e062c88df7adb223a34f1fbb5"
+      },
+      "okhttp": {
+        "entries": 781,
+        "bytes": 6514724,
+        "sha256": "7e328ba60911c96fe84db173bb9041d1681b4da20e1caafe03cb85c7b387ae28"
+      },
+      "otp": {
+        "entries": 1468,
+        "bytes": 17115424,
+        "sha256": "c586ebff36617a9e571197f40b7a08686a511e078d06842568189c798afbd754"
+      },
+      "pandas": {
+        "entries": 2481,
+        "bytes": 40681377,
+        "sha256": "6c1bc0f3d2ce5dad8fb4cf4b072c709df09127dab951cb8c370f7192521171ad"
+      },
+      "perl5": {
+        "entries": 288,
+        "bytes": 8877951,
+        "sha256": "5f575457275c28ffcf9bb3b09db3a71bc103b772fffb239968a4f4067c9865c8"
+      },
+      "phoenix": {
+        "entries": 451,
+        "bytes": 3255395,
+        "sha256": "d9564dd11e8e3530ff14df6cdaf301a0a082a59a99cd4f67fb0792902be86346"
+      },
+      "postgrest": {
+        "entries": 347,
+        "bytes": 2787764,
+        "sha256": "af6327a15a59480e4b06a1dcdf05743e34392e4f3148c59e9f4b82e4ded8c3fc"
+      },
+      "prisma": {
+        "entries": 4432,
+        "bytes": 9459775,
+        "sha256": "247a3c603c7f8acb2f29f58f86a6c63b326a5c56b90a4acc832bbc9c14c6dbfb"
+      },
+      "rails": {
+        "entries": 4804,
+        "bytes": 24138774,
+        "sha256": "50e2440e3d43ac84f5792d96da1128ef0f4d130d9febf22f235d374185fc759c"
+      },
+      "redis": {
+        "entries": 1742,
+        "bytes": 19438272,
+        "sha256": "f5a227f41bd2863eacfb1ff2c4caa91a71f066ba2684a8c11a0960ea75e56974"
+      },
+      "requests": {
+        "entries": 112,
+        "bytes": 610106,
+        "sha256": "16a0c6b415b96d14fd447d89c0ba259486b2968e1c3a8cb9a85e0fe648bf6432"
+      },
+      "ring": {
+        "entries": 113,
+        "bytes": 363497,
+        "sha256": "c4cc524d63c8eae9e879bd753e8903e45fd1fdafdc8bfdcfe371373bddf700ba"
+      },
+      "ripgrep": {
+        "entries": 215,
+        "bytes": 3094276,
+        "sha256": "6f2b2a5979969dca72479f99d363a9cd75456719e619ef491d4414773e971143"
+      },
+      "spdlog": {
+        "entries": 175,
+        "bytes": 1199158,
+        "sha256": "3d85cb1fc89d0450db24983c073c34de26378d97b8350d545542f7ece2e41f88"
+      },
+      "starship": {
+        "entries": 765,
+        "bytes": 10571988,
+        "sha256": "48e8145b0c18340ba6de5720bde6cbecade178bd866f14298537a3381925c8c8"
+      },
+      "zls": {
+        "entries": 128,
+        "bytes": 2484105,
+        "sha256": "1971bbdbca7589fa99331582b33201d8c4344b68b3a5b8cd10fb236fc4396281"
+      }
+    },
+    "cleanup_verified": true
+  },
+  "native_captures": {
+    "ocaml": {
+      "status": "passed",
+      "parse_calls": 1047,
+      "native_failures": 0,
+      "selected_source_parses": 5,
+      "parser_generation_thread_pairs": 3,
+      "threads": 1,
+      "worker_pid": 4186,
+      "trace_sha256": "706739f24fd3df8a0fa9b8f46b8a83f92b307c1c345ad2d0d57d88d010bb66fe",
+      "trace_bytes": 1000162,
+      "source_origin_clock_lifecycle_verified": true
+    }
+  },
+  "aggregate_seconds": 820.9957579019999,
+  "limits": {
+    "disk_bytes": 2147483648,
+    "evidence_bytes": 67108864,
+    "rss_bytes": 2147483648,
+    "seconds": 1200
+  },
+  "supervision": {
+    "cleanup_errors": [],
+    "cleanup_verified": true,
+    "command": [
+      "/home/runner/work/attocode/attocode/.venv/bin/python",
+      "-m",
+      "eval.quality.experiments",
+      "broad",
+      "--root",
+      "/home/runner/work/_temp/intelligence-experiment-40750355272-1",
+      "--payload"
+    ],
+    "exit_code": 0,
+    "log_truncated": false,
+    "monitoring": {
+      "controller_cpu_seconds": 163.96008230200005,
+      "samples": 3281,
+      "wall_seconds": 163.99163141800165
+    },
+    "peak_disk_bytes": 1305215130,
+    "peak_evidence_bytes": 50528256,
+    "peak_rss_bytes": 1144848384,
+    "seconds": 820.645,
+    "status": "passed",
+    "wall_seconds": 820.645
+  },
+  "original_zips": [
+    {
+      "kind": "payload",
+      "sha256": "cc228c8885ce84646b5aefca37e4ae85eb014fddab81d5c043cdf537023e3dfe"
+    },
+    {
+      "kind": "same-run-platform",
+      "sha256": "4f4c2ed98015b16a4ca7429604044c4d7944880f4c9d72adbdec746556f2082d"
+    }
+  ],
+  "archive": {
+    "path": "packages/code-intel/evals/results/2026-10-28-native-compatibility.tar.gz",
+    "sha256": "29df04710e651aaf180d7c01534e47757708aa6853df5cbf2b3bad75d9b437d8",
+    "bytes": 8403209,
+    "members": 702,
+    "original_zips": 2,
+    "source_commits": 2,
+    "both_equal_engine_files": 349,
+    "all_original_and_Git_source_bytes_replayed": true
+  },
+  "observations": [
+    "Every observed native parse returns a tree. The run does not reproduce the historical intermittent failure or establish its absence.",
+    "All144questions are already consumed operational anchors; no fresh/blind relevance or model-benefit claim.",
+    "Instrumented native spans include observer work and are not uninstrumented performance comparisons.",
+    "Native binary/cache hashes are not retained by this unchanged routine workflow; loaded native execution is source-bound online observation, not host binary replay.",
+    "Historical OCaml/Rust causes remain unproven; prior relevance and restart candidates remain rejected."
+  ]
+}
