@@ -37,7 +37,6 @@ jobs:
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
       QUALITY_TEST_SYSTEMD: '1'
-      QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/scale-control-grammars
       SCALE_CONTROL_EVIDENCE: results/workers
     steps:
       - uses: actions/checkout@v4
@@ -51,10 +50,12 @@ jobs:
           import os
           from pathlib import Path
           import tree_sitter_language_pack as pack
-          Path(os.environ['QUALITY_GRAMMAR_CACHE']).mkdir()
-          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          cache=Path(os.environ['RUNNER_TEMP'])/'scale-control-grammars'
+          cache.mkdir()
+          pack.configure(cache_dir=str(cache))
           pack.download(['toml'])
           assert 'toml' in pack.downloaded_languages()
+          with open(os.environ['GITHUB_ENV'],'a') as env: env.write('QUALITY_GRAMMAR_CACHE='+str(cache)+'\n')
           PY
       - name: Run exact scale controls and existing cloud controls
         id: gate
