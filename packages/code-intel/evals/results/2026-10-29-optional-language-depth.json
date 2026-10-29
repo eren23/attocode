@@ -1,0 +1,71 @@
+{
+  "status": "qualified-unreleased",
+  "baseline": "d83e109898d5e86a215852683ff202bdfa432ae0",
+  "qualified_head": "e95709e0d4380d097939b6077bf5f6133d0732f9",
+  "qualified_run": 40845549531,
+  "version": "0.1.19",
+  "new_publication": false,
+  "runtime_files_changed": [
+    "_internal/integrations/context/codebase_context.py",
+    "_internal/integrations/context/syntax_evidence.py",
+    "_internal/integrations/context/ts_parser.py"
+  ],
+  "original_first_baseline": "retained-incomplete; incorrect mandatory Crystal hypothesis; 383cases378passed5causalfailed, no errors/skips",
+  "focused_red": {
+    "run": 40844593593,
+    "cases": 386,
+    "passed": 378,
+    "failed": 8,
+    "new_native_cases": 11
+  },
+  "green": {
+    "run": 40845549531,
+    "cases": 394,
+    "passed": 394,
+    "skipped": 0,
+    "errors": 0,
+    "maintained_controls": 375,
+    "dedicated_depth_controls": 19,
+    "authored_workflows": {
+      "ocaml": 8,
+      "perl": 8,
+      "crystal": 8
+    }
+  },
+  "old_questions_and_fixtures_unchanged": true,
+  "crystal_source": "50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49",
+  "crystal_availability": "Explicit source-built individual grammar in disposable online setup; package/navigation never downloads",
+  "source_byte_qualified": {
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/ts_parser.py": "975fdec229e88f131708b7b0470a5995ab93a42ceb82d315828a82a4fa03e0a0",
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/syntax_evidence.py": "58e6e2372336d97edfa8a43fccf31edfe7351fcb2cabd0d96d8150940ad5ced7",
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/codebase_context.py": "38d7ac340dc4b0b16cb2d8469bd0f7eba89812b2a26467bae2464170b52b6817"
+  },
+  "limits": {
+    "seconds": 600,
+    "rss_bytes": 2147483648,
+    "disk_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "archive": {
+    "path": "packages/code-intel/evals/results/2026-10-29-optional-language-depth.tar.gz",
+    "sha256": "29165adfdf854ffaf614f88a99b71078f02db9c72a4dddd846e048672d5fa777",
+    "bytes": 2605048,
+    "members": 718,
+    "original_zips": 3,
+    "source_commits": 4,
+    "engine_files_each": 349,
+    "runtime_changed": [
+      "_internal/integrations/context/codebase_context.py",
+      "_internal/integrations/context/syntax_evidence.py",
+      "_internal/integrations/context/ts_parser.py"
+    ],
+    "all_original_and_Git_source_bytes_replayed": true
+  },
+  "scope_limits": [
+    "Static syntax candidates, conventional workspace import candidates and heuristic test discovery; no compiler-resolved relationship claim.",
+    "OCaml static open paths, Perl namespace imports, Crystal explicit relative require paths only; dynamic/external/glob/ambiguous imports remain unknown.",
+    "Original Perl source under dist remains excluded by default; configured scenario is separate and no originalpack was changed.",
+    "No new full36 run, relevance, performance, historical nativecause or modelbenefit claim from this qualification.",
+    "Grammar before/after byte hashes are source-bound online observations; native binaries were not independently replayed locally."
+  ]
+}

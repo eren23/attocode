@@ -15,7 +15,7 @@
     "evidence_bytes": 67108864
   },
   "per_pack_seconds": 180,
-  "optional_grammars": "Explicit bounded online setup; copy acquired bytes into managed cache before payload use; no acquisition during navigation",
+  "optional_grammars": "Explicit bounded online setup; pinned standalone Crystal source build plus cached language-pack grammars; no acquisition during navigation",
   "pass_rule": "All 36 packs complete, 288 checks only passed/limited/unsupported, all144 existing retrieval observations, exact source/origin/raw request admission, limits and owned cleanup; no performance or relevance improvement claim",
   "runtime_target": {
     "runner": "ubuntu-latest",
@@ -25,7 +25,7 @@
   },
   "platform_preflight": {
     "experiment": "preflight",
-    "required_controls": 373,
+    "required_controls": 375,
     "step_minutes": 5,
     "artifact": "experiment-broad-platform-preflight-RUN-ATTEMPT",
     "same_head_required": true
