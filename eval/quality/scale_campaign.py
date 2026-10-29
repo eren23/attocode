@@ -30,6 +30,7 @@ from eval.quality.cloud import (
 )
 from eval.quality.scale_evidence import (
     PRODUCT,
+    dispatch_selection,
     export_evidence,
     require,
     unique_dispatch,
@@ -39,6 +40,7 @@ from eval.quality.scale_evidence import (
 
 
 def preflight(data, output, api):
+    dispatch_selection(data, os.environ.get("INPUT_BATCH"), os.environ.get("INPUT_RESERVATION"))
     require(
         os.environ.get("GITHUB_REF") == "refs/heads/main", "paid controller requires published main"
     )

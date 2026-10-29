@@ -191,6 +191,11 @@ async def run_phase(spec, phase, output):
         result["checks"]["search"] = True
         result["search_ready_seconds"] = time.monotonic() - started
         result["complete"] = True
+        if phase == "crash":
+            result["closed"] = False
+            write(output / "result.json", result)
+            while True:
+                await asyncio.sleep(1)
     except BaseException as error:
         result["error"] = {"type": type(error).__name__, "message": str(error)[:4000]}
         raise
@@ -630,9 +635,6 @@ def main():
         spec = json.loads(args.case.read_text())
         output = args.root / "evidence" / spec["id"] / args.phase
         asyncio.run(run_phase(spec, args.phase, output))
-        if args.phase == "crash":
-            while True:
-                time.sleep(1)
     elif args.case:
         run_case(json.loads(args.case.read_text()), args.root)
     else:

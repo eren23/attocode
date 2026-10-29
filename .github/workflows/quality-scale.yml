@@ -44,7 +44,7 @@ jobs:
       - run: uv sync --locked --package attocode-code-intel --extra dev
       - name: Run exact scale controls and existing cloud controls
         env:
-          STAGE: ${{ inputs.stage || 'boundary-red' }}
+          STAGE: ${{ inputs.stage || 'green' }}
         run: |
           mkdir results
           uv run --no-sync python - <<'PY'
@@ -99,6 +99,7 @@ jobs:
           QUALITY_SCALE_RESERVATION: ${{ secrets.QUALITY_SCALE_RESERVATION }}
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.QUALITY_DIGITALOCEAN_TOKEN }}
           INPUT_RESERVATION: ${{ inputs.reservation_id }}
+          INPUT_BATCH: ${{ inputs.batch }}
         run: uv run --no-sync python -m eval.quality.scale_campaign --out '${{ runner.temp }}/scale-results'
       - name: Remove controller private keys before upload
         if: always()

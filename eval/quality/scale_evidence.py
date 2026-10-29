@@ -84,6 +84,13 @@ def unique_dispatch(runs, own_run, title, attempt):
     require(len(matching) == 1 and matching[0]["id"] == own_run, "duplicate or unobserved dispatch")
 
 
+def dispatch_selection(data, batch, reservation_id):
+    require(
+        data["batch"] == batch and data["reservation_id"] == reservation_id,
+        "dispatch batch/reservation differs from secret",
+    )
+
+
 def admit_coverage(coverage, minimum):
     require(coverage.get("phase") == "ready", "hydration is not ready")
     require(coverage.get("discovery_truncated") is False, "discovery coverage unknown or truncated")
@@ -133,7 +140,7 @@ def attest_wheel(wheel, installed, expected_sha):
 
 
 def export_evidence(root, destination):
-    """Keep full records; split oversized JSONL only at complete line boundaries."""
+    """Keep complete JSON bytes; split JSONL at complete line boundaries."""
     root = Path(root)
     entries, total, splits = [], 0, {}
     for path in sorted(root.rglob("*")):
@@ -147,6 +154,13 @@ def export_evidence(root, destination):
             raw = json.dumps(json.loads(raw), separators=(",", ":"), ensure_ascii=False).encode()
         name = path.relative_to(root).as_posix()
         chunks = [raw]
+        if len(raw) > 2 * 2**20 and path.suffix == ".json":
+            chunks = [raw[i : i + 2 * 2**20] for i in range(0, len(raw), 2 * 2**20)]
+            splits[name] = {
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "bytes": len(raw),
+                "parts": len(chunks),
+            }
         if len(raw) > 2 * 2**20 and path.suffix == ".jsonl":
             chunks, current = [], bytearray()
             for line in raw.splitlines(keepends=True):
@@ -166,15 +180,31 @@ def export_evidence(root, destination):
             total += len(chunk)
             require(len(chunk) <= 2 * 2**20 and total <= 20 * 2**20, "report export exceeds limit")
             entries.append((name if len(chunks) == 1 else name + f".part{i:03d}", chunk))
+    manifest = json.dumps(
+        {
+            "schema": 1,
+            "splits": splits,
+            "entries": {
+                name: {"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+                for name, raw in entries
+            },
+        },
+        separators=(",", ":"),
+    ).encode()
+    require(
+        len(manifest) <= 2 * 2**20 and total + len(manifest) <= 20 * 2**20,
+        "export manifest exceeds remaining allowance",
+    )
+    require(not (root / "export-manifest.json").exists(), "reserved export manifest collision")
     with tarfile.open(destination, "w:gz") as archive:
-        for name, chunk in entries:
+        for name, chunk in entries + [("export-manifest.json", manifest)]:
             info = tarfile.TarInfo(name)
             info.size = len(chunk)
             info.mode = 0o600
             archive.addfile(info, io.BytesIO(chunk))
     return {
         "files": len(entries),
-        "bytes": total,
+        "bytes": total + len(manifest),
         "splits": splits,
         "archive_sha256": hashlib.sha256(Path(destination).read_bytes()).hexdigest(),
     }
