@@ -55,6 +55,7 @@ def reservation():
         "monthly_reserved_limit_usd": 26,
         "max_batches": 3,
         "product_commit": "b4ce67f3584aad4c2e324029fac8d9b9fcdc98a8",
+        "bootstrap_key_id": 77,
     }
 
 
@@ -602,28 +603,6 @@ def test_full_campaign_history_includes_older_reservation():
         module("evidence").unique_dispatch(rows, 120, own["display_title"], 1)
 
 
-def test_uncertain_ssh_key_creation_is_not_verified(tmp_path, monkeypatch):
-    m = module("campaign")
-    api = FakeAPI()
-    original = api.request
-
-    def request(method, path, data=None):
-        if path == "/account/keys" and method == "POST":
-            original(method, path, data)
-            raise TimeoutError("key response lost")
-        if path.startswith("/account/keys") and method == "GET":
-            return {"ssh_keys": []}
-        return original(method, path, data)
-
-    api.request = request
-    monkeypatch.setattr(m, "preflight", lambda *args: {"hourly_usd": 0.16667})
-    monkeypatch.setattr(m, "make_key", lambda path: "ssh-ed25519 fixture")
-    result = m.run(
-        reservation(), tmp_path, api=api, execute=lambda *args: {"complete": True}, month="2026-10"
-    )
-    assert result["key_cleanup_verified"] is False, "uncertain key falsely verified"
-
-
 def test_sigterm_runs_provider_cleanup(tmp_path):
     import signal
     import subprocess
@@ -668,32 +647,6 @@ m.run(reservation(),out,api=api,execute=execute,month='2026-10')
         process.wait(timeout=10)
 
 
-def test_independent_reaper_removes_only_expired_owned_keys():
-    callback = feature("cleanup", "reap_keys")
-
-    class API:
-        def __init__(self):
-            self.rows = [
-                {"id": 1, "name": "user-existing-key"},
-                {"id": 2, "name": "attocode-scale-key-1000-0123456789abcdef"},
-                {"id": 3, "name": "attocode-scale-key-9000-0123456789abcdef"},
-            ]
-
-        def request(self, method, path, data=None):
-            if method == "GET":
-                if path.startswith("/account/keys/"):
-                    import urllib.error
-
-                    raise urllib.error.HTTPError(path, 404, "absent", {}, None)
-                return {"ssh_keys": self.rows}
-            assert method == "DELETE" and path == "/account/keys/2"
-            self.rows = [r for r in self.rows if r["id"] != 2]
-
-    api = API()
-    result = callback(api, now=10000, apply=True)
-    assert result["cleanup_verified"] and [r["id"] for r in api.rows] == [1, 3]
-
-
 def test_failure_export_preserves_original_failure_receipt(tmp_path):
     callback = feature("evidence", "safe_export")
     root = tmp_path / "raw"
@@ -730,3 +683,61 @@ def test_native_specs_resolve_all_four_maintained_ids():
 def test_soak_uses_full_remaining_case_budget():
     callback = feature("workload", "remaining_soak")
     assert callback(3300, 200) == 3040 and callback(90, 50) == 0
+
+
+def test_vm_key_bootstrap_preserves_existing_authorization(tmp_path):
+    import stat
+    import subprocess
+
+    m = module("campaign")
+    callback = feature("campaign", "bootstrap_user_data")
+    key = tmp_path / "ephemeral"
+    public = m.make_key(key)
+    authorized = tmp_path / "ssh" / "authorized_keys"
+    authorized.parent.mkdir()
+    authorized.write_text("existing-line")
+    userdata = callback(public, authorized_keys=authorized)
+    assert userdata.startswith("#cloud-config\n")
+    data = json.loads(userdata.split("\n", 1)[1])
+    assert data["ssh_pwauth"] is False
+    for command in data["runcmd"]:
+        subprocess.run(command, check=True, timeout=5)
+    assert authorized.read_text() == "existing-line\n" + public + "\n"
+    assert stat.S_IMODE(authorized.stat().st_mode) == 0o600
+    assert stat.S_IMODE(authorized.parent.stat().st_mode) == 0o700
+
+
+@pytest.mark.parametrize("public", ["invalid-key", "ssh-ed25519 value\nsecond-line"])
+def test_vm_key_bootstrap_rejects_invalid_public_input(public):
+    callback = feature("campaign", "bootstrap_user_data")
+    with pytest.raises(ValueError):
+        callback(public)
+
+
+def test_controller_uses_readonly_registered_bootstrap_metadata(tmp_path, monkeypatch):
+    m = module("campaign")
+
+    class ReadOnlyKeys(FakeAPI):
+        def __init__(self):
+            super().__init__()
+            self.keys = [{"id": 77, "name": "existing-bootstrap"}]
+            self.body = None
+
+        def request(self, method, path, data=None):
+            if path.startswith("/account/keys") and method != "GET":
+                import urllib.error
+
+                raise urllib.error.HTTPError(path, 403, "read-only keys", {}, None)
+            if path == "/droplets" and method == "POST":
+                self.body = data
+            return super().request(method, path, data)
+
+    api = ReadOnlyKeys()
+    monkeypatch.setattr(m, "preflight", lambda *args: {"hourly_usd": 0.16667})
+    monkeypatch.setattr(m, "make_key", lambda path: "ssh-ed25519 fixture")
+    result = m.run(
+        reservation(), tmp_path, api=api, execute=lambda *args: {"complete": True}, month="2026-10"
+    )
+    assert result["complete"] and result["cleanup_verified"] and result["key_cleanup_verified"]
+    assert api.keys == [{"id": 77, "name": "existing-bootstrap"}]
+    assert api.body["ssh_keys"] == [77] and "ssh-ed25519 fixture" in api.body["user_data"]
