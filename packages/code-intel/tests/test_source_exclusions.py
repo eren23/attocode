@@ -27,3 +27,33 @@ async def test_build_named_source_needs_explicit_inclusion_and_refreshes(tmp_pat
         assert 'source_entry' not in await names()
     finally:
         await gateway.close()
+
+
+async def test_scoped_dist_source_inclusion_preserves_generated_exclusions(tmp_path, monkeypatch):
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    sources = {
+        'dist/Carp/lib/source.py': 'def scoped_entry(): return 1\n',
+        'dist/Other/generated.py': 'def unrelated_generated(): return 0\n',
+        'build/generated.py': 'def build_generated(): return 0\n',
+    }
+    for name, text in sources.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    gateway = OperationGateway(str(tmp_path), 'daily', watch=False)
+    async def visible():
+        response = await gateway.execute('search_symbols', {'name': 'scoped_entry'})
+        assert not response.isError
+        return {r['name'] for r in response.structuredContent['data']}
+    try:
+        assert 'scoped_entry' not in await visible()
+        (tmp_path / '.gitignore').write_text('!dist/\ndist/*\n!dist/Carp/\n')
+        assert 'scoped_entry' in await visible()
+        expected = {'dist/Carp/lib/source.py'}
+        assert {f.relative_path for f in CodebaseContextManager(str(tmp_path)).discover_files()} == expected
+        assert set(FreshnessTracker(str(tmp_path)).scan_manifest()) == expected
+        (tmp_path / '.gitignore').write_text('dist/\n')
+        assert 'scoped_entry' not in await visible()
+        assert FreshnessTracker(str(tmp_path)).scan_manifest() == {}
+    finally:
+        await gateway.close()

@@ -1,0 +1,27 @@
+{
+  "experiment": "languagedepth",
+  "limits": {
+    "seconds": 600,
+    "rss_bytes": 2147483648,
+    "disk_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "stage": "baseline",
+  "expected_cases": 383,
+  "new_native_cases": [
+    "test_perl_scoped_project_inclusion_refresh_and_restart",
+    "test_crystal_method_definition_native_range",
+    "test_crystal_class_definition_native_range",
+    "test_ocaml_native_call_candidates_exclude_decoys",
+    "test_perl_native_call_candidates_exclude_decoys",
+    "test_ocaml_cross_file_workflow",
+    "test_perl_cross_file_workflow",
+    "test_crystal_cross_file_workflow"
+  ],
+  "mandatory_failures": [
+    "test_crystal_method_definition_native_range",
+    "test_crystal_class_definition_native_range"
+  ],
+  "crystal_source": "50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49",
+  "scope": "Causal native behavior controls and existing scoped inclusion; no scored/relevance/performance study"
+}
