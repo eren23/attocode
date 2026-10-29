@@ -120,7 +120,7 @@ def admit_qualification(receipt, run, jobs, tree, head):
         "qualification source/attempt mismatch",
     )
     require(
-        receipt.get("new") == 66
+        receipt.get("new") == 68
         and receipt.get("old") == 58
         and receipt.get("failed") == receipt.get("errors") == 0,
         "qualification controls incomplete",
@@ -129,7 +129,7 @@ def admit_qualification(receipt, run, jobs, tree, head):
     require(
         all(
             by_name.get(name, {}).get("conclusion") == "success"
-            for name in ("controls", "worker-smoke")
+            for name in ("controls", "worker-smoke", "access-check")
         ),
         "actual worker smoke or controls missing/skipped",
     )

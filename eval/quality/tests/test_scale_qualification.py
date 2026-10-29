@@ -382,7 +382,7 @@ def test_dispatch_batch_and_reservation_binding():
 def qualification():
     receipt = {
         "stage": "green",
-        "new": 66,
+        "new": 68,
         "old": 58,
         "failed": 0,
         "errors": 0,
@@ -402,6 +402,7 @@ def qualification():
     }
     jobs = [
         {"name": "controls", "conclusion": "success"},
+        {"name": "access-check", "conclusion": "success"},
         {"name": "worker-smoke", "conclusion": "success"},
     ]
     m = module("evidence")
@@ -425,7 +426,7 @@ def test_incomplete_qualification_rejected(damage):
     if damage == "tree":
         receipt["tree"] = "0" * 40
     if damage == "count":
-        receipt["new"] = 65
+        receipt["new"] = 67
     if damage == "attempt":
         run["run_attempt"] = 2
     if damage == "worker":

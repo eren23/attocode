@@ -30,7 +30,6 @@ from eval.quality.cloud import (
     wait_for_bootstrap,
     worker_command,
 )
-from eval.quality.scale_cleanup import cleanup_key, key_name, key_rows
 from eval.quality.scale_evidence import (
     PRODUCT,
     admit_qualification,
@@ -142,24 +141,12 @@ def preflight(data, output, api):
         runs, int(os.environ["GITHUB_RUN_ID"]), title, int(os.environ["GITHUB_RUN_ATTEMPT"])
     )
     verify_reaper()
-    cleanup_runs = github("actions/workflows/quality-cleanup.yml/runs?per_page=5")["workflow_runs"]
-    key_heartbeat = False
-    for run in cleanup_runs:
-        updated = dt.datetime.fromisoformat(run["updated_at"].replace("Z", "+00:00")).timestamp()
-        if (
-            run.get("conclusion") == "success"
-            and run.get("head_branch") == "main"
-            and time.time() - updated < 7200
-        ):
-            cleanup_jobs = github(f"actions/runs/{run['id']}/jobs?per_page=100")["jobs"]
-            if any(
-                s["name"] == "Reap expired scale SSH registrations" and s["conclusion"] == "success"
-                for j in cleanup_jobs
-                for s in j.get("steps", [])
-            ):
-                key_heartbeat = True
-                break
-    require(key_heartbeat, "independent SSH registration cleanup heartbeat missing")
+    require(
+        type(data.get("bootstrap_key_id")) is int and data["bootstrap_key_id"] > 0,
+        "registered bootstrap key metadata missing",
+    )
+    bootstrap = api.request("GET", "/account/keys/" + str(data["bootstrap_key_id"]))["ssh_key"]
+    require(bootstrap["id"] == data["bootstrap_key_id"], "registered bootstrap key differs")
     require(not tagged(api), "another quality worker exists")
     price = quote(api)
     require(
@@ -210,7 +197,13 @@ def make_key(path):
 
 
 def keys(api):
-    return key_rows(api)
+    result = []
+    for page in range(1, 101):
+        data = api.request("GET", f"/account/keys?per_page=200&page={page}")
+        result.extend(data["ssh_keys"])
+        if not data.get("links", {}).get("pages", {}).get("next"):
+            return result
+    raise ValueError("SSH key pagination limit")
 
 
 def run(data, output, *, api=None, execute=None, month=None):
@@ -232,12 +225,11 @@ def run(data, output, *, api=None, execute=None, month=None):
         "product_commit": PRODUCT,
         "github_run_id": os.environ.get("GITHUB_RUN_ID"),
         "head": os.environ.get("GITHUB_SHA"),
+        "bootstrap_key_id": data["bootstrap_key_id"],
+        "new_key_registration": False,
     }
     key = output.parent / ("scale-private-" + row["id"])
-    name = "attocode-scale-" + row["id"]
-    registration = key_name(row)
-    result["key_name"] = registration
-    started_create = key_attempted = False
+    started_create = False
     previous_signal = None
     if threading.current_thread() is threading.main_thread():
         previous_signal = signal.getsignal(signal.SIGTERM)
@@ -251,41 +243,35 @@ def run(data, output, *, api=None, execute=None, month=None):
         price = preflight(data, output, api)
         result["hourly_usd"] = price["hourly_usd"]
         public = make_key(key)
+        user_data = bootstrap_user_data(public)
         write(
-            output / "key-attempt.json",
+            output / "key-bootstrap.json",
             {
-                "name": registration,
+                "registered_key_id": data["bootstrap_key_id"],
                 "public_key_sha256": hashlib.sha256(public.encode()).hexdigest(),
+                "user_data": user_data,
                 "reservation_id": row["id"],
             },
-        )
-        key_attempted = True
-        registered = api.request(
-            "POST", "/account/keys", {"name": registration, "public_key": public}
-        )["ssh_key"]
-        result["key_id"] = registered["id"]
-        require(
-            registered["name"] == registration,
-            "ephemeral key identity differs from create response",
         )
         started_create = True
         created = api.request(
             "POST",
             "/droplets",
             {
-                "name": name,
+                "name": "attocode-scale-" + row["id"],
                 "region": "ams3",
                 "size": "s-8vcpu-16gb-amd",
                 "image": "ubuntu-24-04-x64",
                 "backups": False,
-                "ssh_keys": [result["key_id"]],
+                "ssh_keys": [data["bootstrap_key_id"]],
+                "user_data": user_data,
                 "tags": [TAG, row["run_tag"]],
             },
         )
         result["node_id"] = created["droplet"]["id"]
         write(
             output / "resource.json",
-            {k: result[k] for k in ("reservation_id", "run_tag", "node_id", "key_id")},
+            {k: result[k] for k in ("reservation_id", "run_tag", "node_id", "bootstrap_key_id")},
         )
         result["execution"] = (execute or execute_remote)(api, result, output, key)
         result["complete"] = result["execution"].get("complete") is True
@@ -297,26 +283,24 @@ def run(data, output, *, api=None, execute=None, month=None):
         cleanup_errors = []
         try:
             nodes = tagged(api, row["run_tag"])
-            ids = {n["id"] for n in nodes}
+            identities = {node["id"] for node in nodes}
             if result.get("node_id"):
-                ids.add(result["node_id"])
-            for node_id in ids:
-                require(destroy(api, node_id), "worker deletion unverified")
-            # An uncertain create response requires the independent TTL reconciliation;
-            # do not claim absence from one empty eventually-consistent listing.
+                identities.add(result["node_id"])
+            for identity in identities:
+                require(destroy(api, identity), "worker deletion unverified")
             result["cleanup_verified"] = not tagged(api, row["run_tag"]) and (
-                not started_create or bool(ids)
+                not started_create or bool(identities)
             )
         except BaseException as error:
             cleanup_errors.append("worker:" + type(error).__name__)
-        try:
-            result["key_cleanup_verified"] = cleanup_key(
-                api, registration, known_id=result.get("key_id"), attempted=key_attempted
-            )
-        except BaseException as error:
-            cleanup_errors.append("key:" + type(error).__name__)
         for path in (key, Path(str(key) + ".pub")):
-            path.unlink(missing_ok=True)
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as error:
+                cleanup_errors.append("keyfile:" + type(error).__name__)
+        result["key_cleanup_verified"] = (
+            result["cleanup_verified"] and not key.exists() and not Path(str(key) + ".pub").exists()
+        )
         result.update(finished_unix=time.time(), cleanup_errors=cleanup_errors)
         result["estimated_usd"] = round(
             max(
@@ -557,6 +541,39 @@ def main():
         )
     )
     return 0 if result["complete"] else 1
+
+
+def bootstrap_user_data(public, *, authorized_keys="/root/.ssh/authorized_keys"):
+    require(
+        isinstance(public, str)
+        and public.startswith("ssh-ed25519 ")
+        and len(public) <= 1024
+        and "\n" not in public
+        and "\r" not in public,
+        "invalid ephemeral public key",
+    )
+    path = Path(authorized_keys)
+    command = (
+        "set -eu; printf '\\n%s\\n' "
+        + shlex.quote(public)
+        + " >> "
+        + shlex.quote(str(path))
+        + "; chmod 600 "
+        + shlex.quote(str(path))
+    )
+    return (
+        "#cloud-config\n"
+        + json.dumps(
+            {
+                "ssh_pwauth": False,
+                "runcmd": [
+                    ["/usr/bin/install", "-d", "-m", "700", str(path.parent)],
+                    ["/bin/sh", "-c", command],
+                ],
+            }
+        )
+        + "\n"
+    )
 
 
 if __name__ == "__main__":

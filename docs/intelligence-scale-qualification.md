@@ -62,7 +62,8 @@ real small gateway operations, lossless export, exact dispatch binding and a
 live crash checkpoint. A separate hosted smoke runs the exact worker installer
 and the published wheel through small synthetic, pinned-source and native/
 lifecycle cases without cloud credentials. `access-check` verifies the live
-quote and ephemeral SSH-key permissions without creating a worker.
+quote, the existing bootstrap registration and creation-request validation
+without provisioning a worker. No account SSH-key writes are required.
 
 The approved October campaign adds precisely three $1 reservations to the
 original 23 rows: $26 monthly allowance, one worker at a time. This is admission
@@ -75,12 +76,17 @@ The existing generic controller's $23 ceiling is unchanged.
 
 The controller requires the frozen qualified source tree, manual main dispatch,
 first run attempt, exact batch/reservation identity and no earlier dispatch with
-the same run title. It creates a unique SSH key registration and worker, keeps
-provider credentials on GHA, and verifies deletion of both in `finally`. A lost
+the same run title. It generates a fresh job-only SSH key and creates one worker using an existing
+bootstrap registration. Cloud-init appends only the disposable public key inside
+that worker; the existing private key is never read or transferred. Provider
+credentials remain on GHA. `finally` verifies worker deletion and removes the
+disposable controller key files, also removing the in-VM authorization. A lost
 create response is reconciled by its unique tag; unresolved state blocks another
 launch. Workers also carry `attocode-quality-v1` for the existing independent
 two-hour TTL reaper. Provider/GitHub outages can delay deletion. Temporary
-reservation secrets and controller key files are removed after the campaign.
+reservation/bootstrap-metadata secrets and controller key files are removed after
+the campaign. The existing registered bootstrap key and provider secret remain
+unchanged.
 
 Results are operational/source-based qualification, not held-out relevance,
 exhaustive semantic correctness, agent benefit, a speedup or proof of historical
