@@ -26,6 +26,11 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.20 improves native OCaml/Perl call candidates and conservative workspace
+import candidates for OCaml, Perl and Crystal. Physical paths and ambiguity remain
+guarded; native limits, ranking and dependencies are unchanged. Optional grammars
+must be explicitly available before analysis; navigation never downloads them.
+
 Version 0.1.19 restores source text into spare space after fitting a complete
 compact search page. Existing hits, visible text, source lines and continuations
 remain protected within the same response budget; ranking and retrieval are unchanged.

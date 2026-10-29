@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      INTELLIGENCE_BASELINE: '0.1.18'
+      INTELLIGENCE_BASELINE: '0.1.19'
     steps:
       - uses: actions/checkout@v4
         with:

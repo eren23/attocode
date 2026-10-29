@@ -4,15 +4,15 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** this checkout targets `attocode-code-intel` 0.1.19 (2026-10-25).
-See the [0.1.19 release notes](intelligence-0.1.19.md). Published 0.1.18 remains immutable.
-The patch restores source snippets into spare serialized space after fitting the
-complete compact search page. Existing hits, visible text, source coordinates,
-provenance and continuations stay protected. Ranking, retrieval, native limits,
-source/cache guards and dependencies remain unchanged. Publication requires a fresh
-36-pack compatibility run on this exact versioned tree, same-head 305-case Linux
-preflight, normal CI, actual PyPI clean-install/0.1.18-upgrade verification and all
-18 release jobs. Publication does not upgrade a global tool or restart an MCP host.
+**Current version:** this checkout targets `attocode-code-intel` 0.1.20 (2026-10-29).
+See the [0.1.20 release notes](intelligence-0.1.20.md). Published 0.1.19 remains immutable.
+The patch improves OCaml/Perl native calls, OCaml open paths and conservative
+OCaml/Perl/Crystal workspace import candidates. Physical paths and ambiguity remain
+guarded. Dependencies, parser limits, source/cache policy, exclusions, ranking and
+retrieval are unchanged. Publication requires one full versioned 36-pack matrix,
+same-head 384-case Linux controls, all 17 normal checks, the 75-case acquired grammar
+artifact and actual PyPI clean-install/0.1.19-upgrade verification through all 18
+tag jobs. Publication does not upgrade global tools or restart an MCP host.
 
 **Development optional-language depth, 2026-10-29:** [causal native controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
 restore omitted OCaml/Perl call candidates, OCaml native `open_module` extraction
@@ -22,8 +22,8 @@ Perl's existing scoped inclusion and Crystal's configured definitions were alrea
 working; the initial incorrect Crystal hypothesis/control remains recorded as a
 failed first attempt. Explicit source-built Crystal acquisition and all22 depth
 cases are maintained in optional CI; default384/required397 inventories remain
-mandatory. Product corrections are unreleased, with version019/dependencies and
-published assets unchanged. Syntax candidates and heuristic tests make no compiler,
+mandatory. The corrections are included in the 0.1.20 target; dependencies and published
+0.1.19 assets remain unchanged until the separate release gates complete. Syntax candidates and heuristic tests make no compiler,
 historical nativecause, relevance or performance claim.
 
 **Routine compatibility with native capture, 2026-10-28:** [one unchanged-engine run](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-28-native-compatibility.md)
