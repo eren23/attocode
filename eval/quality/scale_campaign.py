@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import io
 import ipaddress
 import json
 import os
@@ -14,6 +15,7 @@ import tarfile
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 
 from eval.quality.cloud import (
@@ -30,6 +32,7 @@ from eval.quality.cloud import (
 )
 from eval.quality.scale_evidence import (
     PRODUCT,
+    admit_qualification,
     dispatch_selection,
     export_evidence,
     require,
@@ -57,6 +60,60 @@ def preflight(data, output, api):
         subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
         == data["qualified_tree"],
         "qualified harness tree changed",
+    )
+
+    def github(path):
+        return json.loads(
+            subprocess.check_output(["gh", "api", "repos/eren23/attocode/" + path], timeout=45)
+        )
+
+    qualified_run = int(data["qualified_control_run"])
+    qualified = github(f"actions/runs/{qualified_run}")
+    jobs = github(f"actions/runs/{qualified_run}/jobs?per_page=100")["jobs"]
+    artifacts = github(f"actions/runs/{qualified_run}/artifacts?per_page=100")["artifacts"]
+    artifacts = [
+        a
+        for a in artifacts
+        if a["name"] == f"scale-controls-{qualified_run}-1" and not a["expired"]
+    ]
+    require(len(artifacts) == 1, "qualified original control artifact missing")
+    artifact = artifacts[0]
+    require(
+        artifact["workflow_run"]["id"] == qualified_run
+        and artifact["workflow_run"]["head_sha"] == data["qualified_control_head"]
+        and artifact["size_in_bytes"] <= 64 * 2**20,
+        "qualification artifact binding mismatch",
+    )
+    raw = subprocess.check_output(
+        ["gh", "api", f"repos/eren23/attocode/actions/artifacts/{artifact['id']}/zip"], timeout=90
+    )
+    require(
+        artifact["digest"] == "sha256:" + hashlib.sha256(raw).hexdigest(),
+        "qualification archive digest changed",
+    )
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        require(
+            sum(m.file_size for m in archive.infolist()) <= 64 * 2**20,
+            "qualification artifact expansion overflow",
+        )
+        receipt = json.loads(archive.read("control-receipt.json"))
+    require(
+        github("git/commits/" + data["qualified_control_head"])["tree"]["sha"]
+        == data["qualified_tree"],
+        "actual qualified Git tree differs",
+    )
+    admit_qualification(
+        receipt, qualified, jobs, data["qualified_tree"], data["qualified_control_head"]
+    )
+    write(
+        output / "qualification.json",
+        {
+            "run": qualified_run,
+            "head": data["qualified_control_head"],
+            "tree": data["qualified_tree"],
+            "receipt": receipt,
+            "artifact_sha256": hashlib.sha256(raw).hexdigest(),
+        },
     )
     subprocess.run(["git", "fetch", "--no-tags", "--depth", "1", "origin", PRODUCT], check=True)
     subprocess.run(

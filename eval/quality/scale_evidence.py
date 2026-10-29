@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import tarfile
 import zipfile
 from pathlib import Path
@@ -65,6 +66,16 @@ def validate_reservation(data, batch, *, month):
     )
     row = ledger[-1]
     require(
+        isinstance(row.get("id"), str)
+        and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,47}", row["id"]) is not None,
+        "unsafe reservation identity",
+    )
+    require(
+        isinstance(row.get("run_tag"), str)
+        and re.fullmatch(r"quality-scale-[a-z0-9-]{1,48}", row["run_tag"]) is not None,
+        "unsafe worker tag",
+    )
+    require(
         row["id"] == data["reservation_id"]
         and row["month"] == month
         and row.get("cleanup_verified") is False
@@ -88,6 +99,39 @@ def dispatch_selection(data, batch, reservation_id):
     require(
         data["batch"] == batch and data["reservation_id"] == reservation_id,
         "dispatch batch/reservation differs from secret",
+    )
+
+
+def admit_qualification(receipt, run, jobs, tree, head):
+    require(
+        run.get("status") == "completed"
+        and run.get("conclusion") == "success"
+        and run.get("run_attempt") == 1
+        and run.get("event") in {"push", "workflow_dispatch"}
+        and run.get("path") == ".github/workflows/quality-scale.yml",
+        "qualification workflow incomplete",
+    )
+    require(
+        receipt.get("stage") == "green"
+        and receipt.get("head") == run.get("head_sha") == head
+        and receipt.get("tree") == tree
+        and receipt.get("run_id") == str(run.get("id"))
+        and receipt.get("attempt") == "1",
+        "qualification source/attempt mismatch",
+    )
+    require(
+        receipt.get("new") == 45
+        and receipt.get("old") == 58
+        and receipt.get("failed") == receipt.get("errors") == 0,
+        "qualification controls incomplete",
+    )
+    by_name = {j["name"]: j for j in jobs}
+    require(
+        all(
+            by_name.get(name, {}).get("conclusion") == "success"
+            for name in ("controls", "worker-smoke")
+        ),
+        "actual worker smoke or controls missing/skipped",
     )
 
 
