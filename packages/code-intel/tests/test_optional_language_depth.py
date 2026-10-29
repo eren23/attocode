@@ -166,3 +166,21 @@ def test_optional_static_import_and_resolution(language, path, source, module, t
     actual = resolve_import_targets(language, module, path, {path: path, target: target})
     evidence(language + '-import-targets.json', actual)
     assert actual == [target], 'language coverage: static workspace import not resolved'
+
+
+@pytest.mark.parametrize('language,module,source,index', [
+    ('ocaml', 'Helper', 'pkg/driver.ml', {'helper.ml': 'helper.ml', 'pkg/helper.ml': 'pkg/helper.ml'}),
+    ('perl', 'Lib::Helper', 'driver.pl', {'Lib/Helper.pm': 'Lib/Helper.pm', 'lib/Lib/Helper.pm': 'lib/Lib/Helper.pm'}),
+    ('crystal', 'json', 'driver.cr', {'json.cr': 'json.cr'}),
+    ('crystal', '../../outside', 'src/driver.cr', {'../outside.cr': '../outside.cr'}),
+    ('perl', '$module', 'driver.pl', {'$module.pm': '$module.pm'}),
+    ('ocaml', 'Helper(X)', 'driver.ml', {'helper(X).ml': 'helper(X).ml'}),
+    ('crystal', './parts/*', 'driver.cr', {'parts/a.cr': 'parts/a.cr'}),
+    ('perl', '../../escape.pm', 'driver.pl', {'../../escape.pm': '../../escape.pm'}),
+], ids=['ocaml-ambiguous', 'perl-ambiguous', 'crystal-external', 'crystal-escape',
+        'perl-dynamic', 'ocaml-functor', 'crystal-glob', 'perl-escape'])
+def test_optional_imports_preserve_uncertainty(language, module, source, index):
+    from attocode_intel._internal.integrations.context.codebase_context import (
+        resolve_import_targets,
+    )
+    assert resolve_import_targets(language, module, source, index) == [], 'language coverage: unsupported or ambiguous import claimed a local target'

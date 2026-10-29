@@ -11,6 +11,7 @@ Provides intelligent code understanding through:
 from __future__ import annotations
 
 import os
+import posixpath
 import time
 from dataclasses import dataclass, field
 from functools import partial
@@ -523,6 +524,8 @@ def resolve_import_targets(language, module, source_file, file_index, *, include
         return file_index.namespace_candidates(language, module)
     if language == "go" and hasattr(file_index, "go_candidates"):
         return file_index.go_candidates(module, source_file)
+    if language in {"ocaml", "perl", "crystal"}:
+        return _optional_import_targets(language, module, source_file, file_index)
     resolver = IMPORT_RESOLVERS.get(language)
     target = resolver(module, source_file, file_index) if resolver else None
     return [target] if target else []
@@ -664,7 +667,51 @@ def _resolve_namespace_import(language, module, source_file, file_index):
     return candidates[0] if len(candidates) == 1 else None
 
 
+def _optional_import_targets(language, module, source_file, file_index):
+    """Conservative static workspace candidates, never compiler/load-path proof."""
+    if not isinstance(module, str) or not module or any(c in module for c in "\x00\r\n\\"):
+        return []
+    source = source_file.replace("\\", "/")
+    if source.startswith("/") or posixpath.normpath(source).startswith("../"):
+        return []
+    directory = posixpath.dirname(source)
+    groups = []
+    if language == "ocaml":
+        parts = module.split(".")
+        if not all(p.isidentifier() and p[0].isupper() for p in parts):
+            return []
+        name = parts[0]
+        stems = {name, name[0].lower() + name[1:]}
+        for root in {"", directory}:
+            for stem in stems:
+                groups.append({posixpath.join(root, stem + suffix) for suffix in (".ml", ".mli")})
+    elif language == "perl":
+        parts = module.split("::")
+        if not all(p.isidentifier() for p in parts):
+            return []
+        name = "/".join(parts) + ".pm"
+        groups = [{name}, {"lib/" + name}]
+    elif language == "crystal":
+        if not module.startswith(("./", "../")) or any(c in module for c in '*?[]#"\'`') or module.endswith('/'):
+            return []
+        name = posixpath.normpath(posixpath.join(directory, module))
+        if name in {".", ".."} or name.startswith(("/", "../")):
+            return []
+        groups = [{name if name.endswith(".cr") else name + ".cr"}]
+    # A module can have an implementation and interface, but competing source
+    # roots or filename casings are ambiguous. Do not pick the first match.
+    matches = {tuple(sorted({file_index[key] for key in group if key in file_index})) for group in groups}
+    matches.discard(())
+    return list(next(iter(matches))) if len(matches) == 1 else []
+
+
+def _optional_import_target(language, module, source_file, file_index):
+    targets = _optional_import_targets(language, module, source_file, file_index)
+    return targets[0] if len(targets) == 1 else None
+
+
 IMPORT_RESOLVERS = {
+    **{language: partial(_optional_import_target, language) for language in ("ocaml", "perl", "crystal")},
     "python": _resolve_python_import, "javascript": _resolve_js_import,
     "typescript": _resolve_js_import, "rust": _resolve_rust_import,
     "go": _resolve_go_import, "java": _resolve_java_import,
