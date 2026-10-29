@@ -184,3 +184,29 @@ def test_optional_imports_preserve_uncertainty(language, module, source, index):
         resolve_import_targets,
     )
     assert resolve_import_targets(language, module, source, index) == [], 'language coverage: unsupported or ambiguous import claimed a local target'
+
+
+@pytest.mark.parametrize('language,module,driver,target,valid_driver,valid_target', [
+    ('ocaml', 'Helper', 'driver.ml', 'src/helper.ml', 'src/driver.ml', 'src/helper.ml'),
+    ('perl', 'Lib::Helper', 'driver.pl', 'src/Lib/Helper.pm', 'driver.pl', 'lib/Lib/Helper.pm'),
+    ('crystal', './helper', 'driver.cr', 'src/helper.cr', 'src/driver.cr', 'src/helper.cr'),
+], ids=['ocaml', 'perl', 'crystal'])
+def test_optional_imports_require_physical_paths(tmp_path, language, module, driver, target, valid_driver, valid_target):
+    from types import SimpleNamespace
+
+    from attocode_intel._internal.integrations.context.codebase_context import (
+        _build_file_index,
+        resolve_import_targets,
+    )
+    paths = {'src/pkg/__init__.py', target, driver}
+    def index():
+        for name in paths:
+            file = tmp_path / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.touch()
+        return _build_file_index([SimpleNamespace(relative_path=name) for name in sorted(paths)], str(tmp_path))
+    misleading = index()
+    assert misleading[target.removeprefix('src/')] == target
+    assert resolve_import_targets(language, module, driver, misleading) == [], 'language coverage: Python import alias became a physical optional-language target'
+    paths.update({valid_driver, valid_target})
+    assert resolve_import_targets(language, module, valid_driver, index()) == [valid_target], 'language coverage: canonical physical target lost'

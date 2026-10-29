@@ -113,7 +113,7 @@ Development optional CI also source-builds Crystal's individual Python grammar a
 `50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49`, before any navigation. The downloaded
 language-pack artifact inventory and standalone grammar availability are reported
 separately. Optional navigation never performs that acquisition.
-[The language-depth correction](../packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
+[The language-depth correction](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
 records native OCaml/Perl call evidence, static workspace imports for the three
 languages and the limits of those syntax/heuristic relationships.
 
