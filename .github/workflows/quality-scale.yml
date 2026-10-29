@@ -47,7 +47,7 @@ jobs:
         run: |
           mkdir results
           uv run --no-sync python - <<'PY'
-          import json, os, subprocess, sys, xml.etree.ElementTree as ET
+          import ast, json, os, subprocess, sys, xml.etree.ElementTree as ET
           from pathlib import Path
           command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml', '--confcutdir=packages/code-intel/tests', '-q', '--junitxml=results/controls.xml', 'eval/quality/tests/test_scale_qualification.py', 'packages/code-intel/tests/test_quality_cloud.py']
           with Path('results/controls.log').open('w') as stream:
@@ -56,9 +56,10 @@ jobs:
           rows = root.findall('.//testcase')
           failed = [r for r in rows if r.find('failure') is not None]
           errors = [r for r in rows if r.find('error') is not None]
-          new = [r for r in rows if 'test_scale_qualification' in r.get('classname', '')]
+          functions = {n.name for n in ast.parse(Path('eval/quality/tests/test_scale_qualification.py').read_text()).body if isinstance(n, ast.FunctionDef) and n.name.startswith('test_')}
+          new = [r for r in rows if r.get('name', '').split('[')[0] in functions]
           old = [r for r in rows if r not in new]
-          assert not errors and old and not any(r.find('failure') is not None for r in old)
+          assert len(new) == 32 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
           if os.environ['STAGE'] == 'red':
               assert result.returncode == 1 and len(failed) == len(new) and new
               assert all('scale qualification feature absent' in r.find('failure').get('message', '') for r in failed)
