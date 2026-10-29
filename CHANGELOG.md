@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.20] - 2026-10-29
+
+### Fixed
+
+- Retain native OCaml and Perl call candidates and OCaml static open-module paths.
+  Offer conservative OCaml, Perl and Crystal workspace import candidates while
+  preserving ambiguity, physical source paths and existing parser/source policies.
+
+### Evaluation maintenance
+
+- Verify scoped Perl inclusion and explicitly source-built Crystal grammars in CI.
+  Require exact unskipped optional coverage and reject Python import-root aliases
+  as physical optional-language targets. Preserve the causal failures and 406-case
+  corrected qualification; keep 384 preflight and 397 required regressions.
+
 ## [Intelligence 0.1.19] - 2026-10-25
 
 ### Fixed
