@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -18,15 +19,19 @@ def admit_grammars(inventory):
 
 
 def run(root, output):
+    import importlib.metadata
+
+    import attocode_intel
     import tree_sitter_language_pack as pack
     import yaml
     from attocode_intel._internal.integrations.context import ts_parser
 
     from eval.quality.corpus import evaluate, materialize
     from eval.quality.corpus_capture import journal_events
-    from eval.quality.experiment_evidence import Journal
+    from eval.quality.experiment_evidence import Journal, assert_engine
     from eval.quality.fixture_identity import source_manifest
     from eval.quality.native_capture import NativeCapture, read_capture
+    from eval.quality.native_experiment import distribution_identity
 
     root, output = Path(root), Path(output)
     output.mkdir(parents=True)
@@ -35,10 +40,26 @@ def run(root, output):
         name: ts_parser.is_available(name) for name in ("ocaml", "rust", "perl", "crystal")
     }
     admit_grammars(inventory)
+    crystal = json.loads(
+        importlib.metadata.distribution("tree-sitter-crystal").read_text("direct_url.json")
+    )
+    require(
+        crystal["vcs_info"]["commit_id"] == "50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49",
+        "standalone Crystal grammar revision changed",
+    )
     write(
         output / "grammars.json",
         {
             "available": inventory,
+            "distributions": distribution_identity(
+                (
+                    "tree-sitter",
+                    "tree-sitter-language-pack",
+                    "tree-sitter-rust",
+                    "tree-sitter-crystal",
+                )
+            ),
+            "crystal_source": crystal,
             "cache_files": {
                 p.relative_to(Path(os.environ["QUALITY_GRAMMAR_CACHE"])).as_posix(): hashlib.sha256(
                     p.read_bytes()
@@ -59,6 +80,9 @@ def run(root, output):
         receipt = {}
         materialize(spec, tree, root / "cache" / ("native-" + name), receipt=receipt)
         write(folder / "pinned-source.json", receipt)
+        require(
+            source_manifest(tree) == receipt, "native materialization differs from pinned source"
+        )
         if name == "perl":
             # Explicitly exercise the labeled source under the published ignore contract.
             ignore = tree / ".gitignore"
@@ -67,6 +91,10 @@ def run(root, output):
         before = source_manifest(tree)
         write(folder / "actual-source.json", before)
         journal = Journal(folder / "journal", 4 * 2**20)
+        selected = Path(attocode_intel.__file__).parent
+        journal.response(
+            {"event": "origin_start"}, {"pid": os.getpid(), "origins": assert_engine(selected)}
+        )
         capture = NativeCapture(
             folder / "native-ocaml.jsonl" if name == "ocaml" else None, tree, spec
         )
@@ -96,6 +124,9 @@ def run(root, output):
             report["repositories"].append(row)
             write(folder / "result.json", row)
         finally:
+            journal.response(
+                {"event": "origin_end"}, {"pid": os.getpid(), "origins": assert_engine(selected)}
+            )
             write(output / "result.json", report)
     report["complete"] = len(report["repositories"]) == 4
     write(output / "result.json", report)

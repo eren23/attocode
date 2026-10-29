@@ -268,7 +268,7 @@ Path('/root/published.whl').write_bytes(raw)
 PYWHEEL
 /root/bootstrap/bin/uv pip install --python .venv/bin/python --no-deps --reinstall /root/attocode_code_intel-0.1.20-py3-none-any.whl
 /root/bootstrap/bin/uv pip install --python .venv/bin/python --no-deps 'tree-sitter-crystal @ git+https://github.com/crystal-lang-tools/tree-sitter-crystal@50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49'
-mkdir -p /root/scale/cache/grammars
+mkdir -p /root/scale/cache/grammars /root/scale/tmp
 QUALITY_GRAMMAR_CACHE=/root/scale/cache/grammars .venv/bin/python - <<'PYGRAMMAR'
 import os
 import tree_sitter_language_pack as pack
@@ -375,7 +375,7 @@ def execute_remote(api, result, output, key):
             180,
         )
         command("setup", bounded(SETUP, 600), 620)
-        environment = "ATTOCODE_LOCAL_ONLY=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 QUALITY_ALLOW_DOWNLOADS=1 QUALITY_GRAMMAR_CACHE=/root/scale/cache/grammars PYTHONPATH=/root/job"
+        environment = "ATTOCODE_LOCAL_ONLY=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 QUALITY_ALLOW_DOWNLOADS=1 QUALITY_GRAMMAR_CACHE=/root/scale/cache/grammars QUALITY_SCALE_PUBLISHED=1 TMPDIR=/root/scale/tmp PYTHONPATH=/root/job"
         payload = (
             "cd /root/job; "
             + environment

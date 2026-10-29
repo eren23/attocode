@@ -80,6 +80,8 @@ def test_valid_reserved_row():
         "release",
         "selection",
         "finished",
+        "path",
+        "tag",
     ],
 )
 def test_reservation_rejects_invalid_admission(damage):
@@ -107,6 +109,10 @@ def test_reservation_rejects_invalid_admission(damage):
         data["ledger"][-1]["selection"] = "real"
     if damage == "finished":
         data["ledger"][-1]["cleanup_verified"] = True
+    if damage == "path":
+        data["ledger"][-1]["id"] = data["reservation_id"] = "../escape"
+    if damage == "tag":
+        data["ledger"][-1]["run_tag"] = "quality-scale-../escape"
     with pytest.raises(ValueError):
         module("evidence").validate_reservation(data, "capacity", month="2026-10")
 
@@ -192,6 +198,12 @@ def test_source_generation_has_exact_known_edges(tmp_path):
         "def operation_31(value: int) -> int:\n"
         "    return operation_30(value) + 31\n"
     )
+
+
+def test_eligible_source_count_separates_discovery_from_parsing(tmp_path):
+    (tmp_path / "entry.py").write_text("def entry():\n    return 1\n")
+    (tmp_path / "README.md").write_text("# Source documentation\n")
+    assert [p.name for p in module("workload").eligible_sources(tmp_path)] == ["entry.py"]
 
 
 def test_real_gateway_phase_and_reopen(tmp_path):
@@ -327,6 +339,61 @@ def test_dispatch_batch_and_reservation_binding():
     for batch, identity in [("real", "scale-1"), ("capacity", "scale-2")]:
         with pytest.raises(ValueError):
             m.dispatch_selection(reservation(), batch, identity)
+
+
+def qualification():
+    receipt = {
+        "stage": "green",
+        "new": 45,
+        "old": 58,
+        "failed": 0,
+        "errors": 0,
+        "head": "f" * 40,
+        "tree": "e" * 40,
+        "run_id": "123",
+        "attempt": "1",
+    }
+    run = {
+        "id": 123,
+        "head_sha": "f" * 40,
+        "run_attempt": 1,
+        "event": "push",
+        "path": ".github/workflows/quality-scale.yml",
+        "status": "completed",
+        "conclusion": "success",
+    }
+    jobs = [
+        {"name": "controls", "conclusion": "success"},
+        {"name": "worker-smoke", "conclusion": "success"},
+    ]
+    m = module("evidence")
+    callback = getattr(m, "admit_qualification", None)
+    assert callable(callback), "control qualification binding absent"
+    return callback, receipt, run, jobs
+
+
+def test_qualified_controls_and_worker_smoke_are_required():
+    callback, receipt, run, jobs = qualification()
+    callback(receipt, run, jobs, "e" * 40, "f" * 40)
+
+
+@pytest.mark.parametrize("damage", ["stage", "head", "tree", "count", "attempt", "worker"])
+def test_incomplete_qualification_rejected(damage):
+    callback, receipt, run, jobs = qualification()
+    if damage == "stage":
+        receipt["stage"] = "boundary-red"
+    if damage == "head":
+        receipt["head"] = "0" * 40
+    if damage == "tree":
+        receipt["tree"] = "0" * 40
+    if damage == "count":
+        receipt["new"] = 44
+    if damage == "attempt":
+        run["run_attempt"] = 2
+    if damage == "worker":
+        jobs[-1]["conclusion"] = "skipped"
+    with pytest.raises(ValueError):
+        callback(receipt, run, jobs, "e" * 40, "f" * 40)
 
 
 def test_forced_restart_checkpoint_keeps_gateway_open(tmp_path):

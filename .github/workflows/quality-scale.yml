@@ -16,7 +16,7 @@ on:
         required: true
       stage:
         type: choice
-        options: [green, red, boundary-red]
+        options: [green, red, boundary-red, admission-red]
         default: green
         required: true
 permissions:
@@ -44,7 +44,7 @@ jobs:
       - run: uv sync --locked --package attocode-code-intel --extra dev
       - name: Run exact scale controls and existing cloud controls
         env:
-          STAGE: ${{ inputs.stage || 'green' }}
+          STAGE: ${{ inputs.stage || 'admission-red' }}
         run: |
           mkdir results
           uv run --no-sync python - <<'PY'
@@ -60,12 +60,15 @@ jobs:
           functions = {n.name for n in ast.parse(Path('eval/quality/tests/test_scale_qualification.py').read_text()).body if isinstance(n, ast.FunctionDef) and n.name.startswith('test_')}
           new = [r for r in rows if r.get('name', '').split('[')[0] in functions]
           old = [r for r in rows if r not in new]
-          assert len(new) == 35 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
+          assert len(new) == 45 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
           if os.environ['STAGE'] == 'red':
               assert result.returncode == 1 and len(failed) == len(new) and new
               assert all('scale qualification feature absent' in r.find('failure').get('message', '') for r in failed)
           elif os.environ['STAGE'] == 'boundary-red':
               assert result.returncode == 1 and {r.get('name') for r in failed} == {'test_large_manifest_export_is_lossless', 'test_dispatch_batch_and_reservation_binding', 'test_forced_restart_checkpoint_keeps_gateway_open'}
+          elif os.environ['STAGE'] == 'admission-red':
+              expected = {'test_reservation_rejects_invalid_admission[path]', 'test_reservation_rejects_invalid_admission[tag]', 'test_qualified_controls_and_worker_smoke_are_required'} | {'test_incomplete_qualification_rejected['+x+']' for x in ['stage','head','tree','count','attempt','worker']}
+              assert result.returncode == 1 and {r.get('name') for r in failed} == expected
           else:
               assert result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
@@ -139,13 +142,14 @@ jobs:
       - name: Published wheel actual CLI lifecycle and native smoke
         timeout-minutes: 7
         run: |
-          sudo -n env PYTHONPATH=/root/job QUALITY_ALLOW_DOWNLOADS=1 QUALITY_GRAMMAR_CACHE=/root/scale/cache/grammars ATTOCODE_LOCAL_ONLY=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /root/job/.venv/bin/python - <<'PY'
-          import json,os
+          sudo -n env PYTHONPATH=/root/job QUALITY_ALLOW_DOWNLOADS=1 QUALITY_GRAMMAR_CACHE=/root/scale/cache/grammars QUALITY_SCALE_PUBLISHED=1 TMPDIR=/root/scale/tmp ATTOCODE_LOCAL_ONLY=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /root/job/.venv/bin/python - <<'PY'
+          import os
+          os.chdir('/root/job')
+          import json
           from pathlib import Path
           import attocode_intel,yaml
           from eval.quality.scale_evidence import attest_wheel,WHEEL_SHA,write
           from eval.quality.scale_workload import run_case
-          os.chdir('/root/job')
           root=Path('/root/scale'); (root/'evidence').mkdir(parents=True,exist_ok=True)
           write(root/'evidence/installed.json',attest_wheel('/root/published.whl',Path(attocode_intel.__file__).parent,WHEEL_SHA))
           packs=yaml.safe_load(Path('eval/quality/workflows.yaml').read_text())['repositories']

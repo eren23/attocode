@@ -370,9 +370,11 @@ async def lifecycle(root, output, *, soak_seconds):
 
 def eligible_sources(root):
     from attocode_intel._internal.integrations.context.codebase_context import EXTENSION_LANGUAGES
+    from attocode_intel._internal.integrations.context.ts_parser import supported_languages
     from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
 
     ignore = IgnoreManager(root)
+    supported = {"python", "javascript", "typescript", "shell"} | set(supported_languages())
     return [
         p
         for p in Path(root).rglob("*")
@@ -380,6 +382,8 @@ def eligible_sources(root):
         and not p.is_symlink()
         and not any(s.startswith(".") for s in p.relative_to(root).parts)
         and p.suffix in EXTENSION_LANGUAGES
+        and ("bash" if EXTENSION_LANGUAGES[p.suffix] == "shell" else EXTENSION_LANGUAGES[p.suffix])
+        in supported
         and p.stat().st_size <= 1_000_000
         and not ignore.is_ignored(p.relative_to(root).as_posix())
     ]
@@ -486,7 +490,9 @@ def run_batch(batch, root):
             )
             report["cases"].append({"id": spec["id"], "supervision": row, "result": result})
             write(evidence / "batch-result.json", report)
-            if case_outcome([row]) != "passed" or not result.get("complete"):
+            if (case_outcome([row]) != "passed" or not result.get("complete")) and (
+                batch != "real" or not row.get("cleanup_verified") or row.get("reason")
+            ):
                 break
         report["complete"] = len(report["cases"]) == len(specs) and all(
             r["result"].get("complete") and case_outcome([r["supervision"]]) == "passed"
@@ -520,17 +526,48 @@ def run_case(spec, root):
                 "dependency": f"module_{last - 1}.py",
             }
         else:
+            from unittest.mock import patch
+
+            from eval.quality import corpus
             from eval.quality.corpus import materialize
 
             source = {}
             tree.mkdir(parents=True)
-            materialize(spec["source"], tree, root / "cache" / spec["id"], receipt=source)
+            original_read = corpus.read_tree
+            inventory = {}
+
+            def record_tree(*args, **kwargs):
+                value = original_read(*args, **kwargs)
+                inventory.update(value)
+                return value
+
+            with patch.object(corpus, "read_tree", record_tree):
+                materialize(spec["source"], tree, root / "cache" / spec["id"], receipt=source)
+            require(bool(inventory), "full original Git inventory was not captured")
+            write(output / "git-inventory.json", inventory)
             write(output / "source.json", source)
             content = (tree / spec["source"]["file"]).read_text()
+            require(
+                hashlib.sha256(content.encode()).hexdigest() == spec["source"]["source_sha256"],
+                "pinned selected source differs from maintained label",
+            )
+            parseable = eligible_sources(tree)
+            write(
+                output / "input-policy.json",
+                {
+                    "materialized_entries": len(source),
+                    "parseable_source_files": len(parseable),
+                    "parseable_paths": sorted(p.relative_to(tree).as_posix() for p in parseable),
+                    "full_git_entries": len(inventory["entries"]),
+                    "scope": spec["source"].get("include")
+                    or spec["source"].get("subdir")
+                    or "complete-admissible-Git-tree",
+                },
+            )
             selected = {
                 "id": spec["id"],
                 "root": str(tree),
-                "source_files": len(eligible_sources(tree)),
+                "source_files": len(parseable),
                 "file": spec["source"]["file"],
                 "symbol": spec["source"]["symbol"],
                 "line": content[: content.index(spec["source"]["anchor"])].count("\n") + 1,
@@ -645,15 +682,40 @@ def main():
     parser.add_argument("--case", type=Path)
     parser.add_argument("--phase", choices=["cold", "restart", "crash", "recovery"])
     args = parser.parse_args()
-    if args.phase:
-        spec = json.loads(args.case.read_text())
-        output = args.root / "evidence" / spec["id"] / args.phase
-        asyncio.run(run_phase(spec, args.phase, output))
-    elif args.case:
-        run_case(json.loads(args.case.read_text()), args.root)
-    else:
-        return 0 if run_batch(args.batch, args.root)["complete"] else 1
-    return 0
+    installed = None
+    if os.environ.get("QUALITY_SCALE_PUBLISHED") == "1":
+        import attocode_intel
+
+        from eval.quality.experiment_evidence import assert_engine
+        from eval.quality.scale_evidence import WHEEL_SHA, attest_wheel
+
+        installed = Path(attocode_intel.__file__).parent
+        attested = attest_wheel("/root/published.whl", installed, WHEEL_SHA)
+        require(attested["python_files"] == 272, "published Python inventory changed")
+        write(
+            args.root / "evidence" / f"origin-{os.getpid()}-start.json",
+            {"pid": os.getpid(), "wheel": attested, "origins": assert_engine(installed)},
+        )
+    try:
+        if args.phase:
+            spec = json.loads(args.case.read_text())
+            output = args.root / "evidence" / spec["id"] / args.phase
+            asyncio.run(run_phase(spec, args.phase, output))
+        elif args.case:
+            run_case(json.loads(args.case.read_text()), args.root)
+        else:
+            return 0 if run_batch(args.batch, args.root)["complete"] else 1
+        return 0
+    finally:
+        if installed is not None:
+            write(
+                args.root / "evidence" / f"origin-{os.getpid()}-end.json",
+                {
+                    "pid": os.getpid(),
+                    "origins": assert_engine(installed),
+                    "wheel": attest_wheel("/root/published.whl", installed, WHEEL_SHA),
+                },
+            )
 
 
 if __name__ == "__main__":
