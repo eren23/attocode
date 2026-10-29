@@ -1,0 +1,1042 @@
+{
+  "schema": 1,
+  "campaign": {
+    "status": "complete",
+    "qualification": "incomplete",
+    "paid_runs": {
+      "capacity": 40896522768,
+      "real": 40897997997,
+      "lifecycle": 40902756918
+    },
+    "source_head": "17d7d21437a30d64f668f6ab2411a03eae20dcee",
+    "product_version": "0.1.20",
+    "all_cleanup_verified": true,
+    "original_23_rows_preserved": true,
+    "ledger_rows": 26,
+    "reserved_usd": 26.0,
+    "additional_reserved_usd": 3,
+    "estimated_campaign_compute_usd": 0.244,
+    "owned_workers": [],
+    "temporary_secrets_removed": true,
+    "dedicated_workflow_state": "disabled_manually",
+    "normal_ci_and_reaper_preserved": true,
+    "original_run_attempts": 1,
+    "byte_repair_green": 40913190455,
+    "byte_repair_controls": 130,
+    "original_native_blobs_restored": 177,
+    "fixed_smoke_blobs_verified_without_restoration": 94,
+    "observed_unix": 1793292865.471874
+  },
+  "source": {
+    "product_version": "0.1.20",
+    "product_commit": "b4ce67f3584aad4c2e324029fac8d9b9fcdc98a8",
+    "measured_harness_head": "17d7d21437a30d64f668f6ab2411a03eae20dcee",
+    "wheel_sha256": "caadfebdeb3f25090878e78ea64f1034fc01a6b0edcf48e227bd402647fdc9dd",
+    "product_source_files_unchanged": 349,
+    "installed_python_files_verified": 272
+  },
+  "machine": {
+    "size": "s-8vcpu-16gb-amd",
+    "region": "ams3",
+    "vcpus": 8,
+    "memory_mib": 16384,
+    "shared_cpu": true
+  },
+  "batches": {
+    "capacity": {
+      "batch": "capacity",
+      "run": 40896522768,
+      "source_head": "17d7d21437a30d64f668f6ab2411a03eae20dcee",
+      "controller_complete": false,
+      "cleanup_verified": true,
+      "key_cleanup_verified": true,
+      "error": {
+        "message": "controller phase failed: payload",
+        "type": "ValueError"
+      },
+      "estimated_compute_usd": 0.0168,
+      "cases": [
+        {
+          "id": "synthetic-10000",
+          "complete": false,
+          "supervision_status": "failed",
+          "supervision_reason": null,
+          "peak_rss_bytes": 291536896,
+          "peak_disk_bytes": 152162304,
+          "peak_evidence_bytes": 749568,
+          "seconds": 35.789431315,
+          "error": {
+            "message": "phase process failed",
+            "type": "ValueError"
+          },
+          "phases": [
+            {
+              "phase": "cold",
+              "complete": false,
+              "coverage": {
+                "dep_graph_files": 9999,
+                "discovered_files": 10001,
+                "discovery_truncated": false,
+                "elapsed_ms": 24618.8,
+                "embedding_coverage": 0.0,
+                "excluded_checkout_roots": [],
+                "excluded_checkout_roots_truncated": false,
+                "parse_coverage": 1.0,
+                "parsed_files": 10001,
+                "phase": "ready",
+                "reference_coverage": 1.0,
+                "reference_indexed_files": 10001,
+                "snapshot_repair": null,
+                "tier": "large",
+                "total_files": 10001
+              },
+              "pid": 3624,
+              "error": {
+                "message": "ready search omitted known source",
+                "type": "ValueError"
+              },
+              "bootstrap_seconds": 24.155287025000007,
+              "hydration_seconds": 28.007697852999968,
+              "search_ready_seconds": null,
+              "independently_replayed_coverage": true,
+              "requests_offered": 5,
+              "requests_completed": 5,
+              "requests_unfinished": 0
+            }
+          ]
+        }
+      ],
+      "limitations": [],
+      "payload_complete": false,
+      "payload_seconds": 36.72778558731079,
+      "unissued_cases": [
+        "synthetic-50000",
+        "synthetic-100000"
+      ],
+      "attested_started_processes": 3,
+      "attested_closed_processes": 3,
+      "request_journals": [
+        {
+          "folder": "synthetic-10000/cold",
+          "offered": 5,
+          "completed": 5,
+          "unfinished": 0,
+          "tool_errors": 0
+        }
+      ],
+      "requests_offered_total": 5,
+      "requests_completed_total": 5,
+      "outcome": "incomplete"
+    },
+    "real": {
+      "batch": "real",
+      "run": 40897997997,
+      "source_head": "17d7d21437a30d64f668f6ab2411a03eae20dcee",
+      "controller_complete": false,
+      "cleanup_verified": true,
+      "key_cleanup_verified": true,
+      "error": {
+        "message": "controller phase failed: payload",
+        "type": "ValueError"
+      },
+      "estimated_compute_usd": 0.0638,
+      "cases": [
+        {
+          "id": "cockroach",
+          "complete": false,
+          "supervision_status": "failed",
+          "supervision_reason": null,
+          "peak_rss_bytes": 1401626624,
+          "peak_disk_bytes": 1555247270,
+          "peak_evidence_bytes": 8056832,
+          "seconds": 291.77814038899993,
+          "error": {
+            "message": "phase process failed",
+            "type": "ValueError"
+          },
+          "phases": [
+            {
+              "phase": "cold",
+              "complete": false,
+              "coverage": null,
+              "pid": 3977,
+              "error": {
+                "message": "parser tiers missing, degraded or incomplete",
+                "type": "ValueError"
+              },
+              "bootstrap_seconds": 35.27720920599995,
+              "hydration_seconds": null,
+              "search_ready_seconds": null,
+              "requests_offered": 49,
+              "requests_completed": 49,
+              "requests_unfinished": 0
+            }
+          ],
+          "source_scope": {
+            "full_git_entries": 20083,
+            "materialized_entries": 19687,
+            "parseable_source_files": 10705,
+            "scope": "complete-admissible-Git-tree"
+          },
+          "pinned_commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7"
+        },
+        {
+          "id": "pandas",
+          "complete": true,
+          "supervision_status": "passed",
+          "supervision_reason": null,
+          "peak_rss_bytes": 502173696,
+          "peak_disk_bytes": 1758318758,
+          "peak_evidence_bytes": 9646080,
+          "seconds": 98.13399940499994,
+          "error": null,
+          "phases": [
+            {
+              "phase": "cold",
+              "complete": true,
+              "coverage": {
+                "dep_graph_files": 1375,
+                "discovered_files": 2337,
+                "discovery_truncated": false,
+                "elapsed_ms": 48014.2,
+                "embedding_coverage": 0.0,
+                "excluded_checkout_roots": [],
+                "excluded_checkout_roots_truncated": false,
+                "parse_coverage": 1.0,
+                "parsed_files": 1729,
+                "phase": "ready",
+                "reference_coverage": 1.0,
+                "reference_indexed_files": 1729,
+                "snapshot_repair": null,
+                "tier": "medium",
+                "total_files": 1729
+              },
+              "pid": 4051,
+              "error": null,
+              "bootstrap_seconds": 45.06765502900009,
+              "hydration_seconds": 59.330823967000015,
+              "search_ready_seconds": 61.93060671400008,
+              "independently_replayed_coverage": true,
+              "requests_offered": 14,
+              "requests_completed": 14,
+              "requests_unfinished": 0
+            },
+            {
+              "phase": "restart",
+              "complete": true,
+              "coverage": {
+                "dep_graph_files": 1375,
+                "discovered_files": 2337,
+                "discovery_truncated": false,
+                "elapsed_ms": 15967.2,
+                "embedding_coverage": 0.0,
+                "excluded_checkout_roots": [],
+                "excluded_checkout_roots_truncated": false,
+                "parse_coverage": 1.0,
+                "parsed_files": 1729,
+                "phase": "ready",
+                "reference_coverage": 1.0,
+                "reference_indexed_files": 1729,
+                "snapshot_repair": null,
+                "tier": "medium",
+                "total_files": 1729
+              },
+              "pid": 4059,
+              "error": null,
+              "bootstrap_seconds": 18.73994505600001,
+              "hydration_seconds": 19.755695445000015,
+              "search_ready_seconds": 20.672094736000076,
+              "independently_replayed_coverage": true,
+              "requests_offered": 4,
+              "requests_completed": 4,
+              "requests_unfinished": 0
+            }
+          ],
+          "source_scope": {
+            "full_git_entries": 2632,
+            "materialized_entries": 2481,
+            "parseable_source_files": 1729,
+            "scope": "complete-admissible-Git-tree"
+          },
+          "pinned_commit": "0039f168fe057b945e8ec2a65c9d1e973c7c1fe9"
+        },
+        {
+          "id": "deno",
+          "complete": false,
+          "supervision_status": "failed",
+          "supervision_reason": null,
+          "peak_rss_bytes": 495157248,
+          "peak_disk_bytes": 2122162353,
+          "peak_evidence_bytes": 14475264,
+          "seconds": 653.542939099,
+          "error": {
+            "message": "phase process failed",
+            "type": "ValueError"
+          },
+          "phases": [
+            {
+              "phase": "cold",
+              "complete": false,
+              "coverage": null,
+              "pid": 4240,
+              "error": {
+                "message": "parser tiers missing, degraded or incomplete",
+                "type": "ValueError"
+              },
+              "bootstrap_seconds": 23.114086410000027,
+              "hydration_seconds": null,
+              "search_ready_seconds": null,
+              "requests_offered": 14,
+              "requests_completed": 14,
+              "requests_unfinished": 0
+            }
+          ],
+          "source_scope": {
+            "full_git_entries": 11280,
+            "materialized_entries": 11106,
+            "parseable_source_files": 7938,
+            "scope": "complete-admissible-Git-tree"
+          },
+          "pinned_commit": "574272ded08b82c7dec64da2120be8442a1f7636"
+        }
+      ],
+      "limitations": [],
+      "payload_complete": false,
+      "payload_seconds": 1047.594812631607,
+      "unissued_cases": [],
+      "attested_started_processes": 8,
+      "attested_closed_processes": 8,
+      "request_journals": [
+        {
+          "folder": "cockroach/cold",
+          "offered": 49,
+          "completed": 49,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "deno/cold",
+          "offered": 14,
+          "completed": 14,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "pandas/cold",
+          "offered": 14,
+          "completed": 14,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "pandas/restart",
+          "offered": 4,
+          "completed": 4,
+          "unfinished": 0,
+          "tool_errors": 0
+        }
+      ],
+      "requests_offered_total": 81,
+      "requests_completed_total": 81,
+      "outcome": "incomplete"
+    },
+    "lifecycle": {
+      "batch": "lifecycle",
+      "run": 40902756918,
+      "source_head": "17d7d21437a30d64f668f6ab2411a03eae20dcee",
+      "controller_complete": true,
+      "cleanup_verified": true,
+      "key_cleanup_verified": true,
+      "error": null,
+      "estimated_compute_usd": 0.1634,
+      "cases": [
+        {
+          "id": "lifecycle",
+          "complete": true,
+          "supervision_status": "passed",
+          "supervision_reason": null,
+          "peak_rss_bytes": 554033152,
+          "peak_disk_bytes": 388784397,
+          "peak_evidence_bytes": 25296896,
+          "seconds": 3242.561119382,
+          "error": null,
+          "phases": [
+            {
+              "phase": "cold",
+              "complete": true,
+              "coverage": {
+                "dep_graph_files": 1999,
+                "discovered_files": 2001,
+                "discovery_truncated": false,
+                "elapsed_ms": 4641.7,
+                "embedding_coverage": 0.0,
+                "excluded_checkout_roots": [],
+                "excluded_checkout_roots_truncated": false,
+                "parse_coverage": 1.0,
+                "parsed_files": 2001,
+                "phase": "ready",
+                "reference_coverage": 1.0,
+                "reference_indexed_files": 2001,
+                "snapshot_repair": null,
+                "tier": "medium",
+                "total_files": 2001
+              },
+              "pid": 3967,
+              "error": null,
+              "bootstrap_seconds": 5.879931404999979,
+              "hydration_seconds": 6.23774457899998,
+              "search_ready_seconds": 6.432799521999982,
+              "independently_replayed_coverage": true,
+              "requests_offered": 5,
+              "requests_completed": 5,
+              "requests_unfinished": 0
+            },
+            {
+              "phase": "restart",
+              "complete": true,
+              "coverage": {
+                "dep_graph_files": 1999,
+                "discovered_files": 2001,
+                "discovery_truncated": false,
+                "elapsed_ms": 1923.5,
+                "embedding_coverage": 0.0,
+                "excluded_checkout_roots": [],
+                "excluded_checkout_roots_truncated": false,
+                "parse_coverage": 1.0,
+                "parsed_files": 2001,
+                "phase": "ready",
+                "reference_coverage": 1.0,
+                "reference_indexed_files": 2001,
+                "snapshot_repair": null,
+                "tier": "medium",
+                "total_files": 2001
+              },
+              "pid": 3981,
+              "error": null,
+              "bootstrap_seconds": 2.7659923429999935,
+              "hydration_seconds": 3.1799653090000106,
+              "search_ready_seconds": 3.4090479199999777,
+              "independently_replayed_coverage": true,
+              "requests_offered": 5,
+              "requests_completed": 5,
+              "requests_unfinished": 0
+            }
+          ],
+          "soak": {
+            "seconds": 3075.0019361900004,
+            "planned_seconds": 3075,
+            "requests": 2466,
+            "offered_clients": 8,
+            "p95_seconds": 0.2491091829999732
+          },
+          "native_outcomes": {
+            "ocaml": {
+              "passed": 4,
+              "limited": 4
+            },
+            "deno": {
+              "passed": 4,
+              "limited": 4
+            },
+            "perl5": {
+              "passed": 4,
+              "limited": 4
+            },
+            "crystal": {
+              "passed": 4,
+              "limited": 4
+            }
+          }
+        }
+      ],
+      "limitations": [],
+      "payload_complete": true,
+      "payload_seconds": 3244.1301445961,
+      "unissued_cases": [],
+      "attested_started_processes": 6,
+      "attested_closed_processes": 5,
+      "request_journals": [
+        {
+          "folder": "lifecycle/cold",
+          "offered": 5,
+          "completed": 5,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "lifecycle/crash",
+          "offered": 6,
+          "completed": 6,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "lifecycle/load",
+          "offered": 30,
+          "completed": 30,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "lifecycle/load/fresh",
+          "offered": 1,
+          "completed": 1,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "lifecycle/recovery",
+          "offered": 5,
+          "completed": 5,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "lifecycle/restart",
+          "offered": 5,
+          "completed": 5,
+          "unfinished": 0,
+          "tool_errors": 0
+        },
+        {
+          "folder": "lifecycle/soak",
+          "offered": 2466,
+          "completed": 2466,
+          "unfinished": 0,
+          "tool_errors": 0
+        }
+      ],
+      "requests_offered_total": 2518,
+      "requests_completed_total": 2518,
+      "native_journal_bytes": {
+        "blobs_verified": 95,
+        "blobs_restored": 95,
+        "journals": [
+          {
+            "case": "crystal",
+            "events": 24,
+            "events_sha256": "77f33ddf74e26d26fb0d3e4b70e592efbb4d72f60516853f51341159360b8020",
+            "unique_references": 15,
+            "blobs_verified": 15,
+            "blobs_restored": 15
+          },
+          {
+            "case": "deno",
+            "events": 54,
+            "events_sha256": "8fd8f28eedaf8e03556ea924efe8ca9c4ed45e733e9173e0ec351bd4e3001249",
+            "unique_references": 35,
+            "blobs_verified": 35,
+            "blobs_restored": 35
+          },
+          {
+            "case": "ocaml",
+            "events": 30,
+            "events_sha256": "194269eb6248ad44e8d034bae34e189c28070b2920339f3d914baec243e92e8a",
+            "unique_references": 23,
+            "blobs_verified": 23,
+            "blobs_restored": 23
+          },
+          {
+            "case": "perl5",
+            "events": 30,
+            "events_sha256": "79e373102ae47dcb0f42774c87f924db994de3b71f3851ad8edf8fa8ba2661d1",
+            "unique_references": 22,
+            "blobs_verified": 22,
+            "blobs_restored": 22
+          }
+        ]
+      },
+      "outcome": "complete"
+    }
+  },
+  "parser_findings": {
+    "run": 40897997997,
+    "observed_unix": 1793288015.720345,
+    "cases": {
+      "cockroach": {
+        "source_paths": 10705,
+        "grammars": {
+          "bash": true,
+          "c": true,
+          "cpp": true,
+          "csharp": true,
+          "css": true,
+          "go": true,
+          "hcl": true,
+          "html": true,
+          "java": true,
+          "javascript": true,
+          "json": true,
+          "php": true,
+          "python": true,
+          "ruby": true,
+          "toml": true,
+          "typescript": true,
+          "yaml": true
+        },
+        "parser_tiers": {
+          "minimal": 6,
+          "regex": 7,
+          "tree_sitter": 10692
+        },
+        "parse_failure_files": 13,
+        "degraded_count": 13,
+        "degraded_samples": {
+          "docs/generated/metrics/metrics.html": {
+            "failures": [
+              {
+                "elapsed_micros": 100052,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100057,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "minimal"
+          },
+          "docs/generated/metrics/metrics.yaml": {
+            "failures": [
+              {
+                "elapsed_micros": 100051,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100065,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "minimal"
+          },
+          "pkg/backup/backup_test.go": {
+            "failures": [
+              {
+                "elapsed_micros": 100039,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100023,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "regex"
+          },
+          "pkg/ccl/changefeedccl/changefeed_test.go": {
+            "failures": [
+              {
+                "elapsed_micros": 100074,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100027,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "regex"
+          },
+          "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_mma-only_1.json": {
+            "failures": [
+              {
+                "elapsed_micros": 100052,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100055,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "minimal"
+          },
+          "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_mma-only_2.json": {
+            "failures": [
+              {
+                "elapsed_micros": 100040,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100021,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "minimal"
+          },
+          "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_sma-count_1.json": {
+            "failures": [
+              {
+                "elapsed_micros": 100087,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100032,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "minimal"
+          },
+          "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_sma-count_2.json": {
+            "failures": [
+              {
+                "elapsed_micros": 100054,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100043,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "minimal"
+          },
+          "pkg/kv/kvserver/replica_test.go": {
+            "failures": [
+              {
+                "elapsed_micros": 100057,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100040,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "regex"
+          },
+          "pkg/sql/colexec/colexecbase/cast.eg.go": {
+            "failures": [
+              {
+                "elapsed_micros": 100034,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100029,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "regex"
+          },
+          "pkg/sql/colexec/colexecjoin/mergejoiner_fullouter.eg.go": {
+            "failures": [
+              {
+                "elapsed_micros": 100038,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              }
+            ],
+            "tier": "regex"
+          },
+          "pkg/sql/colexec/colexecprojconst/proj_const_left_ops.eg.go": {
+            "failures": [
+              {
+                "elapsed_micros": 100068,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100046,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "regex"
+          },
+          "pkg/sql/sem/builtins/builtins.go": {
+            "failures": [
+              {
+                "elapsed_micros": 100052,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100055,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "regex"
+          }
+        },
+        "identity_sets_replayed": true,
+        "limitation": "Observed ValueError native parser failures near100ms configured limit; no new per-thread CPU or complete Rust native trace in this payload, no historical-cause attribution."
+      },
+      "deno": {
+        "source_paths": 7938,
+        "grammars": {
+          "c": true,
+          "cpp": true,
+          "csharp": true,
+          "css": true,
+          "html": true,
+          "javascript": true,
+          "json": true,
+          "rust": true,
+          "toml": true,
+          "typescript": true,
+          "yaml": true
+        },
+        "parser_tiers": {
+          "regex": 1,
+          "tree_sitter": 7937
+        },
+        "parse_failure_files": 2,
+        "degraded_count": 2,
+        "degraded_samples": {
+          "cli/args/flags.rs": {
+            "failures": [
+              {
+                "elapsed_micros": 100025,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "tree_sitter"
+          },
+          "tests/integration/lsp_tests.rs": {
+            "failures": [
+              {
+                "elapsed_micros": 100050,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "structure"
+              },
+              {
+                "elapsed_micros": 100040,
+                "error_type": "ValueError",
+                "limit_micros": 100000,
+                "outcome": "parser_error",
+                "stage": "references"
+              }
+            ],
+            "tier": "regex"
+          }
+        },
+        "identity_sets_replayed": true,
+        "limitation": "Observed ValueError native parser failures near100ms configured limit; no new per-thread CPU or complete Rust native trace in this payload, no historical-cause attribution."
+      }
+    },
+    "product_unchanged": true
+  },
+  "ocaml_current_failures": {
+    "run": 40902756918,
+    "source_path": "typing/env.mli",
+    "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+    "bytes": 20928,
+    "failures": [
+      {
+        "native": {
+          "stage": "parse",
+          "language": "ocaml",
+          "parser_id": 127775830079120,
+          "thread_id": 127775824410304,
+          "thread_name": "intel-workspace_0",
+          "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+          "bytes": 20928,
+          "limit_micros": 100000,
+          "error": {
+            "type": "ValueError",
+            "message": "Parsing failed"
+          },
+          "outcome": "ValueError",
+          "wall_ns": 100256553,
+          "thread_cpu_ns": 100226615,
+          "parser_generation": 2
+        },
+        "kind": "native",
+        "index": 1729,
+        "monotonic_ns": 246599929560
+      },
+      {
+        "native": {
+          "stage": "parse",
+          "language": "ocaml",
+          "parser_id": 127775790063584,
+          "thread_id": 127775824410304,
+          "thread_name": "intel-workspace_0",
+          "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+          "bytes": 20928,
+          "limit_micros": 100000,
+          "error": {
+            "type": "ValueError",
+            "message": "Parsing failed"
+          },
+          "outcome": "ValueError",
+          "wall_ns": 100648954,
+          "thread_cpu_ns": 100640782,
+          "parser_generation": 4
+        },
+        "kind": "native",
+        "index": 3741,
+        "monotonic_ns": 265861833146
+      },
+      {
+        "native": {
+          "stage": "parse",
+          "language": "ocaml",
+          "parser_id": 127775756700672,
+          "thread_id": 127775824410304,
+          "thread_name": "intel-workspace_0",
+          "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+          "bytes": 20928,
+          "limit_micros": 100000,
+          "error": {
+            "type": "ValueError",
+            "message": "Parsing failed"
+          },
+          "outcome": "ValueError",
+          "wall_ns": 102641758,
+          "thread_cpu_ns": 102632868,
+          "parser_generation": 5
+        },
+        "kind": "native",
+        "index": 3745,
+        "monotonic_ns": 265974128054
+      }
+    ],
+    "trace_capture_loss": 0,
+    "historical_attribution": false
+  },
+  "source_inventory_verification": {
+    "outcome": "passed",
+    "run": 40897997997,
+    "method": "Retained flat entry modes/names/object IDs recursively hashed as Git trees and matched to official pinned commit metadata; no fixture/source materialization.",
+    "cases": [
+      {
+        "id": "cockroach",
+        "repository": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "tree": "b3ecbe3ceb33fac67612993f7d7b123155d1be4b",
+        "full_git_entries": 20083,
+        "materialized_entries": 19687,
+        "upstream_metadata_sha256": "78b28f33b3126fb840f676c971dc5b844f434990aeda15e55f5328daf69f21df",
+        "reconstructed_tree_verified": true
+      },
+      {
+        "id": "pandas",
+        "repository": "pandas-dev/pandas",
+        "commit": "0039f168fe057b945e8ec2a65c9d1e973c7c1fe9",
+        "tree": "a9ba1a28a0db4528b8df5b82faa93d52cadda587",
+        "full_git_entries": 2632,
+        "materialized_entries": 2481,
+        "upstream_metadata_sha256": "d549bffce3e4b18d28fe404fa82683dc73b7fc5e5aacaa6564d8e82f63cbb278",
+        "reconstructed_tree_verified": true
+      },
+      {
+        "id": "deno",
+        "repository": "denoland/deno",
+        "commit": "574272ded08b82c7dec64da2120be8442a1f7636",
+        "tree": "3670fd9a587d05a68ab12c34a820590645591066",
+        "full_git_entries": 11280,
+        "materialized_entries": 11106,
+        "upstream_metadata_sha256": "c5b16580f3b0f9bdb32640e6e9469f7d4b6f31325f50d9a0a4d3249f8430469c",
+        "reconstructed_tree_verified": true
+      }
+    ],
+    "local_tested_execution": false
+  },
+  "export_repair": {
+    "red_run": 40910853860,
+    "green_run": 40913190455,
+    "controls_passed": 130,
+    "red_expected_failures": 3,
+    "original_native_blobs_restored": 177,
+    "fixed_native_blobs_already_exact": 94,
+    "original_archives_unchanged": true,
+    "no_paid_reruns": true
+  },
+  "archive": {
+    "outcome": "passed",
+    "path": "packages/code-intel/evals/results/2026-10-29-scale-evidence.tar.gz",
+    "sha256": "7fa6745e8ecbd77d26b562c6e15500dfa893ed75e8f523758d710caa470ac972",
+    "bytes": 9821202,
+    "members": 746,
+    "original_zip_count": 26,
+    "product_source_files": 349,
+    "source_commits": [
+      "b4ce67f3584aad4c2e324029fac8d9b9fcdc98a8",
+      "a619012a6ac69b407e2e28ba04e5609593233533",
+      "ef3d74c7084a5e30eafa2f8eac40c5353eca37aa",
+      "17d7d21437a30d64f668f6ab2411a03eae20dcee",
+      "f2c870a69cd6467f4c7b73165796ccabb357bfb0",
+      "351294cb2e4e992cc97d97ae97781fd0225d3617",
+      "b6cec34ced26a530b680037239d2bce063f04aa0"
+    ],
+    "private_ledger_and_credentials_excluded": true
+  },
+  "limitations": [
+    "50k/100k capacity and 10k restart unissued after the first failure.",
+    "Parser-quality failure stopped cold search and restart for CockroachDB and Deno.",
+    "Native compatibility has four explicitly limited checks per pack and three recorded OCaml parser errors.",
+    "Original JSON exports were normalized; content-addressed native bytes are separately restored and exactly hash-verified.",
+    "Timing includes shared CPU and substantial observer overhead; no speedup, broad semantic correctness, relevance or historical-cause claim."
+  ]
+}
