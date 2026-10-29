@@ -1,5 +1,7 @@
 # Published intelligence scale qualification
 
+The 2026-10-29 campaign is closed. [Results and permanent evidence](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-scale.md) record the search boundary failure, native parser limits, passed lifecycle/soak contracts and exact-byte exporter repair. The dedicated workflow is disabled; normal CI and the independent reaper remain enabled. All three approved reservations are spent. Any future campaign needs a distinct admitted design and allowance.
+
 The manual **Published scale qualification** workflow tests the immutable
 0.1.20 wheel on disposable DigitalOcean workers. Product source, dependency
 metadata, native limits and the published release remain unchanged. The

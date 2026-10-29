@@ -76,7 +76,7 @@ jobs:
           functions = {n.name for n in ast.parse(Path('eval/quality/tests/test_scale_qualification.py').read_text()).body if isinstance(n, ast.FunctionDef) and n.name.startswith('test_')}
           new = [r for r in rows if r.get('name', '').split('[')[0] in functions]
           old = [r for r in rows if r not in new]
-          assert len(new) == 68 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
+          assert len(new) == 72 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
           assert os.environ['STAGE'] == 'green' and result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
           Path('results/control-receipt.json').write_text(json.dumps({'stage': os.environ['STAGE'], 'new': len(new), 'old': len(old), 'failed': len(failed), 'errors': len(errors), 'head': os.environ['GITHUB_SHA'], 'tree': tree, 'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']}))

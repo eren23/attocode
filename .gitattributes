@@ -1,0 +1,2 @@
+# Retained evidence stays in Git; worker source exports omit this archive.
+/packages/code-intel/evals/results/2026-10-29-scale-evidence.tar.gz export-ignore

@@ -120,7 +120,7 @@ def admit_qualification(receipt, run, jobs, tree, head):
         "qualification source/attempt mismatch",
     )
     require(
-        receipt.get("new") == 68
+        receipt.get("new") == 72
         and receipt.get("old") == 58
         and receipt.get("failed") == receipt.get("errors") == 0,
         "qualification controls incomplete",
@@ -245,7 +245,7 @@ def export_evidence(root, destination):
         require(path.stat().st_size <= 256 * 2**20, "oversized remote evidence input")
         raw = path.read_bytes()
         if path.suffix == ".json":
-            raw = json.dumps(json.loads(raw), separators=(",", ":"), ensure_ascii=False).encode()
+            json.loads(raw)  # Validate without changing content-addressed bytes.
         name = path.relative_to(root).as_posix()
         chunks = [raw]
         if len(raw) > 2 * 2**20 and path.suffix == ".json":
