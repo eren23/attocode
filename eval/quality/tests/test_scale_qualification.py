@@ -5,8 +5,23 @@ import hashlib
 import importlib
 import importlib.util
 import json
+import os
+import shutil
+from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def retain_control_json(tmp_path, request):
+    yield
+    if folder := os.environ.get("SCALE_CONTROL_EVIDENCE"):
+        target = Path(folder) / request.node.name
+        for path in tmp_path.rglob("*.json"):
+            if path.is_file() and not path.is_symlink() and ".attocode" not in path.parts:
+                destination = target / path.relative_to(tmp_path)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(path, destination)
 
 
 def module(name):
@@ -286,3 +301,79 @@ def test_installed_wheel_source_mismatch_is_rejected(tmp_path):
         z.writestr("attocode_intel/__init__.py", '__version__="0.1.20"')
     with pytest.raises(ValueError):
         module("evidence").attest_wheel(wheel, root, hashlib.sha256(wheel.read_bytes()).hexdigest())
+
+
+def test_large_manifest_export_is_lossless(tmp_path):
+    import tarfile
+
+    root = tmp_path / "raw"
+    root.mkdir()
+    value = {"manifest": "x" * (2 * 2**20 + 100)}
+    (root / "large.json").write_text(json.dumps(value))
+    output = tmp_path / "results.tar.gz"
+    receipt = module("evidence").export_evidence(root, output)
+    with tarfile.open(output) as archive:
+        parts = sorted(n for n in archive.getnames() if n.startswith("large.json.part"))
+        assert len(parts) == 2
+        raw = b"".join(archive.extractfile(n).read() for n in parts)
+    assert json.loads(raw) == value
+    assert receipt["splits"]["large.json"]["sha256"] == hashlib.sha256(raw).hexdigest()
+
+
+def test_dispatch_batch_and_reservation_binding():
+    m = module("evidence")
+    assert callable(getattr(m, "dispatch_selection", None)), "dispatch binding absent"
+    m.dispatch_selection(reservation(), "capacity", "scale-1")
+    for batch, identity in [("real", "scale-1"), ("capacity", "scale-2")]:
+        with pytest.raises(ValueError):
+            m.dispatch_selection(reservation(), batch, identity)
+
+
+def test_forced_restart_checkpoint_keeps_gateway_open(tmp_path):
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    m = module("workload")
+    root = tmp_path / "tree"
+    m.generate_tree(root, 32)
+    spec = {
+        "id": "forced",
+        "root": str(root),
+        "source_files": 32,
+        "file": "module_31.py",
+        "symbol": "operation_31",
+        "line": 2,
+        "dependency": "module_30.py",
+        "seconds": 45,
+    }
+    path = tmp_path / "spec.json"
+    path.write_text(json.dumps(spec))
+    marker = tmp_path / "evidence/forced/crash/result.json"
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "eval.quality.scale_workload",
+            "--phase",
+            "crash",
+            "--case",
+            str(path),
+            "--root",
+            str(tmp_path),
+        ],
+        start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 45
+        while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert marker.exists(), "missing crash checkpoint"
+        result = json.loads(marker.read_text())
+        assert result.get("closed") is not True, "crash checkpoint already closed gateway"
+        assert result["complete"] and process.poll() is None
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait(timeout=10)

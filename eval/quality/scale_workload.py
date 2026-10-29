@@ -291,8 +291,8 @@ async def lifecycle(root, output, *, soak_seconds):
         (root / "scale_ignored.py").write_text("def scale_ignored():\n    return 9\n")
         await notify(["scale_ignored.py"])
         require(bool(await find("scale_ignored")), "pre-ignore source absent")
-        (root / ".attocodeignore").write_text("scale_ignored.py\n")
-        await notify([".attocodeignore"])
+        (root / ".gitignore").write_text("scale_ignored.py\n")
+        await notify([".gitignore"])
         result["mutations"]["ignore"] = not await find("scale_ignored")
         require(all(result["mutations"].values()), "mutation failed")
         # Compare the changed workspace's definition identities with a fresh copy.

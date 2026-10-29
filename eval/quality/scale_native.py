@@ -61,7 +61,9 @@ def run(root, output):
         write(folder / "pinned-source.json", receipt)
         if name == "perl":
             # Explicitly exercise the labeled source under the published ignore contract.
-            (tree / ".attocodeignore").write_text("!dist/\ndist/*\n!dist/Carp/\n")
+            ignore = tree / ".gitignore"
+            original = ignore.read_text() if ignore.exists() else ""
+            ignore.write_text(original + "\n!dist/\ndist/*\n!dist/Carp/\n")
         before = source_manifest(tree)
         write(folder / "actual-source.json", before)
         journal = Journal(folder / "journal", 4 * 2**20)
