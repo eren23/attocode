@@ -99,6 +99,25 @@ from the ignore policy. A separate regression proves that explicit `!dist/` in
 root `.gitignore` admits it and that removing the override removes its symbols.
 The frozen source pack itself is not altered to obtain a pass.
 
+For an intentionally configured project, a narrow inclusion keeps other output
+excluded (provide the optional Perl grammar before starting analysis):
+
+```gitignore
+!dist/
+dist/*
+!dist/Carp/
+```
+
+Native Perl coverage verifies that recipe, a fresh restart and re-exclusion.
+Development optional CI also source-builds Crystal's individual Python grammar at
+`50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49`, before any navigation. The downloaded
+language-pack artifact inventory and standalone grammar availability are reported
+separately. Optional navigation never performs that acquisition.
+[The language-depth correction](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
+records native OCaml/Perl call evidence, static workspace imports for the three
+languages and the limits of those syntax/heuristic relationships.
+
+
 Remote source acquisition fetches a shallow filtered commit and inspects only
 the downloaded objects, so inspecting omitted large files cannot trigger an
 unbounded lazy fetch. Workflow reports record the Git version and a bounded

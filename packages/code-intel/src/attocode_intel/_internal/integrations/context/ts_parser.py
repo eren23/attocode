@@ -297,7 +297,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         grammar_module="tree_sitter_ocaml",
         function_types=("let_binding",),
         class_types=("type_definition", "module_definition", "class_definition"),
-        import_types=("open_statement",),
+        import_types=("open_statement", "open_module"),
         language_func="language_ocaml",
     ),
     "fsharp": _LangConfig(
@@ -862,9 +862,13 @@ def _extract_import_module(node, source_bytes: bytes, language: str) -> str:
                 if len(parts) >= 2:
                     return parts[1]
     elif language == "ocaml":
-        # open Module_name
-        if text.startswith("open "):
+        # New grammars use open_module; only a static module path is evidence.
+        module = node.child_by_field_name("module")
+        if module is not None and module.type == "module_path":
+            return _node_text(module, source_bytes)
+        if node.type == "open_statement" and text.startswith("open "):
             return text[5:].strip()
+        return ""
     elif language == "fsharp":
         # open System.Collections.Generic or module M = Module.Path
         if text.startswith("open "):

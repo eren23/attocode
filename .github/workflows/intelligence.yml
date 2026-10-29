@@ -116,10 +116,21 @@ jobs:
         with:
           python-version: '3.12'
       - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Install pinned standalone Crystal grammar
+        timeout-minutes: 5
+        run: uv pip install --python .venv/bin/python --no-deps 'tree-sitter-crystal @ git+https://github.com/crystal-lang-tools/tree-sitter-crystal@50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49'
       - name: Explicit acquisition and all adapter checks in disposable storage
         env:
           QUALITY_ALLOW_DOWNLOADS: '1'
-        run: uv run --no-sync python packages/code-intel/scripts/check_optional_grammars.py --cache '${{ runner.temp }}/quality-grammars'
+          PYTHONPATH: ${{ github.workspace }}/packages/code-intel/src:${{ github.workspace }}
+        run: uv run --no-sync python packages/code-intel/scripts/check_optional_grammars.py --cache '${{ runner.temp }}/quality-grammars' --depth-evidence '${{ runner.temp }}/optional-language-results'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: intelligence-optional-language-results
+          retention-days: 14
+          if-no-files-found: error
+          path: ${{ runner.temp }}/optional-language-results/
   real-language-servers:
     runs-on: ubuntu-latest
     timeout-minutes: 15

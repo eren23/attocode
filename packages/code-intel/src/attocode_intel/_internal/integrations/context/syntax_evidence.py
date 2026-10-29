@@ -79,7 +79,9 @@ def reference_candidates(path: str, content: str, language: str):
         if node.type in {"comment", "line_comment", "block_comment", "string", "string_literal"}:
             continue
         if node.type in {"call", "call_expression", "method_invocation", "object_creation_expression", "new_expression",
-                         "function_call", "invocation_expression", "scoped_call_expression", "command"}:
+                         "function_call", "invocation_expression", "scoped_call_expression", "command"} or (
+                language == "ocaml" and node.type == "application_expression") or (
+                language == "perl" and node.type == "function_call_expression"):
             target = (node.child_by_field_name("function") or node.child_by_field_name("name")
                       or node.child_by_field_name("constructor") or node.child_by_field_name("target")
                       or node.child_by_field_name("method"))

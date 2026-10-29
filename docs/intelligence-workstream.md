@@ -14,6 +14,18 @@ source/cache guards and dependencies remain unchanged. Publication requires a fr
 preflight, normal CI, actual PyPI clean-install/0.1.18-upgrade verification and all
 18 release jobs. Publication does not upgrade a global tool or restart an MCP host.
 
+**Development optional-language depth, 2026-10-29:** [causal native controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
+restore omitted OCaml/Perl call candidates, OCaml native `open_module` extraction
+and conservative workspace import candidates for OCaml/Perl/Crystal. All 406
+controls pass, including three authored workspaces with all eight workflow checks.
+Perl's existing scoped inclusion and Crystal's configured definitions were already
+working; the initial incorrect Crystal hypothesis/control remains recorded as a
+failed first attempt. Explicit source-built Crystal acquisition and all22 depth
+cases are maintained in optional CI; default384/required397 inventories remain
+mandatory. Product corrections are unreleased, with version019/dependencies and
+published assets unchanged. Syntax candidates and heuristic tests make no compiler,
+historical nativecause, relevance or performance claim.
+
 **Routine compatibility with native capture, 2026-10-28:** [one unchanged-engine run](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-28-native-compatibility.md)
 completes same-run 373 Linux controls and all 36 packs/288 checks/144 existing
 operational anchors. OCaml capture retains 1047 native calls,

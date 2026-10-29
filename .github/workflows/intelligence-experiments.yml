@@ -62,6 +62,7 @@ jobs:
         run: |
           exec > >(tee '${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log') 2>&1
           uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+          uv pip install --python .venv/bin/python --no-deps 'tree-sitter-crystal @ git+https://github.com/crystal-lang-tools/tree-sitter-crystal@50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49'
           uv run --no-sync python - <<'PYSETUP'
           import json, os, re, subprocess
           from pathlib import Path
@@ -80,7 +81,7 @@ jobs:
           requested = sorted(names & available)
           pack.download(requested)
           assert set(requested) <= set(pack.downloaded_languages())
-          print(json.dumps({'requested': requested, 'unsupported': sorted(names - available)}))
+          print(json.dumps({'requested': requested, 'pack_unsupported': sorted(names - available)}))
           PYSETUP
       - name: Require broad platform controls before compatibility
         if: inputs.experiment == 'broad'
