@@ -262,9 +262,10 @@ async def lifecycle(root, output, *, soak_seconds):
             await requests.call("notify_file_changed", {"files": names, "max_tokens": 1000})
 
         async def find(name):
-            return (await requests.call("search_symbols", {"name": name, "max_tokens": 1000}))[
+            rows = (await requests.call("search_symbols", {"name": name, "max_tokens": 1000}))[
                 "data"
             ]
+            return [row for row in rows if row["name"] == name]
 
         # Edit, add, rename, delete and ignore-policy refresh all use the public path.
         path = root / "module_1.py"
