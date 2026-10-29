@@ -1,0 +1,76 @@
+name: Published scale qualification
+run-name: Scale ${{ inputs.batch }} ${{ inputs.reservation_id }}
+on:
+  push:
+    branches: [test/published-scale-qualification]
+  workflow_dispatch:
+    inputs:
+      batch:
+        type: choice
+        options: [controls]
+        default: controls
+        required: true
+      reservation_id:
+        type: string
+        default: controls
+        required: true
+      stage:
+        type: choice
+        options: [green, red]
+        default: green
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: quality-scale-qualification
+  cancel-in-progress: false
+jobs:
+  controls:
+    if: github.event_name == 'push' || inputs.batch == 'controls'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      QUALITY_TEST_SYSTEMD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Run exact scale controls and existing cloud controls
+        env:
+          STAGE: ${{ inputs.stage || 'red' }}
+        run: |
+          mkdir results
+          uv run --no-sync python - <<'PY'
+          import json, os, subprocess, sys, xml.etree.ElementTree as ET
+          from pathlib import Path
+          command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml', '--confcutdir=packages/code-intel/tests', '-q', '--junitxml=results/controls.xml', 'eval/quality/tests/test_scale_qualification.py', 'packages/code-intel/tests/test_quality_cloud.py']
+          with Path('results/controls.log').open('w') as stream:
+              result = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT)
+          root = ET.parse('results/controls.xml').getroot()
+          rows = root.findall('.//testcase')
+          failed = [r for r in rows if r.find('failure') is not None]
+          errors = [r for r in rows if r.find('error') is not None]
+          new = [r for r in rows if 'test_scale_qualification' in r.get('classname', '')]
+          old = [r for r in rows if r not in new]
+          assert not errors and old and not any(r.find('failure') is not None for r in old)
+          if os.environ['STAGE'] == 'red':
+              assert result.returncode == 1 and len(failed) == len(new) and new
+              assert all('scale qualification feature absent' in r.find('failure').get('message', '') for r in failed)
+          else:
+              assert result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
+          Path('results/control-receipt.json').write_text(json.dumps({'stage': os.environ['STAGE'], 'new': len(new), 'old': len(old), 'failed': len(failed), 'errors': len(errors), 'head': os.environ['GITHUB_SHA'], 'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']}))
+          print(Path('results/control-receipt.json').read_text())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-controls-${{ github.run_id }}-${{ github.run_attempt }}
+          path: results/
+          retention-days: 14
+          if-no-files-found: error
