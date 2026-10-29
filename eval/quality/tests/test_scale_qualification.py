@@ -30,6 +30,70 @@ def module(name):
     return importlib.import_module(name)
 
 
+def test_export_preserves_exact_json_octets(tmp_path):
+    import tarfile
+
+    root = tmp_path / "input"
+    root.mkdir()
+    original = b'{\n  "z": "\\u2603", "a": 1\n}\n'
+    (root / "original.json").write_bytes(original)
+    archive = tmp_path / "export.tar.gz"
+    module("evidence").export_evidence(root, archive)
+    with tarfile.open(archive) as exported:
+        actual = exported.extractfile("original.json").read()
+    (tmp_path / "exported.json").write_bytes(actual)
+    assert actual == original
+
+
+def test_export_preserves_real_journal_blob_identity(tmp_path):
+    import tarfile
+
+    from eval.quality.experiment_evidence import Journal
+
+    journal = Journal(tmp_path / "journal", 2**20)
+    reference = journal.response({"tool": "inspect_symbol"}, {"snippet": "snowman \u2603\n"})
+    archive = tmp_path / "journal.tar.gz"
+    module("evidence").export_evidence(journal.root, archive)
+    with tarfile.open(archive) as exported:
+        actual = exported.extractfile(reference["path"]).read()
+    (tmp_path / "exported-blob.json").write_bytes(actual)
+    (tmp_path / "blob-reference.json").write_text(json.dumps(reference))
+    assert len(actual) == reference["bytes"]
+    assert hashlib.sha256(actual).hexdigest() == reference["sha256"]
+
+
+def test_invalid_json_stays_incomplete_export(tmp_path):
+    root = tmp_path / "invalid"
+    root.mkdir()
+    (root / "bad.json").write_bytes(b"{not-json}\n")
+    result = module("evidence").safe_export(root, tmp_path / "invalid.tar.gz")
+    assert result["complete"] is False
+
+
+def test_qualified_receipt_covers_current_control_inventory():
+    import ast
+
+    expected = 0
+    for node in ast.parse(Path(__file__).read_text()).body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
+            continue
+        cases = 1
+        for decorator in node.decorator_list:
+            if (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and decorator.func.attr == "parametrize"
+            ):
+                cases *= len(ast.literal_eval(decorator.args[1]))
+        expected += cases
+    callback, receipt, run, jobs = qualification()
+    receipt["new"] = expected
+    callback(receipt, run, jobs, "e" * 40, "f" * 40)
+    receipt["new"] = 68
+    with pytest.raises(ValueError):
+        callback(receipt, run, jobs, "e" * 40, "f" * 40)
+
+
 def reservation():
     base = [
         {"id": str(i), "month": "2026-10", "reserved_usd": 1, "cleanup_verified": True}
