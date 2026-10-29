@@ -130,13 +130,38 @@ def test_repeated_dispatch_cannot_relaunch_deleted_worker():
 
 
 def test_complete_coverage_requires_actual_parsed_files():
-    good = {"phase": "ready", "parsed_files": 32, "total_files": 33, "discovery_truncated": False}
+    good = {
+        "phase": "ready",
+        "parsed_files": 32,
+        "total_files": 32,
+        "reference_indexed_files": 32,
+        "discovery_truncated": False,
+    }
     module("evidence").admit_coverage(good, 32)
 
 
-@pytest.mark.parametrize("damage", ["warming", "missing", "truncated", "short", "bool", "unknown"])
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "warming",
+        "missing",
+        "truncated",
+        "short",
+        "bool",
+        "unknown",
+        "partial",
+        "references",
+        "missing_refs",
+    ],
+)
 def test_coverage_rejects_false_readiness(damage):
-    data = {"phase": "ready", "parsed_files": 32, "total_files": 33, "discovery_truncated": False}
+    data = {
+        "phase": "ready",
+        "parsed_files": 32,
+        "total_files": 32,
+        "reference_indexed_files": 32,
+        "discovery_truncated": False,
+    }
     if damage == "warming":
         data["phase"] = "hydrating"
     if damage == "missing":
@@ -149,6 +174,12 @@ def test_coverage_rejects_false_readiness(damage):
         data["parsed_files"] = True
     if damage == "unknown":
         data.pop("discovery_truncated")
+    if damage == "partial":
+        data["total_files"] = 33
+    if damage == "references":
+        data["reference_indexed_files"] = 31
+    if damage == "missing_refs":
+        data.pop("reference_indexed_files")
     with pytest.raises(ValueError):
         module("evidence").admit_coverage(data, 32)
 
@@ -444,3 +475,248 @@ def test_forced_restart_checkpoint_keeps_gateway_open(tmp_path):
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
         process.wait(timeout=10)
+
+
+def feature(name, function):
+    callback = getattr(module(name), function, None)
+    assert callable(callback), "review control feature absent: " + function
+    return callback
+
+
+def test_exact_parsed_and_reference_identities():
+    feature("evidence", "admit_identities")(
+        ["a.py", "pyproject.toml"], ["a.py", "pyproject.toml"], ["a.py", "pyproject.toml"]
+    )
+
+
+@pytest.mark.parametrize("damage", ["missing", "extra", "reference"])
+def test_incorrect_indexed_identity_sets_rejected(damage):
+    callback = feature("evidence", "admit_identities")
+    expected = ["a.py", "pyproject.toml"]
+    parsed = expected[:]
+    refs = expected[:]
+    if damage == "missing":
+        parsed.pop()
+    if damage == "extra":
+        parsed.append("unselected.py")
+    if damage == "reference":
+        refs.pop()
+    with pytest.raises(ValueError):
+        callback(expected, parsed, refs)
+
+
+def test_complete_native_parser_receipt():
+    feature("evidence", "admit_parsers")(
+        {"files_by_parser": {"tree_sitter": 2}, "files_with_parse_failures": 0}, {"python": True}, 2
+    )
+
+
+@pytest.mark.parametrize("damage", ["grammar", "regex", "failure", "missing", "count"])
+def test_missing_or_degraded_parser_evidence_rejected(damage):
+    callback = feature("evidence", "admit_parsers")
+    analysis = {"files_by_parser": {"tree_sitter": 2}, "files_with_parse_failures": 0}
+    grammars = {"python": True}
+    if damage == "grammar":
+        grammars["python"] = False
+    if damage == "regex":
+        analysis["files_by_parser"] = {"regex": 2}
+    if damage == "failure":
+        analysis["files_with_parse_failures"] = 1
+    if damage == "missing":
+        analysis.pop("files_by_parser")
+    if damage == "count":
+        analysis["files_by_parser"] = {"tree_sitter": 1}
+    with pytest.raises(ValueError):
+        callback(analysis, grammars, 2)
+
+
+def test_interrupted_request_has_durable_offered_record(tmp_path):
+    m = module("workload")
+
+    async def exercise():
+        entered = asyncio.Event()
+
+        class Gateway:
+            async def execute_mcp(self, *args):
+                entered.set()
+                await asyncio.Event().wait()
+
+        requests = m.Requests(Gateway(), tmp_path)
+        task = asyncio.create_task(
+            requests.call("search_symbols", {"name": "known", "max_tokens": 1000})
+        )
+        try:
+            await asyncio.wait_for(entered.wait(), 2)
+            offered = list(tmp_path.glob("offered-*.json"))
+            assert len(offered) == 1, "offered request missing during dispatch"
+            row = json.loads(offered[0].read_text())
+            assert (
+                row["arguments"]["name"] == "known"
+                and row["sequence"] == 0
+                and "response" not in row
+            )
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+def test_full_campaign_history_includes_older_reservation():
+    callback = feature("evidence", "campaign_runs")
+    own = {
+        "id": 120,
+        "display_title": "Scale capacity reserved",
+        "created_at": "2026-10-29T00:00:00Z",
+    }
+    original = {
+        "id": 1,
+        "display_title": own["display_title"],
+        "created_at": "2026-10-01T00:00:00Z",
+    }
+    calls = []
+
+    def fetch(page):
+        calls.append(page)
+        return {
+            "workflow_runs": (
+                [own]
+                + [
+                    {"id": i, "display_title": "controls", "created_at": own["created_at"]}
+                    for i in range(2, 101)
+                ]
+            )
+            if page == 1
+            else [original]
+        }
+
+    rows = callback(fetch, "2026-10")
+    assert calls == [1, 2] and original in rows
+    with pytest.raises(ValueError):
+        module("evidence").unique_dispatch(rows, 120, own["display_title"], 1)
+
+
+def test_uncertain_ssh_key_creation_is_not_verified(tmp_path, monkeypatch):
+    m = module("campaign")
+    api = FakeAPI()
+    original = api.request
+
+    def request(method, path, data=None):
+        if path == "/account/keys" and method == "POST":
+            original(method, path, data)
+            raise TimeoutError("key response lost")
+        if path.startswith("/account/keys") and method == "GET":
+            return {"ssh_keys": []}
+        return original(method, path, data)
+
+    api.request = request
+    monkeypatch.setattr(m, "preflight", lambda *args: {"hourly_usd": 0.16667})
+    monkeypatch.setattr(m, "make_key", lambda path: "ssh-ed25519 fixture")
+    result = m.run(
+        reservation(), tmp_path, api=api, execute=lambda *args: {"complete": True}, month="2026-10"
+    )
+    assert result["key_cleanup_verified"] is False, "uncertain key falsely verified"
+
+
+def test_sigterm_runs_provider_cleanup(tmp_path):
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    code = """import time,sys,json
+from pathlib import Path
+from eval.quality.tests.test_scale_qualification import FakeAPI,reservation
+from eval.quality import scale_campaign as m
+out=Path(sys.argv[1]); api=FakeAPI()
+m.preflight=lambda *args:{'hourly_usd':.16667}
+m.make_key=lambda path:'ssh-ed25519 fixture'
+def execute(*args):
+ (out/'issued.json').write_text('{}')
+ time.sleep(60)
+ return {'complete':True}
+m.run(reservation(),out,api=api,execute=execute,month='2026-10')
+"""
+    process = subprocess.Popen([sys.executable, "-c", code, str(tmp_path)], start_new_session=True)
+    try:
+        until = time.monotonic() + 10
+        while (
+            not (tmp_path / "issued.json").exists()
+            and process.poll() is None
+            and time.monotonic() < until
+        ):
+            time.sleep(0.1)
+        assert (tmp_path / "issued.json").exists(), "fake worker not issued"
+        process.send_signal(signal.SIGTERM)
+        process.wait(timeout=15)
+        assert (tmp_path / "receipt.json").exists(), "SIGTERM bypassed cleanup receipt"
+        receipt = json.loads((tmp_path / "receipt.json").read_text())
+        assert (
+            not receipt["complete"]
+            and receipt["cleanup_verified"]
+            and receipt["key_cleanup_verified"]
+        )
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait(timeout=10)
+
+
+def test_independent_reaper_removes_only_expired_owned_keys():
+    callback = feature("cleanup", "reap_keys")
+
+    class API:
+        def __init__(self):
+            self.rows = [
+                {"id": 1, "name": "user-existing-key"},
+                {"id": 2, "name": "attocode-scale-key-1000-0123456789abcdef"},
+                {"id": 3, "name": "attocode-scale-key-9000-0123456789abcdef"},
+            ]
+
+        def request(self, method, path, data=None):
+            if method == "GET":
+                return {"ssh_keys": self.rows}
+            assert method == "DELETE" and path == "/account/keys/2"
+            self.rows = [r for r in self.rows if r["id"] != 2]
+
+    api = API()
+    result = callback(api, now=10000, apply=True)
+    assert result["cleanup_verified"] and [r["id"] for r in api.rows] == [1, 3]
+
+
+def test_failure_export_preserves_original_failure_receipt(tmp_path):
+    callback = feature("evidence", "safe_export")
+    root = tmp_path / "raw"
+    root.mkdir()
+    failure = {"complete": False, "error": {"message": "first original failure"}}
+    (root / "case-result.json").write_text(json.dumps(failure))
+    (root / "oversize.log").write_bytes(b"x" * (2 * 2**20 + 1))
+    archive = tmp_path / "failure.tar.gz"
+    receipt = callback(root, archive)
+    import tarfile
+
+    with tarfile.open(archive) as tar:
+        assert json.load(tar.extractfile("case-result.json")) == failure
+        loss = json.load(tar.extractfile("collection-failure.json"))
+        assert loss["complete"] is False and loss["dropped_bytes"] > 0
+    assert receipt["complete"] is False and archive.stat().st_size <= 20 * 2**20
+
+
+def test_native_specs_resolve_all_four_maintained_ids():
+    import yaml
+
+    callback = feature("native", "select_specs")
+    packs = yaml.safe_load(Path("eval/quality/workflows.yaml").read_text())["repositories"]
+    specs = callback(packs)
+    assert [(s["id"], s["language"]) for s in specs] == [
+        ("ocaml", "ocaml"),
+        ("deno", "rust"),
+        ("perl5", "perl"),
+        ("crystal", "crystal"),
+    ]
+    assert not any(s.get("queries") for s in specs)
+
+
+def test_soak_uses_full_remaining_case_budget():
+    callback = feature("workload", "remaining_soak")
+    assert callback(3300, 200) == 3040 and callback(90, 50) == 0

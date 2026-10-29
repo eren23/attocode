@@ -16,7 +16,7 @@ on:
         required: true
       stage:
         type: choice
-        options: [green, red, boundary-red, admission-red]
+        options: [green, red, boundary-red, admission-red, review-red]
         default: green
         required: true
 permissions:
@@ -27,6 +27,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   controls:
+    outputs:
+      stage: ${{ steps.gate.outputs.stage }}
     if: github.event_name == 'push' || inputs.batch == 'controls'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -43,8 +45,9 @@ jobs:
           python-version: '3.12'
       - run: uv sync --locked --package attocode-code-intel --extra dev
       - name: Run exact scale controls and existing cloud controls
+        id: gate
         env:
-          STAGE: ${{ inputs.stage || 'green' }}
+          STAGE: ${{ inputs.stage || 'review-red' }}
         run: |
           mkdir results
           uv run --no-sync python - <<'PY'
@@ -60,7 +63,7 @@ jobs:
           functions = {n.name for n in ast.parse(Path('eval/quality/tests/test_scale_qualification.py').read_text()).body if isinstance(n, ast.FunctionDef) and n.name.startswith('test_')}
           new = [r for r in rows if r.get('name', '').split('[')[0] in functions]
           old = [r for r in rows if r not in new]
-          assert len(new) == 45 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
+          assert len(new) == 66 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
           if os.environ['STAGE'] == 'red':
               assert result.returncode == 1 and len(failed) == len(new) and new
               assert all('scale qualification feature absent' in r.find('failure').get('message', '') for r in failed)
@@ -69,11 +72,15 @@ jobs:
           elif os.environ['STAGE'] == 'admission-red':
               expected = {'test_reservation_rejects_invalid_admission[path]', 'test_reservation_rejects_invalid_admission[tag]', 'test_qualified_controls_and_worker_smoke_are_required'} | {'test_incomplete_qualification_rejected['+x+']' for x in ['stage','head','tree','count','attempt','worker']}
               assert result.returncode == 1 and {r.get('name') for r in failed} == expected
+          elif os.environ['STAGE'] == 'review-red':
+              expected = {'test_coverage_rejects_false_readiness['+x+']' for x in ['partial','references','missing_refs']} | {'test_incorrect_indexed_identity_sets_rejected['+x+']' for x in ['missing','extra','reference']} | {'test_missing_or_degraded_parser_evidence_rejected['+x+']' for x in ['grammar','regex','failure','missing','count']} | {'test_exact_parsed_and_reference_identities','test_complete_native_parser_receipt','test_interrupted_request_has_durable_offered_record','test_full_campaign_history_includes_older_reservation','test_uncertain_ssh_key_creation_is_not_verified','test_sigterm_runs_provider_cleanup','test_independent_reaper_removes_only_expired_owned_keys','test_failure_export_preserves_original_failure_receipt','test_native_specs_resolve_all_four_maintained_ids','test_soak_uses_full_remaining_case_budget'}
+              assert result.returncode == 1 and {r.get('name') for r in failed} == expected
           else:
               assert result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
           Path('results/control-receipt.json').write_text(json.dumps({'stage': os.environ['STAGE'], 'new': len(new), 'old': len(old), 'failed': len(failed), 'errors': len(errors), 'head': os.environ['GITHUB_SHA'], 'tree': tree, 'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']}))
           print(Path('results/control-receipt.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output: output.write('stage='+os.environ['STAGE']+'\n')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -120,7 +127,7 @@ jobs:
           if-no-files-found: error
   worker-smoke:
     needs: controls
-    if: (inputs.stage || 'green') == 'green'
+    if: needs.controls.outputs.stage == 'green'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
