@@ -16,7 +16,25 @@ import sys
 import time
 from pathlib import Path
 
-from eval.quality.scale_evidence import admit_coverage, case_outcome, require, write
+from eval.quality.scale_evidence import (
+    admit_coverage,
+    admit_identities,
+    admit_parsers,
+    case_outcome,
+    require,
+    write,
+)
+
+
+def configure_grammars():
+    if cache := os.environ.get("QUALITY_GRAMMAR_CACHE"):
+        import tree_sitter_language_pack as pack
+
+        pack.configure(cache_dir=cache)
+
+
+def remaining_soak(seconds, elapsed):
+    return max(0, int(seconds - elapsed - 60))
 
 
 def generate_tree(root, files):
@@ -63,6 +81,7 @@ class Requests:
             "pid": os.getpid(),
         }
         try:
+            write(self.output / f"offered-{sequence:06d}.json", row)
             response = await (
                 self.gateway.execute_mcp(tool, args)
                 if compact
@@ -112,18 +131,66 @@ class Requests:
             self.inflight -= 1
 
 
-async def ready(requests, minimum, deadline):
+async def indexed_snapshot(gateway):
+    from attocode_intel._internal.integrations.context.codebase_context import EXTENSION_LANGUAGES
+    from attocode_intel._internal.integrations.context.ts_parser import is_available
+
+    require(len(gateway._workers) == 1, "ambiguous observed workspace")
+    key = next(iter(gateway._workers))
+
+    def snapshot():
+        from dataclasses import asdict
+
+        ast = gateway._stores[key]["service"]._ast_service
+        languages = {EXTENSION_LANGUAGES.get(Path(p).suffix.lower(), "") for p in ast._ast_cache}
+        languages = {"bash" if language == "shell" else language for language in languages}
+        degraded = [
+            (path, value)
+            for path, value in ast._ast_cache.items()
+            if value.parsing_tier not in {"tree_sitter", "generic_ts"} or value.parse_failures
+        ]
+        return {
+            "parsed": sorted(ast._ast_cache),
+            "referenced": sorted(ast._reference_indexed_files),
+            "grammars": {language: is_available(language) for language in sorted(languages)},
+            "degraded_count": len(degraded),
+            "degraded_samples": {
+                path: {
+                    "tier": value.parsing_tier,
+                    "failures": [asdict(f) for f in value.parse_failures],
+                }
+                for path, value in degraded[:100]
+            },
+        }
+
+    return await asyncio.get_running_loop().run_in_executor(gateway._workers[key], snapshot)
+
+
+async def ready(requests, expected, deadline):
     while True:
         page = await requests.call("hydration_status", {}, compact=False)
         coverage = page["metadata"]["coverage"]
         if coverage.get("phase") == "ready":
-            admit_coverage(coverage, minimum)
+            observed = await indexed_snapshot(requests.gateway)
+            write(
+                requests.output / "index-identities.json",
+                {
+                    "expected": sorted(expected),
+                    **observed,
+                    "coverage": coverage,
+                    "analysis": page["metadata"]["analysis"],
+                },
+            )
+            admit_coverage(coverage, len(expected))
+            admit_identities(expected, observed["parsed"], observed["referenced"])
+            admit_parsers(page["metadata"]["analysis"], observed["grammars"], len(expected))
             return coverage
         require(time.monotonic() < deadline, "full readiness deadline exceeded")
         await asyncio.sleep(1)
 
 
 async def run_phase(spec, phase, output):
+    configure_grammars()
     import attocode_intel
     from attocode_intel.gateway import OperationGateway
 
@@ -151,7 +218,9 @@ async def run_phase(spec, phase, output):
         result["origin_start"] = assert_engine(selected)
         await requests.call("bootstrap", {"task_hint": spec["symbol"], "max_tokens": 2000})
         result["bootstrap_seconds"] = time.monotonic() - started
-        result["coverage"] = await ready(requests, spec["source_files"], deadline)
+        expected = [p.relative_to(root).as_posix() for p in eligible_sources(root)]
+        result["expected_parseable_files"] = len(expected)
+        result["coverage"] = await ready(requests, expected, deadline)
         result["hydration_seconds"] = time.monotonic() - started
         page = await requests.call(
             "inspect_symbol",
@@ -247,6 +316,7 @@ def sqlite_integrity(root):
 
 
 async def lifecycle(root, output, *, soak_seconds):
+    configure_grammars()
     from attocode_intel.gateway import OperationGateway
 
     root, output = Path(root), Path(output)
@@ -260,7 +330,11 @@ async def lifecycle(root, output, *, soak_seconds):
     }
     try:
         await requests.call("bootstrap", {"max_tokens": 2000})
-        await ready(requests, len(list(root.glob("module_*.py"))), time.monotonic() + 180)
+        await ready(
+            requests,
+            [p.relative_to(root).as_posix() for p in eligible_sources(root)],
+            time.monotonic() + 180,
+        )
 
         async def look():
             page = await requests.call(
@@ -369,24 +443,92 @@ async def lifecycle(root, output, *, soak_seconds):
 
 
 def eligible_sources(root):
-    from attocode_intel._internal.integrations.context.codebase_context import EXTENSION_LANGUAGES
+    from attocode_intel._internal.integrations.context.codebase_context import (
+        EXTENSION_LANGUAGES,
+        SKIP_FILENAMES,
+    )
     from attocode_intel._internal.integrations.context.ts_parser import supported_languages
     from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
 
     ignore = IgnoreManager(root)
     supported = {"python", "javascript", "typescript", "shell"} | set(supported_languages())
-    return [
-        p
-        for p in Path(root).rglob("*")
-        if p.is_file()
-        and not p.is_symlink()
-        and not any(s.startswith(".") for s in p.relative_to(root).parts)
-        and p.suffix in EXTENSION_LANGUAGES
-        and ("bash" if EXTENSION_LANGUAGES[p.suffix] == "shell" else EXTENSION_LANGUAGES[p.suffix])
-        in supported
-        and p.stat().st_size <= 1_000_000
-        and not ignore.is_ignored(p.relative_to(root).as_posix())
-    ]
+    result = []
+    root = Path(root)
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        language = EXTENSION_LANGUAGES.get(path.suffix.lower(), "")
+        language = "bash" if language == "shell" else language
+        try:
+            if (
+                not path.is_file()
+                or path.name in SKIP_FILENAMES
+                or language not in supported
+                or any(p.startswith(".") for p in relative.parts)
+                or path.stat().st_size > 1_000_000
+                or (
+                    path.is_symlink()
+                    and not path.resolve(strict=True).is_relative_to(root.resolve())
+                )
+                or ignore.is_ignored(relative.as_posix())
+                or any(
+                    ignore.is_ignored("/".join(relative.parts[:i]) + "/")
+                    for i in range(1, len(relative.parts))
+                )
+            ):
+                continue
+        except (OSError, RuntimeError):
+            continue
+        result.append(path)
+    return result
+
+
+async def soak(root, output, seconds):
+    from attocode_intel.gateway import OperationGateway
+
+    configure_grammars()
+    root, output = Path(root), Path(output)
+    peer = OperationGateway(str(root), "daily", watch=False)
+    requests = Requests(peer, output)
+    result = {"complete": False, "planned_seconds": seconds, "offered_clients": 8}
+    try:
+        await requests.call("bootstrap", {"max_tokens": 2000})
+        await ready(
+            requests,
+            [p.relative_to(root).as_posix() for p in eligible_sources(root)],
+            time.monotonic() + 180,
+        )
+        started = time.monotonic()
+
+        async def lookup():
+            page = await requests.call(
+                "search_symbols", {"name": "operation_0", "max_tokens": 1000}
+            )
+            require(
+                any(
+                    r["name"] == "operation_0" and r["file_path"] == "module_0.py"
+                    for r in page["data"]
+                ),
+                "soak source missing",
+            )
+
+        while time.monotonic() - started < seconds:
+            burst = time.monotonic()
+            await asyncio.gather(*(lookup() for _ in range(8)))
+            await asyncio.sleep(
+                max(0, min(10 - (time.monotonic() - burst), seconds - (time.monotonic() - started)))
+            )
+        result.update(complete=True, seconds=time.monotonic() - started)
+    finally:
+        try:
+            await peer.close()
+            result["sqlite_integrity"] = sqlite_integrity(root)
+        except BaseException:
+            result["complete"] = False
+            raise
+        finally:
+            result.update(requests=requests.metrics, max_inflight=requests.max_inflight)
+            write(output / "result.json", result)
+    return result
 
 
 def supervise_case(command, root, output, seconds):
@@ -576,10 +718,6 @@ def run_case(spec, root):
             from eval.quality.scale_native import run as native_run
 
             native_run(root, output / "native")
-            # Keep 60 seconds for forced restart and collection in this case.
-            soak = max(0, min(1800, int(spec["seconds"] - (time.monotonic() - start) - 120)))
-            asyncio.run(lifecycle(tree, output / "load", soak_seconds=soak))
-            result["lifecycle"] = True
         for phase in ("cold", "restart"):
             folder = output / phase
             seconds = max(1, int(spec["seconds"] - (time.monotonic() - start) - 5))
@@ -611,6 +749,8 @@ def run_case(spec, root):
             result["phases"][0]["pid"] != result["phases"][1]["pid"], "restart reused a process"
         )
         if spec["kind"] == "lifecycle":
+            asyncio.run(lifecycle(tree, output / "load", soak_seconds=0))
+            result["lifecycle"] = True
             # Crash after reopening a real persisted index, then recover in another PID.
             crash = subprocess.Popen(
                 [
@@ -666,6 +806,8 @@ def run_case(spec, root):
                 if crash.poll() is None:
                     os.killpg(crash.pid, signal.SIGKILL)
                     crash.wait(timeout=10)
+            seconds = remaining_soak(spec["seconds"], time.monotonic() - start)
+            result["soak"] = asyncio.run(soak(tree, output / "soak", seconds))
         result["complete"] = True
     except BaseException as error:
         result["error"] = {"type": type(error).__name__, "message": str(error)[:4000]}
@@ -682,6 +824,7 @@ def main():
     parser.add_argument("--case", type=Path)
     parser.add_argument("--phase", choices=["cold", "restart", "crash", "recovery"])
     args = parser.parse_args()
+    configure_grammars()
     installed = None
     if os.environ.get("QUALITY_SCALE_PUBLISHED") == "1":
         import attocode_intel

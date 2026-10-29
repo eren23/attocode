@@ -50,6 +50,13 @@ reconstruction must verify part hashes and original hashes before interpretation
 Source corpora, indexes and package caches stay remote. Every product process
 checks its installed files against the published wheel's 272 Python files.
 
+Admission reconciles the exact eligible, parsed and reference-indexed path sets,
+and separately rejects missing native grammars, fallback parser tiers and native
+parse failures. Requests are recorded before dispatch so interrupted operations
+remain visible. If complete export cannot fit, a bounded failure bundle keeps
+original case outcomes, diagnostic prefixes/tails and explicit omitted-byte/hash
+receipts. Such a bundle is incomplete and cannot earn a scale pass.
+
 Before a billed dispatch, hosted controls exercise failure admission/cleanup,
 real small gateway operations, lossless export, exact dispatch binding and a
 live crash checkpoint. A separate hosted smoke runs the exact worker installer

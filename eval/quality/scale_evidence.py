@@ -120,7 +120,7 @@ def admit_qualification(receipt, run, jobs, tree, head):
         "qualification source/attempt mismatch",
     )
     require(
-        receipt.get("new") == 45
+        receipt.get("new") == 66
         and receipt.get("old") == 58
         and receipt.get("failed") == receipt.get("errors") == 0,
         "qualification controls incomplete",
@@ -140,9 +140,59 @@ def admit_coverage(coverage, minimum):
     require(coverage.get("discovery_truncated") is False, "discovery coverage unknown or truncated")
     parsed, total = coverage.get("parsed_files"), coverage.get("total_files")
     require(
-        type(parsed) is int and type(total) is int and total >= parsed >= minimum,
+        type(parsed) is int
+        and type(total) is int
+        and total == parsed == minimum
+        and type(coverage.get("reference_indexed_files")) is int
+        and coverage["reference_indexed_files"] == minimum,
         "parsed source coverage incomplete",
     )
+
+
+def admit_identities(expected, parsed, referenced):
+    expected = set(expected)
+    require(
+        expected and set(parsed) == expected and set(referenced) == expected,
+        "indexed parse/reference identities differ from eligible inputs",
+    )
+    return {
+        "files": len(expected),
+        "paths_sha256": hashlib.sha256(
+            json.dumps(sorted(expected), separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+
+
+def admit_parsers(analysis, grammars, expected):
+    require(
+        grammars and all(value is True for value in grammars.values()), "required grammar missing"
+    )
+    tiers = analysis.get("files_by_parser")
+    require(
+        isinstance(tiers, dict)
+        and tiers
+        and set(tiers) <= {"tree_sitter", "generic_ts"}
+        and all(type(n) is int and n >= 0 for n in tiers.values())
+        and sum(tiers.values()) == expected,
+        "parser tiers missing, degraded or incomplete",
+    )
+    require(
+        type(analysis.get("files_with_parse_failures")) is int
+        and analysis["files_with_parse_failures"] == 0,
+        "native parse failure observed",
+    )
+
+
+def campaign_runs(fetch, month):
+    """Inspect every relevant run; bounded pagination refuses incomplete history."""
+    result = []
+    for page in range(1, 101):
+        rows = fetch(page)["workflow_runs"]
+        require(isinstance(rows, list), "invalid workflow history")
+        result.extend(r for r in rows if r["created_at"][:7] >= month)
+        if len(rows) < 100 or (rows and rows[-1]["created_at"][:7] < month):
+            return result
+    raise ValueError("workflow history exceeds bounded complete admission")
 
 
 def case_outcome(rows):
@@ -252,3 +302,108 @@ def export_evidence(root, destination):
         "splits": splits,
         "archive_sha256": hashlib.sha256(Path(destination).read_bytes()).hexdigest(),
     }
+
+
+def safe_export(root, destination):
+    """A failed complete export still carries bounded original failure diagnostics."""
+    try:
+        return {"complete": True, **export_evidence(root, destination)}
+    except Exception as error:
+        root = Path(root)
+        paths = [] if root.is_symlink() else list(root.rglob("*"))
+
+        def priority(path):
+            if path.name in {"batch-result.json", "case-result.json", "result.json"}:
+                level = 0
+            elif path.suffix == ".log":
+                level = 1
+            elif path.name.startswith(("raw-", "offered-")):
+                level = 2
+            else:
+                level = 3
+            return level, path.as_posix()
+
+        bodies, inventory, used, dropped = [], [], 0, 0
+        for path in sorted(paths, key=priority):
+            if path.is_dir() and not path.is_symlink():
+                continue
+            name = path.relative_to(root).as_posix()
+            if path.is_symlink() or not path.is_file():
+                inventory.append({"path": name, "reason": "unsafe-entry", "retained": False})
+                continue
+            size = path.stat().st_size
+            with path.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            row = {"path": name, "bytes": size, "sha256": digest, "parts": []}
+            budget = max(0, 16 * 2**20 - used)
+            keep = min(size, budget)
+            if size > 2 * 2**20 and path.suffix == ".log":
+                keep = min(keep, 2 * 2**20)
+                spans = [(0, keep // 2), (size - (keep - keep // 2), size)] if keep else []
+            else:
+                spans = [(i, min(i + 2 * 2**20, keep)) for i in range(0, keep, 2 * 2**20)]
+            with path.open("rb") as stream:
+                for i, (start, end) in enumerate(spans):
+                    stream.seek(start)
+                    raw = stream.read(end - start)
+                    part = (
+                        name if keep == size and len(spans) == 1 else name + f".failure-part{i:03d}"
+                    )
+                    if part in {"collection-failure.json", "export-manifest.json"}:
+                        part = "original-" + part
+                    bodies.append((part, raw))
+                    used += len(raw)
+                    row["parts"].append(
+                        {
+                            "path": part,
+                            "start": start,
+                            "end": end,
+                            "sha256": hashlib.sha256(raw).hexdigest(),
+                        }
+                    )
+            row["dropped_bytes"] = size - keep
+            dropped += size - keep
+            inventory.append(row)
+        inventory_raw = json.dumps(inventory, separators=(",", ":")).encode()
+        loss = {
+            "complete": False,
+            "reason": "complete-export-failed",
+            "error": str(error)[:2000],
+            "dropped_bytes": dropped,
+            "original_entries": len(inventory),
+            "inventory_sha256": hashlib.sha256(inventory_raw).hexdigest(),
+            "inventory_limited": len(inventory_raw) > 2**20,
+            "entries": inventory
+            if len(inventory_raw) <= 2**20
+            else inventory[:100] + inventory[-100:],
+        }
+        bodies.append(("collection-failure.json", json.dumps(loss, separators=(",", ":")).encode()))
+        manifest = {
+            "schema": 1,
+            "complete": False,
+            "entries": {
+                name: {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+                for name, raw in bodies
+            },
+        }
+        bodies.append(
+            ("export-manifest.json", json.dumps(manifest, separators=(",", ":")).encode())
+        )
+        require(
+            sum(len(raw) for _, raw in bodies) <= 20 * 2**20
+            and all(len(raw) <= 2 * 2**20 for _, raw in bodies),
+            "bounded failure metadata overflow",
+        )
+        with tarfile.open(destination, "w:gz") as archive:
+            for name, raw in bodies:
+                info = tarfile.TarInfo(name)
+                info.size = len(raw)
+                info.mode = 0o600
+                archive.addfile(info, io.BytesIO(raw))
+        return {
+            "complete": False,
+            "files": len(bodies),
+            "bytes": sum(len(raw) for _, raw in bodies),
+            "dropped_bytes": dropped,
+            "archive_sha256": hashlib.sha256(Path(destination).read_bytes()).hexdigest(),
+        }

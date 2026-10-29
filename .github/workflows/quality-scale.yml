@@ -16,7 +16,7 @@ on:
         required: true
       stage:
         type: choice
-        options: [green, red, boundary-red, admission-red, review-red]
+        options: [green]
         default: green
         required: true
 permissions:
@@ -37,17 +37,29 @@ jobs:
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
       QUALITY_TEST_SYSTEMD: '1'
+      QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/scale-control-grammars
       SCALE_CONTROL_EVIDENCE: results/workers
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
-      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Prepare explicit small-fixture grammar cache
+        run: |
+          uv run --no-sync python - <<'PY'
+          import os
+          from pathlib import Path
+          import tree_sitter_language_pack as pack
+          Path(os.environ['QUALITY_GRAMMAR_CACHE']).mkdir()
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          pack.download(['toml'])
+          assert 'toml' in pack.downloaded_languages()
+          PY
       - name: Run exact scale controls and existing cloud controls
         id: gate
         env:
-          STAGE: ${{ inputs.stage || 'review-red' }}
+          STAGE: ${{ inputs.stage || 'green' }}
         run: |
           mkdir results
           uv run --no-sync python - <<'PY'
@@ -64,19 +76,7 @@ jobs:
           new = [r for r in rows if r.get('name', '').split('[')[0] in functions]
           old = [r for r in rows if r not in new]
           assert len(new) == 66 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
-          if os.environ['STAGE'] == 'red':
-              assert result.returncode == 1 and len(failed) == len(new) and new
-              assert all('scale qualification feature absent' in r.find('failure').get('message', '') for r in failed)
-          elif os.environ['STAGE'] == 'boundary-red':
-              assert result.returncode == 1 and {r.get('name') for r in failed} == {'test_large_manifest_export_is_lossless', 'test_dispatch_batch_and_reservation_binding', 'test_forced_restart_checkpoint_keeps_gateway_open'}
-          elif os.environ['STAGE'] == 'admission-red':
-              expected = {'test_reservation_rejects_invalid_admission[path]', 'test_reservation_rejects_invalid_admission[tag]', 'test_qualified_controls_and_worker_smoke_are_required'} | {'test_incomplete_qualification_rejected['+x+']' for x in ['stage','head','tree','count','attempt','worker']}
-              assert result.returncode == 1 and {r.get('name') for r in failed} == expected
-          elif os.environ['STAGE'] == 'review-red':
-              expected = {'test_coverage_rejects_false_readiness['+x+']' for x in ['partial','references','missing_refs']} | {'test_incorrect_indexed_identity_sets_rejected['+x+']' for x in ['missing','extra','reference']} | {'test_missing_or_degraded_parser_evidence_rejected['+x+']' for x in ['grammar','regex','failure','missing','count']} | {'test_exact_parsed_and_reference_identities','test_complete_native_parser_receipt','test_interrupted_request_has_durable_offered_record','test_full_campaign_history_includes_older_reservation','test_uncertain_ssh_key_creation_is_not_verified','test_sigterm_runs_provider_cleanup','test_independent_reaper_removes_only_expired_owned_keys','test_failure_export_preserves_original_failure_receipt','test_native_specs_resolve_all_four_maintained_ids','test_soak_uses_full_remaining_case_budget'}
-              assert result.returncode == 1 and {r.get('name') for r in failed} == expected
-          else:
-              assert result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
+          assert os.environ['STAGE'] == 'green' and result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
           Path('results/control-receipt.json').write_text(json.dumps({'stage': os.environ['STAGE'], 'new': len(new), 'old': len(old), 'failed': len(failed), 'errors': len(errors), 'head': os.environ['GITHUB_SHA'], 'tree': tree, 'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']}))
           print(Path('results/control-receipt.json').read_text())
@@ -186,7 +186,8 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
   access-check:
-    if: github.event_name == 'workflow_dispatch' && inputs.batch == 'access-check' && github.ref == 'refs/heads/main'
+    needs: [controls, worker-smoke]
+    if: always() && ((github.event_name == 'workflow_dispatch' && inputs.batch == 'access-check' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/test/published-scale-qualification' && needs.controls.result == 'success' && needs.worker-smoke.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -204,24 +205,31 @@ jobs:
           from pathlib import Path
           from eval.quality.cloud import API,tagged,quote,verify_reaper
           from eval.quality.scale_campaign import keys,make_key
+          from eval.quality.scale_cleanup import cleanup_key,key_name
+          import time
           api=API(); verify_reaper(); assert not tagged(api)
           price=quote(api); assert price['hourly_usd']<=.16667
-          name='attocode-scale-access-'+os.environ['GITHUB_RUN_ID']
+          name=key_name({'id':'access-'+os.environ['GITHUB_RUN_ID'], 'created_at':time.time()})
           key=Path(os.environ['RUNNER_TEMP'])/name
+          attempted=False; known=None; verified=False
           try:
               public=make_key(key)
-              api.request('POST','/account/keys',{'name':name,'public_key':public})
-              assert len([k for k in keys(api) if k['name']==name])==1
+              Path('access-attempt.json').write_text(json.dumps({'key_name':name,'run_id':os.environ['GITHUB_RUN_ID']}))
+              attempted=True
+              created=api.request('POST','/account/keys',{'name':name,'public_key':public})['ssh_key']
+              known=created['id']; assert created['name']==name
           finally:
-              for k in [k for k in keys(api) if k['name']==name]: api.request('DELETE','/account/keys/'+str(k['id']))
+              verified=cleanup_key(api,name,known_id=known,attempted=attempted)
               key.unlink(missing_ok=True); Path(str(key)+'.pub').unlink(missing_ok=True)
-          assert not any(k['name']==name for k in keys(api)) and not tagged(api)
+          assert verified and not tagged(api)
           Path('access-receipt.json').write_text(json.dumps({'complete':True,'workers_created':0,'key_cleanup_verified':True,'quote':price,'head':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID']}))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: scale-access-${{ github.run_id }}-${{ github.run_attempt }}
-          path: access-receipt.json
+          path: |
+            access-receipt.json
+            access-attempt.json
           retention-days: 14
           if-no-files-found: warn

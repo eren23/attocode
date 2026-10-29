@@ -10,11 +10,11 @@ import ipaddress
 import json
 import os
 import shlex
+import signal
 import subprocess
 import tarfile
+import threading
 import time
-import urllib.error
-import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -30,12 +30,14 @@ from eval.quality.cloud import (
     wait_for_bootstrap,
     worker_command,
 )
+from eval.quality.scale_cleanup import cleanup_key, key_name, key_rows
 from eval.quality.scale_evidence import (
     PRODUCT,
     admit_qualification,
+    campaign_runs,
     dispatch_selection,
-    export_evidence,
     require,
+    safe_export,
     unique_dispatch,
     validate_reservation,
     write,
@@ -132,15 +134,32 @@ def preflight(data, output, api):
         check=True,
     )
     title = f"Scale {data['batch']} {data['reservation_id']}"
-    with urllib.request.urlopen(
-        "https://api.github.com/repos/eren23/attocode/actions/workflows/quality-scale.yml/runs?per_page=100",
-        timeout=30,
-    ) as stream:
-        runs = json.load(stream)["workflow_runs"]
+    runs = campaign_runs(
+        lambda page: github(f"actions/workflows/quality-scale.yml/runs?per_page=100&page={page}"),
+        data["month"],
+    )
     unique_dispatch(
         runs, int(os.environ["GITHUB_RUN_ID"]), title, int(os.environ["GITHUB_RUN_ATTEMPT"])
     )
     verify_reaper()
+    cleanup_runs = github("actions/workflows/quality-cleanup.yml/runs?per_page=5")["workflow_runs"]
+    key_heartbeat = False
+    for run in cleanup_runs:
+        updated = dt.datetime.fromisoformat(run["updated_at"].replace("Z", "+00:00")).timestamp()
+        if (
+            run.get("conclusion") == "success"
+            and run.get("head_branch") == "main"
+            and time.time() - updated < 7200
+        ):
+            cleanup_jobs = github(f"actions/runs/{run['id']}/jobs?per_page=100")["jobs"]
+            if any(
+                s["name"] == "Reap expired scale SSH registrations" and s["conclusion"] == "success"
+                for j in cleanup_jobs
+                for s in j.get("steps", [])
+            ):
+                key_heartbeat = True
+                break
+    require(key_heartbeat, "independent SSH registration cleanup heartbeat missing")
     require(not tagged(api), "another quality worker exists")
     price = quote(api)
     require(
@@ -191,13 +210,7 @@ def make_key(path):
 
 
 def keys(api):
-    result = []
-    for page in range(1, 101):
-        data = api.request("GET", f"/account/keys?per_page=200&page={page}")
-        result.extend(data["ssh_keys"])
-        if not data.get("links", {}).get("pages", {}).get("next"):
-            return result
-    raise ValueError("SSH key pagination limit")
+    return key_rows(api)
 
 
 def run(data, output, *, api=None, execute=None, month=None):
@@ -222,15 +235,39 @@ def run(data, output, *, api=None, execute=None, month=None):
     }
     key = output.parent / ("scale-private-" + row["id"])
     name = "attocode-scale-" + row["id"]
-    started_create = False
+    registration = key_name(row)
+    result["key_name"] = registration
+    started_create = key_attempted = False
+    previous_signal = None
+    if threading.current_thread() is threading.main_thread():
+        previous_signal = signal.getsignal(signal.SIGTERM)
+
+        def terminate(_signal, _frame):
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            raise InterruptedError("controller received SIGTERM")
+
+        signal.signal(signal.SIGTERM, terminate)
     try:
         price = preflight(data, output, api)
         result["hourly_usd"] = price["hourly_usd"]
         public = make_key(key)
-        api.request("POST", "/account/keys", {"name": name, "public_key": public})
-        matches = [k for k in keys(api) if k["name"] == name]
-        require(len(matches) == 1, "ephemeral key identity ambiguous")
-        result["key_id"] = matches[0]["id"]
+        write(
+            output / "key-attempt.json",
+            {
+                "name": registration,
+                "public_key_sha256": hashlib.sha256(public.encode()).hexdigest(),
+                "reservation_id": row["id"],
+            },
+        )
+        key_attempted = True
+        registered = api.request(
+            "POST", "/account/keys", {"name": registration, "public_key": public}
+        )["ssh_key"]
+        result["key_id"] = registered["id"]
+        require(
+            registered["name"] == registration,
+            "ephemeral key identity differs from create response",
+        )
         started_create = True
         created = api.request(
             "POST",
@@ -255,6 +292,8 @@ def run(data, output, *, api=None, execute=None, month=None):
     except BaseException as error:
         result["error"] = {"type": type(error).__name__, "message": str(error)[:4000]}
     finally:
+        if previous_signal is not None:
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
         cleanup_errors = []
         try:
             nodes = tagged(api, row["run_tag"])
@@ -271,9 +310,9 @@ def run(data, output, *, api=None, execute=None, month=None):
         except BaseException as error:
             cleanup_errors.append("worker:" + type(error).__name__)
         try:
-            for item in [k for k in keys(api) if k["name"] == name]:
-                api.request("DELETE", "/account/keys/" + str(item["id"]))
-            result["key_cleanup_verified"] = not any(k["name"] == name for k in keys(api))
+            result["key_cleanup_verified"] = cleanup_key(
+                api, registration, known_id=result.get("key_id"), attempted=key_attempted
+            )
         except BaseException as error:
             cleanup_errors.append("key:" + type(error).__name__)
         for path in (key, Path(str(key) + ".pub")):
@@ -295,6 +334,8 @@ def run(data, output, *, api=None, execute=None, month=None):
             and not cleanup_errors
         )
         write(output / "receipt.json", result)
+        if previous_signal is not None:
+            signal.signal(signal.SIGTERM, previous_signal)
     return result
 
 
@@ -330,9 +371,10 @@ QUALITY_GRAMMAR_CACHE=/root/scale/cache/grammars .venv/bin/python - <<'PYGRAMMAR
 import os
 import tree_sitter_language_pack as pack
 pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
-pack.download(['ocaml','perl'])
-assert {'ocaml','perl'}<=set(pack.downloaded_languages())
-from attocode_intel._internal.integrations.context.ts_parser import is_available
+from attocode_intel._internal.integrations.context.ts_parser import is_available,supported_languages
+requested=sorted(set(supported_languages()) & set(pack.manifest_languages()))
+pack.download(requested)
+assert set(requested)<=set(pack.downloaded_languages())
 assert all(is_available(x) for x in ['rust','ocaml','perl','crystal'])
 PYGRAMMAR
 """
@@ -481,7 +523,9 @@ def execute_remote(api, result, output, key):
     require(path.exists(), "batch result missing")
     report = json.loads(path.read_text())
     return {
-        "complete": report.get("complete") is True and all(r["status"] == "passed" for r in rows),
+        "complete": report.get("complete") is True
+        and not (output / "evidence/collection-failure.json").exists()
+        and all(r["status"] == "passed" for r in rows),
         "batch": report,
         "phases": rows,
     }
@@ -493,7 +537,7 @@ def main():
     parser.add_argument("--export", type=Path)
     args = parser.parse_args()
     if args.export:
-        receipt = export_evidence(args.export, args.out)
+        receipt = safe_export(args.export, args.out)
         print(json.dumps(receipt))
         return 0
     data = json.loads(os.environ.pop("QUALITY_SCALE_RESERVATION"))

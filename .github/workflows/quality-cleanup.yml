@@ -22,3 +22,8 @@ jobs:
         env:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.QUALITY_DIGITALOCEAN_TOKEN }}
         run: uv run --no-project --with filelock --with psutil python -m eval.quality cloud reap-apply
+      - name: Reap expired scale SSH registrations
+        if: always()
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.QUALITY_DIGITALOCEAN_TOKEN }}
+        run: uv run --no-project --with filelock --with psutil python -m eval.quality.scale_cleanup --apply

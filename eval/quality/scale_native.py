@@ -18,6 +18,15 @@ def admit_grammars(inventory):
     )
 
 
+def select_specs(packs):
+    selected = []
+    for name in ("ocaml", "deno", "perl5", "crystal"):
+        matches = [p for p in packs if p["id"] == name]
+        require(len(matches) == 1, "missing or duplicate native fixture: " + name)
+        selected.append({k: v for k, v in matches[0].items() if k != "queries"})
+    return selected
+
+
 def run(root, output):
     import importlib.metadata
 
@@ -71,9 +80,8 @@ def run(root, output):
     )
     packs = yaml.safe_load(Path("eval/quality/workflows.yaml").read_text())["repositories"]
     report = {"complete": False, "queries": 0, "repositories": []}
-    for name in ("ocaml", "deno", "perl", "crystal"):
-        spec = dict(next(s for s in packs if s["id"] == name))
-        spec.pop("queries", None)
+    for spec in select_specs(packs):
+        name = spec["id"]
         tree, folder = root / "work" / ("native-" + name), output / name
         tree.mkdir(parents=True)
         folder.mkdir()
@@ -83,7 +91,7 @@ def run(root, output):
         require(
             source_manifest(tree) == receipt, "native materialization differs from pinned source"
         )
-        if name == "perl":
+        if spec["language"] == "perl":
             # Explicitly exercise the labeled source under the published ignore contract.
             ignore = tree / ".gitignore"
             original = ignore.read_text() if ignore.exists() else ""

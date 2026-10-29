@@ -285,6 +285,12 @@ class FakeAPI:
     def request(self, method, path, data=None):
         if path.startswith("/account/keys"):
             if method == "GET":
+                if path.startswith("/account/keys/"):
+                    import urllib.error
+
+                    if not self.keys:
+                        raise urllib.error.HTTPError(path, 404, "absent", {}, None)
+                    return {"ssh_key": self.keys[0]}
                 return {"ssh_keys": self.keys}
             if method == "POST":
                 self.keys.append({"id": 12, "name": data["name"]})
@@ -375,7 +381,7 @@ def test_dispatch_batch_and_reservation_binding():
 def qualification():
     receipt = {
         "stage": "green",
-        "new": 45,
+        "new": 66,
         "old": 58,
         "failed": 0,
         "errors": 0,
@@ -418,7 +424,7 @@ def test_incomplete_qualification_rejected(damage):
     if damage == "tree":
         receipt["tree"] = "0" * 40
     if damage == "count":
-        receipt["new"] = 44
+        receipt["new"] = 65
     if damage == "attempt":
         run["run_attempt"] = 2
     if damage == "worker":
@@ -675,6 +681,10 @@ def test_independent_reaper_removes_only_expired_owned_keys():
 
         def request(self, method, path, data=None):
             if method == "GET":
+                if path.startswith("/account/keys/"):
+                    import urllib.error
+
+                    raise urllib.error.HTTPError(path, 404, "absent", {}, None)
                 return {"ssh_keys": self.rows}
             assert method == "DELETE" and path == "/account/keys/2"
             self.rows = [r for r in self.rows if r["id"] != 2]
