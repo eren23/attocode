@@ -7,7 +7,7 @@ on:
     inputs:
       batch:
         type: choice
-        options: [controls]
+        options: [controls, capacity, real, lifecycle]
         default: controls
         required: true
       reservation_id:
@@ -43,7 +43,7 @@ jobs:
       - run: uv sync --locked --package attocode-code-intel --extra dev
       - name: Run exact scale controls and existing cloud controls
         env:
-          STAGE: ${{ inputs.stage || 'red' }}
+          STAGE: ${{ inputs.stage || 'green' }}
         run: |
           mkdir results
           uv run --no-sync python - <<'PY'
@@ -65,7 +65,8 @@ jobs:
               assert all('scale qualification feature absent' in r.find('failure').get('message', '') for r in failed)
           else:
               assert result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
-          Path('results/control-receipt.json').write_text(json.dumps({'stage': os.environ['STAGE'], 'new': len(new), 'old': len(old), 'failed': len(failed), 'errors': len(errors), 'head': os.environ['GITHUB_SHA'], 'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']}))
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          Path('results/control-receipt.json').write_text(json.dumps({'stage': os.environ['STAGE'], 'new': len(new), 'old': len(old), 'failed': len(failed), 'errors': len(errors), 'head': os.environ['GITHUB_SHA'], 'tree': tree, 'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']}))
           print(Path('results/control-receipt.json').read_text())
           PY
       - uses: actions/upload-artifact@v4
@@ -73,5 +74,39 @@ jobs:
         with:
           name: scale-controls-${{ github.run_id }}-${{ github.run_attempt }}
           path: results/
+          retention-days: 14
+          if-no-files-found: error
+  cloud:
+    if: github.event_name == 'workflow_dispatch' && inputs.batch != 'controls' && inputs.stage == 'green' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Execute exactly one reserved cloud batch
+        timeout-minutes: 90
+        env:
+          QUALITY_SCALE_RESERVATION: ${{ secrets.QUALITY_SCALE_RESERVATION }}
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.QUALITY_DIGITALOCEAN_TOKEN }}
+          INPUT_RESERVATION: ${{ inputs.reservation_id }}
+        run: uv run --no-sync python -m eval.quality.scale_campaign --out '${{ runner.temp }}/scale-results'
+      - name: Remove controller private keys before upload
+        if: always()
+        run: find '${{ runner.temp }}' -maxdepth 1 -type f -name 'scale-private-*' -delete
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-${{ inputs.batch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/scale-results/*.json
+            ${{ runner.temp }}/scale-results/*.log
+            ${{ runner.temp }}/scale-results/results.tar.gz
           retention-days: 14
           if-no-files-found: error
