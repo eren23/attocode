@@ -1038,5 +1038,24 @@
     "Native compatibility has four explicitly limited checks per pack and three recorded OCaml parser errors.",
     "Original JSON exports were normalized; content-addressed native bytes are separately restored and exactly hash-verified.",
     "Timing includes shared CPU and substantial observer overhead; no speedup, broad semantic correctness, relevance or historical-cause claim."
-  ]
+  ],
+  "lifecycle_load_contract": {
+    "initial_offered_clients": [
+      1,
+      4,
+      8
+    ],
+    "soak_clients": 8,
+    "soak_burst_period_seconds": 10,
+    "serial_shared_workspace": true,
+    "soak_observed_cadence": {
+      "search_requests": 2464,
+      "bursts": 308,
+      "offered_clients_per_burst": 8,
+      "median_burst_interval_seconds": 10.010529432999647,
+      "min_interval": 10.000644267000098,
+      "max_interval": 10.012914029000058
+    }
+  },
+  "retained_archive_export_ignore": true
 }
