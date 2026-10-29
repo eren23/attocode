@@ -1,0 +1,238 @@
+name: Published scale qualification
+run-name: Scale ${{ inputs.batch }} ${{ inputs.reservation_id }}
+on:
+  push:
+    branches: [test/published-scale-qualification]
+  workflow_dispatch:
+    inputs:
+      batch:
+        type: choice
+        options: [controls, access-check, capacity, real, lifecycle]
+        default: controls
+        required: true
+      reservation_id:
+        type: string
+        default: controls
+        required: true
+      stage:
+        type: choice
+        options: [green]
+        default: green
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: quality-scale-qualification
+  cancel-in-progress: false
+jobs:
+  controls:
+    outputs:
+      stage: ${{ steps.gate.outputs.stage }}
+    if: github.event_name == 'push' || inputs.batch == 'controls'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      QUALITY_TEST_SYSTEMD: '1'
+      SCALE_CONTROL_EVIDENCE: results/workers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Prepare explicit small-fixture grammar cache
+        run: |
+          uv run --no-sync python - <<'PY'
+          import os
+          from pathlib import Path
+          import tree_sitter_language_pack as pack
+          cache=Path(os.environ['RUNNER_TEMP'])/'scale-control-grammars'
+          cache.mkdir()
+          pack.configure(cache_dir=str(cache))
+          pack.download(['toml'])
+          assert 'toml' in pack.downloaded_languages()
+          with open(os.environ['GITHUB_ENV'],'a') as env: env.write('QUALITY_GRAMMAR_CACHE='+str(cache)+'\n')
+          PY
+      - name: Run exact scale controls and existing cloud controls
+        id: gate
+        env:
+          STAGE: ${{ inputs.stage || 'green' }}
+        run: |
+          mkdir results
+          uv run --no-sync python - <<'PY'
+          import ast, json, os, subprocess, sys, xml.etree.ElementTree as ET
+          from pathlib import Path
+          command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml', '--confcutdir=packages/code-intel/tests', '-q', '--junitxml=results/controls.xml', 'eval/quality/tests/test_scale_qualification.py', 'packages/code-intel/tests/test_quality_cloud.py']
+          with Path('results/controls.log').open('w') as stream:
+              result = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT)
+          root = ET.parse('results/controls.xml').getroot()
+          rows = root.findall('.//testcase')
+          failed = [r for r in rows if r.find('failure') is not None]
+          errors = [r for r in rows if r.find('error') is not None]
+          functions = {n.name for n in ast.parse(Path('eval/quality/tests/test_scale_qualification.py').read_text()).body if isinstance(n, ast.FunctionDef) and n.name.startswith('test_')}
+          new = [r for r in rows if r.get('name', '').split('[')[0] in functions]
+          old = [r for r in rows if r not in new]
+          assert len(new) == 68 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
+          assert os.environ['STAGE'] == 'green' and result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          Path('results/control-receipt.json').write_text(json.dumps({'stage': os.environ['STAGE'], 'new': len(new), 'old': len(old), 'failed': len(failed), 'errors': len(errors), 'head': os.environ['GITHUB_SHA'], 'tree': tree, 'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']}))
+          print(Path('results/control-receipt.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output: output.write('stage='+os.environ['STAGE']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-controls-${{ github.run_id }}-${{ github.run_attempt }}
+          path: results/
+          retention-days: 14
+          if-no-files-found: error
+  cloud:
+    if: github.event_name == 'workflow_dispatch' && contains(fromJSON('["capacity","real","lifecycle"]'), inputs.batch) && inputs.stage == 'green' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Execute exactly one reserved cloud batch
+        timeout-minutes: 90
+        env:
+          QUALITY_SCALE_RESERVATION: ${{ secrets.QUALITY_SCALE_RESERVATION }}
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.QUALITY_DIGITALOCEAN_TOKEN }}
+          INPUT_RESERVATION: ${{ inputs.reservation_id }}
+          INPUT_BATCH: ${{ inputs.batch }}
+          GH_TOKEN: ${{ github.token }}
+        run: uv run --no-sync python -m eval.quality.scale_campaign --out '${{ runner.temp }}/scale-results'
+      - name: Remove controller private keys before upload
+        if: always()
+        run: find '${{ runner.temp }}' -maxdepth 1 -type f -name 'scale-private-*' -delete
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-${{ inputs.batch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/scale-results/*.json
+            ${{ runner.temp }}/scale-results/*.log
+            ${{ runner.temp }}/scale-results/results.tar.gz
+          retention-days: 14
+          if-no-files-found: error
+  worker-smoke:
+    needs: controls
+    if: needs.controls.outputs.stage == 'green'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Exact disposable worker setup without cloud credentials
+        timeout-minutes: 11
+        run: |
+          git archive --format=tar.gz -o '${{ runner.temp }}/source.tar.gz' HEAD
+          sudo -n cp '${{ runner.temp }}/source.tar.gz' /root/source.tar.gz
+          uv run --no-sync python - <<'PY'
+          import subprocess
+          from eval.quality.cloud import worker_command
+          from eval.quality.scale_campaign import SETUP
+          subprocess.run(['sudo', '-n', '/bin/sh', '-c', worker_command(SETUP, 600)], check=True, timeout=620)
+          PY
+      - name: Published wheel actual CLI lifecycle and native smoke
+        timeout-minutes: 7
+        run: |
+          sudo -n env PYTHONPATH=/root/job QUALITY_ALLOW_DOWNLOADS=1 QUALITY_GRAMMAR_CACHE=/root/scale/cache/grammars QUALITY_SCALE_PUBLISHED=1 TMPDIR=/root/scale/tmp ATTOCODE_LOCAL_ONLY=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /root/job/.venv/bin/python - <<'PY'
+          import os
+          os.chdir('/root/job')
+          import json
+          from pathlib import Path
+          import attocode_intel,yaml
+          from eval.quality.scale_evidence import attest_wheel,WHEEL_SHA,write
+          from eval.quality.scale_workload import run_case
+          root=Path('/root/scale'); (root/'evidence').mkdir(parents=True,exist_ok=True)
+          write(root/'evidence/installed.json',attest_wheel('/root/published.whl',Path(attocode_intel.__file__).parent,WHEEL_SHA))
+          packs=yaml.safe_load(Path('eval/quality/workflows.yaml').read_text())['repositories']
+          deno=dict(next(s for s in packs if s['id']=='deno')); deno.pop('queries',None)
+          cases=[{'id':'smoke-capacity','kind':'synthetic','size':64,'seconds':90},
+                 {'id':'smoke-real','kind':'real','source':deno,'seconds':120},
+                 {'id':'smoke-lifecycle','kind':'lifecycle','size':64,'seconds':180}]
+          for case in cases:
+              (root/'evidence'/case['id']).mkdir()
+              run_case(case,root)
+          write(root/'evidence/smoke-receipt.json',{'complete':True,'paid_workers':0,'cases':[c['id'] for c in cases],'product_python_files':272})
+          PY
+      - name: Collect bounded original smoke evidence
+        if: always()
+        run: |
+          if sudo -n test -d /root/scale/evidence; then
+            sudo -n sh -c 'cd /root/job && PYTHONPATH=/root/job .venv/bin/python -m eval.quality.scale_campaign --export /root/scale/evidence --out /root/smoke-evidence.tar.gz'
+            sudo -n cp /root/smoke-evidence.tar.gz '${{ runner.temp }}/smoke-evidence.tar.gz'
+            sudo -n chmod 644 '${{ runner.temp }}/smoke-evidence.tar.gz'
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-worker-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/smoke-evidence.tar.gz
+          retention-days: 14
+          if-no-files-found: warn
+  access-check:
+    needs: [controls, worker-smoke]
+    if: always() && ((github.event_name == 'workflow_dispatch' && inputs.batch == 'access-check' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/test/published-scale-qualification' && needs.controls.result == 'success' && needs.worker-smoke.result == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Verify existing bootstrap metadata and non-provisioning API admission
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.QUALITY_DIGITALOCEAN_TOKEN }}
+          SCALE_BOOTSTRAP_SELECTOR: ${{ secrets.QUALITY_SCALE_BOOTSTRAP_KEY_ID }}
+        run: |
+          uv run --no-sync python - <<'PYACCESS'
+          import hashlib,json,os,urllib.error
+          from pathlib import Path
+          from eval.quality.cloud import API,tagged,quote,verify_reaper,destroy
+          from eval.quality.scale_campaign import keys
+          api=API(); verify_reaper(); assert not tagged(api)
+          price=quote(api); assert price['hourly_usd']<=.16667
+          selector=os.environ['SCALE_BOOTSTRAP_SELECTOR']; assert selector
+          selected=[k for k in keys(api) if str(k['id'])==selector or k.get('fingerprint')==selector]
+          assert len(selected)==1, 'Existing bootstrap registration missing/ambiguous'
+          # Missing every required creation parameter: this can only validate or reject.
+          status=None; detail=None
+          try:
+              unexpected=api.request('POST','/droplets',{})
+          except urllib.error.HTTPError as error:
+              status=error.code; detail=error.read(8192).decode(errors='replace')
+          else:
+              if identity:=unexpected.get('droplet',{}).get('id'): assert destroy(api,identity)
+              raise AssertionError('Provider accepted an invalid empty creation request')
+          receipt={'complete':status in (400,422),'workers_created':0,'account_key_writes':0,
+                   'bootstrap_key_id':selected[0]['id'],'bootstrap_fingerprint':selected[0].get('fingerprint'),
+                   'create_validation_status':status,'create_validation_detail':detail,
+                   'quote':price,'head':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID']}
+          Path('access-receipt.json').write_text(json.dumps(receipt))
+          assert receipt['complete'] and not tagged(api), 'Creation permission or validation admission failed'
+          PYACCESS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-access-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            access-receipt.json
+          retention-days: 14
+          if-no-files-found: warn
