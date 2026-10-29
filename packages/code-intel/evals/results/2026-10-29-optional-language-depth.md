@@ -21,7 +21,9 @@ The new resolvers offer static candidates: OCaml module implementation/interface
 files in the workspace root or current source directory; Perl namespace `.pm`
 files under the root or `lib`; Crystal explicit relative `.cr` requires. Competing
 roots, malformed/dynamic modules, external Crystal requires, wildcard paths and
-root escapes yield no claimed target. These are syntax/conventional-workspace
+root escapes yield no claimed target. Prefix-stripped Python import aliases are
+rejected: a relative Crystal require cannot silently bind a file under an unrelated
+Python source root. The same physical-path boundary applies to OCaml and Perl. These are syntax/conventional-workspace
 candidates, not compiler load-path or type-resolution proof. Test discovery remains
 heuristic, and absence is not proven from an unresolved import.
 
@@ -60,6 +62,23 @@ follows.
   scoped search, caller, dependencies, impact, tests and restart. All five defect
   native ASTs and source bytes exactly match their baseline counterparts.
 
+- Whole-branch review found Python source-root aliases could be mistaken for real
+  optional-language paths, and pytest exit zero alone could accept skipped grammar
+  checks. [Review RED40851465962](https://github.com/eren23/attocode/actions/runs/40851465962)
+  reproduced exactly 12 new assertions with all 394 earlier cases passing: three
+  real file-index alias boundaries and nine coverage-receipt controls.
+- [Review GREEN40852212232](https://github.com/eren23/attocode/actions/runs/40852212232)
+  passed all **406 unskipped cases** in 27.586 seconds: 384 maintained controls and
+  22 dedicated depth cases. Physical targets still resolve; misleading Python
+  aliases do not. Coverage receipt checks reject missing, skipped, failed, errored,
+  duplicated, renamed, empty and unsafe XML. The three authored eight-check
+  workflows were independently replayed again from all 27 raw MCP responses,
+  including three explicitly recorded warming responses.
+- The first draft's optional CI artifact separately passed 72 unskipped cases.
+  Its strict documentation build failed on an external-tree relative link; that
+  original failure is retained, and the link now uses the repository URL. No
+  overall first-draft CI pass is claimed.
+
 Qualification uses real acquired native grammars and actual gateway responses,
 within 600 seconds / 2 GiB RSS and disk / 64 MiB evidence. No runtime, native parser,
 test, build, installation or source fixture runs locally. Grammar source/cache and
@@ -67,17 +86,20 @@ distribution hashes stay equal before/after each run; those remain source-bound
 online observations rather than independent host binary replay. Existing 100 ms
 native and bounded recovery policy stay unchanged.
 
-The scoped inclusion module stays in maintained preflight (375 cases). Normal CI
-retains 388 required regression identities. The dedicated optional job explicitly
-acquires grammars, runs all prior capabilities plus the 19 new depth cases, and
-retains original XML/native inputs/raw MCP/source/grammar/origin/cleanup evidence;
-its 19 cases must be unskipped before merge. Default opt-out skips do not count as
-native verification. Temporary controller/design/choice are retired.
+Scoped inclusion and coverage-admission controls stay in maintained preflight
+(384 cases). Normal CI retains 397 required regression identities. The dedicated
+optional job explicitly acquires grammars and requires an exact 75-case inventory:
+53 prior capabilities plus 22 depth cases. Its permanent completion receipt rejects
+skipped, missing, duplicate, unexpected or failed cases; exit zero alone cannot
+certify coverage. XML/native inputs/raw MCP/source/grammar/origin/cleanup evidence
+is retained. Default opt-out skips do not count as native verification. Temporary
+controller/design/choice are retired.
 
 [Machine-readable result](2026-10-29-optional-language-depth.json) and [original evidence archive](2026-10-29-optional-language-depth.tar.gz)
-retain all three original ZIPs, four executed Git source maps, both 349-file engine
-maps (three changed files), upstream pin/license, and the explicit first-failure
-admission. Archive SHA-256 `29165adfdf854ffaf614f88a99b71078f02db9c72a4dddd846e048672d5fa777`
-(2,605,048 bytes; 718 members). Old source packs,
+retain six original ZIPs (five bounded controls and the first optional CI artifact),
+seven executed Git source maps, both 349-file engine maps (three changed files),
+upstream pin/license, the explicit first-failure admission and original strict-doc
+failure log. Archive SHA-256 `6961ee493f8d8e4da0c73dace22b47334e63087a937d98b56eeb73c3cf6fa575`
+(3,320,382 bytes; 755 members). Old source packs,
 consumed questions, earlier relevance/restart rejections and historical native
 causes are unchanged. No relevance, performance, frequency or agent-benefit claim.

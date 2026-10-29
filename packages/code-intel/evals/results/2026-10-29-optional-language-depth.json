@@ -1,8 +1,8 @@
 {
   "status": "qualified-unreleased",
   "baseline": "d83e109898d5e86a215852683ff202bdfa432ae0",
-  "qualified_head": "e95709e0d4380d097939b6077bf5f6133d0732f9",
-  "qualified_run": 40845549531,
+  "qualified_head": "430c574010a7732c25efd7b573080c57d529abc4",
+  "qualified_run": 40852212232,
   "version": "0.1.19",
   "new_publication": false,
   "runtime_files_changed": [
@@ -19,6 +19,58 @@
     "new_native_cases": 11
   },
   "green": {
+    "run": 40852212232,
+    "cases": 406,
+    "passed": 406,
+    "skipped": 0,
+    "errors": 0,
+    "maintained_controls": 384,
+    "dedicated_depth_controls": 22,
+    "authored_workflows": {
+      "ocaml": 8,
+      "perl": 8,
+      "crystal": 8
+    },
+    "seconds": 27.585519707,
+    "raw_mcp_responses": 27
+  },
+  "old_questions_and_fixtures_unchanged": true,
+  "crystal_source": "50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49",
+  "crystal_availability": "Explicit source-built individual grammar in disposable online setup; package/navigation never downloads",
+  "source_byte_qualified": {
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/ts_parser.py": "975fdec229e88f131708b7b0470a5995ab93a42ceb82d315828a82a4fa03e0a0",
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/syntax_evidence.py": "58e6e2372336d97edfa8a43fccf31edfe7351fcb2cabd0d96d8150940ad5ced7",
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/codebase_context.py": "0fd53dd34e4f000a4ced47df1e06ea67da1886d24ee4c473cd7ec216a178cef1"
+  },
+  "limits": {
+    "seconds": 600,
+    "rss_bytes": 2147483648,
+    "disk_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "archive": {
+    "sha256": "6961ee493f8d8e4da0c73dace22b47334e63087a937d98b56eeb73c3cf6fa575",
+    "bytes": 3320382,
+    "members": 755,
+    "original_zips": 6,
+    "source_commits": 7,
+    "engine_files_each": 349,
+    "runtime_changed": [
+      "_internal/integrations/context/codebase_context.py",
+      "_internal/integrations/context/syntax_evidence.py",
+      "_internal/integrations/context/ts_parser.py"
+    ],
+    "all_original_and_Git_source_bytes_replayed": true,
+    "path": "packages/code-intel/evals/results/2026-10-29-optional-language-depth.tar.gz"
+  },
+  "scope_limits": [
+    "Static syntax candidates, conventional workspace import candidates and heuristic test discovery; no compiler-resolved relationship claim.",
+    "OCaml static open paths, Perl namespace imports, Crystal explicit relative require paths only; dynamic/external/glob/ambiguous imports remain unknown.",
+    "Original Perl source under dist remains excluded by default; configured scenario is separate and no originalpack was changed.",
+    "No new full36 run, relevance, performance, historical nativecause or modelbenefit claim from this qualification.",
+    "Grammar before/after byte hashes are source-bound online observations; native binaries were not independently replayed locally."
+  ],
+  "initial_qualification_green": {
     "run": 40845549531,
     "cases": 394,
     "passed": 394,
@@ -32,40 +84,36 @@
       "crystal": 8
     }
   },
-  "old_questions_and_fixtures_unchanged": true,
-  "crystal_source": "50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49",
-  "crystal_availability": "Explicit source-built individual grammar in disposable online setup; package/navigation never downloads",
-  "source_byte_qualified": {
-    "packages/code-intel/src/attocode_intel/_internal/integrations/context/ts_parser.py": "975fdec229e88f131708b7b0470a5995ab93a42ceb82d315828a82a4fa03e0a0",
-    "packages/code-intel/src/attocode_intel/_internal/integrations/context/syntax_evidence.py": "58e6e2372336d97edfa8a43fccf31edfe7351fcb2cabd0d96d8150940ad5ced7",
-    "packages/code-intel/src/attocode_intel/_internal/integrations/context/codebase_context.py": "38d7ac340dc4b0b16cb2d8469bd0f7eba89812b2a26467bae2464170b52b6817"
+  "review_red": {
+    "run": 40851465962,
+    "head": "4a9bfba562e11c27f23a98e770249f12f78b9dba",
+    "cases": 406,
+    "passed": 394,
+    "failed": 12,
+    "errors": 0,
+    "skipped": 0
   },
-  "limits": {
-    "seconds": 600,
-    "rss_bytes": 2147483648,
-    "disk_bytes": 2147483648,
-    "evidence_bytes": 67108864
+  "maintained_coverage": {
+    "required_regressions": 397,
+    "preflight": 384,
+    "optional_total": 75,
+    "prior_capabilities": 53,
+    "depth": 22,
+    "exact_case_inventory": "packages/code-intel/scripts/optional_grammar_cases.json",
+    "skipped_missing_duplicate_failed_or_unexpected_rejected": true
   },
-  "archive": {
-    "path": "packages/code-intel/evals/results/2026-10-29-optional-language-depth.tar.gz",
-    "sha256": "29165adfdf854ffaf614f88a99b71078f02db9c72a4dddd846e048672d5fa777",
-    "bytes": 2605048,
-    "members": 718,
-    "original_zips": 3,
-    "source_commits": 4,
-    "engine_files_each": 349,
-    "runtime_changed": [
-      "_internal/integrations/context/codebase_context.py",
-      "_internal/integrations/context/syntax_evidence.py",
-      "_internal/integrations/context/ts_parser.py"
-    ],
-    "all_original_and_Git_source_bytes_replayed": true
-  },
-  "scope_limits": [
-    "Static syntax candidates, conventional workspace import candidates and heuristic test discovery; no compiler-resolved relationship claim.",
-    "OCaml static open paths, Perl namespace imports, Crystal explicit relative require paths only; dynamic/external/glob/ambiguous imports remain unknown.",
-    "Original Perl source under dist remains excluded by default; configured scenario is separate and no originalpack was changed.",
-    "No new full36 run, relevance, performance, historical nativecause or modelbenefit claim from this qualification.",
-    "Grammar before/after byte hashes are source-bound online observations; native binaries were not independently replayed locally."
-  ]
+  "review_corrections": [
+    "Physical canonical file paths required; Python stripped import aliases are not optional-language targets.",
+    "Permanent acquired-grammar completion requires exact unskipped75-case XML, independently fault-tested.",
+    "Report link uses repository URL; first strict documentation failure remains retained."
+  ],
+  "first_draft_ci": {
+    "head": "520f2b74fbdf45e2da48307a70e585f1152a55b2",
+    "docs_run": 40850417065,
+    "docs_conclusion": "failure",
+    "optional_run": 40850417080,
+    "optional_cases": 72,
+    "optional_artifact_only_pass": true,
+    "overall_all17_pass_claim": false
+  }
 }

@@ -16,12 +16,12 @@ preflight, normal CI, actual PyPI clean-install/0.1.18-upgrade verification and 
 
 **Development optional-language depth, 2026-10-29:** [causal native controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
 restore omitted OCaml/Perl call candidates, OCaml native `open_module` extraction
-and conservative workspace import candidates for OCaml/Perl/Crystal. All 394
+and conservative workspace import candidates for OCaml/Perl/Crystal. All 406
 controls pass, including three authored workspaces with all eight workflow checks.
 Perl's existing scoped inclusion and Crystal's configured definitions were already
 working; the initial incorrect Crystal hypothesis/control remains recorded as a
-failed first attempt. Explicit source-built Crystal acquisition and all19 depth
-cases are maintained in optional CI; default375/required388 inventories remain
+failed first attempt. Explicit source-built Crystal acquisition and all22 depth
+cases are maintained in optional CI; default384/required397 inventories remain
 mandatory. Product corrections are unreleased, with version019/dependencies and
 published assets unchanged. Syntax candidates and heuristic tests make no compiler,
 historical nativecause, relevance or performance claim.

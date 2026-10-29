@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, languagedepth]
+        options: [preflight, native, preview, restart, broad]
 
 permissions:
   contents: read
@@ -34,25 +34,6 @@ jobs:
       - name: Install maintained test dependencies (outside payload budget)
         timeout-minutes: 5
         run: uv sync --locked --package attocode-code-intel --extra dev
-      - name: Acquire pinned language-depth grammars (outside payload budget)
-        if: inputs.experiment == 'languagedepth'
-        timeout-minutes: 5
-        env:
-          QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          exec > >(tee '${{ runner.temp }}/language-depth-setup-${{ github.run_id }}-${{ github.run_attempt }}.log') 2>&1
-          uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
-          uv pip install --python .venv/bin/python --no-deps 'tree-sitter-crystal @ git+https://github.com/crystal-lang-tools/tree-sitter-crystal@50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49'
-          uv run --no-sync python - <<'PYSETUP'
-          import os
-          from pathlib import Path
-          import tree_sitter_language_pack as pack
-          cache = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
-          cache.mkdir()
-          pack.configure(cache_dir=str(cache))
-          pack.download(['perl', 'ocaml'])
-          assert {'perl', 'ocaml'} <= set(pack.downloaded_languages())
-          PYSETUP
       - name: Acquire native diagnostic tools (outside payload budget)
         if: inputs.experiment == 'native'
         timeout-minutes: 5
@@ -129,6 +110,5 @@ jobs:
           if-no-files-found: error
           path: |
             ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
-            ${{ runner.temp }}/language-depth-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
             ${{ runner.temp }}/native-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
             ${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
