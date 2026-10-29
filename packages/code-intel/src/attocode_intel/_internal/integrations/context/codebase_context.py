@@ -700,7 +700,11 @@ def _optional_import_targets(language, module, source_file, file_index):
         groups = [{name if name.endswith(".cr") else name + ".cr"}]
     # A module can have an implementation and interface, but competing source
     # roots or filename casings are ambiguous. Do not pick the first match.
-    matches = {tuple(sorted({file_index[key] for key in group if key in file_index})) for group in groups}
+    # Python import roots add stripped aliases for every file type. Optional
+    # language conventions require the actual physical path, not those aliases.
+    matches = {tuple(sorted({file_index[key] for key in group
+                            if key in file_index and file_index[key].replace("\\", "/") == key}))
+               for group in groups}
     matches.discard(())
     return list(next(iter(matches))) if len(matches) == 1 else []
 

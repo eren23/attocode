@@ -8,7 +8,36 @@ import json
 import os
 import shutil
 import subprocess
+import xml.etree.ElementTree as ET
 from pathlib import Path
+
+
+def validate_coverage(raw: bytes, required) -> list[str]:
+    """A successful acquired-grammar run must contain every required pass."""
+    if len(raw) > 4 * 2**20 or b'<!DOCTYPE' in raw.upper():
+        raise ValueError('Unsafe or oversized optional-grammar XML')
+    expected = list(required)
+    if not expected or len(set(expected)) != len(expected):
+        raise ValueError('Invalid optional-grammar case inventory')
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as error:
+        raise ValueError('Malformed optional-grammar XML') from error
+    if root.tag not in {'testsuite', 'testsuites'} or any(
+        list(root.iter(tag)) for tag in ('failure', 'error', 'skipped')
+    ):
+        raise ValueError('Optional grammar cases failed or skipped')
+    actual = []
+    for case in root.iter('testcase'):
+        parts = case.get('classname', '').split('.')
+        start = next((i for i, part in enumerate(parts) if part.startswith('test_')), None)
+        name = case.get('name')
+        if start is None or not name:
+            raise ValueError('Unnamed optional-grammar case')
+        actual.append('.'.join(parts[start:]) + '::' + name)
+    if len(set(actual)) != len(actual) or set(actual) != set(expected):
+        raise ValueError('Missing, duplicate or unexpected optional-grammar cases')
+    return sorted(actual)
 
 
 def main():
@@ -52,7 +81,8 @@ def main():
     direct = json.loads(importlib.metadata.distribution('tree-sitter-crystal').read_text('direct_url.json'))
     if direct['vcs_info']['commit_id'] != '50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49':
         raise ValueError('Unexpected Crystal grammar source')
-    inputs = [*engine.rglob('*.py'), *(REPO / 'eval/quality').glob('*.py'),
+    inventory = Path(__file__).with_name('optional_grammar_cases.json')
+    inputs = [*engine.rglob('*.py'), *(REPO / 'eval/quality').glob('*.py'), inventory,
               REPO / 'packages/code-intel/tests/test_optional_language_depth.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]
     sources = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
@@ -66,6 +96,12 @@ def main():
     command += ['packages/code-intel/tests/test_optional_language_depth.py', '-p', 'eval.quality.experiment_origin',
                 '--junitxml=' + str(root / 'optional-depth.xml'), '--basetemp=' + str(args.cache.parent / 'optional-depth-pytest')]
     result = pytest.main(command)
+    try:
+        cases = validate_coverage((root / 'optional-depth.xml').read_bytes(),
+                                  json.loads(inventory.read_bytes())['cases'])
+        report['coverage'] = {'status': 'passed', 'cases': cases}
+    except ValueError as error:
+        report['coverage'] = {'status': 'rejected', 'reason': str(error)}
     after = {'grammar': grammar_identity(args.cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
              'direct_url': direct}
     report.update(exit_code=int(result), after=after, final_origins=assert_engine(engine))
@@ -76,7 +112,8 @@ def main():
     if scratch.exists():
         shutil.rmtree(scratch)
     report['owned_scratch_removed'] = not args.cache.exists() and not scratch.exists()
-    if int(result) == 0 and before == after and unchanged and report['owned_scratch_removed']:
+    if (int(result) == 0 and before == after and unchanged and report['owned_scratch_removed']
+            and report['coverage']['status'] == 'passed'):
         report['status'] = 'complete'
     write_json(root / 'report.json', report)
     return 0 if report['status'] == 'complete' else 1

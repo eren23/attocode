@@ -6,7 +6,7 @@
     "disk_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "stage": "baseline",
+  "stage": "green",
   "expected_cases": 406,
   "new_native_cases": [
     "test_optional_imports_require_physical_paths[ocaml]",
@@ -22,21 +22,8 @@
     "test_incomplete_grammar_collection_is_rejected[doctype]",
     "test_incomplete_grammar_collection_is_rejected[empty]"
   ],
-  "mandatory_failures": [
-    "test_optional_imports_require_physical_paths[ocaml]",
-    "test_optional_imports_require_physical_paths[perl]",
-    "test_optional_imports_require_physical_paths[crystal]",
-    "test_complete_grammar_collection_is_admitted",
-    "test_incomplete_grammar_collection_is_rejected[missing]",
-    "test_incomplete_grammar_collection_is_rejected[skipped]",
-    "test_incomplete_grammar_collection_is_rejected[failure]",
-    "test_incomplete_grammar_collection_is_rejected[error]",
-    "test_incomplete_grammar_collection_is_rejected[duplicate]",
-    "test_incomplete_grammar_collection_is_rejected[renamed]",
-    "test_incomplete_grammar_collection_is_rejected[doctype]",
-    "test_incomplete_grammar_collection_is_rejected[empty]"
-  ],
+  "mandatory_failures": [],
   "crystal_source": "50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49",
   "scope": "Causal native behavior controls and existing scoped inclusion; no scored/relevance/performance study",
-  "baseline_context": "Review of520f2b7 found Python-root aliases accepted as physical optional targets and maintained optional CI missing strict collection/skip admission. 12new assertioncontrols, allprior394positive."
+  "baseline_context": "ReviewRED40851465962 admitted406cases/394positive+12exactexpected; minimal physical-path filter and permanent strict coverage admission now under pairedGREEN."
 }
