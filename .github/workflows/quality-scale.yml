@@ -2,7 +2,7 @@ name: Published scale qualification
 run-name: Scale ${{ inputs.batch }} ${{ inputs.reservation_id }}
 on:
   push:
-    branches: [test/published-scale-qualification, fix/scale-export-bytes]
+    branches: [test/published-scale-qualification]
   workflow_dispatch:
     inputs:
       batch:
@@ -16,7 +16,7 @@ on:
         required: true
       stage:
         type: choice
-        options: [export-red, green]
+        options: [green]
         default: green
         required: true
 permissions:
@@ -77,12 +77,7 @@ jobs:
           new = [r for r in rows if r.get('name', '').split('[')[0] in functions]
           old = [r for r in rows if r not in new]
           assert len(new) == 72 and len(old) == 58 and not errors and not any(r.find('failure') is not None or r.find('skipped') is not None for r in old)
-          assert not any(r.find('skipped') is not None for r in new)
-          if os.environ['STAGE'] == 'export-red':
-              expected={'test_export_preserves_exact_json_octets','test_export_preserves_real_journal_blob_identity','test_qualified_receipt_covers_current_control_inventory'}
-              assert result.returncode == 1 and {r.get('name') for r in failed} == expected
-          else:
-              assert os.environ['STAGE'] == 'green' and result.returncode == 0 and not failed
+          assert os.environ['STAGE'] == 'green' and result.returncode == 0 and not failed and not any(r.find('skipped') is not None for r in new)
           tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
           Path('results/control-receipt.json').write_text(json.dumps({'stage': os.environ['STAGE'], 'new': len(new), 'old': len(old), 'failed': len(failed), 'errors': len(errors), 'head': os.environ['GITHUB_SHA'], 'tree': tree, 'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT']}))
           print(Path('results/control-receipt.json').read_text())
