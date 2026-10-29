@@ -70,6 +70,14 @@ class Requests:
             )
             row["response"] = response.model_dump(mode="json")
             row["seconds"] = time.monotonic() - started
+            import psutil
+
+            process = psutil.Process()
+            cpu = process.cpu_times()
+            row["usage"] = {
+                "rss_bytes": process.memory_info().rss,
+                "cpu_seconds": cpu.user + cpu.system,
+            }
             write(self.output / f"raw-{sequence:06d}.json", row)
             require(not response.isError, f"{tool} returned an error")
             if compact:
@@ -81,7 +89,13 @@ class Requests:
             else:
                 page = response.structuredContent
             self.metrics.append(
-                {"sequence": sequence, "tool": tool, "seconds": row["seconds"], "error": False}
+                {
+                    "sequence": sequence,
+                    "tool": tool,
+                    "seconds": row["seconds"],
+                    "error": False,
+                    **row["usage"],
+                }
             )
             return page
         except BaseException as error:

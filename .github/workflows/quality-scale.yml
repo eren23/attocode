@@ -7,7 +7,7 @@ on:
     inputs:
       batch:
         type: choice
-        options: [controls, capacity, real, lifecycle]
+        options: [controls, access-check, capacity, real, lifecycle]
         default: controls
         required: true
       reservation_id:
@@ -80,7 +80,7 @@ jobs:
           retention-days: 14
           if-no-files-found: error
   cloud:
-    if: github.event_name == 'workflow_dispatch' && inputs.batch != 'controls' && inputs.stage == 'green' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && contains(fromJSON('["capacity","real","lifecycle"]'), inputs.batch) && inputs.stage == 'green' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 100
     env:
@@ -114,3 +114,102 @@ jobs:
             ${{ runner.temp }}/scale-results/results.tar.gz
           retention-days: 14
           if-no-files-found: error
+  worker-smoke:
+    needs: controls
+    if: (inputs.stage || 'green') == 'green'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Exact disposable worker setup without cloud credentials
+        timeout-minutes: 11
+        run: |
+          git archive --format=tar.gz -o '${{ runner.temp }}/source.tar.gz' HEAD
+          sudo -n cp '${{ runner.temp }}/source.tar.gz' /root/source.tar.gz
+          uv run --no-sync python - <<'PY'
+          import subprocess
+          from eval.quality.cloud import worker_command
+          from eval.quality.scale_campaign import SETUP
+          subprocess.run(['sudo', '-n', '/bin/sh', '-c', worker_command(SETUP, 600)], check=True, timeout=620)
+          PY
+      - name: Published wheel actual CLI lifecycle and native smoke
+        timeout-minutes: 7
+        run: |
+          sudo -n env PYTHONPATH=/root/job QUALITY_ALLOW_DOWNLOADS=1 QUALITY_GRAMMAR_CACHE=/root/scale/cache/grammars ATTOCODE_LOCAL_ONLY=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /root/job/.venv/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          import attocode_intel,yaml
+          from eval.quality.scale_evidence import attest_wheel,WHEEL_SHA,write
+          from eval.quality.scale_workload import run_case
+          os.chdir('/root/job')
+          root=Path('/root/scale'); (root/'evidence').mkdir(parents=True,exist_ok=True)
+          write(root/'evidence/installed.json',attest_wheel('/root/published.whl',Path(attocode_intel.__file__).parent,WHEEL_SHA))
+          packs=yaml.safe_load(Path('eval/quality/workflows.yaml').read_text())['repositories']
+          deno=dict(next(s for s in packs if s['id']=='deno')); deno.pop('queries',None)
+          cases=[{'id':'smoke-capacity','kind':'synthetic','size':64,'seconds':90},
+                 {'id':'smoke-real','kind':'real','source':deno,'seconds':120},
+                 {'id':'smoke-lifecycle','kind':'lifecycle','size':64,'seconds':180}]
+          for case in cases:
+              (root/'evidence'/case['id']).mkdir()
+              run_case(case,root)
+          write(root/'evidence/smoke-receipt.json',{'complete':True,'paid_workers':0,'cases':[c['id'] for c in cases],'product_python_files':272})
+          PY
+      - name: Collect bounded original smoke evidence
+        if: always()
+        run: |
+          if sudo -n test -d /root/scale/evidence; then
+            sudo -n sh -c 'cd /root/job && PYTHONPATH=/root/job .venv/bin/python -m eval.quality.scale_campaign --export /root/scale/evidence --out /root/smoke-evidence.tar.gz'
+            sudo -n cp /root/smoke-evidence.tar.gz '${{ runner.temp }}/smoke-evidence.tar.gz'
+            sudo -n chmod 644 '${{ runner.temp }}/smoke-evidence.tar.gz'
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-worker-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/smoke-evidence.tar.gz
+          retention-days: 14
+          if-no-files-found: warn
+  access-check:
+    if: github.event_name == 'workflow_dispatch' && inputs.batch == 'access-check' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Verify live quote and ephemeral SSH key permissions without creating a worker
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.QUALITY_DIGITALOCEAN_TOKEN }}
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json,os
+          from pathlib import Path
+          from eval.quality.cloud import API,tagged,quote,verify_reaper
+          from eval.quality.scale_campaign import keys,make_key
+          api=API(); verify_reaper(); assert not tagged(api)
+          price=quote(api); assert price['hourly_usd']<=.16667
+          name='attocode-scale-access-'+os.environ['GITHUB_RUN_ID']
+          key=Path(os.environ['RUNNER_TEMP'])/name
+          try:
+              public=make_key(key)
+              api.request('POST','/account/keys',{'name':name,'public_key':public})
+              assert len([k for k in keys(api) if k['name']==name])==1
+          finally:
+              for k in [k for k in keys(api) if k['name']==name]: api.request('DELETE','/account/keys/'+str(k['id']))
+              key.unlink(missing_ok=True); Path(str(key)+'.pub').unlink(missing_ok=True)
+          assert not any(k['name']==name for k in keys(api)) and not tagged(api)
+          Path('access-receipt.json').write_text(json.dumps({'complete':True,'workers_created':0,'key_cleanup_verified':True,'quote':price,'head':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID']}))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-access-${{ github.run_id }}-${{ github.run_attempt }}
+          path: access-receipt.json
+          retention-days: 14
+          if-no-files-found: warn
