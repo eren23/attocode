@@ -116,7 +116,11 @@ async def workflow(root, files, spec, case, monkeypatch):
     native(spec['file'], files[spec['file']], spec['language'], case)
     evidence(case + '-inputs.json', {'root': str(root), 'files': files, 'spec': spec})
     output = Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / case
-    checks = await evaluate(root, spec, journal=Journal(output, 4 * 2**20))
+    try:
+        checks = await evaluate(root, spec, journal=Journal(output, 4 * 2**20))
+    except ValueError as error:
+        evidence(case + '-failure.json', {'type': type(error).__name__, 'message': str(error)})
+        raise AssertionError('language coverage: workflow stopped: ' + str(error)) from error
     evidence(case + '-checks.json', checks)
     assert len(checks) == 8 and all(c['outcome'] == 'passed' for c in checks), 'language coverage: cross-file workflow incomplete: ' + repr([(c['name'], c['outcome']) for c in checks])
 
@@ -146,3 +150,19 @@ async def test_crystal_cross_file_workflow(tmp_path, monkeypatch):
         {'id': 'crystal-depth', 'language': 'crystal', 'file': 'helper.cr', 'symbol': 'greet',
          'anchor': 'def greet', 'caller': 'driver.cr', 'importer': 'driver.cr', 'test': 'spec/helper_spec.cr'},
         'crystal-workflow', monkeypatch)
+
+
+@pytest.mark.parametrize('language,path,source,module,target', [
+    ('ocaml', 'driver.ml', 'open Helper\nlet run () = greet "ok"\n', 'Helper', 'helper.ml'),
+    ('perl', 'driver.pl', 'use Lib::Helper;\nLib::Helper::greet("ok");\n', 'Lib::Helper', 'Lib/Helper.pm'),
+    ('crystal', 'driver.cr', 'require "./helper"\ngreet("ok")\n', './helper', 'helper.cr'),
+], ids=['ocaml', 'perl', 'crystal'])
+def test_optional_static_import_and_resolution(language, path, source, module, target):
+    from attocode_intel._internal.integrations.context.codebase_context import (
+        resolve_import_targets,
+    )
+    ast = native(path, source, language, language + '-imports')
+    assert [item.module for item in ast.imports] == [module], 'language coverage: static native import lost or malformed'
+    actual = resolve_import_targets(language, module, path, {path: path, target: target})
+    evidence(language + '-import-targets.json', actual)
+    assert actual == [target], 'language coverage: static workspace import not resolved'

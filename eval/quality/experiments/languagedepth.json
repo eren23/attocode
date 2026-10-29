@@ -7,7 +7,7 @@
     "evidence_bytes": 67108864
   },
   "stage": "baseline",
-  "expected_cases": 383,
+  "expected_cases": 386,
   "new_native_cases": [
     "test_perl_scoped_project_inclusion_refresh_and_restart",
     "test_crystal_method_definition_native_range",
@@ -16,12 +16,22 @@
     "test_perl_native_call_candidates_exclude_decoys",
     "test_ocaml_cross_file_workflow",
     "test_perl_cross_file_workflow",
-    "test_crystal_cross_file_workflow"
+    "test_crystal_cross_file_workflow",
+    "test_optional_static_import_and_resolution[ocaml]",
+    "test_optional_static_import_and_resolution[perl]",
+    "test_optional_static_import_and_resolution[crystal]"
   ],
   "mandatory_failures": [
-    "test_crystal_method_definition_native_range",
-    "test_crystal_class_definition_native_range"
+    "test_ocaml_native_call_candidates_exclude_decoys",
+    "test_perl_native_call_candidates_exclude_decoys",
+    "test_ocaml_cross_file_workflow",
+    "test_perl_cross_file_workflow",
+    "test_crystal_cross_file_workflow",
+    "test_optional_static_import_and_resolution[ocaml]",
+    "test_optional_static_import_and_resolution[perl]",
+    "test_optional_static_import_and_resolution[crystal]"
   ],
   "crystal_source": "50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49",
-  "scope": "Causal native behavior controls and existing scoped inclusion; no scored/relevance/performance study"
+  "scope": "Causal native behavior controls and existing scoped inclusion; no scored/relevance/performance study",
+  "baseline_context": "Second functional baseline adds3directnativeimport tests and corrects initialcontrol hypothesis; original40843508338 remainsretained-incomplete/5causalfailures/378passes; productsourceunchanged"
 }
