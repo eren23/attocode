@@ -60,7 +60,7 @@ jobs:
       - name: Run exact scale controls and existing cloud controls
         id: gate
         env:
-          STAGE: ${{ inputs.stage || 'export-red' }}
+          STAGE: ${{ inputs.stage || 'green' }}
         run: |
           mkdir results
           uv run --no-sync python - <<'PY'
