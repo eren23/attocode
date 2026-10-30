@@ -94,3 +94,5 @@ Results are operational/source-based qualification, not held-out relevance,
 exhaustive semantic correctness, agent benefit, a speedup or proof of historical
 native failure causes. Missing receipts, incomplete coverage, capture loss and
 unfinished operations remain visible even when a workflow process exits zero.
+
+The [2026-10-30 search coverage follow-up](../packages/code-intel/evals/results/2026-10-30-search-coverage.md) corrects the reproduced request discovery mismatch at10,001 paths and records the retained causal evidence. The original paid campaign remains incomplete;50k/100k qualification and native parser failures remain open.
