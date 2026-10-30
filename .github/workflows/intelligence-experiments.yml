@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, parser-causes, ocaml-routing]
+        options: [preflight, native, preview, restart, broad]
 
 permissions:
   contents: read
@@ -34,36 +34,6 @@ jobs:
       - name: Install maintained test dependencies (outside payload budget)
         timeout-minutes: 5
         run: uv sync --locked --package attocode-code-intel --extra dev
-      - name: Acquire parser-cause grammars (outside payload budget)
-        if: inputs.experiment == 'parser-causes' || inputs.experiment == 'ocaml-routing'
-        timeout-minutes: 5
-        env:
-          QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/native-grammars-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          exec > >(tee '${{ runner.temp }}/parser-causes-setup-${{ github.run_id }}-${{ github.run_attempt }}.log') 2>&1
-          uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
-          uv run --no-sync python - <<'PYSETUP'
-          import json, os
-          from pathlib import Path
-          import tree_sitter_language_pack as pack
-          cache = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
-          cache.mkdir()
-          pack.configure(cache_dir=str(cache))
-          pack.download(['ocaml', 'ocaml_interface'])
-          assert {'ocaml', 'ocaml_interface'} <= set(pack.downloaded_languages())
-          print(json.dumps({'downloaded': sorted(pack.downloaded_languages())}))
-          PYSETUP
-      - name: Require parser-cause platform controls
-        if: inputs.experiment == 'parser-causes'
-        timeout-minutes: 5
-        run: uv run --no-sync python -m eval.quality.experiments preflight --root '${{ runner.temp }}/parser-causes-preflight-${{ github.run_id }}-${{ github.run_attempt }}'
-      - uses: actions/upload-artifact@v4
-        if: always() && inputs.experiment == 'parser-causes'
-        with:
-          name: experiment-parser-causes-preflight-${{ github.run_id }}-${{ github.run_attempt }}
-          retention-days: 14
-          if-no-files-found: error
-          path: ${{ runner.temp }}/parser-causes-preflight-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
       - name: Acquire native diagnostic tools (outside payload budget)
         if: inputs.experiment == 'native'
         timeout-minutes: 5
@@ -105,7 +75,7 @@ jobs:
           cache = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
           cache.mkdir()
           pack.configure(cache_dir=str(cache))
-          names = {'haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal'}
+          names = {'haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'ocaml_interface', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal'}
           available = set(pack.manifest_languages())
           assert not (names - available - {'crystal'})
           requested = sorted(names & available)
@@ -141,5 +111,4 @@ jobs:
           path: |
             ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
             ${{ runner.temp }}/native-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
-            ${{ runner.temp }}/parser-causes-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
             ${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log

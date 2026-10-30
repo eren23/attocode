@@ -51,7 +51,7 @@ def main():
         parser.error('Use a new disposable grammar cache')
     args.cache.mkdir(parents=True)
     import tree_sitter_language_pack as pack
-    names = ['haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal']
+    names = ['haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'ocaml_interface', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal']
     pack.configure(cache_dir=str(args.cache.resolve()))
     available = set(pack.manifest_languages())
     unsupported = sorted(set(names) - available)
