@@ -22,8 +22,9 @@ from pathlib import Path
 from eval.quality.experiment_evidence import assert_engine
 from eval.quality.runner import GIB, REPO, environment, managed_root, supervise, write_json
 
-SECONDS = {'parser-causes': 600, 'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200}
+SECONDS = {'ocaml-routing': 600, 'parser-causes': 600, 'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200}
 OPERATORS = {
+    'ocaml-routing': 'eval.quality.ocaml_routing_experiment',
     'parser-causes': 'eval.quality.parser_causes_experiment',
     'native': 'eval.quality.native_experiment',
     'preview': 'eval.quality.preview_experiment',
