@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "experiment": "coverage",
+  "scope": "Causal source-backed discovery coverage controls only; no relevance or performance judgment",
+  "limits": {"seconds": 600, "disk_bytes": 2147483648, "rss_bytes": 2147483648, "evidence_bytes": 67108864},
+  "expected": "request_policy_absent",
+  "expected_cases": 470,
+  "expected_failures": [
+    "test_request_policy_reaches_each_fresh_lexical_context[keyword]",
+    "test_request_policy_reaches_each_fresh_lexical_context[body]",
+    "test_request_policy_reaches_each_fresh_lexical_context[importance]",
+    "test_request_policy_reaches_each_fresh_lexical_context[warm]",
+    "test_search_diagnostics_expose_effective_discovery_selection",
+    "test_invalidated_discovery_does_not_publish_old_completed_counts",
+    "test_gateway_retains_last_source_beyond_old_ten_thousand_cap[search_first]",
+    "test_gateway_retains_last_source_beyond_old_ten_thousand_cap[ast_first]",
+    "test_gateway_retains_last_source_beyond_old_ten_thousand_cap[old_cache_reopen]"
+  ]
+}

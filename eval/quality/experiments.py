@@ -22,11 +22,12 @@ from pathlib import Path
 from eval.quality.experiment_evidence import assert_engine
 from eval.quality.runner import GIB, REPO, environment, managed_root, supervise, write_json
 
-SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200}
+SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200, 'coverage': 600}
 OPERATORS = {
     'native': 'eval.quality.native_experiment',
     'preview': 'eval.quality.preview_experiment',
     'restart': 'eval.quality.restart_experiment',
+    'coverage': 'eval.quality.coverage_experiment',
 }
 ENGINE = REPO / 'packages/code-intel/src/attocode_intel'
 TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_evidence.py',
