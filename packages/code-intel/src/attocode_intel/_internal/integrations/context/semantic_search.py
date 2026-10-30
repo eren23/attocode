@@ -371,6 +371,8 @@ class SemanticSearchManager:
     ast_lookup: Any = field(default=None, repr=False)
     discovery_snapshot: Any = field(default=None, repr=False)
     index_probe: IndexProbe | None = field(default=None, repr=False)
+    max_files: int = field(default=2000, kw_only=True)
+    _candidate_discovery: tuple[int, dict[str, int | bool]] | None = field(default=None, repr=False)
     _warmup_reused_asts: int = field(default=0, repr=False)
     _provider: Any = field(default=None, repr=False)
     _store: Any = field(default=None, repr=False)
@@ -433,7 +435,7 @@ class SemanticSearchManager:
             from attocode_intel._internal.integrations.context.codebase_context import (
                 CodebaseContextManager,
             )
-            ctx = context_manager or CodebaseContextManager(self.root_dir)
+            ctx = context_manager or CodebaseContextManager(self.root_dir, max_files=self.max_files)
             ctx._ensure_fresh()
             # Publish one complete generation, dropping deleted paths. A failed
             # inventory read must not leave a mixture of old and new weights.
@@ -468,7 +470,7 @@ class SemanticSearchManager:
                 from attocode_intel._internal.integrations.context.codebase_context import (
                     CodebaseContextManager,
                 )
-                ctx = CodebaseContextManager(self.root_dir)
+                ctx = CodebaseContextManager(self.root_dir, max_files=self.max_files)
                 ctx._ensure_fresh()
                 self._dep_graph = ctx.dependency_graph
                 if self._dep_graph is None:
@@ -693,7 +695,7 @@ class SemanticSearchManager:
         )
         from attocode_intel._internal.integrations.context.vector_store import VectorEntry
 
-        ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
+        ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files)
         ctx._ensure_fresh()
         if not ctx._files:
             ctx.discover_files()
@@ -1432,7 +1434,7 @@ class SemanticSearchManager:
 
         execute = instrument("body.sql", conn.execute)
         try:
-            ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
+            ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files)
             with measure('body.discovery'):
                 ctx._ensure_fresh()
                 if not ctx._files:
@@ -1582,7 +1584,7 @@ class SemanticSearchManager:
 
             # One file discovery serves all three steps. A new context per step
             # discovered the files and built the dependency graph three times.
-            ctx = CodebaseContextManager(root_dir=self.root_dir, cancelled=lambda: self._closed)
+            ctx = CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files, cancelled=lambda: self._closed)
             if self.discovery_snapshot is not None:
                 with measure("keyword.discovery_reuse"):
                     try:
@@ -1819,6 +1821,7 @@ class SemanticSearchManager:
 
     def candidate_diagnostics(self) -> dict[str, int | float | bool | str]:
         """Read-only coverage snapshot for compact search provenance."""
+        generation = self._body_generation
         ready = self._kw_index_built and (
             self._body_index_built or not self._body_index_available
         )
@@ -1830,6 +1833,10 @@ class SemanticSearchManager:
             "body_indexed_files": 0,
             "keyword_indexed_files": 0,
             "body_index_coverage": 0.0,
+            "discovery_max_files": self.max_files,
+            "discovery_discovered_files": 0,
+            "discovery_selected_files": 0,
+            "discovery_truncated": False,
             "vector_status": self._index_progress.status,
             "vector_coverage": self._index_progress.coverage,
             "warmup_stage": self._warmup_stage,
@@ -1839,12 +1846,26 @@ class SemanticSearchManager:
         }
         snapshot.update({f"{stage}_seconds": round(seconds, 3)
                          for stage, seconds in self._warmup_seconds.items()})
-        if not self._body_index_built:
+        discovery = self._candidate_discovery
+        if self._kw_index_built and discovery is not None and discovery[0] == generation:
+            snapshot.update(discovery[1])
+
+        def current_snapshot():
+            # A database read can overlap invalidation. Never combine its old
+            # readiness with the new generation's counts or discovery summary.
+            if generation != self._body_generation:
+                snapshot.update(status="warming", keyword_index_ready=False, body_index_ready=False,
+                                body_indexed_files=0, keyword_indexed_files=0, body_index_coverage=0.0,
+                                discovery_discovered_files=0, discovery_selected_files=0,
+                                discovery_truncated=False)
             return snapshot
+
+        if not self._body_index_built:
+            return current_snapshot()
         conn = self._open_body_db()
         if conn is None:
             snapshot["body_index_available"] = False
-            return snapshot
+            return current_snapshot()
         try:
             body_count = int(conn.execute("SELECT count(*) FROM body_files").fetchone()[0])
             keyword_count = int(conn.execute("SELECT count(*) FROM kw_files").fetchone()[0])
@@ -1858,7 +1879,7 @@ class SemanticSearchManager:
             logger.debug("Failed to read candidate coverage", exc_info=True)
         finally:
             conn.close()
-        return snapshot
+        return current_snapshot()
 
     def _normalize_scores(
         self,
@@ -2328,12 +2349,13 @@ class SemanticSearchManager:
         """
         if self._closed:
             return
+        generation = self._body_generation
         from attocode_intel._internal.integrations.context.codebase_ast import parse_file
         from attocode_intel._internal.integrations.context.codebase_context import (
             CodebaseContextManager,
         )
 
-        ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
+        ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files)
         tokenize = instrument("keyword.tokenize", _tokenize)
         with measure('keyword.discovery'):
             ctx._ensure_fresh()
@@ -2566,6 +2588,17 @@ class SemanticSearchManager:
         self._load_importance_scores(ctx)
         self._warmup_seconds = {**self._warmup_seconds,
                                 "importance": time.monotonic() - importance_started}
+        if self._closed or generation != self._body_generation:
+            return
+        selected = len(ctx._files)
+        discovered = max(selected, getattr(ctx, "discovered_file_count", selected))
+        self._candidate_discovery = (generation, {
+            "discovery_discovered_files": discovered,
+            "discovery_selected_files": selected,
+            # Discovery stops enumerating at50k. Counts at that boundary are
+            # lower bounds, even when the later composition cap keeps them all.
+            "discovery_truncated": bool(getattr(ctx, "discovery_truncated", False)) or discovered >= 50_000,
+        })
         self._kw_index_built = True
 
         # Persist to cache
@@ -2854,6 +2887,7 @@ class SemanticSearchManager:
         self._kw_index_built = False  # Force rebuild on next keyword search
         self._body_index_built = False  # Recheck this file in the source-body index
         self._body_generation += 1
+        self._candidate_discovery = None
         self._body_failed_at = 0.0
         if self._trigram_index is not None:
             self._trigram_index.close()
@@ -2901,7 +2935,7 @@ class SemanticSearchManager:
             CodebaseContextManager,
         )
 
-        ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
+        ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files)
         ctx._ensure_fresh()
         if not ctx._files:
             ctx.discover_files()
@@ -2983,7 +3017,7 @@ class SemanticSearchManager:
                 from attocode_intel._internal.integrations.context.codebase_context import (
                     CodebaseContextManager,
                 )
-                ctx = CodebaseContextManager(root_dir=self.root_dir)
+                ctx = CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files)
                 ctx._ensure_fresh()
                 if not ctx._files:
                     ctx.discover_files()
@@ -3056,7 +3090,7 @@ class SemanticSearchManager:
         )
         from attocode_intel._internal.integrations.context.vector_store import VectorEntry
 
-        ctx = CodebaseContextManager(root_dir=self.root_dir)
+        ctx = CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files)
         ctx._ensure_fresh()
         if not ctx._files:
             ctx.discover_files()
