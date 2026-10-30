@@ -1856,6 +1856,7 @@ class SemanticSearchManager:
             if generation != self._body_generation:
                 snapshot.update(status="warming", keyword_index_ready=False, body_index_ready=False,
                                 body_indexed_files=0, keyword_indexed_files=0, body_index_coverage=0.0,
+                                discovery_max_files=self.max_files,
                                 discovery_discovered_files=0, discovery_selected_files=0,
                                 discovery_truncated=False)
             return snapshot
@@ -2361,6 +2362,7 @@ class SemanticSearchManager:
             ctx._ensure_fresh()
             if not ctx._files:
                 ctx.discover_files()
+        discovery_limit = getattr(ctx, "max_files", self.max_files)
 
         _CONFIG_EXTS = frozenset({".toml", ".json", ".yaml", ".yml", ".cfg", ".ini", ".md", ".rst", ".txt"})  # noqa: N806
         _CONFIG_NAMES = frozenset({  # noqa: N806
@@ -2593,6 +2595,7 @@ class SemanticSearchManager:
         selected = len(ctx._files)
         discovered = max(selected, getattr(ctx, "discovered_file_count", selected))
         self._candidate_discovery = (generation, {
+            "discovery_max_files": discovery_limit,
             "discovery_discovered_files": discovered,
             "discovery_selected_files": selected,
             # Discovery stops enumerating at50k. Counts at that boundary are

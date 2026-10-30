@@ -1563,6 +1563,10 @@ class ASTService:
         # Build a regex pattern for call sites: symbol_name(
         # Only scan for symbols that are actually defined somewhere.
         # Skip comment lines and string literals to reduce false positives.
+        lexical_fallback = ast.language in {'go', 'rust'}
+        if lexical_fallback:
+            from .codebase_ast import _mask_go_rust_source
+            content = _mask_go_rust_source(content, ast.language)
         in_multiline_string = False
         for i, line in enumerate(content.split("\n"), 1):
             stripped = line.lstrip()
@@ -1591,12 +1595,19 @@ class ASTService:
 
             # Strip inline comments and string literals for matching
             # Remove quoted strings to avoid matching inside them
-            clean_line = re.sub(r'(["\'])(?:(?!\1).)*\1', '""', line)
+            clean_line = line if lexical_fallback else re.sub(r'(["\'])(?:(?!\1).)*\1', '""', line)
+            declaration = None
+            if ast.language == 'go':
+                declaration = re.match(r'^\s*func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(', clean_line)
+            elif ast.language == 'rust':
+                declaration = re.match(r'^\s*(?:pub(?:\([^)]*\))?\s+)?(?:(?:async|unsafe|extern|const)\s+)*fn\s+(\w+)', clean_line)
             caller = _enclosing_qname(i)
 
             # Find function/method calls: name(
             for m in re.finditer(r"(?<!\.)\b(\w+)\s*\(", clean_line):
                 name = m.group(1)
+                if declaration is not None and m.start(1) == declaration.start(1):
+                    continue
                 if name in known_symbols and name not in ("if", "for", "while", "return", "print"):
                     ref = SymbolRef(
                         symbol_name=name,
@@ -1605,6 +1616,7 @@ class ASTService:
                         line=i,
                         syntax_name=name,
                         caller_qualified_name=caller,
+                        source='regex' if lexical_fallback else 'tree-sitter',
                     )
                     index.add_reference(ref)
 
@@ -1619,5 +1631,6 @@ class ASTService:
                         line=i,
                         syntax_name=m.group(0).rsplit("(", 1)[0].strip(),
                         caller_qualified_name=caller,
+                        source='regex' if lexical_fallback else 'tree-sitter',
                     )
                     index.add_reference(ref)

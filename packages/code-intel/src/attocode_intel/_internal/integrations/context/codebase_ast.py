@@ -863,12 +863,114 @@ def parse_javascript(content: str, path: str = "") -> FileAST:
     return ast
 
 
+def _mask_go_rust_source(content: str, language: str, *, keep_quoted: bool = False) -> str:
+    """Keep coordinates while hiding comments/literals from bounded heuristics.
+
+    keep_quoted retains ordinary double-quoted Go import paths. Raw literals
+    stay hidden in both views so their interior lines cannot become imports.
+    This is lexical filtering, not a complete language grammar.
+    """
+    output = list(content)
+    size, i = len(content), 0
+    raw_string = re.compile(r'(?:b|c)?r(#{0,255})"')
+    rust_char = re.compile(r"'(?:\\(?:u\{[0-9a-fA-F_]+\}|x[0-9a-fA-F]{2}|[^\r\n])|[^\\'\r\n])'")
+
+    def hide(start, end):
+        for at in range(start, min(end, size)):
+            if content[at] not in '\r\n':
+                output[at] = ' '
+
+    while i < size:
+        start = i
+        if content.startswith('//', i):
+            end = content.find('\n', i + 2)
+            i = size if end < 0 else end
+            hide(start, i)
+        elif content.startswith('/*', i):
+            i, depth = i + 2, 1
+            while i < size and depth:
+                if language == 'rust' and content.startswith('/*', i):
+                    depth += 1
+                    i += 2
+                elif content.startswith('*/', i):
+                    depth -= 1
+                    i += 2
+                else:
+                    i += 1
+            hide(start, i)
+        elif language == 'go' and content[i] == '`':
+            end = content.find('`', i + 1)
+            i = size if end < 0 else end + 1
+            hide(start, i)
+        elif language == 'rust' and (i == 0 or not (content[i - 1].isalnum() or content[i - 1] == '_')) and (raw := raw_string.match(content, i)):
+            closing = '"' + raw.group(1)
+            end = content.find(closing, raw.end())
+            i = size if end < 0 else end + len(closing)
+            hide(start, i)
+        elif language == 'rust' and content[i] == "'":
+            # An apostrophe also introduces a lifetime/label. Only a complete
+            # character token is hidden; &'a and 'label: stay code.
+            char = rust_char.match(content, i)
+            if char:
+                i = char.end()
+                hide(start, i)
+            else:
+                i += 1
+        elif content[i] == '"' or (language == 'go' and content[i] == "'"):
+            quote = content[i]
+            i += 1
+            while i < size:
+                if content[i] == '\\':
+                    i += 2
+                elif content[i] == quote:
+                    i += 1
+                    break
+                else:
+                    i += 1
+            if not (keep_quoted and quote == '"'):
+                hide(start, i)
+        else:
+            i += 1
+    return ''.join(output)
+
+
+def _bounded_fallback_end(lines: list[str], start: int) -> int:
+    """Find an ordinary declaration body within the existing500-line window."""
+    depth = parens = brackets = 0
+    opened = False
+    for number in range(start, min(start + 500, len(lines))):
+        line = lines[number]
+        if number > start and not opened and not parens and not brackets and re.match(
+            r'\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+|unsafe\s+)?(?:func|fn|struct|enum|trait|type|impl|mod|use|import|const|var)\b', line,
+        ):
+            return start + 1
+        for char in line:
+            if opened:
+                depth += (char == '{') - (char == '}')
+                if depth == 0:
+                    return number + 1
+            elif char == '(':
+                parens += 1
+            elif char == ')':
+                parens = max(0, parens - 1)
+            elif char == '[':
+                brackets += 1
+            elif char == ']':
+                brackets = max(0, brackets - 1)
+            elif not parens and not brackets:
+                if char == ';':
+                    return start + 1
+                if char == '{':
+                    opened, depth = True, 1
+    return start + 1
+
+
 def parse_rust(content: str, path: str = "") -> FileAST:
     """Parse Rust source using regex patterns.
 
     Extracts functions, structs, enums, traits, impl blocks, imports (use/mod).
     """
-    lines = content.split("\n")
+    lines = _mask_go_rust_source(content, 'rust').split("\n")
     ast = FileAST(path=path, language="rust", line_count=len(lines))
 
     for i, line in enumerate(lines):
@@ -894,20 +996,13 @@ def parse_rust(content: str, path: str = "") -> FileAST:
 
         # Functions: (pub)? (async)? fn name(...)
         fn_match = re.match(
-            r"^(?:pub(?:\([\w:]+\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+\"[^\"]*\"\s+)?fn\s+(\w+)",
+            r"^(?:pub(?:\([\w:]+\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+)?fn\s+(\w+)",
             stripped,
         )
         if fn_match:
             func_name = fn_match.group(1)
             # Find end via brace matching
-            end_line = i + 1
-            brace_count = stripped.count("{") - stripped.count("}")
-            if brace_count > 0:
-                for j in range(i + 1, min(i + 500, len(lines))):
-                    brace_count += lines[j].count("{") - lines[j].count("}")
-                    if brace_count <= 0:
-                        end_line = j + 1
-                        break
+            end_line = _bounded_fallback_end(lines, i)
             is_async = "async " in stripped.split("fn")[0]
             ast.functions.append(FunctionDef(
                 name=func_name,
@@ -920,14 +1015,7 @@ def parse_rust(content: str, path: str = "") -> FileAST:
         # Structs: (pub)? struct Name
         struct_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?struct\s+(\w+)", stripped)
         if struct_match:
-            end_line = i + 1
-            brace_count = stripped.count("{") - stripped.count("}")
-            if brace_count > 0:
-                for j in range(i + 1, min(i + 500, len(lines))):
-                    brace_count += lines[j].count("{") - lines[j].count("}")
-                    if brace_count <= 0:
-                        end_line = j + 1
-                        break
+            end_line = _bounded_fallback_end(lines, i)
             ast.classes.append(ClassDef(
                 name=struct_match.group(1),
                 start_line=i + 1,
@@ -938,14 +1026,7 @@ def parse_rust(content: str, path: str = "") -> FileAST:
         # Enums: (pub)? enum Name
         enum_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?enum\s+(\w+)", stripped)
         if enum_match:
-            end_line = i + 1
-            brace_count = stripped.count("{") - stripped.count("}")
-            if brace_count > 0:
-                for j in range(i + 1, min(i + 500, len(lines))):
-                    brace_count += lines[j].count("{") - lines[j].count("}")
-                    if brace_count <= 0:
-                        end_line = j + 1
-                        break
+            end_line = _bounded_fallback_end(lines, i)
             ast.classes.append(ClassDef(
                 name=enum_match.group(1),
                 start_line=i + 1,
@@ -956,14 +1037,7 @@ def parse_rust(content: str, path: str = "") -> FileAST:
         # Traits: (pub)? trait Name
         trait_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?(?:unsafe\s+)?trait\s+(\w+)", stripped)
         if trait_match:
-            end_line = i + 1
-            brace_count = stripped.count("{") - stripped.count("}")
-            if brace_count > 0:
-                for j in range(i + 1, min(i + 500, len(lines))):
-                    brace_count += lines[j].count("{") - lines[j].count("}")
-                    if brace_count <= 0:
-                        end_line = j + 1
-                        break
+            end_line = _bounded_fallback_end(lines, i)
             ast.classes.append(ClassDef(
                 name=trait_match.group(1),
                 start_line=i + 1,
@@ -984,7 +1058,8 @@ def parse_go(content: str, path: str = "") -> FileAST:
 
     Extracts functions, methods, structs, interfaces, imports.
     """
-    lines = content.split("\n")
+    lines = _mask_go_rust_source(content, 'go').split("\n")
+    import_lines = _mask_go_rust_source(content, 'go', keep_quoted=True).split("\n")
     ast = FileAST(path=path, language="go", line_count=len(lines))
 
     i = 0
@@ -995,7 +1070,7 @@ def parse_go(content: str, path: str = "") -> FileAST:
         if stripped == "import (" or stripped.startswith("import ("):
             i += 1
             while i < len(lines):
-                imp_line = lines[i].strip()
+                imp_line = import_lines[i].strip()
                 if imp_line == ")":
                     break
                 # Parse "pkg" or alias "pkg"
@@ -1009,7 +1084,7 @@ def parse_go(content: str, path: str = "") -> FileAST:
             continue
 
         # Single import: import "pkg"
-        single_imp = re.match(r'^import\s+(?:\w+\s+)?"([^"]+)"', stripped)
+        single_imp = re.match(r'^import\s+(?:\w+\s+)?"([^"]+)"', import_lines[i].strip()) if stripped.startswith('import') else None
         if single_imp:
             ast.imports.append(ImportDef(
                 module=single_imp.group(1), is_from=False, line=i + 1,
@@ -1021,14 +1096,7 @@ def parse_go(content: str, path: str = "") -> FileAST:
         method_match = re.match(r"^func\s+\([^)]+\)\s+(\w+)\s*\(", stripped)
         if method_match:
             func_name = method_match.group(1)
-            end_line = i + 1
-            brace_count = stripped.count("{") - stripped.count("}")
-            if brace_count > 0:
-                for j in range(i + 1, min(i + 500, len(lines))):
-                    brace_count += lines[j].count("{") - lines[j].count("}")
-                    if brace_count <= 0:
-                        end_line = j + 1
-                        break
+            end_line = _bounded_fallback_end(lines, i)
             ast.functions.append(FunctionDef(
                 name=func_name,
                 start_line=i + 1,
@@ -1042,14 +1110,7 @@ def parse_go(content: str, path: str = "") -> FileAST:
         fn_match = re.match(r"^func\s+(\w+)\s*\(", stripped)
         if fn_match:
             func_name = fn_match.group(1)
-            end_line = i + 1
-            brace_count = stripped.count("{") - stripped.count("}")
-            if brace_count > 0:
-                for j in range(i + 1, min(i + 500, len(lines))):
-                    brace_count += lines[j].count("{") - lines[j].count("}")
-                    if brace_count <= 0:
-                        end_line = j + 1
-                        break
+            end_line = _bounded_fallback_end(lines, i)
             ast.functions.append(FunctionDef(
                 name=func_name,
                 start_line=i + 1,
@@ -1061,14 +1122,7 @@ def parse_go(content: str, path: str = "") -> FileAST:
         # Struct: type Name struct {
         struct_match = re.match(r"^type\s+(\w+)\s+struct\s*\{", stripped)
         if struct_match:
-            end_line = i + 1
-            brace_count = stripped.count("{") - stripped.count("}")
-            if brace_count > 0:
-                for j in range(i + 1, min(i + 500, len(lines))):
-                    brace_count += lines[j].count("{") - lines[j].count("}")
-                    if brace_count <= 0:
-                        end_line = j + 1
-                        break
+            end_line = _bounded_fallback_end(lines, i)
             ast.classes.append(ClassDef(
                 name=struct_match.group(1),
                 start_line=i + 1,
@@ -1080,14 +1134,7 @@ def parse_go(content: str, path: str = "") -> FileAST:
         # Interface: type Name interface {
         iface_match = re.match(r"^type\s+(\w+)\s+interface\s*\{", stripped)
         if iface_match:
-            end_line = i + 1
-            brace_count = stripped.count("{") - stripped.count("}")
-            if brace_count > 0:
-                for j in range(i + 1, min(i + 500, len(lines))):
-                    brace_count += lines[j].count("{") - lines[j].count("}")
-                    if brace_count <= 0:
-                        end_line = j + 1
-                        break
+            end_line = _bounded_fallback_end(lines, i)
             ast.classes.append(ClassDef(
                 name=iface_match.group(1),
                 start_line=i + 1,

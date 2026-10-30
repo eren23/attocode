@@ -57,7 +57,7 @@ class SymbolRef:
     ref_kind: str           # "call" | "import" | "attribute"
     file_path: str
     line: int
-    source: str = "tree-sitter"  # "tree-sitter" | "lsp"
+    source: str = "tree-sitter"  # "tree-sitter" | "regex" | "lsp"
     syntax_name: str = ""  # identifier/member expression as written in source
     # Qualified name of the function/method enclosing this reference. Empty
     # when the reference is at module top level or the enclosing symbol
