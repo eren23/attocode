@@ -295,7 +295,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
     ),
     "ocaml": _LangConfig(
         grammar_module="tree_sitter_ocaml",
-        function_types=("let_binding",),
+        function_types=("let_binding", "value_specification"),
         class_types=("type_definition", "module_definition", "class_definition"),
         import_types=("open_statement", "open_module"),
         language_func="language_ocaml",
@@ -377,6 +377,16 @@ def _cached_pack_language(language: str):
     return pack.get_language(language)
 
 
+def _parser_language(file_path: str, language: str) -> str:
+    """Choose a grammar variant without changing the file's public language."""
+    suffix = Path(file_path).suffix
+    if suffix == ".tsx":
+        return "tsx"
+    if language == "ocaml" and suffix == ".mli":
+        return "ocaml_interface"
+    return language
+
+
 def _get_parser(language: str):
     """Get or create a thread-owned tree-sitter Parser for the given language.
 
@@ -393,7 +403,7 @@ def _get_parser(language: str):
     if not _TS_AVAILABLE and not _try_init_tree_sitter():
         return None
 
-    config = LANGUAGE_CONFIGS.get("typescript" if language == "tsx" else language)
+    config = LANGUAGE_CONFIGS.get({"tsx": "typescript", "ocaml_interface": "ocaml"}.get(language, language))
     if config is None:
         return None
 
@@ -403,7 +413,7 @@ def _get_parser(language: str):
         import tree_sitter as ts
 
         grammar_mod = importlib.import_module(config.grammar_module)
-        lang_fn = getattr(grammar_mod, "language_tsx" if language == "tsx" else config.language_func)
+        lang_fn = getattr(grammar_mod, {"tsx": "language_tsx", "ocaml_interface": "language_ocaml_interface"}.get(language, config.language_func))
         lang = ts.Language(lang_fn())
         parser = ts.Parser(lang)
         parsers[language] = parser
@@ -498,6 +508,11 @@ def _find_name(node, source_bytes: bytes) -> str:
         pattern = node.child_by_field_name("pattern")
         if pattern is not None and pattern.type == "value_name":
             return _node_text(pattern, source_bytes)
+
+    if node.type == "value_specification":
+        name = next((child for child in node.named_children if child.type == "value_name"), None)
+        if name is not None:
+            return _node_text(name, source_bytes)
 
     if node.type in ("function_definition", "short_function_definition"):
         signature = next((c for c in node.named_children if c.type == "signature"), None)
@@ -1428,7 +1443,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
     if language not in LANGUAGE_CONFIGS:
         return None
 
-    parser = _get_parser("tsx" if Path(file_path).suffix == ".tsx" else language)
+    parser = _get_parser(_parser_language(file_path, language))
     if parser is None:
         return None
 
@@ -2063,7 +2078,7 @@ _GENERIC_FUNCTION_TYPES = frozenset({
     "function",  # Haskell
     "bind",  # Haskell
     "proc_declaration", "template_declaration",  # Nim
-    "fun_def", "val_def", "let_binding",  # OCaml, F#
+    "fun_def", "val_def", "let_binding", "value_specification",  # OCaml, F#
     "defn", "defn-", "defmacro",  # Clojure
     "function_clause",  # Erlang
     "macro_definition",  # Clojure, Elixir
@@ -2120,7 +2135,7 @@ class GenericTreeSitterExtractor:
     """
 
     def __init__(self) -> None:
-        self._grammar_cache: dict[str, object | None] = {}
+        self._grammar_cache: dict[str | tuple[str, str], object | None] = {}
 
     def _get_language_obj(self, grammar_module: str, language: str = ""):
         """Try to load a tree-sitter Language from a grammar module.
@@ -2129,7 +2144,7 @@ class GenericTreeSitterExtractor:
         1. Individual PyPI grammar package (e.g. tree_sitter_perl)
         2. tree-sitter-language-pack (170+ bundled languages)
         """
-        cache_key = grammar_module or language
+        cache_key = (grammar_module, language) if language in {"ocaml", "ocaml_interface"} else grammar_module or language
         if cache_key in self._grammar_cache:
             return self._grammar_cache[cache_key]
 
@@ -2147,8 +2162,9 @@ class GenericTreeSitterExtractor:
                 mod = importlib.import_module(grammar_module)
                 # Try standard language(), fall back to language_<name>() for
                 # grammars like tree_sitter_php that export language_php()
-                lang_fn = getattr(mod, "language", None)
-                if lang_fn is None:
+                ocaml_variant = grammar_module == "tree_sitter_ocaml" and language in {"ocaml", "ocaml_interface"}
+                lang_fn = getattr(mod, "language_" + language, None) if ocaml_variant else getattr(mod, "language", None)
+                if lang_fn is None and not ocaml_variant:
                     # Search for language_* functions
                     for attr in dir(mod):
                         if attr.startswith("language_") and callable(getattr(mod, attr)):
@@ -2188,7 +2204,7 @@ class GenericTreeSitterExtractor:
         Returns:
             Dict matching ``ts_parse_file`` output format, or None on failure.
         """
-        lang_obj = self._get_language_obj(grammar_module, language=language)
+        lang_obj = self._get_language_obj(grammar_module, language=_parser_language(file_path, language))
         if lang_obj is None:
             return None
 

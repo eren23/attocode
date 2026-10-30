@@ -7,19 +7,9 @@
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "stage": "red",
+  "stage": "green",
   "expected_cases": 415,
-  "expected_failures": [
-    "test_structure_parser_route[api.mli-ocaml-ocaml_interface]",
-    "test_reference_parser_route[api.mli-ocaml-ocaml_interface]",
-    "test_individual_interface_parser_has_its_own_cached_variant",
-    "test_generic_individual_variants_do_not_alias_one_cache_entry",
-    "test_generic_cached_pack_variants_do_not_alias_one_cache_entry",
-    "test_ocaml_interface_native_grammar_route[structure]",
-    "test_ocaml_interface_native_grammar_route[references]",
-    "test_ocaml_interface_native_grammar_route[generic]",
-    "test_ocaml_interface_native_value_signature_ranges"
-  ],
+  "expected_failures": [],
   "original_causal_probe": 41106006284,
   "policy": "Production100000us unchanged; exact RED/GREEN controls, no original diagnostic rerun."
 }

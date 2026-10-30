@@ -41,8 +41,8 @@ def rust_imports(node, source: bytes) -> list[dict]:
 
 
 def syntax_tree(path: str, content: str, language: str):
-    from .ts_parser import _get_parser, bounded_parse
-    parser = _get_parser("tsx" if Path(path).suffix == ".tsx" else language)
+    from .ts_parser import _get_parser, _parser_language, bounded_parse
+    parser = _get_parser(_parser_language(path, language))
     return bounded_parse(parser, content.encode()) if parser else None
 
 
