@@ -1428,6 +1428,7 @@ class ASTService:
     def _index_definitions(self, rel_path: str, ast: FileAST, *, index=None) -> None:
         """Phase 1: Index all *definitions* (functions, classes, methods)."""
         index = self._index if index is None else index
+        source = 'regex' if ast.language in {'go', 'rust'} and ast.parsing_tier == 'regex' else 'tree-sitter'
         # Top-level functions
         for func in ast.functions:
             loc = SymbolLocation(
@@ -1437,6 +1438,7 @@ class ASTService:
                 file_path=rel_path,
                 start_line=func.start_line,
                 end_line=func.end_line,
+                source=source,
             )
             index.add_definition(loc)
 
@@ -1449,6 +1451,7 @@ class ASTService:
                 file_path=rel_path,
                 start_line=cls.start_line,
                 end_line=cls.end_line,
+                source=source,
             )
             index.add_definition(cls_loc)
 
@@ -1460,6 +1463,7 @@ class ASTService:
                     file_path=rel_path,
                     start_line=method.start_line,
                     end_line=method.end_line,
+                    source=source,
                 )
                 index.add_definition(method_loc)
 
@@ -1472,6 +1476,7 @@ class ASTService:
                 file_path=rel_path,
                 start_line=0,
                 end_line=0,
+                source=source,
             )
             index.add_definition(var_loc)
 

@@ -76,7 +76,7 @@ class SymbolLocation:
     file_path: str
     start_line: int
     end_line: int
-    source: str = "tree-sitter"  # "tree-sitter" | "lsp"
+    source: str = "tree-sitter"  # "tree-sitter" | "regex" | "lsp"
 
 
 @dataclass(slots=True)

@@ -947,8 +947,6 @@ def _bounded_fallback_end(lines: list[str], start: int) -> int:
         for char in line:
             if opened:
                 depth += (char == '{') - (char == '}')
-                if depth == 0:
-                    return number + 1
             elif char == '(':
                 parens += 1
             elif char == ')':
@@ -962,6 +960,10 @@ def _bounded_fallback_end(lines: list[str], start: int) -> int:
                     return start + 1
                 if char == '{':
                     opened, depth = True, 1
+        # A return type may close its own braces before the function body
+        # opens on the same line. Finish only after processing that line.
+        if opened and depth == 0:
+            return number + 1
     return start + 1
 
 
