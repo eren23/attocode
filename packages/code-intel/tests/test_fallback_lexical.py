@@ -76,6 +76,17 @@ def test_native_abort_reference_fallback_keeps_only_real_inline_call(tmp_path, l
 
 
 @pytest.mark.parametrize('language', ['go', 'rust'])
+def test_native_abort_definition_provenance_stays_regex(tmp_path, language, native_abort):
+    name = 'sample.' + ('go' if language == 'go' else 'rs')
+    source = 'func Target() {}\n' if language == 'go' else 'fn Target() {}\n'
+    ast = parse_file(name, source)
+    service = ASTService(str(tmp_path))
+    index = CrossRefIndex()
+    service._index_definitions(name, ast, index=index)
+    assert index.definitions['Target'][0].source == 'regex', 'followup: fallback definition claims native provenance'
+
+
+@pytest.mark.parametrize('language', ['go', 'rust'])
 def test_native_abort_fallback_keeps_existing_500_line_span_bound(language, native_abort):
     first = 'func Target() {' if language == 'go' else 'fn Target() {'
     source = first + '\n' + '\n' * 500 + '}\n'
