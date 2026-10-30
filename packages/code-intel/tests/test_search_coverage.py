@@ -75,6 +75,49 @@ def test_search_diagnostics_expose_effective_discovery_selection(tmp_path, monke
         manager.close()
 
 
+@pytest.mark.parametrize('supplied_limit', [11, 5000])
+def test_supplied_context_cap_is_a_completed_discovery_receipt(tmp_path, monkeypatch, supplied_limit):
+    source = tmp_path / 'main.py'
+    source.write_text('def policyneedle(): return 1\n')
+    manager = request_manager(tmp_path, monkeypatch)
+    context = CodebaseContextManager(str(tmp_path), max_files=supplied_limit)
+    try:
+        manager._build_keyword_index(context)
+        state = manager.candidate_diagnostics()
+        assert state['discovery_max_files'] == supplied_limit, 'followup: diagnostics report manager cap instead of supplied context'
+        assert state['discovery_selected_files'] == state['discovery_discovered_files'] == 1
+        context.max_files = 9000
+        assert manager.candidate_diagnostics()['discovery_max_files'] == supplied_limit
+        manager.invalidate_file(str(source))
+        assert manager.candidate_diagnostics()['discovery_max_files'] == 3000
+        assert manager.candidate_diagnostics()['discovery_selected_files'] == 0
+    finally:
+        manager.close()
+
+
+def test_supplied_cap_is_cleared_when_sql_read_crosses_invalidation(tmp_path, monkeypatch):
+    source = tmp_path / 'main.py'
+    source.write_text('def policyneedle(): return 1\n')
+    manager = request_manager(tmp_path, monkeypatch)
+    try:
+        manager._build_keyword_index(CodebaseContextManager(str(tmp_path), max_files=11))
+        manager._sync_body_index()
+        connection = manager._open_body_db()
+        class InvalidatingConnection:
+            def execute(self, sql):
+                if sql == 'SELECT count(*) FROM body_files':
+                    manager.invalidate_file(str(source))
+                return connection.execute(sql)
+            def close(self):
+                connection.close()
+        monkeypatch.setattr(SemanticSearchManager, '_open_body_db', lambda self: InvalidatingConnection())
+        state = manager.candidate_diagnostics()
+        assert state['status'] == 'warming' and state['discovery_max_files'] == 3000
+        assert state['discovery_selected_files'] == state['discovery_discovered_files'] == 0
+    finally:
+        manager.close()
+
+
 def test_invalidated_discovery_does_not_publish_old_completed_counts(tmp_path, monkeypatch):
     source = tmp_path / "main.py"
     source.write_text("def policyneedle(): return 1\n")

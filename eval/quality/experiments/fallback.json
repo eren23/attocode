@@ -1,0 +1,23 @@
+{
+  "experiment": "fallback",
+  "schema_version": 1,
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "stage": "red",
+  "expected_cases": 424,
+  "expected_failures": [
+    "test_supplied_context_cap_is_a_completed_discovery_receipt[11]",
+    "test_supplied_context_cap_is_a_completed_discovery_receipt[5000]",
+    "test_native_abort_fallback_excludes_comment_and_raw_string_declarations[go]",
+    "test_native_abort_fallback_excludes_comment_and_raw_string_declarations[rust]",
+    "test_native_abort_fallback_multiline_span_ignores_literal_braces[go]",
+    "test_native_abort_fallback_multiline_span_ignores_literal_braces[rust]",
+    "test_native_abort_reference_fallback_keeps_only_real_inline_call[go]",
+    "test_native_abort_reference_fallback_keeps_only_real_inline_call[rust]"
+  ],
+  "decision": "Synthetic fallback correctness/provenance only. Native boundary double raises observed ValueError; does not establish a timeout cause/frequency. Production100ms/reset/cache policy unchanged; original experiments/campaign immutable. No blind reruns, retune or paid launch."
+}
