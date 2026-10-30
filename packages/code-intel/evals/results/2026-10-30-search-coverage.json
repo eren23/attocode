@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-30",
+  "status": "online_causal_controls_qualified",
+  "publication": "unreleased fix on0.1.20 source; no new package/tag",
+  "base": "a21eea48d107240c7d138379ba97dd63a162dcd5",
+  "qualified_head": "24df8b81b4ce6042337a4acac749d830cabcbae6",
+  "product_changed_files": [
+    "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+    "packages/code-intel/src/attocode_intel/service.py"
+  ],
+  "unchanged_product_files": 347,
+  "product_files_each": 349,
+  "dependencies_native_and_ranking_policies_unchanged": true,
+  "trials": [
+    {
+      "label": "red-1",
+      "run": 41095260263,
+      "head": "a682213ac92cf3cd8f14320337c6e627d76835f8",
+      "workflow_conclusion": "failure",
+      "admission": "retained-incomplete",
+      "cases": 470,
+      "failed": 6,
+      "archive_sha256": "8f6bff36a001a45b2e63f06ab97fb3272e35212ad92852b4c81d4ad46f677bc5",
+      "seconds": 68.47372548599999,
+      "supervision": {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "command": [
+          "/home/runner/work/attocode/attocode/.venv/bin/python",
+          "-m",
+          "eval.quality.experiments",
+          "coverage",
+          "--root",
+          "/home/runner/work/_temp/intelligence-experiment-41095260263-1",
+          "--payload"
+        ],
+        "exit_code": 1,
+        "log_truncated": false,
+        "monitoring": {
+          "controller_cpu_seconds": 14.717636955999998,
+          "samples": 256,
+          "wall_seconds": 14.725489974999942
+        },
+        "peak_disk_bytes": 256966702,
+        "peak_evidence_bytes": 1949696,
+        "peak_rss_bytes": 383680512,
+        "seconds": 65.962,
+        "status": "failed",
+        "wall_seconds": 65.962
+      },
+      "owned_scratch_removed": true
+    },
+    {
+      "label": "fixture-red-1",
+      "run": 41095848944,
+      "head": "b737b37d5980549f4f58fc8fde1247d84e73c11d",
+      "workflow_conclusion": "success",
+      "admission": "passed",
+      "cases": 470,
+      "failed": 9,
+      "archive_sha256": "d48f6a0c642841be22d3b903728edc1364ef2d5cdfb496365b793b885325b79e",
+      "seconds": 67.113997737,
+      "supervision": {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "command": [
+          "/home/runner/work/attocode/attocode/.venv/bin/python",
+          "-m",
+          "eval.quality.experiments",
+          "coverage",
+          "--root",
+          "/home/runner/work/_temp/intelligence-experiment-41095848944-1",
+          "--payload"
+        ],
+        "exit_code": 0,
+        "log_truncated": false,
+        "monitoring": {
+          "controller_cpu_seconds": 14.024659554999998,
+          "samples": 253,
+          "wall_seconds": 14.027161212000237
+        },
+        "peak_disk_bytes": 252457006,
+        "peak_evidence_bytes": 1974272,
+        "peak_rss_bytes": 388026368,
+        "seconds": 64.663,
+        "status": "passed",
+        "wall_seconds": 64.663
+      },
+      "owned_scratch_removed": true
+    },
+    {
+      "label": "boundary-red-1",
+      "run": 41096359459,
+      "head": "8252c4c0269fd3a3c290f061e975a7da258e10d1",
+      "workflow_conclusion": "success",
+      "admission": "passed",
+      "cases": 474,
+      "failed": 13,
+      "archive_sha256": "7008a08a651f0c00f5ee964fd6a5c6eb448476988e610a36e2d0fd641d9be31d",
+      "seconds": 61.882592825,
+      "supervision": {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "command": [
+          "/home/runner/work/attocode/attocode/.venv/bin/python",
+          "-m",
+          "eval.quality.experiments",
+          "coverage",
+          "--root",
+          "/home/runner/work/_temp/intelligence-experiment-41096359459-1",
+          "--payload"
+        ],
+        "exit_code": 0,
+        "log_truncated": false,
+        "monitoring": {
+          "controller_cpu_seconds": 10.390500077999999,
+          "samples": 248,
+          "wall_seconds": 10.395168285000015
+        },
+        "peak_disk_bytes": 286502958,
+        "peak_evidence_bytes": 1990656,
+        "peak_rss_bytes": 384856064,
+        "seconds": 60.035,
+        "status": "passed",
+        "wall_seconds": 60.035
+      },
+      "owned_scratch_removed": true
+    },
+    {
+      "label": "green-1",
+      "run": 41097175876,
+      "head": "24df8b81b4ce6042337a4acac749d830cabcbae6",
+      "workflow_conclusion": "success",
+      "admission": "passed",
+      "cases": 474,
+      "failed": 0,
+      "archive_sha256": "8583e5017916db2e2ebfb6f91fa9ace88597c3bd30b5b96ccda1813515c373f7",
+      "seconds": 74.02713922699999,
+      "supervision": {
+        "cleanup_errors": [],
+        "cleanup_verified": true,
+        "command": [
+          "/home/runner/work/attocode/attocode/.venv/bin/python",
+          "-m",
+          "eval.quality.experiments",
+          "coverage",
+          "--root",
+          "/home/runner/work/_temp/intelligence-experiment-41097175876-1",
+          "--payload"
+        ],
+        "exit_code": 0,
+        "log_truncated": false,
+        "monitoring": {
+          "controller_cpu_seconds": 17.280680256000004,
+          "samples": 266,
+          "wall_seconds": 17.28839874299995
+        },
+        "peak_disk_bytes": 286830638,
+        "peak_evidence_bytes": 1925120,
+        "peak_rss_bytes": 380506112,
+        "seconds": 70.53,
+        "status": "passed",
+        "wall_seconds": 70.53
+      },
+      "owned_scratch_removed": true
+    }
+  ],
+  "green_cases": 474,
+  "new_regressions": 16,
+  "maintained_preflight": 397,
+  "required_regressions": 413,
+  "gateway_observations": {
+    "search_first": {
+      "sha256": "787f9f38b8af3534163da23b7a3b4468073c6183ba418c5cf153cca623254a2e",
+      "bytes": 544604,
+      "keyword": 10001,
+      "body": 10001,
+      "target_sha256": "1334832d1fdaac110887e2a43ca9e8ee0f49269078a4a353adc7188f2c36fd9a"
+    },
+    "ast_first": {
+      "sha256": "97c3f73caf1d5b430c8332eb6cafd9cdc57d1035445f9920607754c33a38123d",
+      "bytes": 544753,
+      "keyword": 10001,
+      "body": 10001,
+      "target_sha256": "1334832d1fdaac110887e2a43ca9e8ee0f49269078a4a353adc7188f2c36fd9a"
+    },
+    "old_cache_reopen": {
+      "sha256": "639a3a31346d4db050aff630f015ad78c3b845268bcf093892275b5a7b92b2ac",
+      "bytes": 544614,
+      "keyword": 10001,
+      "body": 10001,
+      "target_sha256": "1334832d1fdaac110887e2a43ca9e8ee0f49269078a4a353adc7188f2c36fd9a"
+    }
+  },
+  "original_paid_campaign_qualification": "incomplete, preserved",
+  "capacity_50k_100k": "unissued",
+  "native_failures": "separate next investigation; no cause attribution",
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "local_tested_execution": false,
+  "new_paid_workers": 0,
+  "archive": {
+    "outcome": "passed",
+    "path": "packages/code-intel/evals/results/2026-10-30-search-coverage-evidence.tar.gz",
+    "sha256": "57969c585bbb3fdb48ebd8cdfeb6ec40b2c0424e774615191652535cdae77e66",
+    "bytes": 2948873,
+    "members": 698,
+    "original_zips": 4,
+    "source_commits": [
+      "a21eea48d107240c7d138379ba97dd63a162dcd5",
+      "a682213ac92cf3cd8f14320337c6e627d76835f8",
+      "b737b37d5980549f4f58fc8fde1247d84e73c11d",
+      "8252c4c0269fd3a3c290f061e975a7da258e10d1",
+      "24df8b81b4ce6042337a4acac749d830cabcbae6",
+      "96e41f32f926a2a032cafaf7f28684d0362910fa"
+    ],
+    "product_files_each": 349,
+    "changed_product_files": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py",
+      "packages/code-intel/src/attocode_intel/service.py"
+    ],
+    "qualified_product_bytes_exact": true,
+    "originals_preserved": true,
+    "private_ledger_and_credentials_excluded": true
+  }
+}

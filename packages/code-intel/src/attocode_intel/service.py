@@ -291,10 +291,14 @@ class CodeIntelService:
                     from attocode_intel._internal.integrations.context.semantic_search import (
                         SemanticSearchManager,
                     )
+                    from attocode_intel.request_context import current_request
 
                     kwargs: dict[str, object] = {"root_dir": self._project_dir,
                                                  "ast_lookup": self._cached_search_ast,
                                                  "discovery_snapshot": self._cached_discovery_snapshot}
+                    if current_request.get():
+                        # Match structural discovery without starting AST hydration.
+                        kwargs["max_files"] = int(os.environ.get("ATTOCODE_INTEL_MAX_FILES", "100000"))
                     if self._scoring_config is not None:
                         kwargs["scoring_config"] = self._scoring_config
                     self._semantic_search = SemanticSearchManager(**kwargs)
