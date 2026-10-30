@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-30",
+  "status": "qualified unreleased source-provenance and Go/Rust fallback correction",
+  "base": "383d75604021e42fd7bdd6c9cf4c8b7b20f8415d",
+  "qualified_head": "b7dd5b16fa7b27441b62056218e57f4f9b7eb534",
+  "published_version": "0.1.20",
+  "new_release": false,
+  "new_paid_launches": 0,
+  "production_timeout_micros": 100000,
+  "fallback_span_window_lines": 500,
+  "new_regressions": 16,
+  "maintained_preflight": 427,
+  "required_regressions": 443,
+  "optional_cases": 79,
+  "optional_depth_cases": 26,
+  "runs": {
+    "red": {
+      "run": 41116468603,
+      "head": "273b9a125fcefe27041c60e0bac55a345bdae255",
+      "cases": 424,
+      "failed": 8,
+      "positive": 416,
+      "archive_sha256": "40caa4b37d6eb24e053cc7821b5961de29b7ce9b3ea535301586aca7d24fc901"
+    },
+    "green": {
+      "run": 41117203792,
+      "head": "20002163fd266aef33aabdd37db0bfdb5dc58481",
+      "cases": 424,
+      "failed": 0,
+      "positive": 424,
+      "archive_sha256": "9bc0afea51f6eb9e442dccdafe34907a223953040eab545cfd722b1984913a22"
+    },
+    "boundary-red": {
+      "run": 41118027226,
+      "head": "d8c1b1ae78aea0f315b5f5621653379807ee1463",
+      "cases": 425,
+      "failed": 1,
+      "positive": 424,
+      "archive_sha256": "2530dcac2c01bd4c647b9d1f2320034fad4eb5ff6f2d8791086fdd199f759ae8"
+    },
+    "provenance-red": {
+      "run": 41118402134,
+      "head": "d3d2be1d25aed8e92a08ea5bb3e2eec34d423237",
+      "cases": 427,
+      "failed": 3,
+      "positive": 424,
+      "archive_sha256": "8a6ae3fd669752af286ddfb6204b3f2499c9fd2b70becc6f85ae690d4ae938b6"
+    },
+    "final-green": {
+      "run": 41118824974,
+      "head": "b7dd5b16fa7b27441b62056218e57f4f9b7eb534",
+      "cases": 427,
+      "failed": 0,
+      "positive": 427,
+      "archive_sha256": "2c92585afc24ebe02d7426a179728ffbc208a7b8881484fd668f039d799ff6fe"
+    }
+  },
+  "archive": {
+    "outcome": "passed",
+    "path": "packages/code-intel/evals/results/2026-10-30-fallback-provenance-evidence.tar.gz",
+    "sha256": "0619b7a0b4d7bb916fc7de9dd5e7e00385c98319f2bef01dec84c14b6021adca",
+    "bytes": 2928805,
+    "members": 726,
+    "original_zips": 5,
+    "source_commits": [
+      "383d75604021e42fd7bdd6c9cf4c8b7b20f8415d",
+      "273b9a125fcefe27041c60e0bac55a345bdae255",
+      "20002163fd266aef33aabdd37db0bfdb5dc58481",
+      "d8c1b1ae78aea0f315b5f5621653379807ee1463",
+      "d3d2be1d25aed8e92a08ea5bb3e2eec34d423237",
+      "b7dd5b16fa7b27441b62056218e57f4f9b7eb534",
+      "5e594c596b7cc0f8379728d259e41530869f1c7b"
+    ],
+    "product_files_each": 349,
+    "changed_product_files": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/ast_service.py",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/codebase_ast.py",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/cross_references.py",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py"
+    ],
+    "qualified_product_and_test_bytes_exact": true,
+    "originals_preserved": true,
+    "private_ledger_and_credentials_excluded": true
+  },
+  "corrections": [
+    "Capture the supplied context discovery cap in its completed generation receipt; later context mutation cannot rewrite it; invalidation clears cap/counts together.",
+    "Mask Go/Rust comments and literals with preserved coordinates before existing fallback declarations, spans and call scans.",
+    "Exclude declaration-name self calls while retaining genuine inline calls.",
+    "Label Go/Rust fallback definitions and regex-generated calls as regex, preserving tree-sitter for actual native results.",
+    "Keep ordinary multiline/anonymous-return-type ranges within the existing500-line window."
+  ],
+  "limitations": [
+    "Native parser abort is a deterministic boundary double raising the previously observedValueError; these are real product fallback/index paths, not a new timing/cause/frequency experiment.",
+    "Regex/lexical evidence remains heuristic; complex headers, macros, raw identifiers and type resolution are not generally supported.",
+    "No change to100ms parser limit, reset/thread/cache policy, ranking/scoring/eligibility, dependencies or version.",
+    "No oldcampaign/native/scored rerun,50k/100k qualification, performance/relevance/restart claim or newrelease.",
+    "Other language fallback semantics remain unchanged."
+  ]
+}

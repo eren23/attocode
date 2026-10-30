@@ -2,3 +2,4 @@
 /packages/code-intel/evals/results/2026-10-29-scale-evidence.tar.gz export-ignore
 /packages/code-intel/evals/results/2026-10-30-search-coverage-evidence.tar.gz export-ignore
 packages/code-intel/evals/results/2026-10-30-native-causes-evidence.tar.gz export-ignore
+packages/code-intel/evals/results/2026-10-30-fallback-provenance-evidence.tar.gz export-ignore
