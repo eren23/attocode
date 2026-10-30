@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from attocode_intel._internal.integrations.context.codebase_context import CodebaseContextManager
 from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
 from attocode_intel.request_context import RequestContext, bind_request
 from attocode_intel.service import CodeIntelService
@@ -27,11 +28,22 @@ def mixed_sources(root):
     (root / "zz_uniquepolicyneedle.notes").write_text("uniquepolicyneedle\n")
 
 
-@pytest.mark.parametrize("entry", ["keyword", "body", "importance", "warm"])
+@pytest.mark.parametrize("entry", ["keyword", "body", "importance", "warm", "handoff_unavailable", "handoff_stale"])
 def test_request_policy_reaches_each_fresh_lexical_context(tmp_path, monkeypatch, entry):
     mixed_sources(tmp_path)
     manager = request_manager(tmp_path, monkeypatch)
     try:
+        if entry == "handoff_unavailable":
+            def unavailable():
+                raise OSError("snapshot provider unavailable")
+            manager.discovery_snapshot = unavailable
+        elif entry == "handoff_stale":
+            donor = CodebaseContextManager(str(tmp_path), max_files=3000)
+            donor.discover_files()
+            stale = donor._discovery_snapshot
+            assert stale is not None
+            (tmp_path / "newly_added.py").write_text("def newoperation(): return 1\n")
+            manager.discovery_snapshot = lambda: stale
         if entry == "keyword":
             manager._build_keyword_index()
             found = manager._keyword_search("uniquepolicyneedle", 5, "zz_uniquepolicyneedle.notes")
@@ -133,5 +145,50 @@ def test_configured_search_preserves_source_exclusions(tmp_path, monkeypatch):
         for excluded in ("ignored.py", "huge.py", "escape.py"):
             assert not manager.search_candidates("secretpolicy", 5, excluded)
         assert Path(manager.root_dir).resolve() == root.resolve()
+    finally:
+        manager.close()
+
+
+def test_request_lower_composition_policy_remains_visible(tmp_path, monkeypatch):
+    mixed_sources(tmp_path)
+    manager = request_manager(tmp_path, monkeypatch, "2000")
+    try:
+        manager._warm_candidate_indexes()
+        conn = manager._open_body_db()
+        try:
+            assert conn.execute("SELECT count(*) FROM kw_files").fetchone()[0] == 2000
+        finally:
+            conn.close()
+        state = manager.candidate_diagnostics()
+        assert state.get("discovery_truncated") is True, "coverage boundary: lower request cap hidden"
+        assert state["discovery_max_files"] == state["discovery_selected_files"] == 2000
+        assert state["discovery_discovered_files"] == 2102
+        assert not manager.search_candidates("uniquepolicyneedle", 5, "zz_uniquepolicyneedle.notes")
+    finally:
+        manager.close()
+
+
+def test_diagnostics_reject_invalidation_during_sql_read(tmp_path, monkeypatch):
+    source = tmp_path / "main.py"
+    source.write_text("def policyneedle(): return 1\n")
+    manager = request_manager(tmp_path, monkeypatch)
+    try:
+        manager._warm_candidate_indexes()
+        conn = manager._open_body_db()
+
+        class InvalidatingConnection:
+            def execute(self, sql):
+                if sql == "SELECT count(*) FROM body_files":
+                    manager.invalidate_file(str(source))
+                return conn.execute(sql)
+
+            def close(self):
+                conn.close()
+
+        monkeypatch.setattr(SemanticSearchManager, "_open_body_db", lambda self: InvalidatingConnection())
+        state = manager.candidate_diagnostics()
+        assert state["status"] == "warming", "coverage boundary: diagnostics mixed invalidated generations"
+        assert state["discovery_selected_files"] == 0
+        assert state["body_indexed_files"] == state["keyword_indexed_files"] == 0
     finally:
         manager.close()
