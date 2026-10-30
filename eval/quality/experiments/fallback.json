@@ -7,8 +7,10 @@
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "stage": "green",
-  "expected_cases": 424,
-  "expected_failures": [],
+  "stage": "boundary-red",
+  "expected_cases": 425,
+  "expected_failures": [
+    "test_go_fallback_return_struct_type_does_not_end_function_span"
+  ],
   "decision": "Synthetic fallback correctness/provenance only. Native boundary double raises observed ValueError; does not establish a timeout cause/frequency. Production100ms/reset/cache policy unchanged; original experiments/campaign immutable. No blind reruns, retune or paid launch."
 }

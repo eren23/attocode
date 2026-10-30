@@ -47,6 +47,12 @@ def test_native_abort_fallback_multiline_span_ignores_literal_braces(language, n
     assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == expected, 'followup: bounded fallback lost declaration body range'
 
 
+def test_go_fallback_return_struct_type_does_not_end_function_span(native_abort):
+    source = 'package sample\nfunc Target() struct{ X int } {\n return struct{ X int }{X: 1}\n}\n'
+    ast = parse_file('sample.go', source)
+    assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == [('Target', 2, 4)], 'followup: return type braces ended function span'
+
+
 CALLS = {
     'go': 'package sample\nfunc Target() {}\nfunc Caller() { Target() }\n// Target()\n/* Target() */\nvar text = `\nTarget()\n`\n',
     'rust': 'fn Target() {}\nfn Caller() { Target(); }\n// Target()\n/* outer /* nested */ Target() */\nconst TEXT: &str = r##"\nTarget()\n"##;\n',
