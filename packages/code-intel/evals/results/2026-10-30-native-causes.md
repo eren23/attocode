@@ -37,7 +37,7 @@ The correction exposes interface declarations through the existing function-like
 
 The [machine report](2026-10-30-native-causes.json) contains every source identity and native outcome. The [evidence archive](2026-10-30-native-causes-evidence.tar.gz) preserves all four original artifact ZIPs from three runs, their source-bound admission data, retained input metadata, complete committed producer/design/test/product snapshots, and the qualified Git history bundle. Every archive payload is covered by the internal byte-count/SHA256 manifest. Its producer is recoverable from the source snapshots/bundle; no corpus download or product runtime is needed to replay recorded bytes.
 
-Archive SHA256: b07a5bdca9e5d534388dc61b3bcbfb6fcc2c8124a7b8f4af451c2e930e4bfe8d. Size: 2600139 bytes; 712 members. Large evidence archives remain tracked but export-ignored so source exports preserve their100MiB bound. No private ledger, provider credentials, new paid worker, package release, Docker cleanup, global upgrade or MCP restart was involved.
+Archive SHA256: b5454e51a220a3f95ae57687f5842a68bea8f831c702c5892bc40800b46fb9c8. Size: 2748816 bytes; 715 members. Large evidence archives remain tracked but export-ignored so source exports preserve their100MiB bound. No private ledger, provider credentials, new paid worker, package release, Docker cleanup, global upgrade or MCP restart was involved.
 
 The original paid campaign remains incomplete.50k/100k capacity, broad failure frequencies, historical native attribution, relevance, restart performance and general throughput remain unclaimed. These observations are not replacement qualification results for that campaign.
 
