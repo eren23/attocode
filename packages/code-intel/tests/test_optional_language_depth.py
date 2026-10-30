@@ -95,6 +95,43 @@ def test_ocaml_native_call_candidates_exclude_decoys():
     assert calls == [('Helper.greet', 'call', 2)], 'language coverage: OCaml native call candidates wrong'
 
 
+@pytest.mark.parametrize('route', ['structure', 'references', 'generic'])
+def test_ocaml_interface_native_grammar_route(route, monkeypatch):
+    from attocode_intel._internal.integrations.context import syntax_evidence, ts_parser
+    source = "open Helper\nval identity : 'a -> 'a\n"
+    observations = []
+    original = ts_parser.bounded_parse
+    def observe(parser, data):
+        tree = original(parser, data)
+        observations.append({'language': parser.language.name, 'bytes': len(data),
+            'sha256': hashlib.sha256(data).hexdigest(), 'tree': str(tree.root_node) if tree else None,
+            'has_error': tree.root_node.has_error if tree else None,
+            'end_byte': tree.root_node.end_byte if tree else None})
+        return tree
+    monkeypatch.setattr(ts_parser, 'bounded_parse', observe)
+    if route == 'structure':
+        result = ts_parser.ts_parse_file('api.mli', source, 'ocaml')
+    elif route == 'references':
+        result = syntax_evidence.reference_candidates('api.mli', source, 'ocaml')
+    else:
+        result = ts_parser.ts_parse_file_generic('api.mli', source, 'ocaml')
+    evidence('ocaml-interface-' + route + '.json', {'source': source, 'observations': observations, 'result': result})
+    assert result is not None and observations, 'ocaml interface: native route unavailable'
+    assert all(o['language'] == 'ocaml_interface' and o['has_error'] is False and o['end_byte'] == len(source.encode()) for o in observations), 'ocaml interface: native route used implementation or error tree'
+    assert ts_parser.PARSE_TIMEOUT_MICROS == 100000
+
+
+def test_ocaml_interface_native_value_signature_ranges():
+    from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+    source = "(* val decoy : int *)\nval identity : 'a -> 'a\nval answer : int\n"
+    result = parse_file('api.mli', source)
+    evidence('ocaml-interface-values.json', {'source': source, 'tier': result.parsing_tier,
+             'functions': [asdict(f) for f in result.functions], 'failures': [asdict(f) for f in result.parse_failures]})
+    assert result.language == 'ocaml' and result.parsing_tier == 'tree_sitter'
+    assert [(f.name, f.start_line, f.end_line) for f in result.functions] == [('identity', 2, 2), ('answer', 3, 3)], 'ocaml interface: value signatures missing or wrong ranges'
+    assert not result.parse_failures
+
+
 def test_perl_native_call_candidates_exclude_decoys():
     from attocode_intel._internal.integrations.context.syntax_evidence import reference_candidates
     source = 'sub greet { return $_[0]; }\nsub run { Lib::Helper::greet("ok"); }\n# Lib::Helper::decoy("no");\nmy $text = "Lib::Helper::decoy nope";\n'

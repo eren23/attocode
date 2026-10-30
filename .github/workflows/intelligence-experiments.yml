@@ -75,7 +75,7 @@ jobs:
           cache = Path(os.environ['QUALITY_GRAMMAR_CACHE'])
           cache.mkdir()
           pack.configure(cache_dir=str(cache))
-          names = {'haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal'}
+          names = {'haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'ocaml_interface', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal'}
           available = set(pack.manifest_languages())
           assert not (names - available - {'crystal'})
           requested = sorted(names & available)

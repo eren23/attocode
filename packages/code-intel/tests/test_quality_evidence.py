@@ -249,7 +249,7 @@ def test_worker_grammar_acquisition_records_absent_artifact_without_downloading_
     import runpy
     from pathlib import Path
     from types import SimpleNamespace
-    names = ['haskell','erlang','clojure','perl','dart','ocaml','fsharp','julia','nim','r','objc']
+    names = ['haskell','erlang','clojure','perl','dart','ocaml','ocaml_interface','fsharp','julia','nim','r','objc']
     calls = []
     pack = SimpleNamespace(configure=lambda **kwargs: None, manifest_languages=lambda: names,
                            download=lambda selected: calls.append(selected), downloaded_languages=lambda: names)
