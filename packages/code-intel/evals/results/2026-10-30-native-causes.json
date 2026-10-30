@@ -1,0 +1,4188 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-30",
+  "status": "current-condition diagnosis and qualified unreleased OCaml correction",
+  "base": "adea7b9fb29ae8ba65889d875f3dee95d40214bb",
+  "probe_head": "fc847d2cf5fe37bb8fed9a054caa8d71ca0d4aa2",
+  "qualified_fix_head": "024f367f3f891d121eb1b75adfda612bdf808230",
+  "published_version": "0.1.20",
+  "new_release": false,
+  "new_paid_launches": 0,
+  "production_timeout_micros": 100000,
+  "diagnostic_budgets_micros": [
+    100000,
+    500000,
+    500000,
+    100000
+  ],
+  "inputs": 16,
+  "raw_bytes": 7355332,
+  "isolated_attempts": 72,
+  "worker_pids": [
+    2829,
+    2830,
+    2831,
+    2832,
+    2834,
+    2835,
+    2837,
+    2838,
+    2839,
+    2840,
+    2841,
+    2842,
+    2843,
+    2844,
+    2845,
+    2846
+  ],
+  "linked_blobs_verified": 609,
+  "preflight_controls": 397,
+  "maintained_preflight": 411,
+  "required_regressions": 427,
+  "optional_cases": 79,
+  "optional_depth_cases": 26,
+  "archive": {
+    "outcome": "passed",
+    "path": "packages/code-intel/evals/results/2026-10-30-native-causes-evidence.tar.gz",
+    "sha256": "b07a5bdca9e5d534388dc61b3bcbfb6fcc2c8124a7b8f4af451c2e930e4bfe8d",
+    "bytes": 2600139,
+    "members": 712,
+    "original_zips": 4,
+    "source_commits": [
+      "adea7b9fb29ae8ba65889d875f3dee95d40214bb",
+      "fc847d2cf5fe37bb8fed9a054caa8d71ca0d4aa2",
+      "c178aee17a9ed0fe6aec54720b07797ef15a61e9",
+      "024f367f3f891d121eb1b75adfda612bdf808230",
+      "e5417de2e464f46a8299ce34072ba80a6f45090b"
+    ],
+    "product_files_each": 349,
+    "changed_product_files": [
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/syntax_evidence.py",
+      "packages/code-intel/src/attocode_intel/_internal/integrations/context/ts_parser.py"
+    ],
+    "qualified_product_and_test_bytes_exact": true,
+    "originals_preserved": true,
+    "private_ledger_and_credentials_excluded": true
+  },
+  "findings": {
+    "ocaml_mli": "Four full-input implementation trees contain errors; four same-provider interface trees are clean at identical budgets. Product-equals-pack-implementation true. Small matching controls clean, crossed controls errors. Fix chooses interface in structure/references/generic and extracts val names/ranges.",
+    "budget_sensitive_paths": [
+      "pkg/sql/colexec/colexecprojconst/proj_const_left_ops.eg.go",
+      "tests/integration/lsp_tests.rs"
+    ],
+    "large_nonreproductions": 13,
+    "historical_causes_proven": false,
+    "current_limit_or_retry_change": false,
+    "performance_or_relevance_claim": false
+  },
+  "original_runs": [
+    {
+      "run": 41106006284,
+      "kind": "raw diagnostic",
+      "controls": 397,
+      "attempts": 72
+    },
+    {
+      "run": 41107000398,
+      "kind": "causal RED",
+      "cases": 415,
+      "failed_as_expected": 9,
+      "positive": 406
+    },
+    {
+      "run": 41107319484,
+      "kind": "causal GREEN",
+      "cases": 415,
+      "passed": 415
+    }
+  ],
+  "observations": [
+    {
+      "index": 0,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "docs/generated/metrics/metrics.html",
+        "bytes": 508195,
+        "sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7"
+      },
+      "source": {
+        "canonical_bytes": 508195,
+        "canonical_sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 508195,
+        "raw_sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7",
+        "spec": {
+          "bytes": 508195,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "docs/generated/metrics/metrics.html",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 14,
+          "name": null,
+          "node_kind_count": 41,
+          "parse_state_count": 94,
+          "semantic_version": null
+        },
+        "individual_module": "tree_sitter_html",
+        "language": "html"
+      },
+      "individual_distribution": {
+        "tree-sitter-html": {
+          "files": [
+            [
+              "tree_sitter_html/__init__.py",
+              "9b5620bf2983c56121b3df34727f8965b2a4429ce9c7898e88a0b1e8fda3e810"
+            ],
+            [
+              "tree_sitter_html/_binding.abi3.so",
+              "e88d0653c6f7616b55d62b22e04df88da4da6f4d7060b38962b7a08597f4e63c"
+            ]
+          ],
+          "version": "0.23.2"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 508195,
+            "error": null,
+            "language": "html",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140209657923408,
+            "source_sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7",
+            "stage": "parse",
+            "thread_cpu_ns": 68042711,
+            "thread_id": 140209679122560,
+            "thread_name": "MainThread",
+            "wall_ns": 68042632
+          },
+          "tree": {
+            "end_byte": 508195,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 41,
+            "parse_state_count": 94,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 508195,
+            "error": null,
+            "language": "html",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140209655552288,
+            "source_sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7",
+            "stage": "parse",
+            "thread_cpu_ns": 69798301,
+            "thread_id": 140209679122560,
+            "thread_name": "MainThread",
+            "wall_ns": 69798541
+          },
+          "tree": {
+            "end_byte": 508195,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 41,
+            "parse_state_count": 94,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 508195,
+            "error": null,
+            "language": "html",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140209655552288,
+            "source_sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7",
+            "stage": "parse",
+            "thread_cpu_ns": 66359414,
+            "thread_id": 140209679122560,
+            "thread_name": "MainThread",
+            "wall_ns": 66359521
+          },
+          "tree": {
+            "end_byte": 508195,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 41,
+            "parse_state_count": 94,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 508195,
+            "error": null,
+            "language": "html",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140209655552288,
+            "source_sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7",
+            "stage": "parse",
+            "thread_cpu_ns": 66237988,
+            "thread_id": 140209679122560,
+            "thread_name": "MainThread",
+            "wall_ns": 66243794
+          },
+          "tree": {
+            "end_byte": 508195,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 41,
+            "parse_state_count": 94,
+            "semantic_version": null
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 0
+      },
+      "product_native": [
+        {
+          "parser_id": 140209678620192,
+          "stage": "timeout_set",
+          "thread_id": 140209679122560,
+          "value": 100000
+        },
+        {
+          "bytes": 508195,
+          "error": null,
+          "language": "html",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140209678620192,
+          "source_sha256": "92a2e081ee86b70821ae47bd0902f73f1d9f8f22a0967c036292420ba95e8aa7",
+          "stage": "parse",
+          "thread_cpu_ns": 68812950,
+          "thread_id": 140209679122560,
+          "thread_name": "MainThread",
+          "wall_ns": 68834259
+        },
+        {
+          "parser_id": 140209678620192,
+          "stage": "reset",
+          "thread_id": 140209679122560
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "docs/generated/metrics/metrics.yaml",
+        "bytes": 989998,
+        "sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b"
+      },
+      "source": {
+        "canonical_bytes": 989998,
+        "canonical_sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 989998,
+        "raw_sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b",
+        "spec": {
+          "bytes": 989998,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "docs/generated/metrics/metrics.yaml",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 14,
+          "name": null,
+          "node_kind_count": 301,
+          "parse_state_count": 1579,
+          "semantic_version": null
+        },
+        "individual_module": "tree_sitter_yaml",
+        "language": "yaml"
+      },
+      "individual_distribution": {
+        "tree-sitter-yaml": {
+          "files": [
+            [
+              "tree_sitter_yaml/__init__.py",
+              "1bc14c540055a3a6e6378b2c7ace9e2e964651808cc791e23ac4a961bfc6134c"
+            ],
+            [
+              "tree_sitter_yaml/_binding.abi3.so",
+              "5c4b55b69914f5e513882fa81e29ae5112b0458fc03e455c5e77a151bce3aa9c"
+            ]
+          ],
+          "version": "0.7.2"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 989998,
+            "error": null,
+            "language": "yaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 139850244633104,
+            "source_sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b",
+            "stage": "parse",
+            "thread_cpu_ns": 81650863,
+            "thread_id": 139850268000384,
+            "thread_name": "MainThread",
+            "wall_ns": 81655008
+          },
+          "tree": {
+            "end_byte": 989998,
+            "has_error": false,
+            "root_type": "stream",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 301,
+            "parse_state_count": 1579,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 989998,
+            "error": null,
+            "language": "yaml",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139850244633104,
+            "source_sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b",
+            "stage": "parse",
+            "thread_cpu_ns": 81340464,
+            "thread_id": 139850268000384,
+            "thread_name": "MainThread",
+            "wall_ns": 81347400
+          },
+          "tree": {
+            "end_byte": 989998,
+            "has_error": false,
+            "root_type": "stream",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 301,
+            "parse_state_count": 1579,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 989998,
+            "error": null,
+            "language": "yaml",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139850244633104,
+            "source_sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b",
+            "stage": "parse",
+            "thread_cpu_ns": 80416086,
+            "thread_id": 139850268000384,
+            "thread_name": "MainThread",
+            "wall_ns": 80414789
+          },
+          "tree": {
+            "end_byte": 989998,
+            "has_error": false,
+            "root_type": "stream",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 301,
+            "parse_state_count": 1579,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 989998,
+            "error": null,
+            "language": "yaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 139850244633104,
+            "source_sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b",
+            "stage": "parse",
+            "thread_cpu_ns": 79147214,
+            "thread_id": 139850268000384,
+            "thread_name": "MainThread",
+            "wall_ns": 79145937
+          },
+          "tree": {
+            "end_byte": 989998,
+            "has_error": false,
+            "root_type": "stream",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 301,
+            "parse_state_count": 1579,
+            "semantic_version": null
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 1
+      },
+      "product_native": [
+        {
+          "parser_id": 139850249992208,
+          "stage": "timeout_set",
+          "thread_id": 139850268000384,
+          "value": 100000
+        },
+        {
+          "bytes": 989998,
+          "error": null,
+          "language": "yaml",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 139850249992208,
+          "source_sha256": "8ce7d616beb75d3c2de4c57774a29363fbcb5a39bbeedfc917cd5d64ace3533b",
+          "stage": "parse",
+          "thread_cpu_ns": 79474286,
+          "thread_id": 139850268000384,
+          "thread_name": "MainThread",
+          "wall_ns": 79473131
+        },
+        {
+          "parser_id": 139850249992208,
+          "stage": "reset",
+          "thread_id": 139850268000384
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/backup/backup_test.go",
+        "bytes": 453433,
+        "sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4"
+      },
+      "source": {
+        "canonical_bytes": 453433,
+        "canonical_sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 453433,
+        "raw_sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4",
+        "spec": {
+          "bytes": 453433,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/backup/backup_test.go",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "go",
+          "node_kind_count": 219,
+          "parse_state_count": 1442,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_go",
+        "language": "go"
+      },
+      "individual_distribution": {
+        "tree-sitter-go": {
+          "files": [
+            [
+              "tree_sitter_go/__init__.py",
+              "e5119cbb42f38cde9e7b318749457b332edd0f2cb09e35ba56b457a46bb55fe7"
+            ],
+            [
+              "tree_sitter_go/_binding.abi3.so",
+              "3e5f2df83c31f1b9f511ad44147d89b822905fdd54ebeca28531026aca076983"
+            ]
+          ],
+          "version": "0.25.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 453433,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140315012985216,
+            "source_sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4",
+            "stage": "parse",
+            "thread_cpu_ns": 55981168,
+            "thread_id": 140315022090368,
+            "thread_name": "MainThread",
+            "wall_ns": 55980949
+          },
+          "tree": {
+            "end_byte": 453433,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 453433,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140315019039760,
+            "source_sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4",
+            "stage": "parse",
+            "thread_cpu_ns": 54146248,
+            "thread_id": 140315022090368,
+            "thread_name": "MainThread",
+            "wall_ns": 54145943
+          },
+          "tree": {
+            "end_byte": 453433,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 453433,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140315019039760,
+            "source_sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4",
+            "stage": "parse",
+            "thread_cpu_ns": 53500511,
+            "thread_id": 140315022090368,
+            "thread_name": "MainThread",
+            "wall_ns": 53500260
+          },
+          "tree": {
+            "end_byte": 453433,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 453433,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140315019039760,
+            "source_sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4",
+            "stage": "parse",
+            "thread_cpu_ns": 53133365,
+            "thread_id": 140315022090368,
+            "thread_name": "MainThread",
+            "wall_ns": 53133151
+          },
+          "tree": {
+            "end_byte": 453433,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 429
+      },
+      "product_native": [
+        {
+          "parser_id": 140315000565904,
+          "stage": "timeout_set",
+          "thread_id": 140315022090368,
+          "value": 100000
+        },
+        {
+          "bytes": 453433,
+          "error": null,
+          "language": "go",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140315000565904,
+          "source_sha256": "661d6d870e9ad69bb62ec89a28d1555d22492dfd944ddda1ad83b177d556c5a4",
+          "stage": "parse",
+          "thread_cpu_ns": 52498809,
+          "thread_id": 140315022090368,
+          "thread_name": "MainThread",
+          "wall_ns": 52498639
+        },
+        {
+          "parser_id": 140315000565904,
+          "stage": "reset",
+          "thread_id": 140315022090368
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/ccl/changefeedccl/changefeed_test.go",
+        "bytes": 516754,
+        "sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2"
+      },
+      "source": {
+        "canonical_bytes": 516754,
+        "canonical_sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 516754,
+        "raw_sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2",
+        "spec": {
+          "bytes": 516754,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/ccl/changefeedccl/changefeed_test.go",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "go",
+          "node_kind_count": 219,
+          "parse_state_count": 1442,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_go",
+        "language": "go"
+      },
+      "individual_distribution": {
+        "tree-sitter-go": {
+          "files": [
+            [
+              "tree_sitter_go/__init__.py",
+              "e5119cbb42f38cde9e7b318749457b332edd0f2cb09e35ba56b457a46bb55fe7"
+            ],
+            [
+              "tree_sitter_go/_binding.abi3.so",
+              "3e5f2df83c31f1b9f511ad44147d89b822905fdd54ebeca28531026aca076983"
+            ]
+          ],
+          "version": "0.25.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 516754,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140689410126736,
+            "source_sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2",
+            "stage": "parse",
+            "thread_cpu_ns": 62688403,
+            "thread_id": 140689430343808,
+            "thread_name": "MainThread",
+            "wall_ns": 62708835
+          },
+          "tree": {
+            "end_byte": 516754,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 516754,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140689410126736,
+            "source_sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2",
+            "stage": "parse",
+            "thread_cpu_ns": 61398613,
+            "thread_id": 140689430343808,
+            "thread_name": "MainThread",
+            "wall_ns": 61397402
+          },
+          "tree": {
+            "end_byte": 516754,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 516754,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140689410126736,
+            "source_sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2",
+            "stage": "parse",
+            "thread_cpu_ns": 60180255,
+            "thread_id": 140689430343808,
+            "thread_name": "MainThread",
+            "wall_ns": 60188191
+          },
+          "tree": {
+            "end_byte": 516754,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 516754,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140689410126736,
+            "source_sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2",
+            "stage": "parse",
+            "thread_cpu_ns": 60624326,
+            "thread_id": 140689430343808,
+            "thread_name": "MainThread",
+            "wall_ns": 60623779
+          },
+          "tree": {
+            "end_byte": 516754,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 391
+      },
+      "product_native": [
+        {
+          "parser_id": 140689409130096,
+          "stage": "timeout_set",
+          "thread_id": 140689430343808,
+          "value": 100000
+        },
+        {
+          "bytes": 516754,
+          "error": null,
+          "language": "go",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140689409130096,
+          "source_sha256": "9c4c663d6e60eb1578ba7ee783086779b18e48c1803bd71f6f59cd15ec3800e2",
+          "stage": "parse",
+          "thread_cpu_ns": 59320007,
+          "thread_id": 140689430343808,
+          "thread_name": "MainThread",
+          "wall_ns": 59319254
+        },
+        {
+          "parser_id": 140689409130096,
+          "stage": "reset",
+          "thread_id": 140689430343808
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_mma-only_1.json",
+        "bytes": 307844,
+        "sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b"
+      },
+      "source": {
+        "canonical_bytes": 307844,
+        "canonical_sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 307844,
+        "raw_sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b",
+        "spec": {
+          "bytes": 307844,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_mma-only_1.json",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 14,
+          "name": null,
+          "node_kind_count": 25,
+          "parse_state_count": 32,
+          "semantic_version": null
+        },
+        "individual_module": "tree_sitter_json",
+        "language": "json"
+      },
+      "individual_distribution": {
+        "tree-sitter-json": {
+          "files": [
+            [
+              "tree_sitter_json/__init__.py",
+              "1210a0a6098b923fe95c8ed3493ee9a8541dfa9f59591ddf17e002fa244195c9"
+            ],
+            [
+              "tree_sitter_json/_binding.abi3.so",
+              "fd52106df3970bdb322713e4dd61b299ae8a104dabadc3b34fa240a236e287d8"
+            ]
+          ],
+          "version": "0.24.8"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 307844,
+            "error": null,
+            "language": "json",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140559628284432,
+            "source_sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b",
+            "stage": "parse",
+            "thread_cpu_ns": 61469024,
+            "thread_id": 140559650926720,
+            "thread_name": "MainThread",
+            "wall_ns": 61469085
+          },
+          "tree": {
+            "end_byte": 307844,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 307844,
+            "error": null,
+            "language": "json",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140559628284432,
+            "source_sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b",
+            "stage": "parse",
+            "thread_cpu_ns": 60995248,
+            "thread_id": 140559650926720,
+            "thread_name": "MainThread",
+            "wall_ns": 60993751
+          },
+          "tree": {
+            "end_byte": 307844,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 307844,
+            "error": null,
+            "language": "json",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140559628284432,
+            "source_sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b",
+            "stage": "parse",
+            "thread_cpu_ns": 59753187,
+            "thread_id": 140559650926720,
+            "thread_name": "MainThread",
+            "wall_ns": 59752949
+          },
+          "tree": {
+            "end_byte": 307844,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 307844,
+            "error": null,
+            "language": "json",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140559628284432,
+            "source_sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b",
+            "stage": "parse",
+            "thread_cpu_ns": 59836164,
+            "thread_id": 140559650926720,
+            "thread_name": "MainThread",
+            "wall_ns": 59843740
+          },
+          "tree": {
+            "end_byte": 307844,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 2
+      },
+      "product_native": [
+        {
+          "parser_id": 140559631020944,
+          "stage": "timeout_set",
+          "thread_id": 140559650926720,
+          "value": 100000
+        },
+        {
+          "bytes": 307844,
+          "error": null,
+          "language": "json",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140559631020944,
+          "source_sha256": "bb9f75fb1214c778dd8a438f731aa6387f02995668cbd600c3cd0aa51f44372b",
+          "stage": "parse",
+          "thread_cpu_ns": 59191689,
+          "thread_id": 140559650926720,
+          "thread_name": "MainThread",
+          "wall_ns": 59197405
+        },
+        {
+          "parser_id": 140559631020944,
+          "stage": "reset",
+          "thread_id": 140559650926720
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_mma-only_2.json",
+        "bytes": 307735,
+        "sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad"
+      },
+      "source": {
+        "canonical_bytes": 307735,
+        "canonical_sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 307735,
+        "raw_sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad",
+        "spec": {
+          "bytes": 307735,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_mma-only_2.json",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 14,
+          "name": null,
+          "node_kind_count": 25,
+          "parse_state_count": 32,
+          "semantic_version": null
+        },
+        "individual_module": "tree_sitter_json",
+        "language": "json"
+      },
+      "individual_distribution": {
+        "tree-sitter-json": {
+          "files": [
+            [
+              "tree_sitter_json/__init__.py",
+              "1210a0a6098b923fe95c8ed3493ee9a8541dfa9f59591ddf17e002fa244195c9"
+            ],
+            [
+              "tree_sitter_json/_binding.abi3.so",
+              "fd52106df3970bdb322713e4dd61b299ae8a104dabadc3b34fa240a236e287d8"
+            ]
+          ],
+          "version": "0.24.8"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 307735,
+            "error": null,
+            "language": "json",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140484608963088,
+            "source_sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad",
+            "stage": "parse",
+            "thread_cpu_ns": 61780327,
+            "thread_id": 140484631883904,
+            "thread_name": "MainThread",
+            "wall_ns": 61780900
+          },
+          "tree": {
+            "end_byte": 307735,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 307735,
+            "error": null,
+            "language": "json",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140484608963088,
+            "source_sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad",
+            "stage": "parse",
+            "thread_cpu_ns": 60605580,
+            "thread_id": 140484631883904,
+            "thread_name": "MainThread",
+            "wall_ns": 60604940
+          },
+          "tree": {
+            "end_byte": 307735,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 307735,
+            "error": null,
+            "language": "json",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140484608963088,
+            "source_sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad",
+            "stage": "parse",
+            "thread_cpu_ns": 60635596,
+            "thread_id": 140484631883904,
+            "thread_name": "MainThread",
+            "wall_ns": 60641569
+          },
+          "tree": {
+            "end_byte": 307735,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 307735,
+            "error": null,
+            "language": "json",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140484608963088,
+            "source_sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad",
+            "stage": "parse",
+            "thread_cpu_ns": 60261868,
+            "thread_id": 140484631883904,
+            "thread_name": "MainThread",
+            "wall_ns": 60261365
+          },
+          "tree": {
+            "end_byte": 307735,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 2
+      },
+      "product_native": [
+        {
+          "parser_id": 140484611699600,
+          "stage": "timeout_set",
+          "thread_id": 140484631883904,
+          "value": 100000
+        },
+        {
+          "bytes": 307735,
+          "error": null,
+          "language": "json",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140484611699600,
+          "source_sha256": "cc5a42978dbf502f516f920e8144135a2330e45553d5798d14c443a6c13906ad",
+          "stage": "parse",
+          "thread_cpu_ns": 58912076,
+          "thread_id": 140484631883904,
+          "thread_name": "MainThread",
+          "wall_ns": 58918290
+        },
+        {
+          "parser_id": 140484611699600,
+          "stage": "reset",
+          "thread_id": 140484631883904
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_sma-count_1.json",
+        "bytes": 367389,
+        "sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0"
+      },
+      "source": {
+        "canonical_bytes": 367389,
+        "canonical_sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 367389,
+        "raw_sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0",
+        "spec": {
+          "bytes": 367389,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_sma-count_1.json",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 14,
+          "name": null,
+          "node_kind_count": 25,
+          "parse_state_count": 32,
+          "semantic_version": null
+        },
+        "individual_module": "tree_sitter_json",
+        "language": "json"
+      },
+      "individual_distribution": {
+        "tree-sitter-json": {
+          "files": [
+            [
+              "tree_sitter_json/__init__.py",
+              "1210a0a6098b923fe95c8ed3493ee9a8541dfa9f59591ddf17e002fa244195c9"
+            ],
+            [
+              "tree_sitter_json/_binding.abi3.so",
+              "fd52106df3970bdb322713e4dd61b299ae8a104dabadc3b34fa240a236e287d8"
+            ]
+          ],
+          "version": "0.24.8"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 367389,
+            "error": null,
+            "language": "json",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140265136574976,
+            "source_sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0",
+            "stage": "parse",
+            "thread_cpu_ns": 61659000,
+            "thread_id": 140265159684224,
+            "thread_name": "MainThread",
+            "wall_ns": 61658292
+          },
+          "tree": {
+            "end_byte": 367389,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 367389,
+            "error": null,
+            "language": "json",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140265150167776,
+            "source_sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0",
+            "stage": "parse",
+            "thread_cpu_ns": 61416988,
+            "thread_id": 140265159684224,
+            "thread_name": "MainThread",
+            "wall_ns": 61414376
+          },
+          "tree": {
+            "end_byte": 367389,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 367389,
+            "error": null,
+            "language": "json",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140265150167776,
+            "source_sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0",
+            "stage": "parse",
+            "thread_cpu_ns": 61093993,
+            "thread_id": 140265159684224,
+            "thread_name": "MainThread",
+            "wall_ns": 61092995
+          },
+          "tree": {
+            "end_byte": 367389,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 367389,
+            "error": null,
+            "language": "json",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140265150167776,
+            "source_sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0",
+            "stage": "parse",
+            "thread_cpu_ns": 60571266,
+            "thread_id": 140265159684224,
+            "thread_name": "MainThread",
+            "wall_ns": 60568885
+          },
+          "tree": {
+            "end_byte": 367389,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 2
+      },
+      "product_native": [
+        {
+          "parser_id": 140265137416656,
+          "stage": "timeout_set",
+          "thread_id": 140265159684224,
+          "value": 100000
+        },
+        {
+          "bytes": 367389,
+          "error": null,
+          "language": "json",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140265137416656,
+          "source_sha256": "f8279df5131205d1c1cd6243d33653113d7ec64eff034fa16a04ce080a84f1e0",
+          "stage": "parse",
+          "thread_cpu_ns": 60685931,
+          "thread_id": 140265159684224,
+          "thread_name": "MainThread",
+          "wall_ns": 60684232
+        },
+        {
+          "parser_id": 140265137416656,
+          "stage": "reset",
+          "thread_id": 140265159684224
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_sma-count_2.json",
+        "bytes": 353829,
+        "sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6"
+      },
+      "source": {
+        "canonical_bytes": 353829,
+        "canonical_sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 353829,
+        "raw_sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6",
+        "spec": {
+          "bytes": 353829,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/kv/kvserver/asim/tests/testdata/generated/sma/rebalancing_qps/rebalancing_qps_sma-count_2.json",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 14,
+          "name": null,
+          "node_kind_count": 25,
+          "parse_state_count": 32,
+          "semantic_version": null
+        },
+        "individual_module": "tree_sitter_json",
+        "language": "json"
+      },
+      "individual_distribution": {
+        "tree-sitter-json": {
+          "files": [
+            [
+              "tree_sitter_json/__init__.py",
+              "1210a0a6098b923fe95c8ed3493ee9a8541dfa9f59591ddf17e002fa244195c9"
+            ],
+            [
+              "tree_sitter_json/_binding.abi3.so",
+              "fd52106df3970bdb322713e4dd61b299ae8a104dabadc3b34fa240a236e287d8"
+            ]
+          ],
+          "version": "0.24.8"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 353829,
+            "error": null,
+            "language": "json",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140123133358608,
+            "source_sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6",
+            "stage": "parse",
+            "thread_cpu_ns": 61516723,
+            "thread_id": 140123155951744,
+            "thread_name": "MainThread",
+            "wall_ns": 61516337
+          },
+          "tree": {
+            "end_byte": 353829,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 353829,
+            "error": null,
+            "language": "json",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140123133358608,
+            "source_sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6",
+            "stage": "parse",
+            "thread_cpu_ns": 60582638,
+            "thread_id": 140123155951744,
+            "thread_name": "MainThread",
+            "wall_ns": 60581138
+          },
+          "tree": {
+            "end_byte": 353829,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 353829,
+            "error": null,
+            "language": "json",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140123133358608,
+            "source_sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6",
+            "stage": "parse",
+            "thread_cpu_ns": 60678096,
+            "thread_id": 140123155951744,
+            "thread_name": "MainThread",
+            "wall_ns": 60676888
+          },
+          "tree": {
+            "end_byte": 353829,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 353829,
+            "error": null,
+            "language": "json",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140123133358608,
+            "source_sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6",
+            "stage": "parse",
+            "thread_cpu_ns": 60779085,
+            "thread_id": 140123155951744,
+            "thread_name": "MainThread",
+            "wall_ns": 60777165
+          },
+          "tree": {
+            "end_byte": 353829,
+            "has_error": false,
+            "root_type": "document",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 14,
+            "name": null,
+            "node_kind_count": 25,
+            "parse_state_count": 32,
+            "semantic_version": null
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 2
+      },
+      "product_native": [
+        {
+          "parser_id": 140123136095120,
+          "stage": "timeout_set",
+          "thread_id": 140123155951744,
+          "value": 100000
+        },
+        {
+          "bytes": 353829,
+          "error": null,
+          "language": "json",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140123136095120,
+          "source_sha256": "3974c876890f0916abdcf32595d00efb1dfe79015e7c1c482c0b41446d975ca6",
+          "stage": "parse",
+          "thread_cpu_ns": 60466591,
+          "thread_id": 140123155951744,
+          "thread_name": "MainThread",
+          "wall_ns": 60464761
+        },
+        {
+          "parser_id": 140123136095120,
+          "stage": "reset",
+          "thread_id": 140123155951744
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/kv/kvserver/replica_test.go",
+        "bytes": 529644,
+        "sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613"
+      },
+      "source": {
+        "canonical_bytes": 529644,
+        "canonical_sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 529644,
+        "raw_sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613",
+        "spec": {
+          "bytes": 529644,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/kv/kvserver/replica_test.go",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "go",
+          "node_kind_count": 219,
+          "parse_state_count": 1442,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_go",
+        "language": "go"
+      },
+      "individual_distribution": {
+        "tree-sitter-go": {
+          "files": [
+            [
+              "tree_sitter_go/__init__.py",
+              "e5119cbb42f38cde9e7b318749457b332edd0f2cb09e35ba56b457a46bb55fe7"
+            ],
+            [
+              "tree_sitter_go/_binding.abi3.so",
+              "3e5f2df83c31f1b9f511ad44147d89b822905fdd54ebeca28531026aca076983"
+            ]
+          ],
+          "version": "0.25.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 529644,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140129938767424,
+            "source_sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613",
+            "stage": "parse",
+            "thread_cpu_ns": 78476591,
+            "thread_id": 140129959878784,
+            "thread_name": "MainThread",
+            "wall_ns": 78475661
+          },
+          "tree": {
+            "end_byte": 529644,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 529644,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140129938767424,
+            "source_sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613",
+            "stage": "parse",
+            "thread_cpu_ns": 77462266,
+            "thread_id": 140129959878784,
+            "thread_name": "MainThread",
+            "wall_ns": 77461826
+          },
+          "tree": {
+            "end_byte": 529644,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 529644,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140129938767424,
+            "source_sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613",
+            "stage": "parse",
+            "thread_cpu_ns": 76420839,
+            "thread_id": 140129959878784,
+            "thread_name": "MainThread",
+            "wall_ns": 76421049
+          },
+          "tree": {
+            "end_byte": 529644,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 529644,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140129938767424,
+            "source_sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613",
+            "stage": "parse",
+            "thread_cpu_ns": 75846125,
+            "thread_id": 140129959878784,
+            "thread_name": "MainThread",
+            "wall_ns": 75845579
+          },
+          "tree": {
+            "end_byte": 529644,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 335
+      },
+      "product_native": [
+        {
+          "parser_id": 140129943056096,
+          "stage": "timeout_set",
+          "thread_id": 140129959878784,
+          "value": 100000
+        },
+        {
+          "bytes": 529644,
+          "error": null,
+          "language": "go",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140129943056096,
+          "source_sha256": "f78a2720285a1069551abce6bb261ff3eb4bd3c39cb43f3624cd5e3d26c02613",
+          "stage": "parse",
+          "thread_cpu_ns": 75607659,
+          "thread_id": 140129959878784,
+          "thread_name": "MainThread",
+          "wall_ns": 75607902
+        },
+        {
+          "parser_id": 140129943056096,
+          "stage": "reset",
+          "thread_id": 140129959878784
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/sql/colexec/colexecbase/cast.eg.go",
+        "bytes": 379930,
+        "sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35"
+      },
+      "source": {
+        "canonical_bytes": 379930,
+        "canonical_sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 379930,
+        "raw_sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35",
+        "spec": {
+          "bytes": 379930,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/sql/colexec/colexecbase/cast.eg.go",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "go",
+          "node_kind_count": 219,
+          "parse_state_count": 1442,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_go",
+        "language": "go"
+      },
+      "individual_distribution": {
+        "tree-sitter-go": {
+          "files": [
+            [
+              "tree_sitter_go/__init__.py",
+              "e5119cbb42f38cde9e7b318749457b332edd0f2cb09e35ba56b457a46bb55fe7"
+            ],
+            [
+              "tree_sitter_go/_binding.abi3.so",
+              "3e5f2df83c31f1b9f511ad44147d89b822905fdd54ebeca28531026aca076983"
+            ]
+          ],
+          "version": "0.25.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 379930,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 139728478785568,
+            "source_sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35",
+            "stage": "parse",
+            "thread_cpu_ns": 60871465,
+            "thread_id": 139728501911680,
+            "thread_name": "MainThread",
+            "wall_ns": 61094983
+          },
+          "tree": {
+            "end_byte": 379930,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 379930,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139728485423584,
+            "source_sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35",
+            "stage": "parse",
+            "thread_cpu_ns": 60731576,
+            "thread_id": 139728501911680,
+            "thread_name": "MainThread",
+            "wall_ns": 60730636
+          },
+          "tree": {
+            "end_byte": 379930,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 379930,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139728485423584,
+            "source_sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35",
+            "stage": "parse",
+            "thread_cpu_ns": 59083777,
+            "thread_id": 139728501911680,
+            "thread_name": "MainThread",
+            "wall_ns": 59083882
+          },
+          "tree": {
+            "end_byte": 379930,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 379930,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 139728485423584,
+            "source_sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35",
+            "stage": "parse",
+            "thread_cpu_ns": 58558845,
+            "thread_id": 139728501911680,
+            "thread_name": "MainThread",
+            "wall_ns": 58558725
+          },
+          "tree": {
+            "end_byte": 379930,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 938
+      },
+      "product_native": [
+        {
+          "parser_id": 139728477901792,
+          "stage": "timeout_set",
+          "thread_id": 139728501911680,
+          "value": 100000
+        },
+        {
+          "bytes": 379930,
+          "error": null,
+          "language": "go",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 139728477901792,
+          "source_sha256": "5f9ea1d0519717afb806b7e927d5d2c00f71952bb0708ab44d61fe7fecbebc35",
+          "stage": "parse",
+          "thread_cpu_ns": 57994801,
+          "thread_id": 139728501911680,
+          "thread_name": "MainThread",
+          "wall_ns": 57994586
+        },
+        {
+          "parser_id": 139728477901792,
+          "stage": "reset",
+          "thread_id": 139728501911680
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/sql/colexec/colexecjoin/mergejoiner_fullouter.eg.go",
+        "bytes": 487262,
+        "sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8"
+      },
+      "source": {
+        "canonical_bytes": 487262,
+        "canonical_sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 487262,
+        "raw_sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8",
+        "spec": {
+          "bytes": 487262,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/sql/colexec/colexecjoin/mergejoiner_fullouter.eg.go",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "go",
+          "node_kind_count": 219,
+          "parse_state_count": 1442,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_go",
+        "language": "go"
+      },
+      "individual_distribution": {
+        "tree-sitter-go": {
+          "files": [
+            [
+              "tree_sitter_go/__init__.py",
+              "e5119cbb42f38cde9e7b318749457b332edd0f2cb09e35ba56b457a46bb55fe7"
+            ],
+            [
+              "tree_sitter_go/_binding.abi3.so",
+              "3e5f2df83c31f1b9f511ad44147d89b822905fdd54ebeca28531026aca076983"
+            ]
+          ],
+          "version": "0.25.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 487262,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 139834260935840,
+            "source_sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8",
+            "stage": "parse",
+            "thread_cpu_ns": 50361615,
+            "thread_id": 139834284220544,
+            "thread_name": "MainThread",
+            "wall_ns": 50361593
+          },
+          "tree": {
+            "end_byte": 487262,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 487262,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139834260543968,
+            "source_sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8",
+            "stage": "parse",
+            "thread_cpu_ns": 49259315,
+            "thread_id": 139834284220544,
+            "thread_name": "MainThread",
+            "wall_ns": 49265603
+          },
+          "tree": {
+            "end_byte": 487262,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 487262,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139834260543968,
+            "source_sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8",
+            "stage": "parse",
+            "thread_cpu_ns": 48150262,
+            "thread_id": 139834284220544,
+            "thread_name": "MainThread",
+            "wall_ns": 48150167
+          },
+          "tree": {
+            "end_byte": 487262,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 487262,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 139834260543968,
+            "source_sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8",
+            "stage": "parse",
+            "thread_cpu_ns": 48059342,
+            "thread_id": 139834284220544,
+            "thread_name": "MainThread",
+            "wall_ns": 48068544
+          },
+          "tree": {
+            "end_byte": 487262,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 249
+      },
+      "product_native": [
+        {
+          "parser_id": 139834265456528,
+          "stage": "timeout_set",
+          "thread_id": 139834284220544,
+          "value": 100000
+        },
+        {
+          "bytes": 487262,
+          "error": null,
+          "language": "go",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 139834265456528,
+          "source_sha256": "61e004601c5e9c23e1274026e3faf37307f37a133aafefa127b22762ed9f31b8",
+          "stage": "parse",
+          "thread_cpu_ns": 47353603,
+          "thread_id": 139834284220544,
+          "thread_name": "MainThread",
+          "wall_ns": 47361786
+        },
+        {
+          "parser_id": 139834265456528,
+          "stage": "reset",
+          "thread_id": 139834284220544
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/sql/colexec/colexecprojconst/proj_const_left_ops.eg.go",
+        "bytes": 680822,
+        "sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c"
+      },
+      "source": {
+        "canonical_bytes": 680822,
+        "canonical_sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 680822,
+        "raw_sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c",
+        "spec": {
+          "bytes": 680822,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/sql/colexec/colexecprojconst/proj_const_left_ops.eg.go",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "go",
+          "node_kind_count": 219,
+          "parse_state_count": 1442,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_go",
+        "language": "go"
+      },
+      "individual_distribution": {
+        "tree-sitter-go": {
+          "files": [
+            [
+              "tree_sitter_go/__init__.py",
+              "e5119cbb42f38cde9e7b318749457b332edd0f2cb09e35ba56b457a46bb55fe7"
+            ],
+            [
+              "tree_sitter_go/_binding.abi3.so",
+              "3e5f2df83c31f1b9f511ad44147d89b822905fdd54ebeca28531026aca076983"
+            ]
+          ],
+          "version": "0.25.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 680822,
+            "error": {
+              "message": "Parsing failed",
+              "type": "ValueError"
+            },
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "ValueError",
+            "parser_id": 140234242759136,
+            "source_sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c",
+            "stage": "parse",
+            "thread_cpu_ns": 100476739,
+            "thread_id": 140234266263680,
+            "thread_name": "MainThread",
+            "wall_ns": 100477383
+          },
+          "tree": null,
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 680822,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140234242759136,
+            "source_sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c",
+            "stage": "parse",
+            "thread_cpu_ns": 122186744,
+            "thread_id": 140234266263680,
+            "thread_name": "MainThread",
+            "wall_ns": 122181567
+          },
+          "tree": {
+            "end_byte": 680822,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 680822,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140234242759136,
+            "source_sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c",
+            "stage": "parse",
+            "thread_cpu_ns": 122083953,
+            "thread_id": 140234266263680,
+            "thread_name": "MainThread",
+            "wall_ns": 122083412
+          },
+          "tree": {
+            "end_byte": 680822,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 680822,
+            "error": {
+              "message": "Parsing failed",
+              "type": "ValueError"
+            },
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "ValueError",
+            "parser_id": 140234242759136,
+            "source_sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c",
+            "stage": "parse",
+            "thread_cpu_ns": 100500413,
+            "thread_id": 140234266263680,
+            "thread_name": "MainThread",
+            "wall_ns": 100499665
+          },
+          "tree": null,
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c",
+        "failures": [
+          {
+            "elapsed_micros": 101320,
+            "error_type": "ValueError",
+            "limit_micros": 100000,
+            "outcome": "parser_error",
+            "stage": "structure"
+          }
+        ],
+        "parsing_tier": "regex",
+        "symbol_count": 949
+      },
+      "product_native": [
+        {
+          "parser_id": 140234246811984,
+          "stage": "timeout_set",
+          "thread_id": 140234266263680,
+          "value": 100000
+        },
+        {
+          "bytes": 680822,
+          "error": {
+            "message": "Parsing failed",
+            "type": "ValueError"
+          },
+          "language": "go",
+          "limit_micros": 100000,
+          "outcome": "ValueError",
+          "parser_id": 140234246811984,
+          "source_sha256": "04af1629e4f4ad091476af7f0ec1b11efc8895dca67367dff569cb47a47ff64c",
+          "stage": "parse",
+          "thread_cpu_ns": 100442883,
+          "thread_id": 140234266263680,
+          "thread_name": "MainThread",
+          "wall_ns": 100456687
+        },
+        {
+          "parser_id": 140234246811984,
+          "stage": "reset",
+          "thread_id": 140234266263680
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "input": {
+        "case": "cockroach",
+        "repo": "cockroachdb/cockroach",
+        "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+        "path": "pkg/sql/sem/builtins/builtins.go",
+        "bytes": 493503,
+        "sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb"
+      },
+      "source": {
+        "canonical_bytes": 493503,
+        "canonical_sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 493503,
+        "raw_sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb",
+        "spec": {
+          "bytes": 493503,
+          "case": "cockroach",
+          "commit": "53aadff3cedde4d810c72b69ddd96e6a735d93e7",
+          "path": "pkg/sql/sem/builtins/builtins.go",
+          "repo": "cockroachdb/cockroach",
+          "sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "go",
+          "node_kind_count": 219,
+          "parse_state_count": 1442,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_go",
+        "language": "go"
+      },
+      "individual_distribution": {
+        "tree-sitter-go": {
+          "files": [
+            [
+              "tree_sitter_go/__init__.py",
+              "e5119cbb42f38cde9e7b318749457b332edd0f2cb09e35ba56b457a46bb55fe7"
+            ],
+            [
+              "tree_sitter_go/_binding.abi3.so",
+              "3e5f2df83c31f1b9f511ad44147d89b822905fdd54ebeca28531026aca076983"
+            ]
+          ],
+          "version": "0.25.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 493503,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140500104598688,
+            "source_sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb",
+            "stage": "parse",
+            "thread_cpu_ns": 73531990,
+            "thread_id": 140500127854720,
+            "thread_name": "MainThread",
+            "wall_ns": 73531781
+          },
+          "tree": {
+            "end_byte": 493503,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 493503,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140500104206816,
+            "source_sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb",
+            "stage": "parse",
+            "thread_cpu_ns": 72125441,
+            "thread_id": 140500127854720,
+            "thread_name": "MainThread",
+            "wall_ns": 72125558
+          },
+          "tree": {
+            "end_byte": 493503,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 493503,
+            "error": null,
+            "language": "go",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140500104206816,
+            "source_sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb",
+            "stage": "parse",
+            "thread_cpu_ns": 71202896,
+            "thread_id": 140500127854720,
+            "thread_name": "MainThread",
+            "wall_ns": 71208796
+          },
+          "tree": {
+            "end_byte": 493503,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 493503,
+            "error": null,
+            "language": "go",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140500104206816,
+            "source_sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb",
+            "stage": "parse",
+            "thread_cpu_ns": 71084435,
+            "thread_id": 140500127854720,
+            "thread_name": "MainThread",
+            "wall_ns": 71090443
+          },
+          "tree": {
+            "end_byte": 493503,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "go",
+            "node_kind_count": 219,
+            "parse_state_count": 1442,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 188
+      },
+      "product_native": [
+        {
+          "parser_id": 140500109119376,
+          "stage": "timeout_set",
+          "thread_id": 140500127854720,
+          "value": 100000
+        },
+        {
+          "bytes": 493503,
+          "error": null,
+          "language": "go",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140500109119376,
+          "source_sha256": "56a8f07f4d7744bafe26bcc1789d2172aeb06ff3fdf0cd1423b5c82e121ac2cb",
+          "stage": "parse",
+          "thread_cpu_ns": 70395397,
+          "thread_id": 140500127854720,
+          "thread_name": "MainThread",
+          "wall_ns": 70403422
+        },
+        {
+          "parser_id": 140500109119376,
+          "stage": "reset",
+          "thread_id": 140500127854720
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "input": {
+        "case": "deno",
+        "repo": "denoland/deno",
+        "commit": "574272ded08b82c7dec64da2120be8442a1f7636",
+        "path": "cli/args/flags.rs",
+        "bytes": 421238,
+        "sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69"
+      },
+      "source": {
+        "canonical_bytes": 421238,
+        "canonical_sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 421238,
+        "raw_sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69",
+        "spec": {
+          "bytes": 421238,
+          "case": "deno",
+          "commit": "574272ded08b82c7dec64da2120be8442a1f7636",
+          "path": "cli/args/flags.rs",
+          "repo": "denoland/deno",
+          "sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "rust",
+          "node_kind_count": 355,
+          "parse_state_count": 3823,
+          "semantic_version": [
+            0,
+            24,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_rust",
+        "language": "rust"
+      },
+      "individual_distribution": {
+        "tree-sitter-rust": {
+          "files": [
+            [
+              "tree_sitter_rust/__init__.py",
+              "39c6727968787212fab8a02b9df0891af4bfa4cdee83fa7f6dc21772324f7550"
+            ],
+            [
+              "tree_sitter_rust/_binding.abi3.so",
+              "afdcecec43e289a250cdd0ed7f94ac9069a5a057460287f2a3f56fa261165b1a"
+            ]
+          ],
+          "version": "0.24.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 421238,
+            "error": null,
+            "language": "rust",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 139905280996672,
+            "source_sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69",
+            "stage": "parse",
+            "thread_cpu_ns": 63743355,
+            "thread_id": 139905304322176,
+            "thread_name": "MainThread",
+            "wall_ns": 63743037
+          },
+          "tree": {
+            "end_byte": 421238,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "rust",
+            "node_kind_count": 355,
+            "parse_state_count": 3823,
+            "semantic_version": [
+              0,
+              24,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 421238,
+            "error": null,
+            "language": "rust",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139905303542592,
+            "source_sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69",
+            "stage": "parse",
+            "thread_cpu_ns": 61744699,
+            "thread_id": 139905304322176,
+            "thread_name": "MainThread",
+            "wall_ns": 61751445
+          },
+          "tree": {
+            "end_byte": 421238,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "rust",
+            "node_kind_count": 355,
+            "parse_state_count": 3823,
+            "semantic_version": [
+              0,
+              24,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 421238,
+            "error": null,
+            "language": "rust",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139905303542592,
+            "source_sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69",
+            "stage": "parse",
+            "thread_cpu_ns": 62042766,
+            "thread_id": 139905304322176,
+            "thread_name": "MainThread",
+            "wall_ns": 62042151
+          },
+          "tree": {
+            "end_byte": 421238,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "rust",
+            "node_kind_count": 355,
+            "parse_state_count": 3823,
+            "semantic_version": [
+              0,
+              24,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 421238,
+            "error": null,
+            "language": "rust",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 139905303542592,
+            "source_sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69",
+            "stage": "parse",
+            "thread_cpu_ns": 61798029,
+            "thread_id": 139905304322176,
+            "thread_name": "MainThread",
+            "wall_ns": 61797381
+          },
+          "tree": {
+            "end_byte": 421238,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "rust",
+            "node_kind_count": 355,
+            "parse_state_count": 3823,
+            "semantic_version": [
+              0,
+              24,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 469
+      },
+      "product_native": [
+        {
+          "parser_id": 139905283946848,
+          "stage": "timeout_set",
+          "thread_id": 139905304322176,
+          "value": 100000
+        },
+        {
+          "bytes": 421238,
+          "error": null,
+          "language": "rust",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 139905283946848,
+          "source_sha256": "0b970f363b23c7f5cb5c761a92a6c2af25f352661d64b37c5f10c53626401a69",
+          "stage": "parse",
+          "thread_cpu_ns": 61122627,
+          "thread_id": 139905304322176,
+          "thread_name": "MainThread",
+          "wall_ns": 61121411
+        },
+        {
+          "parser_id": 139905283946848,
+          "stage": "reset",
+          "thread_id": 139905304322176
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "input": {
+        "case": "deno",
+        "repo": "denoland/deno",
+        "commit": "574272ded08b82c7dec64da2120be8442a1f7636",
+        "path": "tests/integration/lsp_tests.rs",
+        "bytes": 536828,
+        "sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742"
+      },
+      "source": {
+        "canonical_bytes": 536828,
+        "canonical_sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 536828,
+        "raw_sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742",
+        "spec": {
+          "bytes": 536828,
+          "case": "deno",
+          "commit": "574272ded08b82c7dec64da2120be8442a1f7636",
+          "path": "tests/integration/lsp_tests.rs",
+          "repo": "denoland/deno",
+          "sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "rust",
+          "node_kind_count": 355,
+          "parse_state_count": 3823,
+          "semantic_version": [
+            0,
+            24,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_rust",
+        "language": "rust"
+      },
+      "individual_distribution": {
+        "tree-sitter-rust": {
+          "files": [
+            [
+              "tree_sitter_rust/__init__.py",
+              "39c6727968787212fab8a02b9df0891af4bfa4cdee83fa7f6dc21772324f7550"
+            ],
+            [
+              "tree_sitter_rust/_binding.abi3.so",
+              "afdcecec43e289a250cdd0ed7f94ac9069a5a057460287f2a3f56fa261165b1a"
+            ]
+          ],
+          "version": "0.24.0"
+        }
+      },
+      "ocaml_variants": null,
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 536828,
+            "error": {
+              "message": "Parsing failed",
+              "type": "ValueError"
+            },
+            "language": "rust",
+            "limit_micros": 100000,
+            "outcome": "ValueError",
+            "parser_id": 139767065049680,
+            "source_sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742",
+            "stage": "parse",
+            "thread_cpu_ns": 100377914,
+            "thread_id": 139767088197760,
+            "thread_name": "MainThread",
+            "wall_ns": 100378627
+          },
+          "tree": null,
+          "grammar": {
+            "abi_version": 15,
+            "name": "rust",
+            "node_kind_count": 355,
+            "parse_state_count": 3823,
+            "semantic_version": [
+              0,
+              24,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 536828,
+            "error": null,
+            "language": "rust",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139767065049680,
+            "source_sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742",
+            "stage": "parse",
+            "thread_cpu_ns": 101013763,
+            "thread_id": 139767088197760,
+            "thread_name": "MainThread",
+            "wall_ns": 101012007
+          },
+          "tree": {
+            "end_byte": 536828,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "rust",
+            "node_kind_count": 355,
+            "parse_state_count": 3823,
+            "semantic_version": [
+              0,
+              24,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 536828,
+            "error": null,
+            "language": "rust",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 139767064648160,
+            "source_sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742",
+            "stage": "parse",
+            "thread_cpu_ns": 104546996,
+            "thread_id": 139767088197760,
+            "thread_name": "MainThread",
+            "wall_ns": 104554424
+          },
+          "tree": {
+            "end_byte": 536828,
+            "has_error": false,
+            "root_type": "source_file",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "rust",
+            "node_kind_count": 355,
+            "parse_state_count": 3823,
+            "semantic_version": [
+              0,
+              24,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 536828,
+            "error": {
+              "message": "Parsing failed",
+              "type": "ValueError"
+            },
+            "language": "rust",
+            "limit_micros": 100000,
+            "outcome": "ValueError",
+            "parser_id": 139767064648160,
+            "source_sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742",
+            "stage": "parse",
+            "thread_cpu_ns": 100402811,
+            "thread_id": 139767088197760,
+            "thread_name": "MainThread",
+            "wall_ns": 100401941
+          },
+          "tree": null,
+          "grammar": {
+            "abi_version": 15,
+            "name": "rust",
+            "node_kind_count": 355,
+            "parse_state_count": 3823,
+            "semantic_version": [
+              0,
+              24,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 258
+      },
+      "product_native": [
+        {
+          "parser_id": 139767065291648,
+          "stage": "timeout_set",
+          "thread_id": 139767088197760,
+          "value": 100000
+        },
+        {
+          "bytes": 536828,
+          "error": null,
+          "language": "rust",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 139767065291648,
+          "source_sha256": "cbc491c8bf8740420c0d06eef3cae84c6d055f0aaa1283d4705f69cf5b29b742",
+          "stage": "parse",
+          "thread_cpu_ns": 100343499,
+          "thread_id": 139767088197760,
+          "thread_name": "MainThread",
+          "wall_ns": 100352778
+        },
+        {
+          "parser_id": 139767065291648,
+          "stage": "reset",
+          "thread_id": 139767088197760
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "input": {
+        "case": "ocaml",
+        "repo": "ocaml/ocaml",
+        "commit": "5fbe515aa215909e28328a059701da430bc3cff8",
+        "path": "typing/env.mli",
+        "bytes": 20928,
+        "sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161"
+      },
+      "source": {
+        "canonical_bytes": 20928,
+        "canonical_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+        "decode": {
+          "errors": "replace",
+          "newlines": "universal"
+        },
+        "raw_bytes": 20928,
+        "raw_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+        "spec": {
+          "bytes": 20928,
+          "case": "ocaml",
+          "commit": "5fbe515aa215909e28328a059701da430bc3cff8",
+          "path": "typing/env.mli",
+          "repo": "ocaml/ocaml",
+          "sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161"
+        }
+      },
+      "language": {
+        "identity": {
+          "abi_version": 15,
+          "name": "ocaml",
+          "node_kind_count": 455,
+          "parse_state_count": 8677,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "individual_module": "tree_sitter_ocaml",
+        "language": "ocaml"
+      },
+      "individual_distribution": {
+        "absent": "tree-sitter-ocaml"
+      },
+      "ocaml_variants": {
+        "implementation": {
+          "abi_version": 15,
+          "name": "ocaml",
+          "node_kind_count": 455,
+          "parse_state_count": 8677,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "interface": {
+          "abi_version": 15,
+          "name": "ocaml_interface",
+          "node_kind_count": 454,
+          "parse_state_count": 7590,
+          "semantic_version": [
+            0,
+            25,
+            0
+          ]
+        },
+        "product_equals_pack_implementation": true
+      },
+      "attempts": [
+        {
+          "generation": 1,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 20928,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140349723658352,
+            "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+            "stage": "parse",
+            "thread_cpu_ns": 63165415,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 63166298
+          },
+          "tree": {
+            "end_byte": 20928,
+            "has_error": true,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml",
+            "node_kind_count": 455,
+            "parse_state_count": 8677,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 2,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 20928,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140349723658352,
+            "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+            "stage": "parse",
+            "thread_cpu_ns": 62761489,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 62761529
+          },
+          "tree": {
+            "end_byte": 20928,
+            "has_error": true,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml",
+            "node_kind_count": 455,
+            "parse_state_count": 8677,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 3,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 500000,
+          "native": {
+            "bytes": 20928,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140349723658352,
+            "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+            "stage": "parse",
+            "thread_cpu_ns": 62941787,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 62941857
+          },
+          "tree": {
+            "end_byte": 20928,
+            "has_error": true,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml",
+            "node_kind_count": 455,
+            "parse_state_count": 8677,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 4,
+          "label": "selected_input",
+          "variant": "product",
+          "budget": 100000,
+          "native": {
+            "bytes": 20928,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140349723658352,
+            "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+            "stage": "parse",
+            "thread_cpu_ns": 63302972,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 63302955
+          },
+          "tree": {
+            "end_byte": 20928,
+            "has_error": true,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml",
+            "node_kind_count": 455,
+            "parse_state_count": 8677,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 5,
+          "label": "selected_input",
+          "variant": "ocaml_interface",
+          "budget": 100000,
+          "native": {
+            "bytes": 20928,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140349723670688,
+            "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+            "stage": "parse",
+            "thread_cpu_ns": 2425634,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 2425252
+          },
+          "tree": {
+            "end_byte": 20928,
+            "has_error": false,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml_interface",
+            "node_kind_count": 454,
+            "parse_state_count": 7590,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 6,
+          "label": "selected_input",
+          "variant": "ocaml_interface",
+          "budget": 500000,
+          "native": {
+            "bytes": 20928,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140349723670688,
+            "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+            "stage": "parse",
+            "thread_cpu_ns": 2346154,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 2345833
+          },
+          "tree": {
+            "end_byte": 20928,
+            "has_error": false,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml_interface",
+            "node_kind_count": 454,
+            "parse_state_count": 7590,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 7,
+          "label": "selected_input",
+          "variant": "ocaml_interface",
+          "budget": 500000,
+          "native": {
+            "bytes": 20928,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 500000,
+            "outcome": "tree",
+            "parser_id": 140349723670688,
+            "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+            "stage": "parse",
+            "thread_cpu_ns": 2295770,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 2295479
+          },
+          "tree": {
+            "end_byte": 20928,
+            "has_error": false,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml_interface",
+            "node_kind_count": 454,
+            "parse_state_count": 7590,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 8,
+          "label": "selected_input",
+          "variant": "ocaml_interface",
+          "budget": 100000,
+          "native": {
+            "bytes": 20928,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140349723670688,
+            "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+            "stage": "parse",
+            "thread_cpu_ns": 2285331,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 2285129
+          },
+          "tree": {
+            "end_byte": 20928,
+            "has_error": false,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml_interface",
+            "node_kind_count": 454,
+            "parse_state_count": 7590,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 9,
+          "label": "implementation_control",
+          "variant": "ocaml",
+          "budget": 100000,
+          "native": {
+            "bytes": 19,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140349723669296,
+            "source_sha256": "ea6d0eeac4eae27331f33f0a9c68b21f8d5a497210d55d07514799b570459baa",
+            "stage": "parse",
+            "thread_cpu_ns": 70431,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 69851
+          },
+          "tree": {
+            "end_byte": 19,
+            "has_error": false,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml",
+            "node_kind_count": 455,
+            "parse_state_count": 8677,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 10,
+          "label": "implementation_control",
+          "variant": "ocaml_interface",
+          "budget": 100000,
+          "native": {
+            "bytes": 19,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140349723669296,
+            "source_sha256": "ea6d0eeac4eae27331f33f0a9c68b21f8d5a497210d55d07514799b570459baa",
+            "stage": "parse",
+            "thread_cpu_ns": 40256,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 39965
+          },
+          "tree": {
+            "end_byte": 19,
+            "has_error": true,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml_interface",
+            "node_kind_count": 454,
+            "parse_state_count": 7590,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 11,
+          "label": "interface_control",
+          "variant": "ocaml",
+          "budget": 100000,
+          "native": {
+            "bytes": 24,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140349723669296,
+            "source_sha256": "57ded42e285e1e10fd69b84303d0bacb359a601724598f31c0d12dae7dfd8622",
+            "stage": "parse",
+            "thread_cpu_ns": 173664,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 173646
+          },
+          "tree": {
+            "end_byte": 24,
+            "has_error": true,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml",
+            "node_kind_count": 455,
+            "parse_state_count": 8677,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "generation": 12,
+          "label": "interface_control",
+          "variant": "ocaml_interface",
+          "budget": 100000,
+          "native": {
+            "bytes": 24,
+            "error": null,
+            "language": "ocaml",
+            "limit_micros": 100000,
+            "outcome": "tree",
+            "parser_id": 140349723669296,
+            "source_sha256": "57ded42e285e1e10fd69b84303d0bacb359a601724598f31c0d12dae7dfd8622",
+            "stage": "parse",
+            "thread_cpu_ns": 29616,
+            "thread_id": 140349746843776,
+            "thread_name": "MainThread",
+            "wall_ns": 29726
+          },
+          "tree": {
+            "end_byte": 24,
+            "has_error": false,
+            "root_type": "compilation_unit",
+            "start_byte": 0
+          },
+          "grammar": {
+            "abi_version": 15,
+            "name": "ocaml_interface",
+            "node_kind_count": 454,
+            "parse_state_count": 7590,
+            "semantic_version": [
+              0,
+              25,
+              0
+            ]
+          }
+        }
+      ],
+      "product": {
+        "content_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+        "failures": [],
+        "parsing_tier": "tree_sitter",
+        "symbol_count": 0
+      },
+      "product_native": [
+        {
+          "parser_id": 140349724623184,
+          "stage": "timeout_set",
+          "thread_id": 140349746843776,
+          "value": 100000
+        },
+        {
+          "bytes": 20928,
+          "error": null,
+          "language": "ocaml",
+          "limit_micros": 100000,
+          "outcome": "tree",
+          "parser_id": 140349724623184,
+          "source_sha256": "097b9b7919df1377207cc79292392eff7e29caa18dd1eb7e7748065f54c6c161",
+          "stage": "parse",
+          "thread_cpu_ns": 62971132,
+          "thread_id": 140349746843776,
+          "thread_name": "MainThread",
+          "wall_ns": 62970610
+        },
+        {
+          "parser_id": 140349724623184,
+          "stage": "reset",
+          "thread_id": 140349746843776
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "These new GHA isolated inputs are not a rerun or replacement of the closed paid campaign.",
+    "Observed budget sensitivity applies to these exact current conditions; old DO scheduling/CPU/grammar providers were not controlled.",
+    "A returned tree is not proof of semantic correctness. The OCaml comparison additionally checks syntax errors and paired grammar controls.",
+    "No50k/100k capacity, throughput, full36matrix, restart or relevance claim.",
+    "Optional grammar availability is explicit operator setup; navigation never downloads. Interface declarations do not establish implementation resolution."
+  ]
+}
