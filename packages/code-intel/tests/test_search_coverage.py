@@ -23,8 +23,8 @@ def mixed_sources(root):
     for i in range(1001):
         (root / f"module_{i}.py").write_text(f"def operation_{i}(): return {i}\n")
     for i in range(1100):
-        (root / f"note_{i}.md").write_text("ordinary documentation\n")
-    (root / "zz_uniquepolicyneedle.md").write_text("uniquepolicyneedle\n")
+        (root / f"note_{i}.notes").write_text("ordinary documentation\n")
+    (root / "zz_uniquepolicyneedle.notes").write_text("uniquepolicyneedle\n")
 
 
 @pytest.mark.parametrize("entry", ["keyword", "body", "importance", "warm"])
@@ -34,16 +34,16 @@ def test_request_policy_reaches_each_fresh_lexical_context(tmp_path, monkeypatch
     try:
         if entry == "keyword":
             manager._build_keyword_index()
-            found = manager._keyword_search("uniquepolicyneedle", 5, "zz_uniquepolicyneedle.md")
+            found = manager._keyword_search("uniquepolicyneedle", 5, "zz_uniquepolicyneedle.notes")
         elif entry == "body":
             manager._sync_body_index()
-            found = manager._body_search(["uniquepolicyneedle"], 5, "zz_uniquepolicyneedle.md")
+            found = manager._body_search(["uniquepolicyneedle"], 5, "zz_uniquepolicyneedle.notes")
         elif entry == "importance":
             manager._load_importance_scores()
-            found = manager._get_importance("zz_uniquepolicyneedle.md") > 0
+            found = manager._get_importance("zz_uniquepolicyneedle.notes") > 0
         else:
             manager._warm_candidate_indexes()
-            found = manager.search_candidates("uniquepolicyneedle", 5, "zz_uniquepolicyneedle.md")
+            found = manager.search_candidates("uniquepolicyneedle", 5, "zz_uniquepolicyneedle.notes")
         assert found, f"coverage boundary: {entry} lost a configured eligible document"
     finally:
         manager.close()
@@ -105,7 +105,7 @@ def test_standalone_default_keeps_its_existing_composition_bound(tmp_path):
             assert conn.execute("SELECT count(*) FROM kw_files").fetchone()[0] == 2000
         finally:
             conn.close()
-        assert not manager.search_candidates("uniquepolicyneedle", 5, "zz_uniquepolicyneedle.md")
+        assert not manager.search_candidates("uniquepolicyneedle", 5, "zz_uniquepolicyneedle.notes")
     finally:
         manager.close()
 
