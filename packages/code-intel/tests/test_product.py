@@ -433,6 +433,26 @@ def test_package_and_code_report_the_same_version():
     assert tomllib.loads(pyproject.read_text())["project"]["version"] == __version__
 
 
+def test_registry_entry_matches_package():
+    """A version bump that forgets server.json would publish a broken registry entry."""
+    import tomllib
+
+    from attocode_intel import __version__
+
+    package = Path(__file__).resolve().parents[1]
+    entry = json.loads((package.parents[1] / "server.json").read_text())
+    project = tomllib.loads((package / "pyproject.toml").read_text())["project"]
+    [listed] = entry["packages"]
+    assert entry["version"] == listed["version"] == project["version"] == __version__
+    assert listed["identifier"] == project["name"]
+    assert listed["registryType"] == "pypi" and listed["transport"] == {"type": "stdio"}
+    assert len(entry["description"]) <= 100
+    # The registry reads ownership from this marker in the PyPI description.
+    assert project["readme"] == "README.md"
+    first_line = (package / "README.md").read_text().splitlines()[0]
+    assert first_line == f"<!-- mcp-name: {entry['name']} -->"
+
+
 def test_shipped_source_imports_no_dev_or_archived_package():
     """The wheel ships only attocode_intel; a dev or archived import fails for pip users."""
     banned = {"eval", "attocode", "attoswarm", "attocode_core"}

@@ -4,14 +4,11 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** `attocode-code-intel` 0.1.22. It adds the opt-in
-[bounded discovery setting](intelligence-discovery.md): the default stays 50,000
-files, and an explicit limit can go up to 100,000. Its qualification checked a
-persisted default index expanding under the higher setting, fresh-process restarts,
-exact-cap coverage and hard-cap overflow, under the
-[frozen design](https://github.com/eren23/attocode/blob/da382a896f17271caba311260941a17ccd4b18b3/eval/quality/experiments/capacity.json).
-It makes no speed or relevance claim. See the
-[0.1.22 release notes](intelligence-0.1.22.md).
+**Current version:** `attocode-code-intel` 0.1.23. It adds a listing in the
+official MCP Registry, a `uvx` quick start, and a fix that lets the opt-in hosted
+rerank accept a dated model ID. Ranking defaults are unchanged. See the
+[0.1.23 release notes](intelligence-0.1.23.md). Version 0.1.22 added the opt-in
+[bounded discovery setting](intelligence-discovery.md).
 
 **Development optional-language depth, 2026-10-29:** [causal native controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
 restore omitted OCaml/Perl call candidates, OCaml native `open_module` extraction

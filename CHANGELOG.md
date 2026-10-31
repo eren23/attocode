@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.23] - 2026-11-01
+
+### Added
+
+- Official MCP Registry listing as `io.github.eren23/attocode-code-intel`. The
+  repository has a `server.json`, the PyPI description has the ownership marker,
+  and the release workflow publishes the entry after the PyPI package is verified.
+- A `uvx attocode-code-intel` quick start and a generic client configuration in the
+  package README.
+
+### Fixed
+
+- The opt-in SystemOne rerank accepts a dated snapshot of the pinned model, for
+  example `typesafe/jev-1.13-20260917` for `typesafe/jev-1.13`. Before this fix,
+  every hosted OpenRouter call fell back to the unreranked order. Any other model
+  name is still rejected. Rerank stays off by default.
+
 ## [Intelligence 0.1.22] - 2026-10-31
 
 ### Added

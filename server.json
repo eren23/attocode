@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.eren23/attocode-code-intel",
+  "title": "Attocode Code Intelligence",
+  "description": "Local code search, symbol navigation and change impact for coding agents. No model, no API key.",
+  "repository": {
+    "url": "https://github.com/eren23/attocode",
+    "source": "github",
+    "subfolder": "packages/code-intel"
+  },
+  "version": "0.1.23",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "attocode-code-intel",
+      "version": "0.1.23",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "named",
+          "name": "--project",
+          "description": "Absolute path of the repository to index. Omit it when the client sends one workspace root.",
+          "format": "filepath",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

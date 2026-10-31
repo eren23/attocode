@@ -1,3 +1,5 @@
+<!-- mcp-name: io.github.eren23/attocode-code-intel -->
+
 # attocode-code-intel
 
 Local code search and navigation for coding agents and for people. It runs as an MCP server for Codex, Claude Code, Cursor and other MCP clients, and as a command in your terminal. It needs no model, no API key and no network.
@@ -22,9 +24,26 @@ that new probe. An already running client session must be checked separately.
 
 For other clients (VS Code, Zed, Windsurf, Claude Desktop and more), run `attocode-code-intel install <target>`. `attocode-code-intel commands` lists the targets.
 
+To run the server without an installation, use `uvx`. This is a configuration for any MCP client that starts a local command:
+
+```json
+{
+  "mcpServers": {
+    "attocode-code-intel": {
+      "command": "uvx",
+      "args": ["attocode-code-intel", "--project", "/absolute/path/to/your/project"]
+    }
+  }
+}
+```
+
+You can omit `--project` if the client sends one workspace root. Otherwise the server looks for a repository marker such as `.git` in the working folder and its parents, but never selects your home folder. If it finds no repository, it stops with an error.
+
 To use the latest source, install from a clone of this repository: `uv tool install /path/to/attocode/packages/code-intel`.
 
 ## What your agent gets
+
+Version 0.1.23 is listed in the official MCP Registry and documents a `uvx` quick start. The opt-in hosted rerank now accepts the dated model ID that OpenRouter returns; see [Hosted rerank](https://github.com/eren23/attocode/blob/main/docs/intelligence-search.md#hosted-rerank-experimental). Rerank stays off by default.
 
 Version 0.1.22 adds an opt-in discovery budget of up to 100,000 files
 (`ATTOCODE_INTEL_DISCOVERY_MAX_FILES`; the default stays 50,000). It also packages
