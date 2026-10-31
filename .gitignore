@@ -11,8 +11,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Node (lessons/)
+# Node
 node_modules/
+*.tsbuildinfo
 
 # Environment
 .env
@@ -24,37 +25,14 @@ node_modules/
 .production-agent-sessions/
 .test-sandbox/
 
-# Attocode runtime
-.attocode/traces/
-.attocode/sessions/
-.attocode/recordings/
-.attocode/cache/
-.attocode/reports/
-.attocode/rule_feedback.json
-.attocode/packs/python/
-.attocode/.attocode/
-.attocode/dev-state.json
-.attocode/config.toml
-.attocode/vectors
-attocode/attocode_py/.attocode/
-tests/unit/tui/__snapshots__/
-.attocode/exports/
-.attocode/index/
-.attocode/meta_harness/
-tests/fixtures/sample_project/
+# Attocode index, caches and private quality runs
+/.attocode/
+
 docs/superpowers/
 eval/charts/
 eval/*.md
 eval/*.log
 eval/*.json
-# Legacy TS runtime artifacts
-legacy/.attocode/traces/
-legacy/.attocode/sessions/
-legacy/.attocode/recordings/
-
-# attocode snapshots
-tests/unit/tui/__snapshots__/
-
 
 # Build outputs
 *.vsix
@@ -64,7 +42,6 @@ snapshot_report.html
 
 # scripts
 scripts/*
-!scripts/validate_release_version.py
 !scripts/check_pack_licenses.py
 .DS_Store
 
@@ -80,9 +57,3 @@ scripts/*
 
 # search-quality sweep scratch output
 eval/sweep_out/
-
-# Bounded validation workspaces, reports and cloud ledger
-.attocode/quality/
-
-# Local outputs left by the archived TypeScript checkout stay private.
-/legacy/

@@ -26,8 +26,10 @@ attocode-code-intel doctor --global --client codex --project /path/to/repo
 
 Global servers select the explicit `workspace`, an advertised MCP root, or the repository containing their working directory. If a client supplies multiple roots, the agent must select one. Cursor's automatic instruction file is project-scoped even when its server connection is global; run `init --client cursor` in each project where you want those rules.
 
-The current published standalone release is [0.1.15](https://github.com/eren23/attocode/releases/tag/intel-v0.1.15),
-available with `uv tool install attocode-code-intel`. The source installation above uses this checkout.
+The latest published release is on [GitHub Releases](https://github.com/eren23/attocode/releases)
+and [PyPI](https://pypi.org/project/attocode-code-intel/), available with
+`uv tool install attocode-code-intel`. [CHANGELOG.md](CHANGELOG.md) lists the changes in each release.
+The source installation above uses this checkout.
 
 ## Everyday use
 
@@ -37,32 +39,14 @@ Local file watchers and per-operation filesystem checks pick up edits, new files
 
 New installations and direct server invocations use the compact **daily** tool profile. `init --profile full` exposes the complete local catalog, including rules and security analysis, history, architecture, retrieval pins, snapshots, overlays, and cache maintenance. The shipped local `lean` profile is opt-in with `init --profile lean`; remote profiles remain daily and full. `capabilities` reports the actual catalog and optional enhancements.
 
-Version 0.1.7 adds a [change investigation workflow](docs/guides/change-investigation.md):
-`attocode-code-intel changes` combines a Git diff with changed definitions,
+The [change investigation workflow](docs/guides/change-investigation.md)
+(`attocode-code-intel changes`) combines a Git diff with changed definitions,
 caller evidence, import impact and candidate tests. `attocode-code-intel trace`
-follows static caller paths. Export JSON/Markdown, check saved evidence for stale
-source, or refresh the original request. Local full-profile MCP offers
-`change_context` and `trace_flow`; the daily list stays unchanged.
-[Version 0.1.8](docs/intelligence-0.1.8.md) adds exact file/symbol selection and
-bounded changed-class summaries; use `--class-mode expand` for class-wide callers.
-[Version 0.1.9](docs/intelligence-0.1.9.md) keeps Python docstrings and parameter
-types, and lists impact results nearest first.
-[Version 0.1.10](docs/intelligence-0.1.10.md) shows the best test hit second for "tested"
-searches, and counts Swift `Tests/` folders as tests.
-[Version 0.1.11](docs/intelligence-0.1.11.md) counts more test file names as tests,
-such as `_test.dart` and Perl `.t` scripts and `t/` modules.
-[Version 0.1.12](docs/intelligence-0.1.12.md) makes `doctor --client claude` read the
-local-scope entry that `claude mcp add` writes to `~/.claude.json`.
-[Version 0.1.13](docs/intelligence-0.1.13.md) fills spare compact-search budget,
-offers bounded deeper searches up to 50 results, and repairs persisted navigation
-after successful restart parsing. Search ranking remains unchanged; an intermittent
-OCaml cold-parse miss remains open.
-[Version 0.1.14](docs/intelligence-0.1.14.md) adds one bounded selected-file recovery
-attempt, protects repaired navigation from concurrent source changes, fixes guarded
-Elixir definitions, and identifies doctor's new server connection.
-[Version 0.1.15](docs/intelligence-0.1.15.md) isolates native parser caches by thread,
-uses one language-server stderr reader, and preserves bounded recovery without
-static callers. Release install verification runs on GitHub runners.
+follows static caller paths. You can export JSON/Markdown, check saved evidence
+for stale source, or refresh the original request. Use `--file`/`--symbol` for
+exact selection and `--class-mode expand` for class-wide callers. Local
+full-profile MCP offers `change_context` and `trace_flow`; the daily list stays
+unchanged.
 
 ## Teams and remote agents
 
