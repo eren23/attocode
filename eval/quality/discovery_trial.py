@@ -43,7 +43,7 @@ if __name__ == '__main__':
     tests = list(dict.fromkeys([*TESTS, 'test_discovery_ceiling.py']))
     selected = ['packages/code-intel/tests/' + name for name in tests]
     raise SystemExit(pytest.main(['-c', 'packages/code-intel/pyproject.toml',
-        '--confcutdir=packages/code-intel/tests', '-q',
+        '--confcutdir=packages/code-intel/tests', '-q', '--tb=line',
         '--basetemp=' + str(root / 'work/pytest'), '-o', 'cache_dir=' + str(root / 'work/pytest-cache'),
         '--junitxml=' + str(root / 'evidence/followup.xml'),
         '-p', 'eval.quality.experiment_origin', *selected]))

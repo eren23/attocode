@@ -24,7 +24,8 @@ def test_scan_budget_and_truncation_follow_selected_policy(tmp_path, monkeypatch
     monkeypatch.setattr(context.os.path, 'getsize', lambda path: 20)
     manager = context.CodebaseContextManager(str(tmp_path), max_files=100000)
     files = manager.discover_files()
-    assert [f.relative_path for f in files] == names[:selected], 'discovery limit: wrong bounded inventory'
+    inventory_matches = [f.relative_path for f in files] == names[:selected]
+    assert inventory_matches, f'discovery limit: wrong bounded inventory ({len(files)} versus {selected})'
     assert manager.discovered_file_count == selected
     assert manager.discovery_truncated is truncated, 'discovery limit: overflow hidden or invented'
 
