@@ -14,7 +14,7 @@ from pathlib import Path
 from eval.quality.corpus_capture import RecordedGateway
 from eval.quality.experiment_evidence import Journal, assert_engine
 from eval.quality.runner import REPO, supervise, write_json
-from eval.quality.scale_evidence import admit_coverage, admit_identities, admit_parsers, require
+from eval.quality.scale_evidence import admit_identities, admit_parsers, require
 from eval.quality.scale_workload import Requests, indexed_snapshot, sqlite_integrity
 
 DESIGN = REPO / 'eval/quality/experiments/capacity.json'
@@ -108,7 +108,14 @@ async def phase(spec, output):
                 observed = await indexed_snapshot(gateway)
                 write_json(output / 'index-identities.json', {'expected': expected, **observed,
                            'coverage': coverage, 'analysis': page['metadata']['analysis']})
-                admit_coverage(coverage, selected)
+                # This design includes explicitly limited phases. Validate the
+                # selected inventory and its declared omission separately; the
+                # shared full-corpus admission must remain strict.
+                require(coverage.get('discovery_truncated') is truncated,
+                        'native discovery boundary differs from phase contract')
+                require(all(type(coverage.get(key)) is int and coverage[key] == selected
+                            for key in ('parsed_files', 'total_files', 'reference_indexed_files')),
+                        'selected native/reference coverage incomplete')
                 admit_identities(expected, observed['parsed'], observed['referenced'])
                 admit_parsers(page['metadata']['analysis'], observed['grammars'], selected)
                 require(observed['degraded_count'] == 0, 'native failures in small synthetic Python sources')
