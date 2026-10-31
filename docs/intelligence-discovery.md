@@ -1,10 +1,10 @@
-# Discovery file budget (unreleased)
+# Discovery file budget
 
 Discovery defaults to 50,000 eligible files. For a larger repository, set
 `ATTOCODE_INTEL_DISCOVERY_MAX_FILES=100000` in the server environment and start
 a new server process. The value must be an integer from 1 through 100,000;
 invalid values raise a configuration error. The environment is captured when
-a context is constructed. This setting is not included in published 0.1.21.
+a context is constructed. The setting is available from 0.1.22.
 
 The discovery budget bounds file descriptors collected before importance
 scoring. `ATTOCODE_INTEL_MAX_FILES` remains a separate selection limit (100,000
