@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "experiment": "source-control",
+  "stage": "red",
+  "expected_cases": 433,
+  "expected_failures": [
+    "test_capacity_phase_validates_actual_delivered_search_sources[valid-source]",
+    "test_capacity_phase_validates_actual_delivered_search_sources[altered-snippet]"
+  ],
+  "scope": "Reproduce pre-launch reviewer source-policy finding on realtwofile current product gateway; validsource rejected and corruptedsource rejected for wrong reason",
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "pass_rule": "Exactly2specifiednewassertions fail with source policy/result count mismatch;431positive controls; no errors/skips; productonlyversion021 differsfrombase"
+}
