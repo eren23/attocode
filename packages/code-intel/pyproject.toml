@@ -142,8 +142,8 @@ packages = [
 ]
 
 [tool.hatch.build.targets.sdist]
-# Frozen experiment results remain available in the tagged Git repository.
-exclude = ["/evals/results/"]
+# Frozen study designs and results remain available in the tagged Git repository.
+exclude = ["/evals/"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

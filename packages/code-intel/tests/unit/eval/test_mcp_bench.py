@@ -231,7 +231,7 @@ class TestLLMFPFilter:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         monkeypatch.setattr(
-            "eval.meta_harness._llm_client.load_env", lambda: None,
+            "attocode_intel.confidence.llm._load_env", lambda: None,
         )
         result = classify_finding(
             rule_id="rule-5",

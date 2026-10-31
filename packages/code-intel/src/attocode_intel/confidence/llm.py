@@ -36,16 +36,50 @@ _ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 _WORKERS = 32
 
 
-def _default_llm_caller() -> LLMCaller:
-    """The project's shared client. Only importable inside this repo."""
-    try:
-        from eval.meta_harness._llm_client import call_llm
-    except ModuleNotFoundError as exc:  # pragma: no cover - depends on checkout
-        raise RuntimeError(
-            "No LLM caller available. Pass llm_caller=..., or run inside the "
-            "attocode repo where eval.meta_harness is importable."
-        ) from exc
+def call_llm(prompt: str, model: str = "", max_tokens: int = 4096) -> str:
+    """Send one prompt through OpenRouter or Anthropic and return the text.
 
+    OpenRouter is used when ``OPENROUTER_API_KEY`` is set, otherwise
+    ``ANTHROPIC_API_KEY``. The SDKs are optional and imported on demand.
+    """
+    import os
+
+    or_key = os.environ.get("OPENROUTER_API_KEY", "")
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    if or_key:
+        import openai
+
+        client = openai.OpenAI(base_url="https://openrouter.ai/api/v1", api_key=or_key)
+        response = client.chat.completions.create(
+            model=model or "anthropic/claude-sonnet-5",
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content or ""
+
+    if anthropic_key:
+        import anthropic
+
+        model = model or "claude-sonnet-5"
+        # Sonnet 5 and Opus 5 think when `thinking` is omitted; keep thinking off.
+        extra = {"thinking": {"type": "disabled"}} if model in ("claude-sonnet-5", "claude-opus-5") else {}
+        response = anthropic.Anthropic(api_key=anthropic_key).messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            **extra,
+        )
+        # Thinking blocks can come first, so read the first text block.
+        return next((b.text for b in response.content if b.type == "text"), "")
+
+    raise RuntimeError(
+        "No API key found. Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY "
+        "in environment or .env file."
+    )
+
+
+def _default_llm_caller() -> LLMCaller:
     def call(prompt: str, model: str, max_tokens: int) -> str:
         return call_llm(prompt, model=model, max_tokens=max_tokens)
 
@@ -53,12 +87,10 @@ def _default_llm_caller() -> LLMCaller:
 
 
 def _load_env() -> None:
-    """Populate keys from the project .env when running inside the repo."""
-    try:
-        from eval.meta_harness._llm_client import load_env
-    except ModuleNotFoundError:  # pragma: no cover - depends on checkout
-        return
-    load_env()
+    """Populate keys from .env and ~/.jev/env (same loader as the jev scorer)."""
+    from attocode_intel.confidence.jev import _load_env as load
+
+    load()
 
 
 def _cheap_model() -> str:

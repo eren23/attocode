@@ -307,27 +307,11 @@ def _validate_llm_yaml(
 
 
 def _default_llm_caller(prompt: str) -> str:
-    """Resolve the project's shared LLM client lazily — keeps the
-    optional ``openai``/``anthropic`` import out of the import path for
-    callers that only want the deterministic synthesizer.
+    """Call the packaged LLM client. A missing key or SDK raises, and the
+    synthesizer's ``except`` arm reports it as a diagnostic."""
+    from attocode_intel.confidence.llm import _load_env, call_llm
 
-    The default client lives under the dev-only ``eval/meta_harness/``
-    tree, which isn't bundled with the installed wheel. When that path
-    is unavailable we surface a clear error so the synthesizer's
-    ``except`` arm can attach it as a diagnostic, instead of letting an
-    opaque ``ModuleNotFoundError`` bubble out of the MCP tool.
-    """
-    try:
-        from eval.meta_harness._llm_client import call_llm, load_env
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "LLM synthesis requested but no llm_caller was configured "
-            "and the dev meta-harness client is not importable from this "
-            "process. Pass llm_caller=... explicitly when calling "
-            "synthesize_rule(mode='llm' or 'auto') from production."
-        ) from exc
-
-    load_env()
+    _load_env()
     return call_llm(prompt, max_tokens=2048)
 
 
