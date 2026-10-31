@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "experiment": "capacity",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "policy_id": "optin-discovery-100k-v1",
   "scope": "New source-bound opt-in discovery qualification with same-workspace persisted-policy increase; Python import-chain operational coverage, not arbitrary-source memory safety/speed/relevance",
   "limits": {

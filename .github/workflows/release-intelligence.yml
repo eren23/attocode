@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      INTELLIGENCE_BASELINE: '0.1.21'
+      INTELLIGENCE_BASELINE: '0.1.22'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,3 +79,32 @@ jobs:
           name: intelligence-published-verification
           retention-days: 30
           path: quality-artifacts/
+  mcp-registry:
+    needs: published-verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MCP_PUBLISHER_VERSION: '1.8.7'
+      MCP_PUBLISHER_SHA256: 00b21004149a4ce66f0782508ae4a2bce67d1bea395a8da0bd8028159fb59579
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      # published-verification already checks the MCP server from PyPI. This step
+      # checks only that the command the registry lists resolves to this version.
+      - name: Run the listed uvx command
+        run: |
+          release_version="$(python -c 'import tomllib; print(tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"])')"
+          test "$(uvx --from "attocode-code-intel==$release_version" attocode-code-intel --version)" = "attocode-code-intel $release_version"
+      - name: Publish server.json to the MCP Registry
+        run: |
+          archive=mcp-publisher_linux_amd64.tar.gz
+          curl -fsSL -o "$archive" "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/${archive}"
+          echo "${MCP_PUBLISHER_SHA256}  ${archive}" | sha256sum -c
+          tar -xzf "$archive" mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

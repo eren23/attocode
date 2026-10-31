@@ -2,7 +2,7 @@
 
 The standalone distribution has its own version in `packages/code-intel/pyproject.toml` and release tags named `intel-vVERSION`. Historical agent `v*` tags remain preserved; the active repository publishes intelligence only.
 
-See the [0.1.22 release notes](intelligence-0.1.22.md) for the latest changes and upgrade instructions.
+See the [0.1.23 release notes](intelligence-0.1.23.md) for the latest changes and upgrade instructions.
 
 ## Release gate
 
@@ -35,12 +35,23 @@ Previously published agent distributions depend on `attocode-code-intel>=0.1.0,<
 ### Verification on GitHub runners
 
 Product CI runs the maintained candidate verifier for Python 3.12 and 3.13,
-including clean installs and upgrades from 0.1.21. The release workflow runs
+including clean installs and upgrades from 0.1.22. The release workflow runs
 `published-verification` after PyPI publication, checking actual published artifact
 hashes, source/tag identity and both installed trees. Its
 `intelligence-published-verification` artifact retains the report and logs, even
 on failure. A failed post-publication check does not undo an uploaded PyPI version;
 preserve the tag and investigate before creating the GitHub release.
+
+After `published-verification` passes, the `mcp-registry` job checks that
+`uvx --from attocode-code-intel==VERSION attocode-code-intel --version` reports the
+release version. It then publishes the root `server.json` to the
+[official MCP Registry](https://registry.modelcontextprotocol.io) with GitHub OIDC.
+The registry reads package ownership from the `mcp-name` marker on the first line
+of `packages/code-intel/README.md`. A test checks that `server.json`, `pyproject.toml`
+and `__version__` have the same version. If the job fails after PyPI publication,
+publish the same `server.json` manually with `mcp-publisher login github` and
+`mcp-publisher publish`. Do not create a retry tag for it: the PyPI version already
+exists.
 
 The commands below describe the same maintained verifier for an explicitly chosen
 remote or disposable environment. Repository operators keep broad and release
@@ -56,9 +67,9 @@ baseline; development source is recorded as a working tree:
 
 ```sh
 .venv/bin/python packages/code-intel/scripts/check_release.py candidate \
-  --version 0.1.22 --baseline-version 0.1.21 --source . \
-  --wheel dist/attocode_code_intel-0.1.22-py3-none-any.whl \
-  --sdist dist/attocode_code_intel-0.1.22.tar.gz \
+  --version 0.1.23 --baseline-version 0.1.22 --source . \
+  --wheel dist/attocode_code_intel-0.1.23-py3-none-any.whl \
+  --sdist dist/attocode_code_intel-0.1.23.tar.gz \
   --allow-downloads --report /tmp/intelligence-candidate.json
 ```
 

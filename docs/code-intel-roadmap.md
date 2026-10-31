@@ -2,7 +2,7 @@
 
 ## Current priorities — 2026-10-25
 
-This checkout targets `attocode-code-intel` **0.1.22**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.23**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
