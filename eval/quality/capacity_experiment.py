@@ -80,13 +80,21 @@ async def phase(spec, output):
     tree = Path(spec['tree'])
     started = time.monotonic()
     until = started + spec['seconds']
-    selected = min(spec['size'], 50000)
+    selected = spec.get('expected_selected', min(spec['size'], 50000))
+    truncated = spec.get('expected_truncated', spec['size'] > selected)
+    outcome = spec.get('expected_outcome', 'limited' if truncated else 'passed')
+    discovery_env = os.environ.get('ATTOCODE_INTEL_DISCOVERY_MAX_FILES')
+    require(1 <= selected <= min(spec['size'], 100000), 'invalid phase selection contract')
+    if 'discovery_env' in spec:
+        require(discovery_env == spec['discovery_env'], 'phase discovery environment differs')
     expected = [f'module_{number:06d}.py' for number in range(selected)]
     engine = REPO / 'packages/code-intel/src/attocode_intel'
     result = {'complete': False, 'closed': False, 'pid': os.getpid(), 'phase': spec['phase'],
               'size': spec['size'], 'expected_selected_files': selected, 'origin_start': assert_engine(engine),
+              'discovery_env': discovery_env,
               'databases_before': databases(tree)}
-    require(bool(result['databases_before']) == (spec['phase'] == 'restart'), 'cold/restart database provenance differs')
+    require(bool(result['databases_before']) == spec.get('persisted_before', spec['phase'] == 'restart'),
+            'phase database provenance differs')
     gateway = OperationGateway(str(tree), 'daily', watch=False)
     recorded = CapacityGateway(gateway, tree, Journal(output / 'sources', 16 * 2**20))
     requests = Requests(recorded, output)
@@ -117,7 +125,8 @@ async def phase(spec, output):
         require(page['data']['definition']['file_path'] == file, 'included boundary symbol path differs')
         require(bool(validate_sources('inspect_symbol', page, tree, [])), 'included symbol source absent')
         page = await requests.call('dependencies', {'path': file, 'max_tokens': 2500})
-        require(f'module_{last - 1:06d}.py' in json.dumps(page['data']), 'included boundary import absent')
+        if last > 0:
+            require(f'module_{last - 1:06d}.py' in json.dumps(page['data']), 'included boundary import absent')
         for number in (0, last):
             while True:
                 page = await requests.call('semantic_search', {'query': f'operation_{number:06d}',
@@ -141,7 +150,7 @@ async def phase(spec, output):
         require(diagnostic['discovery_max_files'] == 100000, 'configured request cap changed')
         require(diagnostic['discovery_selected_files'] == diagnostic['discovery_discovered_files'] == selected,
                 'discovery selected count differs')
-        require(diagnostic['discovery_truncated'] == (spec['size'] >= 50000), 'safety-boundary disclosure differs')
+        require(diagnostic['discovery_truncated'] is truncated, 'safety-boundary disclosure differs')
         result['outside_search'] = []
         if spec['size'] > selected:
             for number in sorted({selected, spec['size'] - 1}):
@@ -151,7 +160,7 @@ async def phase(spec, output):
                         'outside-boundary search not ready')
                 require(page.get('data', {}).get('results') == [], 'outside-boundary result differs from frozen policy')
                 result['outside_search'].append({'file': f'module_{number:06d}.py', 'results': 0})
-        result.update(complete=True, outcome='passed' if spec['size'] < 50000 else 'limited',
+        result.update(complete=True, outcome=outcome,
                       source_total=spec['size'], omitted_files=spec['size'] - selected,
                       discovery_truncated=diagnostic['discovery_truncated'])
     except BaseException as error:
@@ -183,31 +192,42 @@ def run(root):
         'platform': platform.platform(), 'cpu': Path('/proc/cpuinfo').read_text(),
         'memory': Path('/proc/meminfo').read_text(), 'cgroup': Path('/proc/self/cgroup').read_text(),
         'engine_origin': assert_engine(REPO / 'packages/code-intel/src/attocode_intel')})
-    result = {'complete': False, 'cases': [], 'unissued': list(frozen['sizes']),
+    result = {'complete': False, 'cases': [], 'unissued': [c['id'] for c in frozen['cases']],
               'scope': frozen['scope'], 'model_calls': 0}
+    seen_pids = set()
     try:
-        for size in frozen['sizes']:
+        for contract in frozen['cases']:
+            size = contract['size']
             started = time.monotonic()
-            output = root / 'evidence' / f'capacity-{size}'
+            output = root / 'evidence' / ('capacity-' + contract['id'])
             output.mkdir()
-            tree = root / 'work' / f'capacity-{size}'
+            tree = root / 'work' / ('capacity-' + contract['id'])
             manifest = generate(tree, size)
             write_json(output / 'source.json', manifest)
-            case = {'size': size, 'complete': False, 'phases': []}
+            case = {'id': contract['id'], 'size': size, 'complete': False, 'phases': []}
             result['cases'].append(case)
-            result['unissued'].remove(size)
+            result['unissued'].remove(contract['id'])
             write_json(root / 'evidence/capacity-result.json', result)
-            for phase_name in ('cold', 'restart'):
+            previous_databases = {}
+            for policy in contract['phases']:
+                phase_name = policy['name']
                 folder = output / phase_name
                 folder.mkdir()
-                seconds = int(frozen['per_case_seconds'][str(size)] - (time.monotonic() - started))
+                seconds = int(contract['seconds'] - (time.monotonic() - started))
                 require(seconds > 20, 'case deadline leaves phase unissued')
-                spec = {'tree': str(tree), 'size': size, 'phase': phase_name, 'seconds': seconds}
+                spec = {'tree': str(tree), 'size': size, 'phase': phase_name, 'seconds': seconds,
+                        'discovery_env': policy['discovery_env'], 'expected_selected': policy['selected'],
+                        'expected_truncated': policy['truncated'], 'expected_outcome': policy['outcome'],
+                        'persisted_before': policy['persisted_before']}
                 spec_path = output / (phase_name + '-spec.json')
                 write_json(spec_path, spec)
+                env = os.environ.copy()
+                env.pop('ATTOCODE_INTEL_DISCOVERY_MAX_FILES', None)
+                if policy['discovery_env'] is not None:
+                    env['ATTOCODE_INTEL_DISCOVERY_MAX_FILES'] = policy['discovery_env']
                 row = supervise([sys.executable, '-m', 'eval.quality.capacity_experiment',
                                  '--phase', str(spec_path), '--output', str(folder / 'data')],
-                        cwd=REPO, env=os.environ.copy(), root=root, log=folder / 'process.log',
+                        cwd=REPO, env=env, root=root, log=folder / 'process.log',
                         deadline=time.monotonic() + seconds, max_bytes=frozen['limits']['disk_bytes'],
                         max_rss=frozen['limits']['rss_bytes'], evidence_root=root / 'evidence',
                         max_evidence_bytes=255 * 2**20)
@@ -217,9 +237,13 @@ def run(root):
                         and not row['log_truncated'], 'capacity phase incomplete; preserve original attempt')
                 observed = json.loads((folder / 'data/result.json').read_bytes())
                 require(observed['complete'] and observed['closed'], 'phase did not close completely')
+                require(observed['pid'] not in seen_pids, 'persisted phase reused PID')
+                seen_pids.add(observed['pid'])
+                require(observed['databases_before'] == previous_databases, 'persisted input bytes differ')
+                previous_databases = observed['databases_after']
+                require(observed['outcome'] == policy['outcome'], 'phase outcome differs from contract')
                 case['phases'][-1].update(pid=observed['pid'], outcome=observed['outcome'])
-            require(case['phases'][0]['pid'] != case['phases'][1]['pid'], 'persisted restart reused PID')
-            case.update(complete=True, outcome='passed' if size < 50000 else 'limited',
+            case.update(complete=True, outcome='qualified',
                         seconds=time.monotonic() - started)
             write_json(root / 'evidence/capacity-result.json', result)
         result['complete'] = True
