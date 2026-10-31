@@ -78,15 +78,38 @@ def test_invalid_distributions_preserve_original_order(response):
     assert not result.reranked and result.fallback_reason == "invalid_response"
 
 
-def test_unexpected_model_identity_is_rejected():
-    response = {**_answer([0.2, 0.8]), "model": "different-model"}
+def _rank_with_returned_model(pinned: str, returned):
+    response = {**_answer([0.2, 0.8]), **({} if returned is None else {"model": returned})}
     ranker = SystemOneChoiceReranker(
         "http://127.0.0.1:8000/v1/systemone",
-        model="pinned-model",
+        model=pinned,
         transport=httpx.MockTransport(lambda _request: httpx.Response(200, json=response)),
     )
-    result = ranker.rerank_result("query", _candidates())
+    return ranker.rerank_result("query", _candidates())
+
+
+@pytest.mark.parametrize(
+    "returned",
+    ["different-model", "pinned-model2", "pinned-model-x", "pinned-model-2026091", 7],
+)
+def test_unexpected_model_identity_is_rejected(returned):
+    result = _rank_with_returned_model("pinned-model", returned)
     assert not result.reranked and result.fallback_reason == "invalid_response"
+
+
+@pytest.mark.parametrize(
+    ("pinned", "returned"),
+    [
+        ("pinned-model", "pinned-model"),
+        ("pinned-model", None),
+        # OpenRouter answers typesafe/jev-1.13 with its dated snapshot.
+        ("typesafe/jev-1.13", "typesafe/jev-1.13-20260917"),
+        ("", "any-model"),
+    ],
+)
+def test_pinned_model_and_its_dated_snapshot_are_accepted(pinned, returned):
+    result = _rank_with_returned_model(pinned, returned)
+    assert result.reranked and result.fallback_reason is None
 
 
 def test_remote_requires_consent_and_https_and_redacts_known_secrets(monkeypatch):
