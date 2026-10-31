@@ -22,9 +22,9 @@ from pathlib import Path
 from eval.quality.experiment_evidence import assert_engine
 from eval.quality.runner import GIB, REPO, environment, managed_root, supervise, write_json
 
-SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200, 'boundary': 600}
+SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200, 'capacity': 2400}
 OPERATORS = {
-    'boundary': 'eval.quality.boundary_trial',
+    'capacity': 'eval.quality.capacity_experiment',
     'native': 'eval.quality.native_experiment',
     'preview': 'eval.quality.preview_experiment',
     'restart': 'eval.quality.restart_experiment',
@@ -150,8 +150,10 @@ def main():
     root = managed_root(root)
     (root / 'evidence').mkdir()
     report = {'experiment': args.experiment, 'status': 'incomplete', 'decision': None,
-              'limits': {'seconds': SECONDS[args.experiment], 'disk_bytes': 2 * GIB,
-                         'rss_bytes': 2 * GIB, 'evidence_bytes': 64 * 2**20}}
+              'limits': {'seconds': SECONDS[args.experiment],
+                         'disk_bytes': (8 if args.experiment == 'capacity' else 2) * GIB,
+                         'rss_bytes': (4 if args.experiment == 'capacity' else 2) * GIB,
+                         'evidence_bytes': (256 if args.experiment == 'capacity' else 64) * 2**20}}
     design = REPO / 'eval/quality/experiments' / (args.experiment + '.json')
     before = None
     started = time.monotonic()
@@ -170,8 +172,8 @@ def main():
         row = supervise([sys.executable, '-m', 'eval.quality.experiments', args.experiment,
                          '--root', str(root), '--payload'], cwd=REPO, env=env, root=root,
                         log=root / 'evidence/payload.log', deadline=started + SECONDS[args.experiment],
-                        max_bytes=2 * GIB, max_rss=2 * GIB, include_controller=True,
-                        evidence_root=root / 'evidence', max_evidence_bytes=63 * 2**20)
+                        max_bytes=report['limits']['disk_bytes'], max_rss=report['limits']['rss_bytes'], include_controller=True,
+                        evidence_root=root / 'evidence', max_evidence_bytes=report['limits']['evidence_bytes'] - 2**20)
         report['supervision'] = row
         report['cleanup_verified'] = row.get('cleanup_verified') is True
         complete = root / 'evidence/controller-complete.json'
