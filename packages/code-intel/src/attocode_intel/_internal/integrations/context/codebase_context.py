@@ -821,27 +821,6 @@ def build_dependency_graph(
     return graph
 
 
-_DISCOVERY_ENV = "ATTOCODE_INTEL_DISCOVERY_MAX_FILES"
-_DEFAULT_DISCOVERY_MAX_FILES = 50_000
-_HARD_DISCOVERY_MAX_FILES = 100_000
-
-
-def _validate_discovery_max_files(value: int) -> int:
-    if type(value) is not int or not 1 <= value <= _HARD_DISCOVERY_MAX_FILES:
-        raise ValueError(f"discovery_max_files must be an integer from 1 to {_HARD_DISCOVERY_MAX_FILES}")
-    return value
-
-
-def _discovery_max_files_from_env() -> int:
-    raw = os.environ.get(_DISCOVERY_ENV)
-    if raw is None:
-        return _DEFAULT_DISCOVERY_MAX_FILES
-    try:
-        return _validate_discovery_max_files(int(raw))
-    except ValueError as exc:
-        raise ValueError(f"{_DISCOVERY_ENV} must be an integer from 1 to {_HARD_DISCOVERY_MAX_FILES}") from exc
-
-
 @dataclass
 class CodebaseContextManager:
     """Manages codebase context for intelligent code understanding.
@@ -874,12 +853,6 @@ class CodebaseContextManager:
     _ignored_checkout_dirs_capped: bool = field(default=False, repr=False)
     cancelled: Callable[[], bool] | None = field(default=None, repr=False, compare=False)
     _discovery_snapshot: Any = field(default=None, repr=False, compare=False)
-    # Separate from max_files, which caps selection after importance scoring.
-    # Capture the environment per instance; preserve existing positional fields.
-    discovery_max_files: int = field(default_factory=_discovery_max_files_from_env, kw_only=True)
-
-    def __post_init__(self) -> None:
-        _validate_discovery_max_files(self.discovery_max_files)
 
     def _check_cancelled(self) -> None:
         if self.cancelled is not None and self.cancelled():
@@ -933,8 +906,7 @@ class CodebaseContextManager:
         directory/file and the ignore-file identity must still match. A failed
         validation leaves this context empty so its normal fresh discovery runs.
         """
-        scan_limit = _validate_discovery_max_files(self.discovery_max_files)
-        if snapshot is None or len(snapshot.files) > scan_limit or not snapshot.valid_for(self):
+        if snapshot is None or not snapshot.valid_for(self):
             return False
         files = [FileInfo(*row) for row in snapshot.files]
         cap = _compute_dynamic_cap(files, self.max_files)
@@ -955,7 +927,6 @@ class CodebaseContextManager:
         Returns:
             List of FileInfo objects for discovered files.
         """
-        scan_limit = _validate_discovery_max_files(self.discovery_max_files)
         root = Path(self.root_dir)
         resolved_root = root.resolve()
         from attocode_intel._internal.integrations.context.discovery_snapshot import (
@@ -991,7 +962,7 @@ class CodebaseContextManager:
         guard(root / ".gitignore", missing_ok=True)
         ignore = IgnoreManager(root, default_dirs=self.ignore_patterns)
         files: list[FileInfo] = []
-        scan_truncated = False
+        _SAFETY_CEILING = 50_000  # noqa: N806  # OOM guard for massive repos
         self._ignored_checkout_dirs = []
         self._ignored_checkout_dirs_capped = False
 
@@ -1057,12 +1028,6 @@ class CodebaseContextManager:
                 if size > 1_000_000:  # 1MB
                     continue
 
-                # One further eligible file proves overflow. Excluded files do
-                # not, and no descriptor/content is allocated for this lookahead.
-                if len(files) >= scan_limit:
-                    scan_truncated = True
-                    break
-
                 is_test = any(p in rel_path.lower() for p in TEST_PATTERNS)
                 is_config = any(p in rel_path.lower() for p in CONFIG_PATTERNS)
 
@@ -1085,7 +1050,10 @@ class CodebaseContextManager:
                     line_count=line_count,
                 ))
 
-            if scan_truncated:
+                if len(files) >= _SAFETY_CEILING:
+                    break
+
+            if len(files) >= _SAFETY_CEILING:
                 break
 
         # Score importance
@@ -1116,14 +1084,14 @@ class CodebaseContextManager:
         # Truncate to dynamic cap AFTER scoring (smart truncation)
         cap = _compute_dynamic_cap(files, self.max_files)
         self.discovered_file_count = len(files)
-        self.discovery_truncated = scan_truncated or len(files) > cap
+        self.discovery_truncated = len(files) > cap
         if len(files) > cap:
             files = files[:cap]
 
         self._files = files
         self.refresh_excluded_checkout_roots()
         self._last_refresh_time = time.monotonic()
-        if snapshot_safe and not self.discovery_truncated and self.discovered_file_count < scan_limit:
+        if snapshot_safe and not self.discovery_truncated and self.discovered_file_count < _SAFETY_CEILING:
             self._discovery_snapshot = DiscoverySnapshot(
                 os.path.abspath(self.root_dir), frozenset(self.ignore_patterns),
                 self._last_refresh_time,

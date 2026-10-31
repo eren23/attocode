@@ -104,7 +104,8 @@ def test_optin_search_reaches_document_beyond_fifty_thousand(tmp_path, monkeypat
     manager = SemanticSearchManager(str(tmp_path), max_files=100000)
     try:
         manager._warm_candidate_indexes()
-        assert manager._keyword_search('higherceilingneedle', 5, names[-1]), 'discovery limit: configured late source omitted'
+        assert manager._keyword_search('item_050000', 5, names[-1]), 'discovery limit: configured late metadata omitted'
+        assert manager._body_search(['higherceilingneedle'], 5, names[-1]), 'discovery limit: configured late source omitted'
         conn = manager._open_body_db()
         try:
             assert {r[0] for r in conn.execute('SELECT file_path FROM kw_files')} == set(names)
