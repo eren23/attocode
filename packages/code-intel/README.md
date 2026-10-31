@@ -26,7 +26,7 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
-The 0.1.21 candidate includes configured search-discovery coverage, OCaml interface
+Version 0.1.21 includes configured search-discovery coverage, OCaml interface
 parsing and more conservative Go/Rust fallback evidence. The existing 100 ms native
 budget and 50,000-file discovery safety ceiling remain; bounded fallback is heuristic.
 
