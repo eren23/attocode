@@ -13,7 +13,7 @@ that partial inventory; it did not establish complete 100k coverage. See the
 retains the 50,000-file default and permits an explicit limit up to 100,000.
 A distinct qualification checks a persisted default index expanding under the
 higher setting, fresh-process restarts, exact-cap coverage, and hard-cap overflow.
-The [frozen design](../eval/quality/experiments/capacity.json) defines the cases
+The [frozen design](https://github.com/eren23/attocode/blob/da382a896f17271caba311260941a17ccd4b18b3/eval/quality/experiments/capacity.json) defines the cases
 and limits; pass claims require the original online artifacts and independent
 admission. Version, dependencies, native 100 ms budget and ranking are unchanged.
 There is no new release, global upgrade, or MCP restart in this workstream.

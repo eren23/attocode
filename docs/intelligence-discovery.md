@@ -26,7 +26,7 @@ counts, and the truncation receipt from discovery. `status=ready` and
 `body_index_coverage=1.0` describe the selected inventory. Check truncation before
 interpreting an empty search as evidence of absence from the whole repository.
 
-The [qualification design](../eval/quality/experiments/capacity.json) uses
+The [qualification design](https://github.com/eren23/attocode/blob/da382a896f17271caba311260941a17ccd4b18b3/eval/quality/experiments/capacity.json) uses
 small Python modules with an import chain: a 100,000-file workspace opened at
 the default limit, expanded to 100,000 in a new process using the same persisted
 index, then reopened again; an exact 50,000-file workspace; and a 100,001-file
