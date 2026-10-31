@@ -94,6 +94,20 @@ def test_native_abort_fallback_keeps_existing_500_line_span_bound(language, nati
     assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == [('Target', 1, 1)]
 
 
+@pytest.mark.parametrize(('language', 'prefix_lines'), [
+    ('go', 0), ('rust', 0), ('go', 7), ('rust', 7),
+], ids=['go-at-start', 'rust-at-start', 'go-after-prefix', 'rust-after-prefix'])
+def test_native_abort_fallback_accepts_exact_500_line_span(language, prefix_lines, native_abort):
+    first = 'func Target() {' if language == 'go' else 'fn Target() {'
+    source = '// preceding source\n' * prefix_lines + first + '\n' + '\n' * 498 + '}\n'
+    ast = parse_file('sample.' + ('go' if language == 'go' else 'rs'), source)
+    assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == [
+        ('Target', prefix_lines + 1, prefix_lines + 500),
+    ], 'boundary: fallback rejected the final accepted line of its scan window'
+    assert ast.parsing_tier == 'regex'
+    assert ast.parse_failures[0].limit_micros == 100000
+
+
 @pytest.mark.parametrize('language', ['go', 'rust'])
 def test_native_abort_retains_ordinary_regex_symbols_and_error_receipt(language, native_abort):
     source = 'func Target() {}\n' if language == 'go' else 'pub async fn Target() {}\n'

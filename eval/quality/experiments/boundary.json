@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "boundary",
+  "stage": "mutation-499",
+  "expected_cases": 431,
+  "expected_failures": [
+    "test_native_abort_fallback_accepts_exact_500_line_span[go-at-start]",
+    "test_native_abort_fallback_accepts_exact_500_line_span[rust-at-start]",
+    "test_native_abort_fallback_accepts_exact_500_line_span[go-after-prefix]",
+    "test_native_abort_fallback_accepts_exact_500_line_span[rust-after-prefix]"
+  ],
+  "scope": "Test-only sensitivity control for existing500-line fallback acceptance; injected in memory only, no production file mutation",
+  "limits": {
+    "seconds": 600,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "pass_rule": "Exactly four hand-derived boundary assertions fail; all427existing cases pass; no errors/skips; same original product bytes"
+}
