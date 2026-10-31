@@ -214,7 +214,17 @@ class SystemOneChoiceReranker:
         def predict() -> None:
             try:
                 response = self._post(body, headers)
-                if self.model and response.get("model") not in {None, self.model}:
+                # Hosted routers answer with a dated snapshot of the pinned model,
+                # for example typesafe/jev-1.13-20260917 for typesafe/jev-1.13.
+                returned = response.get("model")
+                if (
+                    self.model
+                    and returned is not None
+                    and not (
+                        isinstance(returned, str)
+                        and re.fullmatch(re.escape(self.model) + r"(?:-\d{8})?", returned)
+                    )
+                ):
                     raise ValueError("unexpected ranking model")
                 output.append(("ok", self._scores(response, len(bounded))))
             except ValueError:
