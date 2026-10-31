@@ -2598,9 +2598,7 @@ class SemanticSearchManager:
             "discovery_max_files": discovery_limit,
             "discovery_discovered_files": discovered,
             "discovery_selected_files": selected,
-            # Discovery stops enumerating at50k. Counts at that boundary are
-            # lower bounds, even when the later composition cap keeps them all.
-            "discovery_truncated": bool(getattr(ctx, "discovery_truncated", False)) or discovered >= 50_000,
+            "discovery_truncated": bool(getattr(ctx, "discovery_truncated", False)),
         })
         self._kw_index_built = True
 

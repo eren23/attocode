@@ -1,24 +1,9 @@
 {
   "schema_version": 1,
   "experiment": "discovery",
-  "stage": "red",
+  "stage": "green",
   "expected_cases": 449,
-  "expected_failures": [
-    "test_scan_budget_and_truncation_follow_selected_policy[default-overflow]",
-    "test_scan_budget_and_truncation_follow_selected_policy[optin-past-old]",
-    "test_scan_budget_and_truncation_follow_selected_policy[optin-hard-overflow]",
-    "test_invalid_scan_budget_rejected_before_walk[zero]",
-    "test_invalid_scan_budget_rejected_before_walk[negative]",
-    "test_invalid_scan_budget_rejected_before_walk[above-hard]",
-    "test_invalid_scan_budget_rejected_before_walk[nonnumeric]",
-    "test_explicit_scan_budget_cannot_exceed_hard_limit[zero]",
-    "test_explicit_scan_budget_cannot_exceed_hard_limit[above-hard]",
-    "test_explicit_scan_budget_cannot_exceed_hard_limit[boolean]",
-    "test_mutated_scan_budget_cannot_bypass_hard_limit",
-    "test_exact_scan_limit_uses_eligible_lookahead[over-limit]",
-    "test_lower_budget_receiver_refuses_larger_complete_snapshot",
-    "test_optin_search_reaches_document_beyond_fifty_thousand"
-  ],
+  "expected_failures": [],
   "scope": "Opt-in bounded discovery descriptor policy, eligibilitylookahead, receiverbudget, actuallate50001document search; no productfix until causalRED admitted",
   "limits": {
     "seconds": 600,
@@ -26,5 +11,5 @@
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "pass_rule": "Exactly14namednewfailures+435positives, no errors/skips, all349productionfiles exact021base"
+  "pass_rule": "Exactly449positivecases, no failures/errors/skips; corrected metadata AND body search test, same inventory/limits"
 }
