@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import os
@@ -430,3 +431,21 @@ def test_package_and_code_report_the_same_version():
 
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     assert tomllib.loads(pyproject.read_text())["project"]["version"] == __version__
+
+
+def test_shipped_source_imports_no_dev_or_archived_package():
+    """The wheel ships only attocode_intel; a dev or archived import fails for pip users."""
+    banned = {"eval", "attocode", "attoswarm", "attocode_core"}
+    src = Path(__file__).resolve().parents[1] / "src/attocode_intel"
+    bad = []
+    for path in src.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(), str(path))):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                modules = [node.module or ""]
+            else:
+                continue
+            if any(module.split(".")[0] in banned for module in modules):
+                bad.append(f"{path.relative_to(src)}:{node.lineno}")
+    assert not bad, bad

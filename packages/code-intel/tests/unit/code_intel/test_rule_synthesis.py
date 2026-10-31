@@ -229,19 +229,16 @@ class TestSynthesizeRuleDispatch:
         assert result.rule is None
         assert any("unknown mode" in d for d in result.diagnostics)
 
-    def test_default_llm_caller_missing_module_returns_clean_diagnostic(
+    def test_default_llm_caller_without_key_returns_clean_diagnostic(
         self, monkeypatch,
     ):
-        """I3 — when the dev meta-harness LLM client is not importable,
-        the synthesizer must surface a useful RuntimeError diagnostic
-        instead of letting ModuleNotFoundError crash the MCP tool."""
-        import sys
-
-        # Make ``eval.meta_harness._llm_client`` un-importable for this test.
-        for mod_name in list(sys.modules):
-            if mod_name.startswith("eval.meta_harness"):
-                monkeypatch.delitem(sys.modules, mod_name, raising=False)
-        monkeypatch.setitem(sys.modules, "eval.meta_harness._llm_client", None)
+        """I3 — with no API key, the packaged default caller must surface a
+        diagnostic instead of crashing the MCP tool."""
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.setattr(
+            "attocode_intel.confidence.llm._load_env", lambda: None,
+        )
 
         # Force the LLM path: positives too short for regex synthesis.
         result = synthesize_rule(
@@ -251,10 +248,7 @@ class TestSynthesizeRuleDispatch:
             mode="llm",  # explicit so we don't get the regex fallback
         )
         assert result.rule is None
-        assert any(
-            "llm_caller" in d.lower() or "meta-harness" in d.lower()
-            for d in result.diagnostics
-        ), result.diagnostics
+        assert any("api key" in d.lower() for d in result.diagnostics), result.diagnostics
 
 
 # ---------------------------------------------------------------------------

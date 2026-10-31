@@ -6,7 +6,7 @@ underlying client. This module owns the keys, model selection, and the
 ``.env`` loader so we don't duplicate that logic in each proposer.
 
 Public surface:
-- :func:`call_llm` — send a single-prompt completion request
+- :func:`call_llm` — re-exported from the shipped package
 - :func:`load_env` — populate API keys from project ``.env`` files
 - :func:`diff_from_defaults` — render a parameter diff string
 """
@@ -16,54 +16,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from attocode_intel.confidence.llm import call_llm
 
-def call_llm(prompt: str, model: str = "", max_tokens: int = 4096) -> str:
-    """Call the LLM via OpenRouter or Anthropic direct.
-
-    Routes to OpenRouter when ``OPENROUTER_API_KEY`` is set (preferred),
-    falling back to ``ANTHROPIC_API_KEY``. Raises ``RuntimeError`` if
-    neither key is present.
-    """
-    or_key = os.environ.get("OPENROUTER_API_KEY", "")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-
-    if or_key:
-        import openai
-
-        if not model:
-            model = "anthropic/claude-sonnet-5"
-        client = openai.OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=or_key,
-        )
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.choices[0].message.content or ""
-
-    if anthropic_key:
-        import anthropic
-
-        if not model:
-            model = "claude-sonnet-5"
-        client = anthropic.Anthropic(api_key=anthropic_key)
-        # Sonnet 5 and Opus 5 think when `thinking` is omitted; keep the old thinking-off behavior.
-        extra = {"thinking": {"type": "disabled"}} if model in ("claude-sonnet-5", "claude-opus-5") else {}
-        response = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-            **extra,
-        )
-        # Thinking blocks can come first, so read the first text block.
-        return next((b.text for b in response.content if b.type == "text"), "")
-
-    raise RuntimeError(
-        "No API key found. Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY "
-        "in environment or .env file."
-    )
+__all__ = ["call_llm", "diff_from_defaults", "load_env"]
 
 
 def load_env() -> None:
