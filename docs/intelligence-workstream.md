@@ -4,17 +4,19 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** this checkout targets `attocode-code-intel` 0.1.21 (2026-10-31).
-See the [0.1.21 release notes](intelligence-0.1.21.md). Published 0.1.20 and 0.1.19
-remain immutable. The candidate includes the merged configured-discovery,
-OCaml-interface and conservative Go/Rust fallback corrections. Dependencies,
-native 100 ms budget, ranking, source exclusions and discovery safety ceiling
-remain unchanged. Qualification requires all 36 pinned packs, same-head 431 Linux
-controls, all 17 normal checks and the 79-case acquired-grammar artifact. A separate
-bounded GHA capacity ladder records cold/persisted-restart observations and the
-50k discovery boundary; it cannot establish complete 100k coverage. Publication
-also requires all 18 tag jobs and actual PyPI clean-install/0.1.20-upgrade checks.
-No global upgrade or MCP restart is included.
+**Current version:** `attocode-code-intel` 0.1.21 is published. Its original
+qualification selected 50,000 files from the 100,000-file fixture and disclosed
+that partial inventory; it did not establish complete 100k coverage. See the
+[0.1.21 release notes](intelligence-0.1.21.md).
+
+**Unreleased development:** the [bounded discovery setting](intelligence-discovery.md)
+retains the 50,000-file default and permits an explicit limit up to 100,000.
+A distinct qualification checks a persisted default index expanding under the
+higher setting, fresh-process restarts, exact-cap coverage, and hard-cap overflow.
+The [frozen design](../eval/quality/experiments/capacity.json) defines the cases
+and limits; pass claims require the original online artifacts and independent
+admission. Version, dependencies, native 100 ms budget and ranking are unchanged.
+There is no new release, global upgrade, or MCP restart in this workstream.
 
 **Development optional-language depth, 2026-10-29:** [causal native controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
 restore omitted OCaml/Perl call candidates, OCaml native `open_module` extraction

@@ -1,9 +1,11 @@
 {
   "schema_version": 1,
   "experiment": "discovery",
-  "stage": "green",
-  "expected_cases": 449,
-  "expected_failures": [],
+  "stage": "harness-red",
+  "expected_cases": 450,
+  "expected_failures": [
+    "test_capacity_phase_expands_same_persisted_index_under_new_scan_policy"
+  ],
   "scope": "Opt-in bounded discovery descriptor policy, eligibilitylookahead, receiverbudget, actuallate50001document search; no productfix until causalRED admitted",
   "limits": {
     "seconds": 600,
@@ -11,5 +13,5 @@
     "rss_bytes": 2147483648,
     "evidence_bytes": 67108864
   },
-  "pass_rule": "Exactly449positivecases, no failures/errors/skips; corrected metadata AND body search test, same inventory/limits"
+  "pass_rule": "Exactlyone named new harness failure and449positive controls, no errors/skips; unchanged product and resource caps"
 }
