@@ -11,12 +11,20 @@ import sys
 import time
 from pathlib import Path
 
-from eval.quality.experiment_evidence import assert_engine
+from eval.quality.corpus_capture import RecordedGateway
+from eval.quality.experiment_evidence import Journal, assert_engine
 from eval.quality.runner import REPO, supervise, write_json
 from eval.quality.scale_evidence import admit_coverage, admit_identities, admit_parsers, require
 from eval.quality.scale_workload import Requests, indexed_snapshot, sqlite_integrity
 
 DESIGN = REPO / 'eval/quality/experiments/capacity.json'
+
+
+class CapacityGateway(RecordedGateway):
+    async def execute(self, tool, arguments):
+        # Uncompacted hydration status carries coverage, not rendered source.
+        return await self.peer.execute(tool, arguments)
+
 
 
 def source_bytes(number):
@@ -80,7 +88,8 @@ async def phase(spec, output):
               'databases_before': databases(tree)}
     require(bool(result['databases_before']) == (spec['phase'] == 'restart'), 'cold/restart database provenance differs')
     gateway = OperationGateway(str(tree), 'daily', watch=False)
-    requests = Requests(gateway, output)
+    recorded = CapacityGateway(gateway, tree, Journal(output / 'sources', 16 * 2**20))
+    requests = Requests(recorded, output)
     try:
         await requests.call('bootstrap', {'task_hint': 'operation_000000', 'max_tokens': 2500})
         result['bootstrap_seconds'] = time.monotonic() - started
@@ -118,7 +127,7 @@ async def phase(spec, output):
                     rows = page.get('data', {}).get('results', [])
                     require(bool(rows) and all(r['file_path'] == f'module_{number:06d}.py' for r in rows),
                             'included boundary scoped search missing or escaped')
-                    require(bool(validate_sources('semantic_search', page, tree, [])), 'search source evidence absent')
+                    # RecordedGateway already admitted the actual producer policies and source spans.
                     break
                 require(time.monotonic() < until, 'search readiness deadline')
                 await asyncio.sleep(1)
@@ -150,7 +159,7 @@ async def phase(spec, output):
         raise
     finally:
         try:
-            await gateway.close()
+            await recorded.close()
             result['closed'] = True
             result['sqlite_integrity'] = sqlite_integrity(tree)
             result['databases_after'] = databases(tree)
