@@ -26,6 +26,11 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.22 adds an opt-in discovery budget of up to 100,000 files
+(`ATTOCODE_INTEL_DISCOVERY_MAX_FILES`; the default stays 50,000). It also packages
+the LLM client, so `ATTOCODE_FLAG_CONFIDENCE=llm` and LLM rule synthesis work from
+a PyPI install when an OpenRouter or Anthropic key is set.
+
 Version 0.1.21 includes configured search-discovery coverage, OCaml interface
 parsing and more conservative Go/Rust fallback evidence. The existing 100 ms native
 budget and 50,000-file discovery safety ceiling remain; bounded fallback is heuristic.
@@ -120,7 +125,7 @@ failed the frozen protocol. It provides no quality, cost or time benefit evidenc
 
 - **First search.** The first tool call starts the index build. A search waits up to 15 seconds for the index. On a large repository, a search can report that the index is warming. Then search again. An empty result during warm-up does not prove that the code is absent.
 - **Index location.** The index is in `.attocode/` in your project. When the server makes that folder, it adds a `.gitignore`, so the index stays out of commits.
-- **What the index reads.** By default the server discovers at most 50,000 eligible files and skips files over 1 MB. The unreleased [discovery budget setting](../../docs/intelligence-discovery.md) allows an explicit limit up to 100,000; the selected index can be smaller under its independent file limit. It skips files that `.gitignore` ignores, and folders that start with a dot. It also skips folders named `dist`, `build`, `out`, `output`, `target`, `env`, `tmp`, `vendor` or `coverage`, and binary, media and lock files. If a build-named folder contains real source, explicitly re-include it with a root `.gitignore` entry such as `!dist/`; discovery and edit refresh honor that override.
+- **What the index reads.** By default the server discovers at most 50,000 eligible files and skips files over 1 MB. From 0.1.22, the [discovery budget setting](https://github.com/eren23/attocode/blob/main/docs/intelligence-discovery.md) allows an explicit limit up to 100,000; the selected index can be smaller under its independent file limit. It skips files that `.gitignore` ignores, and folders that start with a dot. It also skips folders named `dist`, `build`, `out`, `output`, `target`, `env`, `tmp`, `vendor` or `coverage`, and binary, media and lock files. If a build-named folder contains real source, explicitly re-include it with a root `.gitignore` entry such as `!dist/`; discovery and edit refresh honor that override.
 - **Languages.** The base install parses Bash, C, C#, C++, CSS, Elixir, Go, HCL, HTML, Java, JavaScript, JSON, Kotlin, Lua, PHP, Python, Ruby, Rust, Scala, Swift, TOML, TypeScript, YAML and Zig. Optional grammars are loaded only when already installed or cached; installing the `tree-sitter-all` extra does not trigger grammar downloads during navigation. A slow grammar falls back after a 100 ms parse budget. Static imports and references are partial evidence, not compiler/type resolution.
 - **Degraded parsing (development builds).** Selecting a missing definition in
   a file with a recorded native parse failure permits one bounded retry for

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.22] - 2026-10-31
+
+### Added
+
+- Opt-in discovery budget: set `ATTOCODE_INTEL_DISCOVERY_MAX_FILES` to an integer
+  from 1 through 100,000. The default stays 50,000 files. Discovery looks for one
+  more eligible file to report actual truncation, and search uses the reported
+  discovery result instead of a fixed 50,000-file assumption.
+
+### Fixed
+
+- `ATTOCODE_FLAG_CONFIDENCE=llm` and LLM rule synthesis work from a PyPI install.
+  The LLM client is now part of `attocode_intel` instead of the development-only
+  `eval` package. A test rejects shipped imports of `eval` or archived agent packages.
+
+### Changed
+
+- The source distribution no longer includes `evals/` study designs and results;
+  they remain in the tagged Git repository. Unused internal recursive-context
+  code is removed.
+
 ## [Intelligence 0.1.21] - 2026-10-31
 
 ### Fixed
