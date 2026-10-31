@@ -41,3 +41,32 @@ async def test_capacity_phase_validates_actual_delivered_search_sources(tmp_path
         source_rows = [row for value in validations for row in value if row.get('kind') == 'source']
         assert len(source_rows) >= 3
         assert any(row.get('policy', {}).get('producer') for row in source_rows)
+
+
+async def test_capacity_phase_expands_same_persisted_index_under_new_scan_policy(tmp_path, monkeypatch):
+    monkeypatch.setenv('ATTOCODE_INTEL_MAX_FILES', '100000')
+    monkeypatch.setenv('ATTOCODE_INTEL_RANKING_PROVIDER', 'off')
+    tree = tmp_path / 'project'
+    generate(tree, 3)
+    previous = None
+    for name, budget, selected, truncated in [('default', '2', 2, True),
+                                               ('expanded', '3', 3, False),
+                                               ('restart', '3', 3, False)]:
+        monkeypatch.setenv('ATTOCODE_INTEL_DISCOVERY_MAX_FILES', budget)
+        output = tmp_path / name
+        spec = {'tree': str(tree), 'size': 3, 'phase': name, 'seconds': 40,
+                'discovery_env': budget, 'expected_selected': selected,
+                'expected_truncated': truncated,
+                'expected_outcome': 'limited' if truncated else 'passed',
+                'persisted_before': previous is not None}
+        result = await phase(spec, output)
+        assert result['complete'] and result['closed']
+        assert result['expected_selected_files'] == selected
+        assert result['discovery_truncated'] is truncated
+        assert result['discovery_env'] == budget and result['outcome'] == spec['expected_outcome']
+        if previous is not None:
+            assert result['databases_before'] == previous['databases_after']
+        identities = json.loads((output / 'candidate-identities.json').read_bytes())
+        expected = [f'module_{n:06d}.py' for n in range(selected)]
+        assert identities['keyword_paths'] == identities['body_paths'] == expected
+        previous = result
