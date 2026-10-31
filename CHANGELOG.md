@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.21] - 2026-10-31
+
+### Fixed
+
+- Preserve configured search discovery coverage across fresh and reopened indexes;
+  report the actual supplied context limit with its completed discovery generation.
+- Route OCaml `.mli` files to the interface grammar and retain signature symbols.
+- Exclude Go/Rust comment and literal decoys after native parse failures, preserve
+  bounded declaration spans and label heuristic definitions and calls as regex.
+
+### Evaluation maintenance
+
+- Cover acceptance on the final line of the existing 500-line fallback window,
+  both at file start and after preceding source. Native limits, dependencies,
+  ranking and the 50,000-file discovery safety ceiling remain unchanged.
+
 ## [Intelligence 0.1.20] - 2026-10-29
 
 ### Fixed

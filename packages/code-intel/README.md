@@ -26,6 +26,10 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.21 includes configured search-discovery coverage, OCaml interface
+parsing and more conservative Go/Rust fallback evidence. The existing 100 ms native
+budget and 50,000-file discovery safety ceiling remain; bounded fallback is heuristic.
+
 Version 0.1.20 improves native OCaml/Perl call candidates and conservative workspace
 import candidates for OCaml, Perl and Crystal. Physical paths and ambiguity remain
 guarded; native limits, ranking and dependencies are unchanged. Optional grammars

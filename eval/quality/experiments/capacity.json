@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "experiment": "capacity",
+  "version": "0.1.21",
+  "scope": "NEW GHA capacity boundary/startup/newPID persisted restart observation; not a paid campaign rerun or performance comparison",
+  "sizes": [
+    10000,
+    50000,
+    100000
+  ],
+  "per_case_seconds": {
+    "10000": 420,
+    "50000": 780,
+    "100000": 1000
+  },
+  "limits": {
+    "seconds": 2400,
+    "disk_bytes": 8589934592,
+    "rss_bytes": 4294967296,
+    "evidence_bytes": 268435456
+  },
+  "generator": "zero-padded-python-import-chain-v1",
+  "configured_request_max_files": 100000,
+  "discovery_safety_ceiling": 50000,
+  "expected_selected": "min(source_files,50000); flat zero-padded Python-only eligible tree; exact literal path sets",
+  "outcomes": {
+    "passed": "10000 total sources, all identities/native/search/readiness/newPIDrestart/integrity correct with no truncation",
+    "limited": "50000 or100000 total sources with exact first50000 path inventory, explicit search truncation; included-boundary hits, outside-boundary miss if present; all operational/resource checks pass",
+    "incomplete": "any timeout/resource/cleanup/origin/inventory/protocol failure or unexpected result; no later cases issued"
+  },
+  "policy": "One source-frozen attempt, sequential sizes and cold/newPIDrestart; stop on unexpected result, no rerun/replacement/resume/retune or cap waiver; totals/cap/omissions reported separately; timings observational",
+  "pass_rule": "All3 predeclared cases and6phases complete operational checks with expected passed/limited outcomes; no whole100k coverage claim",
+  "runtime_target": {
+    "runner": "ubuntu-latest",
+    "sys_platform": "linux",
+    "machine": "x86_64"
+  }
+}

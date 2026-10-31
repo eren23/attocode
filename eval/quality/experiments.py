@@ -22,15 +22,16 @@ from pathlib import Path
 from eval.quality.experiment_evidence import assert_engine
 from eval.quality.runner import GIB, REPO, environment, managed_root, supervise, write_json
 
-SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200}
+SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200, 'capacity': 2400}
 OPERATORS = {
+    'capacity': 'eval.quality.capacity_experiment',
     'native': 'eval.quality.native_experiment',
     'preview': 'eval.quality.preview_experiment',
     'restart': 'eval.quality.restart_experiment',
 }
 ENGINE = REPO / 'packages/code-intel/src/attocode_intel'
 TESTS = ['test_experiment_evidence.py', 'test_quality_runner.py', 'test_quality_evidence.py',
-         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py', 'test_parse_recovery.py', 'test_experiment_readiness.py', 'test_fixture_source_alias.py', 'test_ast_snapshot.py', 'test_discovery_reuse.py', 'test_index_reuse.py', 'test_cold_index_cost.py', 'test_recovery_readiness.py', 'test_snippet_budget.py', 'test_experiment_dispatch.py', 'test_native_capture.py', 'test_source_exclusions.py', 'test_optional_grammar_admission.py', 'test_search_coverage.py', 'test_ocaml_parser_routing.py', 'test_fallback_lexical.py']
+         'test_image_budget.py', 'test_native_experiment.py', 'test_preview_windows.py', 'test_preview_sources.py', 'test_preview_experiment.py', 'test_preview_admission.py', 'test_restart_experiment.py', 'test_corpus_capture.py', 'test_parse_recovery.py', 'test_experiment_readiness.py', 'test_fixture_source_alias.py', 'test_ast_snapshot.py', 'test_discovery_reuse.py', 'test_index_reuse.py', 'test_cold_index_cost.py', 'test_recovery_readiness.py', 'test_snippet_budget.py', 'test_experiment_dispatch.py', 'test_native_capture.py', 'test_source_exclusions.py', 'test_optional_grammar_admission.py', 'test_search_coverage.py', 'test_ocaml_parser_routing.py', 'test_fallback_lexical.py', 'test_capacity_experiment.py']
 
 
 def identity(design):
@@ -149,8 +150,10 @@ def main():
     root = managed_root(root)
     (root / 'evidence').mkdir()
     report = {'experiment': args.experiment, 'status': 'incomplete', 'decision': None,
-              'limits': {'seconds': SECONDS[args.experiment], 'disk_bytes': 2 * GIB,
-                         'rss_bytes': 2 * GIB, 'evidence_bytes': 64 * 2**20}}
+              'limits': {'seconds': SECONDS[args.experiment],
+                         'disk_bytes': (8 if args.experiment == 'capacity' else 2) * GIB,
+                         'rss_bytes': (4 if args.experiment == 'capacity' else 2) * GIB,
+                         'evidence_bytes': (256 if args.experiment == 'capacity' else 64) * 2**20}}
     design = REPO / 'eval/quality/experiments' / (args.experiment + '.json')
     before = None
     started = time.monotonic()
@@ -169,8 +172,8 @@ def main():
         row = supervise([sys.executable, '-m', 'eval.quality.experiments', args.experiment,
                          '--root', str(root), '--payload'], cwd=REPO, env=env, root=root,
                         log=root / 'evidence/payload.log', deadline=started + SECONDS[args.experiment],
-                        max_bytes=2 * GIB, max_rss=2 * GIB, include_controller=True,
-                        evidence_root=root / 'evidence', max_evidence_bytes=63 * 2**20)
+                        max_bytes=report['limits']['disk_bytes'], max_rss=report['limits']['rss_bytes'], include_controller=True,
+                        evidence_root=root / 'evidence', max_evidence_bytes=report['limits']['evidence_bytes'] - 2**20)
         report['supervision'] = row
         report['cleanup_verified'] = row.get('cleanup_verified') is True
         complete = root / 'evidence/controller-complete.json'
