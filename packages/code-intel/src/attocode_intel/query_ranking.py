@@ -108,24 +108,16 @@ def _component(path: str) -> str:
     return "/".join(parts[:2])
 
 
-def explicit_test_query(query: str) -> bool:
-    """A short query that says "test" or "tests" asks for test files.
-
-    A long issue often says "test" about its reproduction, so only a short query
-    shows test intent.
-    """
-    return len(terms(query)) <= 20 and re.search(r"\btests?\b", query, re.IGNORECASE) is not None
-
-
 def demote_tests(query: str, candidates: list[SemanticSearchResult]) -> list[SemanticSearchResult]:
     """Prefer source files normally and test files for short explicit test requests.
 
-    An issue is fixed in source files, and ``suggest_tests`` finds the tests. The
-    order in each group does not change.
+    An issue is fixed in source files, and ``suggest_tests`` finds the tests. A long
+    issue often says "test" about its reproduction, so only a short query shows test
+    intent. The order in each group does not change.
     """
-    if explicit_test_query(query):
-        return sorted(candidates, key=lambda row: not is_test_path(row.file_path))
     short = len(terms(query)) <= 20
+    if short and re.search(r"\btests?\b", query, re.IGNORECASE):
+        return sorted(candidates, key=lambda row: not is_test_path(row.file_path))
     ordered = sorted(candidates, key=lambda row: is_test_path(row.file_path))
     # "Where is X tested?" asks about a behavior and its check, so it needs both
     # files: keep the source order and show the best test hit second.

@@ -1,0 +1,122 @@
+{
+ "schema_version": 1,
+ "design": "packages/code-intel/evals/designs/2026-10-17-test-source-slot-development.json",
+ "split": "development",
+ "questions_sha256": "c001108186956cc4cfc49bef969ec4abf85015677a8c4755c79450fbb06bc02e",
+ "candidate": "ATTOCODE_INTEL_TEST_RECALL=1: for short queries that contain 'test' or 'tests', one more body search limited to test paths, fused as a third RRF list with the body weight",
+ "candidate_source": "73a7fff1a2db94dd2e97154a237baf5dd9f52e8f (PR 301); removed by this change",
+ "run": {
+  "workflow": ".github/workflows/test-recall-trial.yml",
+  "id": 41303464174,
+  "attempt": 1,
+  "head_sha": "73a7fff1a2db94dd2e97154a237baf5dd9f52e8f",
+  "started": "2026-11-01T11:47:46Z",
+  "finished": "2026-11-01T11:53:40Z",
+  "operator_sha256": "3e83ef963044b9896b631ff5e09e963a28471cfcb33d2391e94e1a67d68646f0",
+  "engine_sha256": "6d5e71a047d5ca60c846c2e3446f568ba6a77ceb250ac7079695a15c2c9a93ee"
+ },
+ "arms": {
+  "baseline": "ATTOCODE_LOCAL_ONLY=1, default ranking",
+  "candidate": "same engine, ATTOCODE_INTEL_TEST_RECALL=1"
+ },
+ "passed": false,
+ "checks": {
+  "file_totals_no_loss": true,
+  "visible_totals_no_loss": true,
+  "scoped_no_individual_loss": true,
+  "inspection_no_net_loss": true,
+  "latency": true,
+  "files_5_gain": false,
+  "no_file_loss_5": true,
+  "no_file_loss_24": false,
+  "controls_identical": false
+ },
+ "totals": {
+  "baseline": {
+   "questions": 68,
+   "files_5": 71,
+   "ranges_5": 34,
+   "visible_5": 22,
+   "files_24": 90,
+   "ranges_24": 41,
+   "visible_24": 13,
+   "files_scoped": 66,
+   "ranges_scoped": 56,
+   "visible_scoped": 29,
+   "inspection_visible": 11,
+   "p95_seconds": 0.18584453799999778
+  },
+  "candidate": {
+   "questions": 68,
+   "files_5": 71,
+   "ranges_5": 34,
+   "visible_5": 22,
+   "files_24": 91,
+   "ranges_24": 40,
+   "visible_24": 14,
+   "files_scoped": 66,
+   "ranges_scoped": 55,
+   "visible_scoped": 29,
+   "inspection_visible": 11,
+   "p95_seconds": 0.19680586200001926
+  }
+ },
+ "individual_losses": [
+  {
+   "id": "okhttp:test-intent-1",
+   "page": "24",
+   "metric": "files",
+   "labels": [
+    0
+   ]
+  }
+ ],
+ "trial": {
+  "split": "development",
+  "files_5_net_by_pack": {
+   "express": 0,
+   "ripgrep": 0,
+   "cats-effect": 0,
+   "okhttp": 0,
+   "requests": 0,
+   "gson": 0,
+   "rails": 0,
+   "SwiftFormat": 0,
+   "spdlog": 0,
+   "ggplot2": 0
+  },
+  "file_label_losses": {
+   "5": 0,
+   "24": 1
+  },
+  "changed_controls": [
+   "express:test-intent-3"
+  ],
+  "test_queries": 24
+ },
+ "file_label_gains_24": [
+  {
+   "id": "ripgrep:usefulness-validation-1",
+   "file": "tests/regression.rs"
+  },
+  {
+   "id": "ripgrep:usefulness-validation-2",
+   "file": "tests/feature.rs"
+  }
+ ],
+ "file_label_losses_24": [
+  {
+   "id": "okhttp:test-intent-1",
+   "file": "okhttp/src/jvmTest/kotlin/okhttp3/HeadersTest.kt"
+  }
+ ],
+ "changed_control_detail": "express:test-intent-3, first-24 page, result 2: the snippet of lib/express.js ends at line 19 instead of 18. The candidate path does not run for this query.",
+ "archive": {
+  "path": "packages/code-intel/evals/results/2026-11-01-test-recall.tar.gz",
+  "sha256": "f4149881601d140b9d2f5a37dd24951186a7351c9ab0bbf3dc8b9b2a1b70006e",
+  "bytes": 530806,
+  "decision_sha256": "f3396be6ceaddebea60353ccdca3b22a6c744cfd3cec5ebe4b0c03219a18e36b"
+ },
+ "independent_recompute": "recompute.py in the archive (standard library only) gives the same gates, per-repository net and losses",
+ "next_stage": "not run: no fresh questions were written and no validation dispatch was made"
+}
