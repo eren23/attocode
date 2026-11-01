@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The search guide now recommends the hosted rerank opt-in. A frozen trial with 24 short
+  questions on four languages passed all 15 gates: 24 of 26 labeled files in the first five
+  results against 20, no file lost, rerank p95 377 ms, $0.064 for 165 calls. The rerank stays
+  off by default.
+
 ## [Intelligence 0.1.23] - 2026-11-01
 
 ### Added
