@@ -1,0 +1,161 @@
+{
+ "schema_version": 1,
+ "design": "packages/code-intel/evals/designs/2026-11-hosted-rerank.json",
+ "questions_sha256": "7105e4ff836c206066b2060e62c82fff26d5981de17125426fb3aa7178b9419d",
+ "run": {
+  "workflow": ".github/workflows/rerank-trial.yml",
+  "id": 41280380677,
+  "attempt": 1,
+  "head_sha": "8081aab00db21dc7bfa1cf4dc84cc28958e97d23",
+  "started": "2026-11-01T06:19:48Z",
+  "finished": "2026-11-01T06:24:01Z",
+  "operator_sha256": "5b63a40d83a0ba9e7e0c3c642cabe663b18b2d67657e726ba6cd2b19ec5ae762",
+  "engine_sha256": "4dd8fac02bab29805985dfa6ac9f7bed595de11e1ad5be53141438bc383f809d"
+ },
+ "arms": {
+  "baseline": "ATTOCODE_LOCAL_ONLY=1, default deterministic ranking, one delivery per page",
+  "candidate": "systemone provider, OpenRouter decisions endpoint, typesafe/jev-1.13, timeout 1500 ms, three samples per page scored worst of three"
+ },
+ "passed": true,
+ "checks": {
+  "file_totals_no_loss": true,
+  "visible_totals_no_loss": true,
+  "scoped_no_individual_loss": true,
+  "inspection_no_net_loss": true,
+  "files_5_gain": true,
+  "no_file_loss_24": true,
+  "at_most_one_file_loss_5": true,
+  "hosted_ranker_used": true,
+  "no_config_fallback": true,
+  "fallback_rate": true,
+  "rerank_p95": true,
+  "search_p95": true,
+  "baseline_no_remote_calls": true,
+  "no_refused_calls": true,
+  "spend": true
+ },
+ "totals": {
+  "baseline": {
+   "questions": 24,
+   "files_5": 20,
+   "ranges_5": 10,
+   "visible_5": 8,
+   "files_24": 23,
+   "ranges_24": 11,
+   "visible_24": 5,
+   "files_scoped": 24,
+   "ranges_scoped": 20,
+   "visible_scoped": 14,
+   "inspection_visible": 8,
+   "p95_seconds": 0.21857894700000458
+  },
+  "candidate": {
+   "questions": 24,
+   "files_5": 24,
+   "ranges_5": 12,
+   "visible_5": 9,
+   "files_24": 24,
+   "ranges_24": 12,
+   "visible_24": 6,
+   "files_scoped": 24,
+   "ranges_scoped": 20,
+   "visible_scoped": 14,
+   "inspection_visible": 10,
+   "p95_seconds": 0.5027488919999996
+  }
+ },
+ "individual_losses": [
+  {
+   "id": "gh-cli:rerank-3",
+   "page": "24",
+   "metric": "visible",
+   "labels": [
+    0
+   ]
+  },
+  {
+   "id": "prisma:rerank-2",
+   "page": "24",
+   "metric": "visible",
+   "labels": [
+    0
+   ]
+  },
+  {
+   "id": "starship:rerank-4",
+   "page": "24",
+   "metric": "visible",
+   "labels": [
+    0
+   ]
+  }
+ ],
+ "hosted": {
+  "files_5_net_by_pack": {
+   "fastapi": 2,
+   "prisma": 1,
+   "gh-cli": 1,
+   "starship": 0
+  },
+  "file_label_losses": {
+   "5": 0,
+   "24": 0
+  },
+  "rankings": 216,
+  "attempts": 144,
+  "fallbacks": 1,
+  "fallback_reasons": {
+   "timeout": 1
+  },
+  "rerank_p95_ms": 376.82,
+  "search_p95_seconds": 0.5684450089999871,
+  "posted_calls": 165,
+  "estimated_usd": 0.12375,
+  "measured_usage_delta_usd": 0.063916188
+ },
+ "file_label_gains": [
+  {
+   "id": "fastapi:rerank-4",
+   "page": "5",
+   "file": "fastapi/exception_handlers.py"
+  },
+  {
+   "id": "fastapi:rerank-5",
+   "page": "5",
+   "file": "fastapi/routing.py"
+  },
+  {
+   "id": "prisma:rerank-2",
+   "page": "5",
+   "file": "packages/migrate/src/commands/DbSeed.ts"
+  },
+  {
+   "id": "gh-cli:rerank-2",
+   "page": "5",
+   "file": "pkg/cmd/repo/sync/sync.go"
+  },
+  {
+   "id": "gh-cli:rerank-2",
+   "page": "24",
+   "file": "pkg/cmd/repo/sync/sync.go"
+  }
+ ],
+ "independent_recompute": "The decision was recomputed from the raw rows with a separate standard-library script. It gives the same first-five (20 to 24) and top-24 (23 to 24) file totals, the same per-repository net, zero file-label losses, 1 timeout fallback in 144 attempts and rerank p95 376.82 ms.",
+ "usage": {
+  "before": {
+   "usage": 0,
+   "limit": 5,
+   "limit_remaining": 5
+  },
+  "after": {
+   "usage": 0.063916188,
+   "limit": 5,
+   "limit_remaining": 4.936083812
+  }
+ },
+ "archive": {
+  "path": "packages/code-intel/evals/results/2026-11-01-hosted-rerank.tar.gz",
+  "sha256": "75286931693aaab36845a5a62225c529ad782e0d8c6d49eeed73fd570b789362",
+  "contents": "Raw per-pack observations of both arms, key usage before and after, and decision.json."
+ }
+}
