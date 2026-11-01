@@ -472,11 +472,17 @@ class OperationGateway:
                     text = json.dumps(payload, default=str, indent=2)
                 elif name == "semantic_search":
                     mgr = service._get_semantic_search()
+                    # Once per request: the warmup wrapper can run the search twice.
+                    extra = service._rewrite_terms(args["query"])
+                    more = {"extra_terms": extra} if extra else {}
                     candidates = service._search_after_warmup(mgr, lambda: (
-                        mgr.search_candidates(args["query"], service._retrieval_depth(args["top_k"]), args["file_filter"])
+                        mgr.search_candidates(
+                            args["query"], service._retrieval_depth(args["top_k"]), args["file_filter"], **more
+                        )
                         if args.get("mode") == "keyword"
                         else mgr.search(
-                            args["query"], top_k=service._retrieval_depth(args["top_k"]), file_filter=args["file_filter"]
+                            args["query"], top_k=service._retrieval_depth(args["top_k"]),
+                            file_filter=args["file_filter"], **more,
                         )
                     ))
                     results, ranking = service._rank_search_results(

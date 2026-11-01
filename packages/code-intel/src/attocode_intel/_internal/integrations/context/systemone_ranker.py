@@ -24,6 +24,79 @@ _MAX_RESPONSE_BYTES = 64 * 1024
 _REMOTE_BLOCKED = {"1", "true", "yes", "on"}
 
 
+def check_endpoint(endpoint: str, *, allow_remote: bool, service_mode: bool, auth_env: str) -> bool:
+    """Validate an opt-in hosted endpoint; return whether it is remote.
+
+    Raises ``ValueError`` for an unsafe URL, a refused remote endpoint or an
+    auth setting that is not an environment-variable name.
+    """
+    parsed = urlsplit(endpoint)
+    try:
+        host = parsed.hostname
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError("invalid ranking endpoint") from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not host
+        or not parsed.path
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "ranking endpoint must be an absolute HTTP(S) URL without credentials or query"
+        )
+    try:
+        loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        # A hostname can resolve differently between validation and use.
+        # Local source access requires an explicit loopback IP literal.
+        loopback = False
+    if not loopback and parsed.scheme != "https":
+        raise ValueError("non-loopback ranking endpoints require HTTPS")
+    if not loopback and (
+        not allow_remote
+        or service_mode
+        or os.environ.get("ATTOCODE_LOCAL_ONLY", "").lower() in _REMOTE_BLOCKED
+    ):
+        raise ValueError("remote source ranking is not permitted")
+    if auth_env and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", auth_env) is None:
+        raise ValueError("ranking credential must be an environment-variable name")
+    return not loopback
+
+
+def post_json(
+    endpoint: str,
+    body: dict,
+    headers: dict[str, str],
+    timeout_seconds: float,
+    transport: httpx.BaseTransport | None,
+) -> object:
+    """POST JSON and decode a response of at most 64 KiB."""
+    # Do not inherit proxy settings or follow a redirect to a different
+    # origin; both could silently send source to an unapproved host.
+    with (
+        httpx.Client(
+            timeout=timeout_seconds,
+            trust_env=False,
+            follow_redirects=False,
+            transport=transport,
+        ) as client,
+        client.stream("POST", endpoint, json=body, headers=headers) as response,
+    ):
+        response.raise_for_status()
+        chunks: list[bytes] = []
+        size = 0
+        for chunk in response.iter_bytes():
+            size += len(chunk)
+            if size > _MAX_RESPONSE_BYTES:
+                raise ValueError("ranking response too large")
+            chunks.append(chunk)
+    return json.loads(b"".join(chunks))
+
+
 class SystemOneChoiceReranker:
     """One ``choice`` request for a bounded page of distinct files.
 
@@ -46,40 +119,9 @@ class SystemOneChoiceReranker:
         max_excerpt_chars: int = 1350,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        parsed = urlsplit(endpoint)
-        try:
-            host = parsed.hostname
-            _ = parsed.port
-        except ValueError as exc:
-            raise ValueError("invalid ranking endpoint") from exc
-        if (
-            parsed.scheme not in {"http", "https"}
-            or not host
-            or not parsed.path
-            or parsed.username
-            or parsed.password
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise ValueError(
-                "ranking endpoint must be an absolute HTTP(S) URL without credentials or query"
-            )
-        try:
-            loopback = ipaddress.ip_address(host).is_loopback
-        except ValueError:
-            # A hostname can resolve differently between validation and use.
-            # Local source access requires an explicit loopback IP literal.
-            loopback = False
-        if not loopback and parsed.scheme != "https":
-            raise ValueError("non-loopback ranking endpoints require HTTPS")
-        if not loopback and (
-            not allow_remote
-            or service_mode
-            or os.environ.get("ATTOCODE_LOCAL_ONLY", "").lower() in _REMOTE_BLOCKED
-        ):
-            raise ValueError("remote source ranking is not permitted")
-        if auth_env and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", auth_env) is None:
-            raise ValueError("ranking credential must be an environment-variable name")
+        loopback = not check_endpoint(
+            endpoint, allow_remote=allow_remote, service_mode=service_mode, auth_env=auth_env
+        )
         if timeout_seconds is None:
             timeout_seconds = 5.0 if loopback else 0.8
         if not 1 <= max_candidates <= 64 or not 0 < timeout_seconds <= 30:
@@ -106,26 +148,7 @@ class SystemOneChoiceReranker:
         return True
 
     def _post(self, body: dict, headers: dict[str, str]) -> dict:
-        # Do not inherit proxy settings or follow a redirect to a different
-        # origin; both could silently send source to an unapproved host.
-        with (
-            httpx.Client(
-                timeout=self.timeout_seconds,
-                trust_env=False,
-                follow_redirects=False,
-                transport=self._transport,
-            ) as client,
-            client.stream("POST", self.endpoint, json=body, headers=headers) as response,
-        ):
-            response.raise_for_status()
-            chunks: list[bytes] = []
-            size = 0
-            for chunk in response.iter_bytes():
-                size += len(chunk)
-                if size > _MAX_RESPONSE_BYTES:
-                    raise ValueError("ranking response too large")
-                chunks.append(chunk)
-        result = json.loads(b"".join(chunks))
+        result = post_json(self.endpoint, body, headers, self.timeout_seconds, self._transport)
         if not isinstance(result, dict):
             raise ValueError("invalid ranking response")
         # Workers AI wraps every answer as {"result": {...}, "success": true, "errors": []}.
