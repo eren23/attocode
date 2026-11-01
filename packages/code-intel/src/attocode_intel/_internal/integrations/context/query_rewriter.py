@@ -90,9 +90,11 @@ class QueryRewriter:
         content = content.strip()
         fenced = _FENCE.match(content)
         words = json.loads(fenced.group(1) if fenced else content)
-        if (not isinstance(words, list) or len(words) > _MAX_WORDS
-                or not all(isinstance(word, str) and 0 < len(word) <= _MAX_WORD_CHARS
-                           for word in words)):
+        if not isinstance(words, list):
+            raise ValueError("invalid rewrite words")
+        # The model sometimes returns more names than asked; keep the first ones.
+        words = words[:_MAX_WORDS]
+        if not all(isinstance(word, str) and 0 < len(word) <= _MAX_WORD_CHARS for word in words):
             raise ValueError("invalid rewrite words")
         return words
 
