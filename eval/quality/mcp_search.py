@@ -61,12 +61,14 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="",
     """Execute the public gateway, recording diagnostics without replacing it."""
     before_hydration = []
     generation = []
+    rankings = []
     rank = CodeIntelService._rank_search_results
 
     def record(service, *args, **kwargs):
         results, ranking = rank(service, *args, **kwargs)
         before_hydration.extend({"file_path": r.file_path, "name": r.name, "chunk_type": r.chunk_type,
                                  "line": r.start_line, "end_line": r.end_line} for r in results)
+        rankings.append(json.loads(json.dumps(ranking, default=str)))
         return results, ranking
 
     request = {"query": query, "top_k": top_k, "max_tokens": budget, "mode": mode, "file_filter": file_filter}
@@ -100,7 +102,7 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="",
         raise RuntimeError(f"Incomplete search index: {index}")
     # Store the entire delivered envelope: trimming may remove metadata too.
     result = {"request": request, "response": payload, "seconds": seconds,
-              "pre_hydration_diagnostic": before_hydration}
+              "pre_hydration_diagnostic": before_hydration, "ranking_diagnostic": rankings}
     if capture_generation:
         result["generation_diagnostic"] = generation
     return result
@@ -126,6 +128,12 @@ def inspect_hits(inspection, evidence):
     return [i for i, e in enumerate(evidence) if definition.get("file_path") == e["file"] and any(
         e["quote"] in x.get("text", "") and 0 < x.get("start_line", 0) <= e["line"] <= x.get("end_line", 0)
         for x in excerpts)]
+
+
+def worst_of(samples):
+    """Labels every sample delivered; a nondeterministic ranker gets no lucky draw."""
+    return {metric: sorted(set.intersection(*(set(s["hits"][metric]) for s in samples)))
+            for metric in samples[0]["hits"]}
 
 
 def summarize(rows):
@@ -186,8 +194,32 @@ async def run(args):
             lines = content.decode().splitlines()
             if hashlib.sha256(content).hexdigest() != e["source_sha256"] or e["quote"] not in lines[e["line"] - 1]:
                 raise ValueError("Source judgment changed")
+    calls = {"posted": 0, "refused": 0}
+    stack = ExitStack()
+    if args.max_rerank_calls is not None:
+        from attocode_intel._internal.integrations.context.systemone_ranker import (
+            SystemOneChoiceReranker,
+        )
+
+        post = SystemOneChoiceReranker._post
+
+        def counted_post(ranker, body, headers):
+            # Refuse before the request leaves the machine; the run then aborts.
+            if calls["posted"] >= args.max_rerank_calls:
+                calls["refused"] += 1
+                raise RuntimeError("Rerank call limit reached")
+            calls["posted"] += 1
+            return post(ranker, body, headers)
+
+        stack.enter_context(patch.object(SystemOneChoiceReranker, "_post", counted_post))
+
+    def check_calls():
+        if calls["refused"]:
+            raise RuntimeError(f"Rerank call limit {args.max_rerank_calls} reached")
+
     gateway = OperationGateway(str(args.source), profile="daily", watch=False)
     rows = []
+    preflight = []
     try:
         started = time.perf_counter()
         # Public warmup first, then wait on the gateway's owned worker.
@@ -195,9 +227,22 @@ async def run(args):
         key = next(iter(gateway._stores))
         mgr = gateway._stores[key]["service"]._get_semantic_search()
         loop = asyncio.get_running_loop()
-        if not await loop.run_in_executor(gateway._workers[key], lambda: mgr.wait_for_body_index(timeout=90)):
+        if not await loop.run_in_executor(gateway._workers[key],
+                                          lambda: mgr.wait_for_body_index(timeout=args.warmup_timeout)):
             raise TimeoutError("Index warmup incomplete")
         setup_seconds = time.perf_counter() - started
+        check_calls()
+        if args.require_rerank:
+            # A non-frozen query proves the hosted path before any frozen question runs.
+            for _ in range(3):
+                result = await observe(gateway, "load settings from a configuration file", top_k=5,
+                                       budget=design["budget"])
+                preflight.append(result["ranking_diagnostic"])
+                check_calls()
+                if any(r.get("method") == "systemone_choice" for r in result["ranking_diagnostic"]):
+                    break
+            else:
+                raise RuntimeError(f"Hosted rerank preflight failed: {preflight}")
         for q in group["queries"]:
             pages = {}
             for page in ("5", "24", "scoped"):
@@ -207,23 +252,34 @@ async def run(args):
                                            budget=design["budget"], mode=q.get("mode", "auto"),
                                            file_filter=q["evidence"][0]["file"] if page == "scoped" else "",
                                            capture_generation=args.capture_generation)
-                    samples.append(result["seconds"])
-                    if page in pages and pages[page]["response"]["data"]["results"] != result["response"]["data"]["results"]:
+                    check_calls()
+                    result["hits"] = evidence_hits(result["response"]["data"]["results"], q["evidence"])
+                    if (samples and not args.samples_may_differ
+                            and samples[0]["response"]["data"]["results"] != result["response"]["data"]["results"]):
                         raise RuntimeError("Unstable warmed delivery")
-                    pages[page] = result
-                result["seconds"] = statistics.median(samples)
-                result["samples_seconds"] = samples
-                result["hits"] = evidence_hits(result["response"]["data"]["results"], q["evidence"])
+                    samples.append(result)
+                pages[page] = result
+                result["seconds"] = statistics.median(s["seconds"] for s in samples)
+                result["samples_seconds"] = [s["seconds"] for s in samples]
+                if args.samples_may_differ:
+                    result["samples"] = [{"seconds": s["seconds"], "hits": s["hits"],
+                                          "ranking_diagnostic": s["ranking_diagnostic"],
+                                          "results": s["response"]["data"]["results"]} for s in samples]
+                    result["hits"] = worst_of(samples)
             inspection = await inspect_first_named(gateway, pages["5"]["response"]["data"]["results"],
                                                    q["query"], design["budget"])
             rows.append({**q, "pack": args.pack, "pages": pages, "inspection": inspection,
                          "inspection_hits": inspect_hits(inspection, q["evidence"])})
+        check_calls()
     finally:
         await gateway.close()
+        stack.close()
     if identity != fingerprint([REPO / "packages/code-intel/src", REPO / "eval/quality"]) or engine != engine_identity():
         raise RuntimeError("Evaluator source changed")
     args.output.write_text(json.dumps({"arm": args.arm, "pack": args.pack, "commit": group["commit"],
                                       "setup_seconds": setup_seconds, "queries": rows,
+                                      "rerank_calls": calls, "preflight": preflight,
+                                      "samples_may_differ": args.samples_may_differ,
                                       "questions_sha256": hashlib.sha256(raw).hexdigest(),
                                       "operator_sha256": identity, "engine_sha256": engine}, indent=2) + "\n")
 
@@ -236,6 +292,13 @@ def main():
     parser.add_argument("--arm", required=True)
     parser.add_argument("--capture-generation", action="store_true",
                         help="Record pre-penalty keyword/body/file candidates without changing delivery")
+    parser.add_argument("--samples-may-differ", action="store_true",
+                        help="Keep differing samples and score labels every sample delivered")
+    parser.add_argument("--max-rerank-calls", type=int,
+                        help="Abort before the request that would exceed this many hosted rerank calls")
+    parser.add_argument("--require-rerank", action="store_true",
+                        help="Abort unless a non-frozen query reaches the hosted ranker first")
+    parser.add_argument("--warmup-timeout", type=float, default=90)
     args = parser.parse_args()
     asyncio.run(run(args))
 

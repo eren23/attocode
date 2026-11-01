@@ -96,10 +96,11 @@ jobs:
           python-version: '3.12'
       # published-verification already checks the MCP server from PyPI. This step
       # checks only that the command the registry lists resolves to this version.
+      # The restored uv cache can hold the package index from before the upload.
       - name: Run the listed uvx command
         run: |
           release_version="$(python -c 'import tomllib; print(tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"])')"
-          test "$(uvx --from "attocode-code-intel==$release_version" attocode-code-intel --version)" = "attocode-code-intel $release_version"
+          test "$(uvx --refresh-package attocode-code-intel --from "attocode-code-intel==$release_version" attocode-code-intel --version)" = "attocode-code-intel $release_version"
       - name: Publish server.json to the MCP Registry
         run: |
           archive=mcp-publisher_linux_amd64.tar.gz
