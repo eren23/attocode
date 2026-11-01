@@ -43,18 +43,21 @@ def consent(tmp_path, monkeypatch):
     return tmp_path
 
 
+class Calls(list):
+    fail = False
+
+
 @pytest.fixture
 def calls(monkeypatch):
-    seen = []
+    seen = Calls()
 
     def post(self, body):
         seen.append(body)
-        if getattr(post, "fail", False):
+        if seen.fail:
             raise httpx.ConnectError("down")
         return reply(body["input"])
 
     monkeypatch.setattr(OpenRouterEmbeddingProvider, "_post", post)
-    seen.post = post
     return seen
 
 
@@ -196,7 +199,7 @@ def test_only_an_explicit_index_spends_and_a_dense_only_file_enters(consent, cal
         assert len(calls) == indexed + 1 and calls[-1]["input_type"] == "search_query"
         assert manager._dense_last["status"] == "ok" and manager._dense_last["files"] == 1
 
-        calls.post.fail = True
+        calls.fail = True
         manager._provider.sleep = lambda _: None
         assert files(manager.search("striped horse", top_k=24)) == ["stable.py"]
         assert manager._dense_last["status"] == "failed"
