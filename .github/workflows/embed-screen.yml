@@ -1,0 +1,92 @@
+name: Hosted embedding screen
+# One frozen screen (packages/code-intel/evals/designs/2026-11-hosted-embed-screen.json).
+# Dispatch only, so the secret never reaches pull requests from forks.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embed-screen
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    # Holds OPENROUTER_API_KEY. The harness stops each model at its spend limit in the design.
+    environment: rerank-trial
+    env:
+      DESIGN: packages/code-intel/evals/designs/2026-11-hosted-embed-screen.json
+      DESIGN_SHA256: 03144ca0ae0c67ae34ba178730d316bc8c4410dddff30cdcd99c4be2e94622ea
+    steps:
+      # The runner context is not available in job-level env.
+      - run: echo "WORK=$RUNNER_TEMP/embed-screen" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - name: Check the frozen design
+        run: echo "$DESIGN_SHA256  $DESIGN" | sha256sum -c -
+      - name: Free disk space for the snapshots
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/hostedtoolcache/CodeQL
+          df -h "$RUNNER_TEMP"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Install maintained test dependencies
+        timeout-minutes: 5
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Prepare the tasks, snapshots and function units
+        id: prepare
+        timeout-minutes: 40
+        run: |
+          set -o pipefail
+          mkdir -p "$WORK"
+          uv run --no-sync --with pyarrow==22.0.0 python -m eval.matrix.embed_screen prepare \
+            --design "$DESIGN" --work "$WORK" 2>&1 | tee "$WORK/prepare.log"
+      - name: Key usage before the hosted calls
+        id: usage
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          curl -fsS --max-time 30 -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/key \
+            | jq '.data | {usage, limit, limit_remaining}' > "$WORK/usage-before.json"
+          jq -e '.usage != null' "$WORK/usage-before.json"
+      - name: voyage-code-4
+        id: voyage
+        timeout-minutes: 70
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -o pipefail
+          uv run --no-sync python -m eval.matrix.embed_screen run --design "$DESIGN" --work "$WORK" \
+            --model voyageai/voyage-code-4 2>&1 | tee "$WORK/run-voyage.log"
+      - name: codestral-embed
+        if: ${{ !cancelled() && steps.usage.outcome == 'success' }}
+        timeout-minutes: 70
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -o pipefail
+          uv run --no-sync python -m eval.matrix.embed_screen run --design "$DESIGN" --work "$WORK" \
+            --model mistralai/codestral-embed-2505 2>&1 | tee "$WORK/run-codestral.log"
+      - name: Key usage after the hosted calls (after the settlement window)
+        if: ${{ !cancelled() && steps.usage.outcome == 'success' }}
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          sleep 60
+          curl -fsS --max-time 30 -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/key \
+            | jq '.data | {usage, limit, limit_remaining}' > "$WORK/usage-after.json"
+      - name: Decide on the frozen gates
+        if: ${{ !cancelled() && steps.usage.outcome == 'success' }}
+        run: uv run --no-sync python -m eval.matrix.embed_screen decide --design "$DESIGN" --work "$WORK"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: embed-screen-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/embed-screen/*.json
+            ${{ runner.temp }}/embed-screen/*.jsonl
+            ${{ runner.temp }}/embed-screen/*.log
+          if-no-files-found: warn
