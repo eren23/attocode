@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "trial": "hosted embedding screen, stage 1 of 2 (function-body units, OpenRouter embeddings)",
+  "split": "public Loc-Bench sample (screen, not validation)",
+  "passed": true,
+  "verdict": "both models pass the frozen gates; winner voyageai/voyage-code-4; stage 2 may start",
+  "design": {
+    "path": "packages/code-intel/evals/designs/2026-11-hosted-embed-screen.json",
+    "sha256": "03144ca0ae0c67ae34ba178730d316bc8c4410dddff30cdcd99c4be2e94622ea",
+    "tasks": 50,
+    "seed": 20261101,
+    "population": 560
+  },
+  "runs": [
+    {
+      "id": 41336572221,
+      "head": "9568beae8c23be2be6ba8309c4cf349e99053db2",
+      "outcome": "stopped before scored work",
+      "stop": "key usage check got 401: the environment secret was empty",
+      "measured_usage_delta_usd": 0,
+      "used_for_decision": false
+    },
+    {
+      "id": 41337571267,
+      "head": "9568beae8c23be2be6ba8309c4cf349e99053db2",
+      "outcome": "complete",
+      "used_for_decision": true
+    }
+  ],
+  "harness_fault": {
+    "what": "run_model built each row id before it rebound tid (tuple assignment), so row i of each rows file carries the id of task i-1",
+    "effect": "per-task pairing in decision.json is wrong (wins, losses, sign_p); totals and net are correct",
+    "harness_decision": {
+      "mistralai/codestral-embed-2505": {
+        "wins": 18,
+        "losses": 6,
+        "sign_p": 0.011328,
+        "verdict": "pass"
+      },
+      "voyageai/voyage-code-4": {
+        "wins": 18,
+        "losses": 6,
+        "sign_p": 0.011328,
+        "verdict": "pass"
+      }
+    },
+    "correction": "recompute.py relabels rows by position (design order) and asserts the rrf and acc fields against each relabeled task",
+    "fixed_in": "eval/matrix/embed_screen.py in this change, with a test assertion on the row ids"
+  },
+  "reference_hits5": {
+    "product": 28,
+    "fn_dense": 41,
+    "rrf_product_fn_dense": 39
+  },
+  "models": {
+    "voyageai/voyage-code-4": {
+      "ok": 50,
+      "incomplete": 0,
+      "hits5": {
+        "rrf": 40,
+        "model": 45
+      },
+      "product_hits5": 28,
+      "net": 12,
+      "wins": 13,
+      "losses": 1,
+      "sign_p": 0.000916,
+      "spent_usd": 4.097093,
+      "verdict": "pass",
+      "not_gated": {
+        "model_vs_product": [
+          18,
+          1
+        ],
+        "model_vs_fn_dense": [
+          4,
+          0
+        ],
+        "rrf_vs_fn_dense": [
+          3,
+          4
+        ],
+        "model_vs_rrf": [
+          5,
+          0
+        ]
+      },
+      "dims": 1024,
+      "tokens": 34142439,
+      "seconds": 355.5,
+      "requests": 6155,
+      "retries": 0,
+      "splits": 0,
+      "refused_inputs": 0,
+      "unique_units": 191334,
+      "variant": {
+        "input_type": true,
+        "deny_data_collection": true
+      }
+    },
+    "mistralai/codestral-embed-2505": {
+      "ok": 50,
+      "incomplete": 0,
+      "hits5": {
+        "rrf": 40,
+        "model": 44
+      },
+      "product_hits5": 28,
+      "net": 12,
+      "wins": 13,
+      "losses": 1,
+      "sign_p": 0.000916,
+      "spent_usd": 5.512445,
+      "verdict": "pass",
+      "not_gated": {
+        "model_vs_product": [
+          17,
+          1
+        ],
+        "model_vs_fn_dense": [
+          3,
+          0
+        ],
+        "rrf_vs_fn_dense": [
+          3,
+          4
+        ],
+        "model_vs_rrf": [
+          4,
+          0
+        ]
+      },
+      "dims": 1536,
+      "tokens": 36749636,
+      "seconds": 966.4,
+      "requests": 6155,
+      "retries": 0,
+      "splits": 0,
+      "refused_inputs": 0,
+      "unique_units": 191334,
+      "variant": {
+        "input_type": true,
+        "deny_data_collection": true
+      }
+    }
+  },
+  "not_gated_pairs": "[a hits and b misses, b hits and a misses] at Acc@5",
+  "winner": "voyageai/voyage-code-4",
+  "models_agreement": {
+    "model_hits_both": 44,
+    "model_hits_either": 45
+  },
+  "key_usage_usd": {
+    "before": 0,
+    "after": 9.60953808,
+    "limit": 20
+  },
+  "archive": {
+    "path": "packages/code-intel/evals/results/2026-11-hosted-embed-screen.tar.gz",
+    "sha256": "e17b1fa435da6a55ea5ab72ac345f4193ea5868893132dd6edb09f35b6819b47",
+    "bytes": 126792,
+    "members": 18
+  },
+  "limits": [
+    "Loc-Bench problem statements and repositories are public; a hosted model can have seen them",
+    "50 tasks, Python only, Acc@5 on gold files; not agent outcomes",
+    "units are top-level functions and class methods outside test paths; the product list is unchanged",
+    "spend is the OpenRouter key usage counter, not an invoice"
+  ]
+}

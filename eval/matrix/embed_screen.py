@@ -351,7 +351,8 @@ def run_model(design: dict, work: Path, model_id: str, embedder: Embedder | None
 
     rows = []
     for task in design["tasks"]:
-        tid, row = task["id"], {"model": model_id, "id": tid}
+        tid = task["id"]
+        row = {"model": model_id, "id": tid}
         if tid in unavailable:
             rows.append({**row, "status": "unavailable", "reason": unavailable[tid]})
             continue
