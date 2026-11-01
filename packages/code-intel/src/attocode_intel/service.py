@@ -60,6 +60,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Settings of the frozen hosted-rerank trial (evals/results/2026-11-01-hosted-rerank.md).
+_OPENROUTER_PRESET = {
+    "endpoint": "https://openrouter.ai/api/alpha/decisions",
+    "model": "typesafe/jev-1.13",
+    "auth_env": "OPENROUTER_API_KEY",
+    "timeout_ms": 1500,
+}
+
 # Registry of service instances by project_dir
 _instances: dict[str, CodeIntelService] = {}
 _instances_lock = threading.Lock()
@@ -91,6 +99,11 @@ class CodeIntelService:
         self._ranking_provider = (self._config.ranking_provider
                                   if config is not None else
                                   os.environ.get("ATTOCODE_INTEL_RANKING_PROVIDER", "")) or "auto"
+        # The "openrouter" preset is SystemOne with the trial-tested defaults. Explicit
+        # settings still win, and the remote opt-in stays scoped to one workspace.
+        preset = _OPENROUTER_PRESET if self._ranking_provider == "openrouter" else {}
+        if preset:
+            self._ranking_provider = "systemone"
         self._systemone_status = "not_configured"
         self._memory_store: MemoryStore | None = None
         self._temporal_analyzer: TemporalCouplingAnalyzer | None = None
@@ -119,11 +132,15 @@ class CodeIntelService:
                 remote_workspace = (self._config.ranking_remote_workspace or
                                     environment.get("ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE", ""))
                 timeout_ms = (self._config.ranking_timeout_ms if config is not None else
-                              int(environment.get("ATTOCODE_INTEL_RANKING_TIMEOUT_MS", "0")))
+                              int(environment.get("ATTOCODE_INTEL_RANKING_TIMEOUT_MS", "0"))
+                              ) or preset.get("timeout_ms", 0)
                 self._systemone_ranker = SystemOneChoiceReranker(
-                    self._config.ranking_endpoint or environment.get("ATTOCODE_INTEL_RANKING_ENDPOINT", ""),
-                    model=self._config.ranking_model or environment.get("ATTOCODE_INTEL_RANKING_MODEL", ""),
-                    auth_env=self._config.ranking_auth_env or environment.get("ATTOCODE_INTEL_RANKING_AUTH_ENV", ""),
+                    self._config.ranking_endpoint or environment.get("ATTOCODE_INTEL_RANKING_ENDPOINT", "")
+                    or preset.get("endpoint", ""),
+                    model=self._config.ranking_model or environment.get("ATTOCODE_INTEL_RANKING_MODEL", "")
+                    or preset.get("model", ""),
+                    auth_env=self._config.ranking_auth_env or environment.get("ATTOCODE_INTEL_RANKING_AUTH_ENV", "")
+                    or preset.get("auth_env", ""),
                     allow_remote=(remote_opt_in and os.path.isabs(remote_workspace) and
                                   os.path.realpath(remote_workspace) == self._project_dir),
                     service_mode=self._config.is_service_mode,
