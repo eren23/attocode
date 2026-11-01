@@ -36,7 +36,7 @@ def _rewriter(respond, **kwargs) -> QueryRewriter:
     ('[]', MODEL + "-20261015", ("ok", [])),
     ("accepts, negotiate", MODEL, ("invalid_response", [])),
     ('["accepts"]', "anthropic/other", ("invalid_response", [])),
-    (json.dumps([f"w{i}" for i in range(13)]), MODEL, ("invalid_response", [])),
+    (json.dumps([f"w{i}" for i in range(14)]), MODEL, ("ok", [f"w{i}" for i in range(12)])),
     (json.dumps(["x" * 81]), MODEL, ("invalid_response", [])),
     ('[1, "accepts"]', MODEL, ("invalid_response", [])),
     ('{"words": ["accepts"]}', MODEL, ("invalid_response", [])),
