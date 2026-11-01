@@ -165,6 +165,7 @@ def test_run_and_decide(tmp_path, monkeypatch):
         json.loads(line)
         for line in (tmp_path / f"rows-{es.slug(MODEL)}.jsonl").read_text().splitlines()
     ]
+    assert [r["id"] for r in rows] == ["t1", "t2"]
     assert rows[0]["files"][0] == "b.py" and rows[0]["acc5_rrf"] and rows[1]["acc5_rrf"]
 
     decision = es.decide(d, tmp_path)["models"][MODEL]
