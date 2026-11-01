@@ -21,8 +21,9 @@ jobs:
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
       DESIGN: packages/code-intel/evals/designs/2026-11-hosted-rerank.json
-      TRIAL_ROOT: ${{ runner.temp }}/rerank-trial
     steps:
+      # The runner context is not available in job-level env.
+      - run: echo "TRIAL_ROOT=$RUNNER_TEMP/rerank-trial" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
         with:
