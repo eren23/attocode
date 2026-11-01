@@ -1,0 +1,404 @@
+{
+ "schema_version": 1,
+ "frozen_at": "2026-10-31T22:46:23.376735+00:00",
+ "split": "validation",
+ "baseline_commit": "57fda8149e893040bc142326ae55a1d00b6e409b",
+ "budget": 2000,
+ "scope": "Short agent-style questions on four public pinned repositories (Python, TypeScript, Go, Rust). The repositories were seen in earlier workflow packs. The questions are new; some label files also label different questions in earlier sets (label_files_in_earlier_sets). Neither arm was tuned on them. Authored, non-exhaustive labels, not independent users or agent outcomes. Frozen before any hosted rerank call; one dispatch, no tuning, consumed after the run.",
+ "acceptance": {
+  "arms": "Baseline: ATTOCODE_LOCAL_ONLY=1, default deterministic ranking, delivery must be stable. Candidate: provider systemone, endpoint https://openrouter.ai/api/alpha/decisions, model typesafe/jev-1.13, timeout 1500 ms, remote opt-in for the pinned source only.",
+  "samples": "Three samples per page. A candidate label counts only if all three samples deliver it (worst of 3).",
+  "gain": "First-five judged files: net gain >= 3 overall, with a positive net in >= 2 repositories.",
+  "losses": "Zero individual file losses at 24, at most one at five; no file or visible-quote total loss on any page; no scoped individual loss; no net inspection loss.",
+  "fallback": "At most 5% of rerank attempts (responses with rerank_elapsed_ms) fall back. Any configuration fallback (not_configured, invalid_config, remote_disabled, missing_credential) fails the trial.",
+  "latency": "Rerank p95 <= 1.5 s; search p95 <= 2.0 s over every page-5 and page-24 sample.",
+  "cost": "Estimated spend (rerank calls x $0.00075) and measured key usage delta both <= $5. The OpenRouter key has a $5 credit limit.",
+  "limitation": "Rerank stays opt-in and off by default whatever the result. A pass recommends the hosted opt-in in docs; a fail keeps it experimental."
+ },
+ "label_files_in_earlier_sets": [
+  "fastapi/routing.py",
+  "fastapi/security/http.py",
+  "packages/client-engine-runtime/src/transaction-manager/transaction-manager.ts",
+  "pkg/cmd/root/alias.go",
+  "pkg/cmd/secret/set/set.go",
+  "src/modules/aws.rs",
+  "src/modules/directory.rs",
+  "src/modules/kubernetes.rs"
+ ],
+ "repositories": [
+  {
+   "pack": "fastapi",
+   "commit": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+   "queries": [
+    {
+     "id": "fastapi:rerank-1",
+     "category": "behavior",
+     "query": "Read the bytes of an uploaded file without blocking the event loop",
+     "evidence": [
+      {
+       "file": "fastapi/datastructures.py",
+       "quote": "async def read(",
+       "line": 86,
+       "source_sha256": "3c7fc72c9aa064f8efe7694e98cd12f97fe29dded2fa4396129475935033660f",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "fastapi:rerank-2",
+     "category": "behavior",
+     "query": "Serve the interactive Swagger UI page",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/docs.py",
+       "quote": "def get_swagger_ui_html(",
+       "line": 40,
+       "source_sha256": "3dc8c7d129feca9f7b3b47b15e29dc1bc7a9b18ec04f2242e7aeb66cad4345aa",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "fastapi:rerank-3",
+     "category": "behavior",
+     "query": "Run a synchronous context manager in a worker thread",
+     "evidence": [
+      {
+       "file": "fastapi/concurrency.py",
+       "quote": "async def contextmanager_in_threadpool(",
+       "line": 18,
+       "source_sha256": "c4718310e40003a72f1440d7e3aa2adebdadd59778b15beb79a4607481388ee3",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "fastapi:rerank-4",
+     "category": "behavior",
+     "query": "Return a 422 response for invalid request data",
+     "evidence": [
+      {
+       "file": "fastapi/exception_handlers.py",
+       "quote": "async def request_validation_exception_handler(",
+       "line": 20,
+       "source_sha256": "615713f19cb4db555861e79c81dca1e581148c420729c2eca5b9127f839f6c92",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "fastapi:rerank-5",
+     "category": "behavior",
+     "query": "Stream server-sent events from an endpoint",
+     "evidence": [
+      {
+       "file": "fastapi/sse.py",
+       "quote": "class EventSourceResponse(StreamingResponse):",
+       "line": 20,
+       "source_sha256": "557254d11b6f5b6e890ca69e430cf7c14036af08f9d15a2cea5d55274e008a13",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      },
+      {
+       "file": "fastapi/routing.py",
+       "quote": "return format_sse_event(",
+       "line": 511,
+       "source_sha256": "07c7a5bdf12fa7b0c8cdca6f72d532eebb12d0554060c7827af7b692f4fdb827",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "fastapi:rerank-6",
+     "category": "behavior",
+     "query": "Decode the username and password from basic auth",
+     "evidence": [
+      {
+       "file": "fastapi/security/http.py",
+       "quote": "data = b64decode(param).decode(\"ascii\")",
+       "line": 213,
+       "source_sha256": "1e8f6a16e45f15e2c9a23f745185728de288cc67d8d39261505cbb21f679f69c",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "prisma",
+   "commit": "33667c373c0ae84ad37c7aed2497b99452da589c",
+   "queries": [
+    {
+     "id": "prisma:rerank-1",
+     "category": "behavior",
+     "query": "Stop an AI coding agent from running a destructive command without user consent",
+     "evidence": [
+      {
+       "file": "packages/migrate/src/utils/ai-safety.ts",
+       "quote": "export function aiAgentConfirmationCheckpoint(): void {",
+       "line": 35,
+       "source_sha256": "7da67b6e701f80adf49a28f7095a416881828ce8bea9a22e6e8c548b13ebd282",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "prisma:rerank-2",
+     "category": "behavior",
+     "query": "Run the configured database seed command",
+     "evidence": [
+      {
+       "file": "packages/migrate/src/utils/seed.ts",
+       "quote": "export async function executeSeedCommand({",
+       "line": 7,
+       "source_sha256": "0b2df56f0b97264a7903e3303ef0e74f42a215bb615ef6b92e2fa95834263f50",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      },
+      {
+       "file": "packages/migrate/src/commands/DbSeed.ts",
+       "quote": "export class DbSeed implements Command {",
+       "line": 8,
+       "source_sha256": "10d5ca2a80bcf128f2b86d85f1cbc01808d431c59836f8dbf62484edbba535ca",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "prisma:rerank-3",
+     "category": "behavior",
+     "query": "Roll back an interactive transaction that runs past its timeout",
+     "evidence": [
+      {
+       "file": "packages/client-engine-runtime/src/transaction-manager/transaction-manager.ts",
+       "quote": "#startTransactionTimeout(transactionId: string, timeout: number | undefined)",
+       "line": 356,
+       "source_sha256": "44f12254b39e159f8088365f81a4c236a764aae0695099f4c845cd742fb88218",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "prisma:rerank-4",
+     "category": "behavior",
+     "query": "Detect whether the CLI runs in a continuous integration environment",
+     "evidence": [
+      {
+       "file": "packages/internals/src/utils/isCi.ts",
+       "quote": "export const isCi = (): boolean => {",
+       "line": 2,
+       "source_sha256": "af6a79e45d5f14d6860a984c138ce46b6b123c5d0a85d4c7eb1cf845326fa17d",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "prisma:rerank-5",
+     "category": "behavior",
+     "query": "Resolve a generator value from an env() reference",
+     "evidence": [
+      {
+       "file": "packages/internals/src/utils/parseEnvValue.ts",
+       "quote": "export function parseEnvValue(object: EnvValue) {",
+       "line": 11,
+       "source_sha256": "f9dbf3870c4ec3466ae377bb0a68d6b3849f07985473c80fd0db0a017ab54294",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "prisma:rerank-6",
+     "category": "behavior",
+     "query": "Pretty-print schema files with consistent indentation",
+     "evidence": [
+      {
+       "file": "packages/internals/src/engine-commands/formatSchema.ts",
+       "quote": "export async function formatSchema(",
+       "line": 13,
+       "source_sha256": "61bea52d16f09227b2b9e0fd860789dccfb6363897287a43c2b6b4e6c71aadcc",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "gh-cli",
+   "commit": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+   "queries": [
+    {
+     "id": "gh-cli:rerank-1",
+     "category": "behavior",
+     "query": "Encrypt a secret value with the repository public key",
+     "evidence": [
+      {
+       "file": "pkg/cmd/secret/set/set.go",
+       "quote": "box.SealAnonymous(nil, secret[:], &peersPubKey, rand)",
+       "line": 347,
+       "source_sha256": "4829e49b2bf1935385d58bb75138bf2370f16d4d6c653a6f7b518d2b3ce548f6",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "gh-cli:rerank-2",
+     "category": "behavior",
+     "query": "Update a fork's branch from its upstream repository",
+     "evidence": [
+      {
+       "file": "pkg/cmd/repo/sync/sync.go",
+       "quote": "func executeRemoteRepoSync(",
+       "line": 281,
+       "source_sha256": "b5dfc84e9d4deeeda4e5d50e0f67f62fe6fc12c10f281852b17b26de78dc1522",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "gh-cli:rerank-3",
+     "category": "behavior",
+     "query": "Download artifacts produced by a workflow run",
+     "evidence": [
+      {
+       "file": "pkg/cmd/run/download/download.go",
+       "quote": "func runDownload(opts *DownloadOptions) error {",
+       "line": 108,
+       "source_sha256": "2885a1b051217c1bc0f575bad9814f64385f8741dc7a215629ffc10605481830",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "gh-cli:rerank-4",
+     "category": "behavior",
+     "query": "Show the log output of failed workflow steps",
+     "evidence": [
+      {
+       "file": "pkg/cmd/run/view/logs.go",
+       "quote": "func populateLogSegments(",
+       "line": 89,
+       "source_sha256": "2e9fcd2a8f3024ef5926b8db74326d55c4866e2bc31b0da030879f8737a7be59",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "gh-cli:rerank-5",
+     "category": "behavior",
+     "query": "Upload a public SSH key to the user account",
+     "evidence": [
+      {
+       "file": "pkg/cmd/ssh-key/add/http.go",
+       "quote": "func SSHKeyUpload(",
+       "line": 17,
+       "source_sha256": "3a844ec74a1d7f826aeb0515a88665f6e31435bdeb2d48e967c4d6a16c5f8be8",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "gh-cli:rerank-6",
+     "category": "behavior",
+     "query": "Expand a command alias with positional arguments",
+     "evidence": [
+      {
+       "file": "pkg/cmd/root/alias.go",
+       "quote": "func expandAlias(expansion string, args []string) ([]string, error) {",
+       "line": 72,
+       "source_sha256": "2ca1cff6ddf14a24ec69ed3d6430c801d25aad743cee68b9675832f432453007",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "starship",
+   "commit": "6d0a1263fcc74381791805cee57fc466f6e6359c",
+   "queries": [
+    {
+     "id": "starship:rerank-1",
+     "category": "behavior",
+     "query": "Abbreviate parent folders of the working directory to a few characters",
+     "evidence": [
+      {
+       "file": "src/modules/directory.rs",
+       "quote": "fn to_fish_style(",
+       "line": 344,
+       "source_sha256": "53d3f1645e7de7f38466e90b4e570b1ec2870cdf8a8b4ca70c016f6d79977401",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "starship:rerank-2",
+     "category": "behavior",
+     "query": "Read the active context name from the kubeconfig",
+     "evidence": [
+      {
+       "file": "src/modules/kubernetes.rs",
+       "quote": "fn get_current_kube_context_name<T: DataValue>(document: &T) -> Option<&str> {",
+       "line": 20,
+       "source_sha256": "3c8896c60348bb2c28e828abcdce9948319ce29886a7b8066f26d7a52ee039b0",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "starship:rerank-3",
+     "category": "behavior",
+     "query": "Show how long the AWS session credentials remain valid",
+     "evidence": [
+      {
+       "file": "src/modules/aws.rs",
+       "quote": "fn get_credentials_duration(",
+       "line": 136,
+       "source_sha256": "6c58290f9fb0c82875174707b7c7e2f7d209af95c186c9e07b0926406915a1bd",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "starship:rerank-4",
+     "category": "behavior",
+     "query": "Get the Python virtual environment name for the prompt",
+     "evidence": [
+      {
+       "file": "src/modules/python.rs",
+       "quote": "fn get_python_virtual_env(context: &Context, config: &PythonConfig) -> Option<String> {",
+       "line": 126,
+       "source_sha256": "5c8000fc561d9d4f37cde99d6b8dad98359bababd86eed94bdc02e6cb47174a3",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "starship:rerank-5",
+     "category": "behavior",
+     "query": "Build a prefilled GitHub issue link for a bug report",
+     "evidence": [
+      {
+       "file": "src/bug_report.rs",
+       "quote": "fn make_github_issue_link(body: &str) -> String {",
+       "line": 141,
+       "source_sha256": "2a6f949c05cb21f689417eb7368d5814d5eff181d9cb5a29431696c26d8b8b92",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    },
+    {
+     "id": "starship:rerank-6",
+     "category": "behavior",
+     "query": "Delete old session log files",
+     "evidence": [
+      {
+       "file": "src/logger.rs",
+       "quote": "pub fn cleanup_log_files<P: AsRef<Path>>(path: P) {",
+       "line": 36,
+       "source_sha256": "e177e390df3af811c4d693deaa5c012362b00765d8a137f232161d3252ddcacd",
+       "relevance": "Implements the requested behavior; non-exhaustive source-bound judgment."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,10 +1,14 @@
 """The quality operator must measure the consumer's actual budgeted output."""
+import argparse
+import hashlib
+import json
 from copy import deepcopy
 
 import pytest
 from attocode_intel.gateway import OperationGateway
 
-from eval.quality.mcp_search import compare, evidence_hits, observe
+from eval.quality.mcp_search import compare, evidence_hits, observe, run, worst_of
+from eval.quality.rerank_trial import decide
 
 
 def test_visible_evidence_requires_literal_quote_in_the_same_file_and_snippet_lines():
@@ -379,3 +383,207 @@ def test_test_support_development_rejection_replays_from_delivery():
     assert decision["decision"] == "rejected on development: no judged test recovered at five"
     assert decision["fresh_validation_started"] is False
     assert not replayed["individual_losses"]
+
+
+def test_worst_of_keeps_only_labels_every_sample_delivered():
+    samples = [{"hits": {"files": [0, 1], "visible": [1]}}, {"hits": {"files": [1, 2], "visible": [1]}},
+               {"hits": {"files": [1], "visible": []}}]
+    assert worst_of(samples) == {"files": [1], "visible": []}
+
+
+RERANK = {"provider": "systemone", "model": "typesafe/jev-1.13", "remote": True,
+          "method": "systemone_choice", "rerank_elapsed_ms": 600}
+SCOPED = {**RERANK, "method": "source_aware_deterministic", "fallback_reason": "single_candidate"}
+del SCOPED["rerank_elapsed_ms"]
+
+
+def hosted_runs():
+    """A passing trial: +3 first-five files across two packs, no losses, all hosted."""
+    questions = (("p", "one", [0, 1]), ("q", "two", [0]))
+    design = json.dumps({"repositories": [{"pack": pack, "commit": "c", "queries": [{"id": qid}]}
+                                          for pack, qid, _ in questions]}).encode()
+    arms = {}
+    for arm in ("baseline", "candidate"):
+        arms[arm] = []
+        for pack, qid, gained in questions:
+            row = {"id": qid, "pack": pack, "query": qid, "evidence": [{"file": "a"}] * 3,
+                   "inspection_hits": [], "pages": {}}
+            for page in ("5", "24", "scoped"):
+                files = (gained if arm == "candidate" else []) if page == "5" else [0, 1, 2]
+                hits = {"files": files, "ranges": files, "visible": []}
+                row["pages"][page] = {"request": {"top_k": page}, "seconds": .5, "hits": hits}
+                if arm == "candidate":
+                    row["pages"][page]["samples"] = [
+                        {"seconds": .5, "hits": deepcopy(hits),
+                         "ranking_diagnostic": [dict(SCOPED if page == "scoped" else RERANK)]}
+                        for _ in range(3)]
+            arms[arm].append({"pack": pack, "arm": arm, "commit": "c", "queries": [row],
+                              "questions_sha256": hashlib.sha256(design).hexdigest(),
+                              "operator_sha256": "o", "engine_sha256": "e",
+                              "samples_may_differ": arm == "candidate",
+                              "rerank_calls": {"posted": 6 if arm == "candidate" else 0, "refused": 0}})
+    return design, arms["baseline"], arms["candidate"], {"usage": 1.0}, {"usage": 1.01}
+
+
+def candidate_pages(candidate, pages=("5", "24")):
+    return [r["queries"][0]["pages"][p] for r in candidate for p in pages]
+
+
+def set_files(page, files):
+    page["hits"]["files"] = files
+    for s in page.get("samples", []):
+        s["hits"]["files"] = files
+
+
+def test_hosted_trial_passes_and_reports_spend():
+    decision = decide(*hosted_runs())
+    assert decision["passed"], decision["checks"]
+    assert decision["hosted"]["files_5_net_by_pack"] == {"p": 2, "q": 1}
+    assert decision["hosted"]["attempts"] == 12 and decision["hosted"]["rankings"] == 18
+    assert decision["hosted"]["estimated_usd"] == .009
+
+
+def _small_gain(b, c, before, after):
+    set_files(c[0]["queries"][0]["pages"]["5"], [0])
+
+
+def _single_pack_gain(b, c, before, after):
+    set_files(c[0]["queries"][0]["pages"]["5"], [0, 1, 2])
+    set_files(c[1]["queries"][0]["pages"]["5"], [])
+
+
+def _loss_24(b, c, before, after):
+    set_files(c[0]["queries"][0]["pages"]["24"], [0, 1])
+
+
+def _loss_5(b, c, before, after):
+    set_files(b[0]["queries"][0]["pages"]["5"], [2])
+    set_files(b[1]["queries"][0]["pages"]["5"], [1])
+
+
+def _fallback(b, c, before, after):
+    for s in c[0]["queries"][0]["pages"]["5"]["samples"]:
+        s["ranking_diagnostic"] = [{**RERANK, "method": "source_aware_deterministic",
+                                    "fallback_reason": "transport_error"}]
+
+
+def _config(b, c, before, after):
+    c[0]["queries"][0]["pages"]["scoped"]["samples"][0]["ranking_diagnostic"] = [
+        {"provider": "systemone", "method": "source_aware_deterministic", "fallback_reason": "missing_credential"}]
+
+
+def _model(b, c, before, after):
+    candidate_pages(c)[0]["samples"][0]["ranking_diagnostic"][0]["model"] = "other/model"
+
+
+def _local(b, c, before, after):
+    candidate_pages(c)[0]["samples"][0]["ranking_diagnostic"][0]["remote"] = False
+
+
+def _slow_rerank(b, c, before, after):
+    for page in candidate_pages(c):
+        for s in page["samples"]:
+            s["ranking_diagnostic"][0]["rerank_elapsed_ms"] = 2000
+
+
+def _slow_search(b, c, before, after):
+    for page in candidate_pages(c):
+        for s in page["samples"]:
+            s["seconds"] = 3
+
+
+def _baseline_remote(b, c, before, after):
+    b[0]["rerank_calls"]["posted"] = 1
+
+
+def _refused(b, c, before, after):
+    c[0]["rerank_calls"]["refused"] = 1
+
+
+def _overspent(b, c, before, after):
+    after["usage"] = 6.5
+
+
+def _usage_reset(b, c, before, after):
+    after["usage"] = .5
+
+
+def _estimate(b, c, before, after):
+    c[0]["rerank_calls"]["posted"] = 7000
+
+
+@pytest.mark.parametrize("mutate, check", [
+    (_small_gain, "files_5_gain"), (_single_pack_gain, "files_5_gain"), (_loss_24, "no_file_loss_24"),
+    (_loss_5, "at_most_one_file_loss_5"), (_fallback, "fallback_rate"), (_config, "no_config_fallback"),
+    (_model, "hosted_ranker_used"), (_local, "hosted_ranker_used"), (_slow_rerank, "rerank_p95"),
+    (_slow_search, "search_p95"), (_baseline_remote, "baseline_no_remote_calls"),
+    (_refused, "no_refused_calls"), (_overspent, "spend"), (_usage_reset, "spend"), (_estimate, "spend")])
+def test_hosted_trial_gate_rejects(mutate, check):
+    design, b, c, before, after = hosted_runs()
+    mutate(b, c, before, after)
+    decision = decide(design, b, c, before, after)
+    assert not decision["checks"][check] and not decision["passed"]
+
+
+def _digest(b, c):
+    c[0]["questions_sha256"] = "x"
+
+
+def _engine(b, c):
+    c[0]["engine_sha256"] = "other"
+
+
+def _missing_pack(b, c):
+    del c[1]
+
+
+def _stable_samples(b, c):
+    c[0]["samples_may_differ"] = False
+
+
+def _two_samples(b, c):
+    candidate_pages(c)[0]["samples"].pop()
+
+
+def _lucky_draw(b, c):
+    candidate_pages(c)[0]["samples"][0]["hits"]["files"] = []
+
+
+@pytest.mark.parametrize("mutate", [_digest, _engine, _missing_pack, _stable_samples, _two_samples, _lucky_draw])
+def test_hosted_trial_rejects_mismatched_observations(mutate):
+    design, b, c, before, after = hosted_runs()
+    mutate(b, c)
+    with pytest.raises(ValueError):
+        decide(design, b, c, before, after)
+
+
+@pytest.mark.asyncio
+async def test_call_cap_refuses_before_any_rerank_request_leaves(tmp_path, monkeypatch):
+    from attocode_intel._internal.integrations.context.systemone_ranker import (
+        SystemOneChoiceReranker,
+    )
+
+    source = tmp_path / "repo"
+    source.mkdir()
+    (source / "settings.py").write_text(
+        'def load_settings(path):\n    """Load settings from a configuration file."""\n    return open(path).read()\n')
+    (source / "config.py").write_text(
+        'def read_configuration_file(path):\n    """Read settings from the configuration file."""\n    return path\n')
+    design = tmp_path / "design.json"
+    design.write_text(json.dumps({"budget": 2000, "repositories": [{"pack": "tiny", "commit": "c", "queries": [
+        {"id": "tiny:1", "query": "load settings", "evidence": [
+            {"file": "settings.py", "line": 1, "quote": "def load_settings(path):",
+             "source_sha256": hashlib.sha256((source / "settings.py").read_bytes()).hexdigest()}]}]}]}))
+    for name, value in (("PROVIDER", "systemone"), ("ENDPOINT", "http://127.0.0.1:9/decisions"),
+                        ("MODEL", "typesafe/jev-1.13")):
+        monkeypatch.setenv(f"ATTOCODE_INTEL_RANKING_{name}", value)
+    monkeypatch.delenv("ATTOCODE_INTEL_RANKING_AUTH_ENV", raising=False)
+    monkeypatch.delenv("ATTOCODE_LOCAL_ONLY", raising=False)
+    sent = []
+    monkeypatch.setattr(SystemOneChoiceReranker, "_post", lambda self, body, headers: sent.append(body))
+    args = argparse.Namespace(questions=design, source=source, output=tmp_path / "out.json", pack="tiny",
+                              arm="candidate", capture_generation=False, samples_may_differ=True,
+                              max_rerank_calls=0, require_rerank=True, warmup_timeout=30)
+    with pytest.raises(RuntimeError, match="Rerank call limit"):
+        await run(args)
+    assert sent == [] and not args.output.exists()
