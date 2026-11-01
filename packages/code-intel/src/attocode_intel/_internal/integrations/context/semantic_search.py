@@ -20,7 +20,7 @@ import threading
 import time
 from dataclasses import dataclass, field, replace
 from itertools import islice
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode_intel._internal.integrations.context.index_probe import (
     IndexProbe,
@@ -33,6 +33,9 @@ from attocode_intel._internal.integrations.context.index_probe import (
 )
 from attocode_intel.query_ranking import demote_tests, hit_evidence, rerank_broad_candidates
 from attocode_intel.search_evidence import search_snippet
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -776,6 +779,7 @@ class SemanticSearchManager:
         two_stage: bool = True,
         rerank: bool = False,
         expand_query: bool = True,
+        extra_terms: Sequence[str] = (),
     ) -> list[SemanticSearchResult]:
         """Search the codebase by natural language query.
 
@@ -795,6 +799,7 @@ class SemanticSearchManager:
             two_stage: Whether to use two-stage retrieval (default True).
             rerank: Whether to apply cross-encoder reranking after fusion.
             expand_query: Whether to expand query with code construct hints.
+            extra_terms: Extra body-search words (see ``search_candidates``).
 
         Returns:
             List of search results sorted by relevance.
@@ -816,7 +821,7 @@ class SemanticSearchManager:
         # load or download weights on an interactive request. Explicit indexing
         # activates vectors; until then, lexical candidates remain available.
         if self._provider is None:
-            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter, extra_terms=extra_terms) or self._scoped_literal_results(query, file_filter)
 
         # An explicitly initialized vector path retains keyword fusion.
         if not self._kw_index_built:
@@ -824,7 +829,7 @@ class SemanticSearchManager:
 
         self._ensure_provider()
         if self._keyword_fallback:
-            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter, extra_terms=extra_terms) or self._scoped_literal_results(query, file_filter)
 
         # Refuse vectors produced by a different embedding model (manual-reindex
         # migration): serving them returns semantically garbage results.
@@ -836,17 +841,17 @@ class SemanticSearchManager:
                 "keyword results only. Run reindex to rebuild vectors.",
                 store_model, active_model,
             )
-            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter, extra_terms=extra_terms) or self._scoped_literal_results(query, file_filter)
 
         # Coverage-based switchover: use keyword fallback while indexing
         if not self._indexed and self._store:
             count = self._store.count()
             if count == 0 and self._bg_indexer is None:
                 # No embeddings and no background indexer — use keyword fallback
-                return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter, extra_terms=extra_terms) or self._scoped_literal_results(query, file_filter)
             elif not self.is_index_ready() and self._bg_indexer is not None:
                 # Indexer running but coverage < 80% — use keyword fallback
-                return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter, extra_terms=extra_terms) or self._scoped_literal_results(query, file_filter)
 
         # Embed query — use expanded query for better recall
         try:
@@ -854,13 +859,13 @@ class SemanticSearchManager:
             if not query_vectors or not query_vectors[0]:
                 self._index_progress.degraded_reason = "query_embedding_failed"
                 self._index_progress.last_error = "Query embedding returned no vector."
-                return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
+                return self.search_candidates(expanded_query, top_k, file_filter, extra_terms=extra_terms) or self._scoped_literal_results(query, file_filter)
             query_vec = query_vectors[0]
         except Exception as exc:
             logger.warning("Query embedding failed, falling back to keyword", exc_info=True)
             self._index_progress.degraded_reason = "query_embedding_failed"
             self._index_progress.last_error = f"Query embedding failed: {type(exc).__name__}: {exc}"
-            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
+            return self.search_candidates(expanded_query, top_k, file_filter, extra_terms=extra_terms) or self._scoped_literal_results(query, file_filter)
 
         # Build set of files that exist on disk to filter out stale branch data.
         # In local mode the filesystem is the source of truth — vectors from
@@ -897,7 +902,9 @@ class SemanticSearchManager:
             ]
 
         # Stage 1b: Keyword search (complementary recall) — always run
-        keyword_results = self.search_candidates(expanded_query, top_k=wide_k, file_filter=file_filter)
+        keyword_results = self.search_candidates(
+            expanded_query, top_k=wide_k, file_filter=file_filter, extra_terms=extra_terms,
+        )
 
         # If both pipelines returned nothing, bail out early
         if not raw_results and not keyword_results:
@@ -1039,6 +1046,7 @@ class SemanticSearchManager:
     def search_candidates(
         self, query: str, top_k: int = 50, file_filter: str = "",
         trace: dict[str, list[str]] | None = None, tests_last: bool = True,
+        extra_terms: Sequence[str] = (),
     ) -> list[SemanticSearchResult]:
         """Return local lexical candidates without initializing an embedding model.
 
@@ -1053,6 +1061,9 @@ class SemanticSearchManager:
         ``tests_last`` applies the source/test intent partition (``demote_tests``):
         source first normally, tests first for short explicit test requests.
         Task scores for test suggestions turn it off.
+
+        ``extra_terms`` (the opt-in hosted query rewrite) feed one more body
+        search, fused as a third list. The other lists use the query only.
         """
         if top_k <= 0:
             return []
@@ -1075,6 +1086,12 @@ class SemanticSearchManager:
         wide_k = max(top_k * 3, 60)
         keyword = self._keyword_search(lexical_query, wide_k, file_filter)
         body = self._body_search(terms, wide_k, file_filter)
+        extra = []
+        if extra_terms:
+            known = set(terms)
+            words = [w for w in dict.fromkeys(_tokenize(" ".join(extra_terms))) if w not in known]
+            if words:
+                extra = self._body_search(words[:20], wide_k, file_filter)
         files = self._file_search(terms, cfg.file_fusion_depth, file_filter)
         if not self._kw_index_built:
             # A body hit failed freshness validation while keyword results
@@ -1083,7 +1100,7 @@ class SemanticSearchManager:
             return []
         if trace is not None:
             trace.update(keyword=_file_order(keyword), body=_file_order(body), file_bm25=files)
-        if not body and not files:
+        if not body and not extra and not files:
             if not keyword:
                 keyword = self._scoped_literal_results(query, file_filter)
             keyword = self._penalize_exclusions(keyword, negative)
@@ -1103,11 +1120,16 @@ class SemanticSearchManager:
         # A metadata definition contributes once to its best-ranked body window.
         # Other windows remain distinct; overloads can match only their own span.
         body_by_owner: dict[tuple[str, str, str], list[SemanticSearchResult]] = {}
-        for hit in body:
+        for hit in body + extra:
             body_by_owner.setdefault((hit.file_path, hit.chunk_type, hit.name), []).append(hit)
         candidates: dict[tuple[str, str, str, int, int], SemanticSearchResult] = {}
         scores: dict[tuple[str, str, str, int, int], float] = {}
-        for weight, ranked in ((1.0, keyword), (cfg.body_weight, body)):
+        lists = [(1.0, keyword), (cfg.body_weight, body)]
+        if extra:
+            # Before body: the last window list sets an owner's representative,
+            # so a body window stays the snippet when both lists find an owner.
+            lists.insert(1, (cfg.body_weight, extra))
+        for weight, ranked in lists:
             seen = set()
             for rank, result in enumerate(ranked):
                 item = key(result)
@@ -1121,7 +1143,7 @@ class SemanticSearchManager:
                     continue
                 seen.add(item)
                 scores[item] = scores.get(item, 0.0) + weight / (cfg.chunk_rrf_k + rank + 1)
-                if item not in candidates or (ranked is body and result.start_line):
+                if item not in candidates or (ranked is not keyword and result.start_line):
                     candidates[item] = result
 
         ordered = sorted(scores, key=lambda item: (-scores[item], item))
@@ -1130,19 +1152,19 @@ class SemanticSearchManager:
         # A definition's metadata can still support its best body window above.
         owner_scores: dict[tuple[str, str, str], float] = {}
         representatives = {}
-        for weight, ranked in ((1.0, keyword), (cfg.body_weight, body)):
+        for weight, ranked in lists:
             seen_chunks, seen_owners = set(), set()
             for rank, result in enumerate(ranked):
                 owner = (result.file_path, result.chunk_type, result.name)
                 item = key(result)
-                if item in seen_chunks or (ranked is body and owner in seen_owners):
+                if item in seen_chunks or (ranked is not keyword and owner in seen_owners):
                     continue
                 seen_chunks.add(item)
                 seen_owners.add(owner)
                 owner_scores[owner] = owner_scores.get(owner, 0.0) + weight / (cfg.chunk_rrf_k + rank + 1)
                 if ranked is keyword or owner not in representatives:
                     representatives[owner] = item
-                if ranked is body:
+                if ranked is not keyword:
                     representatives[owner] = item
         heads = []
         for owner in sorted(owner_scores, key=lambda item: (-owner_scores[item], item)):

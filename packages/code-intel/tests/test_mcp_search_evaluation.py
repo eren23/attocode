@@ -583,7 +583,8 @@ async def test_call_cap_refuses_before_any_rerank_request_leaves(tmp_path, monke
     monkeypatch.setattr(SystemOneChoiceReranker, "_post", lambda self, body, headers: sent.append(body))
     args = argparse.Namespace(questions=design, source=source, output=tmp_path / "out.json", pack="tiny",
                               arm="candidate", capture_generation=False, samples_may_differ=True,
-                              max_rerank_calls=0, require_rerank=True, warmup_timeout=30)
+                              max_rerank_calls=0, require_rerank=True, warmup_timeout=30,
+                              max_rewrite_calls=None, require_rewrite=False)
     with pytest.raises(RuntimeError, match="Rerank call limit"):
         await run(args)
     assert sent == [] and not args.output.exists()

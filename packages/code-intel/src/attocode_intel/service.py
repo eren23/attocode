@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         HierarchicalExplorer,
     )
     from attocode_intel._internal.integrations.context.memory_store import MemoryStore
+    from attocode_intel._internal.integrations.context.query_rewriter import QueryRewriter
     from attocode_intel._internal.integrations.context.reranker import RankingProvider
     from attocode_intel._internal.integrations.context.semantic_search import (
         ContextAssemblyConfig,
@@ -152,6 +153,35 @@ class CodeIntelService:
             except (ValueError, OverflowError):
                 self._systemone_status = "invalid_config"
                 logger.warning("Invalid SystemOne ranking configuration; deterministic ranking remains active")
+        # Trial candidate: an opt-in hosted query rewrite (evals/results/2026-11-query-rewrite.md).
+        # Environment only; it reuses the remote-ranking consent and its one-workspace scope.
+        self._query_rewriter: QueryRewriter | None = None
+        self._query_rewrite_status = "not_configured"
+        rewrite = os.environ.get("ATTOCODE_INTEL_QUERY_REWRITE", "") if config is None else ""
+        if rewrite:
+            try:
+                from attocode_intel._internal.integrations.context.query_rewriter import (
+                    OPENROUTER_REWRITE,
+                    QueryRewriter,
+                )
+
+                if rewrite != "openrouter":
+                    raise ValueError("unknown query rewrite provider")
+                workspace = os.environ.get("ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE", "")
+                self._query_rewriter = QueryRewriter(
+                    OPENROUTER_REWRITE["endpoint"],
+                    model=OPENROUTER_REWRITE["model"],
+                    auth_env=OPENROUTER_REWRITE["auth_env"],
+                    allow_remote=(os.environ.get("ATTOCODE_INTEL_RANKING_ALLOW_REMOTE", "").lower()
+                                  in {"1", "true", "yes", "on"} and os.path.isabs(workspace)
+                                  and os.path.realpath(workspace) == self._project_dir),
+                    service_mode=self._config.is_service_mode,
+                    timeout_seconds=OPENROUTER_REWRITE["timeout_ms"] / 1000,
+                )
+                self._query_rewrite_status = "configured"
+            except ValueError:
+                self._query_rewrite_status = "invalid_config"
+                logger.warning("Invalid query rewrite configuration; search uses the query terms only")
         if self._ranking_provider in {"auto", "local_cross_encoder"}:
             if bool(reranker_path) != bool(reranker_sha):
                 self._local_reranker_status = "incomplete_config"
@@ -471,6 +501,12 @@ class CodeIntelService:
         # ponytail: ~8 chunks per distinct file on the 2026-10-08 blind pools
         # (400 chunks -> median 48 files); lexical retrieval stayed under 150 ms.
         return max(top_k, 24, 8 * self._systemone_ranker.max_candidates)
+
+    def _rewrite_terms(self, query: str) -> list[str]:
+        """Extra code identifiers from the opt-in hosted rewrite; empty when off or on failure."""
+        if self._query_rewriter is None:
+            return []
+        return self._query_rewriter.rewrite(query)[1]
 
     def _rank_search_results(self, query: str, results: list, top_k: int,
                              file_filter: str = "") -> tuple[list, dict]:
