@@ -4,11 +4,12 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** `attocode-code-intel` 0.1.23. It adds a listing in the
-official MCP Registry, a `uvx` quick start, and a fix that lets the opt-in hosted
-rerank accept a dated model ID. Ranking defaults are unchanged. See the
-[0.1.23 release notes](intelligence-0.1.23.md). Version 0.1.22 added the opt-in
-[bounded discovery setting](intelligence-discovery.md).
+**Current version:** `attocode-code-intel` 0.1.24. It adds the
+`openrouter` preset for the opt-in hosted rerank, which passed a
+[frozen trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-11-01-hosted-rerank.md)
+with 24 short questions. Ranking defaults are unchanged. See the
+[0.1.24 release notes](intelligence-0.1.24.md). Version 0.1.23 added the MCP
+Registry listing.
 
 **Development optional-language depth, 2026-10-29:** [causal native controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
 restore omitted OCaml/Perl call candidates, OCaml native `open_module` extraction

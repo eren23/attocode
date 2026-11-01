@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.24] - 2026-11-01
+
 ### Added
 
 - `ATTOCODE_INTEL_RANKING_PROVIDER=openrouter` sets the hosted rerank to the settings of

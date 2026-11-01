@@ -43,6 +43,8 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.24 adds `ATTOCODE_INTEL_RANKING_PROVIDER=openrouter`, a preset for the opt-in hosted rerank. In a frozen trial with 24 short questions, the rerank found 24 of 26 labeled files in the first five results, against 20 without it; see [Hosted rerank](https://github.com/eren23/attocode/blob/main/docs/intelligence-search.md#hosted-rerank-experimental). Rerank stays off by default, because it sends source excerpts to OpenRouter.
+
 Version 0.1.23 is listed in the official MCP Registry and documents a `uvx` quick start. The opt-in hosted rerank now accepts the dated model ID that OpenRouter returns; see [Hosted rerank](https://github.com/eren23/attocode/blob/main/docs/intelligence-search.md#hosted-rerank-experimental). Rerank stays off by default.
 
 Version 0.1.22 adds an opt-in discovery budget of up to 100,000 files
