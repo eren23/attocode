@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "trial": "hosted query rewrite (ATTOCODE_INTEL_QUERY_REWRITE=openrouter)",
+  "split": "development",
+  "passed": false,
+  "verdict": "rejected at the development screen on a partial run",
+  "candidate": {
+    "commits": {
+      "candidate_and_harness": "ebca0d4",
+      "workflow_key_check_removed": "4af4368",
+      "parser_keeps_first_12": "7bb35df"
+    },
+    "model": "anthropic/claude-haiku-5.5",
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "timeout_ms": 1500,
+    "max_words": 12,
+    "fusion": "one extra body-search RRF list, weight body_weight"
+  },
+  "design": {
+    "path": "packages/code-intel/evals/designs/2026-10-17-test-source-slot-development.json",
+    "sha256": "c001108186956cc4cfc49bef969ec4abf85015677a8c4755c79450fbb06bc02e",
+    "questions": 68,
+    "consumed_before_this_trial": true
+  },
+  "runs": [
+    {
+      "id": 41315510319,
+      "head": "4af436882deb522b8fa724cac7b68f1d072e6920",
+      "engine_sha256": "065138c96403f8e457ccd6a2b1434d85dda5b0e4e6f6af44d566bf6a4aa9e4d4",
+      "operator_sha256": "6efe79d18c41a259a36a5a48a8c09c3a186249cfac021ab3b47c43185c5cd309",
+      "outcome": "incomplete",
+      "completed_candidate_packs": [
+        "express"
+      ],
+      "stop": "preflight on ripgrep: invalid_response, timeout, invalid_response",
+      "cause": "the parser rejected replies with more than 12 names; fixed in 7bb35df",
+      "measured_usage_delta_usd": 0.003971781,
+      "used_for_decision": false
+    },
+    {
+      "id": 41317095737,
+      "head": "7bb35df8fab0456f0a4262b85a6bc34bec60b74a",
+      "engine_sha256": "6344fdfab107dfd24bd895f3788395e6d9707c9d9301ec28924103b490d87e22",
+      "operator_sha256": "337f181c765a52ff32f2b596525b3a0149c4feea5a9a063b42e7179ff0fb1fa9",
+      "outcome": "incomplete",
+      "completed_candidate_packs": [
+        "express",
+        "ripgrep"
+      ],
+      "stop": "preflight on cats-effect: timeout, then busy twice (the timed-out call still held the one in-flight slot)",
+      "measured_usage_delta_usd": 0.008574192,
+      "used_for_decision": true
+    }
+  ],
+  "partial_rule": {
+    "file": "precommit.md",
+    "sha256": "256d83599d48bdf42c0d54a407f2f2e9f164f0ad93fda2f6a917d4af35d9ff37",
+    "rule": "a gate decides only if it fails for every outcome of the packs that did not run"
+  },
+  "completed_questions": 18,
+  "totals": {
+    "baseline_files_24": 25,
+    "baseline_files_5": 20,
+    "baseline_files_scoped": 18,
+    "baseline_visible_24": 2,
+    "baseline_visible_5": 5,
+    "baseline_visible_scoped": 8,
+    "candidate_files_24": 26,
+    "candidate_files_5": 22,
+    "candidate_files_scoped": 18,
+    "candidate_visible_24": 1,
+    "candidate_visible_5": 4,
+    "candidate_visible_scoped": 6
+  },
+  "files_5_net_by_pack": {
+    "express": 1,
+    "ripgrep": 1
+  },
+  "file_label_gains": {
+    "5": [
+      "express:usefulness-development-3 lib/application.js",
+      "ripgrep:usefulness-development-1 tests/feature.rs",
+      "ripgrep:usefulness-validation-2 tests/feature.rs"
+    ],
+    "24": [
+      "ripgrep:usefulness-development-1 tests/feature.rs",
+      "ripgrep:usefulness-validation-2 tests/feature.rs"
+    ]
+  },
+  "file_label_losses": {
+    "5": [
+      "ripgrep:usefulness-development-2 tests/feature.rs"
+    ],
+    "24": [
+      "ripgrep:usefulness-development-3 crates/core/flags/hiargs.rs"
+    ]
+  },
+  "individual_losses": [
+    {
+      "id": "express:test-intent-3",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "express:test-intent-3",
+      "page": "24",
+      "metric": "visible",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "ripgrep:test-intent-3",
+      "page": "scoped",
+      "metric": "visible",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "ripgrep:usefulness-development-2",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "ripgrep:usefulness-development-3",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "ripgrep:usefulness-validation-2",
+      "page": "scoped",
+      "metric": "visible",
+      "labels": [
+        0
+      ]
+    }
+  ],
+  "rewrites": {
+    "planned": 612,
+    "recorded": 162,
+    "statuses": {
+      "ok": 106,
+      "invalid_response": 35,
+      "timeout": 6,
+      "busy": 15
+    },
+    "fallbacks": 56,
+    "over_1500_ms": 6,
+    "posted_calls": {
+      "express": 76,
+      "ripgrep": 75
+    }
+  },
+  "searches_over_2_s": 0,
+  "checks_failed_for_every_missing_outcome": [
+    "no_file_loss_24",
+    "scoped_no_individual_loss",
+    "fallback_rate"
+  ],
+  "independent_recompute": {
+    "script": "recompute.py",
+    "sha256": "9a67e89831595708fc5b8f8bba2cdb3aabc6fc1b0d8845c36befb61e3a76f17a",
+    "output": "partial-decision.json",
+    "output_sha256": "113cc81a9a3ad34ccef4c353fe22bdb9cc451717c8f3c4fcf5ccdfcbe01d61ea",
+    "stdlib_only": true
+  },
+  "spend": {
+    "key_limit_usd": 2,
+    "measured_usage_total_usd": 0.012545973,
+    "note": "OpenRouter key usage counter; not an invoice"
+  },
+  "archive": {
+    "path": "packages/code-intel/evals/results/2026-11-query-rewrite.tar.gz",
+    "sha256": "786fcf33dc23d12c2b05422a42d57d1a75196adb5a597a16647058cb878e87c0",
+    "members": 30
+  },
+  "next_stage": "none: no fresh questions written, no validation run, candidate code removed"
+}
