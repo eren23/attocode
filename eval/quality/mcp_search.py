@@ -17,7 +17,6 @@ from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
-from attocode_intel._internal.integrations.context.query_rewriter import QueryRewriter
 from attocode_intel.gateway import OperationGateway
 from attocode_intel.service import CodeIntelService
 
@@ -63,9 +62,7 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="",
     before_hydration = []
     generation = []
     rankings = []
-    rewrites = []
     rank = CodeIntelService._rank_search_results
-    rewrite = QueryRewriter.rewrite
 
     def record(service, *args, **kwargs):
         results, ranking = rank(service, *args, **kwargs)
@@ -74,16 +71,10 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="",
         rankings.append(json.loads(json.dumps(ranking, default=str)))
         return results, ranking
 
-    def record_rewrite(rewriter, query):
-        status, words, elapsed_ms = rewrite(rewriter, query)
-        rewrites.append({"status": status, "elapsed_ms": elapsed_ms, "words": words})
-        return status, words, elapsed_ms
-
     request = {"query": query, "top_k": top_k, "max_tokens": budget, "mode": mode, "file_filter": file_filter}
     started = time.perf_counter()
     with ExitStack() as stack:
         stack.enter_context(patch.object(CodeIntelService, "_rank_search_results", record))
-        stack.enter_context(patch.object(QueryRewriter, "rewrite", record_rewrite))
         if capture_generation:
             from attocode_intel._internal.integrations.context.semantic_search import (
                 SemanticSearchManager,
@@ -111,8 +102,7 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="",
         raise RuntimeError(f"Incomplete search index: {index}")
     # Store the entire delivered envelope: trimming may remove metadata too.
     result = {"request": request, "response": payload, "seconds": seconds,
-              "pre_hydration_diagnostic": before_hydration, "ranking_diagnostic": rankings,
-              "rewrite_diagnostic": rewrites}
+              "pre_hydration_diagnostic": before_hydration, "ranking_diagnostic": rankings}
     if capture_generation:
         result["generation_diagnostic"] = generation
     return result
@@ -222,29 +212,14 @@ async def run(args):
             return post(ranker, body, headers)
 
         stack.enter_context(patch.object(SystemOneChoiceReranker, "_post", counted_post))
-    rewrite_calls = {"posted": 0, "refused": 0}
-    if args.max_rewrite_calls is not None:
-        rewrite_post = QueryRewriter._post
-
-        def counted_rewrite_post(rewriter, body, headers):
-            if rewrite_calls["posted"] >= args.max_rewrite_calls:
-                rewrite_calls["refused"] += 1
-                raise RuntimeError("Rewrite call limit reached")
-            rewrite_calls["posted"] += 1
-            return rewrite_post(rewriter, body, headers)
-
-        stack.enter_context(patch.object(QueryRewriter, "_post", counted_rewrite_post))
 
     def check_calls():
         if calls["refused"]:
             raise RuntimeError(f"Rerank call limit {args.max_rerank_calls} reached")
-        if rewrite_calls["refused"]:
-            raise RuntimeError(f"Rewrite call limit {args.max_rewrite_calls} reached")
 
     gateway = OperationGateway(str(args.source), profile="daily", watch=False)
     rows = []
     preflight = []
-    rewrite_preflight = []
     try:
         started = time.perf_counter()
         # Public warmup first, then wait on the gateway's owned worker.
@@ -268,18 +243,6 @@ async def run(args):
                     break
             else:
                 raise RuntimeError(f"Hosted rerank preflight failed: {preflight}")
-        if args.require_rewrite:
-            if gateway._stores[key]["service"]._query_rewriter is None:
-                raise RuntimeError("Query rewrite is not configured")
-            for _ in range(3):
-                result = await observe(gateway, "load settings from a configuration file", top_k=5,
-                                       budget=design["budget"])
-                rewrite_preflight.append(result["rewrite_diagnostic"])
-                check_calls()
-                if any(r["status"] == "ok" for r in result["rewrite_diagnostic"]):
-                    break
-            else:
-                raise RuntimeError(f"Hosted rewrite preflight failed: {rewrite_preflight}")
         for q in group["queries"]:
             pages = {}
             for page in ("5", "24", "scoped"):
@@ -301,7 +264,6 @@ async def run(args):
                 if args.samples_may_differ:
                     result["samples"] = [{"seconds": s["seconds"], "hits": s["hits"],
                                           "ranking_diagnostic": s["ranking_diagnostic"],
-                                          "rewrite_diagnostic": s["rewrite_diagnostic"],
                                           "results": s["response"]["data"]["results"]} for s in samples]
                     result["hits"] = worst_of(samples)
             inspection = await inspect_first_named(gateway, pages["5"]["response"]["data"]["results"],
@@ -317,7 +279,6 @@ async def run(args):
     args.output.write_text(json.dumps({"arm": args.arm, "pack": args.pack, "commit": group["commit"],
                                       "setup_seconds": setup_seconds, "queries": rows,
                                       "rerank_calls": calls, "preflight": preflight,
-                                      "rewrite_calls": rewrite_calls, "rewrite_preflight": rewrite_preflight,
                                       "samples_may_differ": args.samples_may_differ,
                                       "questions_sha256": hashlib.sha256(raw).hexdigest(),
                                       "operator_sha256": identity, "engine_sha256": engine}, indent=2) + "\n")
@@ -337,10 +298,6 @@ def main():
                         help="Abort before the request that would exceed this many hosted rerank calls")
     parser.add_argument("--require-rerank", action="store_true",
                         help="Abort unless a non-frozen query reaches the hosted ranker first")
-    parser.add_argument("--max-rewrite-calls", type=int,
-                        help="Abort before the request that would exceed this many hosted rewrite calls")
-    parser.add_argument("--require-rewrite", action="store_true",
-                        help="Abort unless a non-frozen query gets a hosted rewrite first")
     parser.add_argument("--warmup-timeout", type=float, default=90)
     args = parser.parse_args()
     asyncio.run(run(args))
