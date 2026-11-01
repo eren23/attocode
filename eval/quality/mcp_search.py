@@ -11,7 +11,9 @@ import asyncio
 import hashlib
 import json
 import math
+import os
 import statistics
+import threading
 import time
 from contextlib import ExitStack
 from pathlib import Path
@@ -213,13 +215,48 @@ async def run(args):
 
         stack.enter_context(patch.object(SystemOneChoiceReranker, "_post", counted_post))
 
+    embed = {"posted": 0, "refused": 0, "cost": 0.0, "models": []}
+    if args.max_embed_calls is not None or args.embed_spend_limit is not None:
+        from attocode_intel._internal.integrations.context.embeddings import (
+            OpenRouterEmbeddingProvider,
+        )
+
+        embed_post = OpenRouterEmbeddingProvider._post
+        embed_lock = threading.Lock()
+
+        def counted_embed(provider, body):
+            # Refuse before the request leaves the machine. The provider turns the
+            # error into an empty vector, so check_calls() aborts the run.
+            with embed_lock:
+                if ((args.max_embed_calls is not None and embed["posted"] >= args.max_embed_calls)
+                        or (args.embed_spend_limit is not None and embed["cost"] >= args.embed_spend_limit)):
+                    embed["refused"] += 1
+                    raise RuntimeError("Embedding call or spend limit reached")
+                embed["posted"] += 1
+            data = embed_post(provider, body)
+            usage = data.get("usage") if isinstance(data, dict) else None
+            cost = usage.get("cost") if isinstance(usage, dict) else None
+            model = data.get("model") if isinstance(data, dict) else None
+            with embed_lock:
+                if isinstance(cost, int | float) and not isinstance(cost, bool):
+                    embed["cost"] += cost
+                if model not in embed["models"]:
+                    embed["models"].append(model)
+            return data
+
+        stack.enter_context(patch.object(OpenRouterEmbeddingProvider, "_post", counted_embed))
+
     def check_calls():
         if calls["refused"]:
             raise RuntimeError(f"Rerank call limit {args.max_rerank_calls} reached")
+        if embed["refused"]:
+            raise RuntimeError(f"Embedding limit reached: {embed}")
 
     gateway = OperationGateway(str(args.source), profile="daily", watch=False)
     rows = []
     preflight = []
+    embed_preflight = []
+    embed_index = None
     try:
         started = time.perf_counter()
         # Public warmup first, then wait on the gateway's owned worker.
@@ -232,6 +269,28 @@ async def run(args):
             raise TimeoutError("Index warmup incomplete")
         setup_seconds = time.perf_counter() - started
         check_calls()
+        if os.environ.get("ATTOCODE_INTEL_EMBEDDING"):
+            # The explicit index is the spend consent; search alone never embeds the pack.
+            started = time.perf_counter()
+            chunks = await loop.run_in_executor(gateway._workers[key], mgr.index)
+            provider = mgr._provider
+            embed_index = {"chunks": chunks, "seconds": time.perf_counter() - started,
+                           "stored": mgr._store.count() if mgr._store is not None else 0,
+                           **{k: getattr(provider, k, None) for k in ("name", "requests", "tokens", "cost", "abort")}}
+            check_calls()
+            if not chunks or embed_index["abort"]:
+                raise RuntimeError(f"Hosted embedding index failed: {embed_index}")
+        if args.require_embed:
+            # A non-frozen query proves the dense list before any frozen question runs.
+            for _ in range(3):
+                mgr._dense_last = {}
+                await observe(gateway, "load settings from a configuration file", top_k=5, budget=design["budget"])
+                embed_preflight.append(dict(mgr._dense_last))
+                check_calls()
+                if mgr._dense_last.get("status") == "ok" and mgr._dense_last.get("files"):
+                    break
+            else:
+                raise RuntimeError(f"Hosted embedding preflight failed: {embed_preflight}")
         if args.require_rerank:
             # A non-frozen query proves the hosted path before any frozen question runs.
             for _ in range(3):
@@ -248,10 +307,13 @@ async def run(args):
             for page in ("5", "24", "scoped"):
                 samples = []
                 for _ in range(3):
+                    # Empty after the call means this request did not run the dense list.
+                    mgr._dense_last = {}
                     result = await observe(gateway, q["query"], top_k=5 if page == "scoped" else int(page),
                                            budget=design["budget"], mode=q.get("mode", "auto"),
                                            file_filter=q["evidence"][0]["file"] if page == "scoped" else "",
                                            capture_generation=args.capture_generation)
+                    result["dense"] = dict(mgr._dense_last)
                     check_calls()
                     result["hits"] = evidence_hits(result["response"]["data"]["results"], q["evidence"])
                     if (samples and not args.samples_may_differ
@@ -262,7 +324,7 @@ async def run(args):
                 result["seconds"] = statistics.median(s["seconds"] for s in samples)
                 result["samples_seconds"] = [s["seconds"] for s in samples]
                 if args.samples_may_differ:
-                    result["samples"] = [{"seconds": s["seconds"], "hits": s["hits"],
+                    result["samples"] = [{"seconds": s["seconds"], "hits": s["hits"], "dense": s["dense"],
                                           "ranking_diagnostic": s["ranking_diagnostic"],
                                           "results": s["response"]["data"]["results"]} for s in samples]
                     result["hits"] = worst_of(samples)
@@ -279,6 +341,8 @@ async def run(args):
     args.output.write_text(json.dumps({"arm": args.arm, "pack": args.pack, "commit": group["commit"],
                                       "setup_seconds": setup_seconds, "queries": rows,
                                       "rerank_calls": calls, "preflight": preflight,
+                                      "embed_calls": embed, "embed_index": embed_index,
+                                      "embed_preflight": embed_preflight,
                                       "samples_may_differ": args.samples_may_differ,
                                       "questions_sha256": hashlib.sha256(raw).hexdigest(),
                                       "operator_sha256": identity, "engine_sha256": engine}, indent=2) + "\n")
@@ -298,6 +362,12 @@ def main():
                         help="Abort before the request that would exceed this many hosted rerank calls")
     parser.add_argument("--require-rerank", action="store_true",
                         help="Abort unless a non-frozen query reaches the hosted ranker first")
+    parser.add_argument("--max-embed-calls", type=int,
+                        help="Abort before the request that would exceed this many hosted embedding calls")
+    parser.add_argument("--embed-spend-limit", type=float,
+                        help="Abort before a hosted embedding request once reported cost reaches this (USD)")
+    parser.add_argument("--require-embed", action="store_true",
+                        help="Abort unless a non-frozen query runs the hosted dense list first")
     parser.add_argument("--warmup-timeout", type=float, default=90)
     args = parser.parse_args()
     asyncio.run(run(args))
