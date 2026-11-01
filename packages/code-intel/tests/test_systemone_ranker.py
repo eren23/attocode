@@ -213,6 +213,34 @@ def test_remote_opt_in_is_scoped_to_one_workspace(tmp_path, monkeypatch):
     assert CodeIntelService(str(other))._systemone_ranker is None
 
 
+
+def test_openrouter_preset_uses_the_trial_settings_and_keeps_the_workspace_scope(tmp_path, monkeypatch):
+    monkeypatch.delenv("ATTOCODE_LOCAL_ONLY", raising=False)
+    allowed = tmp_path / "allowed"
+    other = tmp_path / "other"
+    allowed.mkdir()
+    other.mkdir()
+    for name in ("ENDPOINT", "MODEL", "AUTH_ENV", "TIMEOUT_MS"):
+        monkeypatch.delenv(f"ATTOCODE_INTEL_RANKING_{name}", raising=False)
+    monkeypatch.setenv("ATTOCODE_INTEL_RANKING_PROVIDER", "openrouter")
+    monkeypatch.setenv("ATTOCODE_INTEL_RANKING_ALLOW_REMOTE", "1")
+    monkeypatch.setenv("ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE", str(allowed))
+    service = CodeIntelService(str(allowed))
+    ranker = service._systemone_ranker
+    assert service._ranking_provider == "systemone" and service._systemone_status == "configured"
+    assert (ranker.endpoint, ranker.model, ranker.auth_env, ranker.timeout_seconds, ranker.remote) == (
+        "https://openrouter.ai/api/alpha/decisions", "typesafe/jev-1.13", "OPENROUTER_API_KEY", 1.5, True)
+    # The preset does not widen the remote opt-in.
+    assert CodeIntelService(str(other))._systemone_ranker is None
+    monkeypatch.delenv("ATTOCODE_INTEL_RANKING_ALLOW_REMOTE")
+    assert CodeIntelService(str(allowed))._systemone_status == "invalid_config"
+
+    explicit = CodeIntelService(str(allowed), CodeIntelConfig(
+        ranking_provider="openrouter", ranking_model="typesafe/other", ranking_timeout_ms=900,
+        ranking_allow_remote=True, ranking_remote_workspace=str(allowed)))
+    assert (explicit._systemone_ranker.model, explicit._systemone_ranker.timeout_seconds) == ("typesafe/other", .9)
+    assert explicit._systemone_ranker.endpoint == "https://openrouter.ai/api/alpha/decisions"
+
 def test_redirect_does_not_send_source_to_a_second_endpoint():
     requested = []
 

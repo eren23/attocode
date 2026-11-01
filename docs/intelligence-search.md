@@ -42,17 +42,15 @@ For a non-loopback endpoint, use HTTPS and additionally set `ATTOCODE_INTEL_RANK
 To use the Jev `choice` model through OpenRouter, set these variables in the server environment, then restart the server:
 
 ```sh
-ATTOCODE_INTEL_RANKING_PROVIDER=systemone
-ATTOCODE_INTEL_RANKING_ENDPOINT=https://openrouter.ai/api/alpha/decisions
-ATTOCODE_INTEL_RANKING_MODEL=typesafe/jev-1.13
-ATTOCODE_INTEL_RANKING_AUTH_ENV=OPENROUTER_API_KEY
-ATTOCODE_INTEL_RANKING_TIMEOUT_MS=1500
+ATTOCODE_INTEL_RANKING_PROVIDER=openrouter
 ATTOCODE_INTEL_RANKING_ALLOW_REMOTE=1
 ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE=/absolute/path/to/repository
 OPENROUTER_API_KEY=...
 ```
 
-Each search sends the redacted query (at most 512 characters) and up to 24 source excerpts (at most 1,350 characters each) to OpenRouter. One call cost about $0.0004 in the trial below (the design estimate was $0.00075). The default remote timeout of 800 ms is shorter than the usual response time of this model, so set 1500 ms. OpenRouter answers with a dated snapshot of the model, for example `typesafe/jev-1.13-20260917`. Versions up to 0.1.22 rejected that name, so every hosted call fell back to the deterministic order. To check a search, read `ranking.method` (`systemone_choice` when the model ranked the page), `ranking.fallback_reason` and `ranking.rerank_elapsed_ms` in the response metadata.
+The `openrouter` provider uses the settings of the trial below: the endpoint `https://openrouter.ai/api/alpha/decisions`, the model `typesafe/jev-1.13`, the key from `OPENROUTER_API_KEY` and a 1500 ms timeout. To change one of them, set `ATTOCODE_INTEL_RANKING_ENDPOINT`, `_MODEL`, `_AUTH_ENV` or `_TIMEOUT_MS`. The remote opt-in applies only to the repository in `ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE`. In other repositories, search uses the deterministic order. Version 0.1.23 does not have the `openrouter` provider. For that version, set `ATTOCODE_INTEL_RANKING_PROVIDER=systemone` and the four other settings.
+
+Each search sends the redacted query (at most 512 characters) and up to 24 source excerpts (at most 1,350 characters each) to OpenRouter. One call cost about $0.0004 in the trial below (the design estimate was $0.00075). The default remote timeout of 800 ms is shorter than the usual response time of this model, so the `openrouter` provider sets 1500 ms. OpenRouter answers with a dated snapshot of the model, for example `typesafe/jev-1.13-20260917`. Versions up to 0.1.22 rejected that name, so every hosted call fell back to the deterministic order. To check a search, read `ranking.method` (`systemone_choice` when the model ranked the page), `ranking.fallback_reason` and `ranking.rerank_elapsed_ms` in the response metadata.
 
 The rerank stays off by default. `ATTOCODE_LOCAL_ONLY=1` and service mode block it. It is recommended when you approve sending source to OpenRouter. On long Python issue text it raised Loc-Bench Acc@5 ([Loc-Bench re-measure](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-18-locbench-remeasure.md)). In a frozen trial with 24 short agent-style questions on Python, TypeScript, Go and Rust repositories, it found 24 of 26 labeled files in the first five results, against 20 for the deterministic order, with no file lost. Rerank p95 was 377 ms and 1 of 144 calls timed out ([hosted rerank trial](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-11-01-hosted-rerank.md)). Both results use authored labels, not agent outcomes. Send only source that you approve sending.
 

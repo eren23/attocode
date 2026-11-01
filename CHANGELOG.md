@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ATTOCODE_INTEL_RANKING_PROVIDER=openrouter` sets the hosted rerank to the settings of
+  the trial: the OpenRouter endpoint, `typesafe/jev-1.13`, `OPENROUTER_API_KEY` and a
+  1500 ms timeout. The remote opt-in and its workspace scope are still necessary.
+
 ### Changed
 
 - The search guide now recommends the hosted rerank opt-in. A frozen trial with 24 short
