@@ -31,8 +31,14 @@ from attocode_intel._internal.integrations.context.index_probe import (
     measured_call,
     measured_lock,
 )
-from attocode_intel.query_ranking import demote_tests, hit_evidence, rerank_broad_candidates
+from attocode_intel.query_ranking import (
+    demote_tests,
+    explicit_test_query,
+    hit_evidence,
+    rerank_broad_candidates,
+)
 from attocode_intel.search_evidence import search_snippet
+from attocode_intel.test_ranking import is_test_path
 
 logger = logging.getLogger(__name__)
 
@@ -1075,6 +1081,12 @@ class SemanticSearchManager:
         wide_k = max(top_k * 3, 60)
         keyword = self._keyword_search(lexical_query, wide_k, file_filter)
         body = self._body_search(terms, wide_k, file_filter)
+        # Trial candidate (ATTOCODE_INTEL_TEST_RECALL=1): a short test request also
+        # searches test files only, so source files cannot take every body slot.
+        tests = []
+        if (tests_last and os.environ.get("ATTOCODE_INTEL_TEST_RECALL") == "1"
+                and explicit_test_query(query)):
+            tests = self._body_search(terms, wide_k, file_filter, tests_only=True)
         files = self._file_search(terms, cfg.file_fusion_depth, file_filter)
         if not self._kw_index_built:
             # A body hit failed freshness validation while keyword results
@@ -1103,11 +1115,14 @@ class SemanticSearchManager:
         # A metadata definition contributes once to its best-ranked body window.
         # Other windows remain distinct; overloads can match only their own span.
         body_by_owner: dict[tuple[str, str, str], list[SemanticSearchResult]] = {}
-        for hit in body:
+        for hit in body + tests:
             body_by_owner.setdefault((hit.file_path, hit.chunk_type, hit.name), []).append(hit)
         candidates: dict[tuple[str, str, str, int, int], SemanticSearchResult] = {}
         scores: dict[tuple[str, str, str, int, int], float] = {}
-        for weight, ranked in ((1.0, keyword), (cfg.body_weight, body)):
+        lists = [(1.0, keyword), (cfg.body_weight, body)]
+        if tests:
+            lists.append((cfg.body_weight, tests))
+        for weight, ranked in lists:
             seen = set()
             for rank, result in enumerate(ranked):
                 item = key(result)
@@ -1121,7 +1136,7 @@ class SemanticSearchManager:
                     continue
                 seen.add(item)
                 scores[item] = scores.get(item, 0.0) + weight / (cfg.chunk_rrf_k + rank + 1)
-                if item not in candidates or (ranked is body and result.start_line):
+                if item not in candidates or (ranked is not keyword and result.start_line):
                     candidates[item] = result
 
         ordered = sorted(scores, key=lambda item: (-scores[item], item))
@@ -1130,19 +1145,19 @@ class SemanticSearchManager:
         # A definition's metadata can still support its best body window above.
         owner_scores: dict[tuple[str, str, str], float] = {}
         representatives = {}
-        for weight, ranked in ((1.0, keyword), (cfg.body_weight, body)):
+        for weight, ranked in lists:
             seen_chunks, seen_owners = set(), set()
             for rank, result in enumerate(ranked):
                 owner = (result.file_path, result.chunk_type, result.name)
                 item = key(result)
-                if item in seen_chunks or (ranked is body and owner in seen_owners):
+                if item in seen_chunks or (ranked is not keyword and owner in seen_owners):
                     continue
                 seen_chunks.add(item)
                 seen_owners.add(owner)
                 owner_scores[owner] = owner_scores.get(owner, 0.0) + weight / (cfg.chunk_rrf_k + rank + 1)
                 if ranked is keyword or owner not in representatives:
                     representatives[owner] = item
-                if ranked is body:
+                if ranked is not keyword:
                     representatives[owner] = item
         heads = []
         for owner in sorted(owner_scores, key=lambda item: (-owner_scores[item], item)):
@@ -1636,9 +1651,12 @@ class SemanticSearchManager:
         return self._body_index_built
 
     def _body_search(
-        self, query_terms: list[str], top_k: int, file_filter: str,
+        self, query_terms: list[str], top_k: int, file_filter: str, tests_only: bool = False,
     ) -> list[SemanticSearchResult]:
-        """Find body-only implementations; all MATCH terms are tokenizer-made."""
+        """Find body-only implementations; all MATCH terms are tokenizer-made.
+
+        ``tests_only`` keeps test files only, before the SQL limit.
+        """
         if top_k <= 0:
             return []
         if not self._body_index_built or self._source_revision() != self._body_revision:
@@ -1662,6 +1680,9 @@ class SemanticSearchManager:
             if file_filter:
                 where += " AND body_fts.file_path GLOB ?"
                 parameters.append(file_filter.replace("[!", "[^"))
+            if tests_only:
+                conn.create_function("attocode_is_test", 1, is_test_path, deterministic=True)
+                where += " AND attocode_is_test(body_fts.file_path)"
             parameters.append(max(top_k * 8, 120))
             limit = self.scoring_config.body_max_tokens
             with self._kw_cache_lock:
