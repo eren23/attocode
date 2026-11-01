@@ -24,6 +24,11 @@ _MAX_RESPONSE_BYTES = 64 * 1024
 _REMOTE_BLOCKED = {"1", "true", "yes", "on"}
 
 
+def workspace_consent(opt_in: bool, workspace: str, project_dir: str) -> bool:
+    """The hosted-source consent: an opt-in and this exact absolute project directory."""
+    return opt_in and os.path.isabs(workspace) and os.path.realpath(workspace) == project_dir
+
+
 def check_endpoint(endpoint: str, *, allow_remote: bool, service_mode: bool, auth_env: str) -> bool:
     """Validate an opt-in hosted endpoint; return whether it is remote.
 
@@ -73,8 +78,9 @@ def post_json(
     headers: dict[str, str],
     timeout_seconds: float,
     transport: httpx.BaseTransport | None,
+    max_bytes: int = _MAX_RESPONSE_BYTES,
 ) -> object:
-    """POST JSON and decode a response of at most 64 KiB."""
+    """POST JSON and decode a response of at most ``max_bytes`` (64 KiB)."""
     # Do not inherit proxy settings or follow a redirect to a different
     # origin; both could silently send source to an unapproved host.
     with (
@@ -91,7 +97,7 @@ def post_json(
         size = 0
         for chunk in response.iter_bytes():
             size += len(chunk)
-            if size > _MAX_RESPONSE_BYTES:
+            if size > max_bytes:
                 raise ValueError("ranking response too large")
             chunks.append(chunk)
     return json.loads(b"".join(chunks))

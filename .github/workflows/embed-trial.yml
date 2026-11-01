@@ -1,0 +1,135 @@
+name: Hosted embedding trial
+# One frozen trial of ATTOCODE_INTEL_EMBEDDING=openrouter: both arms run the same engine,
+# neither turns on the hosted rerank, and only the candidate arm indexes with the hosted model.
+# Dispatch only, so the secret never reaches pull requests from forks.
+on:
+  workflow_dispatch:
+    inputs:
+      design:
+        description: Path of the frozen question design
+        required: true
+      design_sha256:
+        description: SHA-256 of the design file
+        required: true
+      max_embed_calls:
+        description: Embedding requests allowed for the whole run
+        required: true
+      spend_limit:
+        description: Reported embedding cost allowed for the whole run, in USD
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embed-trial
+  cancel-in-progress: false
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # Holds OPENROUTER_API_KEY: a dedicated key; OpenRouter enforces its credit limit.
+    environment: rerank-trial
+    env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      DESIGN: ${{ inputs.design }}
+      DESIGN_SHA256: ${{ inputs.design_sha256 }}
+      MAX_EMBED_CALLS: ${{ inputs.max_embed_calls }}
+      SPEND_LIMIT: ${{ inputs.spend_limit }}
+    steps:
+      # The runner context is not available in job-level env.
+      - run: echo "TRIAL_ROOT=$RUNNER_TEMP/embed-trial" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - name: Check the frozen design and the limits
+        run: |
+          echo "$DESIGN_SHA256  $DESIGN" | sha256sum --check --strict
+          [[ "$MAX_EMBED_CALLS" =~ ^[0-9]+$ ]] && [[ "$SPEND_LIMIT" =~ ^[0-9]+(\.[0-9]+)?$ ]]
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Install maintained test dependencies
+        timeout-minutes: 5
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Materialize the pinned public sources, one copy per arm
+        timeout-minutes: 15
+        env:
+          QUALITY_ALLOW_DOWNLOADS: '1'
+          ATTOCODE_LOCAL_ONLY: '1'
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json, os, shutil
+          from pathlib import Path
+          import yaml
+          from eval.quality.corpus import materialize
+          root = Path(os.environ['TRIAL_ROOT'])
+          design = json.loads(Path(os.environ['DESIGN']).read_text())
+          specs = {s['id']: s for s in yaml.safe_load(Path('eval/quality/workflows.yaml').read_text())['repositories']}
+          for group in design['repositories']:
+              spec = specs[group['pack']]
+              assert spec['commit'] == group['commit'] and not spec.get('include') and not spec.get('subdir')
+              materialize(spec, root / 'baseline' / group['pack'], root / 'cache')
+              shutil.copytree(root / 'baseline' / group['pack'], root / 'candidate' / group['pack'], symlinks=True)
+          PY
+          mkdir -p "$TRIAL_ROOT/obs/baseline" "$TRIAL_ROOT/obs/candidate"
+      - name: Baseline arm (local only, no hosted calls)
+        timeout-minutes: 20
+        env:
+          ATTOCODE_LOCAL_ONLY: '1'
+        run: |
+          for pack in $(jq -r '.repositories[].pack' "$DESIGN"); do
+            uv run --no-sync python -m eval.quality.mcp_search --questions "$DESIGN" \
+              --source "$(realpath "$TRIAL_ROOT/baseline/$pack")" --output "$TRIAL_ROOT/obs/baseline/$pack.json" \
+              --pack "$pack" --arm baseline --max-rerank-calls 0 --max-embed-calls 0 --warmup-timeout 300
+          done
+      - name: Key usage before the candidate arm
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          curl -fsS --max-time 30 -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/key \
+            | jq '.data | {usage, limit, limit_remaining}' > "$TRIAL_ROOT/usage-before.json"
+      - name: Candidate arm (hosted embeddings for the pinned source only)
+        timeout-minutes: 90
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ATTOCODE_INTEL_EMBEDDING: openrouter
+          ATTOCODE_INTEL_RANKING_ALLOW_REMOTE: '1'
+        run: |
+          for pack in $(jq -r '.repositories[].pack' "$DESIGN"); do
+            source="$(realpath "$TRIAL_ROOT/candidate/$pack")"
+            # The limits cover the whole run: each pack gets what the earlier packs left.
+            used=$(jq -s '[.[].embed_calls.posted] | add // 0' "$TRIAL_ROOT"/obs/candidate/*.json 2>/dev/null || echo 0)
+            spent=$(jq -s '[.[].embed_calls.cost] | add // 0' "$TRIAL_ROOT"/obs/candidate/*.json 2>/dev/null || echo 0)
+            calls=$(( MAX_EMBED_CALLS - used ))
+            money=$(jq -n --argjson l "$SPEND_LIMIT" --argjson s "$spent" '$l - $s')
+            echo "$pack: $calls calls and $money USD left"
+            ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE="$source" uv run --no-sync python -m eval.quality.mcp_search \
+              --questions "$DESIGN" --source "$source" --output "$TRIAL_ROOT/obs/candidate/$pack.json" \
+              --pack "$pack" --arm candidate --samples-may-differ --require-embed \
+              --max-embed-calls "$calls" --embed-spend-limit "$money" --max-rerank-calls 0 --warmup-timeout 300
+          done
+      - name: Key usage after the candidate arm (after the settlement window)
+        if: always()
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          sleep 60
+          curl -fsS --max-time 30 -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/key \
+            | jq '.data | {usage, limit, limit_remaining}' > "$TRIAL_ROOT/usage-after.json"
+      - name: Decide on the frozen gates
+        run: |
+          uv run --no-sync python -m eval.quality.embed_trial decide --design "$DESIGN" \
+            --baseline "$TRIAL_ROOT/obs/baseline" --candidate "$TRIAL_ROOT/obs/candidate" \
+            --usage-before "$TRIAL_ROOT/usage-before.json" --usage-after "$TRIAL_ROOT/usage-after.json" \
+            --spend-limit "$SPEND_LIMIT" --output "$TRIAL_ROOT/decision.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: embed-trial-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/embed-trial/obs
+            ${{ runner.temp }}/embed-trial/usage-*.json
+            ${{ runner.temp }}/embed-trial/decision.json
+          if-no-files-found: warn

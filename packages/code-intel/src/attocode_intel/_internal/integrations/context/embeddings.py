@@ -10,8 +10,16 @@ Tries providers in order:
 from __future__ import annotations
 
 import logging
+import math
 import os
+import re
+import threading
+import time
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -280,3 +288,175 @@ def create_embedding_provider(
     # Graceful degradation — don't cache so retry picks up newly installed packages
     logger.info("No embedding provider available; semantic search will use keyword fallback")
     return NullEmbeddingProvider()
+
+
+_DATE_SUFFIX = re.compile(r"-(\d{4}|\d{8}|\d{4}-\d{2}(-\d{2})?)$")
+
+
+def _same_model(want: str, got: object) -> bool:
+    """Hosted routers drop the provider prefix and add a dated snapshot suffix."""
+    def base(name: str) -> str:
+        return _DATE_SUFFIX.sub("", name.rsplit("/", 1)[-1])
+    return isinstance(got, str) and base(want) == base(got)
+
+
+class _RefusedError(Exception):
+    """The provider refused the inputs (400/413); split the batch."""
+
+
+class OpenRouterEmbeddingProvider(EmbeddingProvider):
+    """Opt-in hosted voyage-code-4 through OpenRouter. Sends source text off the machine.
+
+    Only ``create_hosted_provider`` makes one, after the hosted-rerank consent.
+    Construction makes no request. A text that fails gets an empty vector, which
+    the index skips. 401/402/403 set ``abort``; later calls then make no request.
+    """
+
+    endpoint = "https://openrouter.ai/api/v1/embeddings"
+    model = "voyageai/voyage-code-4"
+    auth_env = "OPENROUTER_API_KEY"
+    store_file = "embeddings-openrouter.db"
+    index_batch = 4096
+    remote = True
+    max_inputs, max_chars, workers = 32, 40_000, 8
+    backoff = (2, 4, 8, 16, 32)
+    max_bytes = 4 * 1024 * 1024
+
+    def __init__(self, transport: Any = None, timeout_seconds: float = 60.0) -> None:
+        self._transport = transport
+        self._timeout = timeout_seconds
+        self._lock = threading.Lock()
+        self.requests = self.tokens = 0
+        self.cost = 0.0
+        self.abort: str | None = None
+        self.sleep = time.sleep
+
+    def dimension(self) -> int:
+        return 1024
+
+    @property
+    def name(self) -> str:
+        return "openrouter:voyage-code-4"
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return self._embed(texts, "search_document", attempts=6)
+
+    def embed_query(self, texts: list[str]) -> list[list[float]]:
+        # ponytail: 2 attempts so a stalled endpoint delays search by at most ~2 timeouts.
+        return self._embed(texts, "search_query", attempts=2)
+
+    def _embed(self, texts: list[str], input_type: str, attempts: int) -> list[list[float]]:
+        out: list[list[float]] = [[] for _ in texts]
+        batches: list[list[int]] = []
+        size = 0
+        for i, text in enumerate(texts):
+            if not batches or len(batches[-1]) >= self.max_inputs or size + len(text) > self.max_chars:
+                batches.append([])
+                size = 0
+            batches[-1].append(i)
+            size += len(text)
+
+        def run(idx: list[int]) -> None:
+            for i, vec in zip(idx, self._split([texts[i] for i in idx], input_type, attempts), strict=True):
+                out[i] = vec
+
+        if len(batches) <= 1:
+            for idx in batches:
+                run(idx)
+        else:
+            with ThreadPoolExecutor(self.workers) as pool:
+                list(pool.map(run, batches))
+        return out
+
+    def _split(self, texts: list[str], input_type: str, attempts: int) -> list[list[float]]:
+        try:
+            return self._call(texts, input_type, attempts)
+        except _RefusedError:
+            if len(texts) == 1:
+                return [[]]
+            half = len(texts) // 2
+            return (self._split(texts[:half], input_type, attempts)
+                    + self._split(texts[half:], input_type, attempts))
+        except RuntimeError:
+            return [[] for _ in texts]
+
+    def _post(self, body: dict) -> object:
+        from attocode_intel._internal.integrations.context.systemone_ranker import post_json
+
+        headers = {"Authorization": f"Bearer {os.environ.get(self.auth_env, '')}"}
+        return post_json(self.endpoint, body, headers, self._timeout, self._transport, self.max_bytes)
+
+    def _call(self, texts: list[str], input_type: str, attempts: int) -> list[list[float]]:
+        body = {
+            "model": self.model, "input": texts, "encoding_format": "float",
+            "input_type": input_type, "provider": {"data_collection": "deny"},
+        }
+        for attempt in range(attempts):
+            with self._lock:
+                if self.abort:
+                    raise RuntimeError(self.abort)
+                self.requests += 1
+            status: object = None
+            try:
+                data = self._post(body)
+                error = data.get("error") if isinstance(data, dict) else None
+                if isinstance(error, dict):
+                    status = error.get("code")
+                else:
+                    return self._vectors(data, len(texts))
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+            except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError, OSError):
+                status = None  # transport error or invalid response: retry
+            if status in (400, 413):
+                raise _RefusedError(str(status))
+            if isinstance(status, int) and status not in (408, 429) and status < 500:
+                with self._lock:
+                    self.abort = self.abort or f"status {status}"
+                raise RuntimeError(self.abort)
+            if attempt < attempts - 1:
+                self.sleep(self.backoff[min(attempt, len(self.backoff) - 1)])
+        raise RuntimeError("embedding request failed")
+
+    def _vectors(self, data: Any, n: int) -> list[list[float]]:
+        items = data.get("data")
+        if not _same_model(self.model, data.get("model")) or not isinstance(items, list) or len(items) != n:
+            raise ValueError("wrong model or count")
+        items = sorted(items, key=lambda item: item["index"])
+        if [item["index"] for item in items] != list(range(n)):
+            raise ValueError("wrong indexes")
+        vecs = []
+        for item in items:
+            vec = [float(x) for x in item["embedding"]]
+            norm = math.sqrt(sum(x * x for x in vec))
+            if len(vec) != self.dimension() or not all(math.isfinite(x) for x in vec) or norm == 0:
+                raise ValueError("wrong vector")
+            vecs.append([x / norm for x in vec])
+        usage = data.get("usage") or {}
+        cost = usage.get("cost")
+        with self._lock:
+            self.tokens += int(usage.get("prompt_tokens") or usage.get("total_tokens") or 0)
+            self.cost += float(cost) if isinstance(cost, int | float) else 0.0
+        return vecs
+
+
+def create_hosted_provider(kind: str, project_dir: str) -> OpenRouterEmbeddingProvider:
+    """The opt-in hosted provider. Raises ``ValueError`` if a consent check refuses it."""
+    from attocode_intel._internal.integrations.context.systemone_ranker import (
+        check_endpoint,
+        workspace_consent,
+    )
+
+    if kind != "openrouter":
+        raise ValueError(f"unknown hosted embedding provider: {kind}")
+    opt_in = os.environ.get("ATTOCODE_INTEL_RANKING_ALLOW_REMOTE", "").lower() in {"1", "true", "yes", "on"}
+    workspace = os.environ.get("ATTOCODE_INTEL_RANKING_REMOTE_WORKSPACE", "")
+    check_endpoint(
+        OpenRouterEmbeddingProvider.endpoint,
+        allow_remote=workspace_consent(opt_in, workspace, project_dir),
+        service_mode=bool(os.environ.get("DATABASE_URL")),
+        auth_env=OpenRouterEmbeddingProvider.auth_env,
+    )
+    if not os.environ.get(OpenRouterEmbeddingProvider.auth_env):
+        raise ValueError(f"{OpenRouterEmbeddingProvider.auth_env} is not set")
+    return OpenRouterEmbeddingProvider()

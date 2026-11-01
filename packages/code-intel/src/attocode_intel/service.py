@@ -123,6 +123,7 @@ class CodeIntelService:
             try:
                 from attocode_intel._internal.integrations.context.systemone_ranker import (
                     SystemOneChoiceReranker,
+                    workspace_consent,
                 )
 
                 environment = os.environ if config is None else {}
@@ -141,8 +142,7 @@ class CodeIntelService:
                     or preset.get("model", ""),
                     auth_env=self._config.ranking_auth_env or environment.get("ATTOCODE_INTEL_RANKING_AUTH_ENV", "")
                     or preset.get("auth_env", ""),
-                    allow_remote=(remote_opt_in and os.path.isabs(remote_workspace) and
-                                  os.path.realpath(remote_workspace) == self._project_dir),
+                    allow_remote=workspace_consent(remote_opt_in, remote_workspace, self._project_dir),
                     service_mode=self._config.is_service_mode,
                     timeout_seconds=None if timeout_ms == 0 else timeout_ms / 1000,
                     max_candidates=(self._config.ranking_max_candidates if config is not None else
