@@ -100,6 +100,7 @@ class PrecisionSession:
                         candidates = ast.get_callers(definition.qualified_name)
                         resolved, references = None, []
                         for attempt in range(4):
+                            answered = False
                             try:
                                 resolved = await manager.get_definition(path, *position)
                                 # Some servers (including rust-analyzer) return no
@@ -134,6 +135,7 @@ class PrecisionSession:
                                 if str(exc).lower() != "content modified" or attempt == 3:
                                     raise
                             else:
+                                answered = resolved is not None and references is not None
                                 # No syntax callers does not establish server
                                 # readiness: both native lookups may be transiently
                                 # unresolved. A resolved unused declaration can
@@ -147,11 +149,14 @@ class PrecisionSession:
                             # the enclosing two-second deadline or loop forever.
                             if attempt < 3:
                                 await asyncio.sleep(.05 * 2 ** attempt)
-                                # A server that reports its status (rust-analyzer)
-                                # can stay not ready for longer than this backoff.
-                                # Wait for it, but leave half the deadline for the
-                                # remaining lookups. Others return at once.
-                                await manager.wait_ready(path, (deadline - asyncio.get_running_loop().time()) / 2)
+                                # After a null or failed reply, a server that reports
+                                # its status (rust-analyzer) can stay not ready for
+                                # longer than this backoff. Wait for it, but leave half
+                                # the deadline for the remaining lookups. Do not wait
+                                # after an answer: rust-analyzer also answers while
+                                # its status is not ready. Other servers return at once.
+                                if not answered:
+                                    await manager.wait_ready(path, (deadline - asyncio.get_running_loop().time()) / 2)
                         if resolved is None and not references:
                             outcomes.append({"language": language, "status": "not_resolved"})
                             continue

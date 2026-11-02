@@ -11,9 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Precise references for Rust are more reliable. rust-analyzer replies null to definition
   and reference requests while its file system loads after a workspace change. The client
-  now asks for its `experimental/serverStatus` notification. After a null reply, the
-  precision check waits until the server is ready, for at most half of the remaining
-  2-second deadline. Servers that send no status keep the old retry timing.
+  now asks for its `experimental/serverStatus` notification. After a null or failed reply,
+  the precision check waits until the server is ready, for at most half of the remaining
+  2-second deadline. After an answer (also an empty one), it does not wait, because
+  rust-analyzer can answer while it reports "not ready". Servers that send no status keep
+  the old retry timing.
 - A null reference reply is no longer read as "0 references". Before, a resolved symbol
   with no static callers could get the status `verified` with no references when the
   server was not ready. Now it gets `no_references`, and a later request tries again.

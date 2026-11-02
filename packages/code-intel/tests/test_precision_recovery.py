@@ -281,3 +281,40 @@ async def test_null_references_are_not_an_answer_of_zero(tmp_path, monkeypatch):
         assert precision['status'] == 'partial'
     finally:
         await gateway.close()
+
+
+async def test_empty_answer_is_not_a_wait_for_readiness(tmp_path, monkeypatch):
+    """rust-analyzer can answer [] while it reports not ready: do not wait then."""
+    from attocode_intel._internal.integrations.lsp.client import LSPManager
+    null_gate = ("        if not ready:\n"
+                 "            send({'jsonrpc':'2.0','id':msg['id'],'result':None})")
+    source = _status_server(30.0)
+    assert source.count(null_gate) == 1
+    script = tmp_path / 'server.py'
+    script.write_text(source.replace(null_gate, (
+        "        if not ready and method == 'textDocument/references':\n"
+        "            send({'jsonrpc':'2.0','id':msg['id'],'result':[]})")))
+    waits = []
+
+    async def record_wait(self, file, timeout):
+        waits.append(timeout)
+        return False
+
+    monkeypatch.setattr(LSPManager, 'wait_ready', record_wait)
+    monkeypatch.setitem(BUILTIN_SERVERS, 'python', LanguageServerConfig(
+        command=sys.executable, args=[str(script)], extensions=['.py'], language_id='python'))
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'auto')
+    root = tmp_path / 'project'
+    root.mkdir()
+    (root / 'helper.py').write_text('def helper(): return 1\n')
+    (root / 'caller.py').write_text('from helper import helper\nhelper()\n')
+    gateway = OperationGateway(str(root), 'daily', watch=False)
+    try:
+        response = await gateway.execute('inspect_symbol', {
+            'symbol_name': 'helper', 'file_path': 'helper.py', 'line': 1})
+        assert not response.isError
+        precision = response.structuredContent['metadata']['analysis']['precision']
+        assert precision['queries'][0]['status'] == 'no_references', precision
+        assert waits == []
+    finally:
+        await gateway.close()
