@@ -207,6 +207,23 @@ def test_only_an_explicit_index_spends_and_a_dense_only_file_enters(consent, cal
         manager.close()
 
 
+def test_preflight_diagnostic_reports_store_and_cosine_facts(consent, calls):
+    from eval.quality.mcp_search import embed_diagnostic
+
+    write_repo(consent)
+    manager = SemanticSearchManager(str(consent))
+    try:
+        warm(manager)
+        assert manager.index() > 0
+        diag = embed_diagnostic(manager, "striped horse")
+        assert "diagnostic_error" not in diag, diag
+        assert diag["rows"][0][:2] == (4096, 1024) and diag["count"] == diag["matrix"]["meta"] > 0
+        assert diag["qvec"]["len"] == 1024 and diag["cosine"]["positive"] >= 1
+        assert diag["search"][0][0] == "animals.py" and diag["self"][0][1] == 1.0
+    finally:
+        manager.close()
+
+
 async def test_gateway_delivers_the_dense_file_with_its_source_lines(consent, calls):
     write_repo(consent)
     gateway = OperationGateway(str(consent), profile="daily", watch=False)
