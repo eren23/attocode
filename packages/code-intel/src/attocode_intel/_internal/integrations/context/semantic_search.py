@@ -675,7 +675,8 @@ class SemanticSearchManager:
         start = time.monotonic()
         try:
             qvec = self._provider.embed_query([query])[0]
-            hits = self._store.search(qvec, top_k=1000, file_filter=file_filter) if qvec else []
+            # voyage-code-4 query-document cosines can all be negative; their order still ranks.
+            hits = self._store.search(qvec, top_k=1000, file_filter=file_filter, keep_negative=True) if qvec else []
         except Exception:
             qvec, hits = [], []
         files = tuple(dict.fromkeys(hit.file_path for hit in hits))[:48]

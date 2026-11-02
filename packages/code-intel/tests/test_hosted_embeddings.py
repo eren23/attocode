@@ -193,16 +193,42 @@ def test_only_an_explicit_index_spends_and_a_dense_only_file_enters(consent, cal
 
         assert manager.index() > 0 and calls and manager._store.count() > 0
         indexed = len(calls)
-        # Equal RRF scores tie, and ties sort by path. stable.py has cosine 0, so
-        # the vector search drops it; only animals.py is a dense file.
+        # Equal RRF scores tie, and ties sort by path. The dense list keeps
+        # stable.py at cosine 0, after animals.py.
         assert set(files(manager.search("striped horse", top_k=24))) == {"stable.py", "animals.py"}
         assert len(calls) == indexed + 1 and calls[-1]["input_type"] == "search_query"
-        assert manager._dense_last["status"] == "ok" and manager._dense_last["files"] == 1
+        assert manager._dense_last["status"] == "ok" and manager._dense_last["files"] == 2
 
         calls.fail = True
         manager._provider.sleep = lambda _: None
         assert files(manager.search("striped horse", top_k=24)) == ["stable.py"]
         assert manager._dense_last["status"] == "failed"
+    finally:
+        manager.close()
+
+
+def test_all_negative_cosines_still_rank_the_dense_files(consent, monkeypatch):
+    # The failed development dispatch: every query-document cosine was negative,
+    # and the store dropped each hit at a score of 0 or less.
+    def post(self, body):
+        def vec(text):
+            if body["input_type"] == "search_query":
+                return [1.0] + [0.0] * 1023
+            return [-0.1 if "zebra" in text else -0.9, 1.0] + [0.0] * 1022
+
+        return {"model": MODEL, "data": [{"index": i, "embedding": vec(t)} for i, t in enumerate(body["input"])],
+                "usage": {"prompt_tokens": 1, "cost": 0.0}}
+
+    monkeypatch.setattr(OpenRouterEmbeddingProvider, "_post", post)
+    write_repo(consent)
+    manager = SemanticSearchManager(str(consent))
+    try:
+        warm(manager)
+        assert manager.index() > 0
+        qvec = manager._provider.embed_query(["striped horse"])[0]
+        assert manager._store.search(qvec, top_k=1000) == []  # the default keeps its cutoff
+        assert manager._hosted_dense_files("striped horse", "") == ("animals.py", "stable.py")
+        assert manager._hosted_dense_files("striped horse", "stable*") == ("stable.py",)
     finally:
         manager.close()
 
