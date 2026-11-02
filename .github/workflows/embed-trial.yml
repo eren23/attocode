@@ -97,11 +97,14 @@ jobs:
           ATTOCODE_INTEL_EMBEDDING: openrouter
           ATTOCODE_INTEL_RANKING_ALLOW_REMOTE: '1'
         run: |
+          shopt -s nullglob
           for pack in $(jq -r '.repositories[].pack' "$DESIGN"); do
             source="$(realpath "$TRIAL_ROOT/candidate/$pack")"
             # The limits cover the whole run: each pack gets what the earlier packs left.
-            used=$(jq -s '[.[].embed_calls.posted] | add // 0' "$TRIAL_ROOT"/obs/candidate/*.json 2>/dev/null || echo 0)
-            spent=$(jq -s '[.[].embed_calls.cost] | add // 0' "$TRIAL_ROOT"/obs/candidate/*.json 2>/dev/null || echo 0)
+            # Before the first pack there are no files, so jq reads the empty stdin and gives 0.
+            done_packs=("$TRIAL_ROOT"/obs/candidate/*.json)
+            used=$(jq -s '[.[].embed_calls.posted] | add // 0' "${done_packs[@]}" </dev/null)
+            spent=$(jq -s '[.[].embed_calls.cost] | add // 0' "${done_packs[@]}" </dev/null)
             calls=$(( MAX_EMBED_CALLS - used ))
             money=$(jq -n --argjson l "$SPEND_LIMIT" --argjson s "$spent" '$l - $s')
             echo "$pack: $calls calls and $money USD left"
