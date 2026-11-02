@@ -1816,7 +1816,7 @@ class CodeIntelService:
         except Exception as e:
             return {"locations": [], "total": 0, "error": f"LSP error: {e}"}
         locations = []
-        for loc in locs:
+        for loc in locs or []:
             uri = loc.uri
             if uri.startswith("file://"):
                 uri = uri[7:]

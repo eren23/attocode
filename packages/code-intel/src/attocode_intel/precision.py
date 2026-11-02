@@ -137,26 +137,35 @@ class PrecisionSession:
                                 # No syntax callers does not establish server
                                 # readiness: both native lookups may be transiently
                                 # unresolved. A resolved unused declaration can
-                                # still take the fast path.
-                                if references or (resolved is not None and not candidates):
+                                # still take the fast path, but only on an answer:
+                                # null references (None) mean "not ready".
+                                if references or (resolved is not None and references is not None
+                                                  and not candidates):
                                     break
                             # A server can briefly return null after a successful
                             # warmup or edit. Yield before retrying, never extend
                             # the enclosing two-second deadline or loop forever.
                             if attempt < 3:
                                 await asyncio.sleep(.05 * 2 ** attempt)
+                                # A server that reports its status (rust-analyzer)
+                                # can stay not ready for longer than this backoff.
+                                # Wait for it, but leave half the deadline for the
+                                # remaining lookups. Others return at once.
+                                await manager.wait_ready(path, (deadline - asyncio.get_running_loop().time()) / 2)
                         if resolved is None and not references:
                             outcomes.append({"language": language, "status": "not_resolved"})
                             continue
                     finally:
                         manager.on_result_callback = callback
-                    ast.ingest_lsp_results("references", path, references,
+                    ast.ingest_lsp_results("references", path, references or [],
                                            {"line": position[0], "col": position[1],
                                             "symbol_name": definition.qualified_name,
                                             "definition_key": json.dumps([definition.file_path, definition.start_line, definition.qualified_name])})
                     self.verified_languages.add(language)
-                    outcomes.append({"language": language, "status": "verified" if references or not candidates else "no_references",
-                                     "symbol": definition.qualified_name, "references": len(references)})
+                    answered = references is not None
+                    outcomes.append({"language": language,
+                                     "status": "verified" if references or (answered and not candidates) else "no_references",
+                                     "symbol": definition.qualified_name, "references": len(references or [])})
             except Exception as exc:
                 status = "timeout" if isinstance(exc, TimeoutError) or isinstance(exc.__cause__, TimeoutError) else "failed"
                 self.failures[server_id] = (status, _now() + _RETRY_SECONDS)

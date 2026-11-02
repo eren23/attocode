@@ -123,7 +123,7 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
                             manager.notify_file_opened(str(tmp_path / name), content)
                     while True:
                         try:
-                            refs = await manager.get_references(str(tmp_path / target), line - 1, column, include_declaration=False)
+                            refs = await manager.get_references(str(tmp_path / target), line - 1, column, include_declaration=False) or []
                         except ToolError as error:
                             if str(error).lower() != 'content modified':
                                 raise
@@ -156,7 +156,7 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
                 async with asyncio.timeout(15):
                     while True:
                         try:
-                            refs = await manager.get_references(str(tmp_path / other), line - 1, column, include_declaration=False)
+                            refs = await manager.get_references(str(tmp_path / other), line - 1, column, include_declaration=False) or []
                         except ToolError as error:
                             if str(error).lower() != 'content modified':
                                 raise

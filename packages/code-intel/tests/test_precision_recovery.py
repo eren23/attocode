@@ -194,3 +194,90 @@ async def test_null_lookup_without_static_callers_after_warmup(
     finally:
         await gateway.close()
     assert process is not None and process.returncode == 0
+
+
+def _status_server(window: float) -> str:
+    """A server like rust-analyzer: null replies while its VFS loads, with status."""
+    gate = f'''
+    if method in ('textDocument/definition', 'textDocument/references'):
+        if timer is None:
+            def become_ready():
+                global ready
+                ready = True
+                if status:
+                    send({{'jsonrpc':'2.0','method':'experimental/serverStatus','params':{{'health':'ok','quiescent':True}}}})
+            timer = threading.Timer({window!r}, become_ready)
+            timer.daemon = True
+            timer.start()
+        if not ready:
+            send({{'jsonrpc':'2.0','id':msg['id'],'result':None}})
+            continue
+'''
+    source = (SERVER
+              .replace('root = None', 'import threading\nlock = threading.Lock()\n'
+                       'ready = status = False\ntimer = None\nroot = None')
+              .replace('def send(value):', 'def _send(value):')
+              .replace('while True:\n    header', 'def send(value):\n    with lock:\n        _send(value)\n\n'
+                       'while True:\n    header')
+              .replace("        pending_init = msg['id']\n", "        pending_init = msg['id']\n"
+                       "        status = bool(params['capabilities'].get('experimental', {})"
+                       ".get('serverStatusNotification'))\n")
+              .replace("        pending_init = None\n        continue", "        pending_init = None\n"
+                       "        if status:\n"
+                       "            send({'jsonrpc':'2.0','method':'experimental/serverStatus',"
+                       "'params':{'health':'ok','quiescent':False}})\n        continue")
+              .replace('    result = None', gate + '\n    result = None'))
+    assert source.count('experimental/serverStatus') == 2 and 'def _send' in source
+    return source
+
+
+async def test_not_ready_window_longer_than_backoff_is_waited_out(tmp_path, monkeypatch):
+    """The null window (0.6 s) is longer than the retry backoff (about 0.35 s)."""
+    script = tmp_path / 'server.py'
+    script.write_text(_status_server(0.6))
+    monkeypatch.setitem(BUILTIN_SERVERS, 'python', LanguageServerConfig(
+        command=sys.executable, args=[str(script)], extensions=['.py'], language_id='python'))
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'auto')
+    root = tmp_path / 'project'
+    root.mkdir()
+    (root / 'helper.py').write_text('def helper(): return 1\n')
+    (root / 'caller.py').write_text('from helper import helper\nhelper()\n')
+    gateway = OperationGateway(str(root), 'daily', watch=False)
+    try:
+        response = await gateway.execute('inspect_symbol', {
+            'symbol_name': 'helper', 'file_path': 'helper.py', 'line': 1})
+        assert not response.isError
+        result = response.structuredContent
+        precision = result['metadata']['analysis']['precision']
+        assert precision['status'] == 'verified', precision
+        assert any(r['file_path'] == 'caller.py' and r['source'] == 'lsp'
+                   for r in result['data']['references'])
+    finally:
+        await gateway.close()
+
+
+async def test_null_references_are_not_an_answer_of_zero(tmp_path, monkeypatch):
+    """A resolved symbol with no static callers needs an answer, not a null reply."""
+    script = tmp_path / 'server.py'
+    gate = '''
+    if method == 'textDocument/references':
+        send({'jsonrpc':'2.0','id':msg['id'],'result':None})
+        continue
+'''
+    script.write_text(SERVER.replace('    result = None', gate + '\n    result = None'))
+    monkeypatch.setitem(BUILTIN_SERVERS, 'python', LanguageServerConfig(
+        command=sys.executable, args=[str(script)], extensions=['.py'], language_id='python'))
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'auto')
+    root = tmp_path / 'project'
+    root.mkdir()
+    (root / 'helper.py').write_text('def helper(): return 1\n')
+    gateway = OperationGateway(str(root), 'daily', watch=False)
+    try:
+        response = await gateway.execute('inspect_symbol', {
+            'symbol_name': 'helper', 'file_path': 'helper.py', 'line': 1})
+        assert not response.isError
+        precision = response.structuredContent['metadata']['analysis']['precision']
+        assert precision['queries'][0]['status'] == 'no_references', precision
+        assert precision['status'] == 'partial'
+    finally:
+        await gateway.close()

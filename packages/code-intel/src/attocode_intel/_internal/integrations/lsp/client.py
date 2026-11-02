@@ -194,6 +194,10 @@ class _LSPClient:
         self._stderr_task: asyncio.Task[None] | None = None
         self._is_stopping = False  # Suppress spurious errors during shutdown
         self._trace_enabled = False  # Protocol tracing (set via feature flag)
+        # rust-analyzer replies null while its VFS loads; experimental/serverStatus
+        # tells when it is ready. Servers that send no status count as ready.
+        self._ready = asyncio.Event()
+        self._ready.set()
 
     @property
     def language_id(self) -> str:
@@ -210,6 +214,7 @@ class _LSPClient:
     async def start(self) -> None:
         """Start the language server and initialize it."""
         self._documents.clear()
+        self._ready.set()
         self._process = await asyncio.create_subprocess_exec(  # noqa: S603
             self._config.command,
             *self._config.args,
@@ -231,6 +236,7 @@ class _LSPClient:
             "rootUri": self._root_uri,
             "workspaceFolders": [{"uri": self._root_uri, "name": "workspace"}],
             "capabilities": {
+                "experimental": {"serverStatusNotification": True},
                 "workspace": {"workspaceFolders": True},
                 "textDocument": {
                     "completion": {"completionItem": {"snippetSupport": True}},
@@ -461,8 +467,13 @@ class _LSPClient:
         line: int,
         character: int,
         include_declaration: bool = True,
-    ) -> list[LSPLocation]:
-        """Get all references to a symbol."""
+    ) -> list[LSPLocation] | None:
+        """Get all references to a symbol.
+
+        Returns None when the server replied null. A server that is not ready
+        (rust-analyzer while its VFS loads) does this; an answer with no
+        references is an empty list.
+        """
         if not self._initialized:
             return []
 
@@ -471,7 +482,9 @@ class _LSPClient:
             "position": {"line": line, "character": character},
             "context": {"includeDeclaration": include_declaration},
         })
-        if not result or not isinstance(result, list):
+        if result is None:
+            return None
+        if not isinstance(result, list):
             return []
 
         return [
@@ -806,9 +819,24 @@ class _LSPClient:
         elif "method" in message:
             self._handle_notification(message["method"], message.get("params"))
 
+    async def wait_ready(self, timeout: float) -> bool:
+        """Wait up to ``timeout`` seconds until the server reports it is ready."""
+        if self._ready.is_set():
+            return True
+        try:
+            await asyncio.wait_for(self._ready.wait(), max(timeout, 0))
+        except TimeoutError:
+            return False
+        return True
+
     def _handle_notification(self, method: str, params: Any) -> None:
         """Handle server notification."""
-        if method == "textDocument/publishDiagnostics" and self._on_diagnostics:
+        if method == "experimental/serverStatus" and isinstance(params, dict):
+            if params.get("quiescent"):
+                self._ready.set()
+            else:
+                self._ready.clear()
+        elif method == "textDocument/publishDiagnostics" and self._on_diagnostics:
             uri = params.get("uri", "")
             raw_diags = params.get("diagnostics", [])
             severity_map = {1: "error", 2: "warning", 3: "information", 4: "hint"}
@@ -1002,8 +1030,8 @@ class LSPManager:
     async def get_references(
         self, file: str, line: int, col: int,
         include_declaration: bool = True,
-    ) -> list[LSPLocation]:
-        """Get all references to a symbol."""
+    ) -> list[LSPLocation] | None:
+        """Get all references to a symbol. None: the server replied null."""
         client = self._get_client_for_file(file)
         if not client:
             return []
@@ -1102,6 +1130,11 @@ class LSPManager:
         if file.startswith("file://"):
             return file
         return f"file://{os.path.abspath(file)}"
+
+    async def wait_ready(self, file: str, timeout: float) -> bool:
+        """Wait until the server for ``file`` reports it is ready."""
+        client = self._get_client_for_file(file)
+        return True if client is None else await client.wait_ready(timeout)
 
     def _get_client_for_file(self, file: str) -> _LSPClient | None:
         """Find the appropriate client for a file extension."""
