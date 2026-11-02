@@ -1,10 +1,13 @@
 """Embedding provider abstraction for semantic search.
 
-Tries providers in order:
-1. Local: sentence-transformers with code-optimized model (no API cost)
+Auto-detect tries local providers only:
+1. Local: sentence-transformers with code-trained or code-optimized models
 2. Local: sentence-transformers with general model (smaller fallback)
-3. API: OpenAI text-embedding-3-small (if OPENAI_API_KEY set)
-4. None: graceful degradation (returns empty vectors)
+3. None: graceful degradation (returns empty vectors)
+
+The OpenAI API sends source text off the machine. It is used only when
+``ATTOCODE_EMBEDDING_MODEL=openai`` (or ``model="openai"``) selects it, never
+because ``OPENAI_API_KEY`` is set, and never with ``ATTOCODE_LOCAL_ONLY``.
 """
 
 from __future__ import annotations
@@ -172,13 +175,19 @@ def create_embedding_provider(
             - "bge" (768-dim, recommended for code search)
             - "all-MiniLM-L6-v2" (384-dim, fast, smaller)
             - "nomic-embed-text" (768-dim, better code understanding)
-            - "openai" (API-based, requires OPENAI_API_KEY)
-            - "" (auto-detect best available)
+            - "openai" (API-based, requires OPENAI_API_KEY; sends source text)
+            - "" (auto-detect best available local provider)
 
-    Auto-detect order: bge (code-optimized) > MiniLM > OpenAI API > null.
+    Auto-detect order: nomic > bge > MiniLM > null. It never selects a remote
+    provider, so an API key in the environment alone sends no source text.
     Note: switching models requires reindexing (different vector dims).
     """
     model = model or os.environ.get("ATTOCODE_EMBEDDING_MODEL", "")
+
+    # Checked before the cache, so a provider created earlier is not reused.
+    if model == "openai" and os.environ.get("ATTOCODE_LOCAL_ONLY", "").lower() in {"1", "true", "yes", "on"}:
+        logger.warning("ATTOCODE_LOCAL_ONLY is set; refusing the OpenAI embedding provider")
+        return NullEmbeddingProvider()
 
     if model in _provider_cache:
         return _provider_cache[model]
@@ -251,7 +260,7 @@ def create_embedding_provider(
         _provider_cache[model] = provider
         return provider
     except ImportError:
-        logger.debug("sentence-transformers not installed, trying OpenAI")
+        logger.debug("sentence-transformers not installed")
     except Exception as exc:
         logger.info("BGE model unavailable (%s), falling back to MiniLM", exc)
         try:
@@ -260,22 +269,10 @@ def create_embedding_provider(
             _provider_cache[model] = provider
             return provider
         except ImportError:
-            logger.debug("sentence-transformers not installed, trying OpenAI")
+            logger.debug("sentence-transformers not installed")
         except Exception as exc2:
             logger.warning("Local embedding provider unavailable: %s", exc2)
             logger.debug("Local embedding provider traceback", exc_info=True)
-
-    # Try OpenAI API
-    if os.environ.get("OPENAI_API_KEY"):
-        try:
-            provider = OpenAIEmbeddingProvider()
-            logger.info("Using OpenAI embedding provider: %s", provider.name)
-            _provider_cache[model] = provider
-            return provider
-        except ImportError:
-            logger.debug("openai package not installed")
-        except Exception:
-            logger.debug("OpenAI embedding provider failed", exc_info=True)
 
     # Graceful degradation — don't cache so retry picks up newly installed packages
     logger.info("No embedding provider available; semantic search will use keyword fallback")

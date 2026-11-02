@@ -304,3 +304,62 @@ class TestNullEmbeddingProvider:
         provider = NullEmbeddingProvider()
 
         assert isinstance(provider, EmbeddingProvider)
+
+
+class TestRemoteProviderConsent:
+    """An API key alone must not send source text to a remote provider."""
+
+    def test_openai_key_alone_does_not_select_openai(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        openai_module = MagicMock()
+        monkeypatch.setitem(sys.modules, "openai", openai_module)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.delenv("ATTOCODE_EMBEDDING_MODEL", raising=False)
+
+        with patch(
+            "attocode_intel._internal.integrations.context.embeddings.NomicEmbeddingProvider.__init__",
+            side_effect=ImportError("nope"),
+        ), patch(
+            "attocode_intel._internal.integrations.context.embeddings.CodeEmbeddingProvider.__init__",
+            side_effect=ImportError("nope"),
+        ), patch(
+            "attocode_intel._internal.integrations.context.embeddings.LocalEmbeddingProvider.__init__",
+            side_effect=ImportError("nope"),
+        ):
+            provider = create_embedding_provider("")
+
+        assert isinstance(provider, NullEmbeddingProvider)
+        openai_module.OpenAI.assert_not_called()
+
+    def test_explicit_openai_selects_openai(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        openai_module = MagicMock()
+        monkeypatch.setitem(sys.modules, "openai", openai_module)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.delenv("ATTOCODE_LOCAL_ONLY", raising=False)
+        monkeypatch.setenv("ATTOCODE_EMBEDDING_MODEL", "openai")
+
+        provider = create_embedding_provider("")
+
+        assert provider.name == "openai:text-embedding-3-small"
+        openai_module.OpenAI.assert_called_once()
+
+    @pytest.mark.parametrize("value", ["1", "true", "on"])
+    def test_local_only_refuses_explicit_openai(
+        self, monkeypatch: pytest.MonkeyPatch, value: str,
+    ) -> None:
+        openai_module = MagicMock()
+        monkeypatch.setitem(sys.modules, "openai", openai_module)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.delenv("ATTOCODE_LOCAL_ONLY", raising=False)
+        cached = create_embedding_provider("openai")
+        assert "openai" in _provider_cache
+
+        monkeypatch.setenv("ATTOCODE_LOCAL_ONLY", value)
+        provider = create_embedding_provider("openai")
+
+        assert provider is not cached
+        assert isinstance(provider, NullEmbeddingProvider)
+        openai_module.OpenAI.assert_called_once()
