@@ -121,6 +121,39 @@ async def inspect_first_named(gateway, results, query, budget):
     return {"request": request, "response": decode(await gateway.execute_mcp("inspect_symbol", request))}
 
 
+def embed_diagnostic(mgr, query="load settings from a configuration file"):
+    """Store and cosine facts for a failed dense preflight; one extra query embedding."""
+    out = {}
+    try:
+        import numpy as np
+        from attocode_intel._internal.integrations.context import vector_store
+
+        store = mgr._store
+        conn = store._get_conn()
+        with store._lock:
+            rows = conn.execute("SELECT length(vector), dimension, model_name, COUNT(*) "
+                                "FROM vectors GROUP BY 1, 2, 3").fetchall()
+        out |= {"store": id(store), "db": str(store.db_path), "dimension": store.dimension,
+                "degraded": getattr(store, "degraded", None), "count": store.count(),
+                "numpy": vector_store._HAS_NUMPY, "rows": rows}
+        qvec = mgr._provider.embed_query([query])[0]
+        out["qvec"] = {"len": len(qvec), "norm": float(np.linalg.norm(qvec)) if qvec else 0.0,
+                       "head": [round(float(x), 4) for x in qvec[:4]]}
+        out["search"] = [(h.file_path, h.score) for h in store.search(qvec, top_k=5)] if qvec else None
+        m = store._vec_matrix
+        out["matrix"] = {"shape": None if m is None else list(m.shape), "meta": len(store._vec_meta or []),
+                         "loaded": store._vec_loaded_version, "version": store._vec_cache_version}
+        if m is not None and len(m) and qvec:
+            s = m @ np.asarray(qvec, dtype=np.float32)
+            out["cosine"] = {"max": float(np.nanmax(s)), "min": float(np.nanmin(s)), "mean": float(np.nanmean(s)),
+                             "positive": int((s > 0).sum()), "nan": int(np.isnan(s).sum()),
+                             "row0_norm": float(np.linalg.norm(m[0]))}
+            out["self"] = [(h.file_path, h.score) for h in store.search(m[0].tolist(), top_k=1)]
+        return out
+    except Exception as exc:  # the diagnostic must not hide the preflight failure
+        return {**out, "diagnostic_error": repr(exc)}
+
+
 def inspect_hits(inspection, evidence):
     if not inspection:
         return []
@@ -290,7 +323,9 @@ async def run(args):
                 if mgr._dense_last.get("status") == "ok" and mgr._dense_last.get("files"):
                     break
             else:
-                raise RuntimeError(f"Hosted embedding preflight failed: {embed_preflight}")
+                diag = await loop.run_in_executor(gateway._workers[key], embed_diagnostic, mgr)
+                check_calls()
+                raise RuntimeError(f"Hosted embedding preflight failed: {embed_preflight} {diag}")
         if args.require_rerank:
             # A non-frozen query proves the hosted path before any frozen question runs.
             for _ in range(3):
