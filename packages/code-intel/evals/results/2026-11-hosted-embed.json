@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "trial": "hosted embeddings in product search (ATTOCODE_INTEL_EMBEDDING=openrouter)",
+  "split": "development",
+  "passed": false,
+  "verdict": "rejected at the development screen",
+  "candidate": {
+    "commits": {
+      "candidate_and_harness": "d3bcd67",
+      "workflow_count_fix": "d854f86",
+      "preflight_diagnostic": "b5485cb",
+      "keep_negative_cosines": "c09e131"
+    },
+    "model": "voyageai/voyage-code-4",
+    "dimensions": 1024,
+    "endpoint": "https://openrouter.ai/api/v1/embeddings",
+    "fusion": "equal-weight RRF of the first 48 distinct dense files into the product file list, k 60",
+    "consent": "workspace_consent: opt-in and workspace equal to the project directory",
+    "engine_sha256": "20a5250eecf615a88524f49377cc27ededf1280c1cac3c0ebee564818873cea0",
+    "operator_sha256": "cf2c3f2f2720196a1b878d4ea9bcd5a447bf874f6d606b1a537fc61c83b0e3d3"
+  },
+  "design": {
+    "path": "packages/code-intel/evals/designs/2026-10-17-test-source-slot-development.json",
+    "sha256": "c001108186956cc4cfc49bef969ec4abf85015677a8c4755c79450fbb06bc02e",
+    "questions": 68,
+    "consumed_before_this_trial": true
+  },
+  "runs": [
+    {
+      "id": 41347466026,
+      "head": "d3bcd67",
+      "outcome": "incomplete",
+      "measured_usage_delta_usd": 0.0,
+      "used_for_decision": false,
+      "stop": "candidate arm start: shell arithmetic on the call and spend count before the first pack; fixed in PR 310"
+    },
+    {
+      "id": 41400830542,
+      "head": "d854f86",
+      "outcome": "incomplete",
+      "measured_usage_delta_usd": 0.00080964,
+      "used_for_decision": false,
+      "stop": "preflight on express: ok with 0 files, three times; PR 311 added store and cosine diagnostics"
+    },
+    {
+      "id": 41405042110,
+      "head": "b5485cb",
+      "outcome": "incomplete",
+      "measured_usage_delta_usd": 0.00081024,
+      "used_for_decision": false,
+      "stop": "preflight on express: 331 rows, all cosines -0.271 to -0.061, NumPy path cut at 0; fixed in PR 312"
+    },
+    {
+      "id": 41407001519,
+      "head": "c09e131",
+      "outcome": "complete",
+      "measured_usage_delta_usd": 0.289209,
+      "used_for_decision": true
+    }
+  ],
+  "checks": {
+    "file_totals_no_loss": true,
+    "visible_totals_no_loss": false,
+    "scoped_no_individual_loss": true,
+    "inspection_no_net_loss": false,
+    "files_5_gain": true,
+    "no_file_loss_24": false,
+    "at_most_one_file_loss_5": false,
+    "packs_indexed": true,
+    "pinned_model": true,
+    "no_consent_refusal": true,
+    "fallback_rate": true,
+    "search_p95": true,
+    "baseline_no_remote_calls": true,
+    "no_refused_calls": true,
+    "spend": true
+  },
+  "checks_failed": [
+    "at_most_one_file_loss_5",
+    "inspection_no_net_loss",
+    "no_file_loss_24",
+    "visible_totals_no_loss"
+  ],
+  "totals": {
+    "baseline": {
+      "questions": 68,
+      "files_5": 71,
+      "ranges_5": 34,
+      "visible_5": 22,
+      "files_24": 90,
+      "ranges_24": 41,
+      "visible_24": 12,
+      "files_scoped": 66,
+      "ranges_scoped": 56,
+      "visible_scoped": 29,
+      "inspection_visible": 11,
+      "p95_seconds": 0.19334044199999312
+    },
+    "candidate": {
+      "questions": 68,
+      "files_5": 81,
+      "ranges_5": 30,
+      "visible_5": 18,
+      "files_24": 95,
+      "ranges_24": 34,
+      "visible_24": 13,
+      "files_scoped": 68,
+      "ranges_scoped": 56,
+      "visible_scoped": 29,
+      "inspection_visible": 10,
+      "p95_seconds": 0.596678149000013
+    }
+  },
+  "files_5_net_by_pack": {
+    "express": 3,
+    "ripgrep": 0,
+    "cats-effect": 0,
+    "okhttp": 0,
+    "requests": 2,
+    "gson": 2,
+    "rails": 0,
+    "SwiftFormat": 2,
+    "spdlog": 2,
+    "ggplot2": -1
+  },
+  "file_label_gains": {
+    "5": [
+      "SwiftFormat:file-coverage-development-impl-2 Sources/Arguments.swift",
+      "SwiftFormat:file-coverage-development-test Sources/CommandLine.swift",
+      "SwiftFormat:file-coverage-validation-test Sources/Singularize.swift",
+      "express:test-intent-2 test/req.subdomains.js",
+      "express:usefulness-development-3 lib/application.js",
+      "express:usefulness-validation-3 lib/application.js",
+      "gson:usefulness-development-2 gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+      "gson:usefulness-validation-2 gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+      "okhttp:test-intent-1 okhttp/src/jvmTest/kotlin/okhttp3/HeadersTest.kt",
+      "rails:file-coverage-development-impl-2 activejob/lib/active_job/exceptions.rb",
+      "requests:usefulness-development-3 src/requests/utils.py",
+      "requests:usefulness-validation-3 src/requests/exceptions.py",
+      "spdlog:file-coverage-development-impl-2 include/spdlog/sinks/daily_file_sink.h",
+      "spdlog:file-coverage-validation-control include/spdlog/details/mpmc_blocking_q.h"
+    ],
+    "24": [
+      "SwiftFormat:file-coverage-development-control Sources/CommandLine.swift",
+      "SwiftFormat:file-coverage-validation-impl-1 Sources/Singularize.swift",
+      "SwiftFormat:file-coverage-validation-test Sources/Singularize.swift",
+      "express:usefulness-development-2 test/req.accepts.js",
+      "gson:usefulness-development-2 gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+      "gson:usefulness-validation-1 gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+      "gson:usefulness-validation-2 gson/src/test/java/com/google/gson/functional/LeniencyTest.java",
+      "rails:file-coverage-development-impl-2 activejob/lib/active_job/exceptions.rb",
+      "spdlog:file-coverage-validation-test include/spdlog/details/backtracer-inl.h"
+    ]
+  },
+  "file_label_losses": {
+    "5": [
+      "SwiftFormat:file-coverage-development-impl-1 Sources/CommandLine.swift",
+      "ggplot2:file-coverage-validation-control R/position-jitterdodge.R",
+      "okhttp:test-intent-2 okhttp/src/jvmTest/kotlin/okhttp3/FormBodyTest.kt",
+      "rails:file-coverage-validation-control activerecord/lib/active_record/encryption/key.rb"
+    ],
+    "24": [
+      "SwiftFormat:file-coverage-validation-impl-1 Sources/Rules/PreferForLoop.swift",
+      "ggplot2:file-coverage-development-impl-1 R/scale-manual.R",
+      "rails:file-coverage-development-control activejob/lib/active_job/core.rb",
+      "spdlog:file-coverage-validation-impl-2 include/spdlog/details/thread_pool-inl.h"
+    ]
+  },
+  "individual_losses": [
+    {
+      "id": "SwiftFormat:file-coverage-development-impl-1",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+        1
+      ]
+    },
+    {
+      "id": "SwiftFormat:file-coverage-validation-impl-1",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+        1
+      ]
+    },
+    {
+      "id": "ggplot2:file-coverage-development-impl-1",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "ggplot2:file-coverage-validation-control",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+        1
+      ]
+    },
+    {
+      "id": "ggplot2:file-coverage-validation-control",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+        1
+      ]
+    },
+    {
+      "id": "okhttp:test-intent-2",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "okhttp:test-intent-2",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "rails:file-coverage-development-control",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+        1
+      ]
+    },
+    {
+      "id": "rails:file-coverage-development-test",
+      "page": "24",
+      "metric": "visible",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "rails:file-coverage-validation-control",
+      "page": "5",
+      "metric": "files",
+      "labels": [
+        1
+      ]
+    },
+    {
+      "id": "rails:file-coverage-validation-control",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+        1
+      ]
+    },
+    {
+      "id": "requests:usefulness-development-1",
+      "page": "5",
+      "metric": "visible",
+      "labels": [
+        1
+      ]
+    },
+    {
+      "id": "ripgrep:test-intent-2",
+      "page": "24",
+      "metric": "visible",
+      "labels": [
+        0
+      ]
+    },
+    {
+      "id": "spdlog:file-coverage-validation-impl-2",
+      "page": "24",
+      "metric": "files",
+      "labels": [
+        0
+      ]
+    }
+  ],
+  "motivating_miss": {
+    "id": "express:usefulness-development-2",
+    "file": "test/req.accepts.js",
+    "baseline_5": false,
+    "candidate_5": false,
+    "baseline_24": false,
+    "candidate_24": true
+  },
+  "dense": {
+    "statuses": {
+      "ok": 612
+    },
+    "p95_ms": 508.0,
+    "search_p95_seconds": 0.697750696000071,
+    "models": [
+      "voyage-code-4"
+    ]
+  },
+  "index": {
+    "SwiftFormat": {
+      "chunks": 11053,
+      "seconds": 30.811521341999992,
+      "stored": 10515,
+      "name": "openrouter:voyage-code-4",
+      "requests": 346,
+      "tokens": 348896,
+      "cost": 0.04186751999999997,
+      "abort": null
+    },
+    "cats-effect": {
+      "chunks": 5695,
+      "seconds": 17.22542435700001,
+      "stored": 5070,
+      "name": "openrouter:voyage-code-4",
+      "requests": 178,
+      "tokens": 164454,
+      "cost": 0.019734480000000006,
+      "abort": null
+    },
+    "express": {
+      "chunks": 333,
+      "seconds": 1.8010848469999985,
+      "stored": 331,
+      "name": "openrouter:voyage-code-4",
+      "requests": 11,
+      "tokens": 6732,
+      "cost": 0.0008078399999999999,
+      "abort": null
+    },
+    "ggplot2": {
+      "chunks": 2,
+      "seconds": 0.581720439000037,
+      "stored": 2,
+      "name": "openrouter:voyage-code-4",
+      "requests": 1,
+      "tokens": 42,
+      "cost": 5.04e-06,
+      "abort": null
+    },
+    "gson": {
+      "chunks": 3281,
+      "seconds": 10.618865565000021,
+      "stored": 3006,
+      "name": "openrouter:voyage-code-4",
+      "requests": 103,
+      "tokens": 104579,
+      "cost": 0.012549479999999993,
+      "abort": null
+    },
+    "okhttp": {
+      "chunks": 7733,
+      "seconds": 21.147533269000007,
+      "stored": 7442,
+      "name": "openrouter:voyage-code-4",
+      "requests": 242,
+      "tokens": 249876,
+      "cost": 0.02998512000000001,
+      "abort": null
+    },
+    "rails": {
+      "chunks": 50205,
+      "seconds": 128.943540809,
+      "stored": 49934,
+      "name": "openrouter:voyage-code-4",
+      "requests": 1569,
+      "tokens": 1368905,
+      "cost": 0.1642686000000001,
+      "abort": null
+    },
+    "requests": {
+      "chunks": 828,
+      "seconds": 3.9940955409999788,
+      "stored": 805,
+      "name": "openrouter:voyage-code-4",
+      "requests": 26,
+      "tokens": 26893,
+      "cost": 0.0032271599999999998,
+      "abort": null
+    },
+    "ripgrep": {
+      "chunks": 3718,
+      "seconds": 11.532496057999992,
+      "stored": 3330,
+      "name": "openrouter:voyage-code-4",
+      "requests": 117,
+      "tokens": 81656,
+      "cost": 0.00979872,
+      "abort": null
+    },
+    "spdlog": {
+      "chunks": 2749,
+      "seconds": 8.437308007999945,
+      "stored": 2337,
+      "name": "openrouter:voyage-code-4",
+      "requests": 86,
+      "tokens": 48731,
+      "cost": 0.005847719999999998,
+      "abort": null
+    }
+  },
+  "independent_recompute": {
+    "script": "recompute.py",
+    "sha256": "fcb2f81e2adc8e9020a70454a91337d2d558f6bd15452f7f73a24c1b17e085bb",
+    "output": "recompute-output.txt",
+    "output_sha256": "985a0dbd50c570f76306fd9d7a95dadbd5795898c064340b59b888233ab909c6",
+    "result": "decision.json matches",
+    "stdlib_only": true
+  },
+  "spend": {
+    "key_limit_usd": 20,
+    "posted_calls_run_4": 3301,
+    "reported_usd_run_4": 0.289209,
+    "measured_usage_total_usd": 0.29082888,
+    "key_remaining_usd": 10.09963304,
+    "note": "OpenRouter key usage counter; not an invoice"
+  },
+  "archive": {
+    "path": "packages/code-intel/evals/results/2026-11-hosted-embed.tar.gz",
+    "sha256": "3f386c95b8e1c73b177072124baaf1d6fb1eec010be086df9b7565796863edb4",
+    "members": 65
+  },
+  "kept": [
+    "systemone_ranker.workspace_consent",
+    "post_json max_bytes argument"
+  ],
+  "next_stage": "none: no fresh questions written, no validation run, candidate code removed"
+}

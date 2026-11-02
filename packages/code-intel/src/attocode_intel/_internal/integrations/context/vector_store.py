@@ -586,8 +586,6 @@ class VectorStore:
         top_k: int = 10,
         file_filter: str = "",
         existing_files: set[str] | None = None,
-        *,
-        keep_negative: bool = False,
     ) -> list[SearchResult]:
         """Search for similar vectors.
 
@@ -602,9 +600,6 @@ class VectorStore:
             existing_files: Optional set of file paths that exist on disk.
                 When provided, vectors whose file_path is not in this set
                 are skipped (filters out stale branch data in local mode).
-            keep_negative: Keep hits with a cosine of 0 or less. Some hosted
-                models give negative query-document cosines whose order still
-                ranks. The pure Python path never drops them.
 
         Returns:
             Top-k results sorted by similarity score (highest first).
@@ -618,7 +613,7 @@ class VectorStore:
         self._check_external_cache_bump()
 
         if _HAS_NUMPY:
-            return self._search_numpy(query_vector, top_k, file_filter, existing_files, keep_negative)
+            return self._search_numpy(query_vector, top_k, file_filter, existing_files)
         return self._search_python(query_vector, top_k, file_filter, existing_files)
 
     def _search_numpy(
@@ -627,7 +622,6 @@ class VectorStore:
         top_k: int,
         file_filter: str,
         existing_files: set[str] | None,
-        keep_negative: bool = False,
     ) -> list[SearchResult]:
         """Numpy-accelerated vector search with in-memory cache."""
         # Ensure cache is current
@@ -649,9 +643,9 @@ class VectorStore:
             for i, meta in enumerate(self._vec_meta):
                 fp = meta[1]  # file_path
                 if existing_files is not None and fp not in existing_files:  # noqa: SIM114 — clearer as two branches than one combined or
-                    scores[i] = -np.inf
+                    scores[i] = -1.0
                 elif file_filter and not fnmatch.fnmatch(fp, file_filter):
-                    scores[i] = -np.inf
+                    scores[i] = -1.0
 
         # Top-k selection: argpartition is O(N) vs O(N log N) for full sort
         n = len(scores)
@@ -661,11 +655,10 @@ class VectorStore:
             top_indices = np.argpartition(scores, -top_k)[-top_k:]
             top_indices = top_indices[np.argsort(scores[top_indices])[::-1]]
 
-        floor = -np.inf if keep_negative else 0.0
         results: list[SearchResult] = []
         for idx in top_indices:
             s = float(scores[idx])
-            if s <= floor:
+            if s <= 0:
                 break
             m = self._vec_meta[idx]
             results.append(SearchResult(

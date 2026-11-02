@@ -409,7 +409,6 @@ class SemanticSearchManager:
     _importance_scores: dict[str, float] = field(default_factory=dict, repr=False)
     _frecency_tracker: Any = field(default=None, repr=False)
     _dep_graph: Any = field(default=None, repr=False)
-    _dense_last: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         if self.index_probe is None and os.environ.get("ATTOCODE_INTEL_INDEX_PROBE") == "1":
@@ -541,24 +540,13 @@ class SemanticSearchManager:
         from attocode_intel._internal.integrations.context.embeddings import (
             NullEmbeddingProvider,
             create_embedding_provider,
-            create_hosted_provider,
         )
-        hosted = os.environ.get("ATTOCODE_INTEL_EMBEDDING", "")
-        refused = ""
-        if hosted:
-            # Opt-in hosted embeddings never fall back to auto-detect.
-            try:
-                self._provider = create_hosted_provider(hosted, os.path.realpath(self.root_dir))
-            except ValueError as exc:
-                self._provider, refused = NullEmbeddingProvider(), str(exc)
-        else:
-            self._provider = create_embedding_provider()
+        self._provider = create_embedding_provider()
         self._keyword_fallback = isinstance(self._provider, NullEmbeddingProvider)
         if self._keyword_fallback:
-            self._index_progress.degraded_reason = (
-                "hosted_embedding_refused" if hosted else "embedding_provider_unavailable")
-            if refused or not self._index_progress.last_error:
-                self._index_progress.last_error = refused or (
+            self._index_progress.degraded_reason = "embedding_provider_unavailable"
+            if not self._index_progress.last_error:
+                self._index_progress.last_error = (
                     "Embedding provider unavailable; semantic search is running in keyword-only mode."
                 )
 
@@ -582,7 +570,7 @@ class SemanticSearchManager:
             )
             try:
                 self._store = VectorStore(
-                    db_path=os.path.join(db_dir, getattr(self._provider, "store_file", "embeddings.db")),
+                    db_path=os.path.join(db_dir, "embeddings.db"),
                     dimension=self._provider.dimension(),
                     model_name=provider_name_str,
                     model_version=provider_version_str,
@@ -647,7 +635,7 @@ class SemanticSearchManager:
         File notifications must never initialize or download an embedding model.
         Explicit indexing or search initializes the provider before enqueueing.
         """
-        if self._keyword_fallback or not self._store or self._hosted_unindexed():
+        if self._keyword_fallback or not self._store:
             return
         try:
             rel = os.path.relpath(file_path, self.root_dir)
@@ -660,35 +648,6 @@ class SemanticSearchManager:
                 return
             self._reindex_pending.add(rel)
             self._reindex_queue.put(rel)
-
-    def _hosted_dense_files(self, query: str, file_filter: str) -> tuple[str, ...]:
-        """The first 48 distinct files of the opt-in hosted vector search, or ().
-
-        Only an explicit index spends: an empty store makes no request. A failed
-        query embedding gives (), and the search stays lexical.
-        """
-        # ponytail: no query-vector cache; a repeated query embeds again.
-        self._ensure_provider()
-        if self._keyword_fallback or self._hosted_unindexed() or not getattr(self._provider, "remote", False):
-            self._dense_last = {"status": "off", "ms": 0.0, "files": 0}
-            return ()
-        start = time.monotonic()
-        try:
-            qvec = self._provider.embed_query([query])[0]
-            # voyage-code-4 query-document cosines can all be negative; their order still ranks.
-            hits = self._store.search(qvec, top_k=1000, file_filter=file_filter, keep_negative=True) if qvec else []
-        except Exception:
-            qvec, hits = [], []
-        files = tuple(dict.fromkeys(hit.file_path for hit in hits))[:48]
-        # "ok" means the query embedding worked; a scope can still match no vector.
-        self._dense_last = {"status": "ok" if qvec else "failed",
-                            "ms": round((time.monotonic() - start) * 1000, 1), "files": len(files)}
-        return files
-
-    def _hosted_unindexed(self) -> bool:
-        """A hosted provider spends only after an explicit index has stored rows."""
-        return bool(getattr(self._provider, "remote", False)) and (
-            self._store is None or self._store.count() == 0)
 
     @property
     def is_available(self) -> bool:
@@ -757,7 +716,7 @@ class SemanticSearchManager:
 
         # Batch embed (use NL summaries when heuristic mode is enabled)
         texts = self._get_embedding_texts(chunks)
-        batch_size = getattr(self._provider, "index_batch", 64)
+        batch_size = 64
         all_vectors: list[list[float]] = []
 
         for i in range(0, len(texts), batch_size):
@@ -852,11 +811,6 @@ class SemanticSearchManager:
 
         # Apply query expansion for better recall
         expanded_query = _expand_query(query, _lang) if expand_query else query
-
-        if os.environ.get("ATTOCODE_INTEL_EMBEDDING"):
-            dense = self._hosted_dense_files(query, file_filter)
-            return (self.search_candidates(expanded_query, top_k, file_filter, dense_files=dense)
-                    or self._scoped_literal_results(query, file_filter))
 
         # Search never initializes an optional embedding provider: doing so can
         # load or download weights on an interactive request. Explicit indexing
@@ -1085,7 +1039,6 @@ class SemanticSearchManager:
     def search_candidates(
         self, query: str, top_k: int = 50, file_filter: str = "",
         trace: dict[str, list[str]] | None = None, tests_last: bool = True,
-        dense_files: tuple[str, ...] | list[str] = (),
     ) -> list[SemanticSearchResult]:
         """Return local lexical candidates without initializing an embedding model.
 
@@ -1100,9 +1053,6 @@ class SemanticSearchManager:
         ``tests_last`` applies the source/test intent partition (``demote_tests``):
         source first normally, tests first for short explicit test requests.
         Task scores for test suggestions turn it off.
-
-        ``dense_files`` is an opt-in hosted embedding file order. It is fused like
-        whole-file BM25 (equal-weight RRF). Empty means the plain lexical path.
         """
         if top_k <= 0:
             return []
@@ -1139,8 +1089,6 @@ class SemanticSearchManager:
             keyword = self._penalize_exclusions(keyword, negative)
             if trace is not None:
                 trace["chunk_fused"] = _file_order(keyword)
-            if dense_files:
-                keyword = self._fuse_file_order(keyword, list(dense_files))
             if tests_last:
                 keyword = demote_tests(query, keyword)
             if trace is not None:
@@ -1213,8 +1161,6 @@ class SemanticSearchManager:
             trace["chunk_fused"] = _file_order(fused)
         if files:
             fused = self._fuse_file_order(fused, files)
-        if dense_files:
-            fused = self._fuse_file_order(fused, list(dense_files))
         if tests_last:
             fused = demote_tests(query, fused)
         if trace is not None:
@@ -2866,7 +2812,7 @@ class SemanticSearchManager:
             Number of chunks indexed (0 if skipped).
         """
         self._ensure_provider()
-        if self._keyword_fallback or not self._store or self._hosted_unindexed():
+        if self._keyword_fallback or not self._store:
             return 0
 
         from attocode_intel._internal.integrations.context.vector_store import VectorEntry
@@ -3096,11 +3042,10 @@ class SemanticSearchManager:
         self._ensure_provider()
         if self._keyword_fallback or not self._store:
             self._index_progress.status = "error"
-            if self._index_progress.degraded_reason != "hosted_embedding_refused":
-                self._index_progress.degraded_reason = "embedding_provider_unavailable"
-                self._index_progress.last_error = (
-                    "Background indexing unavailable because no embedding provider is configured."
-                )
+            self._index_progress.degraded_reason = "embedding_provider_unavailable"
+            self._index_progress.last_error = (
+                "Background indexing unavailable because no embedding provider is configured."
+            )
             return self._index_progress
 
         with self._reindex_lock:
