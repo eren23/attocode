@@ -292,7 +292,7 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
             except (ImportError, RuntimeError) as exc:
                 return {"error": str(exc)}
             if provider.name == "none":
-                return {"error": "No embedding provider available", "hint": "Install sentence-transformers or set OPENAI_API_KEY"}
+                return {"error": "No embedding provider available", "hint": "Install sentence-transformers or set ATTOCODE_EMBEDDING_MODEL=openai with OPENAI_API_KEY"}
 
             dim = provider.dimension()
 

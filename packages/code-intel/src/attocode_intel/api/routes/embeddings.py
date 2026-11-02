@@ -146,7 +146,7 @@ async def get_embedding_status(
             response.provider_available = False
             response.provider_hint = (
                 "No embedding provider detected. "
-                "Install sentence-transformers (`pip install attocode[semantic]`) or set OPENAI_API_KEY."
+                "Install sentence-transformers (`pip install attocode[semantic]`) or set ATTOCODE_EMBEDDING_MODEL=openai with OPENAI_API_KEY."
             )
     except (ImportError, RuntimeError) as exc:
         response.provider_available = False
@@ -297,7 +297,7 @@ async def trigger_generate_embeddings(
     if provider.name == "none":
         raise HTTPException(
             status_code=400,
-            detail="No embedding provider available. Install sentence-transformers or set OPENAI_API_KEY.",
+            detail="No embedding provider available. Install sentence-transformers or set ATTOCODE_EMBEDDING_MODEL=openai with OPENAI_API_KEY.",
         )
 
     # Enqueue the ARQ job

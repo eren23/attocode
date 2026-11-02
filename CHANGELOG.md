@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with no static callers could get the status `verified` with no references when the
   server was not ready. Now it gets `no_references`, and a later request tries again.
 
+### Security
+
+- An `OPENAI_API_KEY` in the environment no longer sends source text to OpenAI. Before,
+  when no local embedding model loaded, the embedding auto-detection selected the OpenAI
+  provider only because the environment had the key. Then an explicit index call sent code
+  chunks to the OpenAI API. Auto-detection now selects local providers only.
+- To use OpenAI embeddings, set `ATTOCODE_EMBEDDING_MODEL=openai`. With
+  `ATTOCODE_LOCAL_ONLY` (or `--local-only`), the factory refuses the OpenAI provider also
+  when you select it, and semantic search uses keyword fallback. If you indexed with OpenAI
+  through auto-detection, set `ATTOCODE_EMBEDDING_MODEL=openai` to keep that index.
+
 ## [Intelligence 0.1.24] - 2026-11-01
 
 ### Added
