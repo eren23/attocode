@@ -67,14 +67,14 @@ async def test_running_rust_server_can_reload_after_an_edit(tmp_path, monkeypatc
     source = (_status_server(2.5)
               .replace('ready = status = False', 'ready = status = reloading = False')
               .replace('threading.Timer(2.5, become_ready)', 'threading.Timer(2.5 if reloading else 0, become_ready)')
-              .replace('    result = None', """
+              .replace("    if 'id' not in msg:", """
     if method == 'textDocument/didChange':
         ready = False
         timer = None
         reloading = True
         if status:
             send({'jsonrpc':'2.0','method':'experimental/serverStatus','params':{'health':'ok','quiescent':False}})
-    result = None"""))
+    if 'id' not in msg:"""))
     gateway, root, _extension = _gateway(tmp_path, monkeypatch, source)
     try:
         first = await _inspect(gateway)
@@ -85,7 +85,9 @@ async def test_running_rust_server_can_reload_after_an_edit(tmp_path, monkeypatc
         helper = root / 'helper.rs'
         helper.write_text(helper.read_text() + '\n')
         (root / 'caller.rs').write_text('use crate::helper::helper;\n\npub fn caller() -> i32 { helper() }\n')
+        started = time.monotonic()
         changed = await _inspect(gateway)
+        assert 2.0 <= time.monotonic() - started < 5.8  # The reload really happened.
         assert changed['metadata']['analysis']['precision']['status'] == 'verified', changed
         assert any(r['file_path'] == 'caller.rs' and r['line'] == 3 and r['source'] == 'lsp'
                    for r in changed['data']['references'])
@@ -95,6 +97,34 @@ async def test_running_rust_server_can_reload_after_an_edit(tmp_path, monkeypatc
     finally:
         await gateway.close()
     assert process.returncode == 0
+
+
+@pytest.mark.parametrize('language, upper', [('rust', 5.8), ('python', 2.8)])
+async def test_hung_initialization_is_reaped_within_the_precision_budget(tmp_path, monkeypatch, language, upper):
+    import asyncio
+
+    processes = []
+    spawn = asyncio.create_subprocess_exec
+
+    async def record_process(*args, **kwargs):
+        process = await spawn(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', record_process)
+    source = SERVER.replace("    if method == 'initialize':",
+                            "    if method == 'initialize':\n        __import__('time').sleep(60)")
+    gateway, _root, extension = _gateway(tmp_path, monkeypatch, source, language)
+    try:
+        await gateway.execute('symbols', {'path': 'helper' + extension})
+        started = time.monotonic()
+        result = await _inspect(gateway, extension)
+        assert time.monotonic() - started < upper
+        assert result['metadata']['analysis']['precision']['queries'][0]['status'] == 'timeout'
+        assert result['data']['references']
+        assert len(processes) == 1 and processes[0].returncode is not None
+    finally:
+        await gateway.close()
 
 
 @pytest.mark.parametrize('language, lower, upper', [('rust', 4.5, 5.8), ('python', 1.5, 2.8)])
