@@ -968,8 +968,27 @@ class LSPManager:
 
         try:
             await client.start()
-        except BaseException:
-            await client.stop()
+        except BaseException as exc:
+            process, reader = client._process, client._reader_task
+            try:
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+                await client.stop()
+            except asyncio.CancelledError:
+                # Startup exhausted its caller's budget. Do not spend another
+                # full timeout on shutdown and exit for an unfinished server.
+                # Also handle cancellation during cleanup of a startup error.
+                if process is not None:
+                    if process.returncode is None:
+                        try:
+                            process.kill()
+                        except ProcessLookupError:
+                            pass
+                    await process.wait()
+                await client.stop()
+                if reader is not None:
+                    await asyncio.gather(reader, return_exceptions=True)
+                raise
             raise
         self._clients[language_id] = client
         self._emit("lsp.started", {
