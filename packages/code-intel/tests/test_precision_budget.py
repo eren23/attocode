@@ -80,6 +80,10 @@ async def test_running_rust_server_can_reload_after_an_edit(tmp_path, monkeypatc
         first = await _inspect(gateway)
         assert first['metadata']['analysis']['precision']['status'] == 'verified'
         process = next(iter(gateway._stores.values()))['service']._lsp_manager._clients['rust']._process
+        # The selected document is already open. Editing it guarantees didChange
+        # and a reload even if the server answered before caller priming was needed.
+        helper = root / 'helper.rs'
+        helper.write_text(helper.read_text() + '\n')
         (root / 'caller.rs').write_text('use crate::helper::helper;\n\npub fn caller() -> i32 { helper() }\n')
         changed = await _inspect(gateway)
         assert changed['metadata']['analysis']['precision']['status'] == 'verified', changed

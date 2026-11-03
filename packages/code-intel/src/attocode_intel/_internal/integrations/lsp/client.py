@@ -933,9 +933,9 @@ class LSPManager:
         return started
 
     async def start_server(
-        self, language_id: str, root_uri: str | None = None
+        self, language_id: str, root_uri: str | None = None, *, timeout: float | None = None
     ) -> None:
-        """Start a specific language server."""
+        """Start a server, optionally overriding this client's timeout only."""
         if language_id in self._clients:
             return
 
@@ -957,7 +957,7 @@ class LSPManager:
         client = _LSPClient(
             server_config,
             root_uri or self._root_uri,
-            self._timeout,
+            self._timeout if timeout is None else timeout,
             on_diags,
         )
 
