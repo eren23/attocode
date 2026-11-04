@@ -149,7 +149,6 @@ async def test_unresponsive_server_is_bounded_and_preserves_syntax(tmp_path, mon
 @pytest.mark.parametrize('mode', ['inherited_output', 'startup_error', 'buffered_stdin'])
 async def test_cancelled_startup_releases_pipes_held_by_a_child(tmp_path, monkeypatch, mode):
     import asyncio
-    import json
 
     release = tmp_path / 'release-child'
     exited = tmp_path / 'child-exited'
@@ -213,7 +212,7 @@ Path({str(exited)!r}).touch()
         for process in processes:
             if process.returncode is None:
                 process.kill()
-            if process.stdin:
+            if process.stdin and not process.stdin.is_closing():
                 process.stdin.transport.abort()
             process._transport.close()
             await asyncio.wait_for(process.wait(), 1)
