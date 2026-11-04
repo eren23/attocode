@@ -146,6 +146,84 @@ async def test_unresponsive_server_is_bounded_and_preserves_syntax(tmp_path, mon
         await gateway.close()
 
 
+@pytest.mark.parametrize('mode', ['inherited_output', 'startup_error', 'buffered_stdin'])
+async def test_cancelled_startup_releases_pipes_held_by_a_child(tmp_path, monkeypatch, mode):
+    import asyncio
+    import json
+
+    release = tmp_path / 'release-child'
+    exited = tmp_path / 'child-exited'
+    child_pid = tmp_path / 'child-pid'
+    child_source = f'''
+import os, time
+from pathlib import Path
+Path({str(child_pid)!r}).write_text(str(os.getpid()))
+deadline = time.monotonic() + 12
+while time.monotonic() < deadline and not Path({str(release)!r}).exists():
+    time.sleep(.02)
+Path({str(exited)!r}).touch()
+'''
+    initialize = f'''
+    if method == 'initialize':
+        import subprocess
+        subprocess.Popen([sys.executable, '-c', {child_source!r}])
+        if {mode!r} == 'buffered_stdin':
+            send({{'jsonrpc':'2.0','id':'large-config','method':'workspace/configuration',
+                  'params':{{'items':[{{}}] * 32768}}}})
+        if {mode!r} == 'startup_error':
+            send({{'jsonrpc':'2.0','id':msg['id'],'error':{{'code':-32603,'message':'initialization failed'}}}})
+        __import__('time').sleep(60)
+'''
+    source = SERVER.replace("    if method == 'initialize':", initialize)
+    processes = []
+    spawn = asyncio.create_subprocess_exec
+
+    async def record_process(*args, **kwargs):
+        process = await spawn(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', record_process)
+    gateway, _root, _extension = _gateway(tmp_path, monkeypatch, source)
+    inspection = None
+    try:
+        await gateway.execute('symbols', {'path': 'helper.rs'})
+        started = time.monotonic()
+        inspection = asyncio.create_task(_inspect(gateway))
+        if mode == 'buffered_stdin':
+            # A real workspace/configuration response fills the inherited stdin.
+            # Ordinary StreamWriter.close() would try to drain it indefinitely.
+            async with asyncio.timeout(3):
+                while not processes or not processes[0].stdin.transport.get_write_buffer_size():
+                    await asyncio.sleep(.02)
+        result = await inspection
+        assert time.monotonic() - started < 5.8
+        assert child_pid.exists() and not exited.exists(), 'Child must still hold the inherited pipes'
+        assert processes[0].returncode is not None
+        assert result['metadata']['analysis']['precision']['queries'][0]['status'] == 'timeout'
+        assert result['data']['references']
+        async with asyncio.timeout(1):
+            response = await gateway.execute('search_symbols', {'name': 'helper'})
+        assert not response.isError  # The workspace worker remains usable.
+    finally:
+        # The fixture, rather than production code, owns the surviving grandchild.
+        release.touch()
+        if inspection is not None and not inspection.done():
+            await asyncio.wait_for(inspection, 8)
+        for process in processes:
+            if process.returncode is None:
+                process.kill()
+            if process.stdin:
+                process.stdin.transport.abort()
+            process._transport.close()
+            await asyncio.wait_for(process.wait(), 1)
+        if child_pid.exists():
+            async with asyncio.timeout(2):
+                while not exited.exists():
+                    await asyncio.sleep(.02)
+        await gateway.close()
+
+
 async def test_rust_startup_and_lookup_share_one_five_second_deadline(tmp_path, monkeypatch):
     source = (SERVER.replace("        send({'jsonrpc':'2.0','id':pending_init,",
                              "        __import__('time').sleep(2.5)\n        send({'jsonrpc':'2.0','id':pending_init,")
