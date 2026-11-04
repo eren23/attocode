@@ -50,7 +50,8 @@ class PrecisionSession:
             self.retry_after.pop(key)
         from ._internal.integrations.lsp.client import BUILTIN_SERVERS
         outcomes = []
-        deadline = asyncio.get_running_loop().time() + 2.0
+        timeout = 5.0 if detect_language(definitions[0].file_path) == "rust" else 2.0
+        deadline = asyncio.get_running_loop().time() + timeout
         for definition in definitions[:8]:
             language = detect_language(definition.file_path)
             server_id = "typescript" if language == "javascript" else language
@@ -68,8 +69,8 @@ class PrecisionSession:
             try:
                 async with asyncio.timeout_at(deadline):
                     if server_id not in manager.get_active_servers():
-                        manager._timeout = 2
-                        await manager.start_server(server_id, Path(self.service.project_dir).as_uri())
+                        await manager.start_server(server_id, Path(self.service.project_dir).as_uri(),
+                                                   timeout=timeout)
                     # Send edits/deletions for all previously opened documents.
                     for rel in list(self.pending):
                         path = str(Path(self.service.project_dir) / rel)
@@ -146,7 +147,7 @@ class PrecisionSession:
                                     break
                             # A server can briefly return null after a successful
                             # warmup or edit. Yield before retrying, never extend
-                            # the enclosing two-second deadline or loop forever.
+                            # the enclosing language deadline or loop forever.
                             if attempt < 3:
                                 await asyncio.sleep(.05 * 2 ** attempt)
                                 # After a null or failed reply, a server that reports
@@ -180,7 +181,7 @@ class PrecisionSession:
                   "definitions_truncated": len(definitions) > 8}
         self.completed[key] = result
         # A server can become ready without a source edit. Retry only on a later
-        # explicit request after a short cooldown, keeping the same 2s deadline.
+        # explicit request after a short cooldown, keeping the same language budget.
         if any(o["status"] in _TRANSIENT for o in outcomes):
             self.retry_after[key] = _now() + _RETRY_SECONDS
         return result

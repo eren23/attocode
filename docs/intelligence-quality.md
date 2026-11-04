@@ -155,9 +155,11 @@ inventory. `contracts.xml` preserves per-test pass/skip/failure evidence.
 The installed TypeScript server has a cold selected-definition/edit/shutdown test.
 The opt-in Python/Go/Rust worker matrix allows at most 30 seconds of explicit server
 warmup and 15 seconds for an edit; it does not establish cold production latency.
-Production precision retains its two-second deadline and reports partial evidence
-when unavailable. CI installs pinned test servers in disposable runners, never on
-the user's device. Linux/macOS wheel jobs cover Python 3.12 and 3.13 and upgrade a
+Production precision uses a five-second deadline for Rust and two seconds for
+other languages, and reports partial evidence when unavailable. Startup and
+lookups share one deadline; retries do not reset it. CI installs pinned test
+servers in disposable runners, never on the user's device. Linux/macOS wheel
+jobs cover Python 3.12 and 3.13 and upgrade a
 0.1.5 index/configuration before checking the candidate wheel.
 
 With `QUALITY_LSP_TRACE_DIR` set, the Rust fixture also writes
@@ -176,9 +178,9 @@ payload. Hooks apply only to the fixture workspace and are restored after the
 test; an existing artifact is never overwritten. This opt-in test observer adds
 logging overhead and does not establish a cause for intermittent Rust failures.
 
-Precision enrichment keeps its existing two-second deadline and four-attempt
-limit when static analysis finds no callers. An unresolved definition together
-with empty references can be transient, so that combination continues bounded
+Precision enrichment keeps its four-attempt limit and language deadline (five
+seconds for Rust, two for other languages) when static analysis finds no callers.
+An unresolved definition together with empty references can be transient, so that combination continues bounded
 recovery. A resolved declaration with no callers still takes the unused-symbol
 fast path. Persistent unresolved results stay partial. This correction does not
 identify the historical intermittent Rust failure's cause.

@@ -369,6 +369,50 @@ class _LSPClient:
                     future.cancel()
             self._pending.clear()
 
+    async def _abort_start(
+        self,
+        process: asyncio.subprocess.Process | None,
+        reader: asyncio.Task[None] | None,
+        stderr: asyncio.Task[None] | None,
+    ) -> None:
+        """Release a cancelled startup without waiting for inherited pipes."""
+        tasks = {task for task in (*self._notifications, reader, stderr) if task is not None}
+        try:
+            if process is not None:
+                if process.returncode is None:
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                if process.stdin is not None:
+                    transport = process.stdin.transport
+                    # close() drains buffered writes; an inheriting child may
+                    # never read them. abort() also handles a pending close.
+                    if not transport.is_closing() or transport.get_write_buffer_size():
+                        transport.abort()
+                # Process.wait() can wait for descendants to close inherited
+                # pipes. asyncio has no public API to close all owned pipes.
+                process._transport.close()
+            for task in tasks:
+                task.cancel()
+            async with asyncio.timeout(0.25):
+                if process is None:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                else:
+                    await asyncio.gather(*tasks, process.wait(), return_exceptions=True)
+        except TimeoutError:
+            logger.warning("LSP %s: cancelled startup cleanup timed out", self.language_id)
+        finally:
+            self._process = None
+            self._reader_task = self._stderr_task = None
+            self._initialized = self._is_stopping = False
+            self._documents.clear()
+            self._notifications.clear()
+            for future in self._pending.values():
+                if not future.done():
+                    future.cancel()
+            self._pending.clear()
+
     async def get_definition(
         self, uri: str, line: int, character: int
     ) -> LSPLocation | None:
@@ -933,9 +977,9 @@ class LSPManager:
         return started
 
     async def start_server(
-        self, language_id: str, root_uri: str | None = None
+        self, language_id: str, root_uri: str | None = None, *, timeout: float | None = None
     ) -> None:
-        """Start a specific language server."""
+        """Start a server, optionally overriding this client's timeout only."""
         if language_id in self._clients:
             return
 
@@ -957,7 +1001,7 @@ class LSPManager:
         client = _LSPClient(
             server_config,
             root_uri or self._root_uri,
-            self._timeout,
+            self._timeout if timeout is None else timeout,
             on_diags,
         )
 
@@ -968,8 +1012,15 @@ class LSPManager:
 
         try:
             await client.start()
-        except BaseException:
-            await client.stop()
+        except BaseException as exc:
+            process, reader, stderr = client._process, client._reader_task, client._stderr_task
+            try:
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+                await client.stop()
+            except asyncio.CancelledError:
+                await client._abort_start(process, reader, stderr)
+                raise
             raise
         self._clients[language_id] = client
         self._emit("lsp.started", {
