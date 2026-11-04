@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.26] - 2026-11-04
+
+### Fixed
+
+- Rust precision enrichment gets one shared five-second budget across server startup,
+  document delivery, readiness waits and lookups. Other languages retain two seconds.
+  Retries share the deadline; a longer reload still returns partial evidence.
+- Cancelled language-server startup terminates the unfinished server and releases its
+  owned pipes, including buffered stdin. Cleanup has a fixed 250 ms allowance, so a child
+  retaining inherited pipes cannot leave the workspace worker waiting for pipe closure.
+  Ordinary startup errors retain graceful shutdown.
+
 ## [Intelligence 0.1.25] - 2026-11-02
 
 ### Fixed
