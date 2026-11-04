@@ -4,12 +4,12 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** `attocode-code-intel` 0.1.25. An `OPENAI_API_KEY` in the
-environment no longer sends source text to OpenAI: OpenAI embeddings need
-`ATTOCODE_EMBEDDING_MODEL=openai`. Rust references wait for rust-analyzer
-readiness after a null reply. Ranking defaults are unchanged. See the
-[0.1.25 release notes](intelligence-0.1.25.md). Version 0.1.24 added the
-`openrouter` preset for the opt-in hosted rerank.
+**Current version:** `attocode-code-intel` 0.1.26. Rust precision enrichment
+shares a five-second deadline across startup, readiness and lookups; other
+languages retain two seconds. Cancelled startup releases owned pipes even when
+a child retains inherited descriptors. See the [0.1.26 release notes](intelligence-0.1.26.md).
+Version 0.1.25 made OpenAI embeddings explicit with `ATTOCODE_EMBEDDING_MODEL=openai`;
+0.1.24 added the `openrouter` preset for the opt-in hosted rerank.
 
 **Development optional-language depth, 2026-10-29:** [causal native controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md)
 restore omitted OCaml/Perl call candidates, OCaml native `open_module` extraction

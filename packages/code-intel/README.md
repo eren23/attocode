@@ -43,6 +43,8 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.26 gives Rust precision lookups a shared five-second budget and fixes cancelled startup cleanup when a child retains inherited pipes. Other languages keep two seconds; longer reloads still return partial evidence.
+
 Version 0.1.25 uses OpenAI embeddings only when you set `ATTOCODE_EMBEDDING_MODEL=openai`. Before, an `OPENAI_API_KEY` in the environment was enough to send code chunks to OpenAI at index time. Rust references are also more reliable while rust-analyzer loads.
 
 Version 0.1.24 adds `ATTOCODE_INTEL_RANKING_PROVIDER=openrouter`, a preset for the opt-in hosted rerank. In a frozen trial with 24 short questions, the rerank found 24 of 26 labeled files in the first five results, against 20 without it; see [Hosted rerank](https://github.com/eren23/attocode/blob/main/docs/intelligence-search.md#hosted-rerank-experimental). Rerank stays off by default, because it sends source excerpts to OpenRouter.
