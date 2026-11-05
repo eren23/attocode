@@ -221,3 +221,16 @@ matrix uses a separately approved 1,200-second overall window; its 180-second
 per-pack timeout, full fresh manifest, first-failure stopping, source/origin/raw
 admission and RSS/disk/evidence ceilings remain unchanged. Earlier attempts are
 not reclassified. This budget change is not a product performance improvement.
+
+New workflow pack rows also retain parent-observed monotonic timings:
+`worker_seconds` covers process launch through process-group cleanup, while
+`worker_wait_seconds` covers only the wait governed by `worker_limit_seconds`
+(normally 180 seconds). Fixture setup remains in `setup_seconds`; spec writing,
+report decoding and outer evidence admission are outside the worker timings.
+The full worker duration can exceed the wait limit because launch and cleanup
+are outside that limit. Successful returns, nonzero exits, missing output and
+timeouts retain these fields, with completed checkpoints preserved. The parent
+supplies the timings rather than trusting worker output. Historical reports
+without these fields retain their original observations; summing operation
+durations does not recover full worker time. These timings describe the run,
+without establishing a performance improvement.

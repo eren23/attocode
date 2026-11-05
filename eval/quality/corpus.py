@@ -307,19 +307,27 @@ def evaluate_isolated(root, spec, directory):
     """A pathological parser cannot consume the entire matrix's time budget."""
     input_path, output_path = directory / "spec.json", directory / "worker.json"
     write_json(input_path, spec)
+    limit_seconds = PACK_SECONDS
+    worker_started = time.monotonic()
     process = subprocess.Popen([sys.executable, "-m", "eval.quality.corpus", "--worker", str(root),
                                 "--spec", str(input_path), "--output", str(output_path)],
                                start_new_session=True)
     reason = None
+    wait_started = time.monotonic()
     try:
-        code = process.wait(timeout=PACK_SECONDS)
-        if code or not output_path.is_file():
-            reason = f"Workflow worker failed (exit {code})"
+        code = process.wait(timeout=limit_seconds)
     except subprocess.TimeoutExpired:
-        reason = f"Workflow pack exceeded {PACK_SECONDS} seconds"
+        reason = f"Workflow pack exceeded {limit_seconds} seconds"
     finally:
+        # The deadline covers wait(), not launch or process-group cleanup.
+        wait_seconds = time.monotonic() - wait_started
         stop_group(process)
+    worker_seconds = time.monotonic() - worker_started
+    if reason is None and (code or not output_path.is_file()):
+        reason = f"Workflow worker failed (exit {code})"
     result = json.loads(output_path.read_text()) if output_path.is_file() else {"checks": [], "retrieval": []}
+    result.update(worker_seconds=worker_seconds, worker_wait_seconds=wait_seconds,
+                  worker_limit_seconds=limit_seconds)
     if reason:
         result.update(status="incomplete", error=reason)
     return result
