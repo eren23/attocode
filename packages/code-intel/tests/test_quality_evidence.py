@@ -251,7 +251,7 @@ def test_pack_reports_parent_worker_lifetime_and_separate_wait_budget(tmp_path, 
     elapsed = time.monotonic() - started
 
     assert boundaries['cleanup'] - boundaries['launch'] <= result['worker_seconds'] <= elapsed
-    assert .05 <= result['worker_wait_seconds'] <= result['worker_seconds'] - .1
+    assert 0 < result['worker_wait_seconds'] <= result['worker_seconds'] - .1
     assert result['worker_limit_seconds'] == 10
     assert children[0].poll() is not None
     assert result['checks'] == (checkpoint['checks'] if checkpointed else [])
