@@ -208,6 +208,59 @@ def test_interrupted_pack_preserves_completed_checks_and_stops_its_worker(tmp_pa
     assert result['status'] == 'incomplete'
     assert result['checks'][0]['name'] == 'source'
     assert child.poll() is not None
+    assert result['worker_limit_seconds'] == .5
+    assert result['worker_seconds'] >= result['worker_wait_seconds'] >= .5
+
+
+@pytest.mark.parametrize('exit_code,checkpointed', [(0, True), (7, True), (0, False)])
+def test_pack_reports_parent_worker_lifetime_and_separate_wait_budget(tmp_path, monkeypatch, exit_code, checkpointed):
+    import subprocess
+    import time
+
+    from eval.quality import corpus
+
+    original_launch, original_stop = subprocess.Popen, corpus.stop_group
+    boundaries = {}
+    children = []
+    checkpoint = {'checks': [{'name': 'source', 'outcome': 'passed'}], 'retrieval': [],
+                  'worker_seconds': 999, 'worker_wait_seconds': 999, 'worker_limit_seconds': 999}
+
+    def launch(command, **kwargs):
+        boundaries['launch'] = time.monotonic()
+        time.sleep(.05)
+        program = (
+            'import json,pathlib,sys,time; '
+            'pathlib.Path(sys.argv[1]).write_text(sys.argv[2]) if sys.argv[3] == "yes" else None; '
+            'time.sleep(.05); sys.exit(int(sys.argv[4]))'
+        )
+        child = original_launch([sys.executable, '-c', program, str(tmp_path / 'worker.json'),
+                                 json.dumps(checkpoint), 'yes' if checkpointed else 'no', str(exit_code)], **kwargs)
+        children.append(child)
+        return child
+
+    def stop(child):
+        original_stop(child)
+        time.sleep(.05)
+        boundaries['cleanup'] = time.monotonic()
+
+    monkeypatch.setattr(corpus.subprocess, 'Popen', launch)
+    monkeypatch.setattr(corpus, 'stop_group', stop)
+    monkeypatch.setattr(corpus, 'PACK_SECONDS', 10)
+    started = time.monotonic()
+    result = corpus.evaluate_isolated(tmp_path, {'id': 'fixture'}, tmp_path)
+    elapsed = time.monotonic() - started
+
+    assert boundaries['cleanup'] - boundaries['launch'] <= result['worker_seconds'] <= elapsed
+    assert .05 <= result['worker_wait_seconds'] <= result['worker_seconds'] - .1
+    assert result['worker_limit_seconds'] == 10
+    assert children[0].poll() is not None
+    assert result['checks'] == (checkpoint['checks'] if checkpointed else [])
+    assert result['retrieval'] == []
+    if exit_code or not checkpointed:
+        assert result['status'] == 'incomplete'
+        assert 'Workflow worker failed' in result['error']
+    else:
+        assert 'error' not in result and result.get('status') != 'incomplete'
 
 
 def test_resume_refuses_changed_inputs_and_missing_question_observations():
