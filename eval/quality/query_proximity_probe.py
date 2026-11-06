@@ -123,6 +123,10 @@ def run(root):
         outer = json.loads(z.read(str(base / 'report.json')))
         assert outer['status'] == 'complete' and outer['cleanup_verified'] and outer['owned_scratch_removed']
         assert outer['identity']['commit'] == qinput['head']
+        for path in ('packages/code-intel/src/attocode_intel/query_ranking.py',
+                     'packages/code-intel/src/attocode_intel/focused_evidence.py',
+                     'packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py'):
+            assert hashlib.sha256((REPO / path).read_bytes()).hexdigest() == outer['identity']['files'][path]
         diagnostic = json.loads(z.read(names[0]))
         assert diagnostic['status'] == 'complete' and len(diagnostic['packs']) == 6
         for pack in diagnostic['packs']:
