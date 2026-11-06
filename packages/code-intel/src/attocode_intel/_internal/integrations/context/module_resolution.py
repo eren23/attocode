@@ -165,7 +165,8 @@ class FileIndex(dict):
 
     def configure_namespaces(self, asts):
         self.namespace_files = defaultdict(lambda: defaultdict(dict))
-        for path, ast in asts.items():
+        # Hydration can change cache membership while namespace members are read.
+        for path, ast in asts.copy().items():
             names = {c.name for c in ast.classes} | {f.name for f in ast.functions}
             for namespace in ast.namespaces + ([c.name for c in ast.classes] if ast.language == "elixir" else []):
                 self.namespace_files[ast.language][namespace.replace('\\', '.')][path] = names
