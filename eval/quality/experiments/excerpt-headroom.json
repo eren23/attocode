@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "experiment": "excerpt-headroom",
+  "limits": {"seconds": 300, "disk_bytes": 2147483648, "rss_bytes": 2147483648, "evidence_bytes": 67108864},
+  "scope": "Consumed retained data only; no retrieval or fresh relevance claims",
+  "source_window_chars": 640,
+  "restoration_probes": 12,
+  "minimum_new_bundles": 2,
+  "minimum_repositories": 2
+}

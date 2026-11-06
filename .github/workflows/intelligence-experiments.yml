@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, capacity]
+        options: [preflight, native, preview, restart, broad, capacity, excerpt-headroom]
 
 permissions:
   contents: read
@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   experiment:
+    if: inputs.experiment != 'excerpt-headroom'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.experiment == 'capacity' && 55 || 40 }}
     env:
@@ -112,3 +113,37 @@ jobs:
             ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
             ${{ runner.temp }}/native-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
             ${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
+
+  excerpt-headroom:
+    if: inputs.experiment == 'excerpt-headroom'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Fetch exact previously admitted data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/eren23/attocode/actions/artifacts/13510883326/zip > "$RUNNER_TEMP/excerpt-input.zip"
+          echo "EXCERPT_INPUT_ZIP=$RUNNER_TEMP/excerpt-input.zip" >> "$GITHUB_ENV"
+          echo "EXCERPT_ROOT=$RUNNER_TEMP/excerpt-headroom-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+      - name: Bounded data-only source probe
+        env:
+          QUALITY_ALLOW_DOWNLOADS: '1'
+        run: uv run --no-sync python -m eval.quality.experiments excerpt-headroom --root "$EXCERPT_ROOT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: excerpt-headroom-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: error
+          path: ${{ env.EXCERPT_ROOT }}/evidence/
