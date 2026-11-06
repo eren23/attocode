@@ -108,6 +108,23 @@ def test_owner_replay_distinguishes_definitions_from_repeated_rows():
     assert owners['a.py|function|answer']['score'] == round(1.15/21, 6)
 
 
+@pytest.mark.parametrize('change,expected', [('valid', True), ('missing_fact', False),
+                                           ('wrong_file', False), ('wrong_lines', False)])
+def test_complete_answer_requires_every_visible_source_fact(change, expected):
+    question = {'answers': [{'file': 'a.py', 'proofs': [{'line': 3, 'quote': 'if ready:'},
+                                                     {'line': 4, 'quote': 'return data'}]}]}
+    row = {'file_path': 'a.py', 'snippet': 'if ready:\n    return data',
+           'snippet_start_line': 3, 'snippet_end_line': 4}
+    if change == 'missing_fact':
+        row['snippet'] = 'if ready:'
+    elif change == 'wrong_file':
+        row['file_path'] = 'b.py'
+    elif change == 'wrong_lines':
+        row['snippet_start_line'], row['snippet_end_line'] = 30, 31
+    result = decision().page_metrics(question, [row])
+    assert result['answer'] is expected
+
+
 @pytest.mark.asyncio
 async def test_fusion_capture_preserves_delivery_and_restores_patches(tmp_path):
     from eval.quality.mcp_search import observe
