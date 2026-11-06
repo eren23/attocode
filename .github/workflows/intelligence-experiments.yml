@@ -152,6 +152,22 @@ jobs:
           uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_first_page_ranking_trial.py -p eval.quality.no_agent -q --junitxml="$FIRST_PAGE_ROOT-qualification/evidence/qualification.xml"
       - name: Existing platform controls before any questions
         run: uv run --no-sync python -m eval.quality.experiments preflight --root "$FIRST_PAGE_ROOT-controls"
+      - name: Admit exact qualification inventories before questions
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json, os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root = os.environ['FIRST_PAGE_ROOT']
+          for path, expected in [(root + '-qualification/evidence/qualification.xml', 39),
+                                 (root + '-controls/evidence/preflight.xml', 455)]:
+              suites = list(ET.parse(path).getroot().iter('testsuite'))
+              assert sum(int(s.get('tests', 0)) for s in suites) == expected
+              assert all(int(s.get(k, 0)) == 0 for s in suites for k in ('failures', 'errors', 'skipped'))
+          report = json.loads(Path(root + '-controls/evidence/report.json').read_text())
+          assert report['status'] == 'complete' and report['cleanup_verified'] and report['owned_scratch_removed']
+          assert report['identity']['commit'] == os.environ['GITHUB_SHA']
+          PY
       - name: Source-bound experiment
         if: inputs.ranking_phase != 'qualification'
         run: uv run --no-sync python -m eval.quality.experiments first-page-ranking --root "$FIRST_PAGE_ROOT"
