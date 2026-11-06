@@ -38,6 +38,34 @@ def test_complete_stable_gain_promotes():
     assert result['stable_gains'] == ['0', '1', '2']
 
 
+@pytest.mark.parametrize('change', ['valid', 'identity', 'cleanup', 'scratch', 'deadline',
+                                   'diagnostic', 'eligibility_type', 'supervision', 'truncated'])
+def test_only_final_outer_admission_authorizes_eligibility(change):
+    outer = {'status': 'complete', 'cleanup_verified': True, 'owned_scratch_removed': True,
+             'seconds': 10., 'limits': {'seconds': 900},
+             'supervision': {'status': 'passed', 'exit_code': 0, 'cleanup_verified': True,
+                             'log_truncated': False}}
+    diagnostic = {'status': 'complete', 'eligibility': True}
+    if change == 'identity':
+        outer['status'] = 'incomplete'
+    elif change == 'cleanup':
+        outer['cleanup_verified'] = False
+    elif change == 'scratch':
+        outer['owned_scratch_removed'] = False
+    elif change == 'deadline':
+        outer['seconds'] = 901.
+    elif change == 'diagnostic':
+        diagnostic['status'] = 'incomplete'
+    elif change == 'eligibility_type':
+        diagnostic['eligibility'] = 'true'
+    elif change == 'supervision':
+        outer['supervision']['status'] = 'failed'
+    elif change == 'truncated':
+        outer['supervision']['log_truncated'] = True
+    result = decision().admit_diagnostic(outer, diagnostic)
+    assert result == ('eligible_for_fixed_candidate' if change == 'valid' else None)
+
+
 @pytest.mark.parametrize('change', ['missing', 'duplicate', 'query', 'source', 'engine', 'round',
                                     'page', 'type', 'complete'])
 def test_invalid_or_incomplete_inventory_has_null_decision(change):

@@ -147,10 +147,9 @@ jobs:
         run: |
           echo "FIRST_PAGE_ROOT=$RUNNER_TEMP/first-page-ranking-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
       - name: Qualify without issuing corpus questions
-        if: inputs.ranking_phase == 'qualification'
         run: |
-          mkdir -p "$FIRST_PAGE_ROOT/evidence"
-          uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_first_page_ranking_trial.py -p eval.quality.no_agent -q --junitxml="$FIRST_PAGE_ROOT/evidence/qualification.xml"
+          mkdir -p "$FIRST_PAGE_ROOT-qualification/evidence"
+          uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_first_page_ranking_trial.py -p eval.quality.no_agent -q --junitxml="$FIRST_PAGE_ROOT-qualification/evidence/qualification.xml"
       - name: Existing platform controls before any questions
         run: uv run --no-sync python -m eval.quality.experiments preflight --root "$FIRST_PAGE_ROOT-controls"
       - name: Source-bound experiment
@@ -165,3 +164,4 @@ jobs:
           path: |
             ${{ env.FIRST_PAGE_ROOT }}/evidence/
             ${{ env.FIRST_PAGE_ROOT }}-controls/evidence/
+            ${{ env.FIRST_PAGE_ROOT }}-qualification/evidence/
