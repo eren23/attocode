@@ -16,7 +16,7 @@ def run(root):
     assert hashlib.sha256(archive.read_bytes()).hexdigest() == '02c15442e09616bd9cdef7453cfadc6a817a9cc7947b17f70f62ed43b50d7ecc'
     with zipfile.ZipFile(archive) as z:
         assert sum(i.file_size for i in z.infolist()) < 16*2**20
-        names = [n for n in z.namelist() if n.endswith('/headroom.json')]
+        names = [n for n in z.namelist() if Path(n).name == 'headroom.json']
         assert len(names) == 1
         inputs = json.loads(z.read(names[0]))
     assert inputs['status'] == 'complete' and inputs['queries_issued'] == inputs['holdout_issued'] == 0
