@@ -29,8 +29,9 @@ jobs:
       ATTOCODE_INTEL_PRECISION: 'off'
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
-      FIRST_PAGE_ROOT: ${{ runner.temp }}/first-page-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Set isolated diagnostic directory
+        run: echo "FIRST_PAGE_ROOT=${RUNNER_TEMP}/first-page-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
         with:
