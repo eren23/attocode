@@ -21,7 +21,7 @@ jobs:
   first-page:
     if: inputs.experiment == 'first-page'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     env:
       ATTOCODE_LOCAL_ONLY: '1'
       ATTOCODE_EMBEDDING_MODEL: ''
