@@ -1,7 +1,9 @@
 """Compact metadata need not serialize a complete ranking index twice."""
-from copy import deepcopy
 import json
+from copy import deepcopy
+
 import pytest
+
 from attocode_intel import output
 
 
@@ -86,7 +88,9 @@ def test_input_objects_are_not_mutated():
 @pytest.mark.asyncio
 async def test_real_gateway_preserves_payload_and_readiness(monkeypatch, tmp_path):
     from attocode_intel.gateway import OperationGateway
+
     from eval.quality.corpus import ready_search
+
     (tmp_path/'quota.py').write_text('def quota():\n    return "quota limit"\n')
     gateway=OperationGateway(str(tmp_path),profile='daily',watch=False)
     args={'query':'quota limit','top_k':10,'max_tokens':2000}
