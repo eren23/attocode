@@ -22,8 +22,10 @@ from pathlib import Path
 from eval.quality.experiment_evidence import assert_engine
 from eval.quality.runner import GIB, REPO, environment, managed_root, supervise, write_json
 
-SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200, 'capacity': 2400}
+SECONDS = {'preflight': 600, 'native': 1200, 'preview': 600, 'restart': 1800, 'broad': 1200, 'capacity': 2400,
+           'ranking-summary': 120}
 OPERATORS = {
+    'ranking-summary': 'eval.quality.ranking_summary_probe',
     'capacity': 'eval.quality.capacity_experiment',
     'native': 'eval.quality.native_experiment',
     'preview': 'eval.quality.preview_experiment',
