@@ -2,6 +2,16 @@
 import math
 
 
+def _proof_visible(row, proof):
+    start, end = row.get('snippet_start_line'), row.get('snippet_end_line')
+    if type(start) is not int or type(end) is not int or not isinstance(row.get('snippet'), str):
+        return False
+    lines = row['snippet'].splitlines()
+    offset = proof['line'] - start
+    return (start <= proof['line'] <= end and 0 <= offset < len(lines)
+            and proof['quote'] in lines[offset])
+
+
 def page_metrics(question, results):
     files, visible, answered, ranks = set(), set(), False, []
     for i, answer in enumerate(question['answers']):
@@ -11,10 +21,7 @@ def page_metrics(question, results):
             ranks.append(next(n+1 for n, r in enumerate(results) if r['file_path'] == answer['file']))
         proofs = set()
         for j, proof in enumerate(answer['proofs']):
-            if any(proof['quote'] in r.get('snippet', '')
-                   and type(r.get('snippet_start_line')) is int
-                   and type(r.get('snippet_end_line')) is int
-                   and r['snippet_start_line'] <= proof['line'] <= r['snippet_end_line'] for r in matched):
+            if any(_proof_visible(r, proof) for r in matched):
                 proofs.add(j)
                 visible.add(f'{i}:{j}')
         answered |= bool(answer['proofs']) and len(proofs) == len(answer['proofs'])
