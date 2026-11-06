@@ -55,7 +55,24 @@ def gate(rows):
     return len(winners) >= 2 and len({r['pack'] for r in winners}) >= 2
 
 
-def controls():
+def proof_line_visible(body, first, proof_line, original_line):
+    lines = body.split('\n')
+    offset = proof_line - first
+    return 0 <= offset < len(lines) and lines[offset] == original_line
+
+
+def retain_source(path, raw, expected, location):
+    from eval.quality.runner import write_json
+
+    digest = hashlib.sha256(raw).hexdigest()
+    valid = len(raw) == expected['bytes'] <= 1_000_000 and digest == expected['sha256']
+    write_json(path, {**location, 'bytes': len(raw), 'sha256': digest, 'valid': valid,
+                      'expected_bytes': expected['bytes'], 'expected_sha256': expected['sha256'],
+                      'body_base64': base64.b64encode(raw).decode()})
+    assert valid, ('source identity mismatch', location, expected['sha256'], digest)
+
+
+def controls(root):
     assert local_counts('alpha\n\nbeta', {'alpha', 'beta'}) == {'total': 2, 'local': 2}
     assert local_counts('alpha\n\n\nbeta', {'alpha', 'beta'}) == {'total': 2, 'local': 1}
     assert local_counts('', {'alpha'}) == {'total': 0, 'local': 0}
@@ -75,7 +92,17 @@ def controls():
         pass
     else:
         raise AssertionError('body identity damage was accepted')
-    return 10
+    assert proof_line_visible('prefix\ncomplete', 10, 11, 'complete')
+    assert not proof_line_visible('prefix\ncomp', 10, 11, 'complete')
+    path = root / 'evidence/rejected-source-control.json'
+    try:
+        retain_source(path, b'damaged', {'bytes': 8, 'sha256': '0' * 64}, {'case': 'synthetic'})
+    except AssertionError:
+        receipt = json.loads(path.read_text())
+        assert not receipt['valid'] and base64.b64decode(receipt['body_base64']) == b'damaged'
+    else:
+        raise AssertionError('damaged source accepted')
+    return 13
 
 
 def run(root):
@@ -87,7 +114,7 @@ def run(root):
     assert os.environ.get('GITHUB_ACTIONS') == 'true'
     design = json.loads((REPO / 'eval/quality/experiments/query-proximity.json').read_text())['science']
     assert design['local_lines'] == 3 and design['gate'] == {'minimum_cases': 2, 'minimum_repositories': 2}
-    control_count = controls()
+    control_count = controls(root)
     archive = Path(os.environ['QUERY_PROXIMITY_INPUT_ZIP'])
     assert hashlib.sha256(archive.read_bytes()).hexdigest() == design['input_zip_sha256']
     qinput = design['questions_input']
@@ -156,18 +183,24 @@ def run(root):
     assert sum(r['bytes'] for r in tasks.values()) <= design['limits']['max_source_bytes']
 
     (root / 'evidence/sources').mkdir()
+    progress = {'status': 'incomplete', 'decision': None, 'rows': [], 'queries_issued': 0,
+                'holdout_issued': 0, 'controls_passed': control_count, 'source_files_expected': len(tasks)}
+    write_json(root / 'evidence/query-proximity.json', progress)
 
     def fetch(item):
         (pack, path), expected = item
         group = groups[pack]
         url = 'https://raw.githubusercontent.com/' + group['repo'] + '/' + group['commit'] + '/' + quote(path, safe='/')
-        with urlopen(url, timeout=25) as response:
-            raw = response.read(1_000_001)
-        assert len(raw) == expected['bytes'] <= 1_000_000
-        assert hashlib.sha256(raw).hexdigest() == expected['sha256']
-        write_json(root / 'evidence/sources' / (hashlib.sha256((pack + '\0' + path).encode()).hexdigest() + '.json'),
-                   {'pack': pack, 'path': path, 'url': url, 'bytes': len(raw), 'sha256': expected['sha256'],
-                    'body_base64': base64.b64encode(raw).decode()})
+        receipt = root / 'evidence/sources' / (hashlib.sha256((pack + '\0' + path).encode()).hexdigest() + '.json')
+        location = {'pack': pack, 'path': path, 'url': url}
+        try:
+            with urlopen(url, timeout=25) as response:
+                raw = response.read(1_000_001)
+        except Exception as error:
+            write_json(receipt, {**location, 'valid': False, 'error': type(error).__name__,
+                                 'message': str(error)[:2000], 'expected': expected})
+            raise
+        retain_source(receipt, raw, expected, location)
         return (pack, path), raw
 
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -175,12 +208,14 @@ def run(root):
     rows, hashes = [], 0
     for pack, case, question, hits in cases:
         concepts = set(query_concepts(question['query']))
+        proof_lines = {}
         for answer in question['answers']:
             text = sources[pack, answer['file']].decode('utf-8', errors='replace').replace('\r\n', '\n').replace('\r', '\n')
             lines = text.splitlines(keepends=True)
             for proof in answer['proofs']:
                 assert answer['definition_start'] <= proof['line'] <= answer['definition_end']
                 assert proof['quote'] in ''.join(lines[proof['line'] - 1:proof['line'] - 1 + len(proof['quote'].splitlines())])
+                proof_lines[answer['file'], proof['line']] = text.splitlines()[proof['line'] - 1]
         targets, competitors = [], []
         selected, bound = set(case['selected_owners']), set(case['generated_owners'])
         for hit in hits:
@@ -191,7 +226,8 @@ def run(root):
                       'end': hit['end'], 'score': case['credits'][identity]['score']}
             valid = any(hit['file'] == a['file'] and a['definition_start'] <= hit['start']
                         <= hit['end'] <= a['definition_end']
-                        and any(hit['start'] <= p['line'] <= hit['end'] for p in a['proofs'])
+                        and any(proof_line_visible(body, hit['start'], p['line'],
+                                                  proof_lines[a['file'], p['line']]) for p in a['proofs'])
                         for a in question['answers'])
             if identity in bound and identity not in selected and valid:
                 targets.append(values)
@@ -201,6 +237,7 @@ def run(root):
         row = {'id': case['id'], 'pack': pack, 'eligible': not case['primary']['answer'] and bool(pairs),
                'pairs': pairs, 'target_windows': targets, 'selected_competitor_windows': competitors}
         rows.append(row)
+        write_json(root / 'evidence/query-proximity.json', {**progress, 'rows': rows})
     result = {'status': 'complete', 'eligible': gate(rows), 'eligible_ids': [r['id'] for r in rows if r['eligible']],
               'decision': 'eligible_for_fixed_candidate' if gate(rows) else 'unsupported_hypothesis',
               'rows': rows, 'source_files': len(sources), 'body_hashes_verified': hashes,
