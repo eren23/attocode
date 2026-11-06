@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "experiment": "first-page-ranking",
+  "version": "0.1.27",
+  "baseline": "0984c60f11259d8f7c09295104deeb3cbcfd6892",
+  "questions_sha256": "80fa39767c93a0c22267f439256760ba0a746b3c663b14e046351794115d7b11",
+  "limits": {
+    "seconds": 900,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "pages": {
+    "default": [
+      10,
+      2000
+    ],
+    "deep": [
+      24,
+      8000
+    ],
+    "scoped": [
+      5,
+      4000
+    ]
+  },
+  "minimum_eligible_cases": 2,
+  "minimum_eligible_repositories": 2
+}

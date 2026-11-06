@@ -39,6 +39,11 @@ def run(root: Path) -> None:
     if sha(manifest_path) != design['questions_sha256']:
         raise ValueError('questions changed after qualification')
     manifest = json.loads(manifest_path.read_text())
+    all_questions = [q for g in manifest['repositories'] for q in g['questions']]
+    if (len(all_questions) != 48 or len({q['id'] for q in all_questions}) != 48
+            or sum(q['split'] == 'development' for q in all_questions) != 24
+            or sum(q['split'] == 'holdout' for q in all_questions) != 24):
+        raise ValueError('frozen question inventory mismatch')
     specs = {s['id']: s for s in yaml.safe_load(PACK.read_text())['repositories']}
     report = {'status': 'incomplete', 'decision': None, 'baseline': BASELINE,
               'operator_commit': commit, 'questions_sha256': sha(manifest_path), 'packs': []}
@@ -110,7 +115,8 @@ async def worker(root, pack):
             if not path.is_relative_to(source.resolve()) or sha(path) != a['source_sha256']:
                 raise ValueError('question source hash or boundary mismatch')
             lines = path.read_text().splitlines()
-            if any(p['quote'] not in lines[p['line']-1] for p in a['proofs']):
+            if any(p['quote'] not in '\n'.join(lines[p['line']-1:p['line']-1+len(p['quote'].splitlines())])
+                   for p in a['proofs']):
                 raise ValueError('question source proof mismatch')
     journal = Journal(folder / 'journal', 64 * 2**20)
     engine_root = Path(os.environ['ATTOCODE_EXPERIMENT_ENGINE'])

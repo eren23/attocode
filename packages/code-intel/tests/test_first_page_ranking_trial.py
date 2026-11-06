@@ -210,6 +210,9 @@ async def test_supervised_worker_records_and_admits_synthetic_source(tmp_path, m
                              'proofs': [{'line': 2, 'quote': 'return "quota capacity"'}]}]}
     manifest = {'repositories': [{'pack': 'synthetic', 'questions': [
         {**question, 'id': f'synthetic-{n}'} for n in range(4)]}]}
+    manifest['repositories'][0]['questions'][0] = {
+        **question, 'id': 'synthetic-0', 'answers': [{**question['answers'][0], 'proofs': [
+            {'line': 1, 'quote': 'def quota():\n    return "quota capacity"'}]}]}
     (control / 'first_page_ranking_questions.json').write_text(json.dumps(manifest))
     monkeypatch.setattr(runner, 'REPO', tmp_path / 'operator')
     monkeypatch.setenv('ATTOCODE_EXPERIMENT_ENGINE', str(Path(attocode_intel.__file__).parent))

@@ -1,0 +1,1600 @@
+{
+  "schema_version": 1,
+  "baseline": "0984c60f11259d8f7c09295104deeb3cbcfd6892",
+  "split_seed": "owner-vote-v1",
+  "scope": "Independent source-authored non-exhaustive judgments; not real user or agent outcomes. Holdout unissued.",
+  "repositories": [
+    {
+      "pack": "fastapi",
+      "repo": "fastapi/fastapi",
+      "commit": "11614be9021aa4ac078d4d0693a8b5250a1010d8",
+      "questions": [
+        {
+          "id": "fastapi-01",
+          "category": "short",
+          "query": "What capacity is used for the separate thread limiter passed to a synchronous context manager's cleanup?",
+          "required_facts": [
+            "The adapter creates a capacity-one limiter and passes it to the context manager exit call."
+          ],
+          "answers": [
+            {
+              "file": "fastapi/concurrency.py",
+              "owner": "contextmanager_in_threadpool",
+              "source_sha256": "c4718310e40003a72f1440d7e3aa2adebdadd59778b15beb79a4607481388ee3",
+              "definition_start": 18,
+              "definition_end": 41,
+              "proofs": [
+                {
+                  "line": 27,
+                  "quote": "exit_limiter = CapacityLimiter(1)"
+                },
+                {
+                  "line": 40,
+                  "quote": "cm.__exit__, None, None, None, limiter=exit_limiter"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "fastapi-02",
+          "category": "short",
+          "query": "When nested configuration dictionaries are merged, are existing list values replaced or concatenated?",
+          "required_facts": [
+            "When both values are lists, the existing list is concatenated with the incoming list, in that order."
+          ],
+          "answers": [
+            {
+              "file": "fastapi/utils.py",
+              "owner": "deep_dict_update",
+              "source_sha256": "0d7d15ae73307d5b19c51cfc222b50e36736fbef9f0f398566479131947650ca",
+              "definition_start": 103,
+              "definition_end": 118,
+              "proofs": [
+                {
+                  "line": 113,
+                  "quote": "isinstance(main_dict[key], list)"
+                },
+                {
+                  "line": 114,
+                  "quote": "isinstance(update_dict[key], list)"
+                },
+                {
+                  "line": 116,
+                  "quote": "main_dict[key] = main_dict[key] + update_dict[key]"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "fastapi-03",
+          "category": "short",
+          "query": "How does an internal default-value wrapper decide whether another object is equal?",
+          "required_facts": [
+            "Equality requires another default placeholder with the same wrapped value."
+          ],
+          "answers": [
+            {
+              "file": "fastapi/datastructures.py",
+              "owner": "DefaultPlaceholder.__eq__",
+              "source_sha256": "3c7fc72c9aa064f8efe7694e98cd12f97fe29dded2fa4396129475935033660f",
+              "definition_start": 167,
+              "definition_end": 168,
+              "proofs": [
+                {
+                  "line": 168,
+                  "quote": "return isinstance(o, DefaultPlaceholder) and o.value == self.value"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "fastapi-04",
+          "category": "short",
+          "query": "What OpenAPI type and media type are advertised for an uploaded file value?",
+          "required_facts": [
+            "The schema uses type string and contentMediaType application/octet-stream."
+          ],
+          "answers": [
+            {
+              "file": "fastapi/datastructures.py",
+              "owner": "UploadFile.__get_pydantic_json_schema__",
+              "source_sha256": "3c7fc72c9aa064f8efe7694e98cd12f97fe29dded2fa4396129475935033660f",
+              "definition_start": 139,
+              "definition_end": 142,
+              "proofs": [
+                {
+                  "line": 142,
+                  "quote": "return {\"type\": \"string\", \"contentMediaType\": \"application/octet-stream\"}"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "fastapi-05",
+          "category": "test",
+          "query": "Find the regression test where a deliberately slower first upload must still appear before a faster second upload.",
+          "required_facts": [
+            "The regression deliberately slows the first file read.",
+            "The expected result preserves request order as ord(\"A\") followed by ord(\"B\")."
+          ],
+          "answers": [
+            {
+              "file": "tests/test_list_bytes_file_order_preserved_issue_14811.py",
+              "owner": "test_list_bytes_file_preserves_order",
+              "source_sha256": "c6c527b5a9b3c3828b3137b5c4988d432727869030db78ae5cd55feb01d755e4",
+              "definition_start": 16,
+              "definition_end": 46,
+              "proofs": [
+                {
+                  "line": 30,
+                  "quote": "if self.filename == \"slow.txt\":\n            await anyio.sleep(0.05)"
+                },
+                {
+                  "line": 39,
+                  "quote": "(\"slow.txt\", b\"A\""
+                },
+                {
+                  "line": 40,
+                  "quote": "(\"fast.txt\", b\"B\""
+                },
+                {
+                  "line": 46,
+                  "quote": "assert r.json() == [ord(\"A\"), ord(\"B\")]"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "fastapi-06",
+          "category": "test",
+          "query": "Find a test comparing the Set-Cookie output from direct and nested use of the same cookie-setting dependency.",
+          "required_facts": [
+            "The direct and indirect dependency routes produce equal Set-Cookie headers."
+          ],
+          "answers": [
+            {
+              "file": "tests/test_repeated_cookie_headers.py",
+              "owner": "test_cookie_is_set_once",
+              "source_sha256": "5a95cc676c3f25644e60424d6eef272b39c84c483e39aa3d443485911bc2e0a1",
+              "definition_start": 29,
+              "definition_end": 34,
+              "proofs": [
+                {
+                  "line": 30,
+                  "quote": "direct_response = client.get(\"/directCookie\")"
+                },
+                {
+                  "line": 31,
+                  "quote": "indirect_response = client.get(\"/indirectCookie\")"
+                },
+                {
+                  "line": 32,
+                  "quote": "assert ("
+                },
+                {
+                  "line": 33,
+                  "quote": "direct_response.headers[\"set-cookie\"] == indirect_response.headers[\"set-cookie\"]"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "fastapi-07",
+          "category": "long",
+          "query": "A client has a password containing several colons, and only the first colon should separate the username from the password. I need the Basic-auth parsing code that preserves the remainder instead of splitting the password into pieces.",
+          "required_facts": [
+            "Decoded Basic credentials are partitioned at the first colon, preserving subsequent colons in the password."
+          ],
+          "answers": [
+            {
+              "file": "fastapi/security/http.py",
+              "owner": "HTTPBasic.__call__",
+              "source_sha256": "1e8f6a16e45f15e2c9a23f745185728de288cc67d8d39261505cbb21f679f69c",
+              "definition_start": 202,
+              "definition_end": 219,
+              "proofs": [
+                {
+                  "line": 216,
+                  "quote": "username, separator, password = data.partition(\":\")"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "fastapi-08",
+          "category": "long",
+          "query": "An event stream cannot accept an event identifier containing a NUL character, but the identifier is optional and a missing value should remain valid. Find the validation code enforcing this restriction before an event is emitted.",
+          "required_facts": [
+            "An identifier is rejected with ValueError when it is non-None and contains a NUL character."
+          ],
+          "answers": [
+            {
+              "file": "fastapi/sse.py",
+              "owner": "_check_id_no_null",
+              "source_sha256": "557254d11b6f5b6e890ca69e430cf7c14036af08f9d15a2cea5d55274e008a13",
+              "definition_start": 36,
+              "definition_end": 39,
+              "proofs": [
+                {
+                  "line": 37,
+                  "quote": "if v is not None and \"\\0\" in v:"
+                },
+                {
+                  "line": 38,
+                  "quote": "raise ValueError(\"SSE 'id' must not contain null characters\")"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        }
+      ]
+    },
+    {
+      "pack": "express",
+      "repo": "expressjs/express",
+      "commit": "6c4249feec8ab40631817c8e7001baf2ed022224",
+      "questions": [
+        {
+          "id": "express-01",
+          "category": "short",
+          "query": "How is the forwarded-client address array ordered, and is the direct socket peer kept in that array?",
+          "required_facts": [
+            "The returned addresses are ordered from farthest to closest.",
+            "The socket address is removed."
+          ],
+          "answers": [
+            {
+              "file": "lib/request.js",
+              "owner": "ips",
+              "source_sha256": "d5645ebe62c8e914efd4343da17c8d6209bad7e354f003b1264d234f6aa7697d",
+              "definition_start": 357,
+              "definition_end": 366,
+              "proofs": [
+                {
+                  "line": 359,
+                  "quote": "var addrs = proxyaddr.all(this, trust);"
+                },
+                {
+                  "line": 363,
+                  "quote": "addrs.reverse().pop()"
+                },
+                {
+                  "line": 365,
+                  "quote": "return addrs"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "express-02",
+          "category": "short",
+          "query": "For a numeric proxy trust setting, which hop indexes are trusted?",
+          "required_facts": [
+            "A hop is trusted when its index is less than the numeric setting."
+          ],
+          "answers": [
+            {
+              "file": "lib/utils.js",
+              "owner": "compileTrust",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+              "definition_start": 194,
+              "definition_end": 214,
+              "proofs": [
+                {
+                  "line": 202,
+                  "quote": "if (typeof val === 'number') {"
+                },
+                {
+                  "line": 204,
+                  "quote": "return function(a, i){ return i < val };"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "express-03",
+          "category": "short",
+          "query": "When a template's direct path is missing, what directory-index path is tried as a fallback?",
+          "required_facts": [
+            "The fallback joins the directory, the file basename without its extension, and index plus that extension."
+          ],
+          "answers": [
+            {
+              "file": "lib/view.js",
+              "owner": "View.prototype.resolve",
+              "source_sha256": "74f4171b66263e22481820bc5975708f7dd8a61484f570aac7c5b4ab77ecbd79",
+              "definition_start": 169,
+              "definition_end": 187,
+              "proofs": [
+                {
+                  "line": 181,
+                  "quote": "path = join(dir, basename(file, ext), 'index' + ext);"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "express-04",
+          "category": "short",
+          "query": "When a Link-header relation maps to multiple URLs, how are their individual entries encoded?",
+          "required_facts": [
+            "Each URL is formatted as an angle-bracketed URL with the same rel value, and the entries are joined with comma-space."
+          ],
+          "answers": [
+            {
+              "file": "lib/response.js",
+              "owner": "res.links",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "definition_start": 97,
+              "definition_end": 110,
+              "proofs": [
+                {
+                  "line": 102,
+                  "quote": "if (Array.isArray(links[rel])) {"
+                },
+                {
+                  "line": 103,
+                  "quote": "return links[rel].map(function (singleLink) {"
+                },
+                {
+                  "line": 104,
+                  "quote": "return `<${singleLink}>; rel=\"${rel}\"`;"
+                },
+                {
+                  "line": 105,
+                  "quote": "}).join(', ');"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "express-05",
+          "category": "test",
+          "query": "Find a test that fails a file transfer and verifies that the callback still sees the request's asynchronous local store.",
+          "required_facts": [
+            "The callback reads the asynchronous local store and the response still carries its foo value as bar.",
+            "The transfer callback reports a 404 error."
+          ],
+          "answers": [
+            {
+              "file": "test/res.download.js",
+              "owner": null,
+              "source_sha256": "cd90a8f6e6390907af0f8844e08fc02ddb5918f745f1cfe7aeb7f86dd137c5c4",
+              "definition_start": 120,
+              "definition_end": 147,
+              "proofs": [
+                {
+                  "line": 130,
+                  "quote": "res.download("
+                },
+                {
+                  "line": 131,
+                  "quote": "req.asyncLocalStorage.getStore()"
+                },
+                {
+                  "line": 134,
+                  "quote": "'x-store-foo', String(local.foo)"
+                },
+                {
+                  "line": 137,
+                  "quote": "res.send(err ? 'got ' + err.status + ' error' : 'no error')"
+                },
+                {
+                  "line": 144,
+                  "quote": ".expect('x-store-foo', 'bar')"
+                },
+                {
+                  "line": 145,
+                  "quote": ".expect('got 404 error')"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "express-06",
+          "category": "test",
+          "query": "Find the test showing that adjacent byte ranges become one continuous range when combining is enabled.",
+          "required_facts": [
+            "With combining enabled, bytes=0-50,51-100 becomes one range from 0 to 100."
+          ],
+          "answers": [
+            {
+              "file": "test/req.range.js",
+              "owner": null,
+              "source_sha256": "263ed06eebe97323c116cde572c68a749a6183cc4c493cfeb0a32af4919e837d",
+              "definition_start": 88,
+              "definition_end": 101,
+              "proofs": [
+                {
+                  "line": 93,
+                  "quote": "combine: true"
+                },
+                {
+                  "line": 99,
+                  "quote": ".set('Range', 'bytes=0-50,51-100')"
+                },
+                {
+                  "line": 100,
+                  "quote": ".expect(200, '[{\"start\":0,\"end\":100}]', done)"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "express-07",
+          "category": "long",
+          "query": "A caller supplies a custom disposition header when returning an attachment, sometimes with different letter casing. That header must not replace the automatically generated attachment filename, while unrelated caller headers should still be copied. Find the merge code enforcing that rule.",
+          "required_facts": [
+            "The attachment disposition is generated from the chosen filename or path.",
+            "User-provided headers are copied except Content-Disposition, which is excluded case-insensitively."
+          ],
+          "answers": [
+            {
+              "file": "lib/response.js",
+              "owner": "res.download",
+              "source_sha256": "5fe7b091799a1b914c43d92a80bcd679bfb4af832f21a07fac8e60fc8982a0da",
+              "definition_start": 433,
+              "definition_end": 482,
+              "proofs": [
+                {
+                  "line": 457,
+                  "quote": "'Content-Disposition': contentDisposition(name || path)"
+                },
+                {
+                  "line": 465,
+                  "quote": "if (key.toLowerCase() !== 'content-disposition') {"
+                },
+                {
+                  "line": 466,
+                  "quote": "headers[key] = opts.headers[key]"
+                },
+                {
+                  "line": 473,
+                  "quote": "opts.headers = headers"
+                },
+                {
+                  "line": 481,
+                  "quote": "this.sendFile(fullPath, opts, done)"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "express-08",
+          "category": "long",
+          "query": "A response media type already has parameters, and choosing a new character encoding should preserve those parameters. I need the helper that parses that media type, changes only its charset entry, and formats the result again.",
+          "required_facts": [
+            "The helper parses the input media type, updates its charset parameter, and formats that same parsed value."
+          ],
+          "answers": [
+            {
+              "file": "lib/utils.js",
+              "owner": "setCharset",
+              "source_sha256": "4bd3bf9c911e086d1911954708de7a6c384ed924360e3fd1d4a43c98bd68b112",
+              "definition_start": 225,
+              "definition_end": 238,
+              "proofs": [
+                {
+                  "line": 231,
+                  "quote": "var parsed = contentType.parse(type);"
+                },
+                {
+                  "line": 234,
+                  "quote": "parsed.parameters.charset = charset;"
+                },
+                {
+                  "line": 237,
+                  "quote": "return contentType.format(parsed);"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        }
+      ]
+    },
+    {
+      "pack": "gh-cli",
+      "repo": "cli/cli",
+      "commit": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+      "questions": [
+        {
+          "id": "gh-cli-01",
+          "category": "short",
+          "query": "How is renaming a gist file prevented when the authenticated user is not its owner?",
+          "required_facts": [
+            "The rename operation returns the error \"you do not own this gist\" when the authenticated login differs from the gist owner."
+          ],
+          "answers": [
+            {
+              "file": "pkg/cmd/gist/rename/rename.go",
+              "owner": "renameRun",
+              "source_sha256": "6f3a260e2b863127540f03a61f650b674c9c08f15b1832adeed76df96465831f",
+              "definition_start": 58,
+              "definition_end": 114,
+              "proofs": [
+                {
+                  "line": 90,
+                  "quote": "username, err := api.CurrentLoginName(apiClient, host)"
+                },
+                {
+                  "line": 95,
+                  "quote": "if username != gist.Owner.Login {\n\t\treturn errors.New(\"you do not own this gist\")"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "gh-cli-02",
+          "category": "short",
+          "query": "Which color is assigned to new single-select project field options?",
+          "required_facts": [
+            "Every supplied single-select option is assigned the GRAY color."
+          ],
+          "answers": [
+            {
+              "file": "pkg/cmd/project/field-create/field_create.go",
+              "owner": "createFieldArgs",
+              "source_sha256": "9bf9fa1caa0f6feb9268204b0a2f79fde3375b7303b08046f3bfd9eca4f9dc64",
+              "definition_start": 122,
+              "definition_end": 143,
+              "proofs": [
+                {
+                  "line": 131,
+                  "quote": "for _, opt := range config.opts.singleSelectOptions {"
+                },
+                {
+                  "line": 134,
+                  "quote": "Color: githubv4.ProjectV2SingleSelectFieldOptionColor(\"GRAY\"),"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "gh-cli-03",
+          "category": "short",
+          "query": "Which validation prevents success-on-empty cache deletion from being used for a single cache?",
+          "required_facts": [
+            "The --succeed-on-no-caches flag must be used together with --all."
+          ],
+          "answers": [
+            {
+              "file": "pkg/cmd/cache/delete/delete.go",
+              "owner": "NewCmdDelete",
+              "source_sha256": "e2f5eca087f041e4a4b03b285755653a97bc9f43402166ff11c603fad6ed8551",
+              "definition_start": 31,
+              "definition_end": 117,
+              "proofs": [
+                {
+                  "line": 82,
+                  "quote": "if !opts.DeleteAll && opts.SucceedOnNoCaches {"
+                },
+                {
+                  "line": 83,
+                  "quote": "return cmdutil.FlagErrorf(\"--succeed-on-no-caches must be used in conjunction with --all\")"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "gh-cli-04",
+          "category": "short",
+          "query": "Does an attestation download fail when the API reports that no matching attestations exist?",
+          "required_facts": [
+            "The no-attestations-found API error is handled with a successful nil return."
+          ],
+          "answers": [
+            {
+              "file": "pkg/cmd/attestation/download/download.go",
+              "owner": "runDownload",
+              "source_sha256": "fc17dd0e3dcc604b30f7e0669e6afcfefa587d9161035925195971045ef02a67",
+              "definition_start": 121,
+              "definition_end": 170,
+              "proofs": [
+                {
+                  "line": 140,
+                  "quote": "if errors.Is(err, api.ErrNoAttestationsFound) {"
+                },
+                {
+                  "line": 142,
+                  "quote": "return nil"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "gh-cli-05",
+          "category": "test",
+          "query": "Find the rerun argument test showing that supplying both a run number and a job clears the run selection.",
+          "required_facts": [
+            "For input \"1234 --job 5678\", the expected run ID is empty."
+          ],
+          "answers": [
+            {
+              "file": "pkg/cmd/run/rerun/rerun_test.go",
+              "owner": "TestNewCmdRerun",
+              "source_sha256": "fa6382a2a307970713a615036df07289b6236dcb628e765c5a6e70af6668f8fc",
+              "definition_start": 22,
+              "definition_end": 164,
+              "proofs": [
+                {
+                  "line": 84,
+                  "quote": "cli:  \"1234 --job 5678\","
+                },
+                {
+                  "line": 87,
+                  "quote": "RunID: \"\","
+                },
+                {
+                  "line": 159,
+                  "quote": "assert.Equal(t, tt.wants.RunID, gotOpts.RunID)"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "gh-cli-06",
+          "category": "test",
+          "query": "Find the test checking that a repository-autolink creation failure preserves the original client error.",
+          "required_facts": [
+            "The creation failure is checked with assert.ErrorIs against the original expected client error."
+          ],
+          "answers": [
+            {
+              "file": "pkg/cmd/repo/autolink/create/create_test.go",
+              "owner": "TestCreateRun",
+              "source_sha256": "11e4be2f734f1e73ebc49db30e607ed5bf279f2a1598e0d09766780dc681b485",
+              "definition_start": 118,
+              "definition_end": 190,
+              "proofs": [
+                {
+                  "line": 153,
+                  "quote": "stubCreator: stubAutolinkCreator{err: testAutolinkClientCreateError{}},"
+                },
+                {
+                  "line": 154,
+                  "quote": "expectedErr: testAutolinkClientCreateError{},"
+                },
+                {
+                  "line": 175,
+                  "quote": "assert.ErrorIs(t, err, tt.expectedErr)"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "gh-cli-07",
+          "category": "long",
+          "query": "A script tries to lock an already locked issue with a different reason and cannot prompt. Locate the behavior that stops this attempt, and explain the error returned before any unlock-and-lock sequence can begin.",
+          "required_facts": [
+            "Without prompting capability, relocking returns false and an \"already locked\" error."
+          ],
+          "answers": [
+            {
+              "file": "pkg/cmd/issue/lock/lock.go",
+              "owner": "relockLockable",
+              "source_sha256": "d1c80cfb9c80849775971017e2bb3f15d256635badd81e448831c20dd5d483e7",
+              "definition_start": 355,
+              "definition_end": 381,
+              "proofs": [
+                {
+                  "line": 356,
+                  "quote": "if !opts.IO.CanPrompt() {\n\t\treturn false, errors.New(\"already locked\")"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "gh-cli-08",
+          "category": "long",
+          "query": "I am piping workflow YAML into another tool, and the stored file may lack a final newline. Locate how raw output is finalized, and explain whether the command adds a newline when the source already has one.",
+          "required_facts": [
+            "Raw workflow YAML receives a trailing newline only when the source YAML does not already end with one."
+          ],
+          "answers": [
+            {
+              "file": "pkg/cmd/workflow/view/view.go",
+              "owner": "viewWorkflowContent",
+              "source_sha256": "6a734b30396784999a814be713941e69ae4f877900be218a0cad2179b9d46039",
+              "definition_start": 159,
+              "definition_end": 203,
+              "proofs": [
+                {
+                  "line": 197,
+                  "quote": "if !strings.HasSuffix(yaml, \"\\n\") {\n\t\t_, err := fmt.Fprint(opts.IO.Out, \"\\n\")"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        }
+      ]
+    },
+    {
+      "pack": "ripgrep",
+      "repo": "BurntSushi/ripgrep",
+      "commit": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
+      "questions": [
+        {
+          "id": "ripgrep-01",
+          "category": "short",
+          "query": "How many bytes does an M suffix multiply a size by?",
+          "required_facts": [
+            "The M suffix multiplies the numeric value by 1 << 20, or 1,048,576."
+          ],
+          "answers": [
+            {
+              "file": "crates/cli/src/human.rs",
+              "owner": "parse_human_readable_size",
+              "source_sha256": "b85f1391a01ccdfed20951cdf07bd641bf190256c48caccfe83f8ec14e2b1636",
+              "definition_start": 79,
+              "definition_end": 100,
+              "proofs": [
+                {
+                  "line": 95,
+                  "quote": "\"M\" => value.checked_mul(1 << 20),"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "ripgrep-02",
+          "category": "short",
+          "query": "What happens if --hostname-bin outputs only whitespace while preparing hyperlink URLs?",
+          "required_facts": [
+            "The helper's output is trimmed, and an empty result falls back to platform host-name discovery."
+          ],
+          "answers": [
+            {
+              "file": "crates/core/flags/hiargs.rs",
+              "owner": "hostname",
+              "source_sha256": "c1b8f669546d29248d23d1b0ad684957449318cfd5fc21955e7e5c4d4e485519",
+              "definition_start": 1325,
+              "definition_end": 1369,
+              "proofs": [
+                {
+                  "line": 1359,
+                  "quote": "let hostname = out.trim();\n    if hostname.is_empty() {"
+                },
+                {
+                  "line": 1366,
+                  "quote": "return platform_hostname();"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "ripgrep-03",
+          "category": "short",
+          "query": "Which external decompressor association wins if several match the same path?",
+          "required_facts": [
+            "The last matching association takes precedence."
+          ],
+          "answers": [
+            {
+              "file": "crates/cli/src/decompress.rs",
+              "owner": "DecompressionMatcher::command",
+              "source_sha256": "eaceb58ab4c650f0f9f62de1181fd6611b9e6b5b162816546760d49514045b37",
+              "definition_start": 179,
+              "definition_end": 187,
+              "proofs": [
+                {
+                  "line": 180,
+                  "quote": "if let Some(i) = self.globs.matches(path).into_iter().next_back() {"
+                },
+                {
+                  "line": 181,
+                  "quote": "let decomp_cmd = &self.commands[i];"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "ripgrep-04",
+          "category": "short",
+          "query": "In colored path-only output, does the terminator fall inside or outside the hyperlink?",
+          "required_facts": [
+            "The hyperlink is finished before the configured path terminator is emitted."
+          ],
+          "answers": [
+            {
+              "file": "crates/printer/src/path.rs",
+              "owner": "PathPrinter::write",
+              "source_sha256": "733d31ce45d34bc521d35fa63494f10b0fc73760496c5181a51a1473b672d234",
+              "definition_start": 150,
+              "definition_end": 163,
+              "proofs": [
+                {
+                  "line": 160,
+                  "quote": "self.interpolator.finish(status, &mut self.wtr)?;"
+                },
+                {
+                  "line": 162,
+                  "quote": "self.wtr.write_all(&[self.config.terminator])"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "ripgrep-05",
+          "category": "test",
+          "query": "Find regression coverage for matching an entire NUL-delimited record while retaining the NUL in printed output.",
+          "required_facts": [
+            "The test runs --null-data --line-regexp bar on foo\\0bar\\0quux\\0 and expects haystack:bar\\0."
+          ],
+          "answers": [
+            {
+              "file": "tests/regression.rs",
+              "owner": null,
+              "source_sha256": "22d1778677e2668e5351d6d8e4d48424db11d3a699ea270be06e9bd7b7a07ec3",
+              "definition_start": 1476,
+              "definition_end": 1480,
+              "proofs": [
+                {
+                  "line": 1477,
+                  "quote": "dir.create(\"haystack\", \"foo\\0bar\\0quux\\0\");"
+                },
+                {
+                  "line": 1478,
+                  "quote": "let got = cmd.args(&[\"--null-data\", \"--line-regexp\", r\"bar\"]).stdout();"
+                },
+                {
+                  "line": 1479,
+                  "quote": "eqnice!(\"haystack:bar\\0\", got);"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "ripgrep-06",
+          "category": "test",
+          "query": "Find the test covering adjacent multiline matches that meet exactly where one ends, without repeating their shared line.",
+          "required_facts": [
+            "The adjacent matches produce numbered lines 2, 3, and 4, with the shared middle line emitted once."
+          ],
+          "answers": [
+            {
+              "file": "tests/multiline.rs",
+              "owner": null,
+              "source_sha256": "2c1b987f0fe60905e9cfe4edc19738f7693b12f79661d4b66252f4295e03d03d",
+              "definition_start": 14,
+              "definition_end": 18,
+              "proofs": [
+                {
+                  "line": 15,
+                  "quote": "dir.create(\"test\", \"xxx\\nabc\\ndefabc\\ndefxxx\\nxxx\");"
+                },
+                {
+                  "line": 16,
+                  "quote": "cmd.arg(\"-n\").arg(\"-U\").arg(\"abc\\ndef\").arg(\"test\");"
+                },
+                {
+                  "line": 17,
+                  "quote": "eqnice!(\"2:abc\\n3:defabc\\n4:defxxx\\n\", cmd.stdout());"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "ripgrep-07",
+          "category": "long",
+          "query": "An external decompressor matches a file, but its process cannot be started. Locate the fallback that lets the caller keep reading, and explain whether the spawn failure itself is returned or logged.",
+          "required_facts": [
+            "A decompressor spawn failure is logged at debug level.",
+            "Reader construction falls back to an uncompressed passthrough reader."
+          ],
+          "answers": [
+            {
+              "file": "crates/cli/src/decompress.rs",
+              "owner": "DecompressionReaderBuilder::build",
+              "source_sha256": "eaceb58ab4c650f0f9f62de1181fd6611b9e6b5b162816546760d49514045b37",
+              "definition_start": 221,
+              "definition_end": 244,
+              "proofs": [
+                {
+                  "line": 233,
+                  "quote": "Err(err) => {"
+                },
+                {
+                  "line": 234,
+                  "quote": "log::debug!("
+                },
+                {
+                  "line": 235,
+                  "quote": "error spawning command"
+                },
+                {
+                  "line": 241,
+                  "quote": "DecompressionReader::new_passthru(path)"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "ripgrep-08",
+          "category": "long",
+          "query": "If one config-file line cannot be converted to an OS argument while other lines are valid, does parsing discard the whole file? Locate how valid arguments and the bad line are retained for the caller.",
+          "required_facts": [
+            "Successfully converted config lines remain in the returned argument vector.",
+            "Conversion errors are collected separately with their line numbers."
+          ],
+          "answers": [
+            {
+              "file": "crates/core/flags/config.rs",
+              "owner": "parse_reader",
+              "source_sha256": "adb0b126590521b981db9d913091f6d564f0b142b2d024861e84538a225cf23e",
+              "definition_start": 84,
+              "definition_end": 108,
+              "proofs": [
+                {
+                  "line": 97,
+                  "quote": "match line.to_os_str() {"
+                },
+                {
+                  "line": 99,
+                  "quote": "args.push(osstr.to_os_string());"
+                },
+                {
+                  "line": 101,
+                  "quote": "Err(err) => {"
+                },
+                {
+                  "line": 102,
+                  "quote": "errs.push(anyhow::anyhow!(\"{line_number}: {err}\"));"
+                },
+                {
+                  "line": 105,
+                  "quote": "Ok(true)"
+                },
+                {
+                  "line": 107,
+                  "quote": "Ok((args, errs))"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        }
+      ]
+    },
+    {
+      "pack": "gson",
+      "repo": "google/gson",
+      "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+      "questions": [
+        {
+          "id": "gson-01",
+          "category": "short",
+          "query": "Where does first-letter capitalization skip leading punctuation and preserve the rest of a field name?",
+          "required_facts": [
+            "The capitalization helper scans until the first letter and uppercases that letter while retaining its prefix and suffix."
+          ],
+          "answers": [
+            {
+              "file": "gson/src/main/java/com/google/gson/FieldNamingPolicy.java",
+              "owner": "FieldNamingPolicy.upperCaseFirstLetter",
+              "source_sha256": "75c224e44c4a3a0eb70af94152621fca57cb3f31a371a6b0d0bc8e625a55e333",
+              "definition_start": 179,
+              "definition_end": 199,
+              "proofs": [
+                {
+                  "line": 181,
+                  "quote": "for (int i = 0; i < length; i++) {"
+                },
+                {
+                  "line": 182,
+                  "quote": "char c = s.charAt(i);"
+                },
+                {
+                  "line": 183,
+                  "quote": "if (Character.isLetter(c)) {"
+                },
+                {
+                  "line": 188,
+                  "quote": "char uppercased = Character.toUpperCase(c);"
+                },
+                {
+                  "line": 193,
+                  "quote": "return s.substring(0, i) + uppercased + s.substring(i + 1);"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "gson-02",
+          "category": "short",
+          "query": "How can two numeric JSON values containing NaN compare equal?",
+          "required_facts": [
+            "Numeric primitive equality explicitly treats two NaN double values as equal."
+          ],
+          "answers": [
+            {
+              "file": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+              "owner": "JsonPrimitive.equals",
+              "source_sha256": "a377b528dc4035f10c4dd596e7f6262017b9302cef37dfc706758fbf2698f628",
+              "definition_start": 259,
+              "definition_end": 281,
+              "proofs": [
+                {
+                  "line": 273,
+                  "quote": "if (value instanceof Number && other.value instanceof Number) {"
+                },
+                {
+                  "line": 278,
+                  "quote": "return a == b || (Double.isNaN(a) && Double.isNaN(b));"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "gson-03",
+          "category": "short",
+          "query": "Where are Java null elements replaced with the JSON null singleton before appending to an array?",
+          "required_facts": [
+            "Appending a Java null element replaces it with JsonNull.INSTANCE before adding it to the backing list."
+          ],
+          "answers": [
+            {
+              "file": "gson/src/main/java/com/google/gson/JsonArray.java",
+              "owner": "JsonArray.add",
+              "source_sha256": "a3e817748bed693a75576c9b68c2a127292a8e12a5ba09bdfd6d6b592d3c0943",
+              "definition_start": 104,
+              "definition_end": 109,
+              "proofs": [
+                {
+                  "line": 105,
+                  "quote": "if (element == null) {"
+                },
+                {
+                  "line": 106,
+                  "quote": "element = JsonNull.INSTANCE;"
+                },
+                {
+                  "line": 108,
+                  "quote": "elements.add(element);"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "gson-04",
+          "category": "short",
+          "query": "Where does raw subclass based generic type capture fail with a missing type parameter?",
+          "required_facts": [
+            "Capturing a generic superclass that is a raw Class throws RuntimeException with the message Missing type parameter."
+          ],
+          "answers": [
+            {
+              "file": "gson/src/main/java/com/google/gson/reflect/TypeToken.java",
+              "owner": "TypeToken.getSuperclassTypeParameter",
+              "source_sha256": "53cbbde0d3fa40669842857d8c7cbc112157b5d0ac44a8b152562e6fd1712565",
+              "definition_start": 81,
+              "definition_end": 88,
+              "proofs": [
+                {
+                  "line": 82,
+                  "quote": "Type superclass = subclass.getGenericSuperclass();"
+                },
+                {
+                  "line": 83,
+                  "quote": "if (superclass instanceof Class) {"
+                },
+                {
+                  "line": 84,
+                  "quote": "throw new RuntimeException(\"Missing type parameter.\");"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "gson-05",
+          "category": "test",
+          "query": "Find the test showing that closing an unfinished in-memory JSON array raises an I/O exception even in lenient mode.",
+          "required_facts": [
+            "A lenient tree writer with an unclosed array is expected to throw IOException when closed."
+          ],
+          "answers": [
+            {
+              "file": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+              "owner": "JsonTreeWriterTest.testPrematureClose",
+              "source_sha256": "f1c61fba71c354f169c1e0a1aafd4c92479ed40189cc87d8cdbb5f9b7cb419f9",
+              "definition_start": 87,
+              "definition_end": 96,
+              "proofs": [
+                {
+                  "line": 89,
+                  "quote": "writer.setLenient(true);"
+                },
+                {
+                  "line": 90,
+                  "quote": "writer.beginArray();"
+                },
+                {
+                  "line": 92,
+                  "quote": "writer.close();"
+                },
+                {
+                  "line": 93,
+                  "quote": "fail();"
+                },
+                {
+                  "line": 94,
+                  "quote": "} catch (IOException expected) {"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "gson-06",
+          "category": "test",
+          "query": "Find the test that mutates an original nested JSON array after copying and verifies that the copied nested array stays empty.",
+          "required_facts": [
+            "After a nested source array is mutated, the original nested size becomes one and the copied nested size remains zero."
+          ],
+          "answers": [
+            {
+              "file": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+              "owner": "JsonArrayTest.testDeepCopy",
+              "source_sha256": "4169c2da152924bbe9aab88b27abec604b5c1454de0946d034fa8a5f0e81ae78",
+              "definition_start": 87,
+              "definition_end": 100,
+              "proofs": [
+                {
+                  "line": 90,
+                  "quote": "original.add(firstEntry);"
+                },
+                {
+                  "line": 92,
+                  "quote": "JsonArray copy = original.deepCopy();"
+                },
+                {
+                  "line": 96,
+                  "quote": "firstEntry.add"
+                },
+                {
+                  "line": 98,
+                  "quote": "assertEquals(1, original.get(0).getAsJsonArray().size());"
+                },
+                {
+                  "line": 99,
+                  "quote": "assertEquals(0, copy.get(0).getAsJsonArray().size());"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "gson-07",
+          "category": "long",
+          "query": "A numeric JSON wrapper still holds its digits as text. A caller asks for a 32-bit integer, but the text does not fit normal integer parsing. Where is the fallback sequence implemented, including what happens after 64-bit parsing also fails?",
+          "required_facts": [
+            "Integer conversion first tries Integer.parseInt and then casts a Long.parseLong result to int.",
+            "If both primitive parsing attempts fail, conversion uses BigDecimal.intValue."
+          ],
+          "answers": [
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java",
+              "owner": "LazilyParsedNumber.intValue",
+              "source_sha256": "311c0adc55a435f6bc2417f52bd1c00638f579fa6532ba6e79a1db0e5a922f7e",
+              "definition_start": 38,
+              "definition_end": 48,
+              "proofs": [
+                {
+                  "line": 40,
+                  "quote": "return Integer.parseInt(value);"
+                },
+                {
+                  "line": 41,
+                  "quote": "} catch (NumberFormatException e) {"
+                },
+                {
+                  "line": 43,
+                  "quote": "return (int) Long.parseLong(value);"
+                },
+                {
+                  "line": 44,
+                  "quote": "} catch (NumberFormatException nfe) {"
+                },
+                {
+                  "line": 45,
+                  "quote": "return new BigDecimal(value).intValue();"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "gson-08",
+          "category": "long",
+          "query": "An application uses Java object serialization on a JSON number wrapper that still stores its original numeric text. The receiver should not need Gson classes merely to read that value. Where is the replacement chosen, and what value type crosses that serialization boundary?",
+          "required_facts": [
+            "The serialization replacement is a BigDecimal constructed from the stored numeric text."
+          ],
+          "answers": [
+            {
+              "file": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java",
+              "owner": "LazilyParsedNumber.writeReplace",
+              "source_sha256": "311c0adc55a435f6bc2417f52bd1c00638f579fa6532ba6e79a1db0e5a922f7e",
+              "definition_start": 79,
+              "definition_end": 81,
+              "proofs": [
+                {
+                  "line": 80,
+                  "quote": "return new BigDecimal(value);"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        }
+      ]
+    },
+    {
+      "pack": "spdlog",
+      "repo": "gabime/spdlog",
+      "commit": "0f7562a0f9273cfc71fddc6ae52ebff7a490fa04",
+      "questions": [
+        {
+          "id": "spdlog-01",
+          "category": "short",
+          "query": "What is returned when a key is absent from the per-thread diagnostic context?",
+          "required_facts": [
+            "A diagnostic-context lookup returns an empty string when the key is absent."
+          ],
+          "answers": [
+            {
+              "file": "include/spdlog/mdc.h",
+              "owner": "spdlog::mdc::get",
+              "source_sha256": "c3516a85d687f806080d81d0b63cb0353665b26d78f6cdc2c51e526ae9c492d8",
+              "definition_start": 33,
+              "definition_end": 40,
+              "proofs": [
+                {
+                  "line": 35,
+                  "quote": "auto it = context.find(key);"
+                },
+                {
+                  "line": 36,
+                  "quote": "if (it != context.end()) {"
+                },
+                {
+                  "line": 37,
+                  "quote": "return it->second;"
+                },
+                {
+                  "line": 39,
+                  "quote": "return \"\";"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "spdlog-02",
+          "category": "short",
+          "query": "Where does filename splitting treat a single leading dot or a trailing dot as having no extension?",
+          "required_facts": [
+            "A last dot at position zero or at the final position returns the whole filename and an empty extension."
+          ],
+          "answers": [
+            {
+              "file": "include/spdlog/details/file_helper-inl.h",
+              "owner": "spdlog::details::file_helper::split_by_extension",
+              "source_sha256": "cb74c68b416fd94ef738b12e93af4bb571b69f2bcc3b6987cc7ee0a1fbee0547",
+              "definition_start": 130,
+              "definition_end": 148,
+              "proofs": [
+                {
+                  "line": 136,
+                  "quote": "if (ext_index == filename_t::npos || ext_index == 0 || ext_index == fname.size() - 1) {"
+                },
+                {
+                  "line": 137,
+                  "quote": "return std::make_tuple(fname, filename_t());"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "spdlog-03",
+          "category": "short",
+          "query": "How are repeated logger names handled while parsing comma-separated level settings?",
+          "required_facts": [
+            "Comma-separated entries are processed in order and each parsed key assignment overwrites the prior value for that key."
+          ],
+          "answers": [
+            {
+              "file": "include/spdlog/cfg/helpers-inl.h",
+              "owner": "spdlog::cfg::helpers::extract_key_vals_",
+              "source_sha256": "5d89750733bec66bf51a5ec58263e7978338a528294ced3018c43d7c224c1220",
+              "definition_start": 59,
+              "definition_end": 71,
+              "proofs": [
+                {
+                  "line": 63,
+                  "quote": "while (std::getline(token_stream, token, ',')) {"
+                },
+                {
+                  "line": 67,
+                  "quote": "auto kv = extract_kv_('=', token);"
+                },
+                {
+                  "line": 68,
+                  "quote": "rv[kv.first] = kv.second;"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "spdlog-04",
+          "category": "short",
+          "query": "How is the numbered log filename formed, and what happens for rotation index zero?",
+          "required_facts": [
+            "Rotation index zero returns the original filename.",
+            "A nonzero rotation index is inserted between the basename and extension with a preceding dot."
+          ],
+          "answers": [
+            {
+              "file": "include/spdlog/sinks/rotating_file_sink-inl.h",
+              "owner": "spdlog::sinks::rotating_file_sink::calc_filename",
+              "source_sha256": "8dc1c0985be041ac2ec0f155b534b748cd44b3eb33e8836dc849f9314c21d13e",
+              "definition_start": 53,
+              "definition_end": 64,
+              "proofs": [
+                {
+                  "line": 56,
+                  "quote": "if (index == 0U) {"
+                },
+                {
+                  "line": 57,
+                  "quote": "return filename;"
+                },
+                {
+                  "line": 62,
+                  "quote": "details::file_helper::split_by_extension(filename)"
+                },
+                {
+                  "line": 63,
+                  "quote": "return fmt_lib::format(SPDLOG_FMT_STRING(SPDLOG_FILENAME_T(\"{}.{}{}\")), basename, index, ext);"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "spdlog-05",
+          "category": "test",
+          "query": "Find the test demonstrating that alternating two payloads is not collapsed by duplicate suppression.",
+          "required_facts": [
+            "Ten iterations alternating message1 and message2 produce twenty forwarded messages."
+          ],
+          "answers": [
+            {
+              "file": "tests/test_dup_filter.cpp",
+              "owner": null,
+              "source_sha256": "5d97ff00995bafa5561650c8ff04132243f027eb83fcd8fcabd45021e8ffda8e",
+              "definition_start": 36,
+              "definition_end": 50,
+              "proofs": [
+                {
+                  "line": 44,
+                  "quote": "for (int i = 0; i < 10; i++) {"
+                },
+                {
+                  "line": 45,
+                  "quote": "spdlog::level::info, \"message1\""
+                },
+                {
+                  "line": 46,
+                  "quote": "spdlog::level::info, \"message2\""
+                },
+                {
+                  "line": 49,
+                  "quote": "REQUIRE(test_sink->msg_counter() == 20);"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        },
+        {
+          "id": "spdlog-06",
+          "category": "test",
+          "query": "Find the ring-buffer test that requests two formatted messages and expects B followed by C.",
+          "required_facts": [
+            "Requesting two formatted entries is checked to return B followed by C."
+          ],
+          "answers": [
+            {
+              "file": "tests/test_ringbuffer.cpp",
+              "owner": null,
+              "source_sha256": "0e30a2e30964d4dfe86dc8296c013ed1e77010613c41c1d95c043d0c12776169",
+              "definition_start": 39,
+              "definition_end": 52,
+              "proofs": [
+                {
+                  "line": 47,
+                  "quote": "auto formatted = sink.last_formatted(2);"
+                },
+                {
+                  "line": 48,
+                  "quote": "REQUIRE(formatted.size() == 2);"
+                },
+                {
+                  "line": 50,
+                  "quote": "formatted[0] == spdlog::fmt_lib::format(\"B{}\""
+                },
+                {
+                  "line": 51,
+                  "quote": "formatted[1] == spdlog::fmt_lib::format(\"C{}\""
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "spdlog-07",
+          "category": "long",
+          "query": "An application is destroying a periodic background callback worker, which may still be asleep between runs. It needs to stop the worker and wait for completion, while also handling a worker whose thread was never started. Where does shutdown check the thread state, change the stop flag under a lock, and wake before joining?",
+          "required_facts": [
+            "Shutdown acts only when the worker thread is joinable and sets active_ to false while holding mutex_.",
+            "It notifies the condition variable before joining the worker thread."
+          ],
+          "answers": [
+            {
+              "file": "include/spdlog/details/periodic_worker-inl.h",
+              "owner": "spdlog::details::periodic_worker::~periodic_worker",
+              "source_sha256": "72c338426a4cd5f1a387d222a867b575f01f8d1968326f5f30a82ff5071bd681",
+              "definition_start": 14,
+              "definition_end": 23,
+              "proofs": [
+                {
+                  "line": 15,
+                  "quote": "if (worker_thread_.joinable()) {"
+                },
+                {
+                  "line": 17,
+                  "quote": "std::lock_guard<std::mutex> lock(mutex_);"
+                },
+                {
+                  "line": 18,
+                  "quote": "active_ = false;"
+                },
+                {
+                  "line": 20,
+                  "quote": "cv_.notify_one();"
+                },
+                {
+                  "line": 21,
+                  "quote": "worker_thread_.join();"
+                }
+              ]
+            }
+          ],
+          "split": "holdout"
+        },
+        {
+          "id": "spdlog-08",
+          "category": "long",
+          "query": "An external process may rotate or truncate a log while the application is running. When opening a log with truncation requested, where does the code truncate through a temporary handle yet keep the actual writing handle in append mode, and what mode sequence does it use?",
+          "required_facts": [
+            "Requested truncation opens and closes a temporary file in wb mode.",
+            "The actual writing handle is opened in ab mode after that truncation step."
+          ],
+          "answers": [
+            {
+              "file": "include/spdlog/details/file_helper-inl.h",
+              "owner": "spdlog::details::file_helper::open",
+              "source_sha256": "cb74c68b416fd94ef738b12e93af4bb571b69f2bcc3b6987cc7ee0a1fbee0547",
+              "definition_start": 26,
+              "definition_end": 62,
+              "proofs": [
+                {
+                  "line": 30,
+                  "quote": "auto *mode = SPDLOG_FILENAME_T(\"ab\");"
+                },
+                {
+                  "line": 31,
+                  "quote": "auto *trunc_mode = SPDLOG_FILENAME_T(\"wb\");"
+                },
+                {
+                  "line": 39,
+                  "quote": "if (truncate) {"
+                },
+                {
+                  "line": 45,
+                  "quote": "if (os::fopen_s(&tmp, fname, trunc_mode)) {"
+                },
+                {
+                  "line": 48,
+                  "quote": "std::fclose(tmp);"
+                },
+                {
+                  "line": 50,
+                  "quote": "if (!os::fopen_s(&fd_, fname, mode)) {"
+                }
+              ]
+            }
+          ],
+          "split": "development"
+        }
+      ]
+    }
+  ]
+}

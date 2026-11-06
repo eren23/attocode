@@ -23,8 +23,10 @@ def _proof_visible(row, proof):
         return False
     lines = row['snippet'].splitlines()
     offset = proof['line'] - start
-    return (start <= proof['line'] <= end and 0 <= offset < len(lines)
-            and proof['quote'] in lines[offset])
+    count = len(proof['quote'].splitlines())
+    return (count > 0 and start <= proof['line'] and proof['line'] + count - 1 <= end
+            and 0 <= offset and offset + count <= len(lines)
+            and proof['quote'] in '\n'.join(lines[offset:offset + count]))
 
 
 def page_metrics(question, results):
