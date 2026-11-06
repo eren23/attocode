@@ -99,14 +99,14 @@ async def test_fusion_capture_preserves_delivery_and_restores_patches(tmp_path):
     gateway = OperationGateway(str(tmp_path), profile='daily', watch=False)
     original = module.rerank_broad_candidates
     try:
-        service = gateway._local_service if hasattr(gateway, '_local_service') else None
+        from eval.quality.corpus import ready_search
+        await ready_search(gateway, {'query': 'neutral readiness', 'top_k': 1, 'max_tokens': 2000})
         ordinary = await observe(gateway, 'quota capacity', top_k=10, budget=2000)
         traced = await observe(gateway, 'quota capacity', top_k=10, budget=2000,
                                capture_generation=True, capture_owner_fusion=True)
         assert ordinary['response']['data']['results'] == traced['response']['data']['results']
         assert traced['owner_fusion_diagnostic']
         assert module.rerank_broad_candidates is original
-        assert service is None or service is not None
     finally:
         await gateway.close()
     class Broken:

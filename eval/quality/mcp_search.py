@@ -57,11 +57,13 @@ def decode(response):
     return payload
 
 
-async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="", capture_generation=False):
+async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="", capture_generation=False,
+                  capture_owner_fusion=False):
     """Execute the public gateway, recording diagnostics without replacing it."""
     before_hydration = []
     generation = []
     rankings = []
+    fusion = []
     rank = CodeIntelService._rank_search_results
 
     def record(service, *args, **kwargs):
@@ -75,6 +77,38 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="",
     started = time.perf_counter()
     with ExitStack() as stack:
         stack.enter_context(patch.object(CodeIntelService, "_rank_search_results", record))
+        if capture_owner_fusion:
+            from attocode_intel._internal.integrations.context import semantic_search as module
+
+            def rows(values):
+                return [{"file": r.file_path, "kind": r.chunk_type, "name": r.name,
+                         "start": r.start_line, "end": r.end_line,
+                         "definition_start": r.definition_start_line,
+                         "definition_end": r.definition_end_line, "score": r.score,
+                         "text_sha256": hashlib.sha256(r.text.encode()).hexdigest()} for r in values]
+
+            rerank = module.rerank_broad_candidates
+            def capture_diversity(query, candidates, top_k, file_filter=""):
+                before = rows(candidates)
+                result = rerank(query, candidates, top_k, file_filter)
+                fusion.append({"stage": "diversity", "before": before, "after": rows(result)})
+                return result
+            stack.enter_context(patch.object(module, "rerank_broad_candidates", capture_diversity))
+            penalty = module.SemanticSearchManager._penalize_exclusions
+            def capture_penalty(candidates, negative):
+                before = rows(candidates)
+                result = penalty(candidates, negative)
+                fusion.append({"stage": "exclusion", "before": before, "after": rows(result)})
+                return result
+            stack.enter_context(patch.object(module.SemanticSearchManager, "_penalize_exclusions",
+                                             staticmethod(capture_penalty)))
+            file_fuse = module.SemanticSearchManager._fuse_file_order
+            def capture_file(manager, candidates, files):
+                before = rows(candidates)
+                result = file_fuse(manager, candidates, files)
+                fusion.append({"stage": "file_fusion", "before": before, "after": rows(result)})
+                return result
+            stack.enter_context(patch.object(module.SemanticSearchManager, "_fuse_file_order", capture_file))
         if capture_generation:
             from attocode_intel._internal.integrations.context.semantic_search import (
                 SemanticSearchManager,
@@ -105,6 +139,8 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="",
               "pre_hydration_diagnostic": before_hydration, "ranking_diagnostic": rankings}
     if capture_generation:
         result["generation_diagnostic"] = generation
+    if capture_owner_fusion:
+        result['owner_fusion_diagnostic'] = fusion
     return result
 
 
