@@ -1,0 +1,58 @@
+{
+  "experiment": "query-proximity",
+  "limits": {
+    "disk_bytes": 2147483648,
+    "evidence_bytes": 67108864,
+    "rss_bytes": 2147483648,
+    "seconds": 900
+  },
+  "schema_version": 1,
+  "science": {
+    "candidate_if_qualified": {
+      "change": "Only reorder the existing returned body-candidate list before fusion. Separate first occurrence per owner from additional windows using original ordinals, preserve primary-before-additional partition, and sort only within each partition by descending priority, original ordinal as tie-break. Priority=original raw BM25 body score*(1+0.25*local3/query_concept_count) when local3>=2 and query_concept_count>=2, otherwise original score. Return original result objects/scores; no candidate additions/removals, SQL or caps changes. If all rows have zero eligible signal, return the exact original list/order.",
+      "development_gate": "In every one of3 paired rounds on all24consumeddevelopmentquestions: same>=3baseline-false/candidate-true default complete frozen proof-bundle gains across>=2repos; zero individual file/proof/answer losses on default/deep/scoped pages; each round default MRR across all24nondecreasing; nearest-rank default p95<=max(0.250s,1.25*baselinep95), defaultmax<=2s. Preserve exact-question controls and full source/raw/origin/budget/cleanup admission. Consumed questions cannot establish freshquality.",
+      "holdout_gate": "Only after all development gates; execute the reserved24 once with the fixed candidate and3pairedrounds; same new-gain/loss/MRR/timing/admission gates; no retuning/retries. Normal CI green before any merge."
+    },
+    "eligibility": [
+      "baseline primary complete-proof bundle false",
+      "at least one frozen bound target owner is present in body generation and absent from pre-hydration selected owners",
+      "for one body window of that owner: it lies wholly within a frozen development answer definition and contains an independently source-verified proof line; matched concept count>=2 and all its matched concepts fit in<=3 adjacent source lines",
+      "there is a selected owner outside the frozen target-owner set with a body window whose total concept coverage >= target total, local3line coverage < target local3line coverage, and original owner score >= target owner score",
+      "all source inputs and raw trace references validate; no metadata-only source assumptions"
+    ],
+    "experiment": "query-proximity-eligibility",
+    "failure_policy": "Preserve first failure; incomplete is no verdict. An admitted below2case/2repo result closes this mechanism without candidate/holdout. No rerun/relaxed gate. Public source proofs are non-exhaustive relevance labels; absent bound owner is not global absence.",
+    "freeze_revision": 1,
+    "gate": {
+      "minimum_cases": 2,
+      "minimum_repositories": 2
+    },
+    "input_artifact": 13510883326,
+    "input_run": 42234153782,
+    "input_zip_sha256": "b55778456790b76d9a5940a4faace0d70ba65bb3c33457d80fbfba34a1d4af3e",
+    "limits": {
+      "disk_bytes": 2147483648,
+      "evidence_bytes": 67108864,
+      "fetch_workers": 4,
+      "max_source_bytes": 67108864,
+      "max_source_files": 1000,
+      "per_fetch_seconds": 25,
+      "rss_bytes": 2147483648,
+      "seconds": 900
+    },
+    "local_lines": 3,
+    "mechanism": "Rank existing body candidates using local query-concept co-occurrence, without new candidates, owner-vote changes or excerpt/source growth.",
+    "questions_input": {
+      "head": "aa19475254673bd3380fe6d5644a160a4bbba73a",
+      "path": "eval/quality/first_page_ranking_questions.json",
+      "policy": "Verify immutable filehash, filter by split==development before accessing query/answer fields; do not inspect/log/issue holdout text.",
+      "sha256": "80fa39767c93a0c22267f439256760ba0a746b3c663b14e046351794115d7b11"
+    },
+    "revision_reason": "Pre-measurement independent review: preserve original body partitions/comparator and explicitly require new stable gains.",
+    "schema_version": 1,
+    "scope": "Consumed24development trace analysis only; no fresh relevance/quality or speed claim. No queries/holdout/fixture execution.",
+    "source_policy": "Immutable fixture-pinned rawGitHub bytes; bound sourceSHA/bytes; UTF8replace/universal newline; reconstruct exact body producer (<=32lines/2400chars) and require result.text_sha256 including path:start-end header.",
+    "tokenization": "Current query_concepts(query) and focused_evidence.terms(line); no synonym/stopword/exclusion-policy changes."
+  },
+  "version": "0.1.28"
+}

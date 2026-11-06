@@ -7,10 +7,11 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, capacity]
+        options: [preflight, native, preview, restart, broad, capacity, query-proximity]
 
 permissions:
   contents: read
+  actions: read
 
 # Never cancel a scored attempt or compete with normal intelligence CI's lock.
 concurrency:
@@ -54,6 +55,24 @@ jobs:
           pack.download(['ocaml'])
           assert 'ocaml' in pack.downloaded_languages()
           PY
+      - name: Require maintained controls for data-only proximity analysis
+        if: inputs.experiment == 'query-proximity'
+        timeout-minutes: 5
+        run: uv run --no-sync python -m eval.quality.experiments preflight --root '${{ runner.temp }}/proximity-controls-${{ github.run_id }}-${{ github.run_attempt }}'
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.experiment == 'query-proximity'
+        with:
+          name: proximity-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/proximity-controls-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Retrieve immutable consumed trace bytes
+        if: inputs.experiment == 'query-proximity'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/eren23/attocode/actions/artifacts/13510883326/zip > "$RUNNER_TEMP/proximity-input.zip"
+          echo "QUERY_PROXIMITY_INPUT_ZIP=$RUNNER_TEMP/proximity-input.zip" >> "$GITHUB_ENV"
       - name: Acquire broad fixture history and grammars (outside payload budget)
         if: inputs.experiment == 'broad'
         timeout-minutes: 5
