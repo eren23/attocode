@@ -2,6 +2,48 @@
 import math
 
 
+def page_metrics(question, results):
+    files, visible, answered, ranks = set(), set(), False, []
+    for i, answer in enumerate(question['answers']):
+        matched = [r for r in results if r['file_path'] == answer['file']]
+        if matched:
+            files.add(answer['file'])
+            ranks.append(next(n+1 for n, r in enumerate(results) if r['file_path'] == answer['file']))
+        proofs = set()
+        for j, proof in enumerate(answer['proofs']):
+            if any(proof['quote'] in r.get('snippet', '')
+                   and type(r.get('snippet_start_line')) is int
+                   and type(r.get('snippet_end_line')) is int
+                   and r['snippet_start_line'] <= proof['line'] <= r['snippet_end_line'] for r in matched):
+                proofs.add(j)
+                visible.add(f'{i}:{j}')
+        answered |= bool(answer['proofs']) and len(proofs) == len(answer['proofs'])
+    return {'answer': answered, 'files': sorted(files), 'visible': sorted(visible),
+            'first_rank': min(ranks, default=None)}
+
+
+def owner_credit(generation, chunk_rrf_k, body_weight):
+    owners = {}
+    for stage in generation:
+        if stage['stage'] not in {'keyword', 'body'}:
+            continue
+        seen_chunks, seen_owners = set(), set()
+        weight = 1. if stage['stage'] == 'keyword' else body_weight
+        for rank, row in enumerate(stage['results'], 1):
+            owner = '|'.join((row['file'], row['kind'], row['name']))
+            key = (owner, row['start'] or row['definition_start'], row['end'] or row['definition_end'])
+            if key in seen_chunks or (stage['stage'] == 'body' and owner in seen_owners):
+                continue
+            seen_chunks.add(key)
+            seen_owners.add(owner)
+            entry = owners.setdefault(owner, {'keyword_votes': 0, 'body_votes': 0, 'score': 0.})
+            entry[stage['stage'] + '_votes'] += 1
+            entry['score'] += weight / (chunk_rrf_k + rank)
+    for entry in owners.values():
+        entry['score'] = round(entry['score'], 6)
+    return owners
+
+
 def evaluate_split(observations: list[dict], frozen_design: dict) -> dict:
     result = {'complete': False, 'decision': None, 'checks': {}, 'losses': []}
     questions = frozen_design['questions']

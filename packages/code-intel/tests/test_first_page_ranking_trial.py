@@ -151,3 +151,34 @@ async def test_fusion_capture_preserves_delivery_and_restores_patches(tmp_path):
     with pytest.raises(RuntimeError, match='synthetic interruption'):
         await observe(Broken(), 'quota', top_k=10, budget=2000, capture_owner_fusion=True)
     assert module.rerank_broad_candidates is original
+
+
+@pytest.mark.asyncio
+async def test_supervised_worker_records_and_admits_synthetic_source(tmp_path, monkeypatch):
+    import hashlib
+    import json
+    from pathlib import Path
+    import attocode_intel
+    from eval.quality import runner
+    from eval.quality.first_page_ranking_trial import worker
+    source = tmp_path / 'work/source'
+    source.mkdir(parents=True)
+    body = 'def quota():\n    return "quota capacity"\n'
+    (source / 'a.py').write_text(body)
+    (tmp_path / 'evidence/synthetic').mkdir(parents=True)
+    control = tmp_path / 'operator/eval/quality'
+    control.mkdir(parents=True)
+    question = {'category': 'short', 'split': 'development', 'query': 'quota capacity',
+                'answers': [{'file': 'a.py', 'definition_start': 1, 'definition_end': 2,
+                             'source_sha256': hashlib.sha256(body.encode()).hexdigest(),
+                             'proofs': [{'line': 2, 'quote': 'return "quota capacity"'}]}]}
+    manifest = {'repositories': [{'pack': 'synthetic', 'questions': [
+        {**question, 'id': f'synthetic-{n}'} for n in range(4)]}]}
+    (control / 'first_page_ranking_questions.json').write_text(json.dumps(manifest))
+    monkeypatch.setattr(runner, 'REPO', tmp_path / 'operator')
+    monkeypatch.setenv('ATTOCODE_EXPERIMENT_ENGINE', str(Path(attocode_intel.__file__).parent))
+    await worker(tmp_path, 'synthetic')
+    report = json.loads((tmp_path / 'evidence/synthetic/worker.json').read_text())
+    assert report['status'] == 'complete' and report['source_unchanged']
+    assert len(report['cases']) == 4
+    assert all(c['owner_score_replay'] for c in report['cases'])

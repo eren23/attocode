@@ -120,6 +120,9 @@ async def observe(gateway, query, *, top_k, budget, mode="auto", file_filter="",
                 def capture(manager, *args, _fn=original, _stage=stage, **kwargs):
                     rows = _fn(manager, *args, **kwargs)
                     generation.append({"stage": _stage, "arguments": list(args), "keywords": kwargs,
+                                       **({'owner_config': {'chunk_rrf_k': manager.scoring_config.chunk_rrf_k,
+                                                            'body_weight': manager.scoring_config.body_weight}}
+                                          if capture_owner_fusion else {}),
                                        "results": [r if isinstance(r, str) else {
                                            "file": r.file_path, "name": r.name, "kind": r.chunk_type, "score": r.score,
                                            "start": r.start_line, "end": r.end_line,

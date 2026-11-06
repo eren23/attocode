@@ -13,6 +13,9 @@ on:
         type: choice
         default: qualification
         options: [qualification, diagnostic, development, holdout]
+      expected_head:
+        description: Exact frozen head for source-bound ranking dispatch
+        type: string
 
 permissions:
   contents: read
@@ -129,6 +132,7 @@ jobs:
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
       FIRST_PAGE_PHASE: ${{ inputs.ranking_phase }}
+      FIRST_PAGE_EXPECTED_HEAD: ${{ inputs.expected_head }}
     steps:
       - uses: actions/checkout@v4
         with:
