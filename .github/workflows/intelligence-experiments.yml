@@ -147,6 +147,8 @@ jobs:
         run: |
           mkdir -p "$FIRST_PAGE_ROOT/evidence"
           uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_first_page_ranking_trial.py -p eval.quality.no_agent -q --junitxml="$FIRST_PAGE_ROOT/evidence/qualification.xml"
+      - name: Existing platform controls before any questions
+        run: uv run --no-sync python -m eval.quality.experiments preflight --root "$FIRST_PAGE_ROOT-controls"
       - name: Source-bound experiment
         if: inputs.ranking_phase != 'qualification'
         run: uv run --no-sync python -m eval.quality.experiments first-page-ranking --root "$FIRST_PAGE_ROOT"
@@ -156,4 +158,6 @@ jobs:
           name: first-page-ranking-${{ inputs.ranking_phase }}-${{ github.run_id }}-${{ github.run_attempt }}
           retention-days: 30
           if-no-files-found: error
-          path: ${{ env.FIRST_PAGE_ROOT }}/evidence/
+          path: |
+            ${{ env.FIRST_PAGE_ROOT }}/evidence/
+            ${{ env.FIRST_PAGE_ROOT }}-controls/evidence/

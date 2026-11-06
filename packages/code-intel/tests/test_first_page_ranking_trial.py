@@ -89,6 +89,25 @@ def test_recording_option_is_explicit_and_disabled_by_default():
     assert inspect.signature(observe).parameters['capture_owner_fusion'].default is False
 
 
+def test_operator_registration_is_synchronous_and_source_bound():
+    from eval.quality.experiments import load_operator
+    assert importlib.util.find_spec('eval.quality.first_page_ranking_trial') is not None
+    operator = load_operator('first-page-ranking')
+    assert operator.__name__ == 'run' and not inspect.iscoroutinefunction(operator)
+
+
+def test_owner_replay_distinguishes_definitions_from_repeated_rows():
+    hit = {'file': 'a.py', 'kind': 'function', 'name': 'parse', 'start': 0, 'end': 0,
+           'definition_start': 1, 'definition_end': 3}
+    other = {**hit, 'definition_start': 5, 'definition_end': 7}
+    generation = [{'stage': 'keyword', 'results': [hit, deepcopy(hit), other]},
+                  {'stage': 'body', 'results': [{**hit, 'name': 'answer', 'start': 10, 'end': 12}]}]
+    owners = decision().owner_credit(generation, 20, 1.15)
+    assert owners['a.py|function|parse']['keyword_votes'] == 2
+    assert owners['a.py|function|parse']['score'] == round(1/21 + 1/23, 6)
+    assert owners['a.py|function|answer']['score'] == round(1.15/21, 6)
+
+
 @pytest.mark.asyncio
 async def test_fusion_capture_preserves_delivery_and_restores_patches(tmp_path):
     from eval.quality.mcp_search import observe
