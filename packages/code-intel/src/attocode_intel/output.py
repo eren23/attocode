@@ -207,6 +207,30 @@ def _restore_search_snippets(result, originals, max_tokens, *, upstream_truncate
     return result
 
 
+def _compact_search_ranking(result, max_tokens):
+    """Summarize a duplicate metadata index after all evidence fitting is done.
+
+    The full record remains in data.ranking.index. Preserve readiness/coverage
+    hints for metadata consumers, and retain the original page if no saving fits.
+    """
+    page = json.loads(result.content[0].text)
+    ranking = page['metadata'].get('ranking')
+    if not isinstance(ranking, dict) or ranking != page['data'].get('ranking'):
+        return result
+    index = ranking.get('index')
+    if not isinstance(index, dict):
+        return result
+    summary = {key: index[key] for key in (
+        'status', 'body_index_available', 'body_index_ready', 'body_index_coverage',
+        'discovery_truncated', 'vector_status', 'vector_coverage') if key in index}
+    summary['details_in'] = 'data.ranking.index'
+    ranking['index'] = summary
+    candidate = compact_result(page['metadata'], page['data'])
+    if response_tokens(candidate) <= min(max_tokens, response_tokens(result)):
+        return candidate
+    return result
+
+
 def bounded_search(metadata, data, max_tokens, *, all_results, follow_up=None):
     """Fit search delivery, reserving a progressing retry after final omissions."""
     payload = deepcopy(data)
@@ -246,8 +270,9 @@ def bounded_search(metadata, data, max_tokens, *, all_results, follow_up=None):
             and len(delivered["data"]["results"]) >= delivered["data"]["ranking"]["candidate_pool_count"]):
         delivered["data"].pop("follow_up", None)
         result = compact_result(delivered["metadata"], delivered["data"])
-    return _restore_search_snippets(result, all_results, max_tokens,
-                                    upstream_truncated=metadata.get("truncated", False))
+    restored = _restore_search_snippets(result, all_results, max_tokens,
+                                         upstream_truncated=metadata.get("truncated", False))
+    return _compact_search_ranking(restored, max_tokens)
 
 
 def bounded_compact(metadata: dict, data, max_tokens: int, *, search_results=None) -> types.CallToolResult:
