@@ -3,7 +3,6 @@ import json
 from copy import deepcopy
 
 import pytest
-
 from attocode_intel import output
 
 
