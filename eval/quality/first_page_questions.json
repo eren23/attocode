@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "fixture_commit": "8b503e6c5ee5eebb7d373f125ffe7056b6ff801e",
+  "profile": "daily",
+  "first_page": {
+    "top_k": 10,
+    "max_tokens": 2000
+  },
+  "diagnostic_page": {
+    "top_k": 24,
+    "max_tokens": 8000
+  },
+  "cases": [
+    {
+      "id": "worker-lifetime",
+      "query": "Where is the duration computed that includes creating and terminating a benchmark subprocess, while reporting just its deadline-controlled wait separately?",
+      "file": "eval/quality/corpus.py",
+      "symbol": "evaluate_isolated",
+      "quote": "result.update(worker_seconds=worker_seconds, worker_wait_seconds=wait_seconds,",
+      "introduced": "8b503e6c5ee5eebb7d373f125ffe7056b6ff801e",
+      "line": 329,
+      "source_sha256": "e5154c606bfe4e18446a732d6f94bf6f2a5e64fabe064ab24ce589529d9a0dad",
+      "definition_line": 306
+    },
+    {
+      "id": "inherited-output",
+      "query": "How does cancelled language-server initialization avoid waiting forever when a descendant still owns the output handles?",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/lsp/client.py",
+      "symbol": "_abort_start",
+      "quote": "process._transport.close()",
+      "introduced": "e50de895f5f87fd4996a523c2bbac9f4fa732ed8",
+      "line": 395,
+      "source_sha256": "81eee6a5ad65f3bd883c2c6cc9a21bd722e042ff664ceb92c4d02b2c9e3561b9",
+      "definition_line": 372
+    },
+    {
+      "id": "cached-privacy",
+      "query": "In semantic search, where is sending project text to an external service refused even if a reusable client was created before the privacy setting changed?",
+      "file": "packages/code-intel/src/attocode_intel/_internal/integrations/context/embeddings.py",
+      "symbol": "create_embedding_provider",
+      "quote": "logger.warning(\"ATTOCODE_LOCAL_ONLY is set; refusing the OpenAI embedding provider\")",
+      "introduced": "9512408",
+      "line": 189,
+      "source_sha256": "3ae3684ac260ada1e5dc0cea6699130be94aa821a934bc9b9d63962ca9e79df1",
+      "definition_line": 168
+    }
+  ],
+  "scope": "Implementer-authored, source-exposed diagnostic cases, frozen before retrieval; not blind validation or quality/agent-benefit evidence."
+}

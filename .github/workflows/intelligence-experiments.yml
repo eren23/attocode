@@ -7,7 +7,7 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, capacity]
+        options: [preflight, native, preview, restart, broad, capacity, first-page]
 
 permissions:
   contents: read
@@ -18,7 +18,56 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  first-page:
+    if: inputs.experiment == 'first-page'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_EMBEDDING_MODEL: ''
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      FIRST_PAGE_ROOT: ${{ runner.temp }}/first-page-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Install unchanged default test environment
+        timeout-minutes: 3
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Fetch immutable source fixture
+        run: git fetch --no-tags --depth 1 origin 8b503e6c5ee5eebb7d373f125ffe7056b6ff801e
+      - name: Observe frozen source-known questions under existing resource supervision
+        run: |
+          uv run --no-sync python - <<'PY'
+          import os, shutil, sys, time
+          from pathlib import Path
+          from eval.quality.runner import GIB, supervise, write_json
+          root = Path(os.environ['FIRST_PAGE_ROOT'])
+          root.mkdir()
+          (root / 'evidence').mkdir()
+          result = supervise([sys.executable, '-m', 'eval.quality.first_page_diagnostic', str(root)],
+              cwd=Path.cwd(), env=os.environ.copy(), root=root, log=root / 'evidence/payload.log',
+              deadline=time.monotonic() + 300, max_bytes=2*GIB, max_rss=2*GIB,
+              include_controller=True, evidence_root=root / 'evidence', max_evidence_bytes=64*2**20)
+          if (root / 'work').exists():
+              shutil.rmtree(root / 'work')
+          result['owned_work_removed'] = not (root / 'work').exists()
+          write_json(root / 'evidence/supervision.json', result)
+          assert result['status'] == 'passed' and result['cleanup_verified'] and result['owned_work_removed']
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: first-page-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: ${{ env.FIRST_PAGE_ROOT }}/evidence/
   experiment:
+    if: inputs.experiment != 'first-page'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.experiment == 'capacity' && 55 || 40 }}
     env:
