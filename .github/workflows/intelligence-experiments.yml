@@ -131,7 +131,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api repos/eren23/attocode/actions/artifacts/13513785185/zip > "$RUNNER_TEMP/ranking-input.zip"
+          gh api repos/eren23/attocode/actions/artifacts/13510883326/zip > "$RUNNER_TEMP/ranking-input.zip"
           echo "RANKING_INPUT_ZIP=$RUNNER_TEMP/ranking-input.zip" >> "$GITHUB_ENV"
           echo "SUMMARY_ROOT=$RUNNER_TEMP/ranking-summary-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
       - run: uv run --no-sync python -m eval.quality.experiments ranking-summary --root "$SUMMARY_ROOT"
