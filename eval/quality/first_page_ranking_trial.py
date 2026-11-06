@@ -80,9 +80,10 @@ def run(root: Path) -> None:
         raise ValueError('incomplete diagnostic inventory')
     eligible = [c for c in cases if c['eligible']]
     qualifies = len(eligible) >= 2 and len({c['pack'] for c in eligible}) >= 2
-    report.update(status='complete', eligibility=qualifies,
-                  eligible_ids=[c['id'] for c in eligible],
-                  decision='eligible_for_fixed_candidate' if qualifies else 'unsupported_hypothesis')
+    # Eligibility is provisional until the outer controller admits final cleanup,
+    # immutable inputs and aggregate deadline. Only its report may authorize work.
+    report.update(status='complete', eligibility=qualifies, decision=None,
+                  eligible_ids=[c['id'] for c in eligible])
     write_json(root / 'evidence/diagnostic.json', report)
 
 
@@ -148,7 +149,8 @@ async def worker(root, pack):
                 raise ValueError('index became incomplete')
             primary[q['id']] = page
             journal.response({'event': 'primary', 'id': q['id']},
-                             {'page': page, 'seconds': timed.seconds, 'metrics': page_metrics(q, page['data']['results'])})
+                             {'page': page, 'instrumented_seconds': timed.seconds,
+                              'metrics': page_metrics(q, page['data']['results'])})
         for q in questions:
             traced = await observe(gateway, q['query'], top_k=10, budget=2000,
                                    capture_generation=True, capture_owner_fusion=True)

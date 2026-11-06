@@ -201,6 +201,15 @@ def main():
         report['owned_scratch_removed'] = all(not (root / name).exists() for name in ('work', 'cache'))
         if report['seconds'] >= SECONDS[args.experiment]:
             report.update(status='incomplete', reason='complete_deadline')
+        if args.experiment == 'first-page-ranking' and report['status'] == 'complete':
+            from eval.quality.first_page_ranking_decision import admit_diagnostic
+            try:
+                diagnostic = json.loads((root / 'evidence/diagnostic.json').read_text())
+                report['decision'] = admit_diagnostic(report, diagnostic)
+                if report['decision'] is None:
+                    report.update(status='incomplete', reason='diagnostic_admission_failed')
+            except Exception as error:
+                report.update(status='incomplete', decision=None, admission_error=type(error).__name__)
         # Quality decisions are separate operator evidence; incomplete never earns one.
         write_json(root / 'evidence/report.json', report)
     print(json.dumps({k: report[k] for k in ('experiment', 'status', 'decision', 'seconds')}))

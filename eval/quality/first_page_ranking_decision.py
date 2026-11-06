@@ -2,6 +2,21 @@
 import math
 
 
+def admit_diagnostic(outer, diagnostic):
+    supervision = outer.get('supervision', {})
+    seconds = outer.get('seconds')
+    valid = (outer.get('status') == 'complete' and outer.get('cleanup_verified') is True
+             and outer.get('owned_scratch_removed') is True
+             and type(seconds) in (int, float) and math.isfinite(seconds)
+             and 0 <= seconds < outer['limits']['seconds']
+             and supervision.get('status') == 'passed' and supervision.get('exit_code') == 0
+             and supervision.get('cleanup_verified') is True and supervision.get('log_truncated') is False
+             and diagnostic.get('status') == 'complete' and type(diagnostic.get('eligibility')) is bool)
+    if not valid:
+        return None
+    return 'eligible_for_fixed_candidate' if diagnostic['eligibility'] else 'unsupported_hypothesis'
+
+
 def _proof_visible(row, proof):
     start, end = row.get('snippet_start_line'), row.get('snippet_end_line')
     if type(start) is not int or type(end) is not int or not isinstance(row.get('snippet'), str):
