@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.27] - 2026-11-06
+
+### Fixed
+
+- Namespace resolution uses a snapshot of cached file membership while building
+  its index. Concurrent AST hydration could previously raise
+  `RuntimeError: dictionary changed size during iteration` during symbol inspection.
+  Files added or removed after the snapshot are reflected in the next namespace build.
+
 ## [Intelligence 0.1.26] - 2026-11-04
 
 ### Fixed
