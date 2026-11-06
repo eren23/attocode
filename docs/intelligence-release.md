@@ -2,7 +2,7 @@
 
 The standalone distribution has its own version in `packages/code-intel/pyproject.toml` and release tags named `intel-vVERSION`. Historical agent `v*` tags remain preserved; the active repository publishes intelligence only.
 
-See the [0.1.27 release notes](intelligence-0.1.27.md) for the latest changes and upgrade instructions.
+See the [0.1.28 release notes](intelligence-0.1.28.md) for the latest changes and upgrade instructions.
 
 ## Release gate
 
@@ -35,7 +35,7 @@ Previously published agent distributions depend on `attocode-code-intel>=0.1.0,<
 ### Verification on GitHub runners
 
 Product CI runs the maintained candidate verifier for Python 3.12 and 3.13,
-including clean installs and upgrades from 0.1.26. The release workflow runs
+including clean installs and upgrades from 0.1.27. The release workflow runs
 `published-verification` after PyPI publication, checking actual published artifact
 hashes, source/tag identity and both installed trees. Its
 `intelligence-published-verification` artifact retains the report and logs, even
@@ -67,9 +67,9 @@ baseline; development source is recorded as a working tree:
 
 ```sh
 .venv/bin/python packages/code-intel/scripts/check_release.py candidate \
-  --version 0.1.27 --baseline-version 0.1.26 --source . \
-  --wheel dist/attocode_code_intel-0.1.27-py3-none-any.whl \
-  --sdist dist/attocode_code_intel-0.1.27.tar.gz \
+  --version 0.1.28 --baseline-version 0.1.27 --source . \
+  --wheel dist/attocode_code_intel-0.1.28-py3-none-any.whl \
+  --sdist dist/attocode_code_intel-0.1.28.tar.gz \
   --allow-downloads --report /tmp/intelligence-candidate.json
 ```
 

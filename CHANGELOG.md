@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.28] - 2026-11-06
+
+### Changed
+
+- Compact search summarizes duplicate lexical-index diagnostics in
+  `metadata.ranking.index`, retaining readiness and coverage hints and pointing
+  to the complete `data.ranking.index` record. The summary runs after evidence
+  fitting and is accepted only when the serialized response stays within its
+  budget and does not grow. Results, source excerpts and continuations are unchanged.
+
 ## [Intelligence 0.1.27] - 2026-11-06
 
 ### Fixed

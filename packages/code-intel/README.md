@@ -43,6 +43,8 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.28 summarizes duplicate compact-search metadata diagnostics after evidence fitting. Full lexical-index details remain at `data.ranking.index`, with readiness and coverage hints in `metadata.ranking.index`. Results and source excerpts are unchanged. See the [release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.28.md).
+
 Version 0.1.27 fixes a dictionary-size error during symbol inspection when AST hydration changes the cache concurrently. Namespace resolution snapshots cached file membership; later changes appear in the next build. See the [release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.27.md).
 
 Version 0.1.26 gives Rust precision lookups a shared five-second budget and fixes cancelled startup cleanup when a child retains inherited pipes. Other languages keep two seconds; longer reloads still return partial evidence.
