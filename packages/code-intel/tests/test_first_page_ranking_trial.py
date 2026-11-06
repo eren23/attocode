@@ -109,7 +109,8 @@ def test_owner_replay_distinguishes_definitions_from_repeated_rows():
 
 
 @pytest.mark.parametrize('change,expected', [('valid', True), ('missing_fact', False),
-                                           ('wrong_file', False), ('wrong_lines', False)])
+                                           ('wrong_file', False), ('wrong_lines', False),
+                                           ('truncated_last_line', False)])
 def test_complete_answer_requires_every_visible_source_fact(change, expected):
     question = {'answers': [{'file': 'a.py', 'proofs': [{'line': 3, 'quote': 'if ready:'},
                                                      {'line': 4, 'quote': 'return data'}]}]}
@@ -121,6 +122,8 @@ def test_complete_answer_requires_every_visible_source_fact(change, expected):
         row['file_path'] = 'b.py'
     elif change == 'wrong_lines':
         row['snippet_start_line'], row['snippet_end_line'] = 30, 31
+    elif change == 'truncated_last_line':
+        row['snippet'] = 'if ready: return data\n    ret'
     result = decision().page_metrics(question, [row])
     assert result['answer'] is expected
 
