@@ -7,7 +7,12 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, capacity]
+        options: [preflight, native, preview, restart, broad, capacity, first-page-ranking]
+      ranking_phase:
+        description: Frozen first-page ranking phase
+        type: choice
+        default: qualification
+        options: [qualification, diagnostic, development, holdout]
 
 permissions:
   contents: read
@@ -19,6 +24,7 @@ concurrency:
 
 jobs:
   experiment:
+    if: inputs.experiment != 'first-page-ranking'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.experiment == 'capacity' && 55 || 40 }}
     env:
@@ -112,3 +118,42 @@ jobs:
             ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
             ${{ runner.temp }}/native-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
             ${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
+
+  first-page-ranking:
+    if: inputs.experiment == 'first-page-ranking'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QUALITY_ALLOW_DOWNLOADS: '1'
+      ATTOCODE_LOCAL_ONLY: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      FIRST_PAGE_PHASE: ${{ inputs.ranking_phase }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Maintained dependencies
+        timeout-minutes: 5
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Set owned evidence location
+        run: |
+          echo "FIRST_PAGE_ROOT=$RUNNER_TEMP/first-page-ranking-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+      - name: Qualify without issuing corpus questions
+        if: inputs.ranking_phase == 'qualification'
+        run: |
+          mkdir -p "$FIRST_PAGE_ROOT/evidence"
+          uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_first_page_ranking_trial.py -p eval.quality.no_agent -q --junitxml="$FIRST_PAGE_ROOT/evidence/qualification.xml"
+      - name: Source-bound experiment
+        if: inputs.ranking_phase != 'qualification'
+        run: uv run --no-sync python -m eval.quality.experiments first-page-ranking --root "$FIRST_PAGE_ROOT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: first-page-ranking-${{ inputs.ranking_phase }}-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: error
+          path: ${{ env.FIRST_PAGE_ROOT }}/evidence/
