@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -89,7 +90,43 @@ def test_shared_deadline_terminates_owned_process(tmp_path):
     assert result['status'] == 'failed' and result['reason'] == 'deadline_exceeded'
     assert len(result['attempts']) == 1
     assert result['owned_scratch_removed']
-    assert len(json.loads(state.read_text())) <= 1 if state.exists() else True
+    if state.exists():
+        assert len(json.loads(state.read_text())) <= 1
+
+
+def test_process_creation_time_does_not_grant_a_new_wait_budget(tmp_path, monkeypatch):
+    uvx, _ = fake_uvx(tmp_path, [(0, 'attocode-code-intel 1.2.3\n', '')])
+    module = probe()
+    launch = module.subprocess.Popen
+    def delayed_launch(*args, **kwargs):
+        # OS process creation cannot be preempted, but its time must consume the
+        # existing budget instead of granting a fresh communicate() allowance.
+        time.sleep(1.1)
+        return launch(*args, **kwargs)
+    monkeypatch.setattr(module.subprocess, 'Popen', delayed_launch)
+    result = module.probe_install('1.2.3', uvx=str(uvx), attempts=3, seconds=1, delay=0)
+    assert result['status'] == 'failed' and result['reason'] == 'deadline_exceeded'
+    assert len(result['attempts']) == 1 and result['seconds'] >= 1
+    assert result['owned_scratch_removed']
+
+
+@pytest.mark.parametrize('option,value', [('attempts', 9), ('seconds', 301)])
+def test_documented_limits_are_hard_ceilings(tmp_path, monkeypatch, option, value):
+    uvx, state = fake_uvx(tmp_path, [(0, 'attocode-code-intel 1.2.3\n', '')])
+    module = probe()
+    with pytest.raises(ValueError):
+        module.probe_install('1.2.3', uvx=str(uvx), **{option: value})
+    assert not state.exists()
+    monkeypatch.setenv('PATH', str(tmp_path) + os.pathsep + os.environ['PATH'])
+    assert module.main(['--version', '1.2.3', '--report', str(tmp_path / 'limits.json'),
+                        '--allow-downloads', '--' + option, str(value)]) == 1
+    assert not state.exists(), 'Rejected CLI budgets still launched an installer'
+
+
+def test_documented_maximum_budget_is_accepted(tmp_path):
+    uvx, _ = fake_uvx(tmp_path, [(0, 'attocode-code-intel 1.2.3\n', '')])
+    result = probe().probe_install('1.2.3', uvx=str(uvx), attempts=8, seconds=300, delay=0)
+    assert result['status'] == 'passed' and result['owned_scratch_removed']
 
 
 @pytest.mark.parametrize('option,value', [('attempts', 0), ('seconds', 0),
