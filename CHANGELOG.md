@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Published-release verification accepts an explicitly selected immutable retry
+  tag and resolves release names only under `refs/tags`. A same-named branch
+  cannot satisfy source provenance; original canonical tags remain required.
+- Source archives exclude generated `.attocode` state while preserving the
+  tracked rule fixture used by tests.
+- The Registry install probe uses owned cache/config state and bounded retries
+  for temporary package-version visibility failures. Other failures and wrong
+  versions stop publication; attempt reports are retained.
+
 ## [Intelligence 0.1.29] - 2026-11-08
 
 ### Fixed

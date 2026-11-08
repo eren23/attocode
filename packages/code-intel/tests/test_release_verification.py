@@ -300,6 +300,14 @@ def test_published_rejects_branch_named_like_release_tag(verifier, artifact):
         verifier.source_identity(artifact, 'published', '1.2.3')
 
 
+@pytest.mark.parametrize('version', ['1.2.3^{}', '1.2.3~1', '1.2.3/../../heads/main'])
+def test_published_rejects_revision_operators_in_version(verifier, artifact, version):
+    initialize_release(artifact)
+    git(artifact, 'tag', 'intel-v1.2.3')
+    with pytest.raises(ValueError, match='tag'):
+        verifier.source_identity(artifact, 'published', version)
+
+
 @pytest.mark.parametrize('annotated', [False, True])
 def test_published_selects_retry_without_moving_original(verifier, artifact, annotated):
     initialize_release(artifact)

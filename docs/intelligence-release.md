@@ -53,6 +53,15 @@ publish the same `server.json` manually with `mcp-publisher login github` and
 `mcp-publisher publish`. Do not create a retry tag for it: the PyPI version already
 exists.
 
+The listed-command probe uses an owned temporary cache, tool directory and home,
+the existing runner Python, and the public PyPI index. Only the observed
+"no version of attocode-code-intel==VERSION" resolution failure is retried:
+at most eight attempts share a 300-second budget, with exponential delays from
+five seconds capped at 60 seconds. Process cleanup has a bounded additional
+allowance. A wrong reported version, other install failures or timeout stop the
+job before Registry publication. Attempt diagnostics survive in the
+`intelligence-registry-install-proof` artifact, including failed probes.
+
 The commands below describe the same maintained verifier for an explicitly chosen
 remote or disposable environment. Repository operators keep broad and release
 installation validation on runners.
@@ -87,6 +96,21 @@ matching `intel-vVERSION` tag, with package Python inputs and `pyproject.toml`
 matching tag blobs. Local notes outside those inputs can remain untracked.
 The verifier does not publish, change tags, or restart another client's MCP.
 
+For a repaired pre-publication attempt, pass the exact
+`--source-tag intel-vVERSION-retry.N`. The original canonical tag must still
+exist, and the selected retry must point at clean `HEAD` and match the requested
+version. Only actual `refs/tags` are accepted. The report records the selected
+tag/object and the canonical commit; source and ref identities are rechecked
+after installation verification. Candidate mode rejects `--source-tag`.
+The tagged workflow passes its own `GITHUB_REF_NAME` explicitly.
+
+Source archives exclude generated `.attocode` state, including nested fixture
+indexes. The tracked rule fixture
+`tests/fixtures/rule_violations/.attocode/rules/team-preferences.yaml` is explicitly
+included as test input. The archive regression builds the real configuration
+with root and nested generated state and verifies that ordinary fixture source
+and the tracked rule remain present.
+
 ### Publication steps
 
 1. Update the version in `packages/code-intel/pyproject.toml` and in `packages/code-intel/src/attocode_intel/__init__.py`. A test fails when the two differ. The CLI, the MCP server and the HTTP API read `__version__`. Refresh `uv.lock`, and merge a reviewed change with passing Intelligence checks.
@@ -100,6 +124,7 @@ If a release-gate failure prevents publication, diagnose, fix and merge it throu
 normal CI, verify that the version is still absent from PyPI, and use a new tag such as
 `intel-v0.1.5-retry.1`. The optional `-retry.N` suffix names the publishing attempt;
 the package version remains `0.1.5`. Preserve the failed original tag and run all
-release gates again. Record packaged-source changes in a repaired candidate;
+release gates again; published verification selects that exact retry tag with
+`--source-tag`. Record packaged-source changes in a repaired candidate;
 confirm source and dependencies match when claiming a workflow-only retry. Never use this path to
 replace a version that has already been uploaded to PyPI.

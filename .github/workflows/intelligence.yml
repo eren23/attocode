@@ -73,6 +73,12 @@ jobs:
             --source . --wheel "dist/attocode_code_intel-${release_version}-py3-none-any.whl" \
             --sdist "dist/attocode_code_intel-${release_version}.tar.gz" \
             --allow-downloads --report quality-artifacts/candidate-verification.json
+      - name: Qualify the Registry install probe against a released baseline
+        if: matrix.python == '3.12'
+        run: |
+          uv run --no-sync python packages/code-intel/scripts/check_registry_install.py \
+            --version "$INTELLIGENCE_BASELINE" --allow-downloads \
+            --report quality-artifacts/registry-install-smoke.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -72,7 +72,8 @@ jobs:
           release_version="$(python -c 'import tomllib; print(tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"])')"
           uv run --no-sync python packages/code-intel/scripts/check_release.py published \
             --version "$release_version" --baseline-version "$INTELLIGENCE_BASELINE" \
-            --source . --allow-downloads --report quality-artifacts/published-verification.json
+            --source . --source-tag "$GITHUB_REF_NAME" --allow-downloads \
+            --report quality-artifacts/published-verification.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -96,11 +97,13 @@ jobs:
           python-version: '3.12'
       # published-verification already checks the MCP server from PyPI. This step
       # checks only that the command the registry lists resolves to this version.
-      # The restored uv cache can hold the package index from before the upload.
+      # Use owned cache/config state; retry only a temporarily invisible version.
       - name: Run the listed uvx command
         run: |
           release_version="$(python -c 'import tomllib; print(tomllib.load(open("packages/code-intel/pyproject.toml", "rb"))["project"]["version"])')"
-          test "$(uvx --refresh-package attocode-code-intel --from "attocode-code-intel==$release_version" attocode-code-intel --version)" = "attocode-code-intel $release_version"
+          python packages/code-intel/scripts/check_registry_install.py \
+            --version "$release_version" --allow-downloads \
+            --report quality-artifacts/registry-install.json
       - name: Publish server.json to the MCP Registry
         run: |
           archive=mcp-publisher_linux_amd64.tar.gz
@@ -109,3 +112,10 @@ jobs:
           tar -xzf "$archive" mcp-publisher
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: intelligence-registry-install-proof
+          retention-days: 30
+          if-no-files-found: warn
+          path: quality-artifacts/registry-install.json
