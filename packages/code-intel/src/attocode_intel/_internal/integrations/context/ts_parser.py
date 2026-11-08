@@ -570,7 +570,7 @@ def _find_parameters(
                 param_names.append(name)
                 if rest is not None:
                     rest.add(name)
-                annotation = next((c for c in child.named_children if c.type not in {
+                annotation = next((c for c in child.named_children if not c.is_extra and c.type not in {
                     "variable_declarator", "modifiers", "annotation", "marker_annotation",
                 }), None)
                 if types is not None and annotation is not None:
