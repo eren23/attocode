@@ -52,6 +52,7 @@
     "test_language_capabilities::test_optional_grammar_discovery_never_downloads[False-True]",
     "test_language_capabilities::test_optional_grammar_discovery_never_downloads[True-False]",
     "test_language_capabilities::test_optional_grammar_discovery_never_downloads[True-True]",
+    "test_language_capabilities::test_perl_test_script_language_identity_is_shared",
     "test_language_capabilities::test_quoted_include_with_angle_comment_is_not_a_system_include",
     "test_language_capabilities::test_timed_out_grammar_resets_before_parsing_a_different_document",
     "test_optional_language_depth::test_crystal_class_definition_native_range",
@@ -79,6 +80,9 @@
     "test_optional_language_depth::test_optional_static_import_and_resolution[perl]",
     "test_optional_language_depth::test_perl_cross_file_workflow",
     "test_optional_language_depth::test_perl_native_call_candidates_exclude_decoys",
+    "test_optional_language_depth::test_perl_pinned_distribution_workflow",
+    "test_optional_language_depth::test_perl_pinned_inclusion_refresh_and_restart",
+    "test_optional_language_depth::test_perl_pinned_native_witnesses",
     "test_optional_language_depth::test_perl_scoped_project_inclusion_refresh_and_restart"
   ]
 }

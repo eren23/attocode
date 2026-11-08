@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "repo": "Perl/perl5",
+  "commit": "ef53bc6892cb851320be193e8cd9b15b2494e24c",
+  "distribution_root": "dist/Carp",
+  "files": {
+    "dist/Carp/lib/Carp.pm": {
+      "bytes": 35994,
+      "sha256": "f2e590a6925ed3574197edf157db4baf8e14cf074636839e0123b1f3b70efa75"
+    },
+    "dist/Carp/lib/Carp/Heavy.pm": {
+      "bytes": 773,
+      "sha256": "97fe3ef31e2c194a471e5ee2130ba5de716378a4dddc4908fa11c3450626416a"
+    },
+    "dist/Carp/t/Carp.t": {
+      "bytes": 12544,
+      "sha256": "da7f0a5ef8fbfbdb08088db498dfb505de42ecf5e08f9bebed7b3d4c1b066e0f"
+    }
+  },
+  "witnesses": {
+    "definition": {"file": "dist/Carp/lib/Carp.pm", "line": 291, "text": "sub croak   { die shortmess @_ }"},
+    "caller": {"file": "dist/Carp/t/Carp.t", "line": 131, "text": "        eval { Carp::croak() };"},
+    "importer": {"file": "dist/Carp/lib/Carp/Heavy.pm", "line": 3, "text": "use Carp ();"},
+    "test": {"file": "dist/Carp/t/Carp.t", "line": 25, "text": "use Carp qw(carp cluck croak confess);"}
+  }
+}
