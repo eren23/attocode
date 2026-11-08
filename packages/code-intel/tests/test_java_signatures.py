@@ -25,6 +25,8 @@ def java_method(source, name='collect'):
     ('java.util.List<String>... values', 'java.util.List<String>', 'values'),
     ('String[]... values', 'String[]', 'values'),
     ('@Sensitive final String... values', 'String', 'values'),
+    ('@Sensitive final /* type comment */ String... values', 'String', 'values'),
+    ('@Sensitive final // type comment\nString... values', 'String', 'values'),
     ('String... $values', 'String', '$values'),
 ])
 def test_java_varargs_name_type_and_rest_flag(declaration, component_type, name):
