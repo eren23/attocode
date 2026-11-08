@@ -9,7 +9,8 @@ Offline candidate example (wheelhouse must contain all dependencies)::
       --baseline-wheel old.whl --wheelhouse wheels --report verification.json
 
 Published mode requires explicit --allow-downloads and HEAD at intel-v<VERSION>
-with a clean tracked tree. It downloads exact PyPI artifacts with verified hashes.
+or an explicitly selected matching retry tag, with a clean tracked tree.
+It downloads exact PyPI artifacts with verified hashes.
 Reports/logs survive; only owned temporary environments and caches are removed.
 """
 from __future__ import annotations
@@ -188,7 +189,9 @@ def tagged_source_identity(source, commit):
             'tag_pyproject_sha256': project_hash, 'tag_python_file_count': len(expected)}
 
 
-def source_identity(source, mode, version):
+def source_identity(source, mode, version, *, source_tag=None):
+    if mode != 'published' and source_tag is not None:
+        raise ValueError('A source tag requires published mode')
     def git(*args):
         return subprocess.check_output(['git', '-C', str(source), *args],
                                        text=True, stderr=subprocess.PIPE, timeout=10).strip()
@@ -202,8 +205,21 @@ def source_identity(source, mode, version):
     if mode == 'published':
         if dirty:
             raise ValueError('Published source tracked tree is dirty')
+        if not isinstance(version, str) or not re.fullmatch(
+                r'[0-9]+(?:\.[0-9]+){2}(?:(?:a|b|rc)[0-9]+)?', version):
+            raise ValueError('Unsupported release version for source tag')
+        canonical = f'intel-v{version}'
+        selected = canonical if source_tag is None else source_tag
+        if not re.fullmatch(re.escape(canonical) + r'(?:-retry\.[1-9][0-9]*)?', selected):
+            raise ValueError('Source tag must match the exact release version')
         try:
-            tagged = git('rev-parse', f'intel-v{version}^{{commit}}')
+            canonical_commit = git('rev-parse', '--verify', f'refs/tags/{canonical}^{{commit}}')
+        except subprocess.CalledProcessError:
+            message = 'Missing original release tag' if selected != canonical else 'Missing published source tag'
+            raise ValueError(message) from None
+        try:
+            tagged = git('rev-parse', '--verify', f'refs/tags/{selected}^{{commit}}')
+            tag_object = git('rev-parse', '--verify', f'refs/tags/{selected}')
         except subprocess.CalledProcessError:
             raise ValueError('Missing published source tag') from None
         if head != tagged:
@@ -211,6 +227,7 @@ def source_identity(source, mode, version):
     identity = {'kind': 'clean_tagged_tree' if mode == 'published' else 'candidate_working_tree',
                 'commit': head, 'dirty': dirty}
     if mode == 'published':
+        identity.update(tag=selected, tag_object=tag_object, canonical_commit=canonical_commit)
         identity.update(tagged_source_identity(source, tagged))
     return identity
 
@@ -342,6 +359,7 @@ def parser():
     result.add_argument('--version', required=True)
     result.add_argument('--baseline-version', required=True)
     result.add_argument('--source', type=Path, required=True, help='Repository root to compare')
+    result.add_argument('--source-tag', help='Exact canonical or retry tag to verify in published mode')
     result.add_argument('--wheel', type=Path)
     result.add_argument('--sdist', type=Path)
     result.add_argument('--baseline-wheel', type=Path)
@@ -378,6 +396,8 @@ def main(argv=None):
         report['baseline_kind'] = 'previous_version_upgrade'
         if min(args.seconds, args.max_bytes, args.max_rss) <= 0:
             raise ValueError('Resource limits must be positive')
+        if args.source_tag is not None and args.mode != 'published':
+            raise ValueError('--source-tag requires published mode')
         if args.mode == 'published' and not args.allow_downloads:
             raise ValueError('Published PyPI verification requires --allow-downloads')
         if args.mode == 'published' and (args.wheel or args.sdist):
@@ -387,7 +407,7 @@ def main(argv=None):
         if args.wheelhouse and not args.wheelhouse.resolve().is_dir():
             raise ValueError('Missing wheelhouse directory')
         source = args.source.resolve()
-        report['source'] = source_identity(source, args.mode, args.version)
+        report['source'] = source_identity(source, args.mode, args.version, source_tag=args.source_tag)
         report['source_sha256_before'] = source_digest(source)
         for p in [Path(__file__), SCRIPTS / 'check_wheel.py', SCRIPTS / 'check_upgrade.py',
                   REPO / 'eval/quality/runner.py']:
@@ -487,7 +507,7 @@ def main(argv=None):
                                                     clean_project, 'claude', config])
         equal_identity(verify_artifacts(source, wheel, args.version, sdist)['python_hashes'],
                        report['artifacts']['python_hashes'], 'Source during verification')
-        if source_identity(source, args.mode, args.version) != report['source']:
+        if source_identity(source, args.mode, args.version, source_tag=args.source_tag) != report['source']:
             raise ValueError('Source revision changed during verification')
         report['status'] = 'passed'
     except Exception as exc:
