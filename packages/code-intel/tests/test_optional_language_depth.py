@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import urllib.request
 from dataclasses import asdict
 from pathlib import Path
 
@@ -33,6 +34,113 @@ def native(path, source, language, case):
              'classes': [asdict(c) for c in ast.classes], 'imports': [asdict(i) for i in ast.imports]})
     assert ast.parsing_tier == 'tree_sitter', 'language coverage: native parse required'
     return ast
+
+
+@pytest.fixture(scope='session')
+def pinned_perl_sources():
+    """Explicit CI fixture acquisition; these third-party sources are never executed."""
+    assert os.environ.get('QUALITY_ALLOW_DOWNLOADS') == '1', 'Pinned source acquisition requires explicit CI opt-in'
+    manifest = json.loads((Path(__file__).resolve().parents[1] / 'scripts/perl_depth_fixture.json').read_bytes())
+    files = {}
+    for name, expected in manifest['files'].items():
+        url = f"https://raw.githubusercontent.com/{manifest['repo']}/{manifest['commit']}/{name}"
+        with urllib.request.urlopen(url, timeout=30) as response:
+            raw = response.read(expected['bytes'] + 1)
+        assert len(raw) == expected['bytes'] and hashlib.sha256(raw).hexdigest() == expected['sha256'], 'Pinned Perl source changed: ' + name
+        files[name] = raw
+    for witness in manifest['witnesses'].values():
+        assert files[witness['file']].decode().splitlines()[witness['line'] - 1] == witness['text'], 'Pinned Perl witness changed'
+    evidence('perl-pinned-receipt.json', manifest)
+    return manifest, files
+
+
+def write_pinned_perl(root, files):
+    for name, raw in files.items():
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+
+
+def test_perl_pinned_native_witnesses(pinned_perl_sources):
+    from attocode_intel._internal.integrations.context.codebase_ast import detect_language
+    from attocode_intel._internal.integrations.context.syntax_evidence import reference_candidates
+    from attocode_intel._internal.integrations.context.ts_parser import ts_parse_file_generic
+    manifest, files = pinned_perl_sources
+    asts = {}
+    for name, raw in files.items():
+        assert detect_language(name) == 'perl', 'Pinned Perl test source lacks canonical language identity: ' + name
+        asts[name] = native(name, raw.decode(), 'perl', 'perl-pinned-' + name.replace('/', '-'))
+    target = manifest['witnesses']['definition']
+    assert any(f.name == 'croak' and f.start_line <= target['line'] <= f.end_line for f in asts[target['file']].functions)
+    importer = manifest['witnesses']['importer']['file']
+    assert 'Carp' in {item.module for item in asts[importer].imports}
+    caller = manifest['witnesses']['caller']
+    generic = ts_parse_file_generic(caller['file'], files[caller['file']].decode())
+    evidence('perl-pinned-generic.json', generic)
+    assert generic is not None and generic['language'] == 'perl', 'Generic parser lost Perl .t identity'
+    calls = reference_candidates(caller['file'], files[caller['file']].decode(), 'perl')
+    evidence('perl-pinned-calls.json', calls)
+    assert ('Carp.croak', 'call', caller['line']) in calls, 'Pinned native caller witness missing'
+
+
+async def test_perl_pinned_inclusion_refresh_and_restart(tmp_path, monkeypatch, pinned_perl_sources):
+    from attocode_intel._internal.integrations.context.codebase_context import (
+        CodebaseContextManager,
+    )
+    from attocode_intel.freshness import FreshnessTracker
+    from attocode_intel.gateway import OperationGateway
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    manifest, files = pinned_perl_sources
+    write_pinned_perl(tmp_path, files)
+    write_pinned_perl(tmp_path, {'dist/Other/generated.pm': b'sub unrelated_generated { return 0; }\n',
+                               'build/generated.pm': b'sub build_generated { return 0; }\n'})
+    recipe = '!dist/\ndist/*\n!dist/Carp/\n'
+    evidence('perl-pinned-inclusion.json', {'workspace_scope': 'Perl repository root', 'config': recipe,
+                                         'files': manifest['files']})
+    async def definitions(peer):
+        response = await peer.execute('search_symbols', {'name': 'croak'})
+        assert not response.isError
+        return {row['file_path'] for row in response.structuredContent['data']}
+    target = manifest['witnesses']['definition']['file']
+    peer = OperationGateway(str(tmp_path), 'daily', watch=False)
+    try:
+        assert target not in await definitions(peer)
+        (tmp_path / '.gitignore').write_text(recipe)
+        assert target in await definitions(peer)
+        expected = set(files)
+        assert {f.relative_path for f in CodebaseContextManager(str(tmp_path)).discover_files()} == expected
+        assert set(FreshnessTracker(str(tmp_path)).scan_manifest()) == expected
+    finally:
+        await peer.close()
+    peer = OperationGateway(str(tmp_path), 'daily', watch=False)
+    try:
+        assert target in await definitions(peer)
+        (tmp_path / '.gitignore').write_text('dist/\n')
+        assert target not in await definitions(peer)
+        assert not FreshnessTracker(str(tmp_path)).scan_manifest()
+    finally:
+        await peer.close()
+
+
+async def test_perl_pinned_distribution_workflow(tmp_path, monkeypatch, pinned_perl_sources):
+    from eval.quality.corpus import evaluate
+    from eval.quality.experiment_evidence import Journal
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    manifest, files = pinned_perl_sources
+    write_pinned_perl(tmp_path, files)
+    # The actual distribution root has a supported lib/ layout. This does not
+    # assert repository-wide resolution through Perl's custom runtime @INC.
+    root = tmp_path / manifest['distribution_root']
+    spec = {'id': 'perl-pinned-distribution', 'language': 'perl', 'file': 'lib/Carp.pm',
+            'symbol': 'croak', 'anchor': manifest['witnesses']['definition']['text'],
+            'source_sha256': manifest['files']['dist/Carp/lib/Carp.pm']['sha256'],
+            'caller': 't/Carp.t', 'importer': 'lib/Carp/Heavy.pm', 'test': 't/Carp.t', 'queries': []}
+    evidence('perl-pinned-workflow-inputs.json', {'workspace_scope': manifest['distribution_root'], 'spec': spec})
+    output = Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / 'perl-pinned-workflow'
+    checks = await evaluate(root, spec, journal=Journal(output, 4 * 2**20))
+    evidence('perl-pinned-workflow-checks.json', checks)
+    assert len(checks) == 8 and all(c['outcome'] == 'passed' for c in checks), repr([(c['name'], c['outcome']) for c in checks])
+    assert all((tmp_path / name).read_bytes() == raw for name, raw in files.items()), 'Navigation changed pinned source'
 
 
 async def test_perl_scoped_project_inclusion_refresh_and_restart(tmp_path, monkeypatch):

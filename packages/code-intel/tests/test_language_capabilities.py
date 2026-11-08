@@ -138,6 +138,23 @@ OPTIONAL_CASES = [
     ("sample.m", "@implementation Sample\n- (int)greet:(int)name { return name; }\n@end\n", "greet"),
     ("sample.cr", "def greet(name)\n name\nend\n", "greet"),
 ]
+
+
+def test_perl_test_script_language_identity_is_shared(tmp_path):
+    from attocode_intel._internal.integrations.context.codebase_ast import detect_language
+    from attocode_intel._internal.integrations.context.codebase_context import (
+        CodebaseContextManager,
+    )
+    from attocode_intel.freshness import FreshnessTracker
+    path = tmp_path / 't' / 'Carp.t'
+    path.parent.mkdir()
+    path.write_text('use Carp;\neval { Carp::croak("failure") };\n')
+    assert detect_language('t/Carp.t') == 'perl', 'Perl .t scripts must have a canonical language'
+    files = CodebaseContextManager(str(tmp_path)).discover_files()
+    assert [(f.relative_path, f.language) for f in files] == [('t/Carp.t', 'perl')]
+    assert set(FreshnessTracker(str(tmp_path)).scan_manifest()) == {'t/Carp.t'}
+
+
 FORMAT_CASES = [
     ("sample.json", '{"quality": true}', "quality"),
     ("sample.yaml", "quality: true\n", "quality"),

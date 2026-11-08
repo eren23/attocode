@@ -2341,6 +2341,7 @@ EXTRA_LANG_EXTENSIONS: dict[str, str] = {
     ".jl": "julia",
     ".pl": "perl",
     ".pm": "perl",
+    ".t": "perl",
     ".ml": "ocaml",
     ".mli": "ocaml",
     ".clj": "clojure",

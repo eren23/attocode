@@ -83,6 +83,7 @@ def main():
         raise ValueError('Unexpected Crystal grammar source')
     inventory = Path(__file__).with_name('optional_grammar_cases.json')
     inputs = [*engine.rglob('*.py'), *(REPO / 'eval/quality').glob('*.py'), inventory,
+              Path(__file__).with_name('perl_depth_fixture.json'),
               REPO / 'packages/code-intel/tests/test_optional_language_depth.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]
     sources = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
