@@ -82,13 +82,15 @@ def main():
     if direct['vcs_info']['commit_id'] != '50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49':
         raise ValueError('Unexpected Crystal grammar source')
     inventory = Path(__file__).with_name('optional_grammar_cases.json')
-    inputs = [*engine.rglob('*.py'), *(REPO / 'eval/quality').glob('*.py'), inventory,
+    inputs = [*engine.rglob('*.py'), *(REPO / 'eval/quality').glob('*.py'), inventory, REPO / 'uv.lock',
               Path(__file__).with_name('perl_depth_fixture.json'),
               Path(__file__).with_name('gson_depth_fixture.json'),
               REPO / 'packages/code-intel/tests/test_optional_language_depth.py',
+              REPO / 'packages/code-intel/tests/test_java_signatures.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]
     sources = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
     before = {'grammar': grammar_identity(args.cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
+              'java': distribution_identity(('tree-sitter-java',)),
               'direct_url': direct}
     report = {'schema_version': 1, 'pid': os.getpid(), 'status': 'incomplete', 'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'files': sources, 'origins': assert_engine(engine), 'before': before}
@@ -105,6 +107,7 @@ def main():
     except ValueError as error:
         report['coverage'] = {'status': 'rejected', 'reason': str(error)}
     after = {'grammar': grammar_identity(args.cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
+             'java': distribution_identity(('tree-sitter-java',)),
              'direct_url': direct}
     report.update(exit_code=int(result), after=after, final_origins=assert_engine(engine))
     unchanged = all(hashlib.sha256((REPO / name).read_bytes()).hexdigest() == sha for name, sha in sources.items())

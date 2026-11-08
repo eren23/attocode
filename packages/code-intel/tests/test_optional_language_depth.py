@@ -291,6 +291,39 @@ async def test_gson_pinned_dollar_workflow_and_unresolved_test(tmp_path, monkeyp
     assert all((tmp_path / name).read_bytes() == raw for name, raw in files.items()), 'Navigation changed pinned Gson source'
 
 
+def test_gson_pinned_java_signature_metadata(pinned_gson_sources):
+    import importlib.metadata
+
+    import tree_sitter
+    import tree_sitter_java
+    from attocode_intel._internal.integrations.context import ts_parser
+    from attocode_intel._internal.integrations.context.ast_chunker import chunk_file
+
+    manifest, files = pinned_gson_sources
+    target = manifest['witnesses']['definition']['file']
+    source = files[target].decode()
+    ast = native(target, source, 'java', 'gson-pinned-signature')
+    cls = next(c for c in ast.classes if c.name == '$Gson$Types')
+    methods = {m.name: m for m in cls.methods if m.name in {'newParameterizedTypeWithOwner', 'canonicalize'}}
+    chunks = {c.name: c.metadata for c in chunk_file(target, target, content=source)
+              if c.name in {'$Gson$Types.newParameterizedTypeWithOwner', '$Gson$Types.canonicalize'}}
+    dist = importlib.metadata.distribution('tree-sitter-java')
+    origin = Path(tree_sitter_java.__file__).resolve()
+    assert any(Path(dist.locate_file(p)).resolve() == origin for p in dist.files or [])
+    parser_matches = ts_parser._get_parser('java').language == tree_sitter.Language(tree_sitter_java.language())
+    evidence('gson-pinned-signatures.json', {'path': target, 'source_sha256': manifest['files'][target]['sha256'],
+             'java_origin': str(origin), 'java_version': dist.version, 'standalone_grammar_matches': parser_matches,
+             'methods': {name: asdict(m) for name, m in methods.items()}, 'chunks': chunks})
+    assert parser_matches, 'Native Java evidence must use the fingerprinted standalone grammar'
+    method = methods['newParameterizedTypeWithOwner']
+    assert [(p.name, p.type_annotation, p.is_rest) for p in method.parameters] == [
+        ('ownerType', 'Type', False), ('rawType', 'Type', False), ('typeArguments', 'Type', True)]
+    assert method.return_type == 'ParameterizedType'
+    assert methods['canonicalize'].return_type == 'Type'
+    assert 'newParameterizedTypeWithOwner(ownerType, rawType, typeArguments)' in chunks['$Gson$Types.newParameterizedTypeWithOwner']
+    assert '-> ParameterizedType' in chunks['$Gson$Types.newParameterizedTypeWithOwner']
+
+
 def test_crystal_method_definition_native_range():
     ast = native('greet.cr', 'def greet(name)\n  name\nend\n', 'crystal', 'crystal-method')
     assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == [('greet', 1, 3)], 'language coverage: Crystal native method definition missing'
