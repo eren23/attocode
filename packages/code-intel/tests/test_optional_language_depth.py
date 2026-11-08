@@ -184,6 +184,111 @@ async def test_perl_scoped_project_inclusion_refresh_and_restart(tmp_path, monke
         await peer.close()
 
 
+@pytest.fixture(scope='session')
+def pinned_gson_sources():
+    """Acquire immutable Java source as data on the opted-in worker only."""
+    assert os.environ.get('QUALITY_ALLOW_DOWNLOADS') == '1', 'Pinned source acquisition requires explicit CI opt-in'
+    manifest = json.loads((Path(__file__).resolve().parents[1] / 'scripts/gson_depth_fixture.json').read_bytes())
+    files = {}
+    for name, expected in manifest['files'].items():
+        url = f"https://raw.githubusercontent.com/{manifest['repo']}/{manifest['commit']}/{name}"
+        with urllib.request.urlopen(url, timeout=30) as response:
+            raw = response.read(expected['bytes'] + 1)
+        assert len(raw) == expected['bytes'] and hashlib.sha256(raw).hexdigest() == expected['sha256'], 'Pinned Gson source changed: ' + name
+        assert hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == expected['git_blob_sha1']
+        files[name] = raw
+    for witness in manifest['witnesses'].values():
+        assert files[witness['file']].decode().splitlines()[witness['line'] - 1] == witness['text'], 'Pinned Gson witness changed'
+    evidence('gson-pinned-receipt.json', manifest)
+    return manifest, files
+
+
+def test_gson_pinned_native_dollar_calls(pinned_gson_sources):
+    from attocode_intel._internal.integrations.context.syntax_evidence import (
+        reference_candidates,
+        syntax_tree,
+    )
+    manifest, files = pinned_gson_sources
+    asts, calls, validation = {}, {}, []
+    for name, raw in files.items():
+        asts[name] = native(name, raw.decode(), 'java', 'gson-pinned-' + name.replace('/', '-'))
+        tree = syntax_tree(name, raw.decode(), 'java')
+        validation.append({'path': name, 'has_error': tree.root_node.has_error,
+                           'end_byte': tree.root_node.end_byte, 'bytes': len(raw)})
+        assert not tree.root_node.has_error and tree.root_node.end_byte == len(raw)
+        calls[name] = reference_candidates(name, raw.decode(), 'java')
+    evidence('gson-pinned-native-validation.json', validation)
+    evidence('gson-pinned-calls.json', calls)
+    for role, symbol in [('definition', 'newParameterizedTypeWithOwner'), ('canonicalize_definition', 'canonicalize')]:
+        witness = manifest['witnesses'][role]
+        assert any(f.name == symbol and f.start_line <= witness['line'] <= f.end_line
+                   for f in asts[witness['file']].functions)
+    for role in ['importer', 'test_importer']:
+        witness = manifest['witnesses'][role]
+        assert any(i.module == 'com.google.gson.internal.$Gson$Types' and i.line == witness['line']
+                   for i in asts[witness['file']].imports)
+    for role, symbol in [('caller', 'newParameterizedTypeWithOwner'), ('test', 'newParameterizedTypeWithOwner'),
+                         ('canonicalize_caller', 'canonicalize'), ('canonicalize_test', 'canonicalize')]:
+        witness = manifest['witnesses'][role]
+        assert ('$Gson$Types.' + symbol, 'call', witness['line']) in calls[witness['file']], role
+
+
+async def test_gson_pinned_dollar_workflow_and_unresolved_test(tmp_path, monkeypatch, pinned_gson_sources):
+    from attocode_intel.gateway import OperationGateway
+
+    from eval.quality.corpus import evaluate
+    from eval.quality.experiment_evidence import Journal
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    manifest, files = pinned_gson_sources
+    for name, raw in files.items():
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+    target = manifest['witnesses']['definition']['file']
+    spec = {'id': 'gson-pinned-dollar', 'language': 'java', 'file': target,
+            'symbol': 'newParameterizedTypeWithOwner', 'anchor': manifest['witnesses']['definition']['text'],
+            'source_sha256': manifest['files'][target]['sha256'],
+            'caller': manifest['witnesses']['caller']['file'], 'importer': manifest['witnesses']['importer']['file'],
+            'test': manifest['witnesses']['test']['file'], 'queries': []}
+    evidence('gson-pinned-workflow-inputs.json', {'workspace_scope': 'four unchanged pinned Gson files', 'spec': spec})
+    output = Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / 'gson-pinned-workflow'
+    checks = await evaluate(tmp_path, spec, journal=Journal(output, 4 * 2**20))
+    evidence('gson-pinned-workflow-checks.json', checks)
+    assert len(checks) == 8 and all(c['outcome'] == 'passed' for c in checks), repr([(c['name'], c['outcome']) for c in checks])
+    peer = OperationGateway(str(tmp_path), 'daily', watch=False)
+    try:
+        primary = await peer.execute('inspect_symbol', {'symbol_name': spec['symbol'],
+                                     'file_path': target, 'line': manifest['witnesses']['definition']['line']})
+        assert not primary.isError
+        evidence('gson-pinned-selected-method.json', primary.structuredContent)
+        selected_data = primary.structuredContent['data']
+        assert selected_data['status'] == 'found'
+        for role in ['caller', 'test']:
+            witness = manifest['witnesses'][role]
+            assert any(r['file_path'] == witness['file'] and r['line'] == witness['line']
+                       and r['resolution'] == 'import_binding' for r in selected_data['references'])
+        assert any(t['file_path'] == spec['test'] and t['evidence']['selected_symbol_reference']
+                   for t in selected_data['tests'])
+        selected = manifest['witnesses']['canonicalize_definition']
+        response = await peer.execute('cross_references', {'symbol_name': 'canonicalize',
+                                      'file_path': target, 'line': selected['line']})
+        assert not response.isError
+        proof = response.structuredContent
+        evidence('gson-pinned-canonicalize-references.json', proof)
+        data = proof['data']
+        caller = manifest['witnesses']['canonicalize_caller']
+        assert any(r['file_path'] == caller['file'] and r['line'] == caller['line']
+                   and r['resolution'] == 'import_binding' for r in data['references'])
+        test = manifest['witnesses']['canonicalize_test']
+        assert not any(r['file_path'] == test['file'] for r in data['references'])
+        assert any(r['file_path'] == test['file'] and r['line'] == test['line']
+                   and r['resolution'] == 'same_name_candidate' for r in data['reference_candidates'])
+        assert proof['metadata']['analysis']['absence_proven'] is False
+    finally:
+        await peer.close()
+    assert all((tmp_path / name).read_bytes() == raw for name, raw in files.items()), 'Navigation changed pinned Gson source'
+
+
 def test_crystal_method_definition_native_range():
     ast = native('greet.cr', 'def greet(name)\n  name\nend\n', 'crystal', 'crystal-method')
     assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == [('greet', 1, 3)], 'language coverage: Crystal native method definition missing'
@@ -242,7 +347,9 @@ def test_ocaml_interface_native_value_signature_ranges():
 
 def test_perl_native_call_candidates_exclude_decoys():
     from attocode_intel._internal.integrations.context.syntax_evidence import reference_candidates
-    source = 'sub greet { return $_[0]; }\nsub run { Lib::Helper::greet("ok"); }\n# Lib::Helper::decoy("no");\nmy $text = "Lib::Helper::decoy nope";\n'
+    source = ('sub greet { return $_[0]; }\nsub run { Lib::Helper::greet("ok"); }\n'
+              '# Lib::Helper::decoy("no");\nmy $text = "Lib::Helper::decoy nope";\n'
+              'my $fn = \\&greet;\n$fn("dynamic");\n')
     native('driver.pl', source, 'perl', 'perl-calls')
     calls = reference_candidates('driver.pl', source, 'perl')
     evidence('perl-calls.json', calls)

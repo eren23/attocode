@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "repo": "google/gson",
+  "commit": "8e01b54682612471a9ab40c73911dfbf6b5be036",
+  "files": {
+    "gson/src/main/java/com/google/gson/internal/$Gson$Types.java": {
+      "bytes": 22779,
+      "sha256": "46f931a32981bea18328db79dcfbb90d3ae666f1137a96413962b13a5aaaf01e",
+      "git_blob_sha1": "32a84565041cba1473e9849d2d04fbb33861fbf7"
+    },
+    "gson/src/main/java/com/google/gson/reflect/TypeToken.java": {
+      "bytes": 10154,
+      "sha256": "53cbbde0d3fa40669842857d8c7cbc112157b5d0ac44a8b152562e6fd1712565",
+      "git_blob_sha1": "3fb8af2bcfb593b319d83747eeddd034df3bbb46"
+    },
+    "gson/src/test/java/com/google/gson/internal/GsonTypesTest.java": {
+      "bytes": 2532,
+      "sha256": "3c7db77e248b80d458850c528ee2fbace854c55753c35aa3d28213d2f16ecf7e",
+      "git_blob_sha1": "c80700bde49a496f158e2e2d69e4548da36a74f0"
+    },
+    "gson/src/test/java/com/google/gson/ParameterizedTypeTest.java": {
+      "bytes": 1925,
+      "sha256": "d96be4b0e352fd672701a3c50e39a05b2cfb30fb29682d17c76793de81642338",
+      "git_blob_sha1": "24d78e89d8dfa50a6c088733cec4661c2af53fc7"
+    }
+  },
+  "witnesses": {
+    "definition": {
+      "file": "gson/src/main/java/com/google/gson/internal/$Gson$Types.java",
+      "line": 57,
+      "text": "  public static ParameterizedType newParameterizedTypeWithOwner("
+    },
+    "caller": {
+      "file": "gson/src/main/java/com/google/gson/reflect/TypeToken.java",
+      "line": 311,
+      "text": "    return new TypeToken<Object>($Gson$Types.newParameterizedTypeWithOwner(null, rawType, typeArguments));"
+    },
+    "importer": {
+      "file": "gson/src/main/java/com/google/gson/reflect/TypeToken.java",
+      "line": 19,
+      "text": "import com.google.gson.internal.$Gson$Types;"
+    },
+    "test": {
+      "file": "gson/src/test/java/com/google/gson/ParameterizedTypeTest.java",
+      "line": 40,
+      "text": "    ourType = $Gson$Types.newParameterizedTypeWithOwner(null, List.class, String.class);"
+    },
+    "test_importer": {
+      "file": "gson/src/test/java/com/google/gson/ParameterizedTypeTest.java",
+      "line": 19,
+      "text": "import com.google.gson.internal.$Gson$Types;"
+    },
+    "canonicalize_definition": {
+      "file": "gson/src/main/java/com/google/gson/internal/$Gson$Types.java",
+      "line": 108,
+      "text": "  public static Type canonicalize(Type type) {"
+    },
+    "canonicalize_caller": {
+      "file": "gson/src/main/java/com/google/gson/reflect/TypeToken.java",
+      "line": 72,
+      "text": "    this.type = $Gson$Types.canonicalize($Gson$Preconditions.checkNotNull(type));"
+    },
+    "canonicalize_importer": {
+      "file": "gson/src/main/java/com/google/gson/reflect/TypeToken.java",
+      "line": 19,
+      "text": "import com.google.gson.internal.$Gson$Types;"
+    },
+    "canonicalize_test": {
+      "file": "gson/src/test/java/com/google/gson/internal/GsonTypesTest.java",
+      "line": 72,
+      "text": "    return $Gson$Types.canonicalize(actualTypeArguments[0]);"
+    }
+  }
+}
