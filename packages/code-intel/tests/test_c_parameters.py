@@ -38,6 +38,9 @@ def c_function(parameters):
     ('int (* /* name note */ callback)(int ignored)', [('callback', 'int (*)(int ignored)')]),
     ('const unsigned char bytes[static restrict 16]', [('bytes', 'const unsigned char[static restrict 16]')]),
     ('const char *label, ...', [('label', 'const char*')]),
+    ('int count [[maybe_unused]], const char *label', [('count', 'int'), ('label', 'const char*')]),
+    ('int (*callback)(register int ignored)', [('callback', 'int (*)(int ignored)')]),
+    ('int (count), int ((size))', [('count', 'int'), ('size', 'int')]),
 ])
 def test_c_named_parameter_names_types_and_order(parameters, expected):
     raw, function = c_function(parameters)
