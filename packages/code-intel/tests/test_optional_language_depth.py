@@ -393,6 +393,8 @@ def test_redis_pinned_c_parameter_metadata(pinned_redis_c_source, tmp_path):
             assert [asdict(f) for f in first._ast_cache[name].functions] == [asdict(f) for f in ast.functions]
             expected = {k: asdict(v) for k, v in first._ast_cache.items()}
             definitions = first._index.definitions.copy()
+            assert {t['symbol'] for t in manifest['targets']} <= set(definitions)
+            expected_symbols = {k: [asdict(loc) for loc in locations] for k, locations in definitions.items()}
             counts = first._store.stats()
         finally:
             first.stop_hydration()
@@ -407,6 +409,8 @@ def test_redis_pinned_c_parameter_metadata(pinned_redis_c_source, tmp_path):
             restored = {k: asdict(v) for k, v in second._ast_cache.items()}
             assert restored == expected
             assert second._index.definitions == definitions
+            restored_symbols = {k: [asdict(loc) for loc in locations]
+                                for k, locations in second._index.definitions.items()}
             assert second._store.stats() == counts
             assert target.read_bytes() == files[name]
         finally:
@@ -415,6 +419,7 @@ def test_redis_pinned_c_parameter_metadata(pinned_redis_c_source, tmp_path):
     assert not root.exists()
     evidence('redis-c-cache-restart.json', {'path': name, 'source_sha256': hashlib.sha256(files[name]).hexdigest(),
              'expected': expected, 'restored': restored, 'definitions_equal': True, 'store_counts_equal': True,
+             'expected_symbols': expected_symbols, 'restored_symbols': restored_symbols,
              'restart_parse_calls': parse.call_count, 'discovery_parse_calls': discover.call_count,
              'source_unchanged': True, 'owned_cleanup': not root.exists()})
 

@@ -40,7 +40,6 @@ def c_function(parameters):
     ('const char *label, ...', [('label', 'const char*')]),
     ('int count [[maybe_unused]], const char *label', [('count', 'int'), ('label', 'const char*')]),
     ('int (*callback)(register int ignored)', [('callback', 'int (*)(int ignored)')]),
-    ('int (count), int ((size))', [('count', 'int'), ('size', 'int')]),
 ])
 def test_c_named_parameter_names_types_and_order(parameters, expected, record_property):
     raw, function, tree = c_function(parameters)
@@ -58,6 +57,20 @@ def test_c_named_parameter_names_types_and_order(parameters, expected, record_pr
 @pytest.mark.parametrize('parameters', ['', 'void', 'int, const char *'])
 def test_c_unnamed_or_void_parameters_do_not_invent_names(parameters):
     raw, function, _ = c_function(parameters)
+    assert raw['parameters'] == [] and function.parameters == []
+
+
+@pytest.mark.parametrize('parameters', [
+    'int (count), int ((size))', 'int (item)', 'int (*)(int ignored)',
+])
+def test_c_abstract_parameter_syntax_stays_unnamed(parameters, record_property):
+    # The grammar treats these as abstract types; inner type/argument identifiers
+    # are insufficient evidence for a named outer parameter, including int(item)
+    # where item is the typedef in c_function's source.
+    raw, function, tree = c_function(parameters)
+    record_property('c_native_tree', tree)
+    record_property('c_raw_function', repr(raw))
+    assert 'abstract_function_declarator' in tree
     assert raw['parameters'] == [] and function.parameters == []
 
 

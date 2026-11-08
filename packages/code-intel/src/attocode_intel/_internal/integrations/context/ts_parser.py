@@ -550,21 +550,21 @@ def _c_declarator_chain(node):
         if node.type == "identifier":
             return chain
         child = node.child_by_field_name("declarator")
-        if child is None and node.type == "parenthesized_declarator":
+        if child is None and node.type in {"parenthesized_declarator", "attributed_declarator"}:
             candidates = [c for c in node.named_children
-                          if not c.is_extra and c.type != "ms_call_modifier"]
+                          if not c.is_extra and c.type not in {"ms_call_modifier", "attribute_declaration"}]
             child = candidates[0] if len(candidates) == 1 else None
         node = child
     return []
 
 
 def _c_type_text(node, source_bytes: bytes, omit=None) -> str:
-    """Read written type syntax without a selected name or comment extras."""
+    """Read type syntax without a selected name, comments or declaration modifiers."""
     excluded = []
     stack = [node]
     while stack:
         part = stack.pop()
-        if part.is_extra:
+        if part.is_extra or part.type in {"storage_class_specifier", "attribute_declaration"}:
             # A comment can separate tokens: unsigned/**/char stays two words.
             excluded.append((part.start_byte, part.end_byte, b" "))
         elif part == omit:

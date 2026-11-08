@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Named C parameters retain source order and written type syntax through nested
-  declarators, including pointers, arrays and callbacks. Comments and storage
-  class modifiers do not become types, and unnamed markers do not invent names.
+  declarators, including pointers, arrays and callbacks. Comments, declaration
+  attributes and storage class modifiers do not become types. Abstract parameter
+  types, including ambiguous parenthesized syntax, do not invent names.
 - Java signature metadata retains varargs parameter names, component types and
   rest flags, plus method return types and trailing array dimensions. Method
   chunks receive the complete signature; constructors keep an empty return type.
