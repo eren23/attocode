@@ -96,7 +96,10 @@ def reference_candidates(path: str, content: str, language: str):
                         node.child_by_field_name("scope") if language == "php" else None))
                 if receiver is not None:
                     name = source[receiver.start_byte:receiver.end_byte].decode() + "." + name
-                if all(part.isidentifier() for part in name.split(".")):
+                # Java permits dollar signs in literal identifiers. Validate a
+                # substitute while keeping the exact source spelling below.
+                identifier = name.replace("$", "_") if language == "java" else name
+                if all(part.isidentifier() for part in identifier.split(".")):
                     result.append((name, "call", target.start_point[0] + 1))
                     if language == "rust" and "." in name:
                         result.append((name.rsplit(".", 1)[0], "attribute", target.start_point[0] + 1))

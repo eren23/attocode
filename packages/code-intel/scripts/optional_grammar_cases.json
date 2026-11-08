@@ -78,6 +78,8 @@
     "test_optional_language_depth::test_optional_static_import_and_resolution[crystal]",
     "test_optional_language_depth::test_optional_static_import_and_resolution[ocaml]",
     "test_optional_language_depth::test_optional_static_import_and_resolution[perl]",
+    "test_optional_language_depth::test_gson_pinned_dollar_workflow_and_unresolved_test",
+    "test_optional_language_depth::test_gson_pinned_native_dollar_calls",
     "test_optional_language_depth::test_perl_cross_file_workflow",
     "test_optional_language_depth::test_perl_native_call_candidates_exclude_decoys",
     "test_optional_language_depth::test_perl_pinned_distribution_workflow",
