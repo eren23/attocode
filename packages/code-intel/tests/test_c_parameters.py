@@ -22,7 +22,7 @@ def c_function(parameters):
     function = next(f for f in raw['functions'] if f['name'] == 'consume')
     ast = parse_file('parameters.c', source)
     assert ast.parsing_tier == 'tree_sitter'
-    return function, next(f for f in ast.functions if f.name == 'consume')
+    return function, next(f for f in ast.functions if f.name == 'consume'), str(tree.root_node)
 
 
 @pytest.mark.parametrize('parameters,expected', [
@@ -42,8 +42,10 @@ def c_function(parameters):
     ('int (*callback)(register int ignored)', [('callback', 'int (*)(int ignored)')]),
     ('int (count), int ((size))', [('count', 'int'), ('size', 'int')]),
 ])
-def test_c_named_parameter_names_types_and_order(parameters, expected):
-    raw, function = c_function(parameters)
+def test_c_named_parameter_names_types_and_order(parameters, expected, record_property):
+    raw, function, tree = c_function(parameters)
+    record_property('c_native_tree', tree)
+    record_property('c_raw_function', repr(raw))
     assert raw['parameters'] == [name for name, _ in expected]
     assert [p.name for p in function.parameters] == [name for name, _ in expected]
     for parameter, (name, annotation) in zip(function.parameters, expected, strict=True):
@@ -55,7 +57,7 @@ def test_c_named_parameter_names_types_and_order(parameters, expected):
 
 @pytest.mark.parametrize('parameters', ['', 'void', 'int, const char *'])
 def test_c_unnamed_or_void_parameters_do_not_invent_names(parameters):
-    raw, function = c_function(parameters)
+    raw, function, _ = c_function(parameters)
     assert raw['parameters'] == [] and function.parameters == []
 
 
