@@ -58,6 +58,14 @@ def test_java_constructor_varargs_has_no_return_type():
     assert [(p.name, p.type_annotation, p.is_rest) for p in constructor.parameters] == [('values', 'String', True)]
 
 
+def test_java_annotated_trailing_return_dimensions():
+    source = ('@java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE_USE)\n'
+              '@interface Sensitive {}\nclass Signature<T> {\n'
+              '  T collect() @Sensitive [] { return null; }\n}\n')
+    raw, method = java_method(source)
+    assert raw['return_type'] == method.return_type == 'T @Sensitive []'
+
+
 def test_java_array_parameter_is_not_varargs():
     raw, method = java_method('class Signature {\n  void collect(String[] values, int count) {}\n}\n')
     assert raw['parameters'] == ['values', 'count']
