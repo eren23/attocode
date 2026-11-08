@@ -63,6 +63,7 @@ LANG_EXTENSIONS: dict[str, str] = {
     '.scss': 'css',
     '.sh': 'bash',
     '.swift': 'swift',
+    '.t': 'perl',
     '.tf': 'hcl',
     '.tfvars': 'hcl',
     '.toml': 'toml',

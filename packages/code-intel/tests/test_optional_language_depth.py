@@ -64,6 +64,7 @@ def write_pinned_perl(root, files):
 def test_perl_pinned_native_witnesses(pinned_perl_sources):
     from attocode_intel._internal.integrations.context.codebase_ast import detect_language
     from attocode_intel._internal.integrations.context.syntax_evidence import reference_candidates
+    from attocode_intel._internal.integrations.context.ts_parser import ts_parse_file_generic
     manifest, files = pinned_perl_sources
     asts = {}
     for name, raw in files.items():
@@ -74,6 +75,9 @@ def test_perl_pinned_native_witnesses(pinned_perl_sources):
     importer = manifest['witnesses']['importer']['file']
     assert 'Carp' in {item.module for item in asts[importer].imports}
     caller = manifest['witnesses']['caller']
+    generic = ts_parse_file_generic(caller['file'], files[caller['file']].decode())
+    evidence('perl-pinned-generic.json', generic)
+    assert generic is not None and generic['language'] == 'perl', 'Generic parser lost Perl .t identity'
     calls = reference_candidates(caller['file'], files[caller['file']].decode(), 'perl')
     evidence('perl-pinned-calls.json', calls)
     assert ('Carp.croak', 'call', caller['line']) in calls, 'Pinned native caller witness missing'
