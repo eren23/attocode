@@ -4,10 +4,15 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** `attocode-code-intel` 0.1.28. Compact search summarizes the
-metadata copy of lexical-index diagnostics after evidence fitting. The complete
-record remains at `data.ranking.index`; results and excerpts are unchanged.
-See the [0.1.28 release notes](intelligence-0.1.28.md).
+**Current version:** `attocode-code-intel` 0.1.29. Perl `.t` scripts share the
+canonical and generic Perl parser identity. Three unchanged pinned Carp sources
+exercise native definition/caller/import witnesses, test candidates, scoped
+inclusion through refresh/restart and eight distribution-root navigation checks.
+The acquired-grammar gate requires 83 cases. Generated-directory exclusions and
+conservative import ownership remain unchanged; syntax and heuristic evidence
+retain their existing limits. See the [0.1.29 release notes](intelligence-0.1.29.md).
+Version 0.1.28 summarized duplicate compact-search metadata diagnostics while
+preserving full `data.ranking.index`, results and excerpts.
 Version 0.1.27 fixed namespace-cache iteration during concurrent AST hydration.
 Version 0.1.26 added the shared five-second Rust precision deadline and bounded
 cancelled startup cleanup; other languages retain two seconds.

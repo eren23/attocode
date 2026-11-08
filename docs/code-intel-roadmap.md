@@ -2,7 +2,7 @@
 
 ## Current priorities — 2026-10-25
 
-This checkout targets `attocode-code-intel` **0.1.28**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.29**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
@@ -12,6 +12,7 @@ an unchecked feature shipped when its old target version was reached.
 
 | Priority | Action | Completion evidence / limits |
 | --- | --- | --- |
+| 0.1.29 Perl test navigation | Recognize `.t` scripts and verify source-pinned Carp relationships | [Release notes](intelligence-0.1.29.md): canonical and generic parser identity, three unchanged pinned sources, real caller/import/test witnesses and eight navigation checks at the Carp distribution root. Scoped inclusion preserves default generated-directory exclusions; syntax and heuristic evidence remain partial. |
 | 0.1.20 optional-language depth | Restore native calls and static local import candidates; verify configured Perl and source-built Crystal | [Paired native controls](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-29-optional-language-depth.md): 406 unskipped, three authored workspaces each8checks, dedicated22-case optionalCI/default384/required397. OCaml/Perl call nodes and OCaml open nodes corrected; conservative OCaml/Perl/Crystal imports. Originalfirstfailedcontrol retained; no historicalcause/relevance/speed claim. Included in the 0.1.20 target; release gates apply. |
 | Routine full compatibility | Exercise maintained capture across the unchanged 36-pack matrix | [One full run](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-28-native-compatibility.md): same-run373 controls, all36packs/288contracts/144existing consumed observations; OCaml1047 native calls/0 failures, complete1000162-byte trace. Historical causes remain unproven; no new product/release/relevance/performance claim. |
 | Routine OCaml native evidence | Retain native outcomes before fallback in opt-in fixture workers | [Causal controls and one pinned smoke](https://github.com/eren23/attocode/blob/main/packages/code-intel/evals/results/2026-10-25-ocaml-native-capture.md): all373 controls, 42 new regressions/386 required, one274-entry source pack/8checks/zeroqueries, 1,028 native trees and lossless977,405-byte trace. Covers primary/generic routes, handoffs and sink-loss rejection. Historical native causes remain unproven; product019/deps/native policy/Rust tracing unchanged; no new release. |
