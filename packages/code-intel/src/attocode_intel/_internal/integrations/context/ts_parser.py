@@ -542,7 +542,10 @@ def _find_name(node, source_bytes: bytes) -> str:
     return ""
 
 
-def _find_parameters(node, source_bytes: bytes, types: dict[str, str] | None = None) -> list[str]:
+def _find_parameters(
+    node, source_bytes: bytes, types: dict[str, str] | None = None,
+    *, language: str = "", rest: set[str] | None = None,
+) -> list[str]:
     """Extract parameter names from a function node; fill ``types`` with annotated ones."""
     params_node = node.child_by_field_name("parameters")
     if params_node is None:
@@ -557,6 +560,22 @@ def _find_parameters(node, source_bytes: bytes, types: dict[str, str] | None = N
 
     param_names: list[str] = []
     for child in params_node.children:
+        if language == "java" and child.type == "spread_parameter":
+            # Java wraps the name in a declarator; modifiers and annotations
+            # are siblings of the component type rather than type fields.
+            declarator = next((c for c in child.named_children if c.type == "variable_declarator"), None)
+            name_node = declarator.child_by_field_name("name") if declarator is not None else None
+            if name_node is not None:
+                name = _node_text(name_node, source_bytes)
+                param_names.append(name)
+                if rest is not None:
+                    rest.add(name)
+                annotation = next((c for c in child.named_children if c.type not in {
+                    "variable_declarator", "modifiers", "annotation", "marker_annotation",
+                }), None)
+                if types is not None and annotation is not None:
+                    types[name] = _node_text(annotation, source_bytes)
+            continue
         if child.type in (
             "identifier", "typed_parameter", "default_parameter",
             "typed_default_parameter", "list_splat_pattern",
@@ -577,11 +596,18 @@ def _find_parameters(node, source_bytes: bytes, types: dict[str, str] | None = N
     return param_names
 
 
-def _find_return_type(node, source_bytes: bytes) -> str:
+def _find_return_type(node, source_bytes: bytes, *, language: str = "") -> str:
     """Extract return type annotation from a function node."""
     ret = node.child_by_field_name("return_type")
-    if ret:
+    java_method = language == "java" and node.type == "method_declaration"
+    if ret is None and java_method:
+        ret = node.child_by_field_name("type")
+    if ret is not None:
         text = _node_text(ret, source_bytes)
+        dimensions = node.child_by_field_name("dimensions") if java_method else None
+        if dimensions is not None:
+            suffix = _node_text(dimensions, source_bytes)
+            text += (" " if suffix.startswith("@") else "") + suffix
         return text.lstrip("->").lstrip(":").strip()
     return ""
 
@@ -1508,8 +1534,9 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 return
 
             param_types: dict[str, str] = {}
-            params = _find_parameters(node, source_bytes, param_types)
-            ret_type = _find_return_type(node, source_bytes)
+            rest_parameters = set() if language == "java" else None
+            params = _find_parameters(node, source_bytes, param_types, language=language, rest=rest_parameters)
+            ret_type = _find_return_type(node, source_bytes, language=language)
             decorators = _find_decorators(node, source_bytes)
             is_async_fn = _is_async(node, source_bytes)
             visibility = _get_visibility(name, language)
@@ -1546,6 +1573,8 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 fn_data["docstring"] = docstring
             if param_types:
                 fn_data["param_types"] = param_types
+            if rest_parameters:
+                fn_data["rest_parameters"] = sorted(rest_parameters)
 
             if effective_parent:
                 # Will be added as method to the class

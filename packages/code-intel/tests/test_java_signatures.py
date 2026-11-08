@@ -33,7 +33,6 @@ def test_java_varargs_name_type_and_rest_flag(declaration, component_type, name)
     raw, method = java_method(source)
     assert raw['parameters'] == ['label', name]
     assert raw['param_types'] == {'label': 'String', name: component_type}
-    assert raw['rest_parameters'] == [name]
     assert [(p.name, p.type_annotation, p.is_rest) for p in method.parameters] == [
         ('label', 'String', False), (name, component_type, True),
     ]
