@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import io
 import json
 import subprocess
@@ -279,3 +280,111 @@ def test_published_rejects_skip_worktree_source_changes(verifier, artifact):
     assert not git(artifact, 'status', '--porcelain', '--untracked-files=no')
     with pytest.raises(ValueError, match='tag.*identity'):
         verifier.source_identity(artifact, 'published', '1.2.3')
+
+
+def selected_identity(verifier, artifact, tag):
+    assert 'source_tag' in inspect.signature(verifier.source_identity).parameters, 'Published verification cannot select an immutable retry tag'
+    return verifier.source_identity(artifact, 'published', '1.2.3', source_tag=tag)
+
+
+def initialize_release(artifact):
+    git(artifact, 'init', '-q')
+    git(artifact, 'add', '.')
+    git(artifact, 'commit', '-qm', 'original')
+
+
+def test_published_rejects_branch_named_like_release_tag(verifier, artifact):
+    initialize_release(artifact)
+    git(artifact, 'branch', 'intel-v1.2.3')
+    with pytest.raises(ValueError, match='tag'):
+        verifier.source_identity(artifact, 'published', '1.2.3')
+
+
+@pytest.mark.parametrize('annotated', [False, True])
+def test_published_selects_retry_without_moving_original(verifier, artifact, annotated):
+    initialize_release(artifact)
+    git(artifact, 'tag', 'intel-v1.2.3')
+    original = git(artifact, 'rev-parse', 'refs/tags/intel-v1.2.3')
+    (artifact / 'packages/code-intel/src/attocode_intel/helper.py').write_text('VALUE = 8\n')
+    git(artifact, 'add', '.')
+    git(artifact, 'commit', '-qm', 'repaired source')
+    retry = 'intel-v1.2.3-retry.1'
+    git(artifact, 'tag', *(['-a', '-m', 'retry'] if annotated else []), retry)
+    with pytest.raises(ValueError, match='HEAD'):
+        verifier.source_identity(artifact, 'published', '1.2.3')
+    result = selected_identity(verifier, artifact, retry)
+    assert result['kind'] == 'clean_tagged_tree' and result['dirty'] is False
+    assert result['tag'] == retry
+    assert result['commit'] == git(artifact, 'rev-parse', 'HEAD')
+    assert result['tag_object'] == git(artifact, 'rev-parse', 'refs/tags/' + retry)
+    assert result['canonical_commit'] == original
+    assert result['tag_python_file_count'] == 2
+    assert git(artifact, 'rev-parse', 'refs/tags/intel-v1.2.3') == original
+
+
+@pytest.mark.parametrize('tag', ['HEAD', 'refs/tags/intel-v1.2.3', 'intel-v1.2.4-retry.1',
+                                'intel-v1.2.3-retry.0', 'intel-v1.2.3-retry.01',
+                                'intel-v1.2.3-retry.-1', 'intel-v1.2.3~1'])
+def test_published_rejects_nonrelease_tag_selectors(verifier, artifact, tag):
+    initialize_release(artifact)
+    git(artifact, 'tag', 'intel-v1.2.3')
+    with pytest.raises(ValueError, match='tag'):
+        selected_identity(verifier, artifact, tag)
+
+
+def test_published_retry_requires_original_tag(verifier, artifact):
+    initialize_release(artifact)
+    git(artifact, 'tag', 'intel-v1.2.3-retry.1')
+    with pytest.raises(ValueError, match='[Oo]riginal.*tag'):
+        selected_identity(verifier, artifact, 'intel-v1.2.3-retry.1')
+
+
+def test_published_retry_rejects_branch_and_wrong_head(verifier, artifact):
+    initialize_release(artifact)
+    git(artifact, 'tag', 'intel-v1.2.3')
+    git(artifact, 'branch', 'intel-v1.2.3-retry.1')
+    with pytest.raises(ValueError, match='tag'):
+        selected_identity(verifier, artifact, 'intel-v1.2.3-retry.1')
+    git(artifact, 'tag', 'intel-v1.2.3-retry.1')
+    (artifact / 'packages/code-intel/src/attocode_intel/helper.py').write_text('VALUE = 8\n')
+    git(artifact, 'add', '.')
+    git(artifact, 'commit', '-qm', 'different head')
+    with pytest.raises(ValueError, match='HEAD'):
+        selected_identity(verifier, artifact, 'intel-v1.2.3-retry.1')
+
+
+@pytest.mark.parametrize('mutation', ['dirty', 'ignored-python', 'skip-worktree'])
+def test_retry_preserves_source_identity_guards(verifier, artifact, mutation):
+    (artifact / '.gitignore').write_text('packages/code-intel/src/attocode_intel/extra.py\n')
+    initialize_release(artifact)
+    git(artifact, 'tag', 'intel-v1.2.3')
+    git(artifact, 'tag', 'intel-v1.2.3-retry.1')
+    if mutation == 'dirty':
+        (artifact / 'packages/code-intel/src/attocode_intel/helper.py').write_text('VALUE = 8\n')
+    elif mutation == 'ignored-python':
+        (artifact / 'packages/code-intel/src/attocode_intel/extra.py').write_text('VALUE = 8\n')
+    else:
+        name = 'packages/code-intel/pyproject.toml'
+        git(artifact, 'update-index', '--skip-worktree', name)
+        (artifact / name).write_text((artifact / name).read_text() + '# altered\n')
+    with pytest.raises(ValueError, match='dirty|tag.*identity'):
+        selected_identity(verifier, artifact, 'intel-v1.2.3-retry.1')
+
+
+def test_source_tag_is_published_only_and_cli_binds_it(verifier, artifact, tmp_path, monkeypatch):
+    assert any(a.dest == 'source_tag' for a in verifier.parser()._actions), 'Release CLI lacks selected source tag'
+    report = tmp_path / 'candidate.json'
+    assert verifier.main(['candidate', '--version', '1.2.3', '--baseline-version', '1.2.2',
+                          '--source', str(artifact), '--source-tag', 'intel-v1.2.3-retry.1',
+                          '--report', str(report)]) == 1
+    assert 'published' in json.loads(report.read_text())['error']
+    observed = []
+    def observe(source, mode, version, *, source_tag=None):
+        observed.append((mode, version, source_tag))
+        raise ValueError('selection reached before downloads')
+    monkeypatch.setattr(verifier, 'source_identity', observe)
+    report = tmp_path / 'published.json'
+    assert verifier.main(['published', '--version', '1.2.3', '--baseline-version', '1.2.2',
+                          '--source', str(artifact), '--source-tag', 'intel-v1.2.3-retry.1',
+                          '--allow-downloads', '--report', str(report)]) == 1
+    assert observed == [('published', '1.2.3', 'intel-v1.2.3-retry.1')]
