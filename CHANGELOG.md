@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Java signature metadata retains varargs parameter names, component types and
+  rest flags, plus method return types and trailing array dimensions. Method
+  chunks receive the complete signature; constructors keep an empty return type.
 - Java call evidence retains literal `$` identifiers, including class-qualified
   calls such as `$Gson$Types.canonicalize`, with their original spelling and line.
 - Published-release verification accepts an explicitly selected immutable retry
@@ -23,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Four unchanged pinned Gson sources cover real Java dollar-sign declarations,
-  calls, imports and selected test references. The native gate requires 85 cases,
+  calls, imports, selected test references and signature metadata. The native gate requires 86 cases,
   including all eight navigation checks for the added Gson workflow. Same-package
   calls without an explicit binding remain unresolved candidates.
 

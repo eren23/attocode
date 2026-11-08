@@ -7,7 +7,10 @@ three successive groups. This is offline product evidence, not an agent study.
 **Unreleased development:** Java call evidence preserves literal dollar signs.
 Four unchanged Gson files at the existing source pin add explicit production and
 test import bindings, eight navigation checks and a same-package unresolved-call
-control. The acquired-grammar gate requires 85 cases. These supplemental source
+control. Java signature metadata retains varargs names/types/rest flags and method
+return types, including trailing array dimensions; constructors have no return
+type. The acquired-grammar gate requires 86 cases, with standalone Java grammar
+file provenance recorded around the native signature check. These supplemental source
 witnesses add no retrieval questions or historical compatibility claims.
 
 **Current published version:** `attocode-code-intel` 0.1.29. Perl `.t` scripts share the
