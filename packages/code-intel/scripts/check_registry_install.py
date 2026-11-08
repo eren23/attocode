@@ -31,7 +31,7 @@ def _environment(root):
     return env
 
 
-def _invoke(command, root, env, remaining):
+def _invoke(command, root, env, deadline):
     try:
         process = subprocess.Popen(command, cwd=root / 'work', env=env,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -40,6 +40,11 @@ def _invoke(command, root, env, remaining):
     except OSError as error:
         return 127, '', str(error), False
     try:
+        # Process creation cannot be interrupted by communicate's timeout. Charge
+        # that elapsed time to the same deadline before granting any wait.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(command, 0)
         out, err = process.communicate(timeout=remaining)
         return process.returncode, out, err, False
     except subprocess.TimeoutExpired:
@@ -63,11 +68,11 @@ def _invoke(command, root, env, remaining):
 def probe_install(version, *, uvx='uvx', attempts=8, seconds=300, delay=5, checkpoint=None):
     if not isinstance(version, str) or not re.fullmatch(VERSION, version):
         raise ValueError('Unsupported release version')
-    if not isinstance(attempts, int) or not 1 <= attempts <= 32:
-        raise ValueError('Attempt limit must be between 1 and 32')
+    if not isinstance(attempts, int) or not 1 <= attempts <= 8:
+        raise ValueError('Attempt limit must be between 1 and 8')
     if (not isinstance(seconds, (int, float)) or not math.isfinite(seconds)
-            or not 0 < seconds <= 600):
-        raise ValueError('Shared deadline must be finite and between 0 and 600 seconds')
+            or not 0 < seconds <= 300):
+        raise ValueError('Shared deadline must be finite and between 0 and 300 seconds')
     if (not isinstance(delay, (int, float)) or not math.isfinite(delay) or not 0 <= delay <= 60):
         raise ValueError('Initial delay must be finite and between 0 and 60 seconds')
     started = time.monotonic()
@@ -95,8 +100,8 @@ def probe_install(version, *, uvx='uvx', attempts=8, seconds=300, delay=5, check
                 reason = 'deadline_exceeded'
                 break
             before = time.monotonic()
-            code, out, err, timed_out = _invoke(command, root, env, remaining)
-            if timed_out:
+            code, out, err, timed_out = _invoke(command, root, env, deadline)
+            if timed_out or time.monotonic() >= deadline:
                 outcome = 'deadline_exceeded'
             elif code == 0:
                 outcome = 'passed' if out.strip() == expected else 'unexpected_version'

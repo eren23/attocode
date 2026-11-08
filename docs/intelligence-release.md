@@ -57,8 +57,10 @@ The listed-command probe uses an owned temporary cache, tool directory and home,
 the existing runner Python, and the public PyPI index. Only the observed
 "no version of attocode-code-intel==VERSION" resolution failure is retried:
 at most eight attempts share a 300-second budget, with exponential delays from
-five seconds capped at 60 seconds. Process cleanup has a bounded additional
-allowance. A wrong reported version, other install failures or timeout stop the
+five seconds capped at 60 seconds. Process creation cannot itself be interrupted;
+its elapsed time counts against that same deadline and a late result fails.
+Process cleanup has a bounded additional allowance, and the report includes full
+elapsed time. A wrong reported version, other install failures or timeout stop the
 job before Registry publication. Attempt diagnostics survive in the
 `intelligence-registry-install-proof` artifact, including failed probes.
 
