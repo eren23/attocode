@@ -87,6 +87,7 @@ def main():
               Path(__file__).with_name('gson_depth_fixture.json'),
               REPO / 'packages/code-intel/tests/test_optional_language_depth.py',
               REPO / 'packages/code-intel/tests/test_java_signatures.py',
+              REPO / 'packages/code-intel/tests/test_ast_snapshot.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]
     sources = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
     before = {'grammar': grammar_identity(args.cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),

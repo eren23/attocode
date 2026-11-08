@@ -35,11 +35,18 @@ def seed(root, count=4):
     ('example.py', 'from typing import List\nclass Example:\n    def method(self, values: List[int] = []) -> int:\n        return len(values)\n'),
     ('example.go', 'package example\nimport "fmt"\ntype Thing struct {}\nfunc (t *Thing) Method(x int) int { fmt.Println(x); return x }\n'),
     ('example.ts', 'import { readFile } from "fs";\nexport class Example { method(value: string): string { return value; } }\n'),
+    ('example.java', 'class Example { String[] method(String first, String... remaining) { return null; } }\n'),
 ])
 def test_restart_preserves_complete_ast_and_symbols_without_parse(tmp_path, name, source):
     (tmp_path / name).write_text(source)
     first = ASTService(str(tmp_path))
     first.initialize_skeleton(indexing_depth='eager')
+    if name == 'example.java':
+        cls = next(c for c in first._ast_cache[name].classes if c.name == 'Example')
+        method = next(m for m in cls.methods if m.name == 'method')
+        assert [(p.name, p.type_annotation, p.is_rest) for p in method.parameters] == [
+            ('first', 'String', False), ('remaining', 'String', True)]
+        assert method.return_type == 'String[]'
     expected = {k: asdict(v) for k, v in first._ast_cache.items()}
     definitions = first._index.definitions.copy()
     counts = first._store.stats()
