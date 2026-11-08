@@ -4,11 +4,17 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Current version:** `attocode-code-intel` 0.1.29. Perl `.t` scripts share the
+**Unreleased development:** Java call evidence preserves literal dollar signs.
+Four unchanged Gson files at the existing source pin add explicit production and
+test import bindings, eight navigation checks and a same-package unresolved-call
+control. The acquired-grammar gate requires 85 cases. These supplemental source
+witnesses add no retrieval questions or historical compatibility claims.
+
+**Current published version:** `attocode-code-intel` 0.1.29. Perl `.t` scripts share the
 canonical and generic Perl parser identity. Three unchanged pinned Carp sources
 exercise native definition/caller/import witnesses, test candidates, scoped
 inclusion through refresh/restart and eight distribution-root navigation checks.
-The acquired-grammar gate requires 83 cases. Generated-directory exclusions and
+Its release verified 83 acquired-grammar cases. Generated-directory exclusions and
 conservative import ownership remain unchanged; syntax and heuristic evidence
 retain their existing limits. See the [0.1.29 release notes](intelligence-0.1.29.md).
 Version 0.1.28 summarized duplicate compact-search metadata diagnostics while

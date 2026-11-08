@@ -221,8 +221,10 @@ def test_gson_pinned_native_dollar_calls(pinned_gson_sources):
     evidence('gson-pinned-calls.json', calls)
     for role, symbol in [('definition', 'newParameterizedTypeWithOwner'), ('canonicalize_definition', 'canonicalize')]:
         witness = manifest['witnesses'][role]
+        classes = [c for c in asts[witness['file']].classes if c.name == '$Gson$Types']
+        assert len(classes) == 1
         assert any(f.name == symbol and f.start_line <= witness['line'] <= f.end_line
-                   for f in asts[witness['file']].functions)
+                   for f in classes[0].methods)
     for role in ['importer', 'test_importer']:
         witness = manifest['witnesses'][role]
         assert any(i.module == 'com.google.gson.internal.$Gson$Types' and i.line == witness['line']
