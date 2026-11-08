@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.29] - 2026-11-08
+
+### Fixed
+
+- Perl `.t` test scripts now share the Perl language identity used by discovery,
+  AST parsing and generic-parser inference. With a Perl grammar installed or
+  cached, native imports and callers in these scripts participate in navigation.
+
+### Added
+
+- Source-pinned Carp integration checks cover a real definition, caller, importer
+  and test candidate, plus scoped source inclusion through refresh and restart.
+  The acquired-grammar gate now requires 83 cases, including all eight navigation
+  checks within the Carp distribution workspace. Default generated-directory
+  exclusions and conservative import resolution are preserved.
+
 ## [Intelligence 0.1.28] - 2026-11-06
 
 ### Changed
