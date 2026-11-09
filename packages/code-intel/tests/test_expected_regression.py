@@ -178,3 +178,59 @@ def test_native_contract_requires_maintained_inventory(record_property, tmp_path
     except ValueError:
         rejected = True
     assert rejected, 'REGRESSION: native inventory mismatch admitted'
+
+
+@pytest.mark.parametrize('mode', ['expected', 'pass', 'skip', 'source-change', 'wrong-head'])
+def test_actions_runner_preserves_original_evidence(record_property, tmp_path, mode):
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    module = checker(record_property)
+    repo = tmp_path / 'checkout'
+    scripts = repo / 'packages/code-intel/scripts'
+    scripts.mkdir(parents=True)
+    shutil.copyfile(module.__file__, scripts / 'check_expected_regression.py')
+    test = repo / 'packages/code-intel/tests/test_example.py'
+    test.parent.mkdir()
+    body = "    record_property('qualified_input', 'true')\n"
+    if mode == 'skip':
+        body += "    import pytest\n    pytest.skip('unexpected skip')\n"
+    elif mode == 'source-change':
+        body += "    from pathlib import Path\n    Path(__file__).resolve().parents[3].joinpath('witness.txt').write_text('changed')\n"
+    if mode != 'skip':
+        body += ("    assert True\n" if mode == 'pass' else
+                 "    assert False, 'REGRESSION: receiver identity'\n")
+    test.write_text('def test_regression(record_property):\n' + body)
+    value = contract()
+    value['cases'] = value['cases'][:1]
+    manifest = repo / '.github/regressions/case.json'
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps(value))
+    (repo / 'witness.txt').write_text('original')
+    (repo / 'packages/code-intel/pyproject.toml').write_text('[tool.pytest.ini_options]\naddopts = ""\n')
+    subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+    subprocess.run(['git', 'add', '.'], cwd=repo, check=True)
+    subprocess.run(['git', '-c', 'user.name=CI regression', '-c', 'user.email=ci@example.invalid',
+                    'commit', '-qm', 'fixture'], cwd=repo, check=True)
+    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip()
+    runner = tmp_path / 'runner'
+    runner.mkdir()
+    output = runner / 'evidence'
+    result = subprocess.run([sys.executable, str(scripts / 'check_expected_regression.py'),
+                             '--contract', '.github/regressions/case.json', '--output', str(output)],
+                            cwd=repo, env={**os.environ, 'GITHUB_ACTIONS': 'true',
+                                           'GITHUB_SHA': 'b' * 40 if mode == 'wrong-head' else head,
+                                           'RUNNER_TEMP': str(runner)},
+                            capture_output=True, text=True, timeout=60)
+    proof = json.loads((output / 'proof.json').read_bytes())
+    assert proof['head'] == head and proof['sources']['witness.txt']
+    assert json.loads((output / 'contract.json').read_bytes()) == value
+    if mode == 'expected':
+        assert result.returncode == 0, result.stderr
+        assert proof['status'] == 'expected-regression-observed' and proof['exit_code'] == 1
+        assert (output / 'pytest.xml').is_file() and (output / 'pytest.log').is_file()
+    else:
+        assert result.returncode == 1 and proof['status'] == 'rejected'
+        assert proof['reason']

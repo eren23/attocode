@@ -63,6 +63,10 @@ def load_contract(raw, repo):
         raise ValueError('Invalid complete case inventory')
     if not isinstance(failures, dict) or not failures or not set(failures) <= set(cases):
         raise ValueError('Invalid expected failure inventory')
+    if value['profile'] == 'native':
+        inventory = json.loads((repo / 'packages/code-intel/scripts/optional_grammar_cases.json').read_bytes())['cases']
+        if not inventory or len(inventory) != len(set(inventory)) or set(inventory) != set(cases):
+            raise ValueError('Native contract differs from maintained case inventory')
     for failure in failures.values():
         if not isinstance(failure, dict) or set(failure) != {'message', 'properties'}:
             raise ValueError('Invalid failure declaration')

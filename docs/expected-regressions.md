@@ -21,7 +21,8 @@ Do not push an intentionally failing PR to obtain RED evidence.
 
 The contract declares the complete testcase inventory and exactly which cases
 must fail. IDs use the test module basename (without `.py`), followed by `::`
-and the literal pytest testcase name, including parameter brackets:
+and the literal pytest testcase name, including parameter brackets. Class-based
+tests retain the class suffix, for example `test_example.TestReceiver::test_value`:
 
 ```json
 {
@@ -44,7 +45,9 @@ with the declared message at the semantic assertion. The failure message must
 begin `AssertionError: ` followed by that marker. Every other declared case
 must pass. Cases cannot skip or produce setup/teardown errors. Missing,
 unexpected or duplicate cases, unexpected passes, crashes, collection errors,
-timeouts, changed sources or failed cleanup reject the run normally.
+timeouts or changed sources reject the run normally. Native runs also require
+the acquisition gate's owned scratch cleanup. Unit pytest scratch is retained
+with the original artifacts until the temporary runner is removed.
 
 `profile: "native"` runs the fixed acquired-grammar gate instead of selected
 unit files; set `paths: []` and include every case in
@@ -58,3 +61,6 @@ Python test files directly within the code-intel test tree. Each run uses a
 fresh runner temporary directory, bounded commands and read-only repository
 permissions. Installation/acquisition failures and final strict gates still
 produce normal failed runs; this workflow does not alter notification settings.
+Committed tests and native evidence producers are trusted repository code. This
+operator is an evidence check, not a sandbox for malicious tests or fabricated
+reports.
