@@ -531,6 +531,76 @@ def test_cli_pinned_go_signature_metadata(pinned_cli_go_source, tmp_path):
              'source_unchanged': True, 'owned_cleanup': not root.exists()})
 
 
+def test_cli_pinned_go_module_binding_scope(pinned_cli_go_source, tmp_path):
+    import importlib.metadata
+    from tempfile import TemporaryDirectory
+
+    import tree_sitter
+    import tree_sitter_go
+    from attocode_intel._internal.integrations.context import ts_parser
+    from attocode_intel._internal.integrations.context.ast_service import ASTService
+    from attocode_intel._internal.integrations.context.syntax_evidence import syntax_tree
+
+    signature_manifest, files = pinned_cli_go_source
+    manifest = json.loads((Path(__file__).resolve().parents[1] / 'scripts/go_binding_fixture.json').read_bytes())
+    assert (manifest['repo'], manifest['commit'], manifest['files']) == (
+        signature_manifest['repo'], signature_manifest['commit'], signature_manifest['files'])
+    target = manifest['local_declaration']
+    name = target['file']
+    raw_bytes = files[name]
+    expected_file = manifest['files'][name]
+    assert len(raw_bytes) == expected_file['bytes'] and hashlib.sha256(raw_bytes).hexdigest() == expected_file['sha256']
+    assert hashlib.sha1(b'blob ' + str(len(raw_bytes)).encode() + b'\0' + raw_bytes).hexdigest() == expected_file['git_blob_sha1']
+    source = raw_bytes.decode()
+    assert source.splitlines()[target['line'] - 1] == target['text']
+    assert source.splitlines()[target['function_start'] - 1] == target['function_header']
+    evidence('cli-go-binding-receipt.json', manifest)
+    ast = native(name, source, 'go', 'cli-go-bindings')
+    raw = ts_parser.ts_parse_file(name, source, 'go')
+    tree = syntax_tree(name, source, 'go')
+    dist = importlib.metadata.distribution('tree-sitter-go')
+    origin = Path(tree_sitter_go.__file__).resolve()
+    assert any(Path(dist.locate_file(p)).resolve() == origin for p in dist.files or [])
+    parser_matches = ts_parser._get_parser('go').language == tree_sitter.Language(tree_sitter_go.language())
+    root, closed = None, False
+    try:
+        with TemporaryDirectory(prefix='cli-go-bindings-', dir=tmp_path) as directory:
+            root = Path(directory)
+            path = root / name
+            path.parent.mkdir(parents=True)
+            path.write_bytes(raw_bytes)
+            service = ASTService(str(root))
+            try:
+                service.initialize_skeleton(indexing_depth='eager')
+                variables = [asdict(loc) for loc in service.get_file_symbols(name)
+                             if loc.kind == 'variable' and loc.qualified_name == loc.name]
+                definitions = {k: [asdict(loc) for loc in values]
+                               for k, values in service._index.definitions.items()}
+                function = next(f for f in ast.functions if f.name == target['enclosing_function'])
+                evidence('cli-go-binding-results.json', {'path': name, 'bytes': len(raw_bytes),
+                         'has_error': tree.root_node.has_error, 'end_byte': tree.root_node.end_byte,
+                         'standalone_grammar_matches': parser_matches, 'go_version': dist.version, 'go_origin': str(origin),
+                         'raw_bindings': raw['top_level_vars'], 'ast_bindings': ast.top_level_vars,
+                         'cached_bindings': service._ast_cache[name].top_level_vars, 'indexed_globals': variables,
+                         'definitions': definitions, 'enclosing_function': asdict(function),
+                         'source_unchanged': path.read_bytes() == raw_bytes})
+                assert parser_matches and dist.version == manifest['grammar_version']
+                assert not tree.root_node.has_error and tree.root_node.end_byte == len(raw_bytes)
+                assert function.start_line == target['function_start'] < target['line'] < target['function_end'] == function.end_line
+                assert set(manifest['required_functions']) <= set(definitions)
+                assert raw['top_level_vars'] == ast.top_level_vars == service._ast_cache[name].top_level_vars == manifest['expected_global_bindings']
+                assert [loc['name'] for loc in variables] == manifest['expected_global_bindings']
+                assert target['name'] not in definitions
+                assert path.read_bytes() == raw_bytes
+            finally:
+                service.stop_hydration()
+                service._store.close()
+                closed = True
+    finally:
+        evidence('cli-go-binding-lifecycle.json', {'owned_cleanup': root is not None and not root.exists(),
+                                                'service_closed': closed})
+
+
 def test_crystal_method_definition_native_range():
     ast = native('greet.cr', 'def greet(name)\n  name\nend\n', 'crystal', 'crystal-method')
     assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == [('greet', 1, 3)], 'language coverage: Crystal native method definition missing'

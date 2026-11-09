@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "repo": "cli/cli",
+  "commit": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+  "grammar_version": "0.25.0",
+  "files": {
+    "pkg/cmd/version/version.go": {
+      "bytes": 1029,
+      "git_blob_sha1": "11d4a0271fde54e885115e8ebba469db11a9a361",
+      "sha256": "a0dc239cfd0042976d48c3fcd19a781e4e76e78f68a42fec03df18cddc9bfacd"
+    }
+  },
+  "local_declaration": {
+    "file": "pkg/cmd/version/version.go",
+    "name": "dateStr",
+    "line": 29,
+    "text": "\tvar dateStr string",
+    "enclosing_function": "Format",
+    "function_start": 26,
+    "function_end": 35,
+    "function_header": "func Format(version, buildDate string) string {"
+  },
+  "required_functions": ["NewCmdVersion", "Format", "changelogURL"],
+  "expected_global_bindings": []
+}
