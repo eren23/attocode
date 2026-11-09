@@ -58,7 +58,10 @@ def chunk_file(
         except OSError:
             return []
 
-    from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+    from attocode_intel._internal.integrations.context.codebase_ast import (
+        _function_symbol_identity,
+        parse_file,
+    )
 
     try:
         ast = parse_file(file_path, content=content)
@@ -96,6 +99,8 @@ def chunk_file(
 
     # Function-level chunks
     for func in ast.functions:
+        name, kind = _function_symbol_identity(func, ast.language)
+        prefix = "method" if kind == "method" else "func"
         start = max(0, func.start_line - 1)
         end = min(len(lines), func.end_line)
         code_lines = lines[start:end]
@@ -104,17 +109,17 @@ def chunk_file(
             code_lines.append(f"    # ... ({func.end_line - func.start_line - max_chunk_lines} more lines)")
 
         params = ", ".join(p.name for p in func.parameters[:8])
-        meta_parts = [f"function {func.name}({params})"]
+        meta_parts = [f"{kind} {name}({params})"]
         if func.return_type:
             meta_parts.append(f"-> {func.return_type}")
         if func.decorators:
             meta_parts.append(f"decorators: {', '.join(func.decorators[:3])}")
 
         chunks.append(CodeChunk(
-            id=f"func:{relative_path}:{func.name}",
+            id=f"{prefix}:{relative_path}:{name}",
             file_path=relative_path,
-            chunk_type="function",
-            name=func.name,
+            chunk_type=kind,
+            name=name,
             text="\n".join(code_lines),
             start_line=func.start_line,
             end_line=func.end_line,

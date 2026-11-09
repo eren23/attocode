@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Native Go semantic chunks retain receiver-qualified method identities, so
+  methods with the same name survive optional vector indexing. Explicit index
+  maintenance repairs legacy Go receiver IDs without source edits. Complete
+  Go replacements are atomic and preserve old vectors on embedding failures.
 - Whole-file deletion notifications retain qualified method names and method
   kinds for standalone Go receiver methods, including refresh and dirty-file
   updates. Previous-definition payloads and ordinary function/class removals
