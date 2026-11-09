@@ -1100,8 +1100,10 @@ class SemanticSearchManager:
         for r in raw_results:
             key = vector_ids[r.id]
             located = lexical_by_id.get(key)
-            if located is not None and (located.start_line or located.definition_start_line):
+            if located is not None and located.start_line:
                 result_map[key] = replace(located)
+            elif located is not None and located.definition_start_line:
+                result_map[key] = replace(located, text=r.text, score=r.score)
             else:
                 result_map[key] = SemanticSearchResult(
                     file_path=r.file_path,
@@ -2332,6 +2334,29 @@ class SemanticSearchManager:
             root_real = os.path.realpath(self.root_dir)
             if os.path.commonpath((root_real, os.path.realpath(os.path.dirname(cache_dir)))) != root_real:
                 return None
+            if os.path.commonpath((root_real, os.path.realpath(cache_dir))) != root_real:
+                return None
+            existing = Path(self._kw_cache_db_path)
+            if existing.is_symlink():
+                return None
+            if existing.exists():
+                if not existing.is_file():
+                    return None
+                # Check an existing cache without changing its journal or mode.
+                # Incompatible future caches remain untouched; do not use
+                # immutable=1 here, since version metadata may live in WAL.
+                probe = sqlite3.connect(existing.absolute().as_uri() + '?mode=ro', uri=True)
+                try:
+                    if probe.execute("SELECT 1 FROM sqlite_master WHERE name='metadata'").fetchone():
+                        limits = {'schema_version': 4, 'body_schema_version': 5}
+                        versions = probe.execute(
+                            "SELECT key,value FROM metadata WHERE key IN (?,?)", tuple(limits),
+                        ).fetchall()
+                        if any(not str(value).isdigit() or int(value) > limits[key]
+                               for key, value in versions):
+                            return None
+                finally:
+                    probe.close()
             os.makedirs(cache_dir, mode=0o700, exist_ok=True)
             if os.path.commonpath((root_real, os.path.realpath(cache_dir))) != root_real:
                 return None
