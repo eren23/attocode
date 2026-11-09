@@ -77,6 +77,35 @@ from attocode_intel._internal.integrations.context.syntax_evidence import syntax
                   'methods': {'Second': ['Run']}, 'full_traversal': True}, id='query-fallback'),
     pytest.param({'source': 'type (\n Café struct{}\n Ω = int\n)\n',
                   'types': [('Café', ' Café struct{}', 1), ('Ω', ' Ω = int', 1)]}, id='unicode-names'),
+    pytest.param({'source': 'type (\n A int // A trailing comment.\n B string\n)\n',
+                  'types': [('A', ' A int // A trailing comment.', 1), ('B', ' B string', 1)],
+                  'docs': {'A': '', 'B': ''}}, id='trailing-group-comment'),
+    pytest.param({'source': 'type (\n A int // A trailing comment.\n // B has its own doc.\n B string\n)\n',
+                  'types': [('A', ' A int // A trailing comment.', 1), ('B', ' B string', 1)],
+                  'docs': {'A': '', 'B': 'B has its own doc.'}}, id='trailing-before-leading-doc'),
+    pytest.param({'source': '// Shared declaration.\ntype (\n A int // A trailing comment.\n B string\n)\n',
+                  'types': [('A', ' A int // A trailing comment.', 1), ('B', ' B string', 1)],
+                  'docs': {'A': 'Shared declaration.', 'B': 'Shared declaration.'}}, id='trailing-with-shared-doc'),
+    pytest.param({'source': 'type A int // A trailing comment.\ntype B string\n',
+                  'types': [('A', 'type A int // A trailing comment.', 1), ('B', 'type B string', 1)],
+                  'docs': {'A': '', 'B': ''}}, id='trailing-between-declarations'),
+    pytest.param({'source': 'var X int // X trailing comment.\nfunc Run() {}\n', 'types': [],
+                  'functions': ['Run'], 'function_docs': {'Run': ''}}, id='trailing-before-function'),
+    pytest.param({'source': 'type Reader (interface {\n Read(p []byte) int\n})\n',
+                  'types': [('Reader', 'type Reader (interface {', 3)], 'methods': {'Reader': ['Read']},
+                  'signature': {'Reader.Read': {'params': ['p'], 'types': {'p': '[]byte'},
+                                               'return': 'int', 'visibility': 'public'}}}, id='parenthesized-interface'),
+    pytest.param({'source': 'type Reader = (interface {\n Read(p []byte) int\n})\n',
+                  'types': [('Reader', 'type Reader = (interface {', 3)], 'methods': {'Reader': ['Read']}},
+                 id='parenthesized-alias-interface'),
+    pytest.param({'source': 'type Reader ( /* transparent */ (interface {\n Read(p []byte) int\n}))\n',
+                  'types': [('Reader', 'type Reader ( /* transparent */ (interface {', 3)],
+                  'methods': {'Reader': ['Read']}}, id='nested-parentheses-comment'),
+    pytest.param({'source': 'type Handler (func() interface {\n Hidden()\n})\n',
+                  'types': [('Handler', 'type Handler (func() interface {', 3)]}, id='parenthesized-rhs-decoy'),
+    pytest.param({'source': '// Item on its own line.\ntype\nItem struct{}\n',
+                  'types': [('Item', 'Item struct{}', 1)], 'docs': {'Item': 'Item on its own line.'}},
+                 id='multiline-single-name-range'),
 ])
 def test_go_named_types_reach_metadata_and_index(tmp_path, monkeypatch, record_property, case):
     name = 'types.go'
@@ -110,10 +139,12 @@ def test_go_named_types_reach_metadata_and_index(tmp_path, monkeypatch, record_p
         locations = service.get_file_symbols(name)
         record_property('indexed_symbols', json.dumps([asdict(loc) for loc in locations]))
         record_property('cached_classes', json.dumps([asdict(c) for c in service._ast_cache[name].classes]))
+        record_property('cached_functions', json.dumps([asdict(f) for f in service._ast_cache[name].functions]))
         assert any(loc.name == 'Sentinel' and loc.kind == 'function' for loc in locations)
         assert [(c['name'], c['start_line'], c['end_line']) for c in raw['classes']] == expected
         assert [(c.name, c.start_line, c.end_line) for c in ast.classes] == expected
         assert [asdict(c) for c in service._ast_cache[name].classes] == [asdict(c) for c in ast.classes]
+        assert [asdict(f) for f in service._ast_cache[name].functions] == [asdict(f) for f in ast.functions]
         assert sorted((loc.name, loc.start_line, loc.end_line) for loc in locations if loc.kind == 'class') == sorted(expected)
         assert [f['name'] for f in raw['functions']] == [f.name for f in ast.functions] == ['Sentinel'] + case.get('functions', [])
         for cls, raw_cls in zip(ast.classes, raw['classes'], strict=True):
@@ -123,7 +154,7 @@ def test_go_named_types_reach_metadata_and_index(tmp_path, monkeypatch, record_p
             for method in methods:
                 assert any(loc.qualified_name == cls.name + '.' + method and loc.kind == 'method' for loc in locations)
             if cls.name in case.get('docs', {}):
-                assert cls.docstring == raw_cls['docstring'] == case['docs'][cls.name]
+                assert cls.docstring == raw_cls.get('docstring', '') == case['docs'][cls.name]
             for method, raw_method in zip(cls.methods, raw_cls['methods'], strict=True):
                 signature = case.get('signature', {}).get(cls.name + '.' + method.name)
                 if signature is not None:
@@ -131,6 +162,9 @@ def test_go_named_types_reach_metadata_and_index(tmp_path, monkeypatch, record_p
                     assert raw_method.get('param_types', {}) == {p.name: p.type_annotation for p in method.parameters} == signature['types']
                     assert raw_method['return_type'] == method.return_type == signature['return']
                     assert raw_method['visibility'] == method.visibility == signature['visibility']
+        for function, raw_function in zip(ast.functions, raw['functions'], strict=True):
+            if function.name in case.get('function_docs', {}):
+                assert function.docstring == raw_function.get('docstring', '') == case['function_docs'][function.name]
     finally:
         service.stop_hydration()
         service._store.close()
