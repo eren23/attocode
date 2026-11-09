@@ -1216,3 +1216,170 @@ def test_optional_imports_require_physical_paths(tmp_path, language, module, dri
     assert resolve_import_targets(language, module, driver, misleading) == [], 'language coverage: Python import alias became a physical optional-language target'
     paths.update({valid_driver, valid_target})
     assert resolve_import_targets(language, module, valid_driver, index()) == [valid_target], 'language coverage: canonical physical target lost'
+
+
+@pytest.fixture(scope='session')
+def pinned_go_crossfile_sources():
+    """The real std module, source, caller/test and license are data only."""
+    assert os.environ.get('QUALITY_ALLOW_DOWNLOADS') == '1'
+    manifest = json.loads((Path(__file__).resolve().parents[1] / 'scripts/go_crossfile_fixture.json').read_bytes())
+    files = {}
+    for name, expected in manifest['files'].items():
+        with urllib.request.urlopen(f"https://raw.githubusercontent.com/{manifest['repo']}/{manifest['commit']}/{name}", timeout=30) as response:
+            raw = response.read(expected['bytes'] + 1)
+        assert len(raw) == expected['bytes'] and hashlib.sha256(raw).hexdigest() == expected['sha256']
+        assert hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == expected['git_blob_sha1']
+        files[name] = raw
+    for witness in manifest['witnesses'].values():
+        assert files[witness['file']].decode().splitlines()[witness['line'] - 1] == witness['text']
+    evidence('go-crossfile-receipt.json', manifest)
+    evidence('go-crossfile-data-files.json', {name: raw.decode() for name, raw in files.items() if not name.endswith('.go')})
+    return manifest, files
+
+
+async def test_go_regexp_crossfile_method_workflow(tmp_path, monkeypatch, record_property, pinned_go_crossfile_sources):
+    import importlib.metadata
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+
+    import tree_sitter
+    import tree_sitter_go
+    from attocode_intel._internal.integrations.context import ast_service, codebase_ast, ts_parser
+    from attocode_intel._internal.integrations.context.ast_service import ASTService
+    from attocode_intel._internal.integrations.context.syntax_evidence import (
+        reference_candidates,
+        syntax_tree,
+    )
+    from attocode_intel.gateway import OperationGateway
+
+    from eval.quality.corpus_capture import RecordedGateway
+    from eval.quality.experiment_evidence import Journal
+
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    manifest, files = pinned_go_crossfile_sources
+    source, test = manifest['source_path'], manifest['test_path']
+    asts, syntax, calls = {}, {}, {}
+    for name in (manifest['type_path'], source, test):
+        text = files[name].decode()
+        asts[name] = native(name, text, 'go', 'go-crossfile-' + Path(name).name)
+        tree = syntax_tree(name, text, 'go')
+        syntax[name] = {'has_error': tree.root_node.has_error, 'end_byte': tree.root_node.end_byte,
+                        'bytes': len(files[name]), 'tree': str(tree.root_node)}
+        calls[name] = reference_candidates(name, text, 'go')
+    dist = importlib.metadata.distribution('tree-sitter-go')
+    origin = Path(tree_sitter_go.__file__).resolve()
+    assert any(Path(dist.locate_file(p)).resolve() == origin for p in dist.files or [])
+    matches = ts_parser._get_parser('go').language == tree_sitter.Language(tree_sitter_go.language())
+    evidence('go-crossfile-native-validation.json', {'syntax': syntax, 'calls': calls,
+             'go_version': dist.version, 'go_origin': str(origin), 'standalone_grammar_matches': matches,
+             'imports': {name: [asdict(i) for i in ast.imports] for name, ast in asts.items()}})
+    assert matches and dist.version == manifest['grammar_version']
+    assert all(not r['has_error'] and r['end_byte'] == r['bytes'] for r in syntax.values())
+    record_property('qualified_input', 'true')
+    evidence('go-crossfile-raw.json', {name: ts_parser.ts_parse_file(name, files[name].decode(), 'go') for name in asts})
+    journal = Journal(Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / 'go-crossfile-workflow', 8 * 2**20)
+    responses = {}
+    root = None
+    closed = {'gateway_first': False, 'gateway_restart': False, 'cache_first': False, 'cache_restart': False}
+    try:
+        with TemporaryDirectory(prefix='go-crossfile-', dir=tmp_path) as directory:
+            root = Path(directory)
+            for name, data in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+
+            async def request(peer, tag, tool, arguments):
+                result = await peer.execute_mcp(tool, {'max_tokens': 4000, **arguments})
+                responses[tag] = {'is_error': result.isError, 'response': json.loads(result.content[0].text)}
+                evidence('go-crossfile-public-responses.json', responses)
+
+            peer = RecordedGateway(OperationGateway(str(root), 'daily', watch=False), root, journal)
+            try:
+                for tag, tool, arguments in [
+                    ('definition', 'inspect_symbol', {'symbol_name': 'Regexp.doMatch', 'file_path': source, 'line': 513}),
+                    ('execute_definition', 'inspect_symbol', {'symbol_name': 'Regexp.doExecute', 'file_path': source, 'line': 521}),
+                    ('dependencies', 'dependencies', {'path': source}),
+                    ('impact', 'impact_analysis', {'changed_files': [source]}),
+                    ('tests', 'suggest_tests', {'files': [source], 'symbol_name': 'Regexp.doExecute'}),
+                    ('member_references', 'cross_references', {'symbol_name': 'Regexp.doExecute', 'file_path': source, 'line': 521}),
+                    ('test_dependencies', 'dependencies', {'path': test}),
+                ]:
+                    await request(peer, tag, tool, arguments)
+            finally:
+                await peer.close()
+                closed['gateway_first'] = True
+
+            first = ASTService(str(root))
+            try:
+                first.initialize_skeleton(indexing_depth='eager')
+                expected = {k: asdict(v) for k, v in first._ast_cache.items()}
+                definitions = {k: [asdict(loc) for loc in values] for k, values in first._index.definitions.items()}
+                counts = first._store.stats()
+                evidence('go-crossfile-cache-before.json', {'asts': expected, 'symbols': definitions, 'counts': counts})
+            finally:
+                first.stop_hydration()
+                first._store.close()
+                closed['cache_first'] = True
+            second = ASTService(str(root))
+            try:
+                with (patch.object(ast_service, 'parse_file', side_effect=AssertionError('restart reparsed')) as parse,
+                      patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('discovery reparsed')) as discover):
+                    assert second.initialize_skeleton().phase == 'ready'
+                restored = {k: asdict(v) for k, v in second._ast_cache.items()}
+                symbols = {k: [asdict(loc) for loc in values] for k, values in second._index.definitions.items()}
+                evidence('go-crossfile-cache-restart.json', {'asts': restored, 'symbols': symbols,
+                         'counts': second._store.stats(), 'service_parse_calls': parse.call_count,
+                         'discovery_parse_calls': discover.call_count})
+                assert expected == restored and definitions == symbols and second._store.stats() == counts
+                assert parse.call_count == discover.call_count == 0
+            finally:
+                second.stop_hydration()
+                second._store.close()
+                closed['cache_restart'] = True
+
+            peer = RecordedGateway(OperationGateway(str(root), 'daily', watch=False), root, journal, generation=1)
+            try:
+                with (patch.object(ast_service, 'parse_file', side_effect=AssertionError('public restart reparsed')) as parse,
+                      patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('public discovery reparsed')) as discover):
+                    await request(peer, 'restart_dependencies', 'dependencies', {'path': source})
+                evidence('go-crossfile-public-restart.json', {'service_parse_calls': parse.call_count,
+                         'discovery_parse_calls': discover.call_count})
+                assert parse.call_count == discover.call_count == 0
+            finally:
+                await peer.close()
+                closed['gateway_restart'] = True
+            evidence('go-crossfile-source-after.json', {'files_unchanged': all((root / name).read_bytes() == raw for name, raw in files.items())})
+            assert all((root / name).read_bytes() == raw for name, raw in files.items())
+    finally:
+        evidence('go-crossfile-lifecycle.json', {**closed, 'owned_cleanup': root is not None and not root.exists()})
+
+    assert set(expected) == {manifest['type_path'], source, test}
+    for name, ast in asts.items():
+        assert expected[name]['classes'] == [asdict(c) for c in ast.classes]
+        assert expected[name]['functions'] == [asdict(f) for f in ast.functions]
+    assert any(i.module == 'regexp' and i.line == 9 for i in asts[test].imports)
+    assert ('re.doExecute', 'call', 514) in calls[source]
+    assert all(not r['is_error'] for r in responses.values())
+    # All original responses, source and restart/cleanup evidence precede the
+    # semantic assertion; a normal not-found response is a legitimate RED.
+    for tag, symbol, line, end in [('definition', 'Regexp.doMatch', 513, 515),
+                                   ('execute_definition', 'Regexp.doExecute', 521, 550)]:
+        data = responses[tag]['response']['data']
+        assert data.get('status') == 'found', 'REGRESSION: Go pinned cross-file method identity'
+        definition = data['definition']
+        assert (definition['qualified_name'], definition['kind'], definition['file_path'],
+                definition['start_line'], definition['end_line']) == (symbol, 'method', source, line, end)
+        assert manifest['witnesses']['definition' if tag == 'definition' else 'execute']['text'] in data['source']['text']
+        assert any(f.qualified_name == symbol and f.is_method and f.start_line == line and f.end_line == end
+                   for f in asts[source].functions)
+        assert any(loc['qualified_name'] == symbol and loc['kind'] == 'method' and loc['file_path'] == source
+                   and loc['start_line'] == line and loc['end_line'] == end
+                   for values in definitions.values() for loc in values)
+    refs = responses['member_references']['response']
+    assert refs['metadata']['absence_proven'] is False and isinstance(refs['metadata']['analysis'], str)
+    for tag in ('dependencies', 'restart_dependencies'):
+        assert responses[tag]['response']['data']['imported_by'] == [test]
+    assert test in responses['impact']['response']['data']['impacted_files']
+    assert any(r['file_path'] == test and r['evidence']['import_distance'] == 1
+               for r in responses['tests']['response']['data']['candidates'])
