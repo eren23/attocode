@@ -105,11 +105,13 @@ class FileIndex(dict):
                 self.go_packages[str(Path(name).parent)].add(name)
             if Path(name).name != 'go.mod':
                 continue
-            # Even empty/invalid go.mod files exclude their subtree from a
-            # containing module. Ignore stale index entries after deletion.
-            if (Path(root) / name).is_file():
-                self.go_module_roots.add(str(Path(name).parent))
+            # Empty/invalid or temporarily inaccessible indexed go.mod files
+            # retain their boundary. Ignore stale entries after deletion.
+            module_root = str(Path(name).parent)
+            self.go_module_roots.add(module_root)
             try:
+                if not (Path(root) / name).is_file():
+                    self.go_module_roots.discard(module_root)
                 text = self._read(root, name)
             except (OSError, ValueError):
                 continue

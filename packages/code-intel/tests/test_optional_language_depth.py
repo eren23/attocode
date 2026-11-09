@@ -1040,7 +1040,7 @@ async def test_go_stdlib_pinned_import_and_test_workflow(tmp_path, monkeypatch, 
         assert data['definition']['start_line'] == line
     refs = responses['member_references']['response']
     assert not any(r['file_path'] == test and r['line'] == 1618 for r in refs['data']['references'])
-    assert refs['metadata']['analysis']['absence_proven'] is False
+    assert refs['metadata']['absence_proven'] is False
     for tag in ('dependencies', 'restart_dependencies'):
         assert responses[tag]['response']['data']['imported_by'] == [test]
     assert test in responses['impact']['response']['data']['impacted_files']
