@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.30] - 2026-11-09
+
 ### Fixed
 
 - Go imports inside a declared `std` module resolve standard package paths
