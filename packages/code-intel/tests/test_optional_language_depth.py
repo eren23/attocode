@@ -178,11 +178,32 @@ async def test_perl_configured_repository_workflow(
     evidence('perl-roots-repository-inputs.json', {'roots':roots,'spec':spec,
              'workspace_scope':'Perl repository root','manifest':manifest})
     output = Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / 'perl-roots-repository-workflow'
-    checks = await evaluate(tmp_path, spec, journal=Journal(output, 4 * 2**20))
-    evidence('perl-roots-repository-checks.json', checks)
-    assert all((tmp_path / name).read_bytes() == raw for name,raw in files.items())
     record_property('qualified_input', 'true')
     record_property('native_pinned_files', str(len(files)))
+    try:
+        checks = await evaluate(tmp_path, spec, journal=Journal(output, 4 * 2**20))
+    except ValueError as error:
+        # The RAW-capturing evaluator stops at a failed contract. Translate
+        # only this healthy missing-importer response, preserving other errors.
+        if str(error) != 'failed compatibility check: dependencies':
+            raise
+        events = [json.loads(line) for line in (output / 'events.jsonl').read_bytes().splitlines()]
+        event = next(e for e in reversed(events) if e['request'].get('event')=='mcp_response'
+                     and e['request'].get('tool')=='dependencies')
+        ref = event['response']
+        raw = (output / ref['path']).read_bytes()
+        assert len(raw)==ref['bytes'] and hashlib.sha256(raw).hexdigest()==ref['sha256']
+        response = json.loads(raw)
+        assert response['isError'] is False
+        data = json.loads(response['content'][0]['text'])['data']
+        assert data['path']==spec['file'] and isinstance(data['imported_by'],list)
+        assert spec['importer'] not in data['imported_by']
+        assert all((tmp_path / name).read_bytes()==content for name,content in files.items())
+        evidence('perl-roots-repository-stopped.json', {'contract':'dependencies','response_ref':ref,
+                 'observed_importers':data['imported_by'],'source_unchanged':True})
+        raise AssertionError('REGRESSION: configured Perl repository roots do not satisfy navigation contracts') from error
+    evidence('perl-roots-repository-checks.json', checks)
+    assert all((tmp_path / name).read_bytes() == raw for name,raw in files.items())
     record_property('workflow_checks', json.dumps([(c['name'],c['outcome']) for c in checks]))
     assert len(checks)==8 and all(c['outcome']=='passed' for c in checks), 'REGRESSION: configured Perl repository roots do not satisfy navigation contracts'
 
