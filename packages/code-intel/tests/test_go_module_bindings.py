@@ -37,10 +37,10 @@ from attocode_intel._internal.integrations.context.ts_parser import ts_parse_fil
     pytest.param('var ()\nconst ()\n', [], id='empty-blocks'),
     pytest.param('var Global int\nfunc consume() { callback := func() { var local int; _ = local }; _ = callback }\n',
                  ['Global'], id='nested-closure-local'),
-    pytest.param('var Global int\nfunc consume() { var (local int; other string); '
-                 'const (inner = 1; extra = 2); _ = local; _ = other; _ = inner; _ = extra }\n',
+    pytest.param('var Global int\nfunc consume() {\n var (\n local int\n other string\n )\n'
+                 ' const (\n inner = 1\n extra = 2\n )\n _ = local; _ = other; _ = inner; _ = extra\n}\n',
                  ['Global'], id='local-declaration-blocks'),
-    pytest.param('var (\n _ int\n Exported int\n)\nconst (_ = iota; Visible = 1)\n',
+    pytest.param('var (\n _ int\n Exported int\n)\nconst (\n _ = iota\n Visible = 1\n)\n',
                  ['Exported', 'Visible'], id='blank-and-real-block-bindings'),
 ])
 def test_go_module_bindings_reach_raw_ast_and_index(tmp_path, declaration, expected, record_property):
