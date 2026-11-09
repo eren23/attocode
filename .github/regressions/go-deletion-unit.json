@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_go_deletion_events.py"
+  ],
+  "cases": [
+    "test_go_deletion_events::test_native_whole_file_removals[qualified-methods-notify]",
+    "test_go_deletion_events::test_native_whole_file_removals[qualified-methods-refresh]",
+    "test_go_deletion_events::test_native_whole_file_removals[qualified-methods-context]",
+    "test_go_deletion_events::test_native_whole_file_removals[unsupported-duplicates-notify]",
+    "test_go_deletion_events::test_native_whole_file_removals[unsupported-duplicates-refresh]",
+    "test_go_deletion_events::test_native_whole_file_removals[unsupported-duplicates-context]",
+    "test_go_deletion_events::test_native_whole_file_removals[same-file-class-notify]",
+    "test_go_deletion_events::test_native_whole_file_removals[same-file-class-refresh]",
+    "test_go_deletion_events::test_native_whole_file_removals[same-file-class-context]",
+    "test_go_deletion_events::test_native_whole_file_removals[python-control-notify]",
+    "test_go_deletion_events::test_native_whole_file_removals[python-control-refresh]",
+    "test_go_deletion_events::test_native_whole_file_removals[python-control-context]",
+    "test_go_deletion_events::test_native_whole_file_removals[empty-go-notify]",
+    "test_go_deletion_events::test_native_whole_file_removals[empty-go-refresh]",
+    "test_go_deletion_events::test_native_whole_file_removals[empty-go-context]"
+  ],
+  "failures": {
+    "test_go_deletion_events::test_native_whole_file_removals[qualified-methods-notify]": {
+      "message": "REGRESSION: Go deletion event identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_deletion_events::test_native_whole_file_removals[qualified-methods-refresh]": {
+      "message": "REGRESSION: Go deletion event identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_deletion_events::test_native_whole_file_removals[qualified-methods-context]": {
+      "message": "REGRESSION: Go deletion event identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}

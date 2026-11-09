@@ -788,6 +788,7 @@ class ASTService:
         """
         from attocode_intel._internal.integrations.context.codebase_ast import (
             SymbolChange,
+            _function_symbol_identity,
         )
 
         rel = self._to_rel(path)
@@ -805,9 +806,10 @@ class ASTService:
                 return []
             changes: list[SymbolChange] = []
             for f in old_ast.functions:
+                symbol_name, symbol_kind = _function_symbol_identity(f, old_ast.language)
                 changes.append(SymbolChange(
-                    kind="removed", symbol_name=f.name,
-                    symbol_kind="function", file_path=rel, previous=f,
+                    kind="removed", symbol_name=symbol_name,
+                    symbol_kind=symbol_kind, file_path=rel, previous=f,
                 ))
             for c in old_ast.classes:
                 changes.append(SymbolChange(

@@ -154,6 +154,7 @@ def main():
               REPO / 'packages/code-intel/tests/test_go_generic_receivers.py',
               REPO / 'packages/code-intel/tests/test_go_stdlib_imports.py',
               REPO / 'packages/code-intel/tests/test_go_crossfile_methods.py',
+              REPO / 'packages/code-intel/tests/test_go_deletion_events.py',
               REPO / 'packages/code-intel/tests/unit/integrations/context/test_go_symbols.py',
               REPO / 'packages/code-intel/tests/test_ast_snapshot.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]

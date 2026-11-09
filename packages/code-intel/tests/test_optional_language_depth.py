@@ -1383,3 +1383,52 @@ async def test_go_regexp_crossfile_method_workflow(tmp_path, monkeypatch, record
     assert test in responses['impact']['response']['data']['impacted_files']
     assert any(r['file_path'] == test and r['evidence']['import_distance'] == 1
                for r in responses['tests']['response']['data']['candidates'])
+
+
+def test_go_pinned_whole_file_deletion_events(tmp_path, record_property, pinned_go_crossfile_sources):
+    import runpy
+    from tempfile import TemporaryDirectory
+
+    # An exact source path avoids depending on pytest's namespace import mode.
+    helper = runpy.run_path(str(Path(__file__).with_name('test_go_deletion_events.py')))['observe_deletion']
+    manifest, files = pinned_go_crossfile_sources
+    name = manifest['source_path']
+    for source in (manifest['type_path'], name, manifest['test_path']):
+        native(source, files[source].decode(), 'go', 'go-deletion-' + Path(source).name)
+        from attocode_intel._internal.integrations.context.syntax_evidence import syntax_tree
+        tree = syntax_tree(source, files[source].decode(), 'go')
+        assert tree is not None and not tree.root_node.has_error
+        assert tree.root_node.end_byte == len(files[source])
+    records = []
+    for consumer in ['notify', 'refresh', 'context']:
+        root = None
+        try:
+            with TemporaryDirectory(prefix='go-deletion-', dir=tmp_path) as directory:
+                root = Path(directory)
+                for path, raw in files.items():
+                    target = root / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(raw)
+                result = helper(root, name, consumer)
+                for symbol, line, end in [('Regexp.doMatch', 513, 515), ('Regexp.doExecute', 521, 550)]:
+                    assert any(f['qualified_name'] == symbol and f['is_method']
+                               and f['start_line'] == line and f['end_line'] == end
+                               for f in result['before_ast']['functions'])
+                result['remaining_sources_unchanged'] = all(
+                    not (root / path).exists() if path == name else (root / path).read_bytes() == raw
+                    for path, raw in files.items())
+                assert result['remaining_sources_unchanged']
+                records.append(result)
+        finally:
+            if records and records[-1]['consumer'] == consumer:
+                records[-1]['owned_cleanup'] = root is not None and not root.exists()
+            evidence('go-deletion-observations.json', records)
+    assert len(records) == 3 and all(r['closed'] and r['owned_cleanup'] for r in records)
+    record_property('qualified_input', 'true')
+    for result in records:
+        changes = result['changes']
+        for symbol, line, end in [('Regexp.doMatch', 513, 515), ('Regexp.doExecute', 521, 550)]:
+            assert any(c['kind'] == 'removed' and c['symbol_name'] == symbol and c['symbol_kind'] == 'method'
+                       and c['file_path'] == name and c['previous']['qualified_name'] == symbol
+                       and c['previous']['start_line'] == line and c['previous']['end_line'] == end
+                       for c in changes), 'REGRESSION: Go pinned deletion event identity'
