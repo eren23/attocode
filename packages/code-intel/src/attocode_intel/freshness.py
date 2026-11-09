@@ -7,6 +7,7 @@ import os
 import threading
 from pathlib import Path
 
+from attocode_intel._internal.integrations.context.codebase_context import build_dependency_graph
 from attocode_intel._internal.integrations.context.index_store import SNAPSHOT_KEY
 from attocode_intel._internal.integrations.context.language_registry import LANG_EXTENSIONS
 from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
@@ -134,6 +135,13 @@ class FreshnessTracker:
                     ast._reference_indexed_files.discard(path)
                 else:
                     ast.notify_file_changed(path)
+            if policy_changed:
+                # A public notification can leave ready hydration without a
+                # complete snapshot. Rebuild now: there may be no hydration
+                # worker to restore the cleared graph before the next query.
+                ast._context_mgr._dep_graph = build_dependency_graph(
+                    ast._context_mgr._files, ast.root_dir, ast_cache=dict(ast._ast_cache),
+                )
             graph = ast._context_mgr.dependency_graph
             if graph:
                 ast._index.file_dependencies.clear()
@@ -141,6 +149,8 @@ class FreshnessTracker:
                 for source, targets in graph.forward.items():
                     for target in targets:
                         ast._index.add_file_dependency(source, target)
+                if policy_changed:
+                    ast._index.persist_files(changed & ast._ast_cache.keys())
             if ast._hydration_state and ast._hydration_state.phase != "ready":
                 ast.start_hydration()
         for path in source_changed:
