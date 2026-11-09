@@ -1,7 +1,9 @@
 """Real optional grammars: explicitly acquired CI only, never navigation downloads."""
+import asyncio
 import hashlib
 import json
 import os
+import threading
 import urllib.request
 from dataclasses import asdict
 from pathlib import Path
@@ -141,6 +143,180 @@ async def test_perl_pinned_distribution_workflow(tmp_path, monkeypatch, pinned_p
     evidence('perl-pinned-workflow-checks.json', checks)
     assert len(checks) == 8 and all(c['outcome'] == 'passed' for c in checks), repr([(c['name'], c['outcome']) for c in checks])
     assert all((tmp_path / name).read_bytes() == raw for name, raw in files.items()), 'Navigation changed pinned source'
+
+
+def _perl_roots_fixture(root, manifest, files, roots, prefix):
+    """Same immutable sources, with explicit discovery and separate resolution policy."""
+    write_pinned_perl(root, files)
+    (root / '.gitignore').write_text('!dist/\ndist/*\n!dist/Carp/\n')
+    config = root / '.attocode/config.toml'
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text('[perl]\nmodule_roots = ' + json.dumps(roots) + '\n')
+    asts = {name:native(name, raw.decode(), 'perl', prefix + '-' + name.replace('/', '-'))
+            for name,raw in files.items()}
+    target = manifest['witnesses']['definition']
+    importer = manifest['witnesses']['importer']['file']
+    assert any(f.name == 'croak' and f.start_line <= target['line'] <= f.end_line
+               for f in asts[target['file']].functions)
+    assert 'Carp' in {i.module for i in asts[importer].imports}
+    return config
+
+
+async def test_perl_configured_repository_workflow(
+        tmp_path, monkeypatch, pinned_perl_sources, record_property):
+    from eval.quality.corpus import evaluate
+    from eval.quality.experiment_evidence import Journal
+
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    manifest, files = pinned_perl_sources
+    roots = ['dist/Carp/lib']
+    _perl_roots_fixture(tmp_path, manifest, files, roots, 'perl-roots-repository')
+    spec = {'id':'perl-configured-repository','language':'perl',
+            'file':'dist/Carp/lib/Carp.pm','symbol':'croak',
+            'anchor':manifest['witnesses']['definition']['text'],
+            'source_sha256':manifest['files']['dist/Carp/lib/Carp.pm']['sha256'],
+            'caller':'dist/Carp/t/Carp.t','importer':'dist/Carp/lib/Carp/Heavy.pm',
+            'test':'dist/Carp/t/Carp.t','queries':[]}
+    evidence('perl-roots-repository-inputs.json', {'roots':roots,'spec':spec,
+             'workspace_scope':'Perl repository root','manifest':manifest})
+    output = Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / 'perl-roots-repository-workflow'
+    record_property('qualified_input', 'true')
+    record_property('native_pinned_files', str(len(files)))
+    try:
+        checks = await evaluate(tmp_path, spec, journal=Journal(output, 4 * 2**20))
+    except ValueError as error:
+        # The RAW-capturing evaluator stops at a failed contract. Translate
+        # only this healthy missing-importer response, preserving other errors.
+        if str(error) != 'failed compatibility check: dependencies':
+            raise
+        events = [json.loads(line) for line in (output / 'events.jsonl').read_bytes().splitlines()]
+        event = next(e for e in reversed(events) if e['request'].get('event')=='mcp_response'
+                     and e['request'].get('tool')=='dependencies')
+        ref = event['response']
+        raw = (output / ref['path']).read_bytes()
+        assert len(raw)==ref['bytes'] and hashlib.sha256(raw).hexdigest()==ref['sha256']
+        response = json.loads(raw)
+        assert response['isError'] is False
+        data = json.loads(response['content'][0]['text'])['data']
+        assert data['path']==spec['file'] and isinstance(data['imported_by'],list)
+        assert spec['importer'] not in data['imported_by']
+        assert all((tmp_path / name).read_bytes()==content for name,content in files.items())
+        evidence('perl-roots-repository-stopped.json', {'contract':'dependencies','response_ref':ref,
+                 'observed_importers':data['imported_by'],'source_unchanged':True})
+        raise AssertionError('REGRESSION: configured Perl repository roots do not satisfy navigation contracts') from error
+    evidence('perl-roots-repository-checks.json', checks)
+    assert all((tmp_path / name).read_bytes() == raw for name,raw in files.items())
+    record_property('workflow_checks', json.dumps([(c['name'],c['outcome']) for c in checks]))
+    assert len(checks)==8 and all(c['outcome']=='passed' for c in checks), 'REGRESSION: configured Perl repository roots do not satisfy navigation contracts'
+
+
+@pytest.mark.parametrize('online', [False,True,'notified','partial'], ids=[
+    'edited-while-closed','edited-in-session','edited-after-notify','controlled-partial',
+])
+async def test_perl_config_only_refresh_and_restart(
+        tmp_path, monkeypatch, pinned_perl_sources, record_property, online):
+    from attocode_intel.gateway import OperationGateway
+
+    from eval.quality.corpus_capture import RecordedGateway
+    from eval.quality.experiment_evidence import Journal
+
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    manifest, files = pinned_perl_sources
+    tag = {'notified':'perl-roots-notified','partial':'perl-roots-partial'}.get(
+        online, 'perl-roots-live' if online else 'perl-roots-closed')
+    config = _perl_roots_fixture(tmp_path, manifest, files, ['missing/lib'], tag)
+    stamps = {name:(tmp_path / name).stat() for name in files}
+    stamps = {name:[s.st_mtime_ns,s.st_ctime_ns,s.st_size] for name,s in stamps.items()}
+    journal = Journal(Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / (tag + '-workflow'), 4 * 2**20)
+    target = manifest['witnesses']['definition']['file']
+    importer = manifest['witnesses']['importer']['file']
+    peer, generation, closed = None, -1, []
+    rows = []
+    hydration_entered, hydration_release = threading.Event(), threading.Event()
+
+    def open_peer():
+        nonlocal peer, generation
+        generation += 1
+        peer = RecordedGateway(OperationGateway(str(tmp_path),'daily',watch=False),
+                               tmp_path,journal,generation=generation)
+
+    async def dependencies(stage):
+        response = await peer.execute_mcp('dependencies', {'path':target,'max_tokens':4000})
+        assert not response.isError
+        payload = json.loads(response.content[0].text)
+        rows.append({'stage':stage,'gateway':generation,'response':payload})
+        return payload['data']
+
+    async def close_peer():
+        nonlocal peer
+        if peer is not None:
+            await peer.close()
+            closed.append(generation)
+            peer = None
+
+    try:
+        open_peer()
+        before = await dependencies('before-config-change')
+        assert not before['imported_by']
+        record_property('qualified_input', 'true')
+        record_property('native_pinned_files', str(len(files)))
+        if online in ('notified','partial'):
+            stores = next(iter(peer.peer._stores.values()))
+            ast = stores['service']._ast_service
+            assert ast._hydration_state.phase == 'ready' and ast._snapshot_start is not None
+            response = await peer.execute_mcp('notify_file_changed', {'files':[importer],'max_tokens':4000})
+            assert not response.isError
+            assert ast._hydration_state.phase == 'ready' and ast._snapshot_start is None
+            record_property('notified_ready_without_snapshot', 'true')
+            if online == 'partial':
+                # Explicit controlled incomplete state, not a naturally slow
+                # hydration claim. Real pinned parsing/gateway stay in use.
+                ast.stop_hydration()
+                ast._hydration_state.phase = 'references'
+                run_hydration = ast._run_hydration
+
+                def gated_hydration():
+                    hydration_entered.set()
+                    assert hydration_release.wait(15), 'Controlled hydration gate was not released'
+                    return run_hydration()
+
+                monkeypatch.setattr(ast, '_run_hydration', gated_hydration)
+                record_property('controlled_partial_state', 'true')
+            evidence(tag + '-pre-policy-state.json', {
+                'phase':ast._hydration_state.phase,'snapshot_absent':ast._snapshot_start is None,
+                'controlled_partial':online=='partial',
+            })
+        if not online:
+            await close_peer()
+        config.write_text('[perl]\nmodule_roots = ["dist/Carp/lib"]\n')
+        if not online:
+            open_peer()
+        await dependencies('after-config-only-change')
+        if online == 'partial':
+            assert hydration_entered.wait(1) and not hydration_release.is_set()
+            record_property('hydration_held_until_first_response', 'true')
+            hydration_release.set()
+            await asyncio.to_thread(ast._hydration_thread.join, 5)
+            assert not ast._hydration_thread.is_alive()
+        if online in ('notified','partial'):
+            await dependencies('repeated-after-config-change')
+        await close_peer()
+        open_peer()
+        await dependencies('reopened-after-change')
+    finally:
+        hydration_release.set()
+        await close_peer()
+        after = {name:(tmp_path / name).stat() for name in files}
+        after = {name:[s.st_mtime_ns,s.st_ctime_ns,s.st_size] for name,s in after.items()}
+        evidence(tag + '-observations.json', {'rows':rows,'closed':closed,
+                 'expected_importer':importer,'source_stamps_before':stamps,
+                 'source_stamps_after':after,'source_unchanged':all(
+                     (tmp_path / name).read_bytes()==raw for name,raw in files.items())})
+    assert stamps==after and all((tmp_path / name).read_bytes()==raw for name,raw in files.items())
+    record_property('source_stamps_unchanged', 'true')
+    record_property('observed_importers', json.dumps([r['response']['data']['imported_by'] for r in rows]))
+    expected_rows = 4 if online in ('notified','partial') else 3
+    assert len(rows)==expected_rows and all(importer in r['response']['data']['imported_by'] for r in rows[1:]), 'REGRESSION: Perl config-only dependencies remain stale across refresh or reopen'
 
 
 async def test_perl_scoped_project_inclusion_refresh_and_restart(tmp_path, monkeypatch):

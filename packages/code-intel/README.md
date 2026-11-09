@@ -131,6 +131,10 @@ The agent sees 16 tools (the `daily` profile):
 
 For all tools (about 140: rules, security scans, history, snapshots and more), add `--profile full` to `init`. The [tool catalog](https://github.com/eren23/attocode/blob/main/docs/intelligence-tools.md) lists them. The [search details](https://github.com/eren23/attocode/blob/main/docs/intelligence-search.md) page describes ranking, the response format and the experimental rerankers.
 
+Development checkouts also support explicit [Perl module roots](https://github.com/eren23/attocode/blob/main/docs/intelligence-perl-roots.md)
+for static resolution over discovered files. This setting is planned for the
+next maintenance release after 0.1.31.
+
 For an experimental local seven-tool surface (0.1.5 or later), use
 `init --profile lean` and restart your client. It advertises `bootstrap`,
 `search_symbols`, `inspect_symbol`, `semantic_search`, `impact_analysis`,

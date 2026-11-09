@@ -325,6 +325,7 @@ def _build_file_index(
     if source_prefixes:
         _add_root_keys(file_index, source_prefixes)
 
+    file_index.configure_perl(root_dir)
     file_index.configure_javascript(root_dir)
     file_index.configure_go(root_dir)
     file_index.configure_rust(root_dir)
@@ -690,7 +691,8 @@ def _optional_import_targets(language, module, source_file, file_index):
         if not all(p.isidentifier() for p in parts):
             return []
         name = "/".join(parts) + ".pm"
-        groups = [{name}, {"lib/" + name}]
+        roots = getattr(file_index, 'perl_module_roots', ['.', 'lib'])
+        groups = [{posixpath.normpath(posixpath.join(root, name))} for root in roots]
     elif language == "crystal":
         if not module.startswith(("./", "../")) or any(c in module for c in '*?[]#"\'`') or module.endswith('/'):
             return []

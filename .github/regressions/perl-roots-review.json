@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": ["packages/code-intel/tests/test_perl_toml_preservation.py"],
+  "cases": [
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-value]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-key]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-section]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[unicode]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[control-escapes]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[nested-types]"
+  ],
+  "failures": {
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-value]": {
+      "message": "REGRESSION: remote save corrupts valid TOML characters or keys",
+      "properties": {"qualified_input": "true", "credential_origin": "authored-fake-only"}
+    },
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-key]": {
+      "message": "REGRESSION: remote save corrupts valid TOML characters or keys",
+      "properties": {"qualified_input": "true", "credential_origin": "authored-fake-only"}
+    },
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-section]": {
+      "message": "REGRESSION: remote save corrupts valid TOML characters or keys",
+      "properties": {"qualified_input": "true", "credential_origin": "authored-fake-only"}
+    }
+  }
+}

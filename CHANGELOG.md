@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Explicit `[perl].module_roots` in `.attocode/config.toml` for conservative
+  resolution over discovered workspace files. Root/lib remain the default;
+  competing modules stay unresolved, and file-discovery exclusions still apply.
+  Config-only changes refresh dependency caches without queuing source vectors.
+
+### Fixed
+
+- Saving remote settings preserves existing TOML values, including quoted Perl
+  root lists and nested configuration data.
+
 ## [Intelligence 0.1.31] - 2026-11-09
 
 ### Fixed

@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_perl_module_roots.py"
+  ],
+  "cases": [
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[default-root]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[default-lib]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[default-ambiguity]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[unrelated-section]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[malformed-toml]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[wrong-list-type]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[custom-root]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[replace-defaults]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[explicit-empty]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[missing-root]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[deduplicated-roots]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[custom-ambiguity]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[absolute-root]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[parent-root]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[backslash-parent]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[windows-drive]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[mixed-safe-unsafe]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[internal-symlink]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[external-symlink]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[external-config]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[oversized-config]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[quoted-root]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[generated-exclusion]",
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[physical-not-python-alias]",
+    "test_perl_module_roots::test_perl_config_loader_is_public_and_read_bounded",
+    "test_perl_module_roots::test_snapshot_tracks_effective_perl_policy_without_source_edits[roots]",
+    "test_perl_module_roots::test_snapshot_tracks_effective_perl_policy_without_source_edits[order]",
+    "test_perl_module_roots::test_snapshot_tracks_effective_perl_policy_without_source_edits[remote]",
+    "test_perl_module_roots::test_remote_settings_save_preserves_perl_and_other_sections[mixed-quotes]",
+    "test_perl_module_roots::test_remote_settings_save_preserves_perl_and_other_sections[backslashes]"
+  ],
+  "failures": {
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[custom-root]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[replace-defaults]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[explicit-empty]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[missing-root]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[deduplicated-roots]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[absolute-root]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[parent-root]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[backslash-parent]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[windows-drive]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[mixed-safe-unsafe]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[internal-symlink]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[external-symlink]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[quoted-root]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[generated-exclusion]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_roots_follow_explicit_workspace_policy[physical-not-python-alias]": {
+      "message": "REGRESSION: explicit Perl module roots are not respected",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_perl_config_loader_is_public_and_read_bounded": {
+      "message": "REGRESSION: bounded Perl configuration loader is unavailable",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_perl_module_roots::test_snapshot_tracks_effective_perl_policy_without_source_edits[roots]": {
+      "message": "REGRESSION: snapshot identity ignores effective Perl module roots",
+      "properties": {
+        "qualified_input": "true",
+        "source_stamps_unchanged": "true"
+      }
+    },
+    "test_perl_module_roots::test_remote_settings_save_preserves_perl_and_other_sections[mixed-quotes]": {
+      "message": "REGRESSION: remote settings save corrupts existing Perl/TOML configuration",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_perl_module_roots::test_remote_settings_save_preserves_perl_and_other_sections[backslashes]": {
+      "message": "REGRESSION: remote settings save corrupts existing Perl/TOML configuration",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    }
+  }
+}
