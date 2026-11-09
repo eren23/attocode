@@ -36,8 +36,8 @@ jobs:
           packages/code-intel/tests/unit/integrations/context/test_semantic_search.py
           packages/code-intel/tests/unit/integrations/context/test_body_chunking.py
           packages/code-intel/tests/unit/integrations/context/test_model_mismatch.py
-          packages/code-intel/tests/unit/integrations/context/test_dim_mismatch_safety.py
-          packages/code-intel/tests/unit/integrations/context/test_embedding_rotation.py
+          packages/code-intel/tests/unit/context/test_vector_store_dim_safety.py
+          packages/code-intel/tests/unit/context/test_embedding_rotation.py
           packages/code-intel/tests/unit/integrations/context/test_query_routing.py
           -p eval.quality.no_agent -q --junitxml=focused.xml
       - name: Source files remain unchanged
