@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "repo": "cli/cli",
+  "commit": "6e49747f49f31c9c0a68cfa344df7262a684e723",
+  "grammar_version": "0.25.0",
+  "files": {
+    "pkg/cmd/version/version.go": {
+      "bytes": 1029,
+      "git_blob_sha1": "11d4a0271fde54e885115e8ebba469db11a9a361",
+      "sha256": "a0dc239cfd0042976d48c3fcd19a781e4e76e78f68a42fec03df18cddc9bfacd"
+    }
+  },
+  "targets": [
+    {
+      "file": "pkg/cmd/version/version.go",
+      "symbol": "NewCmdVersion",
+      "line": 12,
+      "text": "func NewCmdVersion(f *cmdutil.Factory, version, buildDate string) *cobra.Command {",
+      "parameters": [
+        {"name": "f", "type": "*cmdutil.Factory", "is_rest": false},
+        {"name": "version", "type": "string", "is_rest": false},
+        {"name": "buildDate", "type": "string", "is_rest": false}
+      ],
+      "return_type": "*cobra.Command"
+    },
+    {
+      "file": "pkg/cmd/version/version.go",
+      "symbol": "Format",
+      "line": 26,
+      "text": "func Format(version, buildDate string) string {",
+      "parameters": [
+        {"name": "version", "type": "string", "is_rest": false},
+        {"name": "buildDate", "type": "string", "is_rest": false}
+      ],
+      "return_type": "string"
+    },
+    {
+      "file": "pkg/cmd/version/version.go",
+      "symbol": "changelogURL",
+      "line": 37,
+      "text": "func changelogURL(version string) string {",
+      "parameters": [
+        {"name": "version", "type": "string", "is_rest": false}
+      ],
+      "return_type": "string"
+    }
+  ]
+}

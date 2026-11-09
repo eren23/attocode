@@ -82,6 +82,7 @@
     "test_optional_language_depth::test_gson_pinned_native_dollar_calls",
     "test_optional_language_depth::test_gson_pinned_java_signature_metadata",
     "test_optional_language_depth::test_redis_pinned_c_parameter_metadata",
+    "test_optional_language_depth::test_cli_pinned_go_signature_metadata",
     "test_optional_language_depth::test_perl_cross_file_workflow",
     "test_optional_language_depth::test_perl_native_call_candidates_exclude_decoys",
     "test_optional_language_depth::test_perl_pinned_distribution_workflow",
