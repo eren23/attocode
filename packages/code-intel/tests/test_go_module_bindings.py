@@ -85,6 +85,7 @@ def test_initialization_repairs_previous_binding_index(tmp_path, monkeypatch, re
         AST_SNAPSHOT_KEY,
         SNAPSHOT_KEY,
     )
+    from attocode_intel.readiness import ReadinessPhase
     from attocode_intel.service import CodeIntelService
 
     name = 'bindings.go'
@@ -137,7 +138,8 @@ def test_initialization_repairs_previous_binding_index(tmp_path, monkeypatch, re
         if entrypoint == 'direct':
             assert service.initialize() is None
         else:
-            report = api.readiness_report_data(phases=[1], tracer_bullets=False)
+            report = api.readiness_report_data(phases=[ReadinessPhase.BASELINE], tracer_bullets=False)
+            record_property('readiness_report', json.dumps(report))
             assert report
         assert service.initialized and api._get_ast_service() is service
         names = sorted(loc.name for loc in service.get_file_symbols(name) if loc.kind == 'variable')
