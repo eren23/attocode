@@ -8,13 +8,13 @@
     "source": "github",
     "subfolder": "packages/code-intel"
   },
-  "version": "0.1.29",
+  "version": "0.1.30",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "attocode-code-intel",
-      "version": "0.1.29",
+      "version": "0.1.30",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

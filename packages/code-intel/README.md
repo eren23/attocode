@@ -43,6 +43,13 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.30 preserves Java, C and Go signature metadata, Go type and receiver
+ownership, and imports inside declared Go standard modules. Parameter and
+body-only edits update cached metadata and callers, while startup checks parser
+and indexer identity before reusing persisted symbols. See the
+[release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.30.md)
+for source-pinned validation and limits.
+
 Version 0.1.29 recognizes Perl `.t` test scripts in both parser entry points, making native test imports and callers available when a Perl grammar is installed or cached. Source-pinned Carp checks cover real cross-file navigation and scoped inclusion through refresh/restart. See the [release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.29.md).
 
 Version 0.1.28 summarizes duplicate compact-search metadata diagnostics after evidence fitting. Full lexical-index details remain at `data.ranking.index`, with readiness and coverage hints in `metadata.ranking.index`. Results and source excerpts are unchanged. See the [release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.28.md).

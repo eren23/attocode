@@ -4,7 +4,7 @@ Accepted scope: 36 language/format adapters, 36 pinned source packs, 144 unscope
 retrieval questions, six workflow families, and deeper cross-file navigation in
 three successive groups. This is offline product evidence, not an agent study.
 
-**Unreleased development:** Java call evidence preserves literal dollar signs.
+**Version 0.1.30:** Java call evidence preserves literal dollar signs.
 Four unchanged Gson files at the existing source pin add explicit production and
 test import bindings, eight navigation checks and a same-package unresolved-call
 control. Java signature metadata retains varargs names/types/rest flags and method
@@ -17,9 +17,17 @@ method and interface method metadata; blank and unnamed parameters add no bindin
 names. Three headers in one unchanged CLI file provide real Go signature witnesses
 and cached-restart coverage. A separate Go variadic case preserves rest metadata
 and named result syntax through restart without parsing. The acquired-grammar
-gate requires 88 cases, with standalone Java, C and Go grammar file provenance
+gate requires 92 cases, with standalone Java, C and Go grammar file provenance
 recorded around the native signature checks. These supplemental source
 witnesses add no retrieval questions or historical compatibility claims.
+
+Go module bindings retain all declared var/const names while excluding local
+bindings. Grouped named types and aliases keep individual ranges/documentation,
+and generic or parenthesized receiver methods bind to same-file named types.
+Imports inside a declared Go standard module resolve through the nearest owning
+root; nested module configurations retain their target boundaries. Direct and
+readiness-first startup check parser/indexer identity before persisted symbol
+reuse. Real source fixtures cover these paths and full cache restarts.
 
 AST signature diffs compare detailed parameter metadata as well as legacy name
 lists. Refresh also checks the decoded source hash, so a body-only edit updates
@@ -36,7 +44,10 @@ outer parameter names. Declaration attributes and storage classes are excluded
 from written type annotations. Existing C function-name and return-type discovery
 limits remain outside this parameter-metadata change.
 
-**Current published version:** `attocode-code-intel` 0.1.29. Perl `.t` scripts share the
+**Current release:** `attocode-code-intel` 0.1.30. See the
+[0.1.30 release notes](intelligence-0.1.30.md) for changes, validation and limits.
+
+Version 0.1.29 recognizes Perl `.t` scripts, which share the
 canonical and generic Perl parser identity. Three unchanged pinned Carp sources
 exercise native definition/caller/import witnesses, test candidates, scoped
 inclusion through refresh/restart and eight distribution-root navigation checks.
