@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- AST diffs detect detailed parameter changes while retaining legacy parameter
+  lists. Refresh updates cached source and callers for body-only edits, including
+  edits with unchanged size and mtime, without inventing signature-change events.
 - Go signature metadata retains grouped parameter names, written types, variadic
   component types/rest flags and result syntax for functions, receiver methods
   and interface methods. Blank and unnamed parameters introduce no binding names.

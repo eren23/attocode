@@ -91,6 +91,7 @@ def main():
               REPO / 'packages/code-intel/tests/test_java_signatures.py',
               REPO / 'packages/code-intel/tests/test_c_parameters.py',
               REPO / 'packages/code-intel/tests/test_go_signatures.py',
+              REPO / 'packages/code-intel/tests/test_parameter_refresh.py',
               REPO / 'packages/code-intel/tests/test_ast_snapshot.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]
     sources = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}

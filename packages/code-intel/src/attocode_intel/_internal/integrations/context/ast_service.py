@@ -988,7 +988,7 @@ class ASTService:
         return symbol_changes
 
     def refresh(self) -> list[Any]:
-        """Detect changed files (mtime) and update incrementally.
+        """Detect source or signature changes and update incrementally.
 
         Returns aggregated list of ``SymbolChange`` from all changed files.
         """
@@ -1003,7 +1003,9 @@ class ASTService:
             except Exception:
                 continue
             changes = diff_file_ast(cached_ast, new_ast)
-            if changes:
+            source_changed = (bool(new_ast.content_sha256)
+                              and new_ast.content_sha256 != cached_ast.content_sha256)
+            if changes or source_changed:
                 all_changes.extend(self.notify_file_changed(abs_path))
         return all_changes
 

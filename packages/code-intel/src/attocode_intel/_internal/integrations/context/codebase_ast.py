@@ -1360,7 +1360,8 @@ def diff_file_ast(old: FileAST, new: FileAST) -> list[SymbolChange]:
             ))
         else:
             of, nf = old_funcs[name], new_funcs[name]
-            if (of.params != nf.params or of.return_type != nf.return_type
+            if (of.params != nf.params or of.parameters != nf.parameters
+                    or of.return_type != nf.return_type
                     or of.decorators != nf.decorators or of.is_async != nf.is_async
                     or of.start_line != nf.start_line or of.end_line != nf.end_line):
                 changes.append(SymbolChange(
@@ -1407,7 +1408,8 @@ def diff_file_ast(old: FileAST, new: FileAST) -> list[SymbolChange]:
                     ))
                 else:
                     om, nm = old_methods[mname], new_methods[mname]
-                    if (om.params != nm.params or om.return_type != nm.return_type
+                    if (om.params != nm.params or om.parameters != nm.parameters
+                            or om.return_type != nm.return_type
                             or om.start_line != nm.start_line):
                         changes.append(SymbolChange(
                             kind="modified", symbol_name=f"{name}.{mname}",
