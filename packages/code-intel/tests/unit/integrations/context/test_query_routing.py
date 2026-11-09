@@ -17,6 +17,7 @@ def test_query_path_calls_embed_query(tmp_path, monkeypatch):
     store = MagicMock()
     store.count.return_value = 1
     store.model_name = "local:nomic-embed-text-v1.5"
+    store.degraded = False
     store.search.return_value = []
     mgr._store = store
     monkeypatch.setattr(SemanticSearchManager, "_ensure_provider", lambda self: None)

@@ -765,10 +765,11 @@ class SemanticSearchManager:
             states = self._store.get_file_states() if hasattr(self._store, 'get_file_states') else {}
             fresh = set()
             for path in indexed:
-                if path in self._invalidated_files:
-                    continue
                 state = states.get(path)
                 if state and state['dirty']:
+                    continue
+                pending = path in self._invalidated_files
+                if pending and not (state and state['content_sha256']):
                     continue
                 resolved = self._workspace_file(path)
                 if resolved is None or not os.path.isfile(resolved[1]):
@@ -782,6 +783,10 @@ class SemanticSearchManager:
                     metadata = self._store.get_file_metadata(path)
                     if metadata is None or metadata['file_mtime'] != info.st_mtime:
                         continue
+                if pending:
+                    # Another manager can publish the revision this instance
+                    # failed to index. Durable clean/current evidence wins.
+                    self._invalidated_files.discard(path)
                 fresh.add(path)
             return fresh
         except Exception:
@@ -2764,11 +2769,26 @@ class SemanticSearchManager:
                     if rel_path.lower().endswith('.py'):
                         import ast as python_ast
                         python_ast.parse(content)
-                    elif ast.parsing_tier == 'tree_sitter':
+                    elif ast.parsing_tier in {'tree_sitter', 'generic_ts'}:
                         from attocode_intel._internal.integrations.context.syntax_evidence import (
                             syntax_tree,
                         )
-                        tree = syntax_tree(abs_path, content, ast.language)
+                        if ast.parsing_tier == 'generic_ts':
+                            import tree_sitter as ts
+
+                            from attocode_intel._internal.integrations.context.ts_parser import (
+                                EXTRA_GRAMMAR_MODULES,
+                                _generic_extractor,
+                                _parser_language,
+                                bounded_parse,
+                            )
+                            variant = _parser_language(abs_path, ast.language)
+                            language = _generic_extractor._get_language_obj(
+                                EXTRA_GRAMMAR_MODULES.get(ast.language, ''), language=variant,
+                            )
+                            tree = bounded_parse(ts.Parser(language), content.encode()) if language else None
+                        else:
+                            tree = syntax_tree(abs_path, content, ast.language)
                         if (tree is None or tree.root_node.has_error
                                 or tree.root_node.end_byte != len(content.encode())):
                             raise ValueError('Incomplete native source')
@@ -2891,6 +2911,9 @@ class SemanticSearchManager:
                     m_embed,
                 ))
 
+        if (content is not None and content.strip() and not chunks
+                and ast.language != 'python' and ast.parsing_tier not in {'tree_sitter', 'generic_ts'}):
+            raise ValueError('Parser fallback cannot certify an empty replacement')
         # Ordinary duplicate declarations retain the prior store's last-wins
         # policy. Count and embed exactly the rows that will be committed.
         chunks = list({chunk[0]: chunk for chunk in chunks}.values())

@@ -3383,7 +3383,7 @@ class TestNotifyFileChanged:
 
         assert "2 file(s)" in result
         assert mock_svc.notify_file_changed.call_count == 2
-        assert mock_smgr.invalidate_file.call_count == 2
+        assert mock_smgr.handle_file_change.call_count == 2
 
     def test_notify_handles_absolute_paths(self):
         import attocode_intel.server as srv
@@ -3471,7 +3471,7 @@ class TestNotificationQueue:
         result = _process_notification_queue()
         assert result == 2
         assert mock_svc.notify_file_changed.call_count == 2
-        assert mock_smgr.invalidate_file.call_count == 2
+        assert mock_smgr.handle_file_change.call_count == 2
 
         # Queue should be truncated
         assert queue_path.read_text() == ""
