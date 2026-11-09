@@ -154,3 +154,27 @@ def test_native_expected_red_preserves_lifecycle(record_property):
               'source_unchanged': True, 'owned_scratch_removed': True,
               'coverage': {'status': 'rejected'}}
     module.validate_native(report, 'a' * 40)
+
+
+@pytest.mark.parametrize('fault', ['missing', 'extra', 'duplicate'])
+def test_native_contract_requires_maintained_inventory(record_property, tmp_path, fault):
+    module = checker(record_property)
+    value = contract()
+    value.update(profile='native', paths=[])
+    inventory = list(value['cases'])
+    if fault == 'missing':
+        inventory.append('test_required::test_control')
+    elif fault == 'extra':
+        value['cases'].append('test_unexpected::test_control')
+    else:
+        inventory.append(inventory[0])
+    path = tmp_path / 'packages/code-intel/scripts/optional_grammar_cases.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'cases': inventory}))
+    record_property('qualified_input', 'true')
+    rejected = False
+    try:
+        module.load_contract(json.dumps(value).encode(), tmp_path)
+    except ValueError:
+        rejected = True
+    assert rejected, 'REGRESSION: native inventory mismatch admitted'

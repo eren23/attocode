@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_expected_regression.py"
+  ],
+  "cases": [
+    "test_expected_regression::test_exact_failure_and_control_are_admitted",
+    "test_expected_regression::test_invalid_run_is_rejected[unexpected-pass]",
+    "test_expected_regression::test_invalid_run_is_rejected[extra-failure]",
+    "test_expected_regression::test_invalid_run_is_rejected[missing]",
+    "test_expected_regression::test_invalid_run_is_rejected[extra]",
+    "test_expected_regression::test_invalid_run_is_rejected[duplicate]",
+    "test_expected_regression::test_invalid_run_is_rejected[skip]",
+    "test_expected_regression::test_invalid_run_is_rejected[error]",
+    "test_expected_regression::test_invalid_run_is_rejected[teardown-error]",
+    "test_expected_regression::test_invalid_run_is_rejected[wrong-message]",
+    "test_expected_regression::test_invalid_run_is_rejected[wrong-exception]",
+    "test_expected_regression::test_invalid_run_is_rejected[missing-property]",
+    "test_expected_regression::test_invalid_run_is_rejected[wrong-property]",
+    "test_expected_regression::test_invalid_run_is_rejected[duplicate-property]",
+    "test_expected_regression::test_invalid_run_is_rejected[doctype]",
+    "test_expected_regression::test_invalid_run_is_rejected[malformed]",
+    "test_expected_regression::test_invalid_run_is_rejected[oversized]",
+    "test_expected_regression::test_invalid_run_is_rejected[exit-zero]",
+    "test_expected_regression::test_invalid_run_is_rejected[exit-two]",
+    "test_expected_regression::test_invalid_run_is_rejected[exit-five]",
+    "test_expected_regression::test_invalid_run_is_rejected[signal]",
+    "test_expected_regression::test_invalid_contract_is_rejected[profile]",
+    "test_expected_regression::test_invalid_contract_is_rejected[no-failures]",
+    "test_expected_regression::test_invalid_contract_is_rejected[unknown-failure]",
+    "test_expected_regression::test_invalid_contract_is_rejected[duplicate-case]",
+    "test_expected_regression::test_invalid_contract_is_rejected[traversal]",
+    "test_expected_regression::test_invalid_contract_is_rejected[absolute]",
+    "test_expected_regression::test_invalid_contract_is_rejected[option]",
+    "test_expected_regression::test_invalid_contract_is_rejected[empty-marker]",
+    "test_expected_regression::test_invalid_contract_is_rejected[no-qualification]",
+    "test_expected_regression::test_invalid_contract_is_rejected[unknown-key]",
+    "test_expected_regression::test_valid_contract_preserves_literal_ids",
+    "test_expected_regression::test_native_acquisition_or_lifecycle_failure_is_rejected[exit]",
+    "test_expected_regression::test_native_acquisition_or_lifecycle_failure_is_rejected[status]",
+    "test_expected_regression::test_native_acquisition_or_lifecycle_failure_is_rejected[grammar]",
+    "test_expected_regression::test_native_acquisition_or_lifecycle_failure_is_rejected[source]",
+    "test_expected_regression::test_native_acquisition_or_lifecycle_failure_is_rejected[cleanup]",
+    "test_expected_regression::test_native_acquisition_or_lifecycle_failure_is_rejected[coverage]",
+    "test_expected_regression::test_native_acquisition_or_lifecycle_failure_is_rejected[head]",
+    "test_expected_regression::test_native_expected_red_preserves_lifecycle",
+    "test_expected_regression::test_native_contract_requires_maintained_inventory[missing]",
+    "test_expected_regression::test_native_contract_requires_maintained_inventory[extra]",
+    "test_expected_regression::test_native_contract_requires_maintained_inventory[duplicate]"
+  ],
+  "failures": {
+    "test_expected_regression::test_native_contract_requires_maintained_inventory[missing]": {
+      "message": "REGRESSION: native inventory mismatch admitted",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_expected_regression::test_native_contract_requires_maintained_inventory[extra]": {
+      "message": "REGRESSION: native inventory mismatch admitted",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_expected_regression::test_native_contract_requires_maintained_inventory[duplicate]": {
+      "message": "REGRESSION: native inventory mismatch admitted",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}
