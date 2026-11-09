@@ -42,7 +42,7 @@ jobs:
           for case in cases:
               failures = case.findall('failure')
               assert len(failures) == 1
-              assert failures[0].get('message') == 'AssertionError: REGRESSION: expected regression classifier missing'
+              assert failures[0].get('message', '').splitlines()[0] == 'AssertionError: REGRESSION: expected regression classifier missing'
               assert case.find("properties/property[@name='qualification']").get('value') == 'classifier-api-absence'
           proof = {'status': 'expected-api-absence-observed', 'cases': expected,
                    'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}
