@@ -1,6 +1,7 @@
 """Persisted summaries must preserve navigation and reject stale/invalid inputs."""
 import hashlib
 import json
+import re
 from dataclasses import asdict
 from unittest.mock import patch
 
@@ -36,6 +37,7 @@ def seed(root, count=4):
     ('example.go', 'package example\nimport "fmt"\ntype Thing struct {}\nfunc (t *Thing) Method(x int) int { fmt.Println(x); return x }\n'),
     ('example.ts', 'import { readFile } from "fs";\nexport class Example { method(value: string): string { return value; } }\n'),
     ('example.java', 'class Example { String[] method(String first, String... remaining) { return null; } }\n'),
+    ('example.c', 'void consume(int count, const char *label) {}\n'),
 ])
 def test_restart_preserves_complete_ast_and_symbols_without_parse(tmp_path, name, source):
     (tmp_path / name).write_text(source)
@@ -47,6 +49,11 @@ def test_restart_preserves_complete_ast_and_symbols_without_parse(tmp_path, name
         assert [(p.name, p.type_annotation, p.is_rest) for p in method.parameters] == [
             ('first', 'String', False), ('remaining', 'String', True)]
         assert method.return_type == 'String[]'
+    if name == 'example.c':
+        function = next(f for f in first._ast_cache[name].functions if f.name == 'consume')
+        assert [p.name for p in function.parameters] == ['count', 'label']
+        assert [re.findall(r'[A-Za-z_]\w*|[^\s]', p.type_annotation) for p in function.parameters] == [
+            ['int'], ['const', 'char', '*']]
     expected = {k: asdict(v) for k, v in first._ast_cache.items()}
     definitions = first._index.definitions.copy()
     counts = first._store.stats()

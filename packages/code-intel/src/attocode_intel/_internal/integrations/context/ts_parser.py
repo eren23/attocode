@@ -542,11 +542,77 @@ def _find_name(node, source_bytes: bytes) -> str:
     return ""
 
 
+def _c_declarator_chain(node):
+    """Follow one declared name, never a callback's parameters or array bound."""
+    chain = []
+    while node is not None:
+        chain.append(node)
+        if node.type == "identifier":
+            return chain
+        child = node.child_by_field_name("declarator")
+        if child is None and node.type in {"parenthesized_declarator", "attributed_declarator"}:
+            candidates = [c for c in node.named_children
+                          if not c.is_extra and c.type not in {"ms_call_modifier", "attribute_declaration"}]
+            child = candidates[0] if len(candidates) == 1 else None
+        node = child
+    return []
+
+
+def _c_type_text(node, source_bytes: bytes, omit=None) -> str:
+    """Read type syntax without a selected name, comments or declaration modifiers."""
+    excluded = []
+    stack = [node]
+    while stack:
+        part = stack.pop()
+        if part.is_extra or part.type in {"storage_class_specifier", "attribute_declaration"}:
+            # A comment can separate tokens: unsigned/**/char stays two words.
+            excluded.append((part.start_byte, part.end_byte, b" "))
+        elif part == omit:
+            excluded.append((part.start_byte, part.end_byte, b""))
+        else:
+            stack.extend(part.named_children)
+    pieces, cursor = [], node.start_byte
+    for start, end, replacement in sorted(excluded):
+        pieces.extend((source_bytes[cursor:start], replacement))
+        cursor = end
+    pieces.append(source_bytes[cursor:node.end_byte])
+    return b"".join(pieces).decode("utf-8", errors="replace").strip()
+
+
+def _find_c_parameters(node, source_bytes: bytes, types: dict[str, str] | None) -> list[str]:
+    chain = _c_declarator_chain(node.child_by_field_name("declarator"))
+    function = next((n for n in reversed(chain) if n.type == "function_declarator"), None)
+    params = function.child_by_field_name("parameters") if function is not None else None
+    if params is None:
+        return []
+    names = []
+    for parameter in params.named_children:
+        if parameter.type != "parameter_declaration":
+            continue
+        declarator = parameter.child_by_field_name("declarator")
+        parameter_chain = _c_declarator_chain(declarator)
+        if not parameter_chain:
+            continue
+        identifier = parameter_chain[-1]
+        name = _node_text(identifier, source_bytes)
+        names.append(name)
+        base = parameter.child_by_field_name("type")
+        if types is not None and base is not None:
+            qualifiers = [c for c in parameter.named_children if c.type == "type_qualifier"]
+            type_nodes = sorted([base, *qualifiers], key=lambda n: n.start_byte)
+            written = " ".join(_c_type_text(n, source_bytes) for n in type_nodes)
+            abstract = _c_type_text(declarator, source_bytes, identifier)
+            types[name] = written + (" " if abstract.startswith("(") else "") + abstract
+    return names
+
+
 def _find_parameters(
     node, source_bytes: bytes, types: dict[str, str] | None = None,
     *, language: str = "", rest: set[str] | None = None,
 ) -> list[str]:
     """Extract parameter names from a function node; fill ``types`` with annotated ones."""
+    if language == "c":
+        return _find_c_parameters(node, source_bytes, types)
     params_node = node.child_by_field_name("parameters")
     if params_node is None:
         # Some languages use "formal_parameters"

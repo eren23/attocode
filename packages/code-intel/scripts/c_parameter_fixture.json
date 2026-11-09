@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "repo": "redis/redis",
+  "commit": "20f163eb3dcc1311cfe6c0dda5a3beef08ab1a5d",
+  "files": {
+    "src/sha1.c": {
+      "bytes": 7740,
+      "sha256": "f4b6df582597aaa5c0a38572e4aefc8b9f6ba589c5572941eb40d96a6095b0a7",
+      "git_blob_sha1": "4d8c14094d0ab217b14794029b81c27481c86b8b"
+    }
+  },
+  "targets": [
+    {
+      "symbol": "SHA1Transform",
+      "file": "src/sha1.c",
+      "line": 56,
+      "text": "void SHA1Transform(uint32_t state[5], const unsigned char buffer[64])",
+      "parameters": [
+        {
+          "name": "state",
+          "type": "uint32_t[5]"
+        },
+        {
+          "name": "buffer",
+          "type": "const unsigned char[64]"
+        }
+      ]
+    },
+    {
+      "symbol": "SHA1Init",
+      "file": "src/sha1.c",
+      "line": 117,
+      "text": "void SHA1Init(SHA1_CTX* context)",
+      "parameters": [
+        {
+          "name": "context",
+          "type": "SHA1_CTX*"
+        }
+      ]
+    },
+    {
+      "symbol": "SHA1Update",
+      "file": "src/sha1.c",
+      "line": 139,
+      "text": "void SHA1Update(SHA1_CTX* context, const unsigned char* data, uint32_t len)",
+      "parameters": [
+        {
+          "name": "context",
+          "type": "SHA1_CTX*"
+        },
+        {
+          "name": "data",
+          "type": "const unsigned char*"
+        },
+        {
+          "name": "len",
+          "type": "uint32_t"
+        }
+      ]
+    },
+    {
+      "symbol": "SHA1Final",
+      "file": "src/sha1.c",
+      "line": 166,
+      "text": "void SHA1Final(unsigned char digest[20], SHA1_CTX* context)",
+      "parameters": [
+        {
+          "name": "digest",
+          "type": "unsigned char[20]"
+        },
+        {
+          "name": "context",
+          "type": "SHA1_CTX*"
+        }
+      ]
+    }
+  ]
+}

@@ -9,9 +9,20 @@ Four unchanged Gson files at the existing source pin add explicit production and
 test import bindings, eight navigation checks and a same-package unresolved-call
 control. Java signature metadata retains varargs names/types/rest flags and method
 return types, including trailing array dimensions; constructors have no return
-type. The acquired-grammar gate requires 86 cases, with standalone Java grammar
-file provenance recorded around the native signature check. These supplemental source
+type. Named C parameters retain source-written pointer/array/callback types and
+order through native parsing, chunk metadata and cached restart. Four signatures
+in one unchanged Redis file provide a real source witness. The acquired-grammar
+gate requires 87 cases, with standalone Java and C grammar file provenance
+recorded around the native signature checks. These supplemental source
 witnesses add no retrieval questions or historical compatibility claims.
+
+C parameter metadata follows declared names in the native syntax tree. When the
+grammar represents parenthesized syntax such as `int (name)` as an abstract
+function type, the parameter stays unnamed. Resolving that ambiguity needs C
+type-name context; inner type names and callback arguments are not treated as
+outer parameter names. Declaration attributes and storage classes are excluded
+from written type annotations. Existing C function-name and return-type discovery
+limits remain outside this parameter-metadata change.
 
 **Current published version:** `attocode-code-intel` 0.1.29. Perl `.t` scripts share the
 canonical and generic Perl parser identity. Three unchanged pinned Carp sources
