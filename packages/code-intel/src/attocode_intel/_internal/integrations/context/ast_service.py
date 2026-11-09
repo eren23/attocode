@@ -216,9 +216,14 @@ class ASTService:
 
     def initialize(self, *, force: bool = False) -> None:
         """Build a complete index, reusing only source/parser-validated snapshots."""
-        if force:
-            self._store.set_meta(SNAPSHOT_KEY, "")
-        self.initialize_skeleton(indexing_depth="eager")
+        try:
+            if force:
+                self._store.set_meta(SNAPSHOT_KEY, "")
+            self.initialize_skeleton(indexing_depth="eager")
+        finally:
+            # Synchronous initialization reports actual counts via the legacy
+            # hydration_snapshot synthesis, including after incomplete startup.
+            self._hydration_state = None
 
     def force_reindex(self) -> None:
         """Force a full re-scan, ignoring cached data."""

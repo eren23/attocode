@@ -212,7 +212,7 @@ def test_direct_initialization_reports_actual_progress(tmp_path, record_property
             if scenario == 'partial':
                 stack.enter_context(patch.object(ast_service, 'parse_file', side_effect=skip_one))
             if scenario == 'aborted':
-                stack.enter_context(patch.object(service._store, 'save_files_batch',
+                stack.enter_context(patch.object(type(service._store), 'save_files_batch',
                                                 side_effect=RuntimeError('persistence unavailable')))
                 with pytest.raises(RuntimeError, match='persistence unavailable'):
                     service.initialize()
