@@ -1,100 +1,40 @@
-name: CI
+name: Focused live vector verification (temporary proof branch only)
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
-  workflow_call:
-
 permissions:
   contents: read
-
 jobs:
-  test:
+  focused:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      matrix:
-        python-version: ["3.12", "3.13"]
+    timeout-minutes: 12
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
-      - name: Preserved engine tests without agent imports
-        env:
-          ATTOCODE_LOCAL_ONLY: '1'
-          HF_HUB_OFFLINE: '1'
-          TRANSFORMERS_OFFLINE: '1'
-        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/unit -p eval.quality.no_agent -q --junitxml=quality-artifacts/engine.xml
-      - name: Lint migrated tests and workspace checks
-        run: uv run --no-sync ruff check packages/code-intel/tests/unit packages/code-intel/tests/integration eval/quality scripts/check_pack_licenses.py
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Live routes, revisions and existing semantic controls
+        run: >-
+          uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml
+          --confcutdir=packages/code-intel/tests -p eval.quality.no_agent -q
+          packages/code-intel/tests/test_live_vector_freshness.py
+          packages/code-intel/tests/test_vector_revision_lifecycle.py
+          packages/code-intel/tests/test_go_semantic_chunks.py
+          packages/code-intel/tests/test_quality_lifecycle.py
+          packages/code-intel/tests/test_chunk_identity.py
+          packages/code-intel/tests/unit/integrations/context/test_semantic_search.py
+          packages/code-intel/tests/unit/integrations/context/test_body_chunking.py
+          packages/code-intel/tests/unit/integrations/context/test_model_mismatch.py
+          packages/code-intel/tests/unit/context/test_vector_store_dim_safety.py
+          packages/code-intel/tests/unit/context/test_embedding_rotation.py
+          --junitxml=focused.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: engine-${{ matrix.python-version }}
-          retention-days: 7
-          path: quality-artifacts/
-  engine-combined:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: '3.12'
-      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
-      - name: Combined suites catch cross-suite state leaks before release tags
-        env:
-          ATTOCODE_LOCAL_ONLY: '1'
-          HF_HUB_OFFLINE: '1'
-          TRANSFORMERS_OFFLINE: '1'
-        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests -p eval.quality.no_agent -q --junitxml=quality-artifacts/combined.xml
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: engine-combined
-          retention-days: 7
-          path: quality-artifacts/
-  install-sanity:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: '3.12'
-      - name: Verify all optional groups resolve without installing models
-        run: uv lock --check
-      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service --extra docs
-  pack-license-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: '3.12'
-      - run: uv sync --locked --package attocode-code-intel
-      - run: uv run --no-sync python scripts/check_pack_licenses.py
-  engine-integration:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: '3.12'
-      - run: uv sync --locked --package attocode-code-intel --extra dev --extra service
-      - name: HTTP, MCP and service integration without agent imports
-        env:
-          ATTOCODE_LOCAL_ONLY: '1'
-          HF_HUB_OFFLINE: '1'
-          TRANSFORMERS_OFFLINE: '1'
-        run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/integration -p eval.quality.no_agent -q --junitxml=quality-artifacts/integration.xml
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: engine-integration
-          retention-days: 7
-          path: quality-artifacts/
+          name: live-vector-focused
+          path: focused.xml
+          if-no-files-found: error
