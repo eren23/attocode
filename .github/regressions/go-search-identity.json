@@ -54,24 +54,6 @@
         "qualified_input": "true"
       }
     },
-    "test_go_search_identity::test_go_receivers_agree_across_modalities[keyword-same-file]": {
-      "message": "REGRESSION: Go search modalities disagree on receiver identity",
-      "properties": {
-        "qualified_input": "true"
-      }
-    },
-    "test_go_search_identity::test_go_receivers_agree_across_modalities[body-same-file]": {
-      "message": "REGRESSION: Go search modalities disagree on receiver identity",
-      "properties": {
-        "qualified_input": "true"
-      }
-    },
-    "test_go_search_identity::test_go_receivers_agree_across_modalities[default-same-file]": {
-      "message": "REGRESSION: Go search modalities disagree on receiver identity",
-      "properties": {
-        "qualified_input": "true"
-      }
-    },
     "test_go_search_identity::test_go_receivers_agree_across_modalities[fused-same-file]": {
       "message": "REGRESSION: Go search modalities disagree on receiver identity",
       "properties": {

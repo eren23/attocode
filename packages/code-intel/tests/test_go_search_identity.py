@@ -1,7 +1,7 @@
 """Go search labels and fusion retain owners, source spans and cache boundaries."""
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import asdict
 
 import pytest
@@ -110,7 +110,7 @@ def test_go_receivers_agree_across_modalities(tmp_path, monkeypatch, record_prop
 
 
 def cache_rows(path, file):
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn:
         return {table: conn.execute(f'SELECT * FROM {table} WHERE file_path=? ORDER BY 1', (file,)).fetchall()
                 for table in ['kw_docs', 'kw_files', 'body_fts', 'body_files', 'body_file_fts']}
 
@@ -120,7 +120,7 @@ def seed_legacy(root, monkeypatch):
     (root/'unrelated.py').write_text('def untouched(identity):\n    return identity\n')
     with opened(root, monkeypatch) as value:
         path = value._kw_cache_db_path
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn:
         # The old schema4/body5 format has no Go-identity migration markers.
         conn.execute("DELETE FROM metadata WHERE key NOT IN ('schema_version','body_schema_version')")
         for _, name, first, last in EXPECTED:
@@ -142,6 +142,7 @@ def seed_legacy(root, monkeypatch):
                           f'function {bare} (identity)', 'methods.go', first))
             conn.execute('UPDATE body_fts SET chunk_type=?,name=? WHERE file_path=? AND start_line=?',
                          ('function', bare, 'methods.go', first))
+        conn.commit()
     return path
 
 
@@ -176,8 +177,9 @@ def test_unchanged_go_lexical_caches_repair_once(tmp_path, monkeypatch, record_p
 @pytest.mark.parametrize('schema', ['schema_version', 'body_schema_version'])
 def test_future_lexical_cache_stays_unmodified(tmp_path, monkeypatch, record_property, schema):
     path = seed_legacy(tmp_path, monkeypatch)
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn:
         conn.execute('UPDATE metadata SET value=? WHERE key=?', ('999',schema))
+        conn.commit()
     from pathlib import Path
     before = Path(path).read_bytes()
     with opened(tmp_path, monkeypatch, require_body=False) as value:
