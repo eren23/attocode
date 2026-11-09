@@ -81,6 +81,10 @@ class VectorStoreRotationActiveError(RuntimeError):
         )
 
 
+class VectorStoreRevisionChangedError(RuntimeError):
+    """A newer file notification superseded this replacement."""
+
+
 @dataclass(slots=True)
 class VectorEntry:
     """A stored vector with metadata."""
@@ -238,6 +242,14 @@ class VectorStore:
                 last_indexed_at REAL NOT NULL,
                 file_mtime REAL NOT NULL,
                 chunk_count INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS file_states (
+                file_path TEXT PRIMARY KEY, generation INTEGER NOT NULL DEFAULT 0,
+                dirty INTEGER NOT NULL DEFAULT 0, content_sha256 TEXT NOT NULL DEFAULT '',
+                mtime_ns INTEGER NOT NULL DEFAULT 0, size INTEGER NOT NULL DEFAULT 0,
+                ctime_ns INTEGER NOT NULL DEFAULT 0
             )
         """)
         # Store-level metadata (dimension, schema_version, active model, etc.)
@@ -458,9 +470,15 @@ class VectorStore:
             conn.commit()
             self._vec_cache_version += 1
 
-    def upsert_batch(self, entries: list[VectorEntry], *, replace_file: str | None = None) -> None:
+    def upsert_batch(
+        self, entries: list[VectorEntry], *, replace_file: str | None = None,
+        file_mtime: float | None = None, expected_generation: int | None = None,
+        revision: Any = None,
+    ) -> None:
         """Batch upsert, optionally replacing one file atomically after validation."""
         self._guard_writes()
+        if replace_file is None and (file_mtime is not None or expected_generation is not None or revision is not None):
+            raise ValueError('File state requires a replacement target')
         if replace_file is not None:
             ids = [entry.id for entry in entries]
             if (not isinstance(replace_file, str) or not replace_file
@@ -493,6 +511,10 @@ class VectorStore:
                 conn.execute("SAVEPOINT replace_file_vectors")
                 try:
                     self._check_rotation_lock_unlocked()
+                    state = conn.execute('SELECT generation FROM file_states WHERE file_path=?', (replace_file,)).fetchone()
+                    generation = state[0] if state else 0
+                    if expected_generation is not None and generation != expected_generation:
+                        raise VectorStoreRevisionChangedError(replace_file)
                     for offset in range(0, len(ids), 400):
                         batch = ids[offset:offset + 400]
                         placeholders = ",".join("?" for _ in batch)
@@ -503,12 +525,55 @@ class VectorStore:
                             raise ValueError("Vector ID belongs to another file")
                     conn.execute("DELETE FROM vectors WHERE file_path = ?", (replace_file,))
                     conn.executemany(statement, rows)
+                    if file_mtime is not None:
+                        conn.execute(
+                            'INSERT OR REPLACE INTO file_metadata VALUES (?,?,?,?)',
+                            (replace_file, now, file_mtime, len(entries)),
+                        )
+                        conn.execute(
+                            'INSERT OR REPLACE INTO file_states VALUES (?,?,?,?,?,?,?)',
+                            (replace_file, generation, 0,
+                             revision.sha256 if revision else '', revision.mtime_ns if revision else 0,
+                             revision.size if revision else 0, revision.ctime_ns if revision else 0),
+                        )
                     conn.execute("RELEASE SAVEPOINT replace_file_vectors")
                 except Exception:
                     conn.execute("ROLLBACK TO SAVEPOINT replace_file_vectors")
                     conn.execute("RELEASE SAVEPOINT replace_file_vectors")
                     raise
             self._vec_cache_version += 1
+
+    def get_file_states(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            rows = self._get_conn().execute('SELECT * FROM file_states').fetchall()
+        keys = ('generation', 'dirty', 'content_sha256', 'mtime_ns', 'size', 'ctime_ns')
+        return {row[0]: dict(zip(keys, row[1:], strict=True)) for row in rows}
+
+    def mark_file_dirty(self, file_path: str, *, deleted: bool = False) -> int:
+        """Persist invalidation without changing the last successful index metadata."""
+        self._guard_writes()
+        with self._lock:
+            conn = self._get_conn()
+            conn.execute('SAVEPOINT invalidate_vectors')
+            try:
+                self._check_rotation_lock_unlocked()
+                conn.execute(
+                    'INSERT INTO file_states(file_path,generation,dirty) VALUES (?,1,1) '
+                    'ON CONFLICT(file_path) DO UPDATE SET generation=generation+1,dirty=1',
+                    (file_path,),
+                )
+                if deleted:
+                    conn.execute('DELETE FROM vectors WHERE file_path=?', (file_path,))
+                    conn.execute('DELETE FROM file_metadata WHERE file_path=?', (file_path,))
+                generation = conn.execute('SELECT generation FROM file_states WHERE file_path=?', (file_path,)).fetchone()[0]
+                conn.execute('RELEASE SAVEPOINT invalidate_vectors')
+            except Exception:
+                conn.execute('ROLLBACK TO SAVEPOINT invalidate_vectors')
+                conn.execute('RELEASE SAVEPOINT invalidate_vectors')
+                raise
+            if deleted:
+                self._vec_cache_version += 1
+            return generation
 
     def get_file_chunk_ids(self, file_path: str) -> set[str]:
         """Read one file's persisted identities without loading vector blobs."""
@@ -647,6 +712,12 @@ class VectorStore:
         # process (e.g. EmbeddingRotator.cutover in a separate MCP
         # worker) before consulting the in-memory cache.
         self._check_external_cache_bump()
+        dirty = {p for p, state in self.get_file_states().items() if state['dirty']}
+        if dirty:
+            if existing_files is None:
+                with self._lock:
+                    existing_files = {r[0] for r in self._get_conn().execute('SELECT DISTINCT file_path FROM vectors')}
+            existing_files = existing_files - dirty
 
         if _HAS_NUMPY:
             return self._search_numpy(query_vector, top_k, file_filter, existing_files)
@@ -800,10 +871,11 @@ class VectorStore:
                 "SELECT file_path, file_mtime FROM file_metadata"
             ).fetchall()
         indexed = {row[0]: row[1] for row in rows}
+        dirty = {p for p, state in self.get_file_states().items() if state['dirty']}
         stale: list[str] = []
         for fpath, current_mtime in file_mtimes.items():
             stored_mtime = indexed.get(fpath)
-            if stored_mtime is None or current_mtime > stored_mtime:
+            if fpath in dirty or stored_mtime is None or current_mtime != stored_mtime:
                 stale.append(fpath)
         return stale
 

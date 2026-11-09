@@ -221,13 +221,10 @@ def notify_file_changed(files: list[str]) -> str:
             svc.notify_file_changed(rel)
             # Also invalidate semantic search embeddings
             try:
-                smgr = _semantic_search
-                if smgr is None:
-                    from attocode_intel.tools.search_tools import _get_semantic_search
-                    smgr = _get_semantic_search()
+                from attocode_intel.tools.search_tools import _get_semantic_search
+                smgr = _get_semantic_search()
                 abs_path = os.path.join(project_dir, rel)
-                smgr.invalidate_file(abs_path)
-                smgr.queue_reindex(abs_path)
+                smgr.handle_file_change(abs_path)
             except Exception:
                 pass
             # Also invalidate trigram index
@@ -314,13 +311,10 @@ def _process_notification_queue_locked() -> int:
         try:
             svc.notify_file_changed(norm)
             try:
-                smgr = _semantic_search
-                if smgr is None:
-                    from attocode_intel.tools.search_tools import _get_semantic_search
-                    smgr = _get_semantic_search()
+                from attocode_intel.tools.search_tools import _get_semantic_search
+                smgr = _get_semantic_search()
                 abs_path = os.path.join(project_dir, norm)
-                smgr.invalidate_file(abs_path)
-                smgr.queue_reindex(abs_path)
+                smgr.handle_file_change(abs_path)
             except Exception:
                 pass
             try:
@@ -433,8 +427,7 @@ def _start_file_watcher(project_dir: str, *, debounce_ms: int = 500) -> None:
                                 )
 
                                 smgr = _get_semantic_search()
-                                smgr.invalidate_file(path_str)
-                                smgr.queue_reindex(path_str)
+                                smgr.handle_file_change(path_str)
                             except Exception:
                                 pass
                             try:
