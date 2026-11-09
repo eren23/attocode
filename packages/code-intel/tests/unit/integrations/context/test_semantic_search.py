@@ -653,6 +653,7 @@ class TestRRFMergePath:
         # Mock vector store with results (matching model so mismatch guard stays off)
         store = MagicMock()
         store.model_name = "local:test-model"
+        store.degraded = False
         store.count.return_value = 100
         vector_result = MagicMock()
         vector_result.id = "func:src/auth.py:authenticate"

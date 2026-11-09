@@ -2764,6 +2764,14 @@ class SemanticSearchManager:
                     if rel_path.lower().endswith('.py'):
                         import ast as python_ast
                         python_ast.parse(content)
+                    elif ast.parsing_tier == 'tree_sitter':
+                        from attocode_intel._internal.integrations.context.syntax_evidence import (
+                            syntax_tree,
+                        )
+                        tree = syntax_tree(abs_path, content, ast.language)
+                        if (tree is None or tree.root_node.has_error
+                                or tree.root_node.end_byte != len(content.encode())):
+                            raise ValueError('Incomplete native source')
                     if ast.parse_failures:
                         raise ValueError('Incomplete source metadata')
         except ValueError:
@@ -2990,8 +2998,13 @@ class SemanticSearchManager:
         except Exception:
             pass
         if self._store:
-            self._store.mark_file_dirty(rel, deleted=removed or self._workspace_file(absolute) is None
-                                        or not os.path.isfile(absolute))
+            try:
+                self._store.mark_file_dirty(rel, deleted=removed or self._workspace_file(absolute) is None
+                                            or not os.path.isfile(absolute))
+            except Exception as exc:
+                self._index_progress.degraded_reason = 'vector_invalidation_failed'
+                self._index_progress.last_error = f'{type(exc).__name__}: {exc}'
+                logger.debug('Optional vector invalidation refused: %s', rel, exc_info=True)
 
     def handle_file_change(self, file_path: str, *, removed: bool = False) -> None:
         """One local notification contract; never initialize an optional model."""
@@ -3126,8 +3139,11 @@ class SemanticSearchManager:
             return IndexProgress(
                 total_files=total,
                 indexed_files=indexed,
+                failed_files=self._index_progress.failed_files,
                 coverage=round(coverage, 3),
                 status="completed" if coverage >= 0.99 else "idle",
+                degraded_reason=self._index_progress.degraded_reason,
+                last_error=self._index_progress.last_error,
             )
         return self._index_progress
 

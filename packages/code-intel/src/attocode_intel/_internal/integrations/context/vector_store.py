@@ -421,7 +421,7 @@ class VectorStore:
     def _check_external_cache_bump(self) -> None:
         """Pick up cache invalidations from other processes.
 
-        ``EmbeddingRotator.cutover()`` writes ``_rotator_cache_ver`` into
+        Ordinary writes and ``EmbeddingRotator.cutover()`` advance ``_rotator_cache_ver`` in
         ``store_metadata`` to signal already-open ``VectorStore`` instances
         to reload their in-memory numpy matrix. We compare the stored
         value against the last seen and bump the local
@@ -442,10 +442,11 @@ class VectorStore:
             external = int(row[0])
         except (TypeError, ValueError):
             return
-        if external > self._last_external_cache_ver:
-            self._last_external_cache_ver = external
-            # Bump the local version so _search_numpy reloads.
-            self._vec_cache_version += 1
+        with self._lock:
+            if external > self._last_external_cache_ver:
+                self._last_external_cache_ver = external
+                # Bump the local version so _search_numpy reloads.
+                self._vec_cache_version += 1
 
     def upsert(self, entry: VectorEntry) -> None:
         """Insert or update a vector entry."""
@@ -467,6 +468,7 @@ class VectorStore:
                     now, entry.blob_oid, entry.action_hash,
                 ),
             )
+            self._publish_change_unlocked(conn)
             conn.commit()
             self._vec_cache_version += 1
 
@@ -506,6 +508,7 @@ class VectorStore:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             if replace_file is None:
                 conn.executemany(statement, rows)
+                self._publish_change_unlocked(conn)
                 conn.commit()
             else:
                 conn.execute("SAVEPOINT replace_file_vectors")
@@ -536,12 +539,21 @@ class VectorStore:
                              revision.sha256 if revision else '', revision.mtime_ns if revision else 0,
                              revision.size if revision else 0, revision.ctime_ns if revision else 0),
                         )
+                    self._publish_change_unlocked(conn)
                     conn.execute("RELEASE SAVEPOINT replace_file_vectors")
                 except Exception:
                     conn.execute("ROLLBACK TO SAVEPOINT replace_file_vectors")
                     conn.execute("RELEASE SAVEPOINT replace_file_vectors")
                     raise
             self._vec_cache_version += 1
+
+    @staticmethod
+    def _publish_change_unlocked(conn) -> None:
+        """Publish ordinary writes through the existing cross-connection counter."""
+        conn.execute(
+            "INSERT INTO store_metadata(key,value) VALUES ('_rotator_cache_ver','1') "
+            'ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1',
+        )
 
     def get_file_states(self) -> dict[str, dict[str, Any]]:
         with self._lock:
@@ -565,6 +577,7 @@ class VectorStore:
                 if deleted:
                     conn.execute('DELETE FROM vectors WHERE file_path=?', (file_path,))
                     conn.execute('DELETE FROM file_metadata WHERE file_path=?', (file_path,))
+                    self._publish_change_unlocked(conn)
                 generation = conn.execute('SELECT generation FROM file_states WHERE file_path=?', (file_path,)).fetchone()[0]
                 conn.execute('RELEASE SAVEPOINT invalidate_vectors')
             except Exception:
@@ -589,6 +602,7 @@ class VectorStore:
             cursor = conn.execute(
                 "DELETE FROM vectors WHERE file_path = ?", (file_path,),
             )
+            self._publish_change_unlocked(conn)
             conn.commit()
             self._vec_cache_version += 1
             return cursor.rowcount
@@ -608,6 +622,7 @@ class VectorStore:
         with self._lock:
             cursor = conn.execute("DELETE FROM vectors")
             conn.execute("DELETE FROM file_metadata")
+            self._publish_change_unlocked(conn)
             conn.commit()
             self._vec_cache_version += 1
             return cursor.rowcount
@@ -633,6 +648,7 @@ class VectorStore:
                     "DELETE FROM vectors WHERE model_name = ?",
                     (model_name,),
                 )
+            self._publish_change_unlocked(conn)
             conn.commit()
             self._vec_cache_version += 1
             return cursor.rowcount
@@ -648,12 +664,7 @@ class VectorStore:
             rows = conn.execute(
                 "SELECT id, file_path, chunk_type, name, text, vector FROM vectors",
             ).fetchall()
-
-        if not rows:
-            self._vec_matrix = np.empty((0, self.dimension), dtype=np.float32)
-            self._vec_meta = []
-            self._vec_loaded_version = self._vec_cache_version
-            return
+            version = self._vec_cache_version
 
         meta: list[tuple] = []
         vecs: list[np.ndarray] = []
@@ -666,12 +677,11 @@ class VectorStore:
             except (ValueError, struct.error):
                 logger.warning("Skipping corrupt vector row id=%s", row[0])
 
-        if vecs:
-            self._vec_matrix = np.vstack(vecs)
-        else:
-            self._vec_matrix = np.empty((0, self.dimension), dtype=np.float32)
-        self._vec_meta = meta
-        self._vec_loaded_version = self._vec_cache_version
+        matrix = np.vstack(vecs) if vecs else np.empty((0, self.dimension), dtype=np.float32)
+        with self._lock:
+            self._vec_matrix = matrix
+            self._vec_meta = meta
+            self._vec_loaded_version = version
         logger.debug(
             "Vector cache loaded: %d vectors (%d dim)",
             len(meta), self.dimension,
@@ -734,20 +744,21 @@ class VectorStore:
         # Ensure cache is current
         if self._vec_loaded_version != self._vec_cache_version or self._vec_matrix is None:
             self._load_vector_cache()
-
-        if self._vec_matrix is None or len(self._vec_matrix) == 0:
+        with self._lock:
+            matrix, metadata = self._vec_matrix, self._vec_meta
+        if matrix is None or len(matrix) == 0:
             return []
 
         query_np = np.array(query_vector, dtype=np.float32)
 
         # Batch cosine similarity — single BLAS matmul
-        scores = _batch_cosine_similarity(query_np, self._vec_matrix)
+        scores = _batch_cosine_similarity(query_np, matrix)
 
         # Apply filters by zeroing out excluded entries
         if file_filter or existing_files is not None:
             import fnmatch
 
-            for i, meta in enumerate(self._vec_meta):
+            for i, meta in enumerate(metadata):
                 fp = meta[1]  # file_path
                 if existing_files is not None and fp not in existing_files:  # noqa: SIM114 — clearer as two branches than one combined or
                     scores[i] = -1.0
@@ -767,7 +778,7 @@ class VectorStore:
             s = float(scores[idx])
             if s <= 0:
                 break
-            m = self._vec_meta[idx]
+            m = metadata[idx]
             results.append(SearchResult(
                 id=m[0], file_path=m[1], chunk_type=m[2],
                 name=m[3], text=m[4], score=round(s, 4),

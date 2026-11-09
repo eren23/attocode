@@ -35,6 +35,7 @@ def test_model_match_allows_vector_search(tmp_path, monkeypatch):
     store = MagicMock()
     store.count.return_value = 5
     store.model_name = "local:nomic-embed-text-v1.5"
+    store.degraded = False
     store.search.return_value = []
     mgr._store = store
     monkeypatch.setattr(SemanticSearchManager, "_ensure_provider", lambda self: None)
