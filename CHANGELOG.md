@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Go named types retain every declaration and alias in grouped blocks, with
+  individual source ranges and documentation. Local/blank types stay out of
+  module symbols; interface and receiver methods keep their actual type owner,
+  including receivers written before the type declaration.
 - Go module bindings include every declared name in grouped `var`/`const`
   declarations and parenthesized blocks. Function and receiver locals, blank
   identifiers and initializer contents do not become global symbols.
@@ -42,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Four unchanged pinned Gson sources cover real Java dollar-sign declarations,
-  calls, imports, selected test references and signature metadata. The native gate requires 89 cases,
+  calls, imports, selected test references and signature metadata. The native gate requires 90 cases,
   including all eight navigation checks for the added Gson workflow. Same-package
   calls without an explicit binding remain unresolved candidates.
 - An unchanged pinned Redis source provides four real C parameter-signature
@@ -51,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standalone Go grammar provenance and a complete cached restart without parsing.
   A scope witness checks that its function-local variable stays out of the global
   index before and after a cached restart.
+- An unchanged pinned Go AST source checks five grouped types, 15 owned methods,
+  standalone grammar identity and complete cached AST/symbol reuse without parsing.
 
 ## [Intelligence 0.1.29] - 2026-11-08
 

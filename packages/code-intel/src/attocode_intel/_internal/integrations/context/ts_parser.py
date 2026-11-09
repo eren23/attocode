@@ -1507,6 +1507,51 @@ def _cpp_header_tree(source_bytes, file_path, language, tree):
     return "cpp", (bounded_parse(parser, bytes(masked)) or candidate) if changed else candidate
 
 
+def _go_type_classes(root, source_bytes: bytes) -> list[dict]:
+    """Collect module type bindings before associating receiver methods."""
+    classes = []
+    for declaration in root.named_children:
+        if declaration.type != "type_declaration":
+            continue
+        declaration_doc = _find_go_doc_comment(declaration, source_bytes)
+        for spec in declaration.named_children:
+            if spec.type not in {"type_spec", "type_alias"}:
+                continue
+            identifier = spec.child_by_field_name("name")
+            name = _node_text(identifier, source_bytes) if identifier is not None else ""
+            if not name or name == "_":
+                continue
+            cls = {"name": name, "bases": [], "methods": [], "decorators": [],
+                   "start_line": spec.start_point[0] + 1, "end_line": spec.end_point[0] + 1}
+            doc = _find_go_doc_comment(spec, source_bytes) or declaration_doc
+            if doc:
+                cls["docstring"] = doc
+            body = spec.child_by_field_name("type")
+            if body is not None and body.type == "interface_type":
+                for method in body.named_children:
+                    if method.type != "method_elem":
+                        continue
+                    method_name = _find_name(method, source_bytes)
+                    if not method_name or method_name == "_":
+                        continue
+                    param_types = {}
+                    rest_parameters = set()
+                    params = _find_parameters(method, source_bytes, param_types,
+                                              language="go", rest=rest_parameters)
+                    data = {"name": method_name, "parameters": params,
+                            "return_type": _find_return_type(method, source_bytes, language="go"),
+                            "start_line": method.start_point[0] + 1, "end_line": method.end_point[0] + 1,
+                            "is_async": False, "decorators": [],
+                            "visibility": _get_visibility(method_name, "go"), "parent_class": name}
+                    if param_types:
+                        data["param_types"] = param_types
+                    if rest_parameters:
+                        data["rest_parameters"] = sorted(rest_parameters)
+                    cls["methods"].append(data)
+            classes.append(cls)
+    return classes
+
+
 @functools.lru_cache(maxsize=8)
 def _go_declaration_query(grammar):
     from tree_sitter import Query
@@ -1519,10 +1564,9 @@ def _go_declaration_query(grammar):
 def _go_declaration_paths(root, grammar):
     """Keep the existing extractor's paths, locating declarations in native code.
 
-    Go bodies can contain local types/consts/vars, including in function literals.
-    Skipping bodies would lose those. Capture their ancestor paths instead of
-    visiting every expression and punctuation node in Python. A query failure
-    falls back to the complete traversal, including on older bindings.
+    Module types are collected separately. Retain the declaration ancestor paths
+    for the function/import/variable walk instead of visiting every expression
+    and punctuation node. Query failure falls back to the complete traversal.
     """
     try:
         import tree_sitter
@@ -1588,7 +1632,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
     declaration_paths = _go_declaration_paths(root, parser.language) if language == "go" else None
 
     functions: list[dict] = []
-    classes: list[dict] = []
+    classes: list[dict] = _go_type_classes(root, source_bytes) if language == "go" else []
     imports: list[dict] = _literal_call_imports(root, source_bytes, language)
     top_level_vars: list[str] = []
 
@@ -1597,6 +1641,10 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
         if declaration_paths is not None and node.id not in declaration_paths:
             return
         ntype = node.type
+        if language == "go" and ntype == "type_declaration":
+            # Module types were collected before functions; local types are not
+            # module bindings and must not shadow a receiver's actual owner.
+            return
 
         # A CommonJS assignment names its function through the left-hand side.
         if language in ("javascript", "typescript") and ntype == "call_expression":
@@ -1754,12 +1802,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                     "end_line": node.end_point[0] + 1,
                 }
 
-                # Go: extract doc comment for type declarations
-                if language == "go":
-                    docstring = _find_go_doc_comment(node, source_bytes)
-                    if docstring:
-                        cls_data["docstring"] = docstring
-                elif language == "python":
+                if language == "python":
                     docstring = _find_python_docstring(node, source_bytes)
                     if docstring:
                         cls_data["docstring"] = docstring
@@ -1775,41 +1818,6 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                     for child in node.children:
                         _process_node(child, parent_class=name)
 
-                # Go interface methods: type_declaration → type_spec → interface_type → method_elem
-                if language == "go":
-                    for child in node.children:
-                        if child.type == "type_spec":
-                            for gchild in child.children:
-                                if gchild.type == "interface_type":
-                                    for method in gchild.children:
-                                        if method.type == "method_elem":
-                                            # Name is in field_identifier child
-                                            mname = ""
-                                            for mc in method.children:
-                                                if mc.type == "field_identifier":
-                                                    mname = _node_text(mc, source_bytes)
-                                                    break
-                                            if not mname:
-                                                mname = _find_name(method, source_bytes)
-                                            if mname:
-                                                param_types = {}
-                                                rest_parameters = set()
-                                                params = _find_parameters(method, source_bytes, param_types,
-                                                                          language="go", rest=rest_parameters)
-                                                fn_data = {
-                                                    "name": mname, "parameters": params,
-                                                    "return_type": _find_return_type(method, source_bytes, language="go"),
-                                                    "start_line": method.start_point[0] + 1,
-                                                    "end_line": method.end_point[0] + 1,
-                                                    "is_async": False, "decorators": [],
-                                                    "visibility": "public",
-                                                    "parent_class": name,
-                                                }
-                                                if param_types:
-                                                    fn_data["param_types"] = param_types
-                                                if rest_parameters:
-                                                    fn_data["rest_parameters"] = sorted(rest_parameters)
-                                                cls_data["methods"].append(fn_data)
                 return
 
         # Imports
@@ -2013,6 +2021,9 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
     # Process top-level nodes
     for child in root.children:
         _process_node(child)
+    if language == "go":
+        for cls in classes:
+            cls["methods"].sort(key=lambda method: method["start_line"])
 
     # Data/config language extraction: extract top-level keys as vars
     if language in ("yaml", "toml", "json"):
