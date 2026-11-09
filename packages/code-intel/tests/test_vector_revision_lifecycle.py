@@ -378,3 +378,24 @@ def test_manager_reconciles_newer_durable_revision(tmp_path, monkeypatch, record
             assert progress.indexed_files == 2 and progress.coverage == 1.0 and 'target.py' not in s.value._invalidated_files, 'REGRESSION: memory invalidation hid newer durable revision'
         finally:
             other.close()
+
+
+def test_python_stub_fallback_uses_builtin_syntax_validation(tmp_path, monkeypatch, record_property):
+    from attocode_intel._internal.integrations.context import ts_parser
+    with workspace(tmp_path, monkeypatch) as s:
+        path = tmp_path / 'target.pyi'
+        path.write_text('def original() -> int: ...\n')
+        s.value.reindex_file(str(path))
+        before, metadata = rows(s.value, 'target.pyi'), s.value._store.get_file_metadata('target.pyi')
+        assert len(before) == 2
+        path.write_text('def broken(')
+        monkeypatch.setattr(ts_parser, '_get_parser', lambda language: None)
+        ast = parse_file(str(path), 'def broken(')
+        assert ast.language == 'python' and ast.parsing_tier == 'regex' and not ast.parse_failures
+        s.value.reindex_file(str(path))
+        actual, after_metadata = rows(s.value, 'target.pyi'), s.value._store.get_file_metadata('target.pyi')
+        record_property('observed', json.dumps({'before': before, 'after': actual, 'metadata': metadata,
+                                               'after_metadata': after_metadata, 'language': ast.language,
+                                               'tier': ast.parsing_tier}))
+        record_property('qualified_input', 'true')
+        assert actual == before and metadata == after_metadata, 'REGRESSION: Python stub fallback erased prior vectors'
