@@ -368,10 +368,6 @@ class TestGoConstVar:
         assert result is not None
         assert "GlobalConfig" in result["top_level_vars"]
 
-    @pytest.mark.xfail(
-        reason="Parenthesized var blocks use var_spec_list wrapper; "
-        "current code only checks direct children for var_spec",
-    )
     def test_var_block(self) -> None:
         code = (
             "package main\n"

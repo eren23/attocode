@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Go module bindings include every declared name in grouped `var`/`const`
+  declarations and parenthesized blocks. Function and receiver locals, blank
+  identifiers and initializer contents do not become global symbols.
 - AST diffs detect detailed parameter changes while retaining legacy parameter
   lists. Refresh updates cached source and callers for body-only edits, including
   edits with unchanged size and mtime, without inventing signature-change events.
@@ -36,13 +39,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Four unchanged pinned Gson sources cover real Java dollar-sign declarations,
-  calls, imports, selected test references and signature metadata. The native gate requires 88 cases,
+  calls, imports, selected test references and signature metadata. The native gate requires 89 cases,
   including all eight navigation checks for the added Gson workflow. Same-package
   calls without an explicit binding remain unresolved candidates.
 - An unchanged pinned Redis source provides four real C parameter-signature
   witnesses, with standalone C grammar provenance and cached-restart coverage.
 - An unchanged pinned CLI source provides three real Go signature witnesses,
   standalone Go grammar provenance and a complete cached restart without parsing.
+  A scope witness checks that its function-local variable stays out of the global
+  index before and after a cached restart.
 
 ## [Intelligence 0.1.29] - 2026-11-08
 
