@@ -96,6 +96,8 @@ async def test_long_rust_reload_recovers_on_a_later_request(
         record_property('partial_precision', json.dumps(p))
         assert 4.0 <= elapsed < 5.8
         assert p['status'] == 'partial' and p['queries'][0]['status'] == 'not_resolved'
+        assert any(r['file_path'] == 'caller.rs' and r['line'] == 3 and r['source'] != 'lsp'
+                   for r in partial['data']['references'])
         assert not any(r['file_path'] == 'caller.rs' and r['line'] == 2 and r['source'] == 'lsp'
                        for r in partial['data']['references'])
         sent = _events(journal)
