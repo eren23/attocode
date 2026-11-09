@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "engine_commit": "c54513a987b3ec29c0f9dfb2cad4daa511690715",
+  "engine_version": "0.1.31",
+  "scope": "One source-exposed baseline diagnostic, six new questions across three immutable repositories. No candidate or blind quality claim.",
+  "profile": "daily",
+  "mode": "auto",
+  "primary": {"top_k": 10, "max_tokens": 2000},
+  "deep": {"top_k": 24, "max_tokens": 8000},
+  "scoped": {"top_k": 5, "max_tokens": 4000},
+  "order": "Warm each fresh owned workspace using a non-frozen sentinel. Issue all six primaries before any deep/scoped or label-guided requests. Then issue deep/scoped per case. No question repetition beyond these frozen page roles.",
+  "limits": {"payload_seconds": 900, "aggregate_rss_bytes": 2147483648, "owned_disk_bytes": 2147483648, "evidence_bytes": 67108864, "outer_minutes": 30},
+  "providers": "Hosted and local model ranking off, embeddings off, precision off, offline model envs; ordinary lexical/body/auto producer unchanged.",
+  "capture": "Durably mark question issued before gateway request; preserve RAW envelopes before validation, stage ranks, selected identities, source-coordinate policies, exact Git/engine/origin before and after, partial records and owned cleanup.",
+  "labels": "File presence, enclosing span and literal quote are separate automatic metrics. Manual source-bound assessment of complete requested guard/effect and equivalent answers controls actionable misses. Labels are non-exhaustive; no answer-quality inference from a file hit alone.",
+  "eligibility": {"minimum_actionable_first_page_misses": 2, "minimum_distinct_repositories": 2, "mechanism": "At least two misses in two repos attributable to the same distinct, previously untested mechanism; exclude all closed historical hypotheses.", "outcome_if_ineligible": "Close with bounded diagnosis and continue release reconciliation.", "outcome_if_eligible": "Write a separate prospective experiment design with causal, no-loss, development/holdout and latency gates. Do not implement a candidate under this plan."},
+  "retry": "No automatic scored retry, tuning or old-question reuse; partial requests remain consumed. Infrastructure-only correction allowed only if zero real queries were issued.",
+  "reserved_holdout": "Existing 24 unissued questions stay unissued and are not pilot inputs.",
+  "prelaunch": "Independent semantic freshness/source/pin/protocol review and prospective online controls for materially new harness paths required before any frozen query."
+}

@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "scope": "Implementer-authored source-exposed diagnostic; not blind validation, candidate comparison, quality or agent-benefit evidence.",
+  "engine_commit": "c54513a987b3ec29c0f9dfb2cad4daa511690715",
+  "engine_version": "0.1.31",
+  "repositories": [
+    {
+      "id": "attrs",
+      "repo": "python-attrs/attrs",
+      "commit": "9d9f94a043de7fc4012459853a4ed597a5577855",
+      "language": "python"
+    },
+    {
+      "id": "p-limit",
+      "repo": "sindresorhus/p-limit",
+      "commit": "a8a6fbec4e0e866d6d779b10889bb4f5567e70eb",
+      "language": "javascript"
+    },
+    {
+      "id": "golang-lru",
+      "repo": "hashicorp/golang-lru",
+      "commit": "2bb29091a6c341aba625d23fea354c4fbaef5d6f",
+      "language": "go"
+    }
+  ],
+  "cases": [
+    {
+      "id": "attrs-dict-key",
+      "repo_id": "attrs",
+      "query": "When converting an object to a dictionary, where are collection-valued dictionary keys kept as tuples even though ordinary collection values become lists?",
+      "symbol": "_asdict_anything",
+      "evidence": [
+        {
+          "file": "src/attr/_funcs.py",
+          "line": 181,
+          "quote": "        elif is_key:",
+          "start_line": 178,
+          "end_line": 184,
+          "source_sha256": "eb6623ffeb7a3052483a39635fda25da4ebbe36e4ca6d8dfe66d6e02d8ed9b88"
+        }
+      ],
+      "answer_contract": "Show the key-specific tuple branch and contrasting list branch when retain_collection_types is false.",
+      "alternate_answers": "Source-bound equivalent guards are manually assessed; labels are non-exhaustive."
+    },
+    {
+      "id": "attrs-generic-metadata",
+      "repo_id": "attrs",
+      "query": "When a specialized generic lacks its own attrs metadata, where is metadata copied from its generic base so later checks can return directly?",
+      "symbol": "has",
+      "evidence": [
+        {
+          "file": "src/attr/_funcs.py",
+          "line": 375,
+          "quote": "            cls.__attrs_attrs__ = generic_attrs",
+          "start_line": 365,
+          "end_line": 376,
+          "source_sha256": "eb6623ffeb7a3052483a39635fda25da4ebbe36e4ca6d8dfe66d6e02d8ed9b88"
+        }
+      ],
+      "answer_contract": "Show absence check, generic base lookup and caching generic_attrs on cls; generic type support alone is insufficient.",
+      "alternate_answers": "Source-bound equivalent guards are manually assessed; labels are non-exhaustive."
+    },
+    {
+      "id": "limit-iterable-throws",
+      "repo_id": "p-limit",
+      "query": "If iteration throws while mapping work, where are already scheduled promises observed to prevent unhandled rejections before the original iteration error is rethrown?",
+      "symbol": "pLimit",
+      "evidence": [
+        {
+          "file": "index.js",
+          "line": 119,
+          "quote": "\t\t\t\t\t\tpromise.catch(() => {}); // eslint-disable-line promise/prefer-await-to-then",
+          "start_line": 116,
+          "end_line": 123,
+          "source_sha256": "edde12a4a4dbdbe8d27161cdd0853db0bab435d5dc6c15f9f4dedc27ee9bca60"
+        }
+      ],
+      "answer_contract": "Show the iterable-error catch, observer attachment for accumulated promises, and rethrow. Ordinary task rejection handling is a different guard.",
+      "alternate_answers": "Source-bound equivalent guards are manually assessed; labels are non-exhaustive."
+    },
+    {
+      "id": "limit-async-context",
+      "repo_id": "p-limit",
+      "query": "Where is the submitter's asynchronous execution context preserved by queuing an internal promise resolver instead of the task runner?",
+      "symbol": "enqueue",
+      "evidence": [
+        {
+          "file": "index.js",
+          "line": 56,
+          "quote": "\t\t\tqueueItem.run = internalResolve;",
+          "start_line": 53,
+          "end_line": 58,
+          "source_sha256": "edde12a4a4dbdbe8d27161cdd0853db0bab435d5dc6c15f9f4dedc27ee9bca60"
+        }
+      ],
+      "answer_contract": "Show the queued internal resolver and then-bound run function, not just general queue concurrency control.",
+      "alternate_answers": "Source-bound equivalent guards are manually assessed; labels are non-exhaustive."
+    },
+    {
+      "id": "lru-callback-unlock",
+      "repo_id": "golang-lru",
+      "query": "Where are evicted key/value pairs buffered so a user callback runs after the cache mutex has been released?",
+      "symbol": "Cache.Add",
+      "evidence": [
+        {
+          "file": "lru.go",
+          "line": 89,
+          "quote": "\t\tc.onEvictedCB(k, v)",
+          "start_line": 81,
+          "end_line": 90,
+          "source_sha256": "529954c22649f0ecac5de6799af5316a91efde4c60e618582815ab3934238879"
+        }
+      ],
+      "answer_contract": "Accept equivalent Purge/Remove/Resize/RemoveOldest/ContainsOrAdd/PeekOrAdd paths that capture buffered values under the lock and invoke the user callback after unlock; onEvicted buffering helper alone is incomplete.",
+      "alternate_answers": "Source-bound equivalent guards are manually assessed; labels are non-exhaustive."
+    },
+    {
+      "id": "lru-ghost-reinsert",
+      "repo_id": "golang-lru",
+      "query": "When a previously evicted key is added again, where is its ghost-history entry removed and its value promoted directly into the frequent queue?",
+      "symbol": "TwoQueueCache.Add",
+      "evidence": [
+        {
+          "file": "2q.go",
+          "line": 140,
+          "quote": "\t\tc.recentEvict.Remove(key)",
+          "start_line": 136,
+          "end_line": 142,
+          "source_sha256": "e96f5a18839b9c6c644485fa859518825dd7d20bfe00a605f9f20d2196862c94"
+        }
+      ],
+      "answer_contract": "Show recentEvict.Contains predicate followed by ensureSpace(true), ghost removal and frequent.Add. Ordinary capacity eviction or recent-entry promotion alone is incomplete.",
+      "alternate_answers": "Source-bound equivalent guards are manually assessed; labels are non-exhaustive."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "experiment": "fresh-six",
+  "scope": "One frozen source-exposed baseline diagnostic; no candidate comparison or quality claim.",
+  "questions": "eval/quality/fresh_six_questions.json",
+  "protocol": "eval/quality/fresh_six_protocol.json",
+  "limits": {
+    "seconds": 900,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  }
+}
