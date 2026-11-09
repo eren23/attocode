@@ -1,6 +1,7 @@
 """Configured Perl roots resolve only physically discovered workspace modules."""
 import hashlib
 import json
+import shutil
 import tomllib
 from pathlib import Path
 
@@ -56,9 +57,13 @@ def _write_config(root, roots, **other):
 
 
 @pytest.mark.parametrize('case', ROOT_CASES, ids=[c['id'] for c in ROOT_CASES])
-def test_perl_roots_follow_explicit_workspace_policy(tmp_path, record_property, case):
+def test_perl_roots_follow_explicit_workspace_policy(tmp_path, record_property, request, case):
     root, outside = tmp_path / 'repo', tmp_path / 'outside'
     root.mkdir()
+    if case['id'] == 'quoted-root':
+        # Preserve quoted input bytes in XML below; GitHub's artifact transport
+        # cannot carry this filename. Only this fixture owns the directory.
+        request.addfinalizer(lambda: shutil.rmtree(root))
     (outside / 'Acme').mkdir(parents=True)
     (outside / LEAF).write_text('package Acme::Widget; sub outside { 0 }\n1;\n')
     for name in [*case['paths'], 'consumer.t']:
@@ -93,6 +98,8 @@ def test_perl_roots_follow_explicit_workspace_policy(tmp_path, record_property, 
     actual = resolve_import_targets('perl', MODULE, 'consumer.t', index)
     record_property('qualified_input', 'true')
     record_property('physical_files', json.dumps(sorted(physical)))
+    record_property('fixture_sources', json.dumps({f.relative_path: Path(f.path).read_text()
+                                                 for f in files}))
     record_property('expected_candidates', json.dumps(case['expected']))
     record_property('actual_candidates', json.dumps(actual))
     record_property('config_sha256', hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else 'absent')
