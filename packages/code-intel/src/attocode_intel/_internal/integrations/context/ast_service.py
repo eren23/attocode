@@ -215,141 +215,15 @@ class ASTService:
     # ------------------------------------------------------------------
 
     def initialize(self, *, force: bool = False) -> None:
-        """Discover files, parse ASTs, build cross-ref index.
-
-        When a persistent ``IndexStore`` is available and *force* is False,
-        loads cached symbols/refs from SQLite and only re-parses files whose
-        mtime has changed (incremental mode).  Otherwise does a full scan.
-        """
-        self._store.set_meta(SNAPSHOT_KEY, "")
-        self._snapshot_start = None
-        from attocode_intel.telemetry import measure
-        with measure("discovery"):
-            files = self._context_mgr.discover_files()
-        self._index = CrossRefIndex()
-        self._index.set_store(self._store)
-        self._ast_cache.clear()
-
-        # Supported languages
-        _ts_langs: set[str] = set()
+        """Build a complete index, reusing only source/parser-validated snapshots."""
         try:
-            from attocode_intel._internal.integrations.context.ts_parser import supported_languages
-            _ts_langs = set(supported_languages())
-        except ImportError:
-            pass
-        _supported = {"python", "javascript", "typescript", "shell"} | _ts_langs
-
-        # Build mtime map for parseable files
-        parseable: list[Any] = []
-        mtime_map: dict[str, float] = {}
-        for fi in files:
-            lang = fi.language
-            if lang == "shell":
-                lang = "bash"
-            if lang not in _supported:
-                continue
-            parseable.append(fi)
-            try:
-                mtime_map[fi.relative_path] = os.path.getmtime(fi.path)
-            except OSError:
-                mtime_map[fi.relative_path] = 0.0
-
-        # Try incremental load from store
-        last_scan = self._store.get_last_scan_time() if not force else None
-        if last_scan is not None and not force:
-            try:
-                loaded = self._index.load_from_store()
-                if loaded > 0:
-                    stale = self._store.get_stale_files(mtime_map)
-                    deleted = self._store.get_deleted_files(set(mtime_map.keys()))
-
-                    for d in deleted:
-                        self._index.remove_file(d)
-
-                    stale_set = set(stale)
-                    for fi in parseable:
-                        rel = fi.relative_path
-                        if rel in stale_set:
-                            try:
-                                ast = parse_file(fi.path)
-                            except Exception:
-                                continue
-                            self._index.remove_file(rel)
-                            self._ast_cache[rel] = ast
-                            self._index_definitions(rel, ast)
-
-                    dep_graph = self._context_mgr.dependency_graph
-                    if dep_graph:
-                        for src, targets in dep_graph.forward.items():
-                            for tgt in targets:
-                                self._index.add_file_dependency(src, tgt)
-
-                    for rel in stale_set:
-                        ast = self._ast_cache.get(rel)
-                        if ast:
-                            self._index_references(rel, ast)
-                            self._persist_indexed_file(rel, ast, mtime_map.get(rel, 0.0))
-
-                    self._initialized = True
-                    self._store.record_scan_time()
-                    logger.debug(
-                        "ASTService incremental init: %d cached, %d stale, %d deleted",
-                        loaded, len(stale), len(deleted),
-                    )
-                    return
-            except sqlite3.IntegrityError:
-                if force:
-                    raise
-                logger.warning(
-                    "ASTService incremental init hit sqlite integrity error; rebuilding index",
-                    exc_info=True,
-                )
-                self._store.clear_all()
-                self.initialize(force=True)
-                return
-
-        # Full scan fallback
-        self._store.clear_all()
-        for fi in parseable:
-            try:
-                ast = parse_file(fi.path)
-            except Exception:
-                continue
-            rel = fi.relative_path
-            self._ast_cache[rel] = ast
-            self._index_definitions(rel, ast)
-
-        # Phase 2: index references
-        for rel, ast in self._ast_cache.items():
-            self._index_references(rel, ast)
-
-        # Copy dependency graph edges
-        dep_graph = self._context_mgr.dependency_graph
-        if dep_graph:
-            edges: list[tuple[str, str]] = []
-            for src, targets in dep_graph.forward.items():
-                for tgt in targets:
-                    self._index.add_file_dependency(src, tgt)
-                    edges.append((src, tgt))
-            if edges:
-                self._store.save_dependencies_batch(edges)
-
-        # Persist all to store — files must be saved BEFORE symbols/refs
-        # (foreign key: symbols.file_path REFERENCES files(path))
-        stored_files: list[StoredFile] = []
-        for rel, ast in self._ast_cache.items():
-            stored_files.append(self._build_stored_file(rel, ast, mtime_map.get(rel, 0.0)))
-        if stored_files:
-            self._store.save_files_batch(stored_files)
-        self._index.persist_files(set(self._ast_cache))
-
-        self._store.record_scan_time()
-        self._initialized = True
-        logger.debug(
-            "ASTService full init: %d files, %d definitions",
-            len(self._ast_cache),
-            sum(len(v) for v in self._index.definitions.values()),
-        )
+            if force:
+                self._store.set_meta(SNAPSHOT_KEY, "")
+            self.initialize_skeleton(indexing_depth="eager")
+        finally:
+            # Synchronous initialization reports actual counts via the legacy
+            # hydration_snapshot synthesis, including after incomplete startup.
+            self._hydration_state = None
 
     def force_reindex(self) -> None:
         """Force a full re-scan, ignoring cached data."""

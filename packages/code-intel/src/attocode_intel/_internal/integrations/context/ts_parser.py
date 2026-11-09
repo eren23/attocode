@@ -1930,11 +1930,25 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
         # Config-driven top-level variable/constant declarations (Go, Zig, etc.)
         if config.var_types and ntype in config.var_types and not parent_class:
             if language == "go":
-                # Go const/var blocks: const ( X = 1; Y = 2 )
-                for child in node.children:
+                if parent_function:
+                    return
+                # Follow declaration wrappers only; initializer/type identifiers
+                # do not introduce module bindings.
+                specs = []
+                for child in node.named_children:
+                    if child.type == "var_spec_list":
+                        specs.extend(child.named_children)
                     if child.type in ("const_spec", "var_spec"):
-                        var_name = _find_name(child, source_bytes)
-                        if var_name:
+                        specs.append(child)
+                for spec in specs:
+                    if spec.type not in ("const_spec", "var_spec"):
+                        continue
+                    for identifier in spec.children_by_field_name("name"):
+                        # const_spec also assigns the name field to commas.
+                        if identifier.type != "identifier":
+                            continue
+                        var_name = _node_text(identifier, source_bytes)
+                        if var_name and var_name != "_":
                             top_level_vars.append(var_name)
             else:
                 var_name = _find_name(node, source_bytes)
