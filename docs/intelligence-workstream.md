@@ -21,6 +21,13 @@ gate requires 88 cases, with standalone Java, C and Go grammar file provenance
 recorded around the native signature checks. These supplemental source
 witnesses add no retrieval questions or historical compatibility claims.
 
+AST signature diffs compare detailed parameter metadata as well as legacy name
+lists. Refresh also checks the decoded source hash, so a body-only edit updates
+cached source and caller edges even when size, mtime and signatures stay unchanged.
+These edits do not create structural signature-change events. An absent source
+digest does not trigger a content-only refresh; unchanged source keeps its cached
+AST. Same-source restart coverage and live refresh checks are separate evidence.
+
 C parameter metadata follows declared names in the native syntax tree. When the
 grammar represents parenthesized syntax such as `int (name)` as an abstract
 function type, the parameter stays unnamed. Resolving that ambiguity needs C

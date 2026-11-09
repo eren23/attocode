@@ -4,6 +4,7 @@ import json
 import os
 from contextlib import contextmanager
 from dataclasses import asdict, replace
+from pathlib import Path
 
 import pytest
 from attocode_intel._internal.integrations.context.ast_service import ASTService
@@ -153,6 +154,25 @@ def test_identical_source_and_metadata_do_not_reindex(tmp_path):
     with indexed(tmp_path, name, source) as (service, _):
         cached = service._ast_cache[name]
         assert service.refresh() == []
+        assert service._ast_cache[name] is cached
+
+
+def test_unbound_source_hash_does_not_trigger_content_only_refresh(tmp_path, monkeypatch):
+    name, source = 'unreadable.go', 'package sample\nvar Value int\n'
+    with indexed(tmp_path, name, source) as (service, target):
+        cached = service._ast_cache[name]
+        assert cached.top_level_vars == ['Value'] and cached.content_sha256
+        original = Path.read_text
+
+        def read_text(path, *args, **kwargs):
+            if path == target:
+                raise PermissionError('controlled source-read failure')
+            return original(path, *args, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, 'read_text', read_text)
+            assert parse_file(str(target)).content_sha256 == ''
+            assert service.refresh() == []
         assert service._ast_cache[name] is cached
 
 
