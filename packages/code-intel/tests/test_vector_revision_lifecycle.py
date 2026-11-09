@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from attocode_intel._internal.integrations.context.codebase_ast import parse_file
 from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
+from attocode_intel._internal.integrations.context.syntax_evidence import syntax_tree
 from test_live_vector_freshness import NEW, rows, workspace, writer
 
 LATEST = 'def renewed():\n    return "lastfalcon"\n'
@@ -194,3 +195,109 @@ def test_reindex_rejects_outside_workspace(tmp_path, monkeypatch, record_propert
             assert not s.provider.calls and all(not p[0].startswith('..') for p in paths), 'REGRESSION: reindex accepted outside workspace'
         finally:
             outside.unlink()
+
+
+@pytest.mark.parametrize('language', ['python', 'javascript', 'typescript'])
+def test_incomplete_native_source_preserves_prior_vectors(tmp_path, monkeypatch, record_property, language):
+    with workspace(tmp_path, monkeypatch) as s:
+        name = {'python': 'target.py', 'javascript': 'target.js', 'typescript': 'target.ts'}[language]
+        path = tmp_path / name
+        if language != 'python':
+            path.write_text('function original() {\n return 1;\n}\n')
+            s.value.reindex_file(str(path))
+        before, metadata = rows(s.value, name), s.value._store.get_file_metadata(name)
+        assert len(before) == 2
+        source = 'def broken(' if language == 'python' else 'function broken('
+        path.write_text(source)
+        tree = syntax_tree(str(path), source, language)
+        assert tree is not None and tree.root_node.has_error
+        s.value.reindex_file(str(path))
+        actual, after_metadata = rows(s.value, name), s.value._store.get_file_metadata(name)
+        record_property('observed', json.dumps({'before': before, 'after': actual, 'metadata': metadata,
+                                               'after_metadata': after_metadata, 'tree': str(tree.root_node)}))
+        record_property('qualified_input', 'true')
+        assert actual == before and metadata == after_metadata, 'REGRESSION: malformed native source erased vectors'
+
+
+def test_other_connection_observes_vector_publication(tmp_path, monkeypatch, record_property):
+    from attocode_intel._internal.integrations.context import vector_store
+    assert vector_store._HAS_NUMPY
+    with workspace(tmp_path, monkeypatch) as s:
+        second = SemanticSearchManager(str(tmp_path), nl_mode='none')
+        try:
+            second._ensure_provider()
+            old = second.search('original', 10, 'target.py', two_stage=False, expand_query=False)
+            assert any(h.name == 'original' for h in old) and second._store._vec_meta
+            (tmp_path / 'target.py').write_text(NEW)
+            s.value.reindex_file(str(tmp_path / 'target.py'))
+            assert {r[0] for r in rows(second)} == {'file:target.py', 'func:target.py:updated'}
+            actual = second.search('updated', 10, 'target.py', two_stage=False, expand_query=False)
+            record_property('observed', json.dumps({'before': [h.name for h in old], 'after': [h.name for h in actual]}))
+            record_property('qualified_input', 'true')
+            assert any(h.name == 'updated' for h in actual) and all(h.name != 'original' for h in actual), 'REGRESSION: second connection served old vector matrix'
+        finally:
+            second.close()
+
+
+def test_cache_loader_keeps_the_version_of_its_rows(tmp_path, monkeypatch, record_property):
+    from attocode_intel._internal.integrations.context import vector_store
+    assert vector_store._HAS_NUMPY
+    with workspace(tmp_path, monkeypatch) as s:
+        loaded, release = threading.Event(), threading.Event()
+        original = vector_store.np.vstack
+        def blocked(arrays):
+            loaded.set()
+            assert release.wait(3)
+            return original(arrays)
+        monkeypatch.setattr(vector_store.np, 'vstack', blocked)
+        errors = []
+        def search():
+            try:
+                s.value._store.search([1.0, 0.0, 0.0], file_filter='target.py')
+            except Exception as exc:
+                errors.append(str(exc))
+        thread = threading.Thread(target=search)
+        thread.start()
+        try:
+            assert loaded.wait(3)
+            (tmp_path / 'target.py').write_text(NEW)
+            s.value.reindex_file(str(tmp_path / 'target.py'))
+        finally:
+            release.set()
+            thread.join(3)
+        assert not errors and not thread.is_alive()
+        actual = s.value._store.search([1.0, 0.0, 0.0], file_filter='target.py')
+        assert {r[0] for r in rows(s.value)} == {'file:target.py', 'func:target.py:updated'}
+        record_property('observed', json.dumps({'after': [h.name for h in actual],
+                                               'loaded_version': s.value._store._vec_loaded_version,
+                                               'current_version': s.value._store._vec_cache_version}))
+        record_property('qualified_input', 'true')
+        assert any(h.name == 'updated' for h in actual) and all(h.name != 'original' for h in actual), 'REGRESSION: cache loader published old rows as new'
+
+
+@pytest.mark.parametrize('refusal', ['rotation', 'dimension', 'sqlite'])
+def test_optional_write_refusal_does_not_abort_freshness(tmp_path, monkeypatch, record_property, refusal):
+    from test_live_vector_freshness import current_lexical
+    with workspace(tmp_path, monkeypatch) as s:
+        before = rows(s.value)
+        conn = s.value._store._get_conn()
+        if refusal == 'rotation':
+            conn.execute("INSERT OR REPLACE INTO store_metadata VALUES ('rotation_state','pending')")
+            conn.commit()
+        elif refusal == 'dimension':
+            s.value._store.degraded = True
+        else:
+            conn.execute("CREATE TRIGGER block_dirty BEFORE INSERT ON file_states BEGIN SELECT RAISE(ABORT,'blocked dirty state'); END")
+            conn.commit()
+        (tmp_path / 'target.py').write_text(NEW)
+        error = None
+        try:
+            s.tracker.refresh(s.service)
+        except Exception as exc:
+            error = str(exc)
+        actual = rows(s.value)
+        assert [d.name for d in s.ast.get_file_symbols('target.py')] == ['updated']
+        record_property('observed', json.dumps({'error': error, 'before': before, 'after': actual}))
+        record_property('qualified_input', 'true')
+        assert error is None and actual == before, 'REGRESSION: optional vector refusal aborted source freshness'
+        assert current_lexical(s.value)
