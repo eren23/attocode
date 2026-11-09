@@ -156,7 +156,7 @@ def main():
               REPO / 'packages/code-intel/tests/test_ast_snapshot.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]
     sources = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
-    before = {'grammar': grammar_identity(args.cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
+    before = {'grammar': grammar_identity(pack_cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
               'java': distribution_identity(('tree-sitter-java',)),
               'c': distribution_identity(('tree-sitter-c',)),
               'go': distribution_identity(('tree-sitter-go',)),
@@ -175,7 +175,7 @@ def main():
         report['coverage'] = {'status': 'passed', 'cases': cases}
     except ValueError as error:
         report['coverage'] = {'status': 'rejected', 'reason': str(error)}
-    after = {'grammar': grammar_identity(args.cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
+    after = {'grammar': grammar_identity(pack_cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
              'java': distribution_identity(('tree-sitter-java',)),
              'c': distribution_identity(('tree-sitter-c',)),
              'go': distribution_identity(('tree-sitter-go',)),
