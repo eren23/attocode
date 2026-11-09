@@ -3368,7 +3368,7 @@ class TestNotifyFileChanged:
         result = notify_file_changed([])
         assert result == "No files specified."
 
-    def test_notify_updates_ast_and_embeddings(self):
+    def test_notify_updates_ast_and_embeddings(self, monkeypatch):
         import attocode_intel.server as srv
         from attocode_intel.server import notify_file_changed
 
@@ -3377,7 +3377,7 @@ class TestNotifyFileChanged:
         srv._ast_service = mock_svc
 
         mock_smgr = MagicMock()
-        srv._semantic_search = mock_smgr
+        monkeypatch.setattr('attocode_intel.tools.search_tools._semantic_search', mock_smgr)
 
         result = notify_file_changed(["src/foo.py", "src/bar.py"])
 
@@ -3452,7 +3452,7 @@ class TestNotificationQueue:
         result = _process_notification_queue()
         assert result == 0
 
-    def test_process_queued_files(self):
+    def test_process_queued_files(self, monkeypatch):
         import attocode_intel.server as srv
         from attocode_intel.server import _process_notification_queue
 
@@ -3461,7 +3461,7 @@ class TestNotificationQueue:
         srv._ast_service = mock_svc
 
         mock_smgr = MagicMock()
-        srv._semantic_search = mock_smgr
+        monkeypatch.setattr('attocode_intel.tools.search_tools._semantic_search', mock_smgr)
 
         # Write queue file
         queue_path = self.tmp_path / ".attocode" / "cache" / "file_changes"

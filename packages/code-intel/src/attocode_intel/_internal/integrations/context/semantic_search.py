@@ -2766,7 +2766,7 @@ class SemanticSearchManager:
             else:
                 ast = parse_file(abs_path, content=content) if content is not None else parse_file(abs_path)
                 if content is not None:
-                    if rel_path.lower().endswith('.py'):
+                    if ast.language == 'python':
                         import ast as python_ast
                         python_ast.parse(content)
                     elif ast.parsing_tier in {'tree_sitter', 'generic_ts'}:
