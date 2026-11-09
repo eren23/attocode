@@ -70,3 +70,114 @@ def test_go_module_bindings_reach_raw_ast_and_index(tmp_path, declaration, expec
     finally:
         service.stop_hydration()
         service._store.close()
+
+
+@pytest.mark.parametrize('entrypoint', ['direct', 'readiness-first'])
+@pytest.mark.parametrize('previous_identity', ['parser', 'navigation', 'missing-completion'])
+def test_initialization_repairs_previous_binding_index(tmp_path, monkeypatch, record_property,
+                                                     entrypoint, previous_identity):
+    from contextlib import ExitStack
+    from dataclasses import asdict, replace
+    from unittest.mock import patch
+
+    from attocode_intel._internal.integrations.context import ast_service, ast_snapshot
+    from attocode_intel._internal.integrations.context.index_store import (
+        AST_SNAPSHOT_KEY,
+        SNAPSHOT_KEY,
+    )
+    from attocode_intel.service import CodeIntelService
+
+    name = 'bindings.go'
+    path = tmp_path / name
+    source = 'package sample\nvar First, Second int\nfunc Format() { var local int; _ = local }\n'
+    path.write_text(source)
+    before = path.stat()
+    tree = syntax_tree(name, source, 'go')
+    assert tree is not None and not tree.root_node.has_error and tree.root_node.end_byte == len(source.encode())
+    expected = ['First', 'Second']
+    legacy = ['First', 'local']
+    original_parse = ast_service.parse_file
+    original_index = ASTService._index_definitions
+
+    def previous_parse(*args, **kwargs):
+        return replace(original_parse(*args, **kwargs), top_level_vars=legacy)
+
+    def previous_index(service, rel, ast):
+        original_index(service, rel, replace(ast, top_level_vars=legacy))
+
+    first = ASTService(str(tmp_path))
+    try:
+        with ExitStack() as stack:
+            if previous_identity == 'navigation':
+                # Valid AST summaries, but an older indexer persisted wrong names.
+                stack.enter_context(patch.object(ASTService, '_index_definitions', previous_index))
+                stack.enter_context(patch.object(ast_snapshot, 'navigation_identity', return_value='previous-navigation'))
+            else:
+                # An older parser persisted both the old AST and its derived index.
+                stack.enter_context(patch.object(ast_service, 'parse_file', previous_parse))
+                stack.enter_context(patch.object(ast_snapshot, 'parser_identity', return_value='previous-parser'))
+            first.initialize_skeleton(indexing_depth='eager')
+        assert first._store.get_last_scan_time() is not None
+        assert sorted(loc.name for loc in first.get_file_symbols(name) if loc.kind == 'variable') == sorted(legacy)
+        assert first._ast_cache[name].top_level_vars == (expected if previous_identity == 'navigation' else legacy)
+        if previous_identity == 'missing-completion':
+            first._store.set_meta(SNAPSHOT_KEY, '')
+        record_property('seed', json.dumps({'ast_bindings': first._ast_cache[name].top_level_vars,
+                        'symbols': {k: [asdict(loc) for loc in v] for k, v in first._index.definitions.items()},
+                        'completion': first._store.get_meta(SNAPSHOT_KEY),
+                        'summaries': first._store.get_meta(AST_SNAPSHOT_KEY)}))
+    finally:
+        first.stop_hydration()
+        first._store.close()
+
+    monkeypatch.setattr(ast_service, '_instances', {})
+    service = ASTService.get_instance(str(tmp_path))
+    api = CodeIntelService(str(tmp_path))
+    try:
+        if entrypoint == 'direct':
+            assert service.initialize() is None
+        else:
+            report = api.readiness_report_data(phases=[1], tracer_bullets=False)
+            assert report
+        assert service.initialized and api._get_ast_service() is service
+        names = sorted(loc.name for loc in service.get_file_symbols(name) if loc.kind == 'variable')
+        record_property('restored_bindings', json.dumps(names))
+        record_property('source_unchanged', path.read_text() == source and path.stat().st_mtime_ns == before.st_mtime_ns)
+        record_property('current_parser', ast_snapshot.parser_identity('go'))
+        record_property('current_navigation', ast_snapshot.navigation_identity())
+        assert 'Format' in service._index.definitions
+        assert names == sorted(expected)
+        assert path.read_text() == source and path.stat().st_mtime_ns == before.st_mtime_ns
+    finally:
+        service.stop_hydration()
+        service._store.close()
+
+
+@pytest.mark.parametrize('force', [False, True], ids=['unchanged-reuse', 'force-rebuild'])
+def test_direct_initialization_preserves_reuse_and_force(tmp_path, force, record_property):
+    from unittest.mock import patch
+
+    from attocode_intel._internal.integrations.context import ast_service
+
+    name = 'bindings.go'
+    source = 'package sample\nvar First, Second int\nfunc Format() {}\n'
+    (tmp_path / name).write_text(source)
+    first = ASTService(str(tmp_path))
+    try:
+        first.initialize()
+        expected = first._index.definitions.copy()
+        assert {'First', 'Second', 'Format'} <= set(expected)
+    finally:
+        first.stop_hydration()
+        first._store.close()
+    second = ASTService(str(tmp_path))
+    try:
+        with patch.object(ast_service, 'parse_file', wraps=ast_service.parse_file) as parse:
+            assert second.initialize(force=force) is None
+        record_property('definition_parse_calls', parse.call_count)
+        assert (parse.call_count > 0) is force
+        assert second._index.definitions == expected
+        assert (tmp_path / name).read_text() == source
+    finally:
+        second.stop_hydration()
+        second._store.close()
