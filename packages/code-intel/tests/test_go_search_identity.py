@@ -6,6 +6,7 @@ from dataclasses import asdict
 
 import pytest
 from attocode_intel._internal.integrations.context import embeddings, ts_parser
+from attocode_intel._internal.integrations.context.index_probe import IndexProbe
 from attocode_intel._internal.integrations.context.semantic_search import (
     SearchScoringConfig,
     SemanticSearchManager,
@@ -40,11 +41,12 @@ class Provider(DeterministicProvider):
 
 
 @contextmanager
-def opened(root, monkeypatch, provider=None, *, require_body=True):
+def opened(root, monkeypatch, provider=None, *, require_body=True, probe=False):
     if provider is not None:
         monkeypatch.setattr(embeddings, 'create_embedding_provider', lambda *a, **k: provider)
     value = SemanticSearchManager(str(root), nl_mode='none',
-                                 scoring_config=SearchScoringConfig(max_chunks_per_file=128))
+                                 scoring_config=SearchScoringConfig(max_chunks_per_file=128),
+                                 index_probe=IndexProbe() if probe else None)
     try:
         value.warm()
         value.wait_for_body_index(10)
@@ -150,28 +152,26 @@ def test_unchanged_go_lexical_caches_repair_once(tmp_path, monkeypatch, record_p
     path = seed_legacy(tmp_path, monkeypatch)
     stamps = {p.name:p.stat().st_mtime_ns for p in tmp_path.iterdir() if p.is_file()}
     untouched = cache_rows(path, 'unrelated.py')
-    parsed, snapshots, parse_counts = [], [], []
-    from attocode_intel._internal.integrations.context import codebase_ast
-    original = codebase_ast.parse_file
-
-    def counted(file, *args, **kwargs):
-        parsed.append(str(file))
-        return original(file, *args, **kwargs)
-
-    monkeypatch.setattr(codebase_ast, 'parse_file', counted)
+    snapshots, profiles = [], []
     for _ in range(2):
-        with opened(tmp_path, monkeypatch) as value:
+        with opened(tmp_path, monkeypatch, probe=True) as value:
             snapshots.append({'keyword':identities(value._keyword_search('identity',128,'methods.go')),
                               'body':identities(value._body_search(['identity'],128,'methods.go'))})
+            profiles.append(value.index_probe.snapshot())
         assert cache_rows(path, 'unrelated.py') == untouched
-        parse_counts.append(len(parsed))
     assert all(p.stat().st_mtime_ns == stamps[p.name] for p in tmp_path.iterdir() if p.is_file())
     record_property('hits', json.dumps(snapshots))
-    record_property('parse_calls', json.dumps(parsed))
+    record_property('cache_profiles', json.dumps(profiles))
     record_property('qualified_input', 'true')
     record_property('observed', json.dumps(snapshots))
     correct = all(set(s[route]) == EXPECTED for s in snapshots for route in ['keyword','body'])
-    assert correct and not any(p.endswith('unrelated.py') for p in parsed) and parse_counts[0] == parse_counts[1], 'REGRESSION: unchanged Go lexical caches stayed legacy'
+    counters = ['keyword.files_started','keyword.files_completed','body.files_started','body.files_completed']
+    work = [{name:profile['counts'].get(name,0) for name in counters}
+            for profile in profiles]
+    touched = {(row['phase'],row['file']) for row in profiles[0]['slow_files']}
+    expected = {(phase,path) for phase in ['keyword.documents','body.document']
+                for path in ['methods.go','types.go']}
+    assert correct and work == [dict.fromkeys(counters,2),dict.fromkeys(counters,0)] and touched == expected and not profiles[1]['slow_files'], 'REGRESSION: unchanged Go lexical caches stayed legacy'
 
 
 @pytest.mark.parametrize('schema', ['schema_version', 'body_schema_version'])
