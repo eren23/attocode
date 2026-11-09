@@ -43,6 +43,14 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.31 retains prior vectors during failed live refresh, fences superseded
+queued writes, and commits file vectors and metadata together. Go receiver
+identities agree across keyword, body and vector search; optional fusion keeps
+distinct source spans and preserves vector text when only keyword metadata is
+available. Future cache formats are refused before journal or permission changes.
+See the [release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.31.md)
+for validation and bounds.
+
 Version 0.1.30 preserves Java, C and Go signature metadata, Go type and receiver
 ownership, and imports inside declared Go standard modules. Parameter and
 body-only edits update cached metadata and callers, while startup checks parser
