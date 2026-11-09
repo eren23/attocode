@@ -266,10 +266,16 @@ def load_remote_config(project_dir: str) -> RemoteConfig:
     return rc
 
 
+def _toml_string(value: str) -> str:
+    # TOML additionally forbids raw DEL. Keep scalar Unicode instead of JSON's
+    # ASCII surrogate pairs, which are not valid TOML Unicode escapes.
+    return json.dumps(value, ensure_ascii=False).replace('\x7f', '\\u007f')
+
+
 def _toml_key(value: str) -> str:
     if value and all(c.isascii() and (c.isalnum() or c in '-_') for c in value):
         return value
-    return json.dumps(value, ensure_ascii=False)
+    return _toml_string(value)
 
 
 def _toml_value(value: object) -> str:
@@ -277,7 +283,7 @@ def _toml_value(value: object) -> str:
     if isinstance(value, bool):
         return 'true' if value else 'false'
     if isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False)
+        return _toml_string(value)
     if isinstance(value, (int, float)):
         return repr(value)
     if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
