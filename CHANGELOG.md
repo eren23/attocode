@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Go module bindings include every declared name in grouped `var`/`const`
   declarations and parenthesized blocks. Function and receiver locals, blank
   identifiers and initializer contents do not become global symbols.
+- Direct and readiness-first startup validate persisted symbols against parser
+  and indexer identity. Upgrades rebuild stale indexes even when source timestamps
+  are unchanged; explicit forced indexing still rebuilds the complete index.
 - AST diffs detect detailed parameter changes while retaining legacy parameter
   lists. Refresh updates cached source and callers for body-only edits, including
   edits with unchanged size and mtime, without inventing signature-change events.
