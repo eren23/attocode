@@ -94,9 +94,16 @@ async def test_long_rust_reload_recovers_on_a_later_request(
         record_property('qualified_input', 'true')
         record_property('partial_elapsed', elapsed)
         record_property('partial_precision', json.dumps(p))
+        record_property('partial_response', json.dumps(partial))
         assert 4.0 <= elapsed < 5.8
         assert p['status'] == 'partial' and p['queries'][0]['status'] == 'not_resolved'
-        assert any(r['file_path'] == 'caller.rs' and r['line'] == 3 and r['source'] != 'lsp'
+        # This two-file fixture has no crate entrypoint. Preserve the written
+        # cross-file call as a candidate, without claiming an import binding.
+        assert any(r['file_path'] == 'caller.rs' and r['line'] == 3 and
+                   r['source'] != 'lsp' and r['resolution'] == 'same_name_candidate'
+                   for r in partial['data']['reference_candidates'])
+        assert any(r['file_path'] == 'helper.rs' and r['line'] == 2 and
+                   r['source'] != 'lsp' and r['resolution'] == 'same_file'
                    for r in partial['data']['references'])
         assert not any(r['file_path'] == 'caller.rs' and r['line'] == 2 and r['source'] == 'lsp'
                        for r in partial['data']['references'])
