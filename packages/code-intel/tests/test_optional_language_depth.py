@@ -1,7 +1,9 @@
 """Real optional grammars: explicitly acquired CI only, never navigation downloads."""
+import asyncio
 import hashlib
 import json
 import os
+import threading
 import urllib.request
 from dataclasses import asdict
 from pathlib import Path
@@ -230,6 +232,7 @@ async def test_perl_config_only_refresh_and_restart(
     importer = manifest['witnesses']['importer']['file']
     peer, generation, closed = None, -1, []
     rows = []
+    hydration_entered, hydration_release = threading.Event(), threading.Event()
 
     def open_peer():
         nonlocal peer, generation
@@ -270,6 +273,14 @@ async def test_perl_config_only_refresh_and_restart(
                 # hydration claim. Real pinned parsing/gateway stay in use.
                 ast.stop_hydration()
                 ast._hydration_state.phase = 'references'
+                run_hydration = ast._run_hydration
+
+                def gated_hydration():
+                    hydration_entered.set()
+                    assert hydration_release.wait(15), 'Controlled hydration gate was not released'
+                    return run_hydration()
+
+                monkeypatch.setattr(ast, '_run_hydration', gated_hydration)
                 record_property('controlled_partial_state', 'true')
             evidence(tag + '-pre-policy-state.json', {
                 'phase':ast._hydration_state.phase,'snapshot_absent':ast._snapshot_start is None,
@@ -281,12 +292,19 @@ async def test_perl_config_only_refresh_and_restart(
         if not online:
             open_peer()
         await dependencies('after-config-only-change')
+        if online == 'partial':
+            assert hydration_entered.wait(1) and not hydration_release.is_set()
+            record_property('hydration_held_until_first_response', 'true')
+            hydration_release.set()
+            await asyncio.to_thread(ast._hydration_thread.join, 5)
+            assert not ast._hydration_thread.is_alive()
         if online in ('notified','partial'):
             await dependencies('repeated-after-config-change')
         await close_peer()
         open_peer()
         await dependencies('reopened-after-change')
     finally:
+        hydration_release.set()
         await close_peer()
         after = {name:(tmp_path / name).stat() for name in files}
         after = {name:[s.st_mtime_ns,s.st_ctime_ns,s.st_size] for name,s in after.items()}

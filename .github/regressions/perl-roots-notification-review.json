@@ -112,6 +112,7 @@
         "native_pinned_files": "3",
         "notified_ready_without_snapshot": "true",
         "controlled_partial_state": "true",
+        "hydration_held_until_first_response": "true",
         "source_stamps_unchanged": "true"
       }
     },
