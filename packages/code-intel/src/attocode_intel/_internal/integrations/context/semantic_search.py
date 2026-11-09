@@ -383,6 +383,8 @@ class SemanticSearchManager:
     _reindex_thread: threading.Thread | None = field(default=None, repr=False)
     _closed: bool = field(default=False, repr=False)
     _reindex_pending: set[str] = field(default_factory=set, repr=False)
+    _reindex_versions: dict[str, int] = field(default_factory=dict, repr=False)
+    _invalidated_files: set[str] = field(default_factory=set, repr=False)
     _reindex_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _reindex_worker_started: bool = field(default=False, repr=False)
     _kw_docs: list[_KeywordDoc] = field(default_factory=list, repr=False)
@@ -618,16 +620,23 @@ class SemanticSearchManager:
         """Background worker for bounded, queued file reindexing."""
         while True:
             rel_path = self._reindex_queue.get()
+            version = 0
             try:
                 if rel_path is None:
                     return
+                with self._reindex_lock:
+                    version = self._reindex_versions.get(rel_path, 0)
                 self.reindex_file(rel_path)
             except Exception:
                 logger.debug("queue_reindex_failed: %s", rel_path, exc_info=True)
             finally:
                 with self._reindex_lock:
                     if rel_path is not None:
-                        self._reindex_pending.discard(rel_path)
+                        if not self._closed and self._reindex_versions.get(rel_path, 0) != version:
+                            self._reindex_queue.put(rel_path)
+                        else:
+                            self._reindex_pending.discard(rel_path)
+                            self._reindex_versions.pop(rel_path, None)
                 self._reindex_queue.task_done()
 
     def queue_reindex(self, file_path: str) -> None:
@@ -636,16 +645,26 @@ class SemanticSearchManager:
         File notifications must never initialize or download an embedding model.
         Explicit indexing or search initializes the provider before enqueueing.
         """
-        if self._keyword_fallback or not self._store:
+        if self._closed or self._keyword_fallback or not self._store:
             return
-        try:
-            rel = os.path.relpath(file_path, self.root_dir)
-        except ValueError:
-            rel = file_path
-
+        resolved = self._workspace_file(file_path)
+        if resolved is None:
+            return
+        rel, _ = resolved
+        if hasattr(self._store, 'mark_file_dirty'):
+            try:
+                self._store.mark_file_dirty(rel)
+            except Exception:
+                logger.debug('Cannot persist queued vector invalidation: %s', rel, exc_info=True)
+                self._invalidated_files.add(rel)
+                return
         self._start_reindex_worker()
         with self._reindex_lock:
-            if self._closed or rel in self._reindex_pending:
+            if self._closed:
+                return
+            self._invalidated_files.add(rel)
+            self._reindex_versions[rel] = self._reindex_versions.get(rel, 0) + 1
+            if rel in self._reindex_pending:
                 return
             self._reindex_pending.add(rel)
             self._reindex_queue.put(rel)
@@ -677,119 +696,167 @@ class SemanticSearchManager:
             pass
         return {"python", "javascript", "typescript"} | _ts_langs
 
+    def _workspace_file(self, path: str) -> tuple[str, str] | None:
+        root = os.path.realpath(self.root_dir)
+        absolute = os.path.abspath(os.path.join(root, path))
+        try:
+            if (os.path.commonpath((root, absolute)) != root
+                    or os.path.commonpath((root, os.path.realpath(absolute))) != root):
+                return None
+            return os.path.relpath(absolute, root), absolute
+        except ValueError:
+            return None
+
+    def _prepare_vector_file(self, rel: str, absolute: str):
+        from attocode_intel.indexing.file_revision import read_file_revision
+        if self._workspace_file(absolute) is None:
+            return None
+        generation = self._store.mark_file_dirty(rel)
+        self._invalidated_files.add(rel)
+        try:
+            revision = read_file_revision(absolute)
+            chunks = self._chunk_single_file(rel, absolute, content=revision.content)
+            return revision, generation, chunks
+        except FileNotFoundError:
+            self._store.mark_file_dirty(rel, deleted=True)
+        except (OSError, ValueError):
+            logger.warning('Incomplete source; keeping prior vectors: %s', rel, exc_info=True)
+        return None
+
+    def _commit_vector_file(self, rel, absolute, revision, generation, chunks, vectors):
+        from attocode_intel._internal.integrations.context.vector_store import (
+            VectorEntry,
+            VectorStoreRevisionChangedError,
+        )
+        from attocode_intel.indexing.file_revision import read_file_revision
+        try:
+            if len(vectors) != len(chunks) or any(len(v) != self._store.dimension for v in vectors):
+                return None
+            if self._workspace_file(absolute) is None:
+                return None
+            current = read_file_revision(absolute)
+        except FileNotFoundError:
+            self._store.mark_file_dirty(rel, deleted=True)
+            return None
+        except (OSError, TypeError):
+            return None
+        if current.sha256 != revision.sha256:
+            return None
+        entries = [VectorEntry(id=c[0], file_path=rel, chunk_type=c[2],
+                               name=c[0].split(':')[-1], text=c[3], vector=v)
+                   for c, v in zip(chunks, vectors, strict=True)]
+        try:
+            self._store.upsert_batch(entries, replace_file=rel,
+                                     file_mtime=current.mtime,
+                                     expected_generation=generation, revision=current)
+        except VectorStoreRevisionChangedError:
+            return None
+        self._invalidated_files.discard(rel)
+        return len(entries)
+
+    def _fresh_vector_files(self) -> set[str] | None:
+        """Exclude retained dirty rows; never present them as current evidence."""
+        try:
+            if getattr(self._store, 'degraded', False):
+                return set()
+            indexed = self._store.get_all_indexed_files()
+            if not indexed:
+                return None
+            states = self._store.get_file_states() if hasattr(self._store, 'get_file_states') else {}
+            fresh = set()
+            for path in indexed:
+                state = states.get(path)
+                if state and state['dirty']:
+                    continue
+                pending = path in self._invalidated_files
+                if pending and not (state and state['content_sha256']):
+                    continue
+                resolved = self._workspace_file(path)
+                if resolved is None or not os.path.isfile(resolved[1]):
+                    continue
+                info = os.stat(resolved[1])
+                if state and state['content_sha256']:
+                    if (info.st_mtime_ns, info.st_ctime_ns, info.st_size) != (
+                            state['mtime_ns'], state['ctime_ns'], state['size']):
+                        continue
+                elif hasattr(self._store, 'get_file_metadata'):
+                    metadata = self._store.get_file_metadata(path)
+                    if metadata is None or metadata['file_mtime'] != info.st_mtime:
+                        continue
+                if pending:
+                    # Another manager can publish the revision this instance
+                    # failed to index. Durable clean/current evidence wins.
+                    self._invalidated_files.discard(path)
+                fresh.add(path)
+            return fresh
+        except Exception:
+            logger.debug('Cannot establish vector freshness', exc_info=True)
+            return set()
+
+    def _changed_vector_revisions(self, paths: dict[str, str]) -> set[str]:
+        """Explicit maintenance also detects equal-mtime source replacement."""
+        changed = set()
+        for rel, state in self._store.get_file_states().items():
+            if rel not in paths or not state['content_sha256']:
+                continue
+            try:
+                info = os.stat(paths[rel])
+            except OSError:
+                changed.add(rel)
+                continue
+            if (info.st_mtime_ns, info.st_ctime_ns, info.st_size) != (
+                    state['mtime_ns'], state['ctime_ns'], state['size']):
+                changed.add(rel)
+        return changed
+
     def index(self, context_manager: Any = None) -> int:
-        """Build or update the vector index.
-
-        Args:
-            context_manager: Optional CodebaseContextManager for file discovery.
-
-        Returns:
-            Number of chunks indexed.
-        """
+        """Explicitly index complete file revisions, replacing each file atomically."""
         self._ensure_provider()
         if self._keyword_fallback:
-            logger.info("Semantic search: no provider, skipping indexing")
             return 0
-
         from attocode_intel._internal.integrations.context.codebase_context import (
             CodebaseContextManager,
         )
-        from attocode_intel._internal.integrations.context.vector_store import VectorEntry
-
         ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files)
         ctx._ensure_fresh()
         if not ctx._files:
             ctx.discover_files()
-
-        # Supported languages: Python, JS, TS always; others when tree-sitter available
-        _supported = self._supported_languages()
-
-        chunks: list[tuple[str, str, str, str]] = []
-
+        supported = self._supported_languages()
+        prepared = []
+        chunks = []
         for f in ctx._files:
-            if f.language not in _supported:
+            if f.language not in supported:
                 continue
-            try:
-                file_chunks = self._chunk_single_file(f.relative_path, f.path)
-            except ValueError:
-                logger.warning("Incomplete Go source kept out of vector replacement: %s", f.relative_path)
+            resolved = self._workspace_file(f.path)
+            if resolved is None:
                 continue
-            chunks.extend(file_chunks)
-
-        if not chunks:
-            return 0
-
-        # Batch embed (use NL summaries when heuristic mode is enabled)
+            rel, absolute = resolved
+            item = self._prepare_vector_file(rel, absolute)
+            if item is not None:
+                revision, generation, file_chunks = item
+                prepared.append((rel, absolute, revision, generation, file_chunks))
+                chunks.extend(file_chunks)
         texts = self._get_embedding_texts(chunks)
-        batch_size = 64
-        all_vectors: list[list[float]] = []
-
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+        vectors = []
+        for start in range(0, len(texts), 64):
+            batch = texts[start:start + 64]
             try:
-                vectors = self._provider.embed(batch)
-                if len(vectors) != len(batch):
-                    raise ValueError("Embedding batch response length mismatch")
-                all_vectors.extend(vectors)
+                result = self._provider.embed(batch)
+                if len(result) != len(batch):
+                    raise ValueError('Embedding batch response length mismatch')
+                vectors.extend(result)
             except Exception:
-                logger.warning("Embedding batch failed at offset %d", i, exc_info=True)
-                all_vectors.extend([[] for _ in batch])
-
-        # Store (display signature at index 3 is preserved, not body/NL summary)
-        entries = []
-        for chunk, vec in zip(chunks, all_vectors, strict=False):
-            if not vec:
-                continue
-            cid = chunk[0]
-            fpath = chunk[1]
-            ctype = chunk[2]
-            text = chunk[3]
-            entries.append(VectorEntry(
-                id=cid,
-                file_path=fpath,
-                chunk_type=ctype,
-                name=cid.split(":")[-1] if ":" in cid else fpath,
-                text=text,
-                vector=vec,
-            ))
-
-        # A Go file's changed identities must replace its old rows together.
-        # Partial batches retain both vectors and metadata for a later retry.
-        go_counts: dict[str, int] = {}
-        go_entries: dict[str, list] = {}
-        for chunk in chunks:
-            if chunk[1].lower().endswith(".go"):
-                go_counts[chunk[1]] = go_counts.get(chunk[1], 0) + 1
-        for entry in entries:
-            if entry.file_path in go_counts:
-                go_entries.setdefault(entry.file_path, []).append(entry)
-        rejected = {path for path, count in go_counts.items() if len(go_entries.get(path, [])) != count}
-        entries = [e for e in entries if e.file_path not in rejected]
-        for path, file_entries in go_entries.items():
-            if path not in rejected:
-                self._store.upsert_batch(file_entries, replace_file=path)
-        ordinary = [e for e in entries if e.file_path not in go_counts]
-        if ordinary:
-            self._store.upsert_batch(ordinary)
-
-        # Update metadata for indexed files
-        indexed_files: dict[str, int] = {}
-        for e in entries:
-            indexed_files[e.file_path] = indexed_files.get(e.file_path, 0) + 1
-        for f in ctx._files:
-            if f.relative_path in indexed_files:
-                try:
-                    mtime = os.path.getmtime(f.path)
-                except OSError:
-                    mtime = 0.0
-                self._store.set_file_metadata(
-                    f.relative_path, mtime, indexed_files[f.relative_path],
-                )
-
+                logger.warning('Embedding batch failed at offset %d', start, exc_info=True)
+                vectors.extend([[] for _ in batch])
+        total, offset = 0, 0
+        for rel, absolute, revision, generation, file_chunks in prepared:
+            file_vectors = vectors[offset:offset + len(file_chunks)]
+            offset += len(file_chunks)
+            committed = self._commit_vector_file(rel, absolute, revision, generation, file_chunks, file_vectors)
+            if committed is not None:
+                total += committed
         self._indexed = True
-        logger.info("Semantic search: indexed %d chunks from %d files",
-                     len(entries), len(ctx._files))
-        return len(entries)
+        return total
 
     def search(
         self,
@@ -848,6 +915,8 @@ class SemanticSearchManager:
         self._ensure_provider()
         if self._keyword_fallback:
             return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
+        if self._store is not None and getattr(self._store, 'degraded', False):
+            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
 
         # Refuse vectors produced by a different embedding model (manual-reindex
         # migration): serving them returns semantically garbage results.
@@ -888,16 +957,7 @@ class SemanticSearchManager:
         # Build set of files that exist on disk to filter out stale branch data.
         # In local mode the filesystem is the source of truth — vectors from
         # files that no longer exist (e.g. after a branch switch) are skipped.
-        existing_files: set[str] | None = None
-        try:
-            indexed_paths = self._store.get_all_indexed_files()
-            if indexed_paths:
-                existing_files = {
-                    p for p in indexed_paths
-                    if os.path.exists(os.path.join(self.root_dir, p))
-                }
-        except Exception:
-            logger.debug("Failed to build existing_files set", exc_info=True)
+        existing_files = self._fresh_vector_files()
 
         # Stage 1a: Vector search (wide recall)
         cfg = self.scoring_config
@@ -906,6 +966,8 @@ class SemanticSearchManager:
             query_vec, top_k=wide_k, file_filter=file_filter,
             existing_files=existing_files,
         )
+        if not raw_results:
+            return self.search_candidates(expanded_query, top_k, file_filter) or self._scoped_literal_results(query, file_filter)
 
         if not two_stage:
             return [
@@ -2670,7 +2732,7 @@ class SemanticSearchManager:
         return "\n".join(kept).strip()
 
     def _chunk_single_file(
-        self, rel_path: str, abs_path: str,
+        self, rel_path: str, abs_path: str, *, content: str | None = None,
     ) -> list[tuple]:
         """Extract chunks from a single file.
 
@@ -2693,7 +2755,7 @@ class SemanticSearchManager:
                 from attocode_intel._internal.integrations.context.syntax_evidence import (
                     syntax_tree,
                 )
-                go_content = Path(abs_path).read_text(encoding="utf-8", errors="replace")
+                go_content = content if content is not None else Path(abs_path).read_text(encoding="utf-8", errors="replace")
                 tree = syntax_tree(abs_path, go_content, "go")
                 if (tree is None or tree.root_node.has_error
                         or tree.root_node.end_byte != len(go_content.encode())):
@@ -2702,14 +2764,45 @@ class SemanticSearchManager:
                 if ast.parsing_tier != "tree_sitter" or ast.parse_failures:
                     raise ValueError("Incomplete native Go metadata")
             else:
-                ast = parse_file(abs_path)
+                ast = parse_file(abs_path, content=content) if content is not None else parse_file(abs_path)
+                if content is not None:
+                    if ast.language == 'python':
+                        import ast as python_ast
+                        python_ast.parse(content)
+                    elif ast.parsing_tier in {'tree_sitter', 'generic_ts'}:
+                        from attocode_intel._internal.integrations.context.syntax_evidence import (
+                            syntax_tree,
+                        )
+                        if ast.parsing_tier == 'generic_ts':
+                            import tree_sitter as ts
+
+                            from attocode_intel._internal.integrations.context.ts_parser import (
+                                EXTRA_GRAMMAR_MODULES,
+                                _generic_extractor,
+                                _parser_language,
+                                bounded_parse,
+                            )
+                            variant = _parser_language(abs_path, ast.language)
+                            language = _generic_extractor._get_language_obj(
+                                EXTRA_GRAMMAR_MODULES.get(ast.language, ''), language=variant,
+                            )
+                            tree = bounded_parse(ts.Parser(language), content.encode()) if language else None
+                        else:
+                            tree = syntax_tree(abs_path, content, ast.language)
+                        if (tree is None or tree.root_node.has_error
+                                or tree.root_node.end_byte != len(content.encode())):
+                            raise ValueError('Incomplete native source')
+                    if ast.parse_failures:
+                        raise ValueError('Incomplete source metadata')
         except ValueError:
-            if rel_path.lower().endswith(".go"):
+            if content is not None or rel_path.lower().endswith(".go"):
                 raise
             return []
+        except SyntaxError as exc:
+            raise ValueError('Incomplete Python source') from exc
         except Exception:
-            if rel_path.lower().endswith(".go"):
-                raise ValueError("Native Go chunk extraction unavailable") from None
+            if content is not None or rel_path.lower().endswith(".go"):
+                raise ValueError("Source chunk extraction unavailable") from None
             return []
 
         import os
@@ -2718,7 +2811,9 @@ class SemanticSearchManager:
         except ValueError:
             _body_budget = 400
         try:
-            if go_content is not None:
+            if content is not None:
+                _file_lines = content.splitlines()
+            elif go_content is not None:
                 _file_lines = go_content.splitlines()
             else:
                 with open(abs_path, encoding="utf-8", errors="ignore") as _fh:
@@ -2816,10 +2911,12 @@ class SemanticSearchManager:
                     m_embed,
                 ))
 
-        if ast.language == "go":
-            # Go permits repeated init declarations. Preserve the existing
-            # vector store's last-wins ordinary identity before replacement.
-            chunks = list({chunk[0]: chunk for chunk in chunks}.values())
+        if (content is not None and content.strip() and not chunks
+                and ast.language != 'python' and ast.parsing_tier not in {'tree_sitter', 'generic_ts'}):
+            raise ValueError('Parser fallback cannot certify an empty replacement')
+        # Ordinary duplicate declarations retain the prior store's last-wins
+        # policy. Count and embed exactly the rows that will be committed.
+        chunks = list({chunk[0]: chunk for chunk in chunks}.values())
         return chunks
 
     def _get_embedding_texts(
@@ -2858,99 +2955,32 @@ class SemanticSearchManager:
         return result
 
     def reindex_file(self, file_path: str) -> int:
-        """Re-index a single file: delete old vectors and re-embed.
-
-        Args:
-            file_path: Absolute or relative path to the file.
-
-        Returns:
-            Number of chunks indexed (0 if skipped).
-        """
+        """Index one captured workspace revision; failed replacements retain old data."""
         self._ensure_provider()
         if self._keyword_fallback or not self._store:
             return 0
-
-        from attocode_intel._internal.integrations.context.vector_store import VectorEntry
-
-        try:
-            rel = os.path.relpath(file_path, self.root_dir)
-        except ValueError:
-            rel = file_path
-
-        abs_path = os.path.join(self.root_dir, rel) if not os.path.isabs(file_path) else file_path
-
-        if not os.path.isfile(abs_path):
-            # File was deleted — just remove vectors
-            self._store.delete_by_file(rel)
-            self._store.delete_file_metadata(rel)
+        resolved = self._workspace_file(file_path)
+        if resolved is None:
             return 0
-
-        # Re-chunk
-        try:
-            chunks = self._chunk_single_file(rel, abs_path)
-        except ValueError:
-            logger.warning("Incomplete Go source; keeping existing vectors: %s", rel)
+        rel, absolute = resolved
+        if not os.path.isfile(absolute):
+            self._store.mark_file_dirty(rel, deleted=True)
             return 0
-        if not chunks:
-            self._store.delete_by_file(rel)
-            self._store.delete_file_metadata(rel)
+        prepared = self._prepare_vector_file(rel, absolute)
+        if prepared is None:
             return 0
-
-        # Embed FIRST (before deleting old vectors) — if embed fails,
-        # we keep existing vectors rather than losing them
-        texts = self._get_embedding_texts(chunks)
+        revision, generation, chunks = prepared
         try:
-            vectors = self._provider.embed(texts)
+            vectors = self._provider.embed(self._get_embedding_texts(chunks)) if chunks else []
         except Exception:
-            logger.warning(
-                "reindex_file embed failed for %s, keeping old vectors",
-                rel, exc_info=True,
-            )
+            logger.warning('Reindex embedding failed: %s; retaining prior rows', rel, exc_info=True)
             return 0
-
-        if rel.lower().endswith(".go") and (len(vectors) != len(chunks) or not all(vectors)):
-            logger.warning("Partial Go embedding; keeping existing vectors: %s", rel)
-            return 0
-
-        # Build entries
-        entries = []
-        for chunk, vec in zip(chunks, vectors, strict=False):
-            if not vec:
-                continue
-            cid = chunk[0]
-            fpath = chunk[1]
-            ctype = chunk[2]
-            text = chunk[3]
-            entries.append(VectorEntry(
-                id=cid,
-                file_path=fpath,
-                chunk_type=ctype,
-                name=cid.split(":")[-1] if ":" in cid else fpath,
-                text=text,
-                vector=vec,
-            ))
-
-        # Now safe to delete old + upsert new
-        if rel.lower().endswith(".go"):
-            self._store.upsert_batch(entries, replace_file=rel)
-        else:
-            self._store.delete_by_file(rel)
-            if entries:
-                self._store.upsert_batch(entries)
-
-        # Update metadata
-        try:
-            mtime = os.path.getmtime(abs_path)
-        except OSError:
-            mtime = 0.0
-        self._store.set_file_metadata(rel, mtime, len(entries))
-
-        logger.debug("reindex_file: %s -> %d chunks", rel, len(entries))
+        committed = self._commit_vector_file(rel, absolute, revision, generation, chunks, vectors)
         self._indexed = True
-        return len(entries)
+        return committed or 0
 
-    def invalidate_file(self, file_path: str) -> None:
-        """Remove embeddings for a changed file."""
+    def invalidate_file(self, file_path: str, *, removed: bool = False) -> None:
+        """Invalidate source caches and retain prior vectors until replacement."""
         self._kw_index_built = False  # Force rebuild on next keyword search
         self._body_index_built = False  # Recheck this file in the source-body index
         self._body_generation += 1
@@ -2959,10 +2989,17 @@ class SemanticSearchManager:
         if self._trigram_index is not None:
             self._trigram_index.close()
         self._trigram_index = None  # Reload on next use
+        root = os.path.realpath(self.root_dir)
+        absolute = os.path.abspath(os.path.join(root, file_path))
         try:
-            rel = os.path.relpath(file_path, self.root_dir)
+            if os.path.commonpath((root, absolute)) != root:
+                return
+            rel = os.path.relpath(absolute, root)
         except ValueError:
-            rel = file_path
+            return
+        self._invalidated_files.add(rel)
+        if self._bg_indexer is None:
+            self._index_progress.total_files = 0
         # Mark stale in keyword cache
         try:
             conn = self._open_kw_cache_db()
@@ -2984,7 +3021,23 @@ class SemanticSearchManager:
         except Exception:
             pass
         if self._store:
-            self._store.delete_by_file(rel)
+            try:
+                self._store.mark_file_dirty(rel, deleted=removed or self._workspace_file(absolute) is None
+                                            or not os.path.isfile(absolute))
+            except Exception as exc:
+                self._index_progress.degraded_reason = 'vector_invalidation_failed'
+                self._index_progress.last_error = f'{type(exc).__name__}: {exc}'
+                logger.debug('Optional vector invalidation refused: %s', rel, exc_info=True)
+
+    def handle_file_change(self, file_path: str, *, removed: bool = False) -> None:
+        """One local notification contract; never initialize an optional model."""
+        self.invalidate_file(file_path, removed=removed)
+        resolved = self._workspace_file(file_path)
+        if resolved is None:
+            return
+        _, absolute = resolved
+        if not removed and os.path.isfile(absolute):
+            self.queue_reindex(absolute)
 
     def _go_chunk_ids_changed(self, rel_path: str, abs_path: str) -> bool:
         """Repair supported Go receiver IDs without invalidating other caches."""
@@ -3034,6 +3087,7 @@ class SemanticSearchManager:
                 continue
 
         stale = set(self._store.get_stale_files(file_mtimes))
+        stale.update(self._changed_vector_revisions(file_paths))
         stale.update(rel for rel, path in file_paths.items()
                      if rel not in stale and self._go_chunk_ids_changed(rel, path))
 
@@ -3043,8 +3097,7 @@ class SemanticSearchManager:
         deleted_count = 0
         for indexed_path in all_indexed:
             if indexed_path not in current_files:
-                self._store.delete_by_file(indexed_path)
-                self._store.delete_file_metadata(indexed_path)
+                self._store.mark_file_dirty(indexed_path, deleted=True)
                 deleted_count += 1
                 logger.debug("Cleaned up vectors for deleted file: %s", indexed_path)
 
@@ -3083,15 +3136,10 @@ class SemanticSearchManager:
             if self._bg_indexer is not None:
                 # Return a snapshot to avoid races
                 p = self._index_progress
-                return IndexProgress(
-                    total_files=p.total_files,
-                    indexed_files=p.indexed_files,
-                    failed_files=p.failed_files,
-                    status=p.status,
-                    coverage=p.coverage,
-                    started_at=p.started_at,
-                    elapsed_seconds=p.elapsed_seconds,
-                )
+                if self._store is not None and hasattr(self._store, 'get_all_indexed_files'):
+                    indexed = min(len(self._fresh_vector_files() or ()), p.total_files)
+                    return replace(p, indexed_files=indexed, coverage=round(indexed / (p.total_files or 1), 3))
+                return replace(p)
         # If no background indexer, check store directly
         if self._store:
             # Use cached total if available to avoid expensive filesystem scan
@@ -3109,13 +3157,16 @@ class SemanticSearchManager:
                 _supported = self._supported_languages()
                 total = len([f for f in ctx._files if f.language in _supported])
                 self._index_progress.total_files = total
-            indexed = len(self._store.get_all_indexed_files()) if total > 0 else 0
+            indexed = len(self._fresh_vector_files() or ()) if total > 0 else 0
             coverage = indexed / total if total > 0 else 0.0
             return IndexProgress(
                 total_files=total,
                 indexed_files=indexed,
+                failed_files=self._index_progress.failed_files,
                 coverage=round(coverage, 3),
                 status="completed" if coverage >= 0.99 else "idle",
+                degraded_reason=self._index_progress.degraded_reason,
+                last_error=self._index_progress.last_error,
             )
         return self._index_progress
 
@@ -3173,7 +3224,6 @@ class SemanticSearchManager:
         from attocode_intel._internal.integrations.context.codebase_context import (
             CodebaseContextManager,
         )
-        from attocode_intel._internal.integrations.context.vector_store import VectorEntry
 
         ctx = CodebaseContextManager(root_dir=self.root_dir, max_files=self.max_files)
         ctx._ensure_fresh()
@@ -3196,6 +3246,7 @@ class SemanticSearchManager:
                 pass
 
         stale = set(self._store.get_stale_files(file_mtimes))
+        stale.update(self._changed_vector_revisions({f.relative_path: f.path for f in indexable}))
         stale.update(f.relative_path for f in indexable if f.relative_path not in stale
                      and self._go_chunk_ids_changed(f.relative_path, f.path))
         # Also include files not yet indexed at all
@@ -3216,55 +3267,18 @@ class SemanticSearchManager:
                     self._index_progress.status = "paused"
                     return
                 try:
-                    chunks = self._chunk_single_file(f.relative_path, f.path)
-                    if not chunks:
-                        self._index_progress.failed_files += 1
-                        self._index_progress.last_error = (
-                            f"No indexable chunks generated for {f.relative_path}"
-                        )
-                        continue
-
-                    texts = self._get_embedding_texts(chunks)
-                    vectors = self._provider.embed(texts)
-                    if f.relative_path.lower().endswith(".go") and (len(vectors) != len(chunks) or not all(vectors)):
-                        raise ValueError("Partial Go embedding; existing file vectors preserved")
-                    entries = []
-                    for chunk, vec in zip(chunks, vectors, strict=False):
-                        if not vec:
-                            continue
-                        cid = chunk[0]
-                        fpath = chunk[1]
-                        ctype = chunk[2]
-                        text = chunk[3]
-                        entries.append(VectorEntry(
-                            id=cid,
-                            file_path=fpath,
-                            chunk_type=ctype,
-                            name=cid.split(":")[-1] if ":" in cid else fpath,
-                            text=text,
-                            vector=vec,
-                        ))
-
-                    if entries:
-                        if f.relative_path.lower().endswith(".go"):
-                            self._store.upsert_batch(entries, replace_file=f.relative_path)
-                        else:
-                            self._store.delete_by_file(f.relative_path)
-                            self._store.upsert_batch(entries)
-                        try:
-                            mtime = os.path.getmtime(f.path)
-                        except OSError:
-                            mtime = 0.0
-                        self._store.set_file_metadata(f.relative_path, mtime, len(entries))
-                        with self._reindex_lock:
-                            self._index_progress.indexed_files += 1
-                    else:
-                        with self._reindex_lock:
-                            self._index_progress.failed_files += 1
-                            self._index_progress.last_error = (
-                                f"No vectors generated for {f.relative_path}"
-                            )
-                            self._index_progress.degraded_reason = "partial_index_failure"
+                    prepared = self._prepare_vector_file(f.relative_path, f.path)
+                    if prepared is None:
+                        raise ValueError('Source revision unavailable')
+                    revision, generation, chunks = prepared
+                    vectors = self._provider.embed(self._get_embedding_texts(chunks)) if chunks else []
+                    committed = self._commit_vector_file(
+                        f.relative_path, f.path, revision, generation, chunks, vectors,
+                    )
+                    if committed is None:
+                        raise ValueError('Incomplete or superseded vector replacement')
+                    with self._reindex_lock:
+                        self._index_progress.indexed_files += 1
                 except Exception as exc:
                     logger.debug("bg_index_failed: %s", f.relative_path, exc_info=True)
                     with self._reindex_lock:

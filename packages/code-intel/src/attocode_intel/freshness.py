@@ -130,7 +130,7 @@ class FreshnessTracker:
                 ast.start_hydration()
         for path in changed:
             if service._semantic_search:
-                service._semantic_search.invalidate_file(str(Path(self.root) / path))
+                service._semantic_search.handle_file_change(str(Path(self.root) / path), removed=path not in manifest)
                 service._semantic_search._kw_index_built = False
         self.manifest = manifest
 

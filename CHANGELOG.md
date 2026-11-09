@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Local edit notifications retain prior vectors until a complete replacement,
+  hide dirty vectors from fresh search and readiness, and remove deleted paths
+  atomically. Queued edits use workspace-relative paths and preserve follow-up
+  changes. Revision checks reject superseded writes; file vectors and freshness
+  metadata commit together, including ordinary duplicate declarations and empty
+  valid files. Notifications never initialize an optional embedding provider.
 - Native Go semantic chunks retain receiver-qualified method identities, so
   methods with the same name survive optional vector indexing. Explicit index
   maintenance repairs legacy Go receiver IDs without source edits. Complete

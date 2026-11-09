@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_live_vector_freshness.py"
+  ],
+  "cases": [
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[direct]",
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[notify]",
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[notification-queue]",
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[watch]",
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[service]",
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[freshness]",
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[direct]",
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[notify]",
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[notification-queue]",
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[watch]",
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[service]",
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[freshness]",
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[direct]",
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[notify]",
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[notification-queue]",
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[watch]",
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[service]",
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[freshness]",
+    "test_live_vector_freshness::test_notifications_never_initialize_provider[direct]",
+    "test_live_vector_freshness::test_notifications_never_initialize_provider[notify]",
+    "test_live_vector_freshness::test_notifications_never_initialize_provider[notification-queue]",
+    "test_live_vector_freshness::test_notifications_never_initialize_provider[watch]",
+    "test_live_vector_freshness::test_notifications_never_initialize_provider[service]",
+    "test_live_vector_freshness::test_notifications_never_initialize_provider[freshness]",
+    "test_live_vector_freshness::test_dirty_status_survives_reopening",
+    "test_live_vector_freshness::test_dirty_file_excluded_from_readiness",
+    "test_live_vector_freshness::test_dirty_vectors_do_not_hide_fresh_source[False]",
+    "test_live_vector_freshness::test_dirty_vectors_do_not_hide_fresh_source[True]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[raise-full]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[raise-file]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[raise-background]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[empty-full]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[empty-file]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[empty-background]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[short-full]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[short-file]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[short-background]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[long-full]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[long-file]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[long-background]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[hole-full]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[hole-file]",
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[hole-background]",
+    "test_live_vector_freshness::test_success_replaces_orphaned_file_rows[full]",
+    "test_live_vector_freshness::test_success_replaces_orphaned_file_rows[file]",
+    "test_live_vector_freshness::test_success_replaces_orphaned_file_rows[background]"
+  ],
+  "failures": {
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[direct]": {
+      "message": "REGRESSION: live notification deleted prior vectors",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[notify]": {
+      "message": "REGRESSION: live notification deleted prior vectors",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[notification-queue]": {
+      "message": "REGRESSION: live notification deleted prior vectors",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[watch]": {
+      "message": "REGRESSION: live notification deleted prior vectors",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[service]": {
+      "message": "REGRESSION: live notification deleted prior vectors",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_preserves_prior_vectors_on_failure[freshness]": {
+      "message": "REGRESSION: live notification deleted prior vectors",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[direct]": {
+      "message": "REGRESSION: notification did not reindex workspace file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[notify]": {
+      "message": "REGRESSION: notification did not reindex workspace file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[notification-queue]": {
+      "message": "REGRESSION: notification did not reindex workspace file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[watch]": {
+      "message": "REGRESSION: notification did not reindex workspace file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[service]": {
+      "message": "REGRESSION: notification did not reindex workspace file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_edit_reaches_workspace_file[freshness]": {
+      "message": "REGRESSION: notification did not reindex workspace file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[direct]": {
+      "message": "REGRESSION: deletion left vector file metadata",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[notify]": {
+      "message": "REGRESSION: deletion left vector file metadata",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[notification-queue]": {
+      "message": "REGRESSION: deletion left vector file metadata",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[watch]": {
+      "message": "REGRESSION: deletion left vector file metadata",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[service]": {
+      "message": "REGRESSION: deletion left vector file metadata",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_public_deletion_removes_vectors_and_metadata[freshness]": {
+      "message": "REGRESSION: deletion left vector file metadata",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_dirty_status_survives_reopening": {
+      "message": "REGRESSION: dirty vector state lost on reopen",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_dirty_file_excluded_from_readiness": {
+      "message": "REGRESSION: dirty file counted ready",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_dirty_vectors_do_not_hide_fresh_source[False]": {
+      "message": "REGRESSION: dirty vectors hid current lexical evidence",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[empty-file]": {
+      "message": "REGRESSION: incomplete response replaced ordinary file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[short-file]": {
+      "message": "REGRESSION: incomplete response replaced ordinary file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[short-background]": {
+      "message": "REGRESSION: incomplete response replaced ordinary file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[long-file]": {
+      "message": "REGRESSION: incomplete response replaced ordinary file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[long-background]": {
+      "message": "REGRESSION: incomplete response replaced ordinary file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[hole-full]": {
+      "message": "REGRESSION: incomplete response replaced ordinary file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[hole-file]": {
+      "message": "REGRESSION: incomplete response replaced ordinary file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_rejected_response_keeps_complete_file[hole-background]": {
+      "message": "REGRESSION: incomplete response replaced ordinary file",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_live_vector_freshness::test_success_replaces_orphaned_file_rows[full]": {
+      "message": "REGRESSION: full index retained removed ordinary symbols",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}

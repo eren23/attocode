@@ -3388,7 +3388,7 @@ class CodeIntelService:
                 try:
                     smgr = self._get_semantic_search()
                     abs_path = os.path.join(self._project_dir, rel)
-                    smgr.invalidate_file(abs_path)
+                    smgr.handle_file_change(abs_path)
                 except Exception:
                     pass
                 updated += 1
