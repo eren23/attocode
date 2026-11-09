@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_go_semantic_chunks.py"
+  ],
+  "cases": [
+    "test_go_semantic_chunks::test_native_chunk_builder_identity[receivers-structural]",
+    "test_go_semantic_chunks::test_native_chunk_builder_identity[receivers-vector]",
+    "test_go_semantic_chunks::test_native_chunk_builder_identity[same-file-structural]",
+    "test_go_semantic_chunks::test_native_chunk_builder_identity[same-file-vector]",
+    "test_go_semantic_chunks::test_native_chunk_builder_identity[python-structural]",
+    "test_go_semantic_chunks::test_native_chunk_builder_identity[python-vector]",
+    "test_go_semantic_chunks::test_native_chunk_builder_identity[unsupported-structural]",
+    "test_go_semantic_chunks::test_native_chunk_builder_identity[unsupported-vector]",
+    "test_go_semantic_chunks::test_native_vector_index_keeps_both_receivers[full]",
+    "test_go_semantic_chunks::test_native_vector_index_keeps_both_receivers[file]",
+    "test_go_semantic_chunks::test_native_vector_index_keeps_both_receivers[background]",
+    "test_go_semantic_chunks::test_unchanged_legacy_go_cache_is_repaired[full]",
+    "test_go_semantic_chunks::test_unchanged_legacy_go_cache_is_repaired[stale]",
+    "test_go_semantic_chunks::test_unchanged_legacy_go_cache_is_repaired[background]",
+    "test_go_semantic_chunks::test_failed_go_replacement_preserves_old_rows[raise-full]",
+    "test_go_semantic_chunks::test_failed_go_replacement_preserves_old_rows[raise-file]",
+    "test_go_semantic_chunks::test_failed_go_replacement_preserves_old_rows[raise-background]",
+    "test_go_semantic_chunks::test_failed_go_replacement_preserves_old_rows[partial-full]",
+    "test_go_semantic_chunks::test_failed_go_replacement_preserves_old_rows[partial-file]",
+    "test_go_semantic_chunks::test_failed_go_replacement_preserves_old_rows[partial-background]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[success]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[wrong-file]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[duplicate-id]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[conflicting-owner]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[sql-error]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[rotation]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[rotation-race]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[dimension]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[entry-dimension]",
+    "test_go_semantic_chunks::test_atomic_file_replacement[empty-success]",
+    "test_go_semantic_chunks::test_incomplete_go_source_keeps_old_vectors[full]",
+    "test_go_semantic_chunks::test_incomplete_go_source_keeps_old_vectors[file]",
+    "test_go_semantic_chunks::test_incomplete_go_source_keeps_old_vectors[background]",
+    "test_go_semantic_chunks::test_full_index_rejects_misaligned_embedding_batch[short]",
+    "test_go_semantic_chunks::test_full_index_rejects_misaligned_embedding_batch[long]",
+    "test_go_semantic_chunks::test_repeated_go_init_keeps_existing_identity_policy[full]",
+    "test_go_semantic_chunks::test_repeated_go_init_keeps_existing_identity_policy[file]",
+    "test_go_semantic_chunks::test_repeated_go_init_keeps_existing_identity_policy[stale]",
+    "test_go_semantic_chunks::test_repeated_go_init_keeps_existing_identity_policy[background]"
+  ],
+  "failures": {
+    "test_go_semantic_chunks::test_full_index_rejects_misaligned_embedding_batch[short]": {
+      "message": "REGRESSION: misaligned embedding batch replaced Go rows",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_semantic_chunks::test_full_index_rejects_misaligned_embedding_batch[long]": {
+      "message": "REGRESSION: misaligned embedding batch replaced Go rows",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_semantic_chunks::test_repeated_go_init_keeps_existing_identity_policy[full]": {
+      "message": "REGRESSION: repeated Go init blocked vector replacement",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_semantic_chunks::test_repeated_go_init_keeps_existing_identity_policy[file]": {
+      "message": "REGRESSION: repeated Go init blocked vector replacement",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_semantic_chunks::test_repeated_go_init_keeps_existing_identity_policy[stale]": {
+      "message": "REGRESSION: repeated Go init blocked vector replacement",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_semantic_chunks::test_repeated_go_init_keeps_existing_identity_policy[background]": {
+      "message": "REGRESSION: repeated Go init blocked vector replacement",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}

@@ -2,10 +2,12 @@
 import inspect
 import json
 import sqlite3
+import struct
 import threading
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from attocode_intel._internal.integrations.context import embeddings
@@ -297,3 +299,65 @@ def test_incomplete_go_source_keeps_old_vectors(tmp_path, monkeypatch, record_pr
         assert rows(value._store) == before
         assert value._store.get_file_metadata('methods.go') == metadata
     record_property('negative_native_control', 'true')
+
+
+@pytest.mark.parametrize('response', ['short', 'long'])
+def test_full_index_rejects_misaligned_embedding_batch(tmp_path, monkeypatch, record_property, response):
+    files = {**FILES, 'filler.go': 'package p\n' + ''.join(f'func F{i}() {{}}\n' for i in range(70))}
+    record_property('inputs', json.dumps(qualified_files(tmp_path, files)))
+
+    class CardinalityProvider(DeterministicProvider):
+        def embed(self, texts):
+            vectors = super().embed(texts)
+            if len(self.calls) == 1:
+                assert len(texts) == 64
+                return vectors[1:] if response == 'short' else vectors + [[0.0, 1.0, 0.0]]
+            return vectors
+
+    provider = CardinalityProvider()
+    # Put the target entirely inside batch one, with later chunks spanning
+    # a second batch: a global zip can otherwise hide shifted response rows.
+    context = SimpleNamespace(_ensure_fresh=lambda: None, _files=[
+        SimpleNamespace(relative_path=name, path=str(tmp_path / name), language='go')
+        for name in ['methods.go', 'filler.go']])
+    with manager(tmp_path, provider, monkeypatch) as value:
+        legacy(value._store, tmp_path)
+        before, metadata = rows(value._store), value._store.get_file_metadata('methods.go')
+        value.index(context)
+        after = rows(value._store)
+        after_metadata = value._store.get_file_metadata('methods.go')
+        record_property('cache', json.dumps({'before': before, 'after': after,
+                                            'metadata': metadata, 'after_metadata': after_metadata}))
+    assert len(provider.calls) == 2 and [len(t) for t in provider.calls] == [64, 16]
+    record_property('batch_sizes', json.dumps([len(t) for t in provider.calls]))
+    record_property('qualified_input', 'true')
+    assert after == before and after_metadata == metadata, 'REGRESSION: misaligned embedding batch replaced Go rows'
+
+
+@pytest.mark.parametrize('route', ['full', 'file', 'stale', 'background'])
+def test_repeated_go_init_keeps_existing_identity_policy(tmp_path, monkeypatch, record_property, route):
+    files = {**FILES, 'methods.go': FILES['methods.go'] +
+             '\nfunc init() { println("first init") }\nfunc init() { println("last init") }\n'}
+    observations = qualified_files(tmp_path, files)
+    assert sum(f['name'] == 'init' for f in observations['methods.go']['ast']['functions']) == 2
+    record_property('inputs', json.dumps(observations))
+    class InitProvider(DeterministicProvider):
+        def embed(self, texts):
+            super().embed(texts)
+            return [[0.0, 1.0, 0.0] if 'last init' in text else [1.0, 0.0, 0.0] for text in texts]
+
+    with manager(tmp_path, InitProvider(), monkeypatch) as value:
+        legacy(value._store, tmp_path)
+        error = None
+        try:
+            run_route(value, tmp_path, route)
+        except ValueError as exc:
+            error = str(exc)
+        actual = rows(value._store)
+        record_property('stored_rows', json.dumps(actual))
+        record_property('route_error', json.dumps(error))
+    record_property('qualified_input', 'true')
+    assert error is None and stored_identity(actual) == {
+        **EXPECTED, 'func:methods.go:init': ('function', 'init'),
+    } and next(r[4] for r in actual if r[0] == 'func:methods.go:init') == struct.pack(
+        '<3f', 0.0, 1.0, 0.0).hex().upper(), 'REGRESSION: repeated Go init blocked vector replacement'
