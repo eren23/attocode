@@ -143,6 +143,119 @@ async def test_perl_pinned_distribution_workflow(tmp_path, monkeypatch, pinned_p
     assert all((tmp_path / name).read_bytes() == raw for name, raw in files.items()), 'Navigation changed pinned source'
 
 
+def _perl_roots_fixture(root, manifest, files, roots, prefix):
+    """Same immutable sources, with explicit discovery and separate resolution policy."""
+    write_pinned_perl(root, files)
+    (root / '.gitignore').write_text('!dist/\ndist/*\n!dist/Carp/\n')
+    config = root / '.attocode/config.toml'
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text('[perl]\nmodule_roots = ' + json.dumps(roots) + '\n')
+    asts = {name:native(name, raw.decode(), 'perl', prefix + '-' + name.replace('/', '-'))
+            for name,raw in files.items()}
+    target = manifest['witnesses']['definition']
+    importer = manifest['witnesses']['importer']['file']
+    assert any(f.name == 'croak' and f.start_line <= target['line'] <= f.end_line
+               for f in asts[target['file']].functions)
+    assert 'Carp' in {i.module for i in asts[importer].imports}
+    return config
+
+
+async def test_perl_configured_repository_workflow(
+        tmp_path, monkeypatch, pinned_perl_sources, record_property):
+    from eval.quality.corpus import evaluate
+    from eval.quality.experiment_evidence import Journal
+
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    manifest, files = pinned_perl_sources
+    roots = ['dist/Carp/lib']
+    _perl_roots_fixture(tmp_path, manifest, files, roots, 'perl-roots-repository')
+    spec = {'id':'perl-configured-repository','language':'perl',
+            'file':'dist/Carp/lib/Carp.pm','symbol':'croak',
+            'anchor':manifest['witnesses']['definition']['text'],
+            'source_sha256':manifest['files']['dist/Carp/lib/Carp.pm']['sha256'],
+            'caller':'dist/Carp/t/Carp.t','importer':'dist/Carp/lib/Carp/Heavy.pm',
+            'test':'dist/Carp/t/Carp.t','queries':[]}
+    evidence('perl-roots-repository-inputs.json', {'roots':roots,'spec':spec,
+             'workspace_scope':'Perl repository root','manifest':manifest})
+    output = Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / 'perl-roots-repository-workflow'
+    checks = await evaluate(tmp_path, spec, journal=Journal(output, 4 * 2**20))
+    evidence('perl-roots-repository-checks.json', checks)
+    assert all((tmp_path / name).read_bytes() == raw for name,raw in files.items())
+    record_property('qualified_input', 'true')
+    record_property('native_pinned_files', str(len(files)))
+    record_property('workflow_checks', json.dumps([(c['name'],c['outcome']) for c in checks]))
+    assert len(checks)==8 and all(c['outcome']=='passed' for c in checks), 'REGRESSION: configured Perl repository roots do not satisfy navigation contracts'
+
+
+@pytest.mark.parametrize('online', [False,True], ids=['edited-while-closed','edited-in-session'])
+async def test_perl_config_only_refresh_and_restart(
+        tmp_path, monkeypatch, pinned_perl_sources, record_property, online):
+    from attocode_intel.gateway import OperationGateway
+
+    from eval.quality.corpus_capture import RecordedGateway
+    from eval.quality.experiment_evidence import Journal
+
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    manifest, files = pinned_perl_sources
+    tag = 'perl-roots-live' if online else 'perl-roots-closed'
+    config = _perl_roots_fixture(tmp_path, manifest, files, ['missing/lib'], tag)
+    stamps = {name:(tmp_path / name).stat() for name in files}
+    stamps = {name:[s.st_mtime_ns,s.st_ctime_ns,s.st_size] for name,s in stamps.items()}
+    journal = Journal(Path(os.environ['QUALITY_LANGUAGE_EVIDENCE']) / (tag + '-workflow'), 4 * 2**20)
+    target = manifest['witnesses']['definition']['file']
+    importer = manifest['witnesses']['importer']['file']
+    peer, generation, closed = None, -1, []
+    rows = []
+
+    def open_peer():
+        nonlocal peer, generation
+        generation += 1
+        peer = RecordedGateway(OperationGateway(str(tmp_path),'daily',watch=False),
+                               tmp_path,journal,generation=generation)
+
+    async def dependencies(stage):
+        response = await peer.execute_mcp('dependencies', {'path':target,'max_tokens':4000})
+        assert not response.isError
+        payload = json.loads(response.content[0].text)
+        rows.append({'stage':stage,'gateway':generation,'response':payload})
+        return payload['data']
+
+    async def close_peer():
+        nonlocal peer
+        if peer is not None:
+            await peer.close()
+            closed.append(generation)
+            peer = None
+
+    try:
+        open_peer()
+        before = await dependencies('before-config-change')
+        assert not before['imported_by']
+        record_property('qualified_input', 'true')
+        record_property('native_pinned_files', str(len(files)))
+        if not online:
+            await close_peer()
+        config.write_text('[perl]\nmodule_roots = ["dist/Carp/lib"]\n')
+        if not online:
+            open_peer()
+        await dependencies('after-config-only-change')
+        await close_peer()
+        open_peer()
+        await dependencies('reopened-after-change')
+    finally:
+        await close_peer()
+        after = {name:(tmp_path / name).stat() for name in files}
+        after = {name:[s.st_mtime_ns,s.st_ctime_ns,s.st_size] for name,s in after.items()}
+        evidence(tag + '-observations.json', {'rows':rows,'closed':closed,
+                 'expected_importer':importer,'source_stamps_before':stamps,
+                 'source_stamps_after':after,'source_unchanged':all(
+                     (tmp_path / name).read_bytes()==raw for name,raw in files.items())})
+    assert stamps==after and all((tmp_path / name).read_bytes()==raw for name,raw in files.items())
+    record_property('source_stamps_unchanged', 'true')
+    record_property('observed_importers', json.dumps([r['response']['data']['imported_by'] for r in rows]))
+    assert len(rows)==3 and all(importer in r['response']['data']['imported_by'] for r in rows[1:]), 'REGRESSION: Perl config-only dependencies remain stale across refresh or reopen'
+
+
 async def test_perl_scoped_project_inclusion_refresh_and_restart(tmp_path, monkeypatch):
     from attocode_intel._internal.integrations.context.codebase_context import (
         CodebaseContextManager,
