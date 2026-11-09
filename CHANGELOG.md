@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Default Go search uses receiver-qualified method names in keyword and source
+  results, including unchanged-cache repair. Optional vector fusion preserves
+  distinct definition spans and body windows, joining only an unambiguous owner.
 - Local edit notifications retain prior vectors until a complete replacement,
   hide dirty vectors from fresh search and readiness, and remove deleted paths
   atomically. Queued edits use workspace-relative paths and preserve follow-up
