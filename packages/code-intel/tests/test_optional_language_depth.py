@@ -1432,3 +1432,74 @@ def test_go_pinned_whole_file_deletion_events(tmp_path, record_property, pinned_
                        and c['file_path'] == name and c['previous']['qualified_name'] == symbol
                        and c['previous']['start_line'] == line and c['previous']['end_line'] == end
                        for c in changes), 'REGRESSION: Go pinned deletion event identity'
+
+
+def test_go_pinned_semantic_chunk_cache(tmp_path, monkeypatch, record_property, pinned_go_crossfile_sources):
+    import runpy
+    from tempfile import TemporaryDirectory
+
+    from attocode_intel._internal.integrations.context.ast_chunker import chunk_file
+    from attocode_intel._internal.integrations.context.vector_store import VectorEntry
+
+    helpers = runpy.run_path(str(Path(__file__).with_name('test_go_semantic_chunks.py')))
+    manifest, files = pinned_go_crossfile_sources
+    name = manifest['source_path']
+    ast = native(name, files[name].decode(), 'go', 'go-semantic-exec')
+    canonical = {f.qualified_name: f for f in ast.functions if f.is_method and f.qualified_name}
+    assert {'Regexp.doMatch', 'Regexp.doExecute'} <= canonical.keys()
+    provider = helpers['DeterministicProvider']()
+    root = None
+    record = {'closed': False}
+    try:
+        with TemporaryDirectory(prefix='go-semantic-', dir=tmp_path) as directory:
+            root = Path(directory)
+            record['inputs'] = helpers['qualified_files'](root, {p: raw.decode() for p, raw in files.items() if p.endswith('.go')})
+            for p, raw in files.items():
+                target = root / p
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(raw)
+            record['structural'] = [asdict(c) for c in chunk_file(str(root / name), name)]
+            with helpers['manager'](root, provider, monkeypatch) as value:
+                chunks = value._chunk_single_file(name, str(root / name))
+                record['vector_chunks'] = chunks
+                legacy_entries = []
+                for chunk in chunks:
+                    cid, path, kind, display = chunk[:4]
+                    qualified = cid.removeprefix('method:' + name + ':')
+                    if cid.startswith('method:' + name + ':') and qualified in canonical:
+                        bare = canonical[qualified].name
+                        cid, kind = 'func:' + name + ':' + bare, 'function'
+                        display = display.replace('method ' + qualified, 'function ' + bare, 1)
+                    legacy_entries.append(VectorEntry(cid, path, kind, cid.split(':')[-1], display, [1.0, 0.0, 0.0]))
+                value._store.upsert_batch(legacy_entries)
+                value._store.upsert(VectorEntry('preserve-other', 'other.txt', 'file', 'other', 'keep', [0.0, 1.0, 0.0]))
+                stamp = (root / name).stat().st_mtime_ns
+                value._store.set_file_metadata(name, (root / name).stat().st_mtime, len(legacy_entries))
+                record['legacy_rows'] = helpers['rows'](value._store, name)
+                other = helpers['rows'](value._store, 'other.txt')
+                record['repair_count'] = value.reindex_stale_files()
+                record['repaired_rows'] = helpers['rows'](value._store, name)
+                assert helpers['rows'](value._store, 'other.txt') == other
+                assert (root / name).stat().st_mtime_ns == stamp
+            with helpers['manager'](root, provider, monkeypatch) as reopened:
+                record['restored_rows'] = helpers['rows'](reopened._store, name)
+                calls = len(provider.calls)
+                reopened.reindex_stale_files()
+                assert len(provider.calls) == calls
+                assert helpers['rows'](reopened._store, name) == record['restored_rows']
+            record['source_unchanged'] = all((root / p).read_bytes() == raw for p, raw in files.items())
+            assert record['source_unchanged']
+            record['embed_calls'] = provider.calls
+            record['closed'] = True
+    finally:
+        record['owned_cleanup'] = root is not None and not root.exists()
+        evidence('go-semantic-observation.json', record)
+    assert record['closed'] and record['owned_cleanup']
+    record_property('qualified_input', 'true')
+    for qualified in ['Regexp.doMatch', 'Regexp.doExecute']:
+        wanted = 'method:' + name + ':' + qualified
+        assert any(c['id'] == wanted and c['chunk_type'] == 'method' and c['name'] == qualified
+                   for c in record['structural']), 'REGRESSION: Go pinned semantic chunk identity'
+        assert any(row[0] == wanted and row[1] == 'method' and row[2] == qualified
+                   for row in record['repaired_rows']), 'REGRESSION: Go pinned semantic chunk identity'
+    assert record['repaired_rows'] == record['restored_rows']
