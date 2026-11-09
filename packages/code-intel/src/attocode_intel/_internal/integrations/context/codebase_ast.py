@@ -1332,6 +1332,13 @@ def _parse_content(file_path: str, content: str) -> FileAST:
     )
 
 
+def _function_symbol_identity(func: FunctionDef, language: str) -> tuple[str, str]:
+    """Share the explicit Go method identity used by diffs and removals."""
+    if language == "go" and func.is_method and func.qualified_name:
+        return func.qualified_name, "method"
+    return func.name, "function"
+
+
 def diff_file_ast(old: FileAST, new: FileAST) -> list[SymbolChange]:
     """Compute symbol-level diff between two versions of a file's AST.
 
@@ -1349,13 +1356,8 @@ def diff_file_ast(old: FileAST, new: FileAST) -> list[SymbolChange]:
     file_path = new.path or old.path
 
     # --- Functions (including explicit Go methods declared in another file) ---
-    def function_key(func: FunctionDef, language: str) -> tuple[str, str]:
-        if language == "go" and func.is_method and func.qualified_name:
-            return func.qualified_name, "method"
-        return func.name, "function"
-
-    old_funcs = {function_key(f, old.language): f for f in old.functions}
-    new_funcs = {function_key(f, new.language): f for f in new.functions}
+    old_funcs = {_function_symbol_identity(f, old.language): f for f in old.functions}
+    new_funcs = {_function_symbol_identity(f, new.language): f for f in new.functions}
 
     for key in new_funcs:
         name, kind = key

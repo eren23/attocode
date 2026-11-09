@@ -1451,6 +1451,7 @@ class CodebaseContextManager:
             DependencyChanges,
             FileChangeResult,
             SymbolChange,
+            _function_symbol_identity,
             diff_file_ast,
             diff_imports,
             parse_file,
@@ -1469,11 +1470,12 @@ class CodebaseContextManager:
                 # Emit removal changes for all symbols in old AST
                 if old_ast is not None:
                     for func in old_ast.functions:
+                        symbol_name, symbol_kind = _function_symbol_identity(func, old_ast.language)
                         results.append(FileChangeResult(
                             file_path=rel_path,
                             symbol_changes=[SymbolChange(
-                                kind="removed", symbol_name=func.name,
-                                symbol_kind="function", file_path=rel_path,
+                                kind="removed", symbol_name=symbol_name,
+                                symbol_kind=symbol_kind, file_path=rel_path,
                                 previous=func,
                             )],
                             dependency_changes=DependencyChanges(),

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Whole-file deletion notifications retain qualified method names and method
+  kinds for standalone Go receiver methods, including refresh and dirty-file
+  updates. Previous-definition payloads and ordinary function/class removals
+  retain their existing behavior.
 - Go methods retain their explicit receiver-qualified identity and method kind
   when the receiver's type is declared in another file, including generic,
   pointer, parenthesized and Unicode receiver names. Definitions keep the
