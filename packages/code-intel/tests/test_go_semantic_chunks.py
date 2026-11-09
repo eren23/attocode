@@ -337,7 +337,7 @@ def test_full_index_rejects_misaligned_embedding_batch(tmp_path, monkeypatch, re
 @pytest.mark.parametrize('route', ['full', 'file', 'stale', 'background'])
 def test_repeated_go_init_keeps_existing_identity_policy(tmp_path, monkeypatch, record_property, route):
     files = {**FILES, 'methods.go': FILES['methods.go'] +
-             '\nfunc init() { println("first init") }\nfunc init() { println("last init") }\n'}
+             '\nfunc init() {\n println("first init")\n}\nfunc init() {\n println("last init")\n}\n'}
     observations = qualified_files(tmp_path, files)
     assert sum(f['name'] == 'init' for f in observations['methods.go']['ast']['functions']) == 2
     record_property('inputs', json.dumps(observations))
@@ -346,7 +346,8 @@ def test_repeated_go_init_keeps_existing_identity_policy(tmp_path, monkeypatch, 
             super().embed(texts)
             return [[0.0, 1.0, 0.0] if 'last init' in text else [1.0, 0.0, 0.0] for text in texts]
 
-    with manager(tmp_path, InitProvider(), monkeypatch) as value:
+    provider = InitProvider()
+    with manager(tmp_path, provider, monkeypatch) as value:
         legacy(value._store, tmp_path)
         error = None
         try:
@@ -356,6 +357,8 @@ def test_repeated_go_init_keeps_existing_identity_policy(tmp_path, monkeypatch, 
         actual = rows(value._store)
         record_property('stored_rows', json.dumps(actual))
         record_property('route_error', json.dumps(error))
+    assert any('last init' in text for batch in provider.calls for text in batch)
+    record_property('attempted_texts', json.dumps(provider.calls))
     record_property('qualified_input', 'true')
     assert error is None and stored_identity(actual) == {
         **EXPECTED, 'func:methods.go:init': ('function', 'init'),
