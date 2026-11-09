@@ -106,6 +106,11 @@ from attocode_intel._internal.integrations.context.syntax_evidence import syntax
     pytest.param({'source': '// Item on its own line.\ntype\nItem struct{}\n',
                   'types': [('Item', 'Item struct{}', 1)], 'docs': {'Item': 'Item on its own line.'}},
                  id='multiline-single-name-range'),
+    pytest.param({'source': '/* Own block.\nSecond line. */\ntype Item struct{}\n',
+                  'types': [('Item', 'type Item struct{}', 1)], 'docs': {'Item': 'Own block.\nSecond line.'}},
+                 id='leading-block-type-doc'),
+    pytest.param({'source': '/* One. */ /* Two. */\nfunc Run() {}\n', 'types': [],
+                  'functions': ['Run'], 'function_docs': {'Run': 'Two.'}}, id='leading-block-function-doc'),
 ])
 def test_go_named_types_reach_metadata_and_index(tmp_path, monkeypatch, record_property, case):
     name = 'types.go'

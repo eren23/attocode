@@ -743,7 +743,8 @@ def _find_go_doc_comment(node, source_bytes: bytes) -> str:
     Go doc comments are consecutive ``// Comment`` lines directly preceding a
     declaration with no blank lines in between.  This walks backward through
     previous named siblings collecting ``comment`` nodes whose end line is
-    adjacent to (or the same as) the start line of the next element.
+    adjacent to the start line of the next element. Only leading comments on
+    otherwise comment-only lines are eligible; sibling trailing comments are not.
     """
     comment_lines: list[str] = []
     expected_line = node.start_point[0]  # 0-based line of the declaration
@@ -753,6 +754,13 @@ def _find_go_doc_comment(node, source_bytes: bytes) -> str:
         # The comment must end exactly one line before the expected line
         if prev.end_point[0] + 1 != expected_line:
             break
+        leading = prev
+        while (leading.prev_sibling is not None and leading.prev_sibling.type == "comment"
+               and leading.prev_sibling.end_point[0] == leading.start_point[0]):
+            leading = leading.prev_sibling
+        line_start = source_bytes.rfind(b"\n", 0, leading.start_byte) + 1
+        if source_bytes[line_start:leading.start_byte].strip():
+            break  # A sibling's trailing comment is not this declaration's doc.
         text = _node_text(prev, source_bytes).strip()
         # Strip leading "//" (single-line) or "/* ... */" (block)
         if text.startswith("//"):
@@ -1527,6 +1535,8 @@ def _go_type_classes(root, source_bytes: bytes) -> list[dict]:
             if doc:
                 cls["docstring"] = doc
             body = spec.child_by_field_name("type")
+            while body is not None and body.type == "parenthesized_type":
+                body = next((child for child in body.named_children if not child.is_extra), None)
             if body is not None and body.type == "interface_type":
                 for method in body.named_children:
                     if method.type != "method_elem":

@@ -11,8 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Go named types retain every declaration and alias in grouped blocks, with
   individual source ranges and documentation. Local/blank types stay out of
-  module symbols; interface and receiver methods keep their actual type owner,
-  including receivers written before the type declaration.
+  module symbols. Inline interface methods, including parenthesized interfaces,
+  keep their own type owner. Methods on simple named receivers, including
+  pointers, bind even when written before the type declaration. Trailing comments
+  do not become the next type or function's documentation.
 - Go module bindings include every declared name in grouped `var`/`const`
   declarations and parenthesized blocks. Function and receiver locals, blank
   identifiers and initializer contents do not become global symbols.
