@@ -118,13 +118,29 @@ class FileIndex(dict):
             matches = [(directory, name) for directory, name in self.go_modules
                        if module == name or module.startswith(name + '/')]
             if not matches:
-                return []
-            longest = max(len(name) for _, name in matches)
-            matches = [(d, n) for d, n in matches if len(n) == longest]
-            if len(matches) != 1:
-                return []
-            base, name = matches[0]
-            directory = str(Path(base) / module[len(name):].lstrip('/'))
+                # Go's checked-in standard library declares module std, but
+                # imports packages as sync/atomic rather than std/sync/atomic.
+                caller = Path(source)
+                if (not module or not source or Path(module).is_absolute()
+                        or '.' in module.partition('/')[0] or '..' in Path(module).parts
+                        or caller.is_absolute() or '..' in caller.parts):
+                    return []
+                roots = [Path(base) for base, name in self.go_modules
+                         if name == 'std' and caller.is_relative_to(Path(base))]
+                if not roots:
+                    return []
+                depth = max(len(root.parts) for root in roots)
+                roots = [root for root in roots if len(root.parts) == depth]
+                if len(roots) != 1:
+                    return []
+                directory = str(roots[0] / module)
+            else:
+                longest = max(len(name) for _, name in matches)
+                matches = [(d, n) for d, n in matches if len(n) == longest]
+                if len(matches) != 1:
+                    return []
+                base, name = matches[0]
+                directory = str(Path(base) / module[len(name):].lstrip('/'))
         if directory == '..' or directory.startswith('../'):
             return []
         return sorted(self.go_packages.get(directory, ()))
