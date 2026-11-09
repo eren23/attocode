@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Go signature metadata retains grouped parameter names, written types, variadic
+  component types/rest flags and result syntax for functions, receiver methods
+  and interface methods. Blank and unnamed parameters introduce no binding names.
 - Named C parameters retain source order and written type syntax through nested
   declarators, including pointers, arrays and callbacks. Comments, declaration
   attributes and storage class modifiers do not become types. Abstract parameter
@@ -30,11 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Four unchanged pinned Gson sources cover real Java dollar-sign declarations,
-  calls, imports, selected test references and signature metadata. The native gate requires 87 cases,
+  calls, imports, selected test references and signature metadata. The native gate requires 88 cases,
   including all eight navigation checks for the added Gson workflow. Same-package
   calls without an explicit binding remain unresolved candidates.
 - An unchanged pinned Redis source provides four real C parameter-signature
   witnesses, with standalone C grammar provenance and cached-restart coverage.
+- An unchanged pinned CLI source provides three real Go signature witnesses,
+  standalone Go grammar provenance and a complete cached restart without parsing.
 
 ## [Intelligence 0.1.29] - 2026-11-08
 

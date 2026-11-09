@@ -424,6 +424,113 @@ def test_redis_pinned_c_parameter_metadata(pinned_redis_c_source, tmp_path):
              'source_unchanged': True, 'owned_cleanup': not root.exists()})
 
 
+@pytest.fixture(scope='session')
+def pinned_cli_go_source():
+    assert os.environ.get('QUALITY_ALLOW_DOWNLOADS') == '1', 'Pinned source acquisition requires explicit CI opt-in'
+    manifest = json.loads((Path(__file__).resolve().parents[1] / 'scripts/go_signature_fixture.json').read_bytes())
+    files = {}
+    for name, expected in manifest['files'].items():
+        url = f"https://raw.githubusercontent.com/{manifest['repo']}/{manifest['commit']}/{name}"
+        with urllib.request.urlopen(url, timeout=30) as response:
+            raw = response.read(expected['bytes'] + 1)
+        assert len(raw) == expected['bytes'] and hashlib.sha256(raw).hexdigest() == expected['sha256']
+        assert hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == expected['git_blob_sha1']
+        files[name] = raw
+    for target in manifest['targets']:
+        assert files[target['file']].decode().splitlines()[target['line'] - 1] == target['text']
+    evidence('cli-go-signature-receipt.json', manifest)
+    return manifest, files
+
+
+def test_cli_pinned_go_signature_metadata(pinned_cli_go_source, tmp_path):
+    import importlib.metadata
+    import re
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+
+    import tree_sitter
+    import tree_sitter_go
+    from attocode_intel._internal.integrations.context import ast_service, codebase_ast, ts_parser
+    from attocode_intel._internal.integrations.context.ast_chunker import chunk_file
+    from attocode_intel._internal.integrations.context.ast_service import ASTService
+    from attocode_intel._internal.integrations.context.syntax_evidence import syntax_tree
+
+    manifest, files = pinned_cli_go_source
+    name = manifest['targets'][0]['file']
+    source = files[name].decode()
+    ast = native(name, source, 'go', 'cli-go-signatures')
+    raw = ts_parser.ts_parse_file(name, source, 'go')
+    tree = syntax_tree(name, source, 'go')
+    parser_matches = ts_parser._get_parser('go').language == tree_sitter.Language(tree_sitter_go.language())
+    dist = importlib.metadata.distribution('tree-sitter-go')
+    origin = Path(tree_sitter_go.__file__).resolve()
+    assert any(Path(dist.locate_file(p)).resolve() == origin for p in dist.files or [])
+    chunks = {c.name: c.metadata for c in chunk_file(name, name, content=source) if c.chunk_type == 'function'}
+    evidence('cli-go-signature-results.json', {'path': name, 'has_error': tree.root_node.has_error,
+             'end_byte': tree.root_node.end_byte, 'bytes': len(files[name]),
+             'standalone_grammar_matches': parser_matches, 'go_origin': str(origin), 'go_version': dist.version,
+             'raw_functions': raw['functions'], 'functions': [asdict(f) for f in ast.functions], 'chunks': chunks})
+    assert parser_matches and dist.version == manifest['grammar_version']
+    assert not tree.root_node.has_error and tree.root_node.end_byte == len(files[name])
+
+    def tokens(text):
+        return re.findall(r'[A-Za-z_]\w*|\d+|[^\s]', text)
+
+    for target in manifest['targets']:
+        function = next(f for f in ast.functions if f.name == target['symbol'])
+        raw_function = next(f for f in raw['functions'] if f['name'] == target['symbol'])
+        assert function.start_line <= target['line'] <= function.end_line
+        assert raw_function['parameters'] == [p.name for p in function.parameters] == [p['name'] for p in target['parameters']]
+        for actual, expected in zip(function.parameters, target['parameters'], strict=True):
+            assert tokens(raw_function['param_types'][expected['name']]) == tokens(actual.type_annotation) == tokens(expected['type'])
+            assert actual.is_rest is expected['is_rest']
+        assert tokens(raw_function['return_type']) == tokens(function.return_type) == tokens(target['return_type'])
+        assert target['symbol'] + '(' + ', '.join(p['name'] for p in target['parameters']) + ')' in chunks[target['symbol']]
+        assert '-> ' + target['return_type'] in chunks[target['symbol']]
+
+    with TemporaryDirectory(prefix='cli-go-cache-', dir=tmp_path) as directory:
+        root = Path(directory)
+        target = root / name
+        target.parent.mkdir(parents=True)
+        target.write_bytes(files[name])
+        first = ASTService(str(root))
+        try:
+            first.initialize_skeleton(indexing_depth='eager')
+            assert set(first._ast_cache) == {name}
+            assert [asdict(f) for f in first._ast_cache[name].functions] == [asdict(f) for f in ast.functions]
+            expected = {k: asdict(v) for k, v in first._ast_cache.items()}
+            definitions = first._index.definitions.copy()
+            assert {t['symbol'] for t in manifest['targets']} <= set(definitions)
+            expected_symbols = {k: [asdict(loc) for loc in locations] for k, locations in definitions.items()}
+            counts = first._store.stats()
+        finally:
+            first.stop_hydration()
+            first._store.close()
+        second = ASTService(str(root))
+        try:
+            with (patch.object(ast_service, 'parse_file', side_effect=AssertionError('restart reparsed')) as parse,
+                  patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('discovery reparsed')) as discover):
+                assert second.initialize_skeleton().phase == 'ready'
+            parse.assert_not_called()
+            discover.assert_not_called()
+            restored = {k: asdict(v) for k, v in second._ast_cache.items()}
+            assert restored == expected
+            assert second._index.definitions == definitions
+            restored_symbols = {k: [asdict(loc) for loc in locations]
+                                for k, locations in second._index.definitions.items()}
+            assert second._store.stats() == counts
+            assert target.read_bytes() == files[name]
+        finally:
+            second.stop_hydration()
+            second._store.close()
+    assert not root.exists()
+    evidence('cli-go-cache-restart.json', {'path': name, 'source_sha256': hashlib.sha256(files[name]).hexdigest(),
+             'expected': expected, 'restored': restored, 'expected_symbols': expected_symbols,
+             'restored_symbols': restored_symbols, 'definitions_equal': True, 'store_counts_equal': True,
+             'restart_parse_calls': parse.call_count, 'discovery_parse_calls': discover.call_count,
+             'source_unchanged': True, 'owned_cleanup': not root.exists()})
+
+
 def test_crystal_method_definition_native_range():
     ast = native('greet.cr', 'def greet(name)\n  name\nend\n', 'crystal', 'crystal-method')
     assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == [('greet', 1, 3)], 'language coverage: Crystal native method definition missing'
