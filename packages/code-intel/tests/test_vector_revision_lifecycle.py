@@ -329,25 +329,30 @@ def test_missing_parser_cannot_certify_nonempty_replacement(tmp_path, monkeypatc
 def test_generic_native_error_does_not_replace_vectors(tmp_path, monkeypatch, record_property):
     from attocode_intel._internal.integrations.context import ts_parser
     with workspace(tmp_path, monkeypatch) as s:
-        path = tmp_path / 'target.pm'
-        path.write_text('sub original {\n return 1;\n}\n')
+        path = tmp_path / 'target.c'
+        path.write_text('int original(void) {\n return 1;\n}\n')
         s.value.reindex_file(str(path))
-        before, metadata = rows(s.value, 'target.pm'), s.value._store.get_file_metadata('target.pm')
+        before, metadata = rows(s.value, 'target.c'), s.value._store.get_file_metadata('target.c')
         assert len(before) == 2
-        source = 'sub broken {'
+        source = 'int broken('
         path.write_text(source)
         primary = ts_parser.ts_parse_file
+        # Exercise the real generic extractor using the already installed C
+        # grammar; this binding is a controlled component fixture, not a claim
+        # that C ordinarily routes through EXTRA_GRAMMAR_MODULES.
+        monkeypatch.setitem(ts_parser.EXTRA_GRAMMAR_MODULES, 'c', 'tree_sitter_c')
         monkeypatch.setattr(ts_parser, 'ts_parse_file', lambda file_path, **kw:
                             None if str(file_path) == str(path) else primary(file_path, **kw))
         ast = parse_file(str(path), source)
-        tree = syntax_tree(str(path), source, 'perl')
+        tree = syntax_tree(str(path), source, 'c')
         assert ast.parsing_tier == 'generic_ts' and not ast.parse_failures
         assert tree is not None and tree.root_node.has_error
         s.value.reindex_file(str(path))
-        actual, after_metadata = rows(s.value, 'target.pm'), s.value._store.get_file_metadata('target.pm')
+        actual, after_metadata = rows(s.value, 'target.c'), s.value._store.get_file_metadata('target.c')
         record_property('observed', json.dumps({'before': before, 'after': actual, 'metadata': metadata,
                                                'after_metadata': after_metadata, 'tier': ast.parsing_tier,
                                                'tree': str(tree.root_node)}))
+        record_property('controlled_generic_binding', 'c->tree_sitter_c')
         record_property('qualified_input', 'true')
         assert actual == before and after_metadata == metadata, 'REGRESSION: generic syntax errors erased vectors'
 
