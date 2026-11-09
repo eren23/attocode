@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "repo": "golang/go",
+  "commit": "6885bad7dd86880be6929c02085e5c7a67ff2887",
+  "source_tag": "go1.23.0",
+  "source_path": "src/go/ast/ast.go",
+  "grammar_version": "0.25.0",
+  "license_path": "LICENSE",
+  "files": {
+    "src/go/ast/ast.go": {
+      "bytes": 36500,
+      "sha256": "e534fb8d8f85dae4100fbcabca4577199ff5a8ebbd74fa40b874f36b8d7b2732",
+      "git_blob_sha1": "73aa3da89eab6bb600d81f92452c62c9687892f5"
+    },
+    "LICENSE": {
+      "bytes": 1479,
+      "sha256": "2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067",
+      "git_blob_sha1": "6a66aea5eafe0ca6a688840c47219556c552488e"
+    }
+  },
+  "targets": [
+    {
+      "name": "Ident",
+      "start_line": 287,
+      "end_line": 291,
+      "header": "\tIdent struct {",
+      "docstring": "An Ident node represents an identifier.",
+      "methods": [
+        {
+          "name": "Pos",
+          "start_line": 481,
+          "end_line": 481,
+          "header": "func (x *Ident) Pos() token.Pos    { return x.NamePos }",
+          "visibility": "public"
+        },
+        {
+          "name": "End",
+          "start_line": 515,
+          "end_line": 515,
+          "header": "func (x *Ident) End() token.Pos   { return token.Pos(int(x.NamePos) + len(x.Name)) }",
+          "visibility": "public"
+        },
+        {
+          "name": "exprNode",
+          "start_line": 551,
+          "end_line": 551,
+          "header": "func (*Ident) exprNode()          {}",
+          "visibility": "private"
+        },
+        {
+          "name": "IsExported",
+          "start_line": 586,
+          "end_line": 586,
+          "header": "func (id *Ident) IsExported() bool { return token.IsExported(id.Name) }",
+          "visibility": "public"
+        },
+        {
+          "name": "String",
+          "start_line": 588,
+          "end_line": 593,
+          "header": "func (id *Ident) String() string {",
+          "visibility": "public"
+        }
+      ],
+      "doc_lines": [
+        286
+      ]
+    },
+    {
+      "name": "Spec",
+      "start_line": 880,
+      "end_line": 883,
+      "header": "\tSpec interface {",
+      "docstring": "The Spec type stands for any of *ImportSpec, *ValueSpec, and *TypeSpec.",
+      "methods": [
+        {
+          "name": "specNode",
+          "start_line": 882,
+          "end_line": 882,
+          "header": "\t\tspecNode()",
+          "visibility": "private"
+        }
+      ],
+      "doc_lines": [
+        879
+      ]
+    },
+    {
+      "name": "ImportSpec",
+      "start_line": 886,
+      "end_line": 892,
+      "header": "\tImportSpec struct {",
+      "docstring": "An ImportSpec node represents a single package import.",
+      "methods": [
+        {
+          "name": "Pos",
+          "start_line": 918,
+          "end_line": 923,
+          "header": "func (s *ImportSpec) Pos() token.Pos {",
+          "visibility": "public"
+        },
+        {
+          "name": "End",
+          "start_line": 927,
+          "end_line": 932,
+          "header": "func (s *ImportSpec) End() token.Pos {",
+          "visibility": "public"
+        },
+        {
+          "name": "specNode",
+          "start_line": 947,
+          "end_line": 947,
+          "header": "func (*ImportSpec) specNode() {}",
+          "visibility": "private"
+        }
+      ],
+      "doc_lines": [
+        885
+      ]
+    },
+    {
+      "name": "ValueSpec",
+      "start_line": 897,
+      "end_line": 903,
+      "header": "\tValueSpec struct {",
+      "docstring": "A ValueSpec node represents a constant or variable declaration\n(ConstSpec or VarSpec production).\n",
+      "methods": [
+        {
+          "name": "Pos",
+          "start_line": 924,
+          "end_line": 924,
+          "header": "func (s *ValueSpec) Pos() token.Pos { return s.Names[0].Pos() }",
+          "visibility": "public"
+        },
+        {
+          "name": "End",
+          "start_line": 934,
+          "end_line": 942,
+          "header": "func (s *ValueSpec) End() token.Pos {",
+          "visibility": "public"
+        },
+        {
+          "name": "specNode",
+          "start_line": 948,
+          "end_line": 948,
+          "header": "func (*ValueSpec) specNode()  {}",
+          "visibility": "private"
+        }
+      ],
+      "doc_lines": [
+        894,
+        895,
+        896
+      ]
+    },
+    {
+      "name": "TypeSpec",
+      "start_line": 906,
+      "end_line": 913,
+      "header": "\tTypeSpec struct {",
+      "docstring": "A TypeSpec node represents a type declaration (TypeSpec production).",
+      "methods": [
+        {
+          "name": "Pos",
+          "start_line": 925,
+          "end_line": 925,
+          "header": "func (s *TypeSpec) Pos() token.Pos  { return s.Name.Pos() }",
+          "visibility": "public"
+        },
+        {
+          "name": "End",
+          "start_line": 943,
+          "end_line": 943,
+          "header": "func (s *TypeSpec) End() token.Pos { return s.Type.End() }",
+          "visibility": "public"
+        },
+        {
+          "name": "specNode",
+          "start_line": 949,
+          "end_line": 949,
+          "header": "func (*TypeSpec) specNode()   {}",
+          "visibility": "private"
+        }
+      ],
+      "doc_lines": [
+        905
+      ]
+    }
+  ],
+  "required_control_types": [
+    "Node"
+  ],
+  "required_functions": [
+    {
+      "name": "NewIdent",
+      "line": 580,
+      "header": "func NewIdent(name string) *Ident { return &Ident{token.NoPos, name, nil} }"
+    }
+  ]
+}
