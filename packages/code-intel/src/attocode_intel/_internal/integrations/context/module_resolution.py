@@ -27,12 +27,18 @@ class FileIndex(dict):
         self.namespace_files = {}
         self.include_dirs = {}
         self.swift_projects = []
+        self.perl_module_roots = ['.', 'lib']
 
     def _read(self, root, name):
         path = Path(root) / name
         if not path.resolve().is_relative_to(Path(root).resolve()) or path.stat().st_size > 1_000_000:
             raise ValueError('Configuration outside indexed workspace or oversized')
         return path.read_text()
+
+    def configure_perl(self, root_dir: str) -> None:
+        from attocode_intel.config import load_perl_module_roots
+
+        self.perl_module_roots = load_perl_module_roots(str(root_dir))
 
     def configure_javascript(self, root):
         self.js_projects = []

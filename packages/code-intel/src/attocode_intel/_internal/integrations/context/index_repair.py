@@ -9,11 +9,18 @@ from pathlib import Path
 from .codebase_context import build_dependency_graph
 from .cross_references import CrossRefIndex
 from .index_store import SNAPSHOT_KEY
+from .language_registry import LANG_EXTENSIONS
 
 
 def changed_paths(before: dict, after: dict) -> set[str]:
     old, new = before["files"], after["files"]
-    return {path for path in old.keys() | new.keys() if old.get(path) != new.get(path)}
+    changed = {path for path in old.keys() | new.keys() if old.get(path) != new.get(path)}
+    defaults = ('.', 'lib')
+    if tuple(before.get('perl_module_roots', defaults)) != tuple(after.get('perl_module_roots', defaults)):
+        # Unchanged source still needs dependency rows persisted under new roots.
+        changed |= {path for path in old.keys() | new.keys()
+                    if LANG_EXTENSIONS.get(Path(path).suffix.lower()) == 'perl'}
+    return changed
 
 
 def repair_index(service, asts: dict, identity: dict, changed: set[str]) -> dict:

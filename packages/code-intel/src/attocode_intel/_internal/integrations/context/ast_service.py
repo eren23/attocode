@@ -352,6 +352,7 @@ class ASTService:
         return state
 
     def _snapshot_identity(self) -> dict:
+        from attocode_intel.config import load_perl_module_roots
         from attocode_intel.freshness import FreshnessTracker
 
         if self._snapshot_tracker is None:
@@ -360,6 +361,7 @@ class ASTService:
         return {
             "files": {path: list(identity) for path, identity in manifest.items()},
             "ignore": list(self._snapshot_tracker._ignore_identity or ()),
+            "perl_module_roots": sorted(set(load_perl_module_roots(self._root_dir))),
         }
 
     def _restore_snapshot(self, files, parseable, state, *, summaries=None, snapshot=None) -> bool:

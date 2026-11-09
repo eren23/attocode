@@ -8,7 +8,9 @@ import threading
 from pathlib import Path
 
 from attocode_intel._internal.integrations.context.index_store import SNAPSHOT_KEY
+from attocode_intel._internal.integrations.context.language_registry import LANG_EXTENSIONS
 from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
+from attocode_intel.config import load_perl_module_roots
 
 
 class FreshnessTracker:
@@ -19,6 +21,7 @@ class FreshnessTracker:
         self._ignore = None
         self._ignore_identity = None
         self._eligibility = {}
+        self._perl_policy = None
 
     def scan_manifest(self):
         """Stat every eligible file, reusing only path-filter decisions.
@@ -87,27 +90,39 @@ class FreshnessTracker:
         return manifest
 
     def refresh(self, service):
+        policy = tuple(sorted(set(load_perl_module_roots(self.root))))
         manifest = self.scan_manifest()
         previous = self.manifest
         if previous is None or service._ast_service is None:
             self.manifest = manifest
+            self._perl_policy = policy
             return
-        changed = {
+        source_changed = {
             p for p in previous.keys() | manifest.keys() if previous.get(p) != manifest.get(p)
         }
-        if not changed:
+        policy_changed = self._perl_policy is not None and self._perl_policy != policy
+        if not source_changed and not policy_changed:
             self.manifest = manifest
+            self._perl_policy = policy
             return
+        changed = set(source_changed)
+        if policy_changed:
+            changed |= {p for p in manifest if LANG_EXTENSIONS.get(Path(p).suffix.lower()) == 'perl'}
         self.generation += 1
         from attocode_intel.request_context import current_request
         request = current_request.get()
-        if request and (precision := request.stores.get("precision")):
+        if changed and request and (precision := request.stores.get("precision")):
             precision.invalidate(changed)
         if request:
             request.stores.pop("reference_pages", None)
         ast = service._ast_service
         if not ast.repair_changed_files(expected_manifest=manifest):
             ast.stop_hydration()
+            if policy_changed:
+                ast._store.set_meta(SNAPSHOT_KEY, '')
+                ast._snapshot_start = None
+                ast._context_mgr._dep_graph = None
+                ast._context_mgr._repo_map = None
             if previous.keys() != manifest.keys():
                 ast._context_mgr.discover_files()
             for path in changed:
@@ -128,11 +143,12 @@ class FreshnessTracker:
                         ast._index.add_file_dependency(source, target)
             if ast._hydration_state and ast._hydration_state.phase != "ready":
                 ast.start_hydration()
-        for path in changed:
+        for path in source_changed:
             if service._semantic_search:
                 service._semantic_search.handle_file_change(str(Path(self.root) / path), removed=path not in manifest)
                 service._semantic_search._kw_index_built = False
         self.manifest = manifest
+        self._perl_policy = policy
 
 
 class WorkspaceWatcher:

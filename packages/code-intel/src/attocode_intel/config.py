@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import datetime
 import ipaddress
+import json
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 def is_loopback(host: str) -> bool:
@@ -187,6 +189,54 @@ def token_is_expired(token: str, *, leeway_seconds: int = 30) -> bool:
     return time.time() >= (float(exp) - leeway_seconds)
 
 
+def load_perl_module_roots(project_dir: str) -> list[str]:
+    """Read contained static Perl roots; absent/invalid config keeps root/lib.
+
+    Explicit lists replace defaults. Entries grant no file-discovery permission
+    and never cause Perl, shell, environment or host-global path evaluation.
+    """
+    defaults = ['.', 'lib']
+    try:
+        import tomllib
+
+        root = Path(project_dir).resolve()
+        path = (root / '.attocode/config.toml').resolve(strict=True)
+        if not path.is_relative_to(root) or not path.is_file():
+            return defaults
+        with path.open('rb') as stream:
+            raw = stream.read(1_000_001)
+        if len(raw) > 1_000_000:
+            return defaults
+        data = tomllib.loads(raw.decode('utf-8'))
+    except (OSError, UnicodeError, ValueError, RuntimeError):
+        return defaults
+    perl = data.get('perl')
+    if not isinstance(perl, dict) or 'module_roots' not in perl:
+        return defaults
+    entries = perl['module_roots']
+    if not isinstance(entries, list):
+        return defaults
+    result = []
+    for entry in entries:
+        if (not isinstance(entry, str) or not entry
+                or any(ord(c) < 32 or ord(c) == 127 for c in entry)):
+            continue
+        relative = entry.replace('\\', '/')
+        if (PurePosixPath(relative).is_absolute() or PureWindowsPath(entry).drive
+                or '..' in PurePosixPath(relative).parts):
+            continue
+        try:
+            path = (root / relative).resolve()
+            if not path.is_relative_to(root) or (path.exists() and not path.is_dir()):
+                continue
+            name = path.relative_to(root).as_posix()
+        except (OSError, ValueError, RuntimeError):
+            continue
+        if name not in result:
+            result.append(name)
+    return result
+
+
 def load_remote_config(project_dir: str) -> RemoteConfig:
     """Load remote config from .attocode/config.toml, falling back to env vars."""
     config_path = Path(project_dir) / ".attocode" / "config.toml"
@@ -216,6 +266,30 @@ def load_remote_config(project_dir: str) -> RemoteConfig:
     return rc
 
 
+def _toml_key(value: str) -> str:
+    if value and all(c.isascii() and (c.isalnum() or c in '-_') for c in value):
+        return value
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _toml_value(value: object) -> str:
+    """Serialize tomllib values without Python repr changing TOML semantics."""
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, list):
+        return '[' + ', '.join(_toml_value(item) for item in value) + ']'
+    if isinstance(value, dict):
+        return '{' + ', '.join(_toml_key(k) + ' = ' + _toml_value(v)
+                               for k, v in value.items()) + '}'
+    raise TypeError('Unsupported TOML value type: ' + type(value).__name__)
+
+
 def save_remote_config(project_dir: str, rc: RemoteConfig) -> Path:
     """Save remote config to .attocode/config.toml. Returns the config path."""
     config_path = Path(project_dir) / ".attocode" / "config.toml"
@@ -237,20 +311,17 @@ def save_remote_config(project_dir: str, rc: RemoteConfig) -> Path:
         "branch_auto_detect": rc.branch_auto_detect,
     }
 
-    # Write TOML manually (tomllib is read-only, avoid tomli_w dependency)
-    lines: list[str] = []
+    # Root scalars must precede tables; inline nested tables preserve their data.
+    lines = [_toml_key(k) + ' = ' + _toml_value(v) for k, v in existing.items()
+             if not isinstance(v, dict)]
     for section, values in existing.items():
         if isinstance(values, dict):
-            lines.append(f"[{section}]")
+            if lines:
+                lines.append('')
+            lines.append('[' + _toml_key(section) + ']')
             for k, v in values.items():
-                if isinstance(v, bool):
-                    lines.append(f"{k} = {'true' if v else 'false'}")
-                elif isinstance(v, str):
-                    esc = v.replace("\\", "\\\\").replace('"', '\\"')
-                    lines.append(f'{k} = "{esc}"')
-                else:
-                    lines.append(f"{k} = {v}")
-            lines.append("")
+                lines.append(_toml_key(k) + ' = ' + _toml_value(v))
 
-    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Encode before opening the file so invalid Unicode cannot truncate it.
+    config_path.write_bytes(('\n'.join(lines) + '\n').encode('utf-8'))
     return config_path
