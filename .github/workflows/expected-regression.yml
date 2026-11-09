@@ -1,6 +1,8 @@
 name: Expected regression
 
 on:
+  push:
+    branches: [ci/expected-regression-review]
   workflow_dispatch:
     inputs:
       contract:
@@ -39,11 +41,11 @@ jobs:
           if-no-files-found: error
 
   expected-regression:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      CONTRACT: ${{ inputs.contract }}
+      CONTRACT: ${{ inputs.contract || '.github/regressions/classifier-native-inventory.json' }}
       PYTHONPATH: ${{ github.workspace }}/packages/code-intel/src:${{ github.workspace }}
       QUALITY_ALLOW_DOWNLOADS: '1'
     steps:
