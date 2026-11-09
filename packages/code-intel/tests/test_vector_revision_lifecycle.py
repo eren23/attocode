@@ -1,0 +1,196 @@
+"""Source and transaction boundaries around real optional vector writes."""
+import json
+import os
+import sqlite3
+import struct
+import threading
+from pathlib import Path
+
+import pytest
+from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager
+from test_live_vector_freshness import NEW, rows, workspace, writer
+
+LATEST = 'def renewed():\n    return "lastfalcon"\n'
+
+
+@pytest.mark.parametrize('change', ['edit', 'same-mtime', 'unnotified', 'delete', 'rename'])
+def test_superseded_embedding_never_commits(tmp_path, monkeypatch, record_property, change):
+    with workspace(tmp_path, monkeypatch) as s:
+        before = rows(s.value)
+        path = tmp_path / 'target.py'
+        path.write_text(NEW)
+        entered, release = threading.Event(), threading.Event()
+        original = s.provider.embed
+        def blocked(texts):
+            entered.set()
+            assert release.wait(3)
+            return original(texts)
+        s.provider.embed = blocked
+        errors = []
+        def run():
+            try:
+                s.value.reindex_file(str(path))
+            except Exception as exc:
+                errors.append(str(exc))
+        thread = threading.Thread(target=run)
+        thread.start()
+        try:
+            assert entered.wait(3), 'Real embedding provider was not reached'
+            stamp = path.stat()
+            if change == 'delete':
+                path.unlink()
+            elif change == 'rename':
+                path.rename(tmp_path / 'renamed.py')
+            else:
+                path.write_text(LATEST)
+                if change == 'same-mtime':
+                    assert len(NEW.encode()) == len(LATEST.encode())
+                    os.utime(path, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+            if change != 'unnotified':
+                s.value.invalidate_file(str(path))
+        finally:
+            release.set()
+            thread.join(3)
+        assert not thread.is_alive()
+        actual = rows(s.value)
+        metadata = s.value._store.get_file_metadata('target.py')
+        record_property('observed', json.dumps({'before': before, 'after': actual,
+                                               'metadata': metadata, 'errors': errors,
+                                               'embed_calls': s.provider.calls}))
+        record_property('qualified_input', 'true')
+        expected = [] if change in {'delete', 'rename'} else before
+        assert not errors and actual == expected, 'REGRESSION: superseded embedding overwrote notified source'
+        if change in {'delete', 'rename'}:
+            assert metadata is None
+
+
+@pytest.mark.parametrize('failure', ['vector', 'metadata'])
+def test_vectors_and_metadata_rollback_together(tmp_path, monkeypatch, record_property, failure):
+    with workspace(tmp_path, monkeypatch) as s:
+        before, metadata = rows(s.value), s.value._store.get_file_metadata('target.py')
+        conn = s.value._store._get_conn()
+        if failure == 'vector':
+            conn.execute("CREATE TRIGGER fail_replacement BEFORE INSERT ON vectors WHEN NEW.id LIKE '%:updated' BEGIN SELECT RAISE(ABORT,'blocked vector'); END")
+        else:
+            conn.execute("CREATE TRIGGER fail_metadata BEFORE INSERT ON file_metadata WHEN NEW.file_path='target.py' BEGIN SELECT RAISE(ABORT,'blocked metadata'); END")
+        conn.commit()
+        (tmp_path / 'target.py').write_text(NEW)
+        error = None
+        try:
+            s.value.reindex_file(str(tmp_path / 'target.py'))
+        except sqlite3.DatabaseError as exc:
+            error = str(exc)
+        after = rows(s.value)
+        after_metadata = s.value._store.get_file_metadata('target.py')
+        transaction_open = conn.in_transaction
+        conn.rollback()
+        assert error is not None and any('updated' in t for batch in s.provider.calls for t in batch)
+        record_property('observed', json.dumps({'before': before, 'after': after, 'metadata': metadata,
+                                               'after_metadata': after_metadata, 'error': error,
+                                               'transaction_open': transaction_open}))
+        record_property('qualified_input', 'true')
+        assert after == before and metadata == after_metadata and not transaction_open, 'REGRESSION: vector metadata replacement was not atomic'
+
+
+def test_second_edit_while_pending_gets_followup(tmp_path, monkeypatch, record_property):
+    with workspace(tmp_path, monkeypatch) as s:
+        entered, release, second = threading.Event(), threading.Event(), threading.Event()
+        calls = []
+        def controlled(self, path):
+            calls.append(str(path))
+            if len(calls) == 1:
+                entered.set()
+                assert release.wait(3)
+            else:
+                second.set()
+            return 0
+        monkeypatch.setattr(SemanticSearchManager, 'reindex_file', controlled)
+        path = tmp_path / 'target.py'
+        path.write_text(NEW)
+        s.value.queue_reindex(str(path))
+        try:
+            assert entered.wait(3)
+            path.write_text(LATEST)
+            s.value.queue_reindex(str(path))
+        finally:
+            release.set()
+        followed_up = second.wait(1)
+        record_property('observed', json.dumps({'calls': calls, 'followed_up': followed_up}))
+        record_property('qualified_input', 'true')
+        assert followed_up and len(calls) == 2 and all(Path(p).name == 'target.py' for p in calls), 'REGRESSION: pending queue discarded second edit'
+
+
+def test_close_drains_active_worker(tmp_path, monkeypatch, record_property):
+    with workspace(tmp_path, monkeypatch) as s:
+        entered, release = threading.Event(), threading.Event()
+        def controlled(self, path):
+            entered.set()
+            assert release.wait(3)
+            assert self._store._conn is not None
+            return 0
+        monkeypatch.setattr(SemanticSearchManager, 'reindex_file', controlled)
+        s.value.queue_reindex(str(tmp_path / 'target.py'))
+        assert entered.wait(3)
+        closer = threading.Thread(target=s.value.close)
+        closer.start()
+        release.set()
+        closer.join(3)
+        assert not closer.is_alive() and not s.value._reindex_thread.is_alive()
+        assert s.value._store._conn is None
+        record_property('qualified_input', 'true')
+
+
+@pytest.mark.parametrize('language', ['python', 'javascript'])
+def test_duplicate_identity_keeps_last_body_and_correct_count(tmp_path, monkeypatch, record_property, language):
+    with workspace(tmp_path, monkeypatch) as s:
+        name = 'duplicate.py' if language == 'python' else 'duplicate.js'
+        source = ('def same():\n    return "firstvalue"\ndef same():\n    return "lastvalue"\n'
+                  if language == 'python' else
+                  'function same() {\n return "firstvalue";\n}\nfunction same() {\n return "lastvalue";\n}\n')
+        path = tmp_path / name
+        path.write_text(source)
+        ast = parse_file(str(path), source)
+        assert sum(f.name == 'same' for f in ast.functions) == 2 and not ast.parse_failures
+        original = s.provider.embed
+        def tagged(texts):
+            original(texts)
+            return [[0.0, 1.0, 0.0] if 'lastvalue' in t else [1.0, 0.0, 0.0] for t in texts]
+        s.provider.embed = tagged
+        s.value.reindex_file(str(path))
+        actual = rows(s.value, name)
+        metadata = s.value._store.get_file_metadata(name)
+        assert any('lastvalue' in t for batch in s.provider.calls for t in batch)
+        record_property('observed', json.dumps({'rows': actual, 'metadata': metadata}))
+        record_property('qualified_input', 'true')
+        assert len(actual) == 2 and metadata['chunk_count'] == 2, 'REGRESSION: duplicate IDs overstated indexed chunks'
+        assert next(r[4] for r in actual if r[0].endswith(':same')) == struct.pack('<3f', 0, 1, 0).hex().upper()
+
+
+@pytest.mark.parametrize('route', ['full', 'file', 'background'])
+def test_empty_valid_file_commits_zero_chunk_metadata(tmp_path, monkeypatch, record_property, route):
+    with workspace(tmp_path, monkeypatch) as s:
+        (tmp_path / 'target.py').write_text('')
+        s.value._store.set_file_metadata('target.py', 0.0, 2)
+        s.provider.calls.clear()
+        writer(s, route)
+        actual, metadata = rows(s.value), s.value._store.get_file_metadata('target.py')
+        record_property('observed', json.dumps({'rows': actual, 'metadata': metadata}))
+        record_property('qualified_input', 'true')
+        assert not actual and metadata is not None and metadata['chunk_count'] == 0, 'REGRESSION: empty source was not durably indexed'
+        assert not s.provider.calls
+
+
+def test_reindex_rejects_outside_workspace(tmp_path, monkeypatch, record_property):
+    with workspace(tmp_path, monkeypatch) as s:
+        outside = tmp_path.parent / (tmp_path.name + '-outside.py')
+        outside.write_text('def outside():\n    return 1\n')
+        s.provider.calls.clear()
+        try:
+            s.value.reindex_file(str(outside))
+            paths = s.value._store._get_conn().execute('SELECT DISTINCT file_path FROM vectors').fetchall()
+            record_property('observed', json.dumps(paths))
+            record_property('qualified_input', 'true')
+            assert not s.provider.calls and all(not p[0].startswith('..') for p in paths), 'REGRESSION: reindex accepted outside workspace'
+        finally:
+            outside.unlink()
