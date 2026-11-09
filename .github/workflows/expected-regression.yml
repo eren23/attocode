@@ -1,14 +1,25 @@
 name: Expected regression
 
 on:
-  push:
-    branches: [ci/expected-regressions]
+  workflow_dispatch:
+    inputs:
+      contract:
+        description: Committed prospective JSON contract under .github/regressions/
+        required: true
+        type: string
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/expected-regression.yml
+      - packages/code-intel/scripts/check_expected_regression.py
+      - packages/code-intel/tests/test_expected_regression.py
 
 permissions:
   contents: read
 
 jobs:
-  bootstrap-classifier:
+  classifier-tests:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -19,40 +30,44 @@ jobs:
         with:
           python-version: '3.12'
       - run: uv sync --locked --package attocode-code-intel --extra dev
-      - name: Prove frozen classifier API absence without failing the workflow
-        env:
-          EVIDENCE: ${{ runner.temp }}/regression
-        run: |
-          mkdir "$EVIDENCE"
-          set +e
-          uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_expected_regression.py -q --junitxml="$EVIDENCE/pytest.xml" >"$EVIDENCE/pytest.log" 2>&1
-          result=$?
-          set -e
-          printf '%s' "$result" > "$EVIDENCE/exit-code"
-          uv run --no-sync python - <<'PY'
-          import json, os, subprocess, xml.etree.ElementTree as ET
-          from pathlib import Path
-          root = Path(os.environ['EVIDENCE'])
-          expected = json.loads(Path('.github/regressions/classifier-bootstrap.json').read_text())
-          xml = ET.fromstring((root / 'pytest.xml').read_bytes())
-          cases = list(xml.iter('testcase'))
-          assert (root / 'exit-code').read_text() == '1'
-          assert not list(xml.iter('error')) and not list(xml.iter('skipped'))
-          assert len(cases) == len(expected) and {c.get('name') for c in cases} == set(expected)
-          for case in cases:
-              failures = case.findall('failure')
-              assert len(failures) == 1
-              assert failures[0].get('message', '').splitlines()[0] == 'AssertionError: REGRESSION: expected regression classifier missing'
-              assert case.find("properties/property[@name='qualification']").get('value') == 'classifier-api-absence'
-          proof = {'status': 'expected-api-absence-observed', 'cases': expected,
-                   'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}
-          (root / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
-          print(json.dumps(proof))
-          PY
+      - run: uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests packages/code-intel/tests/test_expected_regression.py -q --junitxml=classifier.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: expected-regression-bootstrap
+          name: expected-regression-classifier
+          path: classifier.xml
+          if-no-files-found: error
+
+  expected-regression:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CONTRACT: ${{ inputs.contract }}
+      PYTHONPATH: ${{ github.workspace }}/packages/code-intel/src:${{ github.workspace }}
+      QUALITY_ALLOW_DOWNLOADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Validate contract and select fixed profile
+        id: contract
+        run: uv run --no-sync python packages/code-intel/scripts/check_expected_regression.py --contract "$CONTRACT" --profile >> "$GITHUB_OUTPUT"
+      - name: Install pinned standalone Crystal grammar
+        if: steps.contract.outputs.profile == 'native'
+        timeout-minutes: 5
+        run: uv pip install --python .venv/bin/python --no-deps 'tree-sitter-crystal @ git+https://github.com/crystal-lang-tools/tree-sitter-crystal@50ca9e6fcfb16a2cbcad59203cfd8ad650e25c49'
+      - name: Require exact declared regression and preserve original evidence
+        run: uv run --no-sync python packages/code-intel/scripts/check_expected_regression.py --contract "$CONTRACT" --output "$RUNNER_TEMP/regression"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: expected-regression-evidence
           retention-days: 14
           if-no-files-found: error
           path: ${{ runner.temp }}/regression/
