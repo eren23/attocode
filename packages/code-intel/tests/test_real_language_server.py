@@ -187,3 +187,126 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
                 (destination / f"real-server-{language}.json").write_text(
                     json.dumps(list(protocol), indent=2) + "\n")
         assert process is not None and process.returncode is not None
+
+
+async def test_real_rust_first_attempt_and_later_retry(tmp_path, monkeypatch, record_property):
+    import asyncio
+    import hashlib
+    import json
+    import time
+
+    from attocode_intel._internal.errors import ToolError
+    from attocode_intel._internal.integrations.lsp.client import BUILTIN_SERVERS
+    from test_rust_recovery_contract import _source_receipt
+
+    from eval.quality.lsp_trace import LSPTrace
+
+    if 'rust' not in os.environ.get('QUALITY_REAL_LSP_LANGUAGES', '').split(','):
+        pytest.skip('Worker-only pinned Rust witness; no local acquisition')
+    source_before = _source_receipt(record_property, 'before')
+    assert shutil.which(BUILTIN_SERVERS['rust'].command)
+    files = {
+        'Cargo.toml':'[package]\nname="quality-recovery"\nversion="0.1.0"\nedition="2021"\n',
+        'src/first.rs':'pub fn helper() -> i32 { 1 }\n',
+        'src/second.rs':'pub fn helper() -> i32 { 2 }\n',
+        'src/lib.rs':'pub mod first;\npub mod second;\npub fn caller() -> i32 { first::helper() }\n',
+    }
+    for name, text in files.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    record_property('fixture_hashes', json.dumps({
+        name:hashlib.sha256(text.encode()).hexdigest() for name,text in files.items()}))
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'auto')
+    gateway = OperationGateway(str(tmp_path), 'daily', watch=False)
+    trace_dir = os.environ.get('QUALITY_LSP_TRACE_DIR')
+    trace = LSPTrace(Path(trace_dir) / 'lsp-recovery-rust.jsonl' if trace_dir else None,
+                     tmp_path.as_uri())
+    process = None
+    with trace.capture(monkeypatch):
+        try:
+            await gateway.execute('symbols', {'path':'src/first.rs'})
+            stores = next(iter(gateway._stores.values()))
+            worker = next(iter(gateway._workers.values()))
+            manager = stores['service']._get_lsp_manager()
+
+            async def inspect(path, stage):
+                trace.stage(stage)
+                started = time.monotonic()
+                response = await gateway.execute('inspect_symbol', {
+                    'symbol_name':'helper', 'file_path':path, 'line':1})
+                elapsed = time.monotonic() - started
+                trace.record('inspection', path=path, elapsed=elapsed,
+                             is_error=response.isError, response=response.structuredContent)
+                assert not response.isError
+                assert elapsed < 5.8
+                return response.structuredContent, elapsed
+
+            async def warm(path, expected_line):
+                nonlocal process
+                # Explicit fixture warmup is separate from the product deadline.
+                async with asyncio.timeout(30):
+                    if 'rust' not in manager.get_active_servers():
+                        await manager.start_server('rust', tmp_path.as_uri(), timeout=5)
+                    process = manager._clients['rust']._process
+                    for name in files:
+                        full = tmp_path / name
+                        if manager._get_client_for_file(str(full)):
+                            manager.notify_file_opened(str(full), full.read_text())
+                    callback = manager.on_result_callback
+                    manager.on_result_callback = None
+                    try:
+                        while True:
+                            try:
+                                refs = await manager.get_references(
+                                    str(tmp_path / path), 0, 7, include_declaration=False)
+                            except ToolError as error:
+                                if str(error).lower() != 'content modified':
+                                    raise
+                                refs = None
+                            if any(r.uri == (tmp_path / 'src/lib.rs').as_uri() and
+                                   r.range.start.line == expected_line - 1 for r in refs or []):
+                                break
+                            await asyncio.sleep(.1)
+                    finally:
+                        manager.on_result_callback = callback
+
+            async def warm_on_worker(path, expected_line):
+                def run():
+                    return stores.setdefault('async_runner', asyncio.Runner()).run(warm(path, expected_line))
+                await asyncio.get_running_loop().run_in_executor(worker, run)
+                await asyncio.sleep(1.05)  # Real retry cooldown; no source edit needed.
+
+            cold, elapsed = await inspect('src/first.rs', 'cold_first_attempt')
+            record_property('cold_elapsed', elapsed)
+            record_property('cold_precision', json.dumps(cold['metadata']['analysis']['precision']))
+            assert cold['metadata']['analysis']['precision']['status'] in ['verified','partial']
+            trace.stage('explicit_warmup_original')
+            await warm_on_worker('src/first.rs', 3)
+            recovered, _ = await inspect('src/first.rs', 'later_original_retry')
+            assert recovered['metadata']['analysis']['precision']['status'] == 'verified'
+            assert any(r['file_path'] == 'src/lib.rs' and r['line'] == 3 and r['source'] == 'lsp'
+                       for r in recovered['data']['references'])
+            record_property('qualified_input', 'true')
+            changed = 'pub mod first;\npub mod second;\n\npub fn caller() -> i32 { second::helper() }\n'
+            (tmp_path / 'src/lib.rs').write_text(changed)
+            reload, elapsed = await inspect('src/second.rs', 'first_public_after_edit')
+            record_property('reload_elapsed', elapsed)
+            record_property('reload_precision', json.dumps(reload['metadata']['analysis']['precision']))
+            trace.stage('explicit_warmup_changed')
+            await warm_on_worker('src/second.rs', 4)
+            changed_result, _ = await inspect('src/second.rs', 'later_changed_retry')
+            assert changed_result['metadata']['analysis']['precision']['status'] == 'verified'
+            assert any(r['file_path'] == 'src/lib.rs' and r['line'] == 4 and r['source'] == 'lsp'
+                       for r in changed_result['data']['references'])
+            old, _ = await inspect('src/first.rs', 'old_after_retarget')
+            assert not any(r['file_path'] == 'src/lib.rs' for r in old['data']['references'])
+            assert manager._clients['rust']._process is process
+        except BaseException as error:
+            trace.failed(error)
+            raise
+        finally:
+            trace.stage('shutdown')
+            await gateway.close()
+            assert _source_receipt(record_property, 'after') == source_before
+    assert process is not None and process.returncode is not None

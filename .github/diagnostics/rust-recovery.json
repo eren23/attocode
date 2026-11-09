@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "purpose": "Bounded diagnosis of existing recovery; no known product failure",
+  "baseline_commit": "c54513a987b3ec29c0f9dfb2cad4daa511690715",
+  "production_changes": false,
+  "workflow_changes": false,
+  "limits": {"rust_precision_seconds": 5, "other_precision_seconds": 2, "retry_seconds": 1},
+  "new_cases": [
+    "test_rust_recovery_contract::test_long_rust_reload_recovers_on_a_later_request[edit]",
+    "test_rust_recovery_contract::test_long_rust_reload_recovers_on_a_later_request[delete]",
+    "test_rust_recovery_contract::test_cancelled_rust_enrichment_restores_callback_and_can_retry",
+    "test_real_language_server::test_real_rust_first_attempt_and_later_retry"
+  ],
+  "workflows": ["ci.yml", "intelligence.yml"],
+  "rust_toolchain": "1.94.1",
+  "disposition": "If controls already pass, retain evidence without a cosmetic production change. A qualified causal gap requires controlled RED before any correction."
+}
