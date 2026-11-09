@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "repo": "golang/go",
+  "commit": "6885bad7dd86880be6929c02085e5c7a67ff2887",
+  "source_tag": "go1.23.0",
+  "grammar_version": "0.25.0",
+  "license_path": "LICENSE",
+  "source_path": "src/sync/atomic/type.go",
+  "files": {
+    "src/sync/atomic/type.go": {
+      "bytes": 8690,
+      "sha256": "867f944c54daf34449d0f9e13f5e6476dab4a59098455e8a56958e4d2e90cdc3",
+      "git_blob_sha1": "f487cb9c5f7eaaf35ee0b5b6d02636f2b9831779"
+    },
+    "LICENSE": {
+      "bytes": 1479,
+      "sha256": "2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067",
+      "git_blob_sha1": "6a66aea5eafe0ca6a688840c47219556c552488e"
+    }
+  },
+  "targets": [
+    {
+      "name": "Bool",
+      "start_line": 11,
+      "end_line": 14,
+      "header": "type Bool struct {",
+      "doc_lines": [
+        9,
+        10
+      ],
+      "docstring": "A Bool is an atomic boolean value.\nThe zero value is false.",
+      "methods": [
+        {
+          "name": "Load",
+          "start_line": 17,
+          "end_line": 17,
+          "header": "func (x *Bool) Load() bool { return LoadUint32(&x.v) != 0 }",
+          "parameters": [],
+          "param_types": {},
+          "return_type": "bool",
+          "visibility": "public"
+        },
+        {
+          "name": "Store",
+          "start_line": 20,
+          "end_line": 20,
+          "header": "func (x *Bool) Store(val bool) { StoreUint32(&x.v, b32(val)) }",
+          "parameters": [
+            "val"
+          ],
+          "param_types": {
+            "val": "bool"
+          },
+          "return_type": "",
+          "visibility": "public"
+        },
+        {
+          "name": "Swap",
+          "start_line": 23,
+          "end_line": 23,
+          "header": "func (x *Bool) Swap(new bool) (old bool) { return SwapUint32(&x.v, b32(new)) != 0 }",
+          "parameters": [
+            "new"
+          ],
+          "param_types": {
+            "new": "bool"
+          },
+          "return_type": "(old bool)",
+          "visibility": "public"
+        },
+        {
+          "name": "CompareAndSwap",
+          "start_line": 26,
+          "end_line": 28,
+          "header": "func (x *Bool) CompareAndSwap(old, new bool) (swapped bool) {",
+          "parameters": [
+            "old",
+            "new"
+          ],
+          "param_types": {
+            "old": "bool",
+            "new": "bool"
+          },
+          "return_type": "(swapped bool)",
+          "visibility": "public"
+        }
+      ]
+    },
+    {
+      "name": "Pointer",
+      "start_line": 43,
+      "end_line": 51,
+      "header": "type Pointer[T any] struct {",
+      "doc_lines": [
+        42
+      ],
+      "docstring": "A Pointer is an atomic pointer of type *T. The zero value is a nil *T.",
+      "methods": [
+        {
+          "name": "Load",
+          "start_line": 54,
+          "end_line": 54,
+          "header": "func (x *Pointer[T]) Load() *T { return (*T)(LoadPointer(&x.v)) }",
+          "parameters": [],
+          "param_types": {},
+          "return_type": "*T",
+          "visibility": "public"
+        },
+        {
+          "name": "Store",
+          "start_line": 57,
+          "end_line": 57,
+          "header": "func (x *Pointer[T]) Store(val *T) { StorePointer(&x.v, unsafe.Pointer(val)) }",
+          "parameters": [
+            "val"
+          ],
+          "param_types": {
+            "val": "*T"
+          },
+          "return_type": "",
+          "visibility": "public"
+        },
+        {
+          "name": "Swap",
+          "start_line": 60,
+          "end_line": 60,
+          "header": "func (x *Pointer[T]) Swap(new *T) (old *T) { return (*T)(SwapPointer(&x.v, unsafe.Pointer(new))) }",
+          "parameters": [
+            "new"
+          ],
+          "param_types": {
+            "new": "*T"
+          },
+          "return_type": "(old *T)",
+          "visibility": "public"
+        },
+        {
+          "name": "CompareAndSwap",
+          "start_line": 63,
+          "end_line": 65,
+          "header": "func (x *Pointer[T]) CompareAndSwap(old, new *T) (swapped bool) {",
+          "parameters": [
+            "old",
+            "new"
+          ],
+          "param_types": {
+            "old": "*T",
+            "new": "*T"
+          },
+          "return_type": "(swapped bool)",
+          "visibility": "public"
+        }
+      ]
+    }
+  ],
+  "required_control_types": [
+    "Int32",
+    "Int64",
+    "Uint32",
+    "Uint64",
+    "Uintptr",
+    "noCopy",
+    "align64"
+  ],
+  "required_functions": [
+    {
+      "name": "b32",
+      "end_line": 36,
+      "header": "func b32(b bool) uint32 {",
+      "line": 31
+    }
+  ]
+}
