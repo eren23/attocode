@@ -6,10 +6,58 @@ import hashlib
 import importlib.metadata
 import json
 import os
+import platform
 import shutil
 import subprocess
+import tempfile
+import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+
+def _download_exact(url, size, sha256):
+    request = urllib.request.Request(url, headers={'Accept': 'application/octet-stream',
+                                                 'User-Agent': 'attocode-grammar-acquisition'})
+    with urllib.request.urlopen(request, timeout=90) as response:
+        data = response.read(size + 1)
+    if len(data) != size or hashlib.sha256(data).hexdigest() != sha256:
+        raise ValueError('Pinned grammar asset identity mismatch')
+    return data
+
+
+def _canonical_linux_pack(cache, names):
+    """Populate only an owned CI cache with the unchanged locked release assets."""
+    assets = 'https://api.github.com/repos/xberg-io/tree-sitter-language-pack/releases/assets/'
+    manifest_bytes = _download_exact(assets + '379879559', 16425,
+        '3b7ca62068ce934ef72abfa2d79e536eb64765c80dc79278294a3d932df9a32a')
+    manifest = json.loads(manifest_bytes)
+    bundle = manifest['platforms']['linux-x86_64']
+    archive_sha = '82b9f8c3a53e011f097a3b56594192b638c19dd0aaa73c916b9ed9217e5128ce'
+    if manifest['version'] != '1.1.2' or bundle['sha256'] != archive_sha or bundle['size'] != 12379535:
+        raise ValueError('Pinned grammar manifest metadata mismatch')
+    if set(names) - set(manifest['languages']) - {'crystal'}:
+        raise ValueError('Pinned grammar manifest lacks required languages')
+    libs = cache / 'libs'
+    libs.mkdir()
+    (cache / 'manifest.json').write_bytes(manifest_bytes)
+    with tempfile.TemporaryDirectory(prefix='acquire-', dir=cache) as directory:
+        archive = Path(directory) / 'parsers.tar.zst'
+        archive.write_bytes(_download_exact(assets + '379879522', bundle['size'], archive_sha))
+        members = subprocess.check_output(['tar', '--zstd', '-tf', str(archive)], text=True).splitlines()
+        for name in names:
+            if name not in manifest['languages']:
+                continue
+            filename = 'libtree_sitter_' + name + '.so'
+            choices = [m for m in members if Path(m).name == filename]
+            if len(choices) != 1 or Path(choices[0]).is_absolute() or '..' in Path(choices[0]).parts:
+                raise ValueError('Missing or unsafe pinned grammar member: ' + filename)
+            # tar streams only the selected bytes; archive paths/links never
+            # select a filesystem destination.
+            data = subprocess.check_output(['tar', '--zstd', '-xOf', str(archive), choices[0]])
+            if not data.startswith(b'\x7fELF'):
+                raise ValueError('Pinned grammar member is not an ELF library')
+            (libs / filename).write_bytes(data)
+    return libs
 
 
 def validate_coverage(raw: bytes, required) -> list[str]:
@@ -52,7 +100,11 @@ def main():
     args.cache.mkdir(parents=True)
     import tree_sitter_language_pack as pack
     names = ['haskell', 'erlang', 'clojure', 'perl', 'dart', 'ocaml', 'ocaml_interface', 'fsharp', 'julia', 'nim', 'r', 'objc', 'crystal']
-    pack.configure(cache_dir=str(args.cache.resolve()))
+    pack_cache = args.cache
+    if (importlib.metadata.version('tree-sitter-language-pack') == '1.1.2'
+            and platform.system() == 'Linux' and platform.machine() == 'x86_64'):
+        pack_cache = _canonical_linux_pack(args.cache, names)
+    pack.configure(cache_dir=str(pack_cache.resolve()))
     available = set(pack.manifest_languages())
     unsupported = sorted(set(names) - available)
     # The locked 1.1.2 pack has no downloadable Crystal artifact. Preserve that
@@ -90,6 +142,7 @@ def main():
               Path(__file__).with_name('go_binding_fixture.json'),
               Path(__file__).with_name('go_type_fixture.json'),
               Path(__file__).with_name('go_receiver_fixture.json'),
+              Path(__file__).with_name('go_stdlib_fixture.json'),
               REPO / 'packages/code-intel/tests/test_optional_language_depth.py',
               REPO / 'packages/code-intel/tests/test_java_signatures.py',
               REPO / 'packages/code-intel/tests/test_c_parameters.py',
@@ -98,11 +151,12 @@ def main():
               REPO / 'packages/code-intel/tests/test_go_module_bindings.py',
               REPO / 'packages/code-intel/tests/test_go_type_bindings.py',
               REPO / 'packages/code-intel/tests/test_go_generic_receivers.py',
+              REPO / 'packages/code-intel/tests/test_go_stdlib_imports.py',
               REPO / 'packages/code-intel/tests/unit/integrations/context/test_go_symbols.py',
               REPO / 'packages/code-intel/tests/test_ast_snapshot.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]
     sources = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
-    before = {'grammar': grammar_identity(args.cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
+    before = {'grammar': grammar_identity(pack_cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
               'java': distribution_identity(('tree-sitter-java',)),
               'c': distribution_identity(('tree-sitter-c',)),
               'go': distribution_identity(('tree-sitter-go',)),
@@ -121,7 +175,7 @@ def main():
         report['coverage'] = {'status': 'passed', 'cases': cases}
     except ValueError as error:
         report['coverage'] = {'status': 'rejected', 'reason': str(error)}
-    after = {'grammar': grammar_identity(args.cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
+    after = {'grammar': grammar_identity(pack_cache), 'crystal': distribution_identity(('tree-sitter-crystal',)),
              'java': distribution_identity(('tree-sitter-java',)),
              'c': distribution_identity(('tree-sitter-c',)),
              'go': distribution_identity(('tree-sitter-go',)),

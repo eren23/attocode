@@ -21,6 +21,7 @@ class FileIndex(dict):
         super().__init__(*args, **kwargs)
         self.js_projects = []
         self.go_modules = []
+        self.go_module_roots = set()
         self.go_packages = defaultdict(set)
         self.rust_projects = []
         self.namespace_files = {}
@@ -97,13 +98,20 @@ class FileIndex(dict):
 
     def configure_go(self, root):
         self.go_modules = []
+        self.go_module_roots.clear()
         self.go_packages.clear()
         for name in sorted(set(self.values())):
             if name.endswith('.go') and not name.endswith('_test.go'):
                 self.go_packages[str(Path(name).parent)].add(name)
             if Path(name).name != 'go.mod':
                 continue
+            # Empty/invalid or temporarily inaccessible indexed go.mod files
+            # retain their boundary. Ignore stale entries after deletion.
+            module_root = str(Path(name).parent)
+            self.go_module_roots.add(module_root)
             try:
+                if not (Path(root) / name).is_file():
+                    self.go_module_roots.discard(module_root)
                 text = self._read(root, name)
             except (OSError, ValueError):
                 continue
@@ -118,13 +126,32 @@ class FileIndex(dict):
             matches = [(directory, name) for directory, name in self.go_modules
                        if module == name or module.startswith(name + '/')]
             if not matches:
-                return []
-            longest = max(len(name) for _, name in matches)
-            matches = [(d, n) for d, n in matches if len(n) == longest]
-            if len(matches) != 1:
-                return []
-            base, name = matches[0]
-            directory = str(Path(base) / module[len(name):].lstrip('/'))
+                # Go's checked-in standard library declares module std, but
+                # imports packages as sync/atomic rather than std/sync/atomic.
+                caller = Path(source)
+                if (not module or not source or Path(module).is_absolute()
+                        or '.' in module.partition('/')[0] or '..' in Path(module).parts
+                        or caller.is_absolute() or '..' in caller.parts):
+                    return []
+                roots = [Path(base) for base, name in self.go_modules
+                         if name == 'std' and caller.is_relative_to(Path(base))]
+                if not roots:
+                    return []
+                depth = max(len(root.parts) for root in roots)
+                roots = [root for root in roots if len(root.parts) == depth]
+                if len(roots) != 1:
+                    return []
+                directory = str(roots[0] / module)
+                if any(Path(base) != roots[0] and Path(base).is_relative_to(roots[0])
+                       and Path(directory).is_relative_to(Path(base)) for base in self.go_module_roots):
+                    return []
+            else:
+                longest = max(len(name) for _, name in matches)
+                matches = [(d, n) for d, n in matches if len(n) == longest]
+                if len(matches) != 1:
+                    return []
+                base, name = matches[0]
+                directory = str(Path(base) / module[len(name):].lstrip('/'))
         if directory == '..' or directory.startswith('../'):
             return []
         return sorted(self.go_packages.get(directory, ()))

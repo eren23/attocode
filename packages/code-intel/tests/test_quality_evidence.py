@@ -299,6 +299,7 @@ async def test_fuzzy_same_file_definition_is_not_the_labeled_symbol(tmp_path, mo
 
 
 def test_worker_grammar_acquisition_records_absent_artifact_without_downloading_it(tmp_path, monkeypatch):
+    import importlib.metadata
     import runpy
     from pathlib import Path
     from types import SimpleNamespace
@@ -307,6 +308,7 @@ def test_worker_grammar_acquisition_records_absent_artifact_without_downloading_
     pack = SimpleNamespace(configure=lambda **kwargs: None, manifest_languages=lambda: names,
                            download=lambda selected: calls.append(selected), downloaded_languages=lambda: names)
     monkeypatch.setitem(sys.modules, 'tree_sitter_language_pack', pack)
+    monkeypatch.setattr(importlib.metadata, 'version', lambda name: 'test-double')
     monkeypatch.setattr(pytest, 'main', lambda arguments: 0)
     monkeypatch.setenv('QUALITY_ALLOW_DOWNLOADS', '1')
     monkeypatch.setattr(sys, 'argv', ['check', '--cache', str(tmp_path / 'grammars')])

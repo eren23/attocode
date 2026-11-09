@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Go imports inside a declared `std` module resolve standard package paths
+  through the caller's nearest owning root, restoring dependency, impact and
+  import-bound test evidence. Other modules, external paths and separate
+  checkouts retain their existing ownership boundaries; nested `go.mod` files,
+  including empty or invalid declarations, exclude their target subtree.
 - Go generic receiver methods bind to their same-file named type, including
   pointer and parenthesized receivers, while retaining written method parameter
   and result types. Type arguments cannot become owners; unsupported receiver
@@ -52,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Four unchanged pinned Gson sources cover real Java dollar-sign declarations,
-  calls, imports, selected test references and signature metadata. The native gate requires 91 cases,
+  calls, imports, selected test references and signature metadata. The native gate requires 92 cases,
   including all eight navigation checks for the added Gson workflow. Same-package
   calls without an explicit binding remain unresolved candidates.
 - An unchanged pinned Redis source provides four real C parameter-signature
@@ -65,6 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standalone grammar identity and complete cached AST/symbol reuse without parsing.
 - An unchanged pinned Go atomic source checks generic Pointer receiver ownership
   against ordinary Bool methods, including signatures and complete cache reuse.
+- The same Go revision's atomic tests and standard-module declaration cover real
+  dot imports, member-call syntax, import-bound test evidence and cached restart.
+- Disposable Linux CI grammar caches acquire the unchanged locked 1.1.2 assets
+  through the canonical upstream release API, verifying exact sizes/checksums
+  after the upstream repository move. Default navigation acquisition is unchanged.
 
 ## [Intelligence 0.1.29] - 2026-11-08
 
