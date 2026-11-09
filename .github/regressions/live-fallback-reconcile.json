@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_vector_revision_lifecycle.py"
+  ],
+  "cases": [
+    "test_vector_revision_lifecycle::test_superseded_embedding_never_commits[edit]",
+    "test_vector_revision_lifecycle::test_superseded_embedding_never_commits[same-mtime]",
+    "test_vector_revision_lifecycle::test_superseded_embedding_never_commits[unnotified]",
+    "test_vector_revision_lifecycle::test_superseded_embedding_never_commits[delete]",
+    "test_vector_revision_lifecycle::test_superseded_embedding_never_commits[rename]",
+    "test_vector_revision_lifecycle::test_vectors_and_metadata_rollback_together[vector]",
+    "test_vector_revision_lifecycle::test_vectors_and_metadata_rollback_together[metadata]",
+    "test_vector_revision_lifecycle::test_second_edit_while_pending_gets_followup",
+    "test_vector_revision_lifecycle::test_close_drains_active_worker",
+    "test_vector_revision_lifecycle::test_duplicate_identity_keeps_last_body_and_correct_count[python]",
+    "test_vector_revision_lifecycle::test_duplicate_identity_keeps_last_body_and_correct_count[javascript]",
+    "test_vector_revision_lifecycle::test_empty_valid_file_commits_zero_chunk_metadata[full]",
+    "test_vector_revision_lifecycle::test_empty_valid_file_commits_zero_chunk_metadata[file]",
+    "test_vector_revision_lifecycle::test_empty_valid_file_commits_zero_chunk_metadata[background]",
+    "test_vector_revision_lifecycle::test_reindex_rejects_outside_workspace",
+    "test_vector_revision_lifecycle::test_incomplete_native_source_preserves_prior_vectors[python]",
+    "test_vector_revision_lifecycle::test_incomplete_native_source_preserves_prior_vectors[javascript]",
+    "test_vector_revision_lifecycle::test_incomplete_native_source_preserves_prior_vectors[typescript]",
+    "test_vector_revision_lifecycle::test_other_connection_observes_vector_publication",
+    "test_vector_revision_lifecycle::test_cache_loader_keeps_the_version_of_its_rows",
+    "test_vector_revision_lifecycle::test_optional_write_refusal_does_not_abort_freshness[rotation]",
+    "test_vector_revision_lifecycle::test_optional_write_refusal_does_not_abort_freshness[dimension]",
+    "test_vector_revision_lifecycle::test_optional_write_refusal_does_not_abort_freshness[sqlite]",
+    "test_vector_revision_lifecycle::test_missing_parser_cannot_certify_nonempty_replacement[malformed]",
+    "test_vector_revision_lifecycle::test_missing_parser_cannot_certify_nonempty_replacement[unvalidated-nonempty]",
+    "test_vector_revision_lifecycle::test_missing_parser_cannot_certify_nonempty_replacement[blank-control]",
+    "test_vector_revision_lifecycle::test_generic_native_error_does_not_replace_vectors",
+    "test_vector_revision_lifecycle::test_manager_reconciles_newer_durable_revision"
+  ],
+  "failures": {
+    "test_vector_revision_lifecycle::test_missing_parser_cannot_certify_nonempty_replacement[malformed]": {
+      "message": "REGRESSION: parser absence certified nonempty empty source",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_vector_revision_lifecycle::test_missing_parser_cannot_certify_nonempty_replacement[unvalidated-nonempty]": {
+      "message": "REGRESSION: parser absence certified nonempty empty source",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_vector_revision_lifecycle::test_generic_native_error_does_not_replace_vectors": {
+      "message": "REGRESSION: generic syntax errors erased vectors",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_vector_revision_lifecycle::test_manager_reconciles_newer_durable_revision": {
+      "message": "REGRESSION: memory invalidation hid newer durable revision",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}

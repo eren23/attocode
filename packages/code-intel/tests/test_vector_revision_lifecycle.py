@@ -301,3 +301,75 @@ def test_optional_write_refusal_does_not_abort_freshness(tmp_path, monkeypatch, 
         record_property('qualified_input', 'true')
         assert error is None and actual == before, 'REGRESSION: optional vector refusal aborted source freshness'
         assert current_lexical(s.value)
+
+
+@pytest.mark.parametrize('source', ['function broken(', 'console.log("ready");', ''], ids=['malformed', 'unvalidated-nonempty', 'blank-control'])
+def test_missing_parser_cannot_certify_nonempty_replacement(tmp_path, monkeypatch, record_property, source):
+    from attocode_intel._internal.integrations.context import ts_parser
+    with workspace(tmp_path, monkeypatch) as s:
+        path = tmp_path / 'target.js'
+        path.write_text('function original() {\n return 1;\n}\n')
+        s.value.reindex_file(str(path))
+        before, metadata = rows(s.value, 'target.js'), s.value._store.get_file_metadata('target.js')
+        path.write_text(source)
+        monkeypatch.setattr(ts_parser, '_get_parser', lambda language: None)
+        ast = parse_file(str(path), source)
+        assert ast.parsing_tier == 'regex' and not ast.parse_failures and not ast.functions
+        s.value.reindex_file(str(path))
+        actual, after_metadata = rows(s.value, 'target.js'), s.value._store.get_file_metadata('target.js')
+        record_property('observed', json.dumps({'before': before, 'after': actual, 'metadata': metadata,
+                                               'after_metadata': after_metadata, 'tier': ast.parsing_tier, 'source': source}))
+        record_property('qualified_input', 'true')
+        if not source:
+            assert not actual and after_metadata['chunk_count'] == 0
+        else:
+            assert actual == before and after_metadata == metadata, 'REGRESSION: parser absence certified nonempty empty source'
+
+
+def test_generic_native_error_does_not_replace_vectors(tmp_path, monkeypatch, record_property):
+    from attocode_intel._internal.integrations.context import ts_parser
+    with workspace(tmp_path, monkeypatch) as s:
+        path = tmp_path / 'target.c'
+        path.write_text('int original(void) {\n return 1;\n}\n')
+        s.value.reindex_file(str(path))
+        before, metadata = rows(s.value, 'target.c'), s.value._store.get_file_metadata('target.c')
+        assert len(before) == 2
+        source = 'int broken('
+        path.write_text(source)
+        primary = ts_parser.ts_parse_file
+        monkeypatch.setattr(ts_parser, 'ts_parse_file', lambda file_path, **kw:
+                            None if str(file_path) == str(path) else primary(file_path, **kw))
+        ast = parse_file(str(path), source)
+        tree = syntax_tree(str(path), source, 'c')
+        assert ast.parsing_tier == 'generic_ts' and not ast.parse_failures
+        assert tree is not None and tree.root_node.has_error
+        s.value.reindex_file(str(path))
+        actual, after_metadata = rows(s.value, 'target.c'), s.value._store.get_file_metadata('target.c')
+        record_property('observed', json.dumps({'before': before, 'after': actual, 'metadata': metadata,
+                                               'after_metadata': after_metadata, 'tier': ast.parsing_tier,
+                                               'tree': str(tree.root_node)}))
+        record_property('qualified_input', 'true')
+        assert actual == before and after_metadata == metadata, 'REGRESSION: generic syntax errors erased vectors'
+
+
+def test_manager_reconciles_newer_durable_revision(tmp_path, monkeypatch, record_property):
+    with workspace(tmp_path, monkeypatch) as s:
+        other = SemanticSearchManager(str(tmp_path), nl_mode='none')
+        try:
+            other._ensure_provider()
+            path = tmp_path / 'target.py'
+            path.write_text(NEW)
+            s.value.invalidate_file(str(path))
+            assert 'target.py' in s.value._invalidated_files
+            other.reindex_file(str(path))
+            state = s.value._store.get_file_states()['target.py']
+            assert not state['dirty'] and {r[0] for r in rows(s.value)} == {'file:target.py', 'func:target.py:updated'}
+            calls = len(s.provider.calls)
+            assert s.value.reindex_stale_files() == 0 and len(s.provider.calls) == calls
+            progress = s.value.get_index_progress()
+            record_property('observed', json.dumps({'state': state, 'indexed_files': progress.indexed_files,
+                                                   'invalidated': sorted(s.value._invalidated_files)}))
+            record_property('qualified_input', 'true')
+            assert progress.indexed_files == 2 and progress.coverage == 1.0 and 'target.py' not in s.value._invalidated_files, 'REGRESSION: memory invalidation hid newer durable revision'
+        finally:
+            other.close()
