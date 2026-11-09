@@ -73,6 +73,19 @@ from attocode_intel._internal.integrations.context.syntax_evidence import syntax
                                            'types': {'first': 'T', 'second': 'T', 'rest': 'T'},
                                            'return': '(out T, ok bool)', 'rest': ['rest']}}},
                  id='grouped-variadic-signature'),
+    pytest.param({'source': 'type Box[T any] struct{}\nfunc (x (Box[T])) Run() {}\n',
+                  'types': ['Box'], 'methods': {'Box': ['Run']}}, id='parenthesized-generic-value'),
+    pytest.param({'source': 'type Box[T any] struct{}\nfunc (x (*Box[T])) Run() {}\n',
+                  'types': ['Box'], 'methods': {'Box': ['Run']}}, id='parenthesized-generic-pointer'),
+    pytest.param({'source': 'type Box[T any] struct{}\nfunc (x *(Box[T])) Run() {}\n',
+                  'types': ['Box'], 'methods': {'Box': ['Run']}}, id='pointer-to-parenthesized-generic'),
+    pytest.param({'source': 'type Box[T any] struct{}\n'
+                           'func (x ( /* outer */ (* /* pointer */ (Box[T])))) Run() {}\n',
+                  'types': ['Box'], 'methods': {'Box': ['Run']}}, id='nested-receiver-wrappers-comments'),
+    pytest.param({'source': 'type Box struct{}\nfunc (x (Box)) Run() {}\n',
+                  'types': ['Box'], 'methods': {'Box': ['Run']}}, id='parenthesized-plain-value'),
+    pytest.param({'source': 'type Box struct{}\nfunc (x (*Box)) Run() {}\n',
+                  'types': ['Box'], 'methods': {'Box': ['Run']}}, id='parenthesized-plain-pointer'),
 ])
 def test_go_generic_receivers_reach_owner_and_index(tmp_path, monkeypatch, record_property, case):
     name = 'receivers.go'
