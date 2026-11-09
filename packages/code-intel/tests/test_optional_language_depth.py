@@ -208,7 +208,9 @@ async def test_perl_configured_repository_workflow(
     assert len(checks)==8 and all(c['outcome']=='passed' for c in checks), 'REGRESSION: configured Perl repository roots do not satisfy navigation contracts'
 
 
-@pytest.mark.parametrize('online', [False,True], ids=['edited-while-closed','edited-in-session'])
+@pytest.mark.parametrize('online', [False,True,'notified','partial'], ids=[
+    'edited-while-closed','edited-in-session','edited-after-notify','controlled-partial',
+])
 async def test_perl_config_only_refresh_and_restart(
         tmp_path, monkeypatch, pinned_perl_sources, record_property, online):
     from attocode_intel.gateway import OperationGateway
@@ -218,7 +220,8 @@ async def test_perl_config_only_refresh_and_restart(
 
     monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
     manifest, files = pinned_perl_sources
-    tag = 'perl-roots-live' if online else 'perl-roots-closed'
+    tag = {'notified':'perl-roots-notified','partial':'perl-roots-partial'}.get(
+        online, 'perl-roots-live' if online else 'perl-roots-closed')
     config = _perl_roots_fixture(tmp_path, manifest, files, ['missing/lib'], tag)
     stamps = {name:(tmp_path / name).stat() for name in files}
     stamps = {name:[s.st_mtime_ns,s.st_ctime_ns,s.st_size] for name,s in stamps.items()}
@@ -254,12 +257,32 @@ async def test_perl_config_only_refresh_and_restart(
         assert not before['imported_by']
         record_property('qualified_input', 'true')
         record_property('native_pinned_files', str(len(files)))
+        if online in ('notified','partial'):
+            stores = next(iter(peer.peer._stores.values()))
+            ast = stores['service']._ast_service
+            assert ast._hydration_state.phase == 'ready' and ast._snapshot_start is not None
+            response = await peer.execute_mcp('notify_file_changed', {'files':[importer],'max_tokens':4000})
+            assert not response.isError
+            assert ast._hydration_state.phase == 'ready' and ast._snapshot_start is None
+            record_property('notified_ready_without_snapshot', 'true')
+            if online == 'partial':
+                # Explicit controlled incomplete state, not a naturally slow
+                # hydration claim. Real pinned parsing/gateway stay in use.
+                ast.stop_hydration()
+                ast._hydration_state.phase = 'references'
+                record_property('controlled_partial_state', 'true')
+            evidence(tag + '-pre-policy-state.json', {
+                'phase':ast._hydration_state.phase,'snapshot_absent':ast._snapshot_start is None,
+                'controlled_partial':online=='partial',
+            })
         if not online:
             await close_peer()
         config.write_text('[perl]\nmodule_roots = ["dist/Carp/lib"]\n')
         if not online:
             open_peer()
         await dependencies('after-config-only-change')
+        if online in ('notified','partial'):
+            await dependencies('repeated-after-config-change')
         await close_peer()
         open_peer()
         await dependencies('reopened-after-change')
@@ -274,7 +297,8 @@ async def test_perl_config_only_refresh_and_restart(
     assert stamps==after and all((tmp_path / name).read_bytes()==raw for name,raw in files.items())
     record_property('source_stamps_unchanged', 'true')
     record_property('observed_importers', json.dumps([r['response']['data']['imported_by'] for r in rows]))
-    assert len(rows)==3 and all(importer in r['response']['data']['imported_by'] for r in rows[1:]), 'REGRESSION: Perl config-only dependencies remain stale across refresh or reopen'
+    expected_rows = 4 if online in ('notified','partial') else 3
+    assert len(rows)==expected_rows and all(importer in r['response']['data']['imported_by'] for r in rows[1:]), 'REGRESSION: Perl config-only dependencies remain stale across refresh or reopen'
 
 
 async def test_perl_scoped_project_inclusion_refresh_and_restart(tmp_path, monkeypatch):

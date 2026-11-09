@@ -98,6 +98,8 @@
     "test_optional_language_depth::test_go_pinned_semantic_chunk_cache",
     "test_optional_language_depth::test_perl_configured_repository_workflow",
     "test_optional_language_depth::test_perl_config_only_refresh_and_restart[edited-while-closed]",
-    "test_optional_language_depth::test_perl_config_only_refresh_and_restart[edited-in-session]"
+    "test_optional_language_depth::test_perl_config_only_refresh_and_restart[edited-in-session]",
+    "test_optional_language_depth::test_perl_config_only_refresh_and_restart[edited-after-notify]",
+    "test_optional_language_depth::test_perl_config_only_refresh_and_restart[controlled-partial]"
   ]
 }
