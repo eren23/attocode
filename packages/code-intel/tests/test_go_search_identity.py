@@ -127,6 +127,16 @@ def seed_legacy(root, monkeypatch):
             if '.' not in name:
                 continue
             bare = name.rsplit('.', 1)[1]
+            # A same-file Go method may appear in both the legacy function
+            # and class lists. Seed one literal legacy owner without trying
+            # to assign the same primary key to two existing cache rows.
+            selected = conn.execute(
+                'SELECT id FROM kw_docs WHERE file_path=? AND start_line=? ORDER BY id LIMIT 1',
+                ('methods.go', first),
+            ).fetchone()
+            assert selected is not None
+            conn.execute('DELETE FROM kw_docs WHERE file_path=? AND start_line=? AND id!=?',
+                         ('methods.go', first, selected[0]))
             conn.execute('UPDATE kw_docs SET id=?,chunk_type=?,name=?,text=? WHERE file_path=? AND start_line=?',
                          (f'func:methods.go:{bare}:{first}:{last}', 'function', bare,
                           f'function {bare} (identity)', 'methods.go', first))
