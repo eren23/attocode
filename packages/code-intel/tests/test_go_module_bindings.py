@@ -183,3 +183,56 @@ def test_direct_initialization_preserves_reuse_and_force(tmp_path, force, record
     finally:
         second.stop_hydration()
         second._store.close()
+
+
+@pytest.mark.parametrize('scenario,count,tier,phase,parsed', [
+    pytest.param('medium', 1000, 'medium', 'ready', 1000, id='medium-complete'),
+    pytest.param('partial', 2, 'small', 'hydrating', 1, id='skipped-parse'),
+    pytest.param('aborted', 1, 'unknown', 'unknown', 0, id='failed-persistence'),
+])
+def test_direct_initialization_reports_actual_progress(tmp_path, record_property,
+                                                      scenario, count, tier, phase, parsed):
+    from contextlib import ExitStack
+    from unittest.mock import patch
+
+    from attocode_intel._internal.integrations.context import ast_service
+
+    for i in range(count):
+        (tmp_path / f'entry{i}.go').write_text(f'package sample\nfunc Entry{i}() {{}}\n')
+    service = ASTService(str(tmp_path))
+    original_parse = ast_service.parse_file
+
+    def skip_one(path, *args, **kwargs):
+        if str(path).endswith('entry1.go'):
+            raise RuntimeError('unexpected definition parse failure')
+        return original_parse(path, *args, **kwargs)
+
+    try:
+        with ExitStack() as stack:
+            if scenario == 'partial':
+                stack.enter_context(patch.object(ast_service, 'parse_file', side_effect=skip_one))
+            if scenario == 'aborted':
+                stack.enter_context(patch.object(service._store, 'save_files_batch',
+                                                side_effect=RuntimeError('persistence unavailable')))
+                with pytest.raises(RuntimeError, match='persistence unavailable'):
+                    service.initialize()
+                assert not service.initialized
+            else:
+                assert service.initialize() is None and service.initialized
+        status = service.hydration_snapshot()
+        record_property('public_status', json.dumps(status))
+        record_property('actual_cached_files', len(service._ast_cache))
+        record_property('definition_count', len(service._index.definitions))
+        assert status['tier'] == tier and status['phase'] == phase
+        assert status['parsed_files'] == parsed
+        if scenario != 'aborted':
+            assert status['total_files'] == count
+            assert 'Entry0' in service._index.definitions
+            assert status['parse_coverage'] == parsed / count
+        if scenario == 'medium':
+            assert 'Entry999' in service._index.definitions
+        if scenario == 'partial':
+            assert 'Entry1' not in service._index.definitions
+    finally:
+        service.stop_hydration()
+        service._store.close()
