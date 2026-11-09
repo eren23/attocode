@@ -754,6 +754,137 @@ def test_go_ast_pinned_type_bindings(pinned_go_ast_source, tmp_path):
                        loc['start_line'] == wanted['start_line'] for loc in definitions.get(cls.name + '.' + method.name, []))
 
 
+@pytest.fixture(scope='session')
+def pinned_go_receiver_source():
+    """Acquire immutable Go source and its license as data, never execute them."""
+    assert os.environ.get('QUALITY_ALLOW_DOWNLOADS') == '1'
+    manifest = json.loads((Path(__file__).resolve().parents[1] / 'scripts/go_receiver_fixture.json').read_bytes())
+    files = {}
+    for name, expected in manifest['files'].items():
+        url = f"https://raw.githubusercontent.com/{manifest['repo']}/{manifest['commit']}/{name}"
+        with urllib.request.urlopen(url, timeout=30) as response:
+            raw = response.read(expected['bytes'] + 1)
+        assert len(raw) == expected['bytes'] and hashlib.sha256(raw).hexdigest() == expected['sha256']
+        assert hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == expected['git_blob_sha1']
+        files[name] = raw
+    lines = files[manifest['source_path']].decode().splitlines()
+    for target in manifest['targets']:
+        assert lines[target['start_line'] - 1] == target['header']
+        assert lines[target['end_line'] - 1].strip() == '}'
+        assert '\n'.join(lines[i - 1].strip()[2:].strip() for i in target['doc_lines']) == target['docstring']
+        for method in target['methods']:
+            assert lines[method['start_line'] - 1] == method['header']
+    for function in manifest['required_functions']:
+        assert lines[function['line'] - 1] == function['header']
+    evidence('go-atomic-receiver-receipt.json', manifest)
+    license_bytes = files[manifest['license_path']]
+    evidence('go-atomic-receiver-license.json', {'path': manifest['license_path'], 'source': license_bytes.decode(),
+                                       'bytes': len(license_bytes), 'sha256': hashlib.sha256(license_bytes).hexdigest()})
+    return manifest, files
+
+
+def test_go_atomic_pinned_receiver_ownership(pinned_go_receiver_source, tmp_path):
+    import importlib.metadata
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+
+    import tree_sitter
+    import tree_sitter_go
+    from attocode_intel._internal.integrations.context import ast_service, codebase_ast, ts_parser
+    from attocode_intel._internal.integrations.context.ast_service import ASTService
+    from attocode_intel._internal.integrations.context.syntax_evidence import syntax_tree
+
+    manifest, files = pinned_go_receiver_source
+    name = manifest['source_path']
+    source = files[name].decode()
+    ast = native(name, source, 'go', 'go-atomic-receivers')
+    raw = ts_parser.ts_parse_file(name, source, 'go')
+    tree = syntax_tree(name, source, 'go')
+    dist = importlib.metadata.distribution('tree-sitter-go')
+    origin = Path(tree_sitter_go.__file__).resolve()
+    assert any(Path(dist.locate_file(p)).resolve() == origin for p in dist.files or [])
+    parser_matches = ts_parser._get_parser('go').language == tree_sitter.Language(tree_sitter_go.language())
+    root, first_closed, second_closed = None, False, False
+    try:
+        with TemporaryDirectory(prefix='go-atomic-receivers-', dir=tmp_path) as directory:
+            root = Path(directory)
+            for path_name, data in files.items():
+                path = root / path_name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            first = ASTService(str(root))
+            try:
+                first.initialize_skeleton(indexing_depth='eager')
+                expected = {k: asdict(v) for k, v in first._ast_cache.items()}
+                definitions = {k: [asdict(loc) for loc in values] for k, values in first._index.definitions.items()}
+                counts = first._store.stats()
+                evidence('go-atomic-receiver-results.json', {'path': name, 'bytes': len(files[name]),
+                         'has_error': tree.root_node.has_error, 'end_byte': tree.root_node.end_byte,
+                         'go_version': dist.version, 'go_origin': str(origin), 'standalone_grammar_matches': parser_matches,
+                         'raw_classes': raw['classes'], 'raw_functions': raw['functions'],
+                         'classes': [asdict(c) for c in ast.classes], 'functions': [asdict(f) for f in ast.functions],
+                         'cached_classes': [asdict(c) for c in first._ast_cache[name].classes],
+                         'definitions': definitions, 'files_unchanged': all((root / k).read_bytes() == v for k, v in files.items())})
+            finally:
+                first.stop_hydration()
+                first._store.close()
+                first_closed = True
+            second = ASTService(str(root))
+            try:
+                with (patch.object(ast_service, 'parse_file', side_effect=AssertionError('restart reparsed')) as parse,
+                      patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('discovery reparsed')) as discover):
+                    assert second.initialize_skeleton().phase == 'ready'
+                parse.assert_not_called()
+                discover.assert_not_called()
+                restored = {k: asdict(v) for k, v in second._ast_cache.items()}
+                restored_symbols = {k: [asdict(loc) for loc in values] for k, values in second._index.definitions.items()}
+                evidence('go-atomic-receiver-restart.json', {'expected': expected, 'restored': restored,
+                         'expected_symbols': definitions, 'restored_symbols': restored_symbols,
+                         'restart_parse_calls': parse.call_count, 'discovery_parse_calls': discover.call_count,
+                         'store_counts_equal': second._store.stats() == counts,
+                         'files_unchanged': all((root / k).read_bytes() == v for k, v in files.items())})
+                assert expected == restored and definitions == restored_symbols
+                assert second._store.stats() == counts
+                assert all((root / k).read_bytes() == v for k, v in files.items())
+            finally:
+                second.stop_hydration()
+                second._store.close()
+                second_closed = True
+    finally:
+        evidence('go-atomic-receiver-lifecycle.json', {'owned_cleanup': root is not None and not root.exists(),
+                                             'first_closed': first_closed, 'second_closed': second_closed})
+    assert parser_matches and dist.version == manifest['grammar_version']
+    assert not tree.root_node.has_error and tree.root_node.end_byte == len(files[name])
+    assert set(manifest['required_control_types']) <= {c.name for c in ast.classes}
+    assert {f['name'] for f in manifest['required_functions']} <= set(definitions)
+    assert set(expected) == {name}
+    assert [f.name for f in ast.functions] == [f['name'] for f in raw['functions']] == ['b32']
+    assert (ast.functions[0].start_line, ast.functions[0].end_line) == (31, 36)
+    assert [asdict(c) for c in ast.classes] == expected[name]['classes']
+    for target in manifest['targets']:
+        actual = [c for c in ast.classes if c.name == target['name']]
+        raw_actual = [c for c in raw['classes'] if c['name'] == target['name']]
+        assert len(actual) == len(raw_actual) == 1, 'Pinned named type missing: ' + target['name']
+        cls, raw_cls = actual[0], raw_actual[0]
+        assert cls.start_line == raw_cls['start_line'] == target['start_line']
+        assert cls.end_line == raw_cls['end_line'] == target['end_line']
+        assert cls.docstring == raw_cls['docstring'] == target['docstring']
+        assert any(loc['kind'] == 'class' and loc['start_line'] == target['start_line'] and
+                   loc['end_line'] == target['end_line'] for loc in definitions[target['name']])
+        assert [m.name for m in cls.methods] == [m['name'] for m in raw_cls['methods']] == [m['name'] for m in target['methods']]
+        for method, raw_method, wanted in zip(cls.methods, raw_cls['methods'], target['methods'], strict=True):
+            assert raw_method['parent_class'] == cls.name
+            assert method.start_line == raw_method['start_line'] == wanted['start_line']
+            assert method.end_line == raw_method['end_line'] == wanted['end_line']
+            assert method.visibility == raw_method['visibility'] == wanted['visibility']
+            assert raw_method['parameters'] == [p.name for p in method.parameters] == wanted['parameters']
+            assert raw_method.get('param_types', {}) == {p.name: p.type_annotation for p in method.parameters} == wanted['param_types']
+            assert raw_method['return_type'] == method.return_type == wanted['return_type']
+            assert not any(p.is_rest or p.is_kwargs for p in method.parameters)
+            assert any(loc['qualified_name'] == cls.name + '.' + method.name and loc['kind'] == 'method' and
+                       loc['start_line'] == wanted['start_line'] for loc in definitions.get(cls.name + '.' + method.name, []))
+
+
 def test_crystal_method_definition_native_range():
     ast = native('greet.cr', 'def greet(name)\n  name\nend\n', 'crystal', 'crystal-method')
     assert [(f.name, f.start_line, f.end_line) for f in ast.functions] == [('greet', 1, 3)], 'language coverage: Crystal native method definition missing'

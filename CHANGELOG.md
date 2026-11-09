@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Go generic receiver methods bind to their same-file named type, including
+  pointer and parenthesized receivers, while retaining written method parameter
+  and result types. Type arguments cannot become owners; unsupported receiver
+  shapes keep the existing standalone fallback.
 - Go named types retain every declaration and alias in grouped blocks, with
   individual source ranges and documentation. Local/blank types stay out of
   module symbols. Inline interface methods, including parenthesized interfaces,
@@ -48,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Four unchanged pinned Gson sources cover real Java dollar-sign declarations,
-  calls, imports, selected test references and signature metadata. The native gate requires 90 cases,
+  calls, imports, selected test references and signature metadata. The native gate requires 91 cases,
   including all eight navigation checks for the added Gson workflow. Same-package
   calls without an explicit binding remain unresolved candidates.
 - An unchanged pinned Redis source provides four real C parameter-signature
@@ -59,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   index before and after a cached restart.
 - An unchanged pinned Go AST source checks five grouped types, 15 owned methods,
   standalone grammar identity and complete cached AST/symbol reuse without parsing.
+- An unchanged pinned Go atomic source checks generic Pointer receiver ownership
+  against ordinary Bool methods, including signatures and complete cache reuse.
 
 ## [Intelligence 0.1.29] - 2026-11-08
 
