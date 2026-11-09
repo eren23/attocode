@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.32] - 2026-11-10
+
 ### Added
 
 - Explicit `[perl].module_roots` in `.attocode/config.toml` for conservative

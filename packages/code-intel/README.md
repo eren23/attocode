@@ -43,6 +43,11 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.32 adds explicit Perl module roots in `.attocode/config.toml`,
+refreshes dependencies after config-only edits, and preserves valid TOML when
+saving remote settings. File-discovery exclusions and unresolved module
+ambiguity remain conservative. See the [release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.32.md).
+
 Version 0.1.31 retains prior vectors during failed live refresh, fences superseded
 queued writes, and commits file vectors and metadata together. Go receiver
 identities agree across keyword, body and vector search; optional fusion keeps
@@ -131,9 +136,8 @@ The agent sees 16 tools (the `daily` profile):
 
 For all tools (about 140: rules, security scans, history, snapshots and more), add `--profile full` to `init`. The [tool catalog](https://github.com/eren23/attocode/blob/main/docs/intelligence-tools.md) lists them. The [search details](https://github.com/eren23/attocode/blob/main/docs/intelligence-search.md) page describes ranking, the response format and the experimental rerankers.
 
-Development checkouts also support explicit [Perl module roots](https://github.com/eren23/attocode/blob/main/docs/intelligence-perl-roots.md)
-for static resolution over discovered files. This setting is planned for the
-next maintenance release after 0.1.31.
+Explicit [Perl module roots](https://github.com/eren23/attocode/blob/main/docs/intelligence-perl-roots.md)
+are available from 0.1.32 for static resolution over discovered workspace files.
 
 For an experimental local seven-tool surface (0.1.5 or later), use
 `init --profile lean` and restart your client. It advertises `bootstrap`,
