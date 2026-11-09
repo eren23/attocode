@@ -442,14 +442,17 @@ def pinned_cli_go_source():
     return manifest, files
 
 
-def test_cli_pinned_go_signature_metadata(pinned_cli_go_source):
+def test_cli_pinned_go_signature_metadata(pinned_cli_go_source, tmp_path):
     import importlib.metadata
     import re
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
 
     import tree_sitter
     import tree_sitter_go
-    from attocode_intel._internal.integrations.context import ts_parser
+    from attocode_intel._internal.integrations.context import ast_service, codebase_ast, ts_parser
     from attocode_intel._internal.integrations.context.ast_chunker import chunk_file
+    from attocode_intel._internal.integrations.context.ast_service import ASTService
     from attocode_intel._internal.integrations.context.syntax_evidence import syntax_tree
 
     manifest, files = pinned_cli_go_source
@@ -484,6 +487,48 @@ def test_cli_pinned_go_signature_metadata(pinned_cli_go_source):
         assert tokens(raw_function['return_type']) == tokens(function.return_type) == tokens(target['return_type'])
         assert target['symbol'] + '(' + ', '.join(p['name'] for p in target['parameters']) + ')' in chunks[target['symbol']]
         assert '-> ' + target['return_type'] in chunks[target['symbol']]
+
+    with TemporaryDirectory(prefix='cli-go-cache-', dir=tmp_path) as directory:
+        root = Path(directory)
+        target = root / name
+        target.parent.mkdir(parents=True)
+        target.write_bytes(files[name])
+        first = ASTService(str(root))
+        try:
+            first.initialize_skeleton(indexing_depth='eager')
+            assert set(first._ast_cache) == {name}
+            assert [asdict(f) for f in first._ast_cache[name].functions] == [asdict(f) for f in ast.functions]
+            expected = {k: asdict(v) for k, v in first._ast_cache.items()}
+            definitions = first._index.definitions.copy()
+            assert {t['symbol'] for t in manifest['targets']} <= set(definitions)
+            expected_symbols = {k: [asdict(loc) for loc in locations] for k, locations in definitions.items()}
+            counts = first._store.stats()
+        finally:
+            first.stop_hydration()
+            first._store.close()
+        second = ASTService(str(root))
+        try:
+            with (patch.object(ast_service, 'parse_file', side_effect=AssertionError('restart reparsed')) as parse,
+                  patch.object(codebase_ast, 'parse_file', side_effect=AssertionError('discovery reparsed')) as discover):
+                assert second.initialize_skeleton().phase == 'ready'
+            parse.assert_not_called()
+            discover.assert_not_called()
+            restored = {k: asdict(v) for k, v in second._ast_cache.items()}
+            assert restored == expected
+            assert second._index.definitions == definitions
+            restored_symbols = {k: [asdict(loc) for loc in locations]
+                                for k, locations in second._index.definitions.items()}
+            assert second._store.stats() == counts
+            assert target.read_bytes() == files[name]
+        finally:
+            second.stop_hydration()
+            second._store.close()
+    assert not root.exists()
+    evidence('cli-go-cache-restart.json', {'path': name, 'source_sha256': hashlib.sha256(files[name]).hexdigest(),
+             'expected': expected, 'restored': restored, 'expected_symbols': expected_symbols,
+             'restored_symbols': restored_symbols, 'definitions_equal': True, 'store_counts_equal': True,
+             'restart_parse_calls': parse.call_count, 'discovery_parse_calls': discover.call_count,
+             'source_unchanged': True, 'owned_cleanup': not root.exists()})
 
 
 def test_crystal_method_definition_native_range():

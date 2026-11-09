@@ -11,8 +11,13 @@ control. Java signature metadata retains varargs names/types/rest flags and meth
 return types, including trailing array dimensions; constructors have no return
 type. Named C parameters retain source-written pointer/array/callback types and
 order through native parsing, chunk metadata and cached restart. Four signatures
-in one unchanged Redis file provide a real source witness. The acquired-grammar
-gate requires 87 cases, with standalone Java and C grammar file provenance
+in one unchanged Redis file provide a real source witness. Go grouped inputs,
+variadic component types/rest flags and written results reach function, receiver
+method and interface method metadata; blank and unnamed parameters add no binding
+names. Three headers in one unchanged CLI file provide real Go signature witnesses
+and cached-restart coverage. A separate Go variadic case preserves rest metadata
+and named result syntax through restart without parsing. The acquired-grammar
+gate requires 88 cases, with standalone Java, C and Go grammar file provenance
 recorded around the native signature checks. These supplemental source
 witnesses add no retrieval questions or historical compatibility claims.
 

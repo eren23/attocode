@@ -558,7 +558,7 @@ def _c_declarator_chain(node):
     return []
 
 
-def _c_type_text(node, source_bytes: bytes, omit=None) -> str:
+def _declaration_type_text(node, source_bytes: bytes, omit=None) -> str:
     """Read type syntax without a selected name, comments or declaration modifiers."""
     excluded = []
     stack = [node]
@@ -600,9 +600,31 @@ def _find_c_parameters(node, source_bytes: bytes, types: dict[str, str] | None) 
         if types is not None and base is not None:
             qualifiers = [c for c in parameter.named_children if c.type == "type_qualifier"]
             type_nodes = sorted([base, *qualifiers], key=lambda n: n.start_byte)
-            written = " ".join(_c_type_text(n, source_bytes) for n in type_nodes)
-            abstract = _c_type_text(declarator, source_bytes, identifier)
+            written = " ".join(_declaration_type_text(n, source_bytes) for n in type_nodes)
+            abstract = _declaration_type_text(declarator, source_bytes, identifier)
             types[name] = written + (" " if abstract.startswith("(") else "") + abstract
+    return names
+
+
+def _find_go_parameters(node, source_bytes: bytes, types: dict[str, str] | None, rest: set[str] | None) -> list[str]:
+    """Read only declared input names, including repeated grouped-name fields."""
+    params = node.child_by_field_name("parameters")
+    if params is None:
+        return []
+    names = []
+    for parameter in params.named_children:
+        if parameter.type not in {"parameter_declaration", "variadic_parameter_declaration"}:
+            continue
+        annotation = parameter.child_by_field_name("type")
+        for identifier in parameter.children_by_field_name("name"):
+            name = _node_text(identifier, source_bytes)
+            if not name or name == "_":
+                continue  # The blank identifier does not introduce a binding.
+            names.append(name)
+            if types is not None and annotation is not None:
+                types[name] = _declaration_type_text(annotation, source_bytes)
+            if rest is not None and parameter.type == "variadic_parameter_declaration":
+                rest.add(name)
     return names
 
 
@@ -613,6 +635,8 @@ def _find_parameters(
     """Extract parameter names from a function node; fill ``types`` with annotated ones."""
     if language == "c":
         return _find_c_parameters(node, source_bytes, types)
+    if language == "go":
+        return _find_go_parameters(node, source_bytes, types, rest)
     params_node = node.child_by_field_name("parameters")
     if params_node is None:
         # Some languages use "formal_parameters"
@@ -664,6 +688,9 @@ def _find_parameters(
 
 def _find_return_type(node, source_bytes: bytes, *, language: str = "") -> str:
     """Extract return type annotation from a function node."""
+    if language == "go":
+        result = node.child_by_field_name("result")
+        return _declaration_type_text(result, source_bytes) if result is not None else ""
     ret = node.child_by_field_name("return_type")
     java_method = language == "java" and node.type == "method_declaration"
     if ret is None and java_method:
@@ -1600,7 +1627,7 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 return
 
             param_types: dict[str, str] = {}
-            rest_parameters = set() if language == "java" else None
+            rest_parameters = set() if language in {"java", "go"} else None
             params = _find_parameters(node, source_bytes, param_types, language=language, rest=rest_parameters)
             ret_type = _find_return_type(node, source_bytes, language=language)
             decorators = _find_decorators(node, source_bytes)
@@ -1765,16 +1792,23 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                                             if not mname:
                                                 mname = _find_name(method, source_bytes)
                                             if mname:
-                                                params = _find_parameters(method, source_bytes)
+                                                param_types = {}
+                                                rest_parameters = set()
+                                                params = _find_parameters(method, source_bytes, param_types,
+                                                                          language="go", rest=rest_parameters)
                                                 fn_data = {
                                                     "name": mname, "parameters": params,
-                                                    "return_type": "",
+                                                    "return_type": _find_return_type(method, source_bytes, language="go"),
                                                     "start_line": method.start_point[0] + 1,
                                                     "end_line": method.end_point[0] + 1,
                                                     "is_async": False, "decorators": [],
                                                     "visibility": "public",
                                                     "parent_class": name,
                                                 }
+                                                if param_types:
+                                                    fn_data["param_types"] = param_types
+                                                if rest_parameters:
+                                                    fn_data["rest_parameters"] = sorted(rest_parameters)
                                                 cls_data["methods"].append(fn_data)
                 return
 

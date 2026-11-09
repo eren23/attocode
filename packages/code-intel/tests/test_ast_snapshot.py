@@ -35,6 +35,7 @@ def seed(root, count=4):
 @pytest.mark.parametrize(('name', 'source'), [
     ('example.py', 'from typing import List\nclass Example:\n    def method(self, values: List[int] = []) -> int:\n        return len(values)\n'),
     ('example.go', 'package example\nimport "fmt"\ntype Thing struct {}\nfunc (t *Thing) Method(x int) int { fmt.Println(x); return x }\n'),
+    ('variadic.go', 'package example\nfunc consume(values ...string) (count int) { return len(values) }\n'),
     ('example.ts', 'import { readFile } from "fs";\nexport class Example { method(value: string): string { return value; } }\n'),
     ('example.java', 'class Example { String[] method(String first, String... remaining) { return null; } }\n'),
     ('example.c', 'void consume(int count, const char *label) {}\n'),
@@ -54,6 +55,15 @@ def test_restart_preserves_complete_ast_and_symbols_without_parse(tmp_path, name
         assert [p.name for p in function.parameters] == ['count', 'label']
         assert [re.findall(r'[A-Za-z_]\w*|[^\s]', p.type_annotation) for p in function.parameters] == [
             ['int'], ['const', 'char', '*']]
+    if name == 'example.go':
+        cls = next(c for c in first._ast_cache[name].classes if c.name == 'Thing')
+        method = next(m for m in cls.methods if m.name == 'Method')
+        assert [(p.name, p.type_annotation, p.is_rest) for p in method.parameters] == [('x', 'int', False)]
+        assert method.return_type == 'int'
+    if name == 'variadic.go':
+        function = next(f for f in first._ast_cache[name].functions if f.name == 'consume')
+        assert [(p.name, p.type_annotation, p.is_rest) for p in function.parameters] == [('values', 'string', True)]
+        assert function.return_type == '(count int)'
     expected = {k: asdict(v) for k, v in first._ast_cache.items()}
     definitions = first._index.definitions.copy()
     counts = first._store.stats()
