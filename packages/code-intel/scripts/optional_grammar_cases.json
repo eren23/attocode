@@ -91,6 +91,7 @@
     "test_optional_language_depth::test_perl_pinned_inclusion_refresh_and_restart",
     "test_optional_language_depth::test_perl_pinned_native_witnesses",
     "test_optional_language_depth::test_perl_scoped_project_inclusion_refresh_and_restart",
-    "test_optional_language_depth::test_go_atomic_pinned_receiver_ownership"
+    "test_optional_language_depth::test_go_atomic_pinned_receiver_ownership",
+    "test_optional_language_depth::test_go_stdlib_pinned_import_and_test_workflow"
   ]
 }

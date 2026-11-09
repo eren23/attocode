@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "repo": "golang/go",
+  "commit": "6885bad7dd86880be6929c02085e5c7a67ff2887",
+  "source_tag": "go1.23.0",
+  "grammar_version": "0.25.0",
+  "license_path": "LICENSE",
+  "source_path": "src/sync/atomic/type.go",
+  "test_path": "src/sync/atomic/atomic_test.go",
+  "module_path": "src/go.mod",
+  "files": {
+    "src/sync/atomic/type.go": {
+      "bytes": 8690,
+      "sha256": "867f944c54daf34449d0f9e13f5e6476dab4a59098455e8a56958e4d2e90cdc3",
+      "git_blob_sha1": "f487cb9c5f7eaaf35ee0b5b6d02636f2b9831779"
+    },
+    "LICENSE": {
+      "bytes": 1479,
+      "sha256": "2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067",
+      "git_blob_sha1": "6a66aea5eafe0ca6a688840c47219556c552488e"
+    },
+    "src/sync/atomic/atomic_test.go": {
+      "bytes": 73100,
+      "sha256": "5d2b57bd263cc93ff6c084981aee004e17de59b3a6ec8eddbd236b7479006b25",
+      "git_blob_sha1": "0617b27aca83ec2839f8dc8d6583969d3e0eb978"
+    },
+    "src/go.mod": {
+      "bytes": 238,
+      "sha256": "a932b457ce5b1fc4b23c16168724970d826db7769f2eb15407c2ed0d9c180209",
+      "git_blob_sha1": "789f5aaa1d3e26960da1fa9189a8f40cf6225052"
+    }
+  },
+  "witnesses": {
+    "definition": {
+      "file": "src/sync/atomic/type.go",
+      "symbol": "Pointer.Load",
+      "line": 54,
+      "end_line": 54,
+      "text": "func (x *Pointer[T]) Load() *T { return (*T)(LoadPointer(&x.v)) }"
+    },
+    "test": {
+      "file": "src/sync/atomic/atomic_test.go",
+      "symbol": "TestLoadPointerMethod",
+      "line": 1605,
+      "end_line": 1626,
+      "text": "func TestLoadPointerMethod(t *testing.T) {"
+    },
+    "importer": {
+      "file": "src/sync/atomic/atomic_test.go",
+      "line": 13,
+      "text": "\t. \"sync/atomic\"",
+      "module": "sync/atomic",
+      "alias": "."
+    },
+    "store_call": {
+      "file": "src/sync/atomic/atomic_test.go",
+      "line": 1617,
+      "text": "\t\tx.i.Store(p)",
+      "callee": "x.i.Store"
+    },
+    "load_call": {
+      "file": "src/sync/atomic/atomic_test.go",
+      "line": 1618,
+      "text": "\t\tk := x.i.Load()",
+      "callee": "x.i.Load"
+    },
+    "module": {
+      "file": "src/go.mod",
+      "line": 1,
+      "text": "module std"
+    }
+  },
+  "expected_imported_by": [
+    "src/sync/atomic/atomic_test.go"
+  ]
+}
