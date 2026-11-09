@@ -52,6 +52,21 @@ from attocode_intel.gateway import OperationGateway
                   'module': 'net/../math', 'source': 'client/use.go', 'expected': []}, id='import-parent-component'),
     pytest.param({'configs': {'src/go.mod': 'module "std" // declared\n'}, 'paths': ['src/math/a.go', 'src/client/use.go'],
                   'module': 'math', 'source': 'src/client/use.go', 'expected': ['src/math/a.go']}, id='quoted-std-module'),
+    pytest.param({'configs': {'src/go.mod': 'module std\n', 'src/math/go.mod': 'module example.org/independent\n'},
+                  'paths': ['src/math/a.go', 'src/client/use.go'],
+                  'module': 'math', 'source': 'src/client/use.go', 'expected': []}, id='target-owned-by-other-module'),
+    pytest.param({'configs': {'src/go.mod': 'module std\n', 'src/net/go.mod': 'module example.org/independent\n'},
+                  'paths': ['src/net/http/a.go', 'src/client/use.go'],
+                  'module': 'net/http', 'source': 'src/client/use.go', 'expected': []}, id='target-below-other-module'),
+    pytest.param({'configs': {'src/go.mod': 'module std\n', 'src/other/go.mod': 'module std\n'},
+                  'paths': ['src/other/math/a.go', 'src/client/use.go'],
+                  'module': 'other/math', 'source': 'src/client/use.go', 'expected': []}, id='target-inside-another-std-root'),
+    pytest.param({'configs': {'src/go.mod': 'module std\n', 'src/math/go.mod': ''},
+                  'paths': ['src/math/a.go', 'src/client/use.go'],
+                  'module': 'math', 'source': 'src/client/use.go', 'expected': []}, id='empty-target-module-boundary'),
+    pytest.param({'configs': {'src/go.mod': 'module std\n', 'src/math/go.mod': 'not a module declaration\n'},
+                  'paths': ['src/math/a.go', 'src/client/use.go'],
+                  'module': 'math', 'source': 'src/client/use.go', 'expected': []}, id='unparseable-target-module-boundary'),
 ])
 def test_go_std_package_candidates_use_declared_owner(tmp_path, record_property, case):
     files = {**dict.fromkeys(case['paths'], 'package sample\n'), **case['configs']}
@@ -132,5 +147,32 @@ async def test_go_std_config_only_edit_updates_public_edges(tmp_path, monkeypatc
         assert all(not r['is_error'] for r in rows)
         assert [r['response']['data']['imported_by'] for r in rows] == [
             ['src/client/client_test.go'], [], ['src/client/client_test.go']]
+    finally:
+        await peer.close()
+
+
+async def test_go_std_nested_module_config_boundary_updates_public_edges(tmp_path, monkeypatch, record_property):
+    monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'off')
+    trees = write_sources(tmp_path, '. ')
+    record_property('native_trees', json.dumps(trees))
+    assert all(not t['has_error'] and t['end_byte'] == t['bytes'] for t in trees)
+    config = tmp_path / 'src/math/go.mod'
+    config.write_text('module example.org/independent\ngo 1.23\n')
+    peer = OperationGateway(str(tmp_path), 'daily', watch=False)
+    rows = []
+    try:
+        for kind in ('foreign', 'absent', 'empty', 'foreign'):
+            if kind == 'foreign':
+                config.write_text('module example.org/independent\ngo 1.23\n')
+            elif kind == 'absent':
+                config.unlink()
+            else:
+                config.write_text('')
+            response = await peer.execute('dependencies', {'path': 'src/math/a.go'})
+            rows.append({'nested_module': kind, 'is_error': response.isError, 'response': response.structuredContent})
+        record_property('nested_config_responses', json.dumps(rows))
+        assert all(not r['is_error'] for r in rows)
+        assert [r['response']['data']['imported_by'] for r in rows] == [
+            [], ['src/client/client_test.go'], [], []]
     finally:
         await peer.close()
