@@ -53,6 +53,12 @@ def rows(value, name='target.py'):
         'FROM vectors WHERE file_path=? ORDER BY id', (name,)).fetchall()
 
 
+def current_lexical(value):
+    value.search_candidates('updated', 10, 'target.py')
+    assert value.wait_for_body_index(3), 'Lexical warmup did not finish'
+    return value.search_candidates('updated', 10, 'target.py')
+
+
 @contextmanager
 def workspace(tmp_path, monkeypatch, *, vectors=True):
     (tmp_path / 'target.py').write_text(OLD)
@@ -161,7 +167,7 @@ def test_public_edit_preserves_prior_vectors_on_failure(tmp_path, monkeypatch, r
         assert after == before, 'REGRESSION: live notification deleted prior vectors'
         assert s.value._store.get_file_metadata('target.py') == metadata
         assert any('updated' in t for batch in s.provider.calls for t in batch)
-        hits = s.value.search_candidates('updated', 10, 'target.py')
+        hits = current_lexical(s.value)
         assert hits and all('oldquartz' not in h.text for h in hits)
 
 
@@ -199,7 +205,8 @@ def test_notifications_never_initialize_provider(tmp_path, monkeypatch, record_p
         (tmp_path / 'target.py').write_text(NEW)
         route_change(s, route, monkeypatch)
         assert not s.factories and s.value._provider is None and s.value._store is None
-        assert s.value.search_candidates('updated', 10, 'target.py')
+        assert current_lexical(s.value)
+        assert not s.factories
         record_property('qualified_input', 'true')
 
 
