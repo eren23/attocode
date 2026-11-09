@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Go methods retain their explicit receiver-qualified identity and method kind
+  when the receiver's type is declared in another file, including generic,
+  pointer, parenthesized and Unicode receiver names. Definitions keep the
+  method's own file and source range.
+- Go method diffs distinguish receivers sharing a method name and report
+  receiver changes as a removed method and an added method.
+
 ## [Intelligence 0.1.30] - 2026-11-09
 
 ### Fixed
