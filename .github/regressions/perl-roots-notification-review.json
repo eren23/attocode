@@ -105,6 +105,16 @@
     "test_optional_language_depth::test_perl_config_only_refresh_and_restart[controlled-partial]"
   ],
   "failures": {
+    "test_optional_language_depth::test_perl_config_only_refresh_and_restart[controlled-partial]": {
+      "message": "REGRESSION: Perl config-only dependencies remain stale across refresh or reopen",
+      "properties": {
+        "qualified_input": "true",
+        "native_pinned_files": "3",
+        "notified_ready_without_snapshot": "true",
+        "controlled_partial_state": "true",
+        "source_stamps_unchanged": "true"
+      }
+    },
     "test_optional_language_depth::test_perl_config_only_refresh_and_restart[edited-after-notify]": {
       "message": "REGRESSION: Perl config-only dependencies remain stale across refresh or reopen",
       "properties": {
