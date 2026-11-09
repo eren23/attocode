@@ -728,6 +728,8 @@ class SemanticSearchManager:
             batch = texts[i:i + batch_size]
             try:
                 vectors = self._provider.embed(batch)
+                if len(vectors) != len(batch):
+                    raise ValueError("Embedding batch response length mismatch")
                 all_vectors.extend(vectors)
             except Exception:
                 logger.warning("Embedding batch failed at offset %d", i, exc_info=True)
@@ -2814,6 +2816,10 @@ class SemanticSearchManager:
                     m_embed,
                 ))
 
+        if ast.language == "go":
+            # Go permits repeated init declarations. Preserve the existing
+            # vector store's last-wins ordinary identity before replacement.
+            chunks = list({chunk[0]: chunk for chunk in chunks}.values())
         return chunks
 
     def _get_embedding_texts(
