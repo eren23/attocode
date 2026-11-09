@@ -196,14 +196,20 @@ def test_unchanged_legacy_go_cache_is_repaired(tmp_path, monkeypatch, record_pro
 @pytest.mark.parametrize('failure', ['raise', 'partial'])
 def test_failed_go_replacement_preserves_old_rows(tmp_path, monkeypatch, record_property, failure, route):
     record_property('inputs', json.dumps(qualified_files(tmp_path)))
-    with manager(tmp_path, DeterministicProvider(failure), monkeypatch) as value:
+    provider = DeterministicProvider(failure)
+    with manager(tmp_path, provider, monkeypatch) as value:
         legacy(value._store, tmp_path)
+        # This probe must attempt replacement, even before cache-ID migration
+        # exists. Unchanged-cache behavior has its own separate regression.
+        value._store.set_file_metadata('methods.go', 0.0, 3)
         before, metadata = rows(value._store), value._store.get_file_metadata('methods.go')
         record_property('route_result', json.dumps(run_route(value, tmp_path, route)))
         after = rows(value._store)
         after_metadata = value._store.get_file_metadata('methods.go')
         record_property('cache', json.dumps({'before': before, 'after': after,
                                             'metadata': metadata, 'after_metadata': after_metadata}))
+    assert any('Inner' in text for batch in provider.calls for text in batch)
+    record_property('attempted_texts', json.dumps(provider.calls))
     record_property('qualified_input', 'true')
     assert after == before and metadata == after_metadata, 'REGRESSION: partial Go embedding replaced old rows'
 
@@ -217,6 +223,8 @@ def test_atomic_file_replacement(tmp_path, monkeypatch, record_property, case):
     try:
         legacy(value, tmp_path)
         before = rows(value)
+        assert len(before) == 3 and len(rows(value, 'unrelated.txt')) == 1
+        record_property('sqlite_before', json.dumps(before))
         new = [VectorEntry('method:methods.go:' + owner + '.M', 'methods.go', 'method', owner + '.M',
                            'replacement', [1.0, 0.0, 0.0]) for owner in ['A', 'B']]
         record_property('qualified_input', 'true')
