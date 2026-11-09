@@ -215,7 +215,8 @@ def test_failed_go_replacement_preserves_old_rows(tmp_path, monkeypatch, record_
 
 
 @pytest.mark.parametrize('case', ['success', 'wrong-file', 'duplicate-id', 'conflicting-owner',
-                                 'sql-error', 'rotation', 'rotation-race', 'dimension'])
+                                 'sql-error', 'rotation', 'rotation-race', 'dimension',
+                                 'entry-dimension', 'empty-success'])
 def test_atomic_file_replacement(tmp_path, monkeypatch, record_property, case):
     qualified_files(tmp_path)
     path = str(tmp_path / 'vectors.db')
@@ -234,11 +235,17 @@ def test_atomic_file_replacement(tmp_path, monkeypatch, record_property, case):
             assert {r[0] for r in rows(value)} == {e.id for e in new}
             assert rows(value, 'unrelated.txt')[0][0] == 'untouched'
             return
+        if case == 'empty-success':
+            value.upsert_batch([], replace_file='methods.go')
+            assert not rows(value) and rows(value, 'unrelated.txt')[0][0] == 'untouched'
+            return
         error = ValueError
         if case == 'wrong-file':
             new[0].file_path = 'other.go'
         elif case == 'duplicate-id':
             new[1].id = new[0].id
+        elif case == 'entry-dimension':
+            new[0].vector = [1.0]
         elif case == 'conflicting-owner':
             value.upsert(VectorEntry(new[0].id, 'unrelated.txt', 'file', 'owner', 'keep', [1.0, 0.0, 0.0]))
         elif case == 'sql-error':
@@ -270,3 +277,23 @@ def test_atomic_file_replacement(tmp_path, monkeypatch, record_property, case):
         assert not value._get_conn().in_transaction
     finally:
         value.close()
+
+
+@pytest.mark.parametrize('route', ['full', 'file', 'background'])
+def test_incomplete_go_source_keeps_old_vectors(tmp_path, monkeypatch, record_property, route):
+    # A final robustness control, not native-valid causal identity evidence.
+    qualified_files(tmp_path)
+    target = tmp_path / 'methods.go'
+    source = target.read_text() + '\nfunc Broken(\n'
+    target.write_text(source)
+    tree = syntax_tree(str(target), source, 'go')
+    assert tree is not None and tree.root_node.has_error
+    with manager(tmp_path, DeterministicProvider(), monkeypatch) as value:
+        legacy(value._store, tmp_path)
+        value._store.set_file_metadata('methods.go', 0.0, 3)
+        before = rows(value._store)
+        metadata = value._store.get_file_metadata('methods.go')
+        run_route(value, tmp_path, route)
+        assert rows(value._store) == before
+        assert value._store.get_file_metadata('methods.go') == metadata
+    record_property('negative_native_control', 'true')

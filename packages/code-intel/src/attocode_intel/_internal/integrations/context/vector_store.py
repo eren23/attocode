@@ -381,12 +381,16 @@ class VectorStore:
         Pre-rotation (``none``), aborted, failed, and completed-and-GCed
         states pass through.
         """
+        with self._lock:
+            self._check_rotation_lock_unlocked()
+
+    def _check_rotation_lock_unlocked(self) -> None:
+        """Check again inside a replacement transaction with the lock held."""
         conn = self._get_conn()
         try:
-            with self._lock:
-                row = conn.execute(
-                    "SELECT value FROM store_metadata WHERE key = 'rotation_state'"
-                ).fetchone()
+            row = conn.execute(
+                "SELECT value FROM store_metadata WHERE key = 'rotation_state'"
+            ).fetchone()
         except sqlite3.OperationalError:
             # Pre-v2 store without a store_metadata row yet — treat as
             # no rotation.
@@ -454,9 +458,17 @@ class VectorStore:
             conn.commit()
             self._vec_cache_version += 1
 
-    def upsert_batch(self, entries: list[VectorEntry]) -> None:
-        """Batch insert/update vector entries."""
+    def upsert_batch(self, entries: list[VectorEntry], *, replace_file: str | None = None) -> None:
+        """Batch upsert, optionally replacing one file atomically after validation."""
         self._guard_writes()
+        if replace_file is not None:
+            ids = [entry.id for entry in entries]
+            if (not isinstance(replace_file, str) or not replace_file
+                    or any(entry.file_path != replace_file for entry in entries)
+                    or any(len(entry.vector) != self.dimension for entry in entries)
+                    or any(not isinstance(key, str) or not key for key in ids)
+                    or len(ids) != len(set(ids))):
+                raise ValueError("Invalid per-file vector replacement")
         conn = self._get_conn()
         now = time.time()
         rows = [
@@ -469,16 +481,40 @@ class VectorStore:
             for e in entries
         ]
         with self._lock:
-            conn.executemany(
-                """INSERT OR REPLACE INTO vectors
+            statement = """INSERT OR REPLACE INTO vectors
                    (id, file_path, chunk_type, name, text, vector,
                     model_name, model_version, dimension, produced_at,
                     blob_oid, action_hash)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                rows,
-            )
-            conn.commit()
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            if replace_file is None:
+                conn.executemany(statement, rows)
+                conn.commit()
+            else:
+                conn.execute("SAVEPOINT replace_file_vectors")
+                try:
+                    self._check_rotation_lock_unlocked()
+                    for offset in range(0, len(ids), 400):
+                        batch = ids[offset:offset + 400]
+                        placeholders = ",".join("?" for _ in batch)
+                        if conn.execute(
+                            f"SELECT 1 FROM vectors WHERE id IN ({placeholders}) AND file_path != ? LIMIT 1",
+                            [*batch, replace_file],
+                        ).fetchone():
+                            raise ValueError("Vector ID belongs to another file")
+                    conn.execute("DELETE FROM vectors WHERE file_path = ?", (replace_file,))
+                    conn.executemany(statement, rows)
+                    conn.execute("RELEASE SAVEPOINT replace_file_vectors")
+                except Exception:
+                    conn.execute("ROLLBACK TO SAVEPOINT replace_file_vectors")
+                    conn.execute("RELEASE SAVEPOINT replace_file_vectors")
+                    raise
             self._vec_cache_version += 1
+
+    def get_file_chunk_ids(self, file_path: str) -> set[str]:
+        """Read one file's persisted identities without loading vector blobs."""
+        conn = self._get_conn()
+        with self._lock:
+            return {row[0] for row in conn.execute("SELECT id FROM vectors WHERE file_path = ?", (file_path,))}
 
     def delete_by_file(self, file_path: str) -> int:
         """Delete all entries for a file. Returns count deleted."""

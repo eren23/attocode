@@ -20,6 +20,7 @@ import threading
 import time
 from dataclasses import dataclass, field, replace
 from itertools import islice
+from pathlib import Path
 from typing import Any
 
 from attocode_intel._internal.integrations.context.index_probe import (
@@ -708,7 +709,11 @@ class SemanticSearchManager:
         for f in ctx._files:
             if f.language not in _supported:
                 continue
-            file_chunks = self._chunk_single_file(f.relative_path, f.path)
+            try:
+                file_chunks = self._chunk_single_file(f.relative_path, f.path)
+            except ValueError:
+                logger.warning("Incomplete Go source kept out of vector replacement: %s", f.relative_path)
+                continue
             chunks.extend(file_chunks)
 
         if not chunks:
@@ -746,8 +751,24 @@ class SemanticSearchManager:
                 vector=vec,
             ))
 
-        if entries:
-            self._store.upsert_batch(entries)
+        # A Go file's changed identities must replace its old rows together.
+        # Partial batches retain both vectors and metadata for a later retry.
+        go_counts: dict[str, int] = {}
+        go_entries: dict[str, list] = {}
+        for chunk in chunks:
+            if chunk[1].lower().endswith(".go"):
+                go_counts[chunk[1]] = go_counts.get(chunk[1], 0) + 1
+        for entry in entries:
+            if entry.file_path in go_counts:
+                go_entries.setdefault(entry.file_path, []).append(entry)
+        rejected = {path for path, count in go_counts.items() if len(go_entries.get(path, [])) != count}
+        entries = [e for e in entries if e.file_path not in rejected]
+        for path, file_entries in go_entries.items():
+            if path not in rejected:
+                self._store.upsert_batch(file_entries, replace_file=path)
+        ordinary = [e for e in entries if e.file_path not in go_counts]
+        if ordinary:
+            self._store.upsert_batch(ordinary)
 
         # Update metadata for indexed files
         indexed_files: dict[str, int] = {}
@@ -2659,11 +2680,34 @@ class SemanticSearchManager:
         ``embed_text`` additionally includes a token-budgeted body so the
         embedding model sees the implementation.
         """
-        from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+        from attocode_intel._internal.integrations.context.codebase_ast import (
+            _function_symbol_identity,
+            parse_file,
+        )
 
+        go_content = None
         try:
-            ast = parse_file(abs_path)
+            if rel_path.lower().endswith(".go"):
+                from attocode_intel._internal.integrations.context.syntax_evidence import (
+                    syntax_tree,
+                )
+                go_content = Path(abs_path).read_text(encoding="utf-8", errors="replace")
+                tree = syntax_tree(abs_path, go_content, "go")
+                if (tree is None or tree.root_node.has_error
+                        or tree.root_node.end_byte != len(go_content.encode())):
+                    raise ValueError("Incomplete native Go source")
+                ast = parse_file(abs_path, content=go_content)
+                if ast.parsing_tier != "tree_sitter" or ast.parse_failures:
+                    raise ValueError("Incomplete native Go metadata")
+            else:
+                ast = parse_file(abs_path)
+        except ValueError:
+            if rel_path.lower().endswith(".go"):
+                raise
+            return []
         except Exception:
+            if rel_path.lower().endswith(".go"):
+                raise ValueError("Native Go chunk extraction unavailable") from None
             return []
 
         import os
@@ -2672,8 +2716,11 @@ class SemanticSearchManager:
         except ValueError:
             _body_budget = 400
         try:
-            with open(abs_path, encoding="utf-8", errors="ignore") as _fh:
-                _file_lines = _fh.read().splitlines()
+            if go_content is not None:
+                _file_lines = go_content.splitlines()
+            else:
+                with open(abs_path, encoding="utf-8", errors="ignore") as _fh:
+                    _file_lines = _fh.read().splitlines()
         except OSError:
             _file_lines = []
 
@@ -2700,7 +2747,9 @@ class SemanticSearchManager:
 
         # Function-level chunks
         for func in ast.functions:
-            text_parts = [f"function {func.name}"]
+            name, kind = _function_symbol_identity(func, ast.language)
+            prefix = "method" if kind == "method" else "func"
+            text_parts = [f"{kind} {name}"]
             if func.docstring:
                 text_parts.append(func.docstring[:150])
             params = ", ".join(p.name for p in func.parameters[:8])
@@ -2715,9 +2764,9 @@ class SemanticSearchManager:
             )
             embed_text = f"{sig_text}\n{body}" if body else sig_text
             chunks.append((
-                f"func:{rel_path}:{func.name}",
+                f"{prefix}:{rel_path}:{name}",
                 rel_path,
-                "function",
+                kind,
                 sig_text,
                 embed_text,
             ))
@@ -2831,7 +2880,11 @@ class SemanticSearchManager:
             return 0
 
         # Re-chunk
-        chunks = self._chunk_single_file(rel, abs_path)
+        try:
+            chunks = self._chunk_single_file(rel, abs_path)
+        except ValueError:
+            logger.warning("Incomplete Go source; keeping existing vectors: %s", rel)
+            return 0
         if not chunks:
             self._store.delete_by_file(rel)
             self._store.delete_file_metadata(rel)
@@ -2847,6 +2900,10 @@ class SemanticSearchManager:
                 "reindex_file embed failed for %s, keeping old vectors",
                 rel, exc_info=True,
             )
+            return 0
+
+        if rel.lower().endswith(".go") and (len(vectors) != len(chunks) or not all(vectors)):
+            logger.warning("Partial Go embedding; keeping existing vectors: %s", rel)
             return 0
 
         # Build entries
@@ -2868,9 +2925,12 @@ class SemanticSearchManager:
             ))
 
         # Now safe to delete old + upsert new
-        self._store.delete_by_file(rel)
-        if entries:
-            self._store.upsert_batch(entries)
+        if rel.lower().endswith(".go"):
+            self._store.upsert_batch(entries, replace_file=rel)
+        else:
+            self._store.delete_by_file(rel)
+            if entries:
+                self._store.upsert_batch(entries)
 
         # Update metadata
         try:
@@ -2920,6 +2980,22 @@ class SemanticSearchManager:
         if self._store:
             self._store.delete_by_file(rel)
 
+    def _go_chunk_ids_changed(self, rel_path: str, abs_path: str) -> bool:
+        """Repair supported Go receiver IDs without invalidating other caches."""
+        if not rel_path.lower().endswith(".go"):
+            return False
+        from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+        try:
+            ast = parse_file(abs_path)
+            if (ast.parsing_tier != "tree_sitter" or ast.parse_failures
+                    or not any(f.is_method and f.qualified_name for f in ast.functions)):
+                return False
+            chunks = self._chunk_single_file(rel_path, abs_path)
+            return bool(chunks) and {c[0] for c in chunks} != self._store.get_file_chunk_ids(rel_path)
+        except Exception:
+            logger.debug("Go chunk identity check unavailable: %s", rel_path, exc_info=True)
+            return False
+
     def reindex_stale_files(self, context_manager: Any = None) -> int:
         """Re-index only files whose mtime has changed since last indexing.
 
@@ -2951,7 +3027,9 @@ class SemanticSearchManager:
             except OSError:
                 continue
 
-        stale = self._store.get_stale_files(file_mtimes)
+        stale = set(self._store.get_stale_files(file_mtimes))
+        stale.update(rel for rel, path in file_paths.items()
+                     if rel not in stale and self._go_chunk_ids_changed(rel, path))
 
         # Clean up vectors for files that have been deleted from disk
         all_indexed = self._store.get_all_indexed_files()
@@ -3112,6 +3190,8 @@ class SemanticSearchManager:
                 pass
 
         stale = set(self._store.get_stale_files(file_mtimes))
+        stale.update(f.relative_path for f in indexable if f.relative_path not in stale
+                     and self._go_chunk_ids_changed(f.relative_path, f.path))
         # Also include files not yet indexed at all
         all_indexed = set(self._store.get_all_indexed_files())
         to_index = [f for f in indexable if f.relative_path in stale or f.relative_path not in all_indexed]
@@ -3140,6 +3220,8 @@ class SemanticSearchManager:
 
                     texts = self._get_embedding_texts(chunks)
                     vectors = self._provider.embed(texts)
+                    if f.relative_path.lower().endswith(".go") and (len(vectors) != len(chunks) or not all(vectors)):
+                        raise ValueError("Partial Go embedding; existing file vectors preserved")
                     entries = []
                     for chunk, vec in zip(chunks, vectors, strict=False):
                         if not vec:
@@ -3158,8 +3240,11 @@ class SemanticSearchManager:
                         ))
 
                     if entries:
-                        self._store.delete_by_file(f.relative_path)
-                        self._store.upsert_batch(entries)
+                        if f.relative_path.lower().endswith(".go"):
+                            self._store.upsert_batch(entries, replace_file=f.relative_path)
+                        else:
+                            self._store.delete_by_file(f.relative_path)
+                            self._store.upsert_batch(entries)
                         try:
                             mtime = os.path.getmtime(f.path)
                         except OSError:
