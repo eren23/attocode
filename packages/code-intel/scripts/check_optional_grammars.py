@@ -143,6 +143,7 @@ def main():
               Path(__file__).with_name('go_type_fixture.json'),
               Path(__file__).with_name('go_receiver_fixture.json'),
               Path(__file__).with_name('go_stdlib_fixture.json'),
+              Path(__file__).with_name('go_crossfile_fixture.json'),
               REPO / 'packages/code-intel/tests/test_optional_language_depth.py',
               REPO / 'packages/code-intel/tests/test_java_signatures.py',
               REPO / 'packages/code-intel/tests/test_c_parameters.py',
@@ -152,6 +153,7 @@ def main():
               REPO / 'packages/code-intel/tests/test_go_type_bindings.py',
               REPO / 'packages/code-intel/tests/test_go_generic_receivers.py',
               REPO / 'packages/code-intel/tests/test_go_stdlib_imports.py',
+              REPO / 'packages/code-intel/tests/test_go_crossfile_methods.py',
               REPO / 'packages/code-intel/tests/unit/integrations/context/test_go_symbols.py',
               REPO / 'packages/code-intel/tests/test_ast_snapshot.py',
               REPO / 'packages/code-intel/tests/test_language_capabilities.py', Path(__file__).resolve()]

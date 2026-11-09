@@ -182,6 +182,11 @@ file_dependents:   file_path → {files_that_import_it...}
 
 Each `SymbolLocation` records the symbol's name, qualified name, kind (`function`/`class`/`method`), file path, and line range. Each `SymbolRef` records the reference kind (`call`/`import`/`attribute`), file path, and line number.
 
+Go methods keep their written receiver identity, such as `Regexp.doMatch`, when
+the type is declared in another file. The definition retains the method's own
+file and range. This identity comes from receiver syntax; resolving receiver
+values and package types requires additional evidence.
+
 When a file is edited, `remove_file()` clears all its entries, then `_index_file()` re-adds the new definitions and references. This keeps the index consistent without a full rebuild.
 
 ## AST Service

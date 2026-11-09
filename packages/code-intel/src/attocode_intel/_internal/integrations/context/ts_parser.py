@@ -774,8 +774,8 @@ def _find_go_doc_comment(node, source_bytes: bytes) -> str:
     return "\n".join(comment_lines) if comment_lines else ""
 
 
-def _extract_go_receiver(node, source_bytes: bytes) -> str:
-    """Extract receiver type name from a Go method_declaration node.
+def _go_receiver_identity(node, source_bytes: bytes) -> tuple[str, str]:
+    """Return legacy receiver spelling and a supported native base identity.
 
     Go methods look like ``func (r *Receiver) MethodName(...) ...``.
     The tree-sitter Go grammar exposes a ``receiver`` field containing a
@@ -786,7 +786,7 @@ def _extract_go_receiver(node, source_bytes: bytes) -> str:
     """
     receiver_node = node.child_by_field_name("receiver")
     if receiver_node is None:
-        return ""
+        return "", ""
 
     for child in receiver_node.children:
         if child.type == "parameter_declaration":
@@ -803,15 +803,21 @@ def _extract_go_receiver(node, source_bytes: bytes) -> str:
                 while candidate is not None and candidate.type in ("pointer_type", "parenthesized_type"):
                     if candidate.type == "pointer_type":
                         if seen_pointer:
-                            return _node_text(type_node, source_bytes)
+                            return _node_text(type_node, source_bytes), ""
                         seen_pointer = True
                     candidate = next((sub for sub in candidate.named_children if not sub.is_extra), None)
                 if candidate is not None and candidate.type == "generic_type":
                     candidate = candidate.child_by_field_name("type")
                 if candidate is not None and candidate.type == "type_identifier":
-                    return _node_text(candidate, source_bytes)
-                return _node_text(type_node, source_bytes)
-    return ""
+                    name = _node_text(candidate, source_bytes)
+                    return name, name
+                return _node_text(type_node, source_bytes), ""
+    return "", ""
+
+
+def _extract_go_receiver(node, source_bytes: bytes) -> str:
+    """Keep the receiver spelling API, including unsupported-shape fallbacks."""
+    return _go_receiver_identity(node, source_bytes)[0]
 
 
 def _get_visibility(name: str, language: str) -> str:
@@ -1703,8 +1709,9 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
 
             # Go: extract receiver type for method_declaration → parent_class
             effective_parent = parent_class
+            go_receiver = ""
             if language == "go" and ntype == "method_declaration":
-                receiver_type = _extract_go_receiver(node, source_bytes)
+                receiver_type, go_receiver = _go_receiver_identity(node, source_bytes)
                 if receiver_type:
                     effective_parent = receiver_type
 
@@ -1744,7 +1751,11 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                         break
                 else:
                     # Go: receiver type may not have a matching type_declaration
-                    # in the same file; record as a standalone function with parent_class set
+                    # in this file. Preserve its explicit identity at its own
+                    # coordinates without grafting it into another file's class.
+                    if go_receiver:
+                        fn_data["qualified_name"] = go_receiver + "." + name
+                        fn_data["is_method"] = True
                     functions.append(fn_data)
             else:
                 functions.append(fn_data)

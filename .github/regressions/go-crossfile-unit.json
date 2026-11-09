@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_go_crossfile_methods.py"
+  ],
+  "cases": [
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[value-receiver-other-file]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[pointer-receiver-other-file]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[generic-value-other-file]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[generic-pointer-other-file]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[parenthesized-pointer-other-file]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[unicode-owner-other-file]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[private-method-other-file]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[same-file-placement-control]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[distinct-receivers-same-bare-method]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[same-receiver-name-distinct-packages]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[diff-one-of-two-same-name-receiver-methods]",
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[diff-receiver-only-identity-move]"
+  ],
+  "failures": {
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[value-receiver-other-file]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[pointer-receiver-other-file]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[generic-value-other-file]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[generic-pointer-other-file]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[parenthesized-pointer-other-file]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[unicode-owner-other-file]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[private-method-other-file]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[distinct-receivers-same-bare-method]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[same-receiver-name-distinct-packages]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[diff-one-of-two-same-name-receiver-methods]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_crossfile_methods::test_go_crossfile_method_identity[diff-receiver-only-identity-move]": {
+      "message": "REGRESSION: Go cross-file method identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}

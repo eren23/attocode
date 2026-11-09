@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "repo": "golang/go",
+  "commit": "6885bad7dd86880be6929c02085e5c7a67ff2887",
+  "source_tag": "go1.23.0",
+  "grammar_version": "0.25.0",
+  "license_path": "LICENSE",
+  "module_path": "src/go.mod",
+  "source_path": "src/regexp/exec.go",
+  "type_path": "src/regexp/regexp.go",
+  "test_path": "src/regexp/example_test.go",
+  "files": {
+    "src/regexp/regexp.go": {
+      "bytes": 39477,
+      "sha256": "52c1526cf69992cdbc83067db135d16da18b3c8fc4ac1916fccbf6ec70d3f17c",
+      "git_blob_sha1": "e06099425ebcaf7800c9c0d5cd3d460771ae7547"
+    },
+    "src/regexp/exec.go": {
+      "bytes": 12569,
+      "sha256": "cc9fda63ad7056d4c4abaaa49c00470f726be35ccee53f1c3fe73259e9634dd5",
+      "git_blob_sha1": "3fc4b684febd6034230df4a4c00a082961c7d0c9"
+    },
+    "src/regexp/example_test.go": {
+      "bytes": 11348,
+      "sha256": "e2e3dec1e5c0dde37cbefcf2e7c6171bd604bcdea3c006be235e61d1e48be048",
+      "git_blob_sha1": "707445f9ff02f70b463be4b359a08395f6c1a6bc"
+    },
+    "src/go.mod": {
+      "bytes": 238,
+      "sha256": "a932b457ce5b1fc4b23c16168724970d826db7769f2eb15407c2ed0d9c180209",
+      "git_blob_sha1": "789f5aaa1d3e26960da1fa9189a8f40cf6225052"
+    },
+    "LICENSE": {
+      "bytes": 1479,
+      "sha256": "2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067",
+      "git_blob_sha1": "6a66aea5eafe0ca6a688840c47219556c552488e"
+    }
+  },
+  "witnesses": {
+    "definition": {
+      "file": "src/regexp/exec.go",
+      "line": 513,
+      "text": "func (re *Regexp) doMatch(r io.RuneReader, b []byte, s string) bool {",
+      "symbol": "Regexp.doMatch",
+      "end_line": 515
+    },
+    "execute": {
+      "file": "src/regexp/exec.go",
+      "line": 521,
+      "text": "func (re *Regexp) doExecute(r io.RuneReader, b []byte, s string, pos int, ncap int, dstCap []int) []int {",
+      "symbol": "Regexp.doExecute",
+      "end_line": 550
+    },
+    "type": {
+      "file": "src/regexp/regexp.go",
+      "line": 80,
+      "text": "type Regexp struct {",
+      "symbol": "Regexp"
+    },
+    "test": {
+      "file": "src/regexp/example_test.go",
+      "line": 203,
+      "text": "func ExampleRegexp_MatchString() {",
+      "symbol": "ExampleRegexp_MatchString"
+    },
+    "importer": {
+      "file": "src/regexp/example_test.go",
+      "line": 9,
+      "text": "\t\"regexp\"",
+      "module": "regexp"
+    },
+    "call": {
+      "file": "src/regexp/exec.go",
+      "line": 514,
+      "text": "\treturn re.doExecute(r, b, s, 0, 0, nil) != nil",
+      "callee": "re.doExecute"
+    },
+    "module": {
+      "file": "src/go.mod",
+      "line": 1,
+      "text": "module std"
+    }
+  }
+}

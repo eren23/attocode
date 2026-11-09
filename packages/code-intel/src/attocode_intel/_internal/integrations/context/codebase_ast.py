@@ -1348,32 +1348,39 @@ def diff_file_ast(old: FileAST, new: FileAST) -> list[SymbolChange]:
     changes: list[SymbolChange] = []
     file_path = new.path or old.path
 
-    # --- Functions ---
-    old_funcs = {f.name: f for f in old.functions}
-    new_funcs = {f.name: f for f in new.functions}
+    # --- Functions (including explicit Go methods declared in another file) ---
+    def function_key(func: FunctionDef, language: str) -> tuple[str, str]:
+        if language == "go" and func.is_method and func.qualified_name:
+            return func.qualified_name, "method"
+        return func.name, "function"
 
-    for name in new_funcs:
-        if name not in old_funcs:
+    old_funcs = {function_key(f, old.language): f for f in old.functions}
+    new_funcs = {function_key(f, new.language): f for f in new.functions}
+
+    for key in new_funcs:
+        name, kind = key
+        if key not in old_funcs:
             changes.append(SymbolChange(
-                kind="added", symbol_name=name, symbol_kind="function",
+                kind="added", symbol_name=name, symbol_kind=kind,
                 file_path=file_path,
             ))
         else:
-            of, nf = old_funcs[name], new_funcs[name]
+            of, nf = old_funcs[key], new_funcs[key]
             if (of.params != nf.params or of.parameters != nf.parameters
                     or of.return_type != nf.return_type
                     or of.decorators != nf.decorators or of.is_async != nf.is_async
                     or of.start_line != nf.start_line or of.end_line != nf.end_line):
                 changes.append(SymbolChange(
-                    kind="modified", symbol_name=name, symbol_kind="function",
+                    kind="modified", symbol_name=name, symbol_kind=kind,
                     file_path=file_path, previous=of,
                 ))
 
-    for name in old_funcs:
-        if name not in new_funcs:
+    for key in old_funcs:
+        name, kind = key
+        if key not in new_funcs:
             changes.append(SymbolChange(
-                kind="removed", symbol_name=name, symbol_kind="function",
-                file_path=file_path, previous=old_funcs[name],
+                kind="removed", symbol_name=name, symbol_kind=kind,
+                file_path=file_path, previous=old_funcs[key],
             ))
 
     # --- Classes ---
