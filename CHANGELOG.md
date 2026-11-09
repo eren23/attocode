@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Go imports inside a declared `std` module resolve standard package paths
   through the caller's nearest owning root, restoring dependency, impact and
   import-bound test evidence. Other modules, external paths and separate
-  checkouts retain their existing ownership boundaries.
+  checkouts retain their existing ownership boundaries; nested `go.mod` files,
+  including empty or invalid declarations, exclude their target subtree.
 - Go generic receiver methods bind to their same-file named type, including
   pointer and parenthesized receivers, while retaining written method parameter
   and result types. Type arguments cannot become owners; unsupported receiver
@@ -71,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against ordinary Bool methods, including signatures and complete cache reuse.
 - The same Go revision's atomic tests and standard-module declaration cover real
   dot imports, member-call syntax, import-bound test evidence and cached restart.
+- Disposable Linux CI grammar caches acquire the unchanged locked 1.1.2 assets
+  through the canonical upstream release API, verifying exact sizes/checksums
+  after the upstream repository move. Default navigation acquisition is unchanged.
 
 ## [Intelligence 0.1.29] - 2026-11-08
 

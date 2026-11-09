@@ -1,5 +1,9 @@
 """Declared Go std roots provide package dependencies without SDK guesses."""
+import hashlib
+import importlib.util
+import io
 import json
+from pathlib import Path
 
 import pytest
 from attocode_intel._internal.integrations.context.module_resolution import FileIndex
@@ -176,3 +180,19 @@ async def test_go_std_nested_module_config_boundary_updates_public_edges(tmp_pat
             [], ['src/client/client_test.go'], [], []]
     finally:
         await peer.close()
+
+
+@pytest.mark.parametrize('payload,accepted', [(b'{}', True), (b'xx', False), (b'{}extra', False)],
+                         ids=['exact', 'wrong-hash', 'oversized'])
+def test_ci_pinned_grammar_asset_identity(monkeypatch, payload, accepted):
+    path = Path(__file__).resolve().parents[1] / 'scripts/check_optional_grammars.py'
+    spec = importlib.util.spec_from_file_location('grammar_acquisition_controls', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module.urllib.request, 'urlopen', lambda *a, **kw: io.BytesIO(payload))
+    args = ('https://api.github.com/asset', 2, hashlib.sha256(b'{}').hexdigest())
+    if accepted:
+        assert module._download_exact(*args) == b'{}'
+    else:
+        with pytest.raises(ValueError, match='asset identity'):
+            module._download_exact(*args)

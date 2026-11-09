@@ -21,6 +21,7 @@ class FileIndex(dict):
         super().__init__(*args, **kwargs)
         self.js_projects = []
         self.go_modules = []
+        self.go_module_roots = set()
         self.go_packages = defaultdict(set)
         self.rust_projects = []
         self.namespace_files = {}
@@ -97,12 +98,17 @@ class FileIndex(dict):
 
     def configure_go(self, root):
         self.go_modules = []
+        self.go_module_roots.clear()
         self.go_packages.clear()
         for name in sorted(set(self.values())):
             if name.endswith('.go') and not name.endswith('_test.go'):
                 self.go_packages[str(Path(name).parent)].add(name)
             if Path(name).name != 'go.mod':
                 continue
+            # Even empty/invalid go.mod files exclude their subtree from a
+            # containing module. Ignore stale index entries after deletion.
+            if (Path(root) / name).is_file():
+                self.go_module_roots.add(str(Path(name).parent))
             try:
                 text = self._read(root, name)
             except (OSError, ValueError):
@@ -134,6 +140,9 @@ class FileIndex(dict):
                 if len(roots) != 1:
                     return []
                 directory = str(roots[0] / module)
+                if any(Path(base) != roots[0] and Path(base).is_relative_to(roots[0])
+                       and Path(directory).is_relative_to(Path(base)) for base in self.go_module_roots):
+                    return []
             else:
                 longest = max(len(name) for _, name in matches)
                 matches = [(d, n) for d, n in matches if len(n) == longest]
