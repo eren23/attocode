@@ -182,6 +182,35 @@ async def test_go_std_nested_module_config_boundary_updates_public_edges(tmp_pat
         await peer.close()
 
 
+def test_go_std_unstatable_indexed_module_keeps_boundary(tmp_path, monkeypatch, record_property):
+    files = {'src/go.mod': 'module std\n', 'src/math/go.mod': 'module example.org/independent\n',
+             'src/math/a.go': 'package math\n', 'src/strings/a.go': 'package strings\n'}
+    for name, content in files.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    original = Path.is_file
+
+    def is_file(path):
+        if path == tmp_path / 'src/math/go.mod':
+            raise PermissionError('indexed module parent became unsearchable')
+        return original(path)
+
+    monkeypatch.setattr(Path, 'is_file', is_file)
+    index = FileIndex({name: name for name in files})
+    error = None
+    try:
+        index.configure_go(tmp_path)
+    except OSError as caught:
+        error = type(caught).__name__
+    candidates = {name: index.go_candidates(name, 'src/client/use.go') for name in ('math', 'strings')}
+    record_property('unstatable_module', json.dumps({'error': error, 'candidates': candidates,
+                    'module_roots': sorted(index.go_module_roots)}))
+    assert error is None
+    assert 'src/math' in index.go_module_roots
+    assert candidates == {'math': [], 'strings': ['src/strings/a.go']}
+
+
 @pytest.mark.parametrize('payload,accepted', [(b'{}', True), (b'xx', False), (b'{}extra', False)],
                          ids=['exact', 'wrong-hash', 'oversized'])
 def test_ci_pinned_grammar_asset_identity(monkeypatch, payload, accepted):
