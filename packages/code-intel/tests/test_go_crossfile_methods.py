@@ -195,7 +195,11 @@ def test_go_crossfile_method_identity(tmp_path, record_property, case):
         actual = [{key: getattr(loc, key) for key in expected[0]}
                   for name in case['files'] for loc in service.get_file_symbols(name) if loc.name in names]
         record_property('symbols', json.dumps(actual))
-        assert actual == expected, 'REGRESSION: Go cross-file method identity'
+        # The index stores each file's symbol keys in a set; source order is
+        # not part of this API. Keep complete row equality and multiplicity.
+        def order(row):
+            return row['file_path'], row['start_line'], row['qualified_name']
+        assert sorted(actual, key=order) == sorted(expected, key=order), 'REGRESSION: Go cross-file method identity'
         for row in expected:
             ast = parsed[0][row['file_path']]
             methods = [f for f in ast.functions if f.name == row['name']]
