@@ -78,7 +78,8 @@ remain opt-in and off by default.
 
 ## Install or upgrade
 
-Install with `uv tool install attocode-code-intel==0.1.31`, or upgrade an existing
-installation with `uv tool upgrade attocode-code-intel`. Restart the MCP server
-after upgrading so its running process loads the new version. See the
+Install or upgrade to this release with
+`uv tool install attocode-code-intel==0.1.31`. Reinstalling with this version
+replaces any older exact pin; `uv tool upgrade` preserves existing constraints.
+Restart the MCP server after upgrading so its running process loads the new version. See the
 [release guide](intelligence-release.md) for publication verification.
