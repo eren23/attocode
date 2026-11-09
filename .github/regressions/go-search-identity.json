@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_go_search_identity.py"
+  ],
+  "cases": [
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[keyword-receivers]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[body-receivers]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[default-receivers]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[vector-receivers]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[fused-receivers]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[keyword-same-file]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[body-same-file]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[default-same-file]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[vector-same-file]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[fused-same-file]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[keyword-unsupported]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[body-unsupported]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[default-unsupported]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[vector-unsupported]",
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[fused-unsupported]",
+    "test_go_search_identity::test_unchanged_go_lexical_caches_repair_once",
+    "test_go_search_identity::test_future_lexical_cache_stays_unmodified[schema_version]",
+    "test_go_search_identity::test_future_lexical_cache_stays_unmodified[body_schema_version]",
+    "test_go_search_identity::test_vector_fusion_preserves_distinct_lexical_spans[java-overloads]",
+    "test_go_search_identity::test_vector_fusion_preserves_distinct_lexical_spans[long-method]",
+    "test_go_search_identity::test_vector_fusion_preserves_distinct_lexical_spans[anonymous]",
+    "test_go_search_identity::test_vector_fusion_preserves_distinct_lexical_spans[macro]",
+    "test_go_search_identity::test_missing_go_parser_keeps_fallback_conservative"
+  ],
+  "failures": {
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[keyword-receivers]": {
+      "message": "REGRESSION: Go search modalities disagree on receiver identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[body-receivers]": {
+      "message": "REGRESSION: Go search modalities disagree on receiver identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[default-receivers]": {
+      "message": "REGRESSION: Go search modalities disagree on receiver identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[fused-receivers]": {
+      "message": "REGRESSION: Go search modalities disagree on receiver identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[fused-same-file]": {
+      "message": "REGRESSION: Go search modalities disagree on receiver identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_go_receivers_agree_across_modalities[fused-unsupported]": {
+      "message": "REGRESSION: Go search modalities disagree on receiver identity",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_unchanged_go_lexical_caches_repair_once": {
+      "message": "REGRESSION: unchanged Go lexical caches stayed legacy",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_future_lexical_cache_stays_unmodified[body_schema_version]": {
+      "message": "REGRESSION: future lexical cache was modified",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_vector_fusion_preserves_distinct_lexical_spans[java-overloads]": {
+      "message": "REGRESSION: vector fusion collapsed distinct lexical spans",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_vector_fusion_preserves_distinct_lexical_spans[long-method]": {
+      "message": "REGRESSION: vector fusion collapsed distinct lexical spans",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_vector_fusion_preserves_distinct_lexical_spans[anonymous]": {
+      "message": "REGRESSION: vector fusion collapsed distinct lexical spans",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_go_search_identity::test_vector_fusion_preserves_distinct_lexical_spans[macro]": {
+      "message": "REGRESSION: vector fusion collapsed distinct lexical spans",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}

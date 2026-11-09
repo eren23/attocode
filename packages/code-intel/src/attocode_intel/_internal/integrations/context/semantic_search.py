@@ -62,6 +62,9 @@ _NON_CODE_EXTS = frozenset({
     ".md", ".txt", ".rst", ".cfg", ".ini", ".yml", ".yaml", ".json", ".toml", ".xml", ".csv",
 })
 
+_GO_KEYWORD_FORMAT = "go_kw_v1:"
+_GO_BODY_FORMAT = "go_body_v1:"
+
 _CAMEL_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 _ASCII_WORD_RE = re.compile(r"[a-zA-Z0-9]+")
 
@@ -81,7 +84,12 @@ _CONSTRUCT_HINTS: dict[str, list[str]] = {
 
 
 def _source_spans(ast):
-    symbols = [(f.start_line, f.end_line, "function", f.name) for f in ast.functions]
+    from attocode_intel._internal.integrations.context.codebase_ast import _function_symbol_identity
+
+    symbols = []
+    for func in ast.functions:
+        name, kind = _function_symbol_identity(func, ast.language)
+        symbols.append((func.start_line, func.end_line, kind, name))
     classes = []
     for cls in ast.classes:
         classes.append((cls.start_line, cls.end_line, "class", cls.name))
@@ -101,12 +109,15 @@ class _BodySpanCache:
         # Conservative allowance for Python containers, integers and names.
         size = 512 + len(path.encode()) + sum(256 + len(span[3].encode()) for span in [*symbols, *classes])
         if size <= self.remaining and len(content.encode()) <= 512 * 1024:
-            self.rows[path] = (hashlib.sha256(content.encode()).digest(), (symbols, classes))
+            self.rows[path] = (hashlib.sha256(content.encode()).digest(), (symbols, classes),
+                               ast.language == "go" and ast.parsing_tier == "tree_sitter")
             self.remaining -= size
 
-    def take(self, path, content):
+    def take(self, path, content, *, metadata=None):
         row = self.rows.pop(path, None)
         if row and row[0] == hashlib.sha256(content.encode()).digest():
+            if metadata is not None:
+                metadata['native_go'] = row[2]
             return row[1]
         return None
 
@@ -388,6 +399,7 @@ class SemanticSearchManager:
     _reindex_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _reindex_worker_started: bool = field(default=False, repr=False)
     _kw_docs: list[_KeywordDoc] = field(default_factory=list, repr=False)
+    _go_kw_certified: set[str] = field(default_factory=set, repr=False)
     _kw_df: dict[str, int] = field(default_factory=dict, repr=False)
     _kw_avg_dl: float = field(default=0.0, repr=False)
     _kw_index_built: bool = field(default=False, repr=False)
@@ -994,16 +1006,51 @@ class SemanticSearchManager:
         # Map chunk_type to vector ID prefix for consistent key space
         _type_prefix = {"function": "func", "class": "cls", "method": "method", "file": "file"}
 
-        vector_ranked = self._normalize_scores(
-            [(r.id, r.score) for r in raw_results],
-        )
         def _result_id(result: SemanticSearchResult) -> str:
             prefix = _type_prefix.get(result.chunk_type, result.chunk_type)
+            first = result.start_line or result.definition_start_line
+            last = result.end_line or result.definition_end_line
+            if first:
+                return f"{prefix}:{result.file_path}:{result.name}:{first}:{last}"
             if result.chunk_type == "file":
                 return f"file:{result.file_path}"
             return f"{prefix}:{result.file_path}:{result.name}"
 
-        # Use composite IDs for keyword results matching vector key space
+        def _owner(result):
+            return result.file_path, result.chunk_type, result.name if result.chunk_type != 'file' else ''
+
+        lexical_by_owner = {}
+        lexical_by_id = {}
+        for result in keyword_results:
+            lexical_by_owner.setdefault(_owner(result), []).append(result)
+            lexical_by_id[_result_id(result)] = result
+        raw_owners = {_owner(result) for result in raw_results}
+        definitions = {}
+        for doc in self._kw_docs:
+            owner = _owner(doc)
+            if owner in raw_owners and doc.start_line:
+                definitions.setdefault(owner, set()).add((doc.start_line, doc.end_line))
+        vector_ids = {}
+        for result in raw_results:
+            owner = _owner(result)
+            matches = lexical_by_owner.get(owner, [])
+            spans = definitions.get(owner, set())
+            # Persisted vector IDs intentionally have no source span. Join
+            # only a uniquely located definition, crediting its best window
+            # once. Ambiguous overloads retain every lexical span separately.
+            if len(spans) == 1:
+                first, last = next(iter(spans))
+                matches = [hit for hit in matches
+                           if first <= (hit.start_line or hit.definition_start_line)
+                           <= (hit.end_line or hit.definition_end_line) <= last]
+            elif len(spans) > 1 or len(matches) != 1:
+                matches = []
+            vector_ids[result.id] = _result_id(matches[0]) if matches else result.id
+
+        vector_ranked = self._normalize_scores(
+            [(vector_ids[r.id], r.score) for r in raw_results],
+        )
+        # Lexical definition/window spans remain distinct in optional fusion.
         keyword_ranked = self._normalize_scores([
             (_result_id(r), r.score)
             for r in keyword_results
@@ -1051,13 +1098,20 @@ class SemanticSearchManager:
         # Build result lookup for fast access
         result_map: dict[str, SemanticSearchResult] = {}
         for r in raw_results:
-            result_map[r.id] = SemanticSearchResult(
-                file_path=r.file_path,
-                chunk_type=r.chunk_type,
-                name=r.name,
-                text=r.text,
-                score=r.score,
-            )
+            key = vector_ids[r.id]
+            located = lexical_by_id.get(key)
+            if located is not None and located.start_line:
+                result_map[key] = replace(located)
+            elif located is not None and located.definition_start_line:
+                result_map[key] = replace(located, text=r.text, score=r.score)
+            else:
+                result_map[key] = SemanticSearchResult(
+                    file_path=r.file_path,
+                    chunk_type=r.chunk_type,
+                    name=r.name,
+                    text=r.text,
+                    score=r.score,
+                )
         for r in keyword_results:
             kw_id = _result_id(r)
             if kw_id not in result_map:
@@ -1381,7 +1435,7 @@ class SemanticSearchManager:
 
     @staticmethod
     def _body_document(rel_path: str, abs_path: str, body_spans=None, *, ast_lookup=None,
-                       include_file_terms=False) -> tuple[list[tuple[str, str, int, int, str, str]], str]:
+                       include_file_terms=False, source_metadata=None) -> tuple[list[tuple[str, str, int, int, str, str]], str]:
         """Share one file read and line tokens across overlapping windows and whole-file FTS."""
         from attocode_intel._internal.integrations.context.codebase_ast import parse_file
 
@@ -1399,7 +1453,7 @@ class SemanticSearchManager:
         with measure('body.spans'):
             symbol_spans, class_spans = [], []
             try:
-                cached = body_spans.take(rel_path, content) if body_spans is not None else None
+                cached = body_spans.take(rel_path, content, metadata=source_metadata) if body_spans is not None else None
                 if cached is not None:
                     symbol_spans, class_spans = cached
                 else:
@@ -1409,7 +1463,10 @@ class SemanticSearchManager:
                             ast = ast_lookup(rel_path, hashlib.sha256(content.encode()).hexdigest())
                         except Exception:
                             logger.debug("Existing AST lookup failed for %s", rel_path, exc_info=True)
-                    symbol_spans, class_spans = _source_spans(ast or parse_file(abs_path, content))
+                    ast = ast or parse_file(abs_path, content)
+                    symbol_spans, class_spans = _source_spans(ast)
+                    if source_metadata is not None:
+                        source_metadata['native_go'] = ast.language == 'go' and ast.parsing_tier == 'tree_sitter'
             except Exception:
                 logger.debug("Source window AST parse failed for %s", rel_path, exc_info=True)
 
@@ -1556,6 +1613,10 @@ class SemanticSearchManager:
                     path for path, (_abs, mtime, size) in current.items()
                     if cached.get(path) != (mtime, size)
                 }
+                current_format = {key[len(_GO_BODY_FORMAT):] for key, value in execute(
+                    "SELECT key,value FROM metadata WHERE key GLOB ?", (_GO_BODY_FORMAT + '*',),
+                ) if value == '1'}
+                stale.update(path for path in current if path.lower().endswith('.go') and path not in current_format)
                 with measure('body.delete'):
                     for paths in _sql_batches(sorted(deleted | stale)):
                         if self._closed:
@@ -1563,6 +1624,9 @@ class SemanticSearchManager:
                         placeholders = ",".join(["?"] * len(paths))
                         for table in ("body_fts", "body_file_fts", "body_files"):
                             execute(f"DELETE FROM {table} WHERE file_path IN ({placeholders})", paths)
+                    for path in deleted | stale:
+                        if path.lower().endswith('.go'):
+                            execute("DELETE FROM metadata WHERE key=?", (_GO_BODY_FORMAT + path,))
                 with measure('body.files'):
                     for path in sorted(stale):
                         if self._closed:
@@ -1570,10 +1634,12 @@ class SemanticSearchManager:
                         count("body.files_started")
                         abs_path, mtime, size = current[path]
                         ext = os.path.splitext(path)[1].lower()
+                        source_metadata = {} if ext == '.go' else None
                         with measure('body.document', path):
                             chunks, file_terms = self._body_document(
                                 path, abs_path, body_spans, ast_lookup=self.ast_lookup,
                                 include_file_terms=ext in EXTENSION_LANGUAGES and ext not in _NON_CODE_EXTS,
+                                source_metadata=source_metadata,
                             )
                         count("body.windows", len(chunks))
                         # One SQLite step per bounded batch avoids releasing and
@@ -1599,6 +1665,9 @@ class SemanticSearchManager:
                             "INSERT INTO body_files (file_path, mtime_ns, size) VALUES (?, ?, ?)",
                             (path, mtime, size),
                         )
+                        if source_metadata and source_metadata.get('native_go'):
+                            execute("INSERT OR REPLACE INTO metadata (key,value) VALUES (?,?)",
+                                    (_GO_BODY_FORMAT + path, '1'))
                         count("body.files_completed")
                 if self._closed:
                     return  # Closing the connection rolls back this partial refresh.
@@ -2265,6 +2334,29 @@ class SemanticSearchManager:
             root_real = os.path.realpath(self.root_dir)
             if os.path.commonpath((root_real, os.path.realpath(os.path.dirname(cache_dir)))) != root_real:
                 return None
+            if os.path.commonpath((root_real, os.path.realpath(cache_dir))) != root_real:
+                return None
+            existing = Path(self._kw_cache_db_path)
+            if existing.is_symlink():
+                return None
+            if existing.exists():
+                if not existing.is_file():
+                    return None
+                # Check an existing cache without changing its journal or mode.
+                # Incompatible future caches remain untouched; do not use
+                # immutable=1 here, since version metadata may live in WAL.
+                probe = sqlite3.connect(existing.absolute().as_uri() + '?mode=ro', uri=True)
+                try:
+                    if probe.execute("SELECT 1 FROM sqlite_master WHERE name='metadata'").fetchone():
+                        limits = {'schema_version': 4, 'body_schema_version': 5}
+                        versions = probe.execute(
+                            "SELECT key,value FROM metadata WHERE key IN (?,?)", tuple(limits),
+                        ).fetchall()
+                        if any(not str(value).isdigit() or int(value) > limits[key]
+                               for key, value in versions):
+                            return None
+                finally:
+                    probe.close()
             os.makedirs(cache_dir, mode=0o700, exist_ok=True)
             if os.path.commonpath((root_real, os.path.realpath(cache_dir))) != root_real:
                 return None
@@ -2281,6 +2373,10 @@ class SemanticSearchManager:
             conn.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             row = conn.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
             if row is not None and (not row[0].isdigit() or int(row[0]) > 4):
+                conn.close()
+                return None
+            body_version = conn.execute("SELECT value FROM metadata WHERE key='body_schema_version'").fetchone()
+            if body_version is not None and (not body_version[0].isdigit() or int(body_version[0]) > 5):
                 conn.close()
                 return None
             if row is None or row[0] != "4":
@@ -2352,6 +2448,12 @@ class SemanticSearchManager:
                         + ",".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(batch)),
                         tuple(value for row in batch for value in row),
                     )
+                execute("DELETE FROM metadata WHERE key GLOB ?", (_GO_KEYWORD_FORMAT + '*',))
+                for path in sorted(self._go_kw_certified & file_mtimes.keys()):
+                    if self._closed:
+                        return
+                    execute("INSERT OR REPLACE INTO metadata (key,value) VALUES (?,?)",
+                            (_GO_KEYWORD_FORMAT + path, '1'))
                 if self._closed:
                     return
                 measured_call("keyword.commit", conn.commit)
@@ -2393,6 +2495,11 @@ class SemanticSearchManager:
                     cached_mtime = cached_mtimes.get(fpath)
                     if cached_mtime is None or current_mtime > cached_mtime:
                         stale.add(fpath)
+                current_format = {key[len(_GO_KEYWORD_FORMAT):] for key, value in conn.execute(
+                    "SELECT key,value FROM metadata WHERE key GLOB ?", (_GO_KEYWORD_FORMAT + '*',),
+                ) if value == '1'}
+                stale.update(path for path in current_files if path.lower().endswith('.go') and path not in current_format)
+                self._go_kw_certified = (current_format & current_files.keys()) - stale
                 deleted = set(cached_mtimes.keys()) - set(current_files.keys())
                 exclude = stale | deleted
 
@@ -2436,7 +2543,10 @@ class SemanticSearchManager:
         if self._closed:
             return
         generation = self._body_generation
-        from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+        from attocode_intel._internal.integrations.context.codebase_ast import (
+            _function_symbol_identity,
+            parse_file,
+        )
         from attocode_intel._internal.integrations.context.codebase_context import (
             CodebaseContextManager,
         )
@@ -2473,6 +2583,7 @@ class SemanticSearchManager:
                 file_meta[f.relative_path] = (is_config, f.is_test)
 
         # Try incremental update from cache
+        self._go_kw_certified = set()
         cache_result = measured_call("keyword.cache_load", self._load_kw_cache, current_files)
 
         if cache_result is not None:
@@ -2513,6 +2624,8 @@ class SemanticSearchManager:
                             self._warmup_reused_asts += 1
                         if body_spans is not None:
                             measured_call("keyword.spans", body_spans.put, rel, content, ast)
+                    if ast.language == 'go' and ast.parsing_tier == 'tree_sitter':
+                        self._go_kw_certified.add(rel)
                 except Exception:
                     continue
 
@@ -2542,10 +2655,12 @@ class SemanticSearchManager:
 
                     # Function-level docs
                     for func in ast.functions:
+                        name, kind = _function_symbol_identity(func, ast.language)
+                        prefix = 'func' if kind == 'function' else kind
                         parts: list[str] = []
-                        parts.extend([func.name] * 3)
+                        parts.extend([name] * 3)
                         # Add NL summary of the function name for better query matching
-                        nl_summary = _summarize_code_to_nl(func.name, "function", "")
+                        nl_summary = _summarize_code_to_nl(name, kind, "")
                         parts.append(nl_summary)
                         if func.docstring:
                             parts.append(func.docstring[:300])
@@ -2561,7 +2676,7 @@ class SemanticSearchManager:
                         for t in tokens:
                             tf[t] = tf.get(t, 0) + 1
 
-                        preview_parts = [f"function {func.name}"]
+                        preview_parts = [f"{kind} {name}"]
                         if func.docstring:
                             preview_parts.append(func.docstring[:100])
                         params_str = ", ".join(p.name for p in func.parameters[:6])
@@ -2569,11 +2684,11 @@ class SemanticSearchManager:
                             preview_parts.append(f"({params_str})")
 
                         docs.append(_KeywordDoc(
-                            id=f"func:{rel}:{func.name}:{func.start_line}:{func.end_line}",
+                            id=f"{prefix}:{rel}:{name}:{func.start_line}:{func.end_line}",
                             start_line=func.start_line, end_line=func.end_line,
                             file_path=rel,
-                            chunk_type="function",
-                            name=func.name,
+                            chunk_type=kind,
+                            name=name,
                             text=" | ".join(preview_parts),
                             is_config=False,
                             is_test=is_test,
