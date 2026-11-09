@@ -86,6 +86,12 @@ from attocode_intel._internal.integrations.context.syntax_evidence import syntax
                   'types': ['Box'], 'methods': {'Box': ['Run']}}, id='parenthesized-plain-value'),
     pytest.param({'source': 'type Box struct{}\nfunc (x (*Box)) Run() {}\n',
                   'types': ['Box'], 'methods': {'Box': ['Run']}}, id='parenthesized-plain-pointer'),
+    # Native syntax can represent unsupported receiver shapes; keep the existing
+    # standalone fallback rather than assigning a same-named local type.
+    pytest.param({'source': 'type Box[T any] struct{}\nfunc (x **Box[T]) Run() {}\n',
+                  'types': ['Box'], 'methods': {}, 'functions': ['Run']}, id='repeated-pointer-fallback'),
+    pytest.param({'source': 'type Box[T any] struct{}\nfunc (x *foreign.Box[T]) Run() {}\n',
+                  'types': ['Box'], 'methods': {}, 'functions': ['Run']}, id='nonlocal-generic-fallback'),
 ])
 def test_go_generic_receivers_reach_owner_and_index(tmp_path, monkeypatch, record_property, case):
     name = 'receivers.go'

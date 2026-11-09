@@ -780,7 +780,9 @@ def _extract_go_receiver(node, source_bytes: bytes) -> str:
     Go methods look like ``func (r *Receiver) MethodName(...) ...``.
     The tree-sitter Go grammar exposes a ``receiver`` field containing a
     ``parameter_list`` with one ``parameter_declaration`` whose ``type``
-    child holds the receiver type (possibly wrapped in ``pointer_type``).
+    child holds the receiver type. Unwrap parentheses and one pointer, then
+    read a generic type's direct base field. Unsupported shapes retain their
+    written spelling, so they cannot bind a same-named local class by accident.
     """
     receiver_node = node.child_by_field_name("receiver")
     if receiver_node is None:
@@ -790,17 +792,24 @@ def _extract_go_receiver(node, source_bytes: bytes) -> str:
         if child.type == "parameter_declaration":
             type_node = child.child_by_field_name("type")
             if type_node is None:
-                # Fallback: look for type_identifier or pointer_type child
+                # Retain compatibility with bindings lacking the field lookup.
                 for sub in child.children:
-                    if sub.type in ("type_identifier", "pointer_type"):
+                    if sub.type in ("type_identifier", "pointer_type", "generic_type", "parenthesized_type"):
                         type_node = sub
                         break
             if type_node is not None:
-                # pointer_type wraps the actual type_identifier
-                if type_node.type == "pointer_type":
-                    for sub in type_node.children:
-                        if sub.type == "type_identifier":
-                            return _node_text(sub, source_bytes)
+                candidate = type_node
+                seen_pointer = False
+                while candidate is not None and candidate.type in ("pointer_type", "parenthesized_type"):
+                    if candidate.type == "pointer_type":
+                        if seen_pointer:
+                            return _node_text(type_node, source_bytes)
+                        seen_pointer = True
+                    candidate = next((sub for sub in candidate.named_children if not sub.is_extra), None)
+                if candidate is not None and candidate.type == "generic_type":
+                    candidate = candidate.child_by_field_name("type")
+                if candidate is not None and candidate.type == "type_identifier":
+                    return _node_text(candidate, source_bytes)
                 return _node_text(type_node, source_bytes)
     return ""
 
