@@ -1,7 +1,6 @@
 # Perl module roots
 
-This configuration is available in the development checkout and the next
-maintenance release after 0.1.31.
+This configuration is available in version 0.1.32 and later.
 
 For a workspace whose Perl modules live outside the root or `lib`, set explicit
 roots in `.attocode/config.toml`:
@@ -17,7 +16,7 @@ lookup. Without this setting, the defaults are `"."` and `"lib"`.
 
 Roots must be workspace-relative directories. Separators and dot components are
 normalized, and duplicate roots are removed. Safe internal symlinks resolve to
-their physical workspace path. Absolute paths, parent traversal, control
+their physical workspace path. Absolute paths, parent traversal, ASCII control
 characters, outward symlinks and non-string entries are skipped. A safe root
 that does not exist cannot add any files. Missing, malformed or incorrectly
 typed outer configuration keeps the defaults. The loader accepts only a

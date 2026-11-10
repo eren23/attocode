@@ -1,8 +1,8 @@
 # Code Intelligence Roadmap
 
-## Current priorities — 2026-11-09
+## Current state — 2026-11-10
 
-This checkout targets `attocode-code-intel` **0.1.31**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.32**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
@@ -10,8 +10,28 @@ evidence, the [quality guide](intelligence-quality.md) for bounded checks, and t
 The phase plan below is retained history, not a release schedule or proof that
 an unchecked feature shipped when its old target version was reached.
 
-| Priority | Action | Completion evidence / limits |
+## Next bounded work
+
+These are future checks, each requiring its own scoped execution. Existing
+rejected experiments and consumed questions remain closed.
+
+| Order | Next discriminating check | Acceptance / stopping gate |
 | --- | --- | --- |
+| 1. Remote-settings persistence | Reproduce interruption and outward-symlink behavior using owned synthetic TOML and fake tokens; existing valid-data preservation is already covered. | An online causal regression must show a real gap before a patch. Preserve old valid bytes on failed publication, contain writes, keep existing connection behavior and never record user credentials. Stop if no gap is demonstrated. |
+| 2. First-page evidence | Distinguish a new causal mechanism from known preview, growth, proximity and owner-credit hypotheses before authoring a candidate. Keep the six November 10 cases as known controls. | Prospectively audit task/target overlap and require actionable misses in two repositories attributable to a distinct, untested mechanism. Freeze no-loss/latency and development/holdout gates separately. No replay or retuning of rejected candidates. |
+| 3. Rust recovery boundary | Add a public-gateway cancellation witness and, when reproducible, a naturally slow real reload; current cancellation evidence covers the precision coroutine. | Preserve current-source partial evidence and later recovery within existing deadlines, plus owned-process cleanup. Patch only a causal failure; do not raise deadlines or infer a natural late reload from controlled delays. |
+
+Cockroach performance work remains deferred pending a new matched scope. Its
+historical timing observations do not establish current-release speed or
+authorize another broad run or cloud rental.
+
+## Delivery and diagnostic history
+
+| Record | Delivered or diagnosed behavior | Completion evidence / limits |
+| --- | --- | --- |
+| 0.1.32 Perl roots and TOML preservation | Configure static module roots, refresh config-only dependency policy and retain valid existing TOML when remote settings change | [Maintenance notes](intelligence-0.1.32.md) and [root configuration](intelligence-perl-roots.md): 100 required native cases, unchanged pinned Carp sources, first-response notification/controlled-partial checks, reopen, conservative ambiguity and independent discovery exclusions. Publication verification upgrades actual 0.1.31. |
+| Bounded Rust diagnosis | Controlled late readiness, later retry, edit/deletion, cancellation and a real pinned server required no production patch | Existing five-second Rust/two-second other deadlines remain. The real workspace recovered within budget; no naturally slow real-reload, exact one-second retry-boundary or outer-gateway cancellation guarantee was established. |
+| Fresh first-page diagnosis | One source-exposed six-question/three-repository baseline; no candidate experiment | [One frozen run](https://github.com/eren23/attocode/actions/runs/42722732495): complete RAW/source/Git/request/cleanup evidence; all six first-page contracts incomplete, both p-limit deep/scoped proofs recovered. No evidenced new shared mechanism across two repositories; the gate remains unmet. Questions consumed, reserved 24 holdouts unissued; no broad quality or speed claim. |
 | 0.1.31 edit and search reliability | Preserve vectors through failed live refresh, fence superseded writes, and align Go receiver identities across search paths | [Maintenance notes](intelligence-0.1.31.md): reviewed live-notification/revision controls, distinct lexical source spans during optional fusion, conservative future-cache refusal and 95 required native cases. Publication verification upgrades the actual 0.1.30 baseline. These are correctness contracts, not first-page relevance or latency gains. |
 | 0.1.30 metadata and navigation maintenance | Preserve Java/C/Go signatures, Go bindings and standard-module imports; refresh source/callers and validate persisted index identity | [Release notes](intelligence-0.1.30.md): source-pinned Gson/Redis/Go witnesses, 92 required native cases and complete cache restarts. Receiver ownership is scoped to same-file types; syntax/candidate evidence does not prove runtime member binding or first-page relevance. |
 | 0.1.29 Perl test navigation | Recognize `.t` scripts and verify source-pinned Carp relationships | [Release notes](intelligence-0.1.29.md): canonical and generic parser identity, three unchanged pinned sources, real caller/import/test witnesses and eight navigation checks at the Carp distribution root. Scoped inclusion preserves default generated-directory exclusions; syntax and heuristic evidence remain partial. |
