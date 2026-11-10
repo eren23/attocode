@@ -43,6 +43,19 @@ roots or changing unrelated remote settings keeps the same dependency policy.
 Saving remote settings preserves existing TOML data, including these roots;
 comments and formatting may change.
 
+On the development branch after 0.1.32, remote saves use a flushed private
+temporary file and atomic replacement. Failed data writes or publication keep
+the previous valid bytes. The `.attocode` directory and `config.toml` entry must
+not be symlinks, including links to another location inside the project.
+Nonregular, unreadable, malformed, invalid UTF-8 or over-1,000,000-byte existing
+files are refused; repair them before saving. Successful saves set file mode
+`0600`. Project-directory aliases are supported.
+
+This does not merge concurrent writers or guarantee persistence through power
+loss. An abrupt process kill can leave a private temporary file. Directory
+descriptors anchor writes if paths are changed concurrently; the returned path
+can still be redirected by an external filesystem edit.
+
 This is conservative static resolution. The index does not execute Perl,
 evaluate `use lib` or `BEGIN`, or read runtime `@INC` and global module paths.
 Native syntax and literal call evidence do not prove a runtime binding.

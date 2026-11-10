@@ -113,6 +113,17 @@ jobs:
           uv pip install --reinstall-package attocode-code-intel --python /tmp/intelligence-wheel/bin/python dist/attocode_code_intel-*.whl
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_upgrade.py verify '/tmp/intelligence upgrade project'
           /tmp/intelligence-wheel/bin/python packages/code-intel/scripts/check_wheel.py
+      - name: Verify installed-wheel remote settings on macOS
+        run: |
+          uv pip install --python /tmp/intelligence-wheel/bin/python --extra dev dist/attocode_code_intel-*.whl
+          /tmp/intelligence-wheel/bin/python -m pytest -c packages/code-intel/pyproject.toml --confcutdir=packages/code-intel/tests -o pythonpath= packages/code-intel/tests/test_remote_config_persistence.py packages/code-intel/tests/test_perl_toml_preservation.py -q --junitxml=quality-artifacts/macos-config.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: intelligence-macos-config-${{ matrix.python }}
+          retention-days: 14
+          if-no-files-found: error
+          path: quality-artifacts/macos-config.xml
   optional-grammars:
     runs-on: ubuntu-latest
     timeout-minutes: 10
