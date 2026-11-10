@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.33] - 2026-11-10
+
 ### Fixed
 
 - Remote settings are written to a private temporary file, flushed and replaced

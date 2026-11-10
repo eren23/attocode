@@ -2,7 +2,7 @@
 
 ## Current state — 2026-11-10
 
-This checkout targets `attocode-code-intel` **0.1.32**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.33**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
@@ -28,7 +28,7 @@ authorize another broad run or cloud rental.
 
 | Record | Delivered or diagnosed behavior | Completion evidence / limits |
 | --- | --- | --- |
-| Remote-settings persistence (unreleased) | Preserve prior config on failed data writes/publication; anchor writes and publish private files atomically | [Causal proof](https://github.com/eren23/attocode/actions/runs/42787566977): 19 cases, nine qualified failures before the fix and ten controls. [Current contract](intelligence-perl-roots.md) covers refusal and remaining concurrency/power-loss limits. This change is not in the immutable 0.1.32 package. |
+| 0.1.33 remote-settings persistence | Preserve prior config on failed data writes/publication; anchor writes and publish private files atomically | [Maintenance notes](intelligence-0.1.33.md) and [current contract](intelligence-perl-roots.md): causal failure proofs, 26 new product cases and 32 installed-wheel macOS checks. Single-writer POSIX, refusal and concurrency/power-loss limits remain explicit. Publication verification upgrades actual 0.1.32. |
 | 0.1.32 Perl roots and TOML preservation | Configure static module roots, refresh config-only dependency policy and retain valid existing TOML when remote settings change | [Maintenance notes](intelligence-0.1.32.md) and [root configuration](intelligence-perl-roots.md): 100 required native cases, unchanged pinned Carp sources, first-response notification/controlled-partial checks, reopen, conservative ambiguity and independent discovery exclusions. Publication verification upgrades actual 0.1.31. |
 | Bounded Rust diagnosis | Controlled late readiness, later retry, edit/deletion, cancellation and a real pinned server required no production patch | Existing five-second Rust/two-second other deadlines remain. The real workspace recovered within budget; no naturally slow real-reload, exact one-second retry-boundary or outer-gateway cancellation guarantee was established. |
 | Fresh first-page diagnosis | One source-exposed six-question/three-repository baseline; no candidate experiment | [One frozen run](https://github.com/eren23/attocode/actions/runs/42722732495): complete RAW/source/Git/request/cleanup evidence; all six first-page contracts incomplete, both p-limit deep/scoped proofs recovered. No evidenced new shared mechanism across two repositories; the gate remains unmet. Questions consumed, reserved 24 holdouts unissued; no broad quality or speed claim. |

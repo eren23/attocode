@@ -43,7 +43,7 @@ roots or changing unrelated remote settings keeps the same dependency policy.
 Saving remote settings preserves existing TOML data, including these roots;
 comments and formatting may change.
 
-On the development branch after 0.1.32, remote saves use a flushed private
+In version 0.1.33 and later, remote saves use a flushed private
 temporary file and atomic replacement. Failed data writes or publication keep
 the previous valid bytes. The `.attocode` directory and `config.toml` entry must
 not be symlinks, including links to another location inside the project.
