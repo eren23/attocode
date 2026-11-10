@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_numeric_query_operator.py"
+  ],
+  "cases": [
+    "test_numeric_query_operator::test_git_provenance_preserves_complete_tree_and_omission_policy",
+    "test_numeric_query_operator::test_git_provenance_rejects_wrong_immutable_binding[commit]",
+    "test_numeric_query_operator::test_git_provenance_rejects_wrong_immutable_binding[root]",
+    "test_numeric_query_operator::test_git_provenance_rejects_wrong_immutable_binding[entries]",
+    "test_numeric_query_operator::test_all_primary_requests_precede_every_diagnostic",
+    "test_numeric_query_operator::test_failed_request_stays_durably_consumed_without_replay",
+    "test_numeric_query_operator::test_close_failure_does_not_abandon_other_gateways",
+    "test_numeric_query_operator::test_partial_failure_captures_sources_and_closes_all_peers",
+    "test_numeric_query_operator::test_actual_public_producer_and_raw_source_capture",
+    "test_numeric_query_operator::test_numeric_stage_arguments_are_observed_without_changing_public_output"
+  ],
+  "failures": {
+    "test_numeric_query_operator::test_all_primary_requests_precede_every_diagnostic": {
+      "message": "REGRESSION: numeric diagnostic requests were not issued",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}
