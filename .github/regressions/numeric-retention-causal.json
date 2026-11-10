@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_numeric_retention_causal.py"
+  ],
+  "cases": [
+    "test_numeric_retention_causal::test_mixed_query_retains_indexed_numeric_terms[plain]",
+    "test_numeric_retention_causal::test_mixed_query_retains_indexed_numeric_terms[punctuation]",
+    "test_numeric_retention_causal::test_mixed_query_retains_indexed_numeric_terms[duplicates]",
+    "test_numeric_retention_causal::test_mixed_query_retains_indexed_numeric_terms[two-numbers]",
+    "test_numeric_retention_causal::test_existing_admission_controls[all-numeric]",
+    "test_numeric_retention_causal::test_existing_admission_controls[single-digit]",
+    "test_numeric_retention_causal::test_existing_admission_controls[alphanumeric]",
+    "test_numeric_retention_causal::test_existing_admission_controls[nonnumeric]"
+  ],
+  "failures": {
+    "test_numeric_retention_causal::test_mixed_query_retains_indexed_numeric_terms[plain]": {
+      "message": "REGRESSION: mixed query discarded indexed numeric token",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_numeric_retention_causal::test_mixed_query_retains_indexed_numeric_terms[punctuation]": {
+      "message": "REGRESSION: mixed query discarded indexed numeric token",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_numeric_retention_causal::test_mixed_query_retains_indexed_numeric_terms[duplicates]": {
+      "message": "REGRESSION: mixed query discarded indexed numeric token",
+      "properties": {
+        "qualified_input": "true"
+      }
+    },
+    "test_numeric_retention_causal::test_mixed_query_retains_indexed_numeric_terms[two-numbers]": {
+      "message": "REGRESSION: mixed query discarded indexed numeric token",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}
