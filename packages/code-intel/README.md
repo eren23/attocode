@@ -43,6 +43,12 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.33 makes remote-settings saves atomic and private, preserves old
+config bytes on failed writes, and refuses symlink redirects or invalid and
+oversized data. The existing Perl roots and TOML values survive successful
+saves. See the [release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.33.md)
+for the Linux/macOS contract, refusal behavior and remaining limits.
+
 Version 0.1.32 adds explicit Perl module roots in `.attocode/config.toml`,
 refreshes dependencies after config-only edits, and preserves valid TOML when
 saving remote settings. File-discovery exclusions and unresolved module
