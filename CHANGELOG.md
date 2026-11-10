@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Remote settings are written to a private temporary file, flushed and replaced
+  atomically. Failed writes keep previous valid config bytes; anchored directory
+  operations prevent symlink redirects. Saved files have owner-only permissions.
+  Linked, nonregular, malformed, invalid UTF-8 or over-1,000,000-byte existing
+  config files are refused without overwriting them. Serialized output must fit
+  the same limit, so saving cannot invalidate the config's own readers.
+
 ## [Intelligence 0.1.32] - 2026-11-10
 
 ### Added

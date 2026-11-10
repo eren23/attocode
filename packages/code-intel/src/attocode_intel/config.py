@@ -6,6 +6,7 @@ import datetime
 import ipaddress
 import json
 import os
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -296,38 +297,93 @@ def _toml_value(value: object) -> str:
     raise TypeError('Unsupported TOML value type: ' + type(value).__name__)
 
 
-def save_remote_config(project_dir: str, rc: RemoteConfig) -> Path:
-    """Save remote config to .attocode/config.toml. Returns the config path."""
-    config_path = Path(project_dir) / ".attocode" / "config.toml"
-    config_path.parent.mkdir(parents=True, exist_ok=True)
+def _read_remote_config_data(directory: int) -> dict:
+    """Read an anchored regular file without following links or blocking on FIFOs."""
+    import tomllib
 
-    # Preserve existing config sections
-    existing: dict = {}
-    if config_path.exists():
+    try:
+        descriptor = os.open('config.toml', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=directory)
+    except FileNotFoundError:
+        return {}
+    with os.fdopen(descriptor, 'rb') as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError('Remote settings require a regular config file')
+        raw = stream.read(1_000_001)
+    if len(raw) > 1_000_000:
+        raise ValueError('Existing config exceeds the 1,000,000-byte limit')
+    try:
+        return tomllib.loads(raw.decode('utf-8'))
+    except (ValueError, UnicodeError):
+        # Parser diagnostics can include credential-bearing source lines.
+        raise ValueError('Existing config is not valid UTF-8 TOML; repair it before saving') from None
+
+
+def _publish_remote_config(directory: int, raw: bytes) -> None:
+    """Flush a private owned file before atomically replacing the live name."""
+    if len(raw) > 1_000_000:
+        raise ValueError('Serialized config exceeds the 1,000,000-byte limit')
+    import secrets
+
+    temporary = '.config-' + secrets.token_hex(12) + '.tmp'
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=directory)
+    try:
         try:
-            import tomllib
-            existing = tomllib.loads(config_path.read_text(encoding="utf-8"))
-        except Exception:
+            os.fchmod(descriptor, 0o600)
+            remaining = memoryview(raw)
+            while remaining:
+                count = os.write(descriptor, remaining)
+                if count <= 0:
+                    raise OSError('Remote settings write made no progress')
+                remaining = remaining[count:]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os.replace(temporary, 'config.toml', src_dir_fd=directory, dst_dir_fd=directory)
+    finally:
+        try:
+            os.unlink(temporary, dir_fd=directory)
+        except FileNotFoundError:
             pass
 
-    existing["remote"] = {
-        "server": rc.server,
-        "token": rc.token,
-        "repo_id": rc.repo_id,
-        "branch_auto_detect": rc.branch_auto_detect,
-    }
 
-    # Root scalars must precede tables; inline nested tables preserve their data.
-    lines = [_toml_key(k) + ' = ' + _toml_value(v) for k, v in existing.items()
-             if not isinstance(v, dict)]
-    for section, values in existing.items():
-        if isinstance(values, dict):
-            if lines:
-                lines.append('')
-            lines.append('[' + _toml_key(section) + ']')
-            for k, v in values.items():
-                lines.append(_toml_key(k) + ' = ' + _toml_value(v))
+def save_remote_config(project_dir: str, rc: RemoteConfig) -> Path:
+    """Atomically save private settings; refuse linked or unreadable destinations."""
+    config_path = Path(project_dir) / '.attocode/config.toml'
+    root = Path(project_dir).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    project = os.open(root, flags)
+    try:
+        try:
+            os.mkdir('.attocode', 0o700, dir_fd=project)
+        except FileExistsError:
+            pass
+        directory = os.open('.attocode', flags, dir_fd=project)
+    finally:
+        os.close(project)
+    try:
+        existing = _read_remote_config_data(directory)
+        existing['remote'] = {
+            'server': rc.server,
+            'token': rc.token,
+            'repo_id': rc.repo_id,
+            'branch_auto_detect': rc.branch_auto_detect,
+        }
 
-    # Encode before opening the file so invalid Unicode cannot truncate it.
-    config_path.write_bytes(('\n'.join(lines) + '\n').encode('utf-8'))
-    return config_path
+        # Root scalars precede tables; inline nested tables preserve their data.
+        lines = [_toml_key(k) + ' = ' + _toml_value(v) for k, v in existing.items()
+                 if not isinstance(v, dict)]
+        for section, values in existing.items():
+            if isinstance(values, dict):
+                if lines:
+                    lines.append('')
+                lines.append('[' + _toml_key(section) + ']')
+                for k, v in values.items():
+                    lines.append(_toml_key(k) + ' = ' + _toml_value(v))
+
+        _publish_remote_config(directory, ('\n'.join(lines) + '\n').encode('utf-8'))
+        return config_path
+    finally:
+        os.close(directory)

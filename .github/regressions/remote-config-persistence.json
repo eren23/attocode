@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_remote_config_persistence.py",
+    "packages/code-intel/tests/test_perl_toml_preservation.py"
+  ],
+  "cases": [
+    "test_remote_config_persistence::test_failed_write_preserves_previous_config",
+    "test_remote_config_persistence::test_save_rejects_symlink_destination[directory]",
+    "test_remote_config_persistence::test_save_rejects_symlink_destination[file]",
+    "test_remote_config_persistence::test_save_rejects_symlink_destination[dangling-file]",
+    "test_remote_config_persistence::test_save_publishes_private_complete_config[new]",
+    "test_remote_config_persistence::test_save_publishes_private_complete_config[existing]",
+    "test_remote_config_persistence::test_save_refuses_unreadable_existing_config[malformed]",
+    "test_remote_config_persistence::test_save_refuses_unreadable_existing_config[invalid-utf8]",
+    "test_remote_config_persistence::test_save_refuses_unreadable_existing_config[oversized]",
+    "test_remote_config_persistence::test_invalid_new_unicode_preserves_previous_config",
+    "test_remote_config_persistence::test_save_preserves_toml_and_connection_behavior",
+    "test_remote_config_persistence::test_save_through_project_alias",
+    "test_remote_config_persistence::test_save_creates_nested_project",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-value]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-key]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[del-section]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[unicode]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[control-escapes]",
+    "test_perl_toml_preservation::test_remote_save_preserves_valid_toml_scalars_and_keys[nested-types]"
+  ],
+  "failures": {
+    "test_remote_config_persistence::test_failed_write_preserves_previous_config": {
+      "message": "REGRESSION: failed settings write truncates previous valid config",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only",
+        "actual_filesystem_fault": "EFBIG"
+      }
+    },
+    "test_remote_config_persistence::test_save_rejects_symlink_destination[directory]": {
+      "message": "REGRESSION: settings save follows an outward symlink",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_persistence::test_save_rejects_symlink_destination[file]": {
+      "message": "REGRESSION: settings save follows an outward symlink",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_persistence::test_save_rejects_symlink_destination[dangling-file]": {
+      "message": "REGRESSION: settings save follows an outward symlink",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_persistence::test_save_publishes_private_complete_config[new]": {
+      "message": "REGRESSION: saved remote settings expose credentials to other users",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_persistence::test_save_publishes_private_complete_config[existing]": {
+      "message": "REGRESSION: saved remote settings expose credentials to other users",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_persistence::test_save_refuses_unreadable_existing_config[malformed]": {
+      "message": "REGRESSION: settings save discards unreadable existing data",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_persistence::test_save_refuses_unreadable_existing_config[invalid-utf8]": {
+      "message": "REGRESSION: settings save discards unreadable existing data",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_persistence::test_save_refuses_unreadable_existing_config[oversized]": {
+      "message": "REGRESSION: settings save discards unreadable existing data",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    }
+  }
+}

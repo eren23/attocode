@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_remote_config_size_limit.py"
+  ],
+  "cases": [
+    "test_remote_config_size_limit::test_save_cannot_publish_unreadable_size[remote-growth]",
+    "test_remote_config_size_limit::test_save_cannot_publish_unreadable_size[serializer-growth]",
+    "test_remote_config_size_limit::test_save_cannot_publish_unreadable_size[new-oversized-token]",
+    "test_remote_config_size_limit::test_exact_input_limit_with_comments_can_be_saved",
+    "test_remote_config_size_limit::test_below_output_limit_survives_repeated_save"
+  ],
+  "failures": {
+    "test_remote_config_size_limit::test_save_cannot_publish_unreadable_size[remote-growth]": {
+      "message": "REGRESSION: settings save publishes a file its own loaders reject",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_size_limit::test_save_cannot_publish_unreadable_size[serializer-growth]": {
+      "message": "REGRESSION: settings save publishes a file its own loaders reject",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    },
+    "test_remote_config_size_limit::test_save_cannot_publish_unreadable_size[new-oversized-token]": {
+      "message": "REGRESSION: settings save publishes a file its own loaders reject",
+      "properties": {
+        "qualified_input": "true",
+        "credential_origin": "authored-fake-only"
+      }
+    }
+  }
+}
