@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "d1399be0684835e8b704eac440e5a2ebfbaf617f",
+  "question_state": "All four repo-cases are consumed DEVELOPMENT controls, no fresh-validation claim",
+  "roles": {
+    "primary": {
+      "top_k": 10,
+      "max_tokens": 2000
+    },
+    "deep": {
+      "top_k": 24,
+      "max_tokens": 8000
+    },
+    "scoped": {
+      "top_k": 5,
+      "max_tokens": 4000
+    }
+  },
+  "scientific_calls": 24,
+  "worker_processes": 8,
+  "order": "primaryWerkB,T/StarT,B then diagnosticWerkB,T/StarT,B; all8primaries before16diagnostics",
+  "intervention": "Samepublicrawqueryandpositiveprose; only indexedASCII numeric additions; algorithm/constants/previews/expansion unchanged",
+  "required_gains": [
+    "werkzeug-429",
+    "starlette-206"
+  ],
+  "rubric": "CorrectvisibleTooManyRequestssource overincorrectmetadata; eitherStar206handler counts;both416partialunlessfixedrubric supportsanswer",
+  "decision": "RequireBOTHcandidateprimaryrecoveries;validfailureclosesprototype;noautomaticrealqueryretry",
+  "limits": {
+    "seconds": 900,
+    "rss_bytes": 2147483648,
+    "disk_bytes": 2147483648,
+    "evidence_bytes": 67108864,
+    "outer_minutes": 30
+  },
+  "reserved24holdouts": "unissued",
+  "next": "Onlydevelopmentpass permits separatelyfrozenconservativepolicy/freshvalidation; productionPRconditionalonallgates"
+}

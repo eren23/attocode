@@ -1,0 +1,10 @@
+{
+  "experiment": "numeric-retention",
+  "limits": {
+    "seconds": 900,
+    "rss_bytes": 2147483648,
+    "disk_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "scope": "Defaultfalse candidatecausalGREENonly; actual24known DEVELOPMENTrequestsrequireexplicittrueenv; source-exposed/notfreshvalidation"
+}

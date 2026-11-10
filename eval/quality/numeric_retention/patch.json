@@ -1,0 +1,9 @@
+{
+  "path": "_internal/integrations/context/semantic_search.py",
+  "baseline_commit": "d1399be0684835e8b704eac440e5a2ebfbaf617f",
+  "before": "        positive |= task_terms(query, fold=False)[0]\n",
+  "after": "        positive |= task_terms(query, fold=False)[0]\n        if positive:\n            positive.update(token for token in _tokenize(query) if token.isdigit())\n",
+  "before_sha256": "e652587a93cb1faadb5c99215c4f5646b5de87be89a8bd3e2496390422ba223b",
+  "after_sha256": "66a75e31547fd3d5c4cea001fef6586174b6e8566b2c821838b546c63d5b318f",
+  "scope": "Temporary positive-only numeric admission counterfactual, not a general production policy"
+}
