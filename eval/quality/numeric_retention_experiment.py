@@ -80,7 +80,9 @@ def qualify_candidate(root, engine):
     with (dest/'pytest.log').open('xb') as stream:
         process = subprocess.run(command, cwd=REPO, env=child_environment(engine),
                                  stdout=stream, stderr=subprocess.STDOUT, check=False)
-    require(process.returncode == 0, 'candidate causal assertions failed')
+    if process.returncode != 0:
+        detail = (dest/'pytest.log').read_text(errors='replace')[-12000:]
+        raise ValueError('candidate causal assertions failed: '+detail)
     require(engine_files(engine) == before, 'causal engine changed')
     xml = ET.fromstring((dest/'pytest.xml').read_bytes())
     cases = list(xml.iter('testcase'))
