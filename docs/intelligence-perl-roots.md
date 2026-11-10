@@ -50,6 +50,8 @@ not be symlinks, including links to another location inside the project.
 Nonregular, unreadable, malformed, invalid UTF-8 or over-1,000,000-byte existing
 files are refused; repair them before saving. Successful saves set file mode
 `0600`. Project-directory aliases are supported.
+Serialized output must also fit the 1,000,000-byte limit; an update that would
+exceed it is refused before publication, keeping the previous file intact.
 
 This does not merge concurrent writers or guarantee persistence through power
 loss. An abrupt process kill can leave a private temporary file. Directory

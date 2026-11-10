@@ -321,6 +321,8 @@ def _read_remote_config_data(directory: int) -> dict:
 
 def _publish_remote_config(directory: int, raw: bytes) -> None:
     """Flush a private owned file before atomically replacing the live name."""
+    if len(raw) > 1_000_000:
+        raise ValueError('Serialized config exceeds the 1,000,000-byte limit')
     import secrets
 
     temporary = '.config-' + secrets.token_hex(12) + '.tmp'
