@@ -274,6 +274,7 @@ async def test_observation_failure_closes_gateway_and_attests_final_inputs(tmp_p
 def test_causal_pytest_respects_selected_engine_over_project_path(tmp_path):
     patch=json.loads((operator.INPUTS/'patch.json').read_bytes())
     engines=operator.prepare_engines(tmp_path,patch)
+    assert not (tmp_path/'work').exists()
     proof=operator.qualify_candidate(tmp_path,engines['candidate'])
     assert proof['cases']==8 and proof['exit_code']==0
     xml=tmp_path/'evidence/causal-green/pytest.xml'

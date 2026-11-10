@@ -68,6 +68,7 @@ def child_environment(engine):
 
 
 def qualify_candidate(root, engine):
+    (root/'work').mkdir(parents=True, exist_ok=True)
     dest = root/'evidence/causal-green'
     dest.mkdir(parents=True)
     command = [sys.executable, '-m', 'pytest', '-c', 'packages/code-intel/pyproject.toml',
