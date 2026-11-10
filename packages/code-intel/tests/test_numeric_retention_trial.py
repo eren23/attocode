@@ -269,3 +269,21 @@ async def test_observation_failure_closes_gateway_and_attests_final_inputs(tmp_p
     assert report['source_unchanged'] and report['engine_unchanged']
     events=[json.loads(line)['request']['event'] for line in (dest/'journal/events.jsonl').read_text().splitlines()]
     assert events==['engine_before','source_before','consume_request','gateway_close','source_after','engine_after']
+
+
+def test_causal_pytest_respects_selected_engine_over_project_path(tmp_path):
+    patch=json.loads((operator.INPUTS/'patch.json').read_bytes())
+    engines=operator.prepare_engines(tmp_path,patch)
+    proof=operator.qualify_candidate(tmp_path,engines['candidate'])
+    assert proof['cases']==8 and proof['exit_code']==0
+    xml=tmp_path/'evidence/causal-green/pytest.xml'
+    import xml.etree.ElementTree as ET
+    cases=list(ET.fromstring(xml.read_bytes()).iter('testcase'))
+    qualified=[case for case in cases if case.get('name','').startswith('test_mixed_query')]
+    assert len(qualified)==4
+    expected=hashlib.sha256((engines['candidate']/'_internal/integrations/context/semantic_search.py').read_bytes()).hexdigest()
+    assert expected==patch['after_sha256']
+    for case in qualified:
+        props={p.get('name'):p.get('value') for p in case.findall('properties/property')}
+        assert props['qualified_input']=='true'
+        assert '613' in json.loads(props['observed_stage_terms'])['body']

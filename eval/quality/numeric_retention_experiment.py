@@ -74,7 +74,8 @@ def qualify_candidate(root, engine):
                '--confcutdir=packages/code-intel/tests',
                'packages/code-intel/tests/test_numeric_retention_causal.py', '-q',
                '--junitxml='+str(dest/'pytest.xml'), '--basetemp='+str(root/'work/causal-pytest'),
-               '-o', 'cache_dir='+str(root/'work/causal-pytest-cache')]
+               '-o', 'cache_dir='+str(root/'work/causal-pytest-cache'),
+               '-o', 'pythonpath='+str(engine.parent)]
     before = engine_files(engine)
     with (dest/'pytest.log').open('xb') as stream:
         process = subprocess.run(command, cwd=REPO, env=child_environment(engine),
