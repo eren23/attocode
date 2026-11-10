@@ -7,7 +7,12 @@ on:
         type: choice
         required: true
         default: preflight
-        options: [preflight, native, preview, restart, broad, capacity]
+        options: [preflight, native, preview, restart, broad, capacity, numeric-query]
+      issue_frozen_questions:
+        description: Explicitly issue the frozen numeric-query questions after controls admission
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -19,6 +24,7 @@ concurrency:
 
 jobs:
   experiment:
+    if: inputs.experiment != 'numeric-query'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.experiment == 'capacity' && 55 || 40 }}
     env:
@@ -112,3 +118,37 @@ jobs:
             ${{ runner.temp }}/intelligence-experiment-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
             ${{ runner.temp }}/native-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
             ${{ runner.temp }}/broad-setup-${{ github.run_id }}-${{ github.run_attempt }}.log
+
+  numeric-query:
+    if: inputs.experiment == 'numeric-query'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QUALITY_ALLOW_DOWNLOADS: '1'
+      ATTOCODE_LOCAL_ONLY: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make the immutable released baseline available
+        run: git fetch --no-tags --depth=1 origin d1399be0684835e8b704eac440e5a2ebfbaf617f
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Install maintained dependencies outside payload budget
+        timeout-minutes: 5
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Qualify existing and synthetic operator controls without frozen queries
+        run: uv run --no-sync python -m eval.quality.experiments preflight --root '${{ runner.temp }}/numeric-query-preflight-${{ github.run_id }}-${{ github.run_attempt }}'
+      - name: Issue the one frozen pilot only when explicitly selected
+        if: inputs.issue_frozen_questions
+        run: uv run --no-sync python -m eval.quality.experiments numeric-query --root '${{ runner.temp }}/numeric-query-pilot-${{ github.run_id }}-${{ github.run_attempt }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: numeric-query-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/numeric-query-preflight-${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+            ${{ runner.temp }}/numeric-query-pilot-${{ github.run_id }}-${{ github.run_attempt }}/evidence/

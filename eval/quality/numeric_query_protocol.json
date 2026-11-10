@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "engine_commit": "d1399be0684835e8b704eac440e5a2ebfbaf617f",
+  "engine_version": "0.1.33",
+  "scope": "Four implementer-authored source-exposed diagnostic questions; no blind validation, candidate comparison or quality/latency claim.",
+  "profile": "daily",
+  "mode": "auto",
+  "primary": {
+    "top_k": 10,
+    "max_tokens": 2000
+  },
+  "deep": {
+    "top_k": 24,
+    "max_tokens": 8000
+  },
+  "scoped": {
+    "top_k": 5,
+    "max_tokens": 4000
+  },
+  "numeric": {
+    "top_k": 10,
+    "max_tokens": 2000
+  },
+  "order": "Warm bothownedworkspaces with nonfrozen sentinel; allfourprimaries beforediagnostics; then eachcase deep/scoped/numeric in frozenorder. Numeric role usesonly case.numeric_query, no scopedfilter. Exactly16scientificcalls.",
+  "limits": {
+    "payload_seconds": 900,
+    "aggregate_rss_bytes": 2147483648,
+    "owned_disk_bytes": 2147483648,
+    "evidence_bytes": 67108864,
+    "outer_minutes": 30
+  },
+  "providers": "Models/embeddings/hostedranking/precision off; unchangedreleased33 keyword/body/auto producer.",
+  "capture": "fsyncedissuebeforegateway; RAWenvelopes/source/Git/engine/origins/stageargs+results/spans/cleanup beforeafter; protectedhelpers byteidentical.",
+  "eligibility": {
+    "minimum_actionable_primary_misses": 2,
+    "minimum_distinct_repositories": 2,
+    "same_discrepancy": "Explicitnumeric presentinindexedsource and pure-numeric stageargs; absentfrommixedquery stageargs; numeric-onlyprobe reachesmissingansweridentity. Noequivalentprimaryanswer.",
+    "interpretation": "Observationaleligibility to designa separatecausalexperiment ONLY. Numericonly removesprose/changesscoring; do not conclude restoringnumbers causallyrecoversoriginalquery.",
+    "closed_mechanisms": "Allpreviouslyrejectedstopword/preview/growth/proximity/ownercredit/filepromotion/modelrewrite/testrecall/hostedembedding/restart candidates remainclosed.",
+    "ineligible": "Closewithboundeddiagnosis/nopatch/noreplay.",
+    "eligible": "SeparatelyfreezeisolatedcausalRED/no-loss/latency/development/holdout gates beforecandidatecomparison."
+  },
+  "retry": "Noautomaticrealqueryretry; partialrequestsconsumed. Infrastructurecorrectiononlyifzerofrozenqueriesissued, originalfailure/newheadqualification retained.",
+  "reserved_holdout": "Existing24unissuedquestions remainuntouched. Allhistory andNov10six consumed; none replayed.",
+  "prelaunch": "Samefreshreviewer exactquestion/source/history/protocol+originalcontrolsarchiveYes beforeone true dispatch."
+}

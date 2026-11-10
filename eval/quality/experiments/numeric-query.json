@@ -1,0 +1,10 @@
+{
+  "experiment": "numeric-query",
+  "limits": {
+    "seconds": 900,
+    "disk_bytes": 2147483648,
+    "rss_bytes": 2147483648,
+    "evidence_bytes": 67108864
+  },
+  "scope": "One source-exposed observational numeric admission diagnostic; no causal benefit or candidate comparison."
+}

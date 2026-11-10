@@ -18,7 +18,7 @@ from eval.quality.mcp_search import decode, engine_identity, evidence_hits, obse
 from eval.quality.runner import REPO, write_json
 
 SENTINEL = 'numeric_query_readiness_control_20261110'
-ROLES = {'primary': (10, 2000), 'deep': (24, 8000), 'scoped': (5, 4000)}
+ROLES = {'primary': (10, 2000), 'deep': (24, 8000), 'scoped': (5, 4000), 'numeric': (10, 2000)}
 
 
 def git_provenance(source, commit, tree):
@@ -77,18 +77,19 @@ async def collect_pages(cases, gateways, journal, report, checkpoint):
     rows = {c['id']: {**c, 'pages': {}} for c in cases}
     report['cases'] = list(rows.values())
     phases = [[(c, 'primary') for c in cases],
-              [(c, role) for c in cases for role in ['deep', 'scoped']]]
+              [(c, role) for c in cases for role in ['deep', 'scoped', 'numeric']]]
     for phase in phases:
         for case, role in phase:
             top_k, budget = ROLES[role]
             file_filter = case['evidence'][0]['file'] if role == 'scoped' else ''
-            arguments = {'query': case['query'], 'top_k': top_k, 'max_tokens': budget,
+            query = case['numeric_query'] if role == 'numeric' else case['query']
+            arguments = {'query': query, 'top_k': top_k, 'max_tokens': budget,
                          'mode': 'auto', 'file_filter': file_filter}
             ref = journal.response({'event': 'consume_request', 'id': case['id'],
                                     'repo_id': case['repo_id'], 'role': role}, arguments)
             report.setdefault('issued', []).append({'id': case['id'], 'role': role, 'ref': ref})
             checkpoint()
-            page = await observe(gateways[case['repo_id']], case['query'], top_k=top_k,
+            page = await observe(gateways[case['repo_id']], query, top_k=top_k,
                                  budget=budget, file_filter=file_filter, capture_generation=True)
             page['hits'] = evidence_hits(page['response']['data']['results'], case['evidence'])
             rows[case['id']]['pages'][role] = page
@@ -190,7 +191,7 @@ async def run_async(root):
             row.update(warmup=warmup, index=index)
             checkpoint()
         await collect_pages(manifest['cases'], gateways, journal, report, checkpoint)
-        assert len(report['issued']) == 12
+        assert len(report['issued']) == 16
         assert all(set(c['pages']) == set(ROLES) for c in report['cases'])
     finally:
         corpus.HISTORY, corpus.CLONES = old_sources

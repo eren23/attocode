@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "scope": "Four implementer-authored source-exposed diagnostic questions; no blind validation, candidate comparison or quality/latency claim.",
+  "engine_commit": "d1399be0684835e8b704eac440e5a2ebfbaf617f",
+  "engine_version": "0.1.33",
+  "repositories": [
+    {
+      "id": "werkzeug",
+      "repo": "pallets/werkzeug",
+      "commit": "0f43c6ebd426039e4b99ec22535c2c8a2ec2f69f",
+      "language": "python"
+    },
+    {
+      "id": "starlette",
+      "repo": "encode/starlette",
+      "commit": "271c277da0ff64e2048a4d46ecc812b9d61db5f6",
+      "language": "python"
+    }
+  ],
+  "cases": [
+    {
+      "id": "werkzeug-416",
+      "repo_id": "werkzeug",
+      "query": "Where is the HTTP 416 response implemented?",
+      "numeric_query": "416",
+      "symbol": "RequestedRangeNotSatisfiable",
+      "equivalent_symbols": [
+        "RequestedRangeNotSatisfiable",
+        "RequestedRangeNotSatisfiable.get_response"
+      ],
+      "evidence": [
+        {
+          "file": "src/werkzeug/exceptions.py",
+          "line": 434,
+          "quote": "    code = 416",
+          "start_line": 429,
+          "end_line": 453,
+          "source_sha256": "35e9621190a6fb56bfb847d50d67aa46be53595e44781962af8db5ca3cd05462"
+        }
+      ],
+      "answer_contract": "Identify the implementation bound to this numeric HTTP status. A uniquely status-specific exception class name counts as a correct identity even without the numeric assignment visible. A generic response class without status-specific source binding is partial. No extra header/guard/effect proof is required by this question.",
+      "alternate_answers": "Any source-bound equivalent implementation receives full identity credit. Both single-range and multiple-range 206 handlers count. Literal visibility, file hit, owner location and answer identity are reported separately; a missing narrow quote does not veto a correct identity."
+    },
+    {
+      "id": "werkzeug-429",
+      "repo_id": "werkzeug",
+      "query": "Where is the HTTP 429 response implemented?",
+      "numeric_query": "429",
+      "symbol": "TooManyRequests",
+      "equivalent_symbols": [
+        "TooManyRequests"
+      ],
+      "evidence": [
+        {
+          "file": "src/werkzeug/exceptions.py",
+          "line": 534,
+          "quote": "    code = 429",
+          "start_line": 525,
+          "end_line": 535,
+          "source_sha256": "35e9621190a6fb56bfb847d50d67aa46be53595e44781962af8db5ca3cd05462"
+        }
+      ],
+      "answer_contract": "Identify the implementation bound to this numeric HTTP status. A uniquely status-specific exception class name counts as a correct identity even without the numeric assignment visible. A generic response class without status-specific source binding is partial. No extra header/guard/effect proof is required by this question.",
+      "alternate_answers": "Any source-bound equivalent implementation receives full identity credit. Both single-range and multiple-range 206 handlers count. Literal visibility, file hit, owner location and answer identity are reported separately; a missing narrow quote does not veto a correct identity."
+    },
+    {
+      "id": "starlette-416",
+      "repo_id": "starlette",
+      "query": "Where is the HTTP 416 response implemented?",
+      "numeric_query": "416",
+      "symbol": "FileResponse.__call__",
+      "equivalent_symbols": [
+        "FileResponse.__call__"
+      ],
+      "evidence": [
+        {
+          "file": "starlette/responses.py",
+          "line": 385,
+          "quote": "                response = PlainTextResponse(status_code=416, headers={\"Content-Range\": f\"bytes */{exc.max_size}\"})",
+          "start_line": 381,
+          "end_line": 386,
+          "source_sha256": "0908b45206c92b4d7a617b0aaeddc672d9c9ca9484ecbf5940700b703043825a"
+        }
+      ],
+      "answer_contract": "Identify the implementation bound to this numeric HTTP status. A uniquely status-specific exception class name counts as a correct identity even without the numeric assignment visible. A generic response class without status-specific source binding is partial. No extra header/guard/effect proof is required by this question.",
+      "alternate_answers": "Any source-bound equivalent implementation receives full identity credit. Both single-range and multiple-range 206 handlers count. Literal visibility, file hit, owner location and answer identity are reported separately; a missing narrow quote does not veto a correct identity."
+    },
+    {
+      "id": "starlette-206",
+      "repo_id": "starlette",
+      "query": "Where is the HTTP 206 response implemented?",
+      "numeric_query": "206",
+      "symbol": "FileResponse._handle_single_range",
+      "equivalent_symbols": [
+        "FileResponse._handle_single_range",
+        "FileResponse._handle_multiple_ranges"
+      ],
+      "evidence": [
+        {
+          "file": "starlette/responses.py",
+          "line": 448,
+          "quote": "        await send({\"type\": \"http.response.start\", \"status\": 206, \"headers\": headers.raw})",
+          "start_line": 442,
+          "end_line": 448,
+          "source_sha256": "0908b45206c92b4d7a617b0aaeddc672d9c9ca9484ecbf5940700b703043825a"
+        }
+      ],
+      "answer_contract": "Identify the implementation bound to this numeric HTTP status. A uniquely status-specific exception class name counts as a correct identity even without the numeric assignment visible. A generic response class without status-specific source binding is partial. No extra header/guard/effect proof is required by this question.",
+      "alternate_answers": "Any source-bound equivalent implementation receives full identity credit. Both single-range and multiple-range 206 handlers count. Literal visibility, file hit, owner location and answer identity are reported separately; a missing narrow quote does not veto a correct identity."
+    }
+  ]
+}
