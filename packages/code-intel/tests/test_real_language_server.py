@@ -191,3 +191,4 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
 
 # Worker-only diagnostic; the existing pinned real-server job owns acquisition.
 from rust_gateway_real import test_real_rust_gateway_reload_observation  # noqa: E402, F401
+from rust_late_reload_witness import test_real_rust_larger_reload_observation  # noqa: E402, F401
