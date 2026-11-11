@@ -37,7 +37,7 @@ async def _inspect(gateway):
     response = await gateway.execute_mcp('inspect_symbol', {
         'symbol_name': 'helper', 'file_path': 'helper.rs', 'line': 1, 'max_tokens': 8000})
     assert not response.isError
-    return response.structuredContent
+    return json.loads(response.content[0].text)
 
 
 def _snapshot(stores, manager, callback):
