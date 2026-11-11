@@ -39,7 +39,7 @@ async def test_real_rust_gateway_reload_observation(tmp_path, monkeypatch, recor
     assert shutil.which(BUILTIN_SERVERS['rust'].command)
     monkeypatch.setenv('ATTOCODE_INTEL_PRECISION', 'auto')
     output = Path(os.environ['QUALITY_LSP_TRACE_DIR'])
-    trace = LSPTrace(output / 'lsp-gateway-rust.jsonl', tmp_path.as_uri())
+    trace = LSPTrace(output / 'lsp-gateway-rust.jsonl', tmp_path.as_uri(), max_bytes=32 * 2**20)
     precision_times = []
     original = PrecisionSession.enrich
 
@@ -161,5 +161,6 @@ async def test_real_rust_gateway_reload_observation(tmp_path, monkeypatch, recor
         finally:
             trace.stage('shutdown')
             await gateway.close()
+    assert not (trace.dropped_events or trace.oversized_events or trace.capture_errors), 'Incomplete native protocol capture'
     assert process is not None and process.returncode is not None
     record_property('owned_process_exit_code', process.returncode)

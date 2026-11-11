@@ -3,6 +3,7 @@ import asyncio
 import json
 import threading
 import time
+from functools import wraps
 
 import pytest
 from test_precision_budget import _gateway
@@ -222,6 +223,7 @@ async def test_cancelled_running_sync_call_keeps_workspace_busy(
         service = next(iter(gateway._stores.values()))['service']
         original = service.symbols_data
 
+        @wraps(original)
         def blocked(*args, **kwargs):
             entered.set()
             assert release.wait(4)

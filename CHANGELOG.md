@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Cancelling a gateway navigation request now reaches its selected-symbol
+  precision coroutine, restoring callbacks and pending-request state. Cancelled
+  queued calls do not start work, and a running workspace stays busy until its
+  worker actually finishes. Rust's five-second precision deadline, other
+  languages' two-second deadline and the one-second retry cooldown are unchanged.
+
 ## [Intelligence 0.1.33] - 2026-11-10
 
 ### Fixed
