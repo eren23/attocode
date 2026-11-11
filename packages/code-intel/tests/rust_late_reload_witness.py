@@ -137,8 +137,12 @@ async def test_real_rust_larger_reload_observation(tmp_path, monkeypatch, record
                                 refs = await manager.get_references(
                                     str(tmp_path / target), 0, 7, include_declaration=False)
                             except ToolError as error:
-                                if str(error).lower() != 'content modified':
+                                # A single native request still has its5s timeout.
+                                # Fixture recovery may observe again within90s.
+                                if str(error).lower() not in {
+                                        'content modified', 'request textdocument/references timed out'}:
                                     raise
+                                trace.record('fixture_warmup_transient', error=str(error))
                                 refs = None
                             if any(ref.uri == (tmp_path / 'src/lib.rs').as_uri() and
                                    ref.range.start.line == expected_line - 1 for ref in refs or []):
