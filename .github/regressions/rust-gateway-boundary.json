@@ -13,7 +13,9 @@
     "test_rust_gateway_boundary::test_retry_boundary_is_one_second[equal-definition]",
     "test_rust_gateway_boundary::test_retry_boundary_is_one_second[above-initialize]",
     "test_rust_gateway_boundary::test_retry_boundary_is_one_second[above-definition]",
-    "test_rust_gateway_boundary::test_uncancelled_public_call_retains_verified_evidence"
+    "test_rust_gateway_boundary::test_uncancelled_public_call_retains_verified_evidence",
+    "test_rust_gateway_boundary::test_cancelled_queued_call_does_not_start_precision",
+    "test_rust_gateway_boundary::test_cancelled_running_sync_call_keeps_workspace_busy"
   ],
   "failures": {
     "test_rust_gateway_boundary::test_public_cancellation_releases_workspace_worker[initialize]": {
@@ -30,6 +32,12 @@
         "qualified_input": "true",
         "public_entrypoint": "execute_mcp",
         "blocked_phase": "definition"
+      }
+    },
+    "test_rust_gateway_boundary::test_cancelled_running_sync_call_keeps_workspace_busy": {
+      "message": "REGRESSION: cancelled running worker is treated as an idle workspace",
+      "properties": {
+        "qualified_input": "true"
       }
     }
   }

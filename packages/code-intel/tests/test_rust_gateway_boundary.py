@@ -1,6 +1,7 @@
 """Gateway cancellation must reach its worker, without changing retry budgets."""
 import asyncio
 import json
+import threading
 import time
 
 import pytest
@@ -164,4 +165,94 @@ async def test_uncancelled_public_call_retains_verified_evidence(tmp_path, monke
         assert (await _inspect(gateway))['metadata']['precision'] == 'verified'
         assert _journal(journal) == before
     finally:
+        await gateway.close()
+
+
+async def test_cancelled_queued_call_does_not_start_precision(tmp_path, monkeypatch):
+    ready, journal = tmp_path / 'ready', tmp_path / 'protocol.jsonl'
+    ready.touch()
+    gateway, _root, _ = _gateway(tmp_path, monkeypatch, _source(ready, journal))
+    release, entered = threading.Event(), threading.Event()
+    task = None
+    try:
+        await gateway.execute('symbols', {'path': 'helper.rs'})
+        worker = next(iter(gateway._workers.values()))
+
+        def occupy():
+            entered.set()
+            assert release.wait(4)
+
+        occupied = asyncio.wrap_future(worker.submit(occupy))
+        async with asyncio.timeout(2):
+            while not entered.is_set():
+                await asyncio.sleep(.01)
+        task = asyncio.create_task(_inspect(gateway))
+        async with asyncio.timeout(2):
+            while not any(gateway._active.values()):
+                await asyncio.sleep(.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        release.set()
+        await occupied
+        await gateway.execute('symbols', {'path': 'helper.rs'})
+        assert not journal.exists()  # Cancelled queued work must never start a server.
+        assert 'precision' not in next(iter(gateway._stores.values()))
+    finally:
+        release.set()
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await gateway.close()
+
+
+async def test_cancelled_running_sync_call_keeps_workspace_busy(
+        tmp_path, monkeypatch, record_property):
+    # A cancelled caller cannot make a still-running serialized workspace idle.
+    ready, journal = tmp_path / 'ready', tmp_path / 'protocol.jsonl'
+    gateway, root, _ = _gateway(tmp_path, monkeypatch, _source(ready, journal))
+    gateway.max_workspaces = 1
+    other = tmp_path / 'other'
+    other.mkdir()
+    (other / 'other.rs').write_text('pub fn other() {}\n')
+    release, entered = threading.Event(), threading.Event()
+    task = None
+    try:
+        await gateway.execute('symbols', {'path': 'helper.rs'})
+        service = next(iter(gateway._stores.values()))['service']
+        original = service.symbols_data
+
+        def blocked(*args, **kwargs):
+            entered.set()
+            assert release.wait(4)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(service, 'symbols_data', blocked)
+        task = asyncio.create_task(gateway.execute('symbols', {'path': 'helper.rs'}))
+        async with asyncio.timeout(2):
+            while not entered.is_set():
+                await asyncio.sleep(.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not release.is_set()
+        record_property('qualified_input', 'true')
+        refused = False
+        try:
+            async with asyncio.timeout(.5):
+                await gateway.execute('symbols', {'workspace': str(other), 'path': 'other.rs'})
+        except ValueError as error:
+            assert 'All workspace slots are busy' in str(error)
+            refused = True
+        except TimeoutError:
+            pass
+        assert refused, 'REGRESSION: cancelled running worker is treated as an idle workspace'
+        release.set()
+        response = await gateway.execute('symbols', {'path': 'helper.rs'})
+        assert not response.isError and str(root) in response.structuredContent['metadata']['workspace']
+    finally:
+        release.set()
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         await gateway.close()
