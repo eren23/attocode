@@ -187,3 +187,7 @@ async def test_real_server_warmed_selected_definition_and_edit(tmp_path, monkeyp
                 (destination / f"real-server-{language}.json").write_text(
                     json.dumps(list(protocol), indent=2) + "\n")
         assert process is not None and process.returncode is not None
+
+
+# Worker-only diagnostic; the existing pinned real-server job owns acquisition.
+from rust_gateway_real import test_real_rust_gateway_reload_observation  # noqa: E402, F401
