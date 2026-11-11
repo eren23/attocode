@@ -66,11 +66,12 @@ async def test_real_rust_gateway_reload_observation(tmp_path, monkeypatch, recor
         trace.record('fixture_sources', version=version, hashes=hashes)
         return files
 
-    files = write_sources(0)
     gateway = OperationGateway(str(tmp_path), 'daily', watch=False)
     process = None
     with trace.capture(monkeypatch):
         try:
+            trace.stage('fixture_sources_original')
+            write_sources(0)
             trace.stage('prepare_static_index')
             response = await gateway.execute('symbols', {'path': 'src/first.rs'})
             assert not response.isError
