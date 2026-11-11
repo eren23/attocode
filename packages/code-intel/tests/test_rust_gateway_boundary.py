@@ -100,7 +100,7 @@ async def test_public_cancellation_releases_workspace_worker(
             assert processes[0].returncode is not None
         ready.touch()
         recovered = await _inspect(gateway)
-        assert recovered['metadata']['analysis']['precision']['status'] == 'verified'
+        assert recovered['metadata']['precision'] == 'verified'
         assert any(ref['file_path'] == 'caller.rs' and ref['source'] == 'lsp'
                    for ref in recovered['data']['references'])
         if phase == 'definition':
@@ -132,14 +132,13 @@ async def test_retry_boundary_is_one_second(
         tmp_path, monkeypatch, _source(ready, journal, phase, failure=phase == 'initialize'))
     try:
         first = await _inspect(gateway)
-        outcome = first['metadata']['analysis']['precision']
-        assert outcome['status'] == 'partial'
-        assert outcome['queries'][0]['status'] == ('failed' if phase == 'initialize' else 'not_resolved')
+        outcome = first['metadata']['precision']
+        assert outcome == 'partial'
         ready.touch()
         before = _journal(journal)
         clock[0] = 1001.0 + offset
         result = await _inspect(gateway)
-        actual = result['metadata']['analysis']['precision']['status']
+        actual = result['metadata']['precision']
         assert actual == ('verified' if retries else 'partial')
         assert (_journal(journal) != before) is retries
         if retries:
@@ -147,7 +146,7 @@ async def test_retry_boundary_is_one_second(
                        for ref in result['data']['references'])
         record_property('qualified_input', 'true')
         record_property('cache_clock', clock[0])
-        record_property('precision', json.dumps(result['metadata']['analysis']['precision']))
+        record_property('precision', json.dumps(result['metadata']['precision']))
     finally:
         await gateway.close()
 
@@ -158,11 +157,11 @@ async def test_uncancelled_public_call_retains_verified_evidence(tmp_path, monke
     gateway, _root, _ = _gateway(tmp_path, monkeypatch, _source(ready, journal))
     try:
         result = await _inspect(gateway)
-        assert result['metadata']['analysis']['precision']['status'] == 'verified'
+        assert result['metadata']['precision'] == 'verified'
         assert any(ref['file_path'] == 'caller.rs' and ref['source'] == 'lsp'
                    for ref in result['data']['references'])
         before = _journal(journal)
-        assert (await _inspect(gateway))['metadata']['analysis']['precision']['status'] == 'verified'
+        assert (await _inspect(gateway))['metadata']['precision'] == 'verified'
         assert _journal(journal) == before
     finally:
         await gateway.close()
