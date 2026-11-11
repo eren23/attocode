@@ -32,7 +32,6 @@ from attocode_intel.query_ranking import hit_evidence, next_search_top_k
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
 from attocode_intel.search_evidence import hydrate_selected_sources, search_snippet
 
-
 _operation_cancellation = ContextVar("intel_operation_cancellation", default=None)
 
 

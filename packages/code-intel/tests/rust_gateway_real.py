@@ -34,6 +34,7 @@ async def test_real_rust_gateway_reload_observation(tmp_path, monkeypatch, recor
     from attocode_intel._internal.errors import ToolError
     from attocode_intel._internal.integrations.lsp.client import BUILTIN_SERVERS
     from attocode_intel.precision import PrecisionSession
+
     from eval.quality.lsp_trace import LSPTrace
 
     assert shutil.which(BUILTIN_SERVERS['rust'].command)
