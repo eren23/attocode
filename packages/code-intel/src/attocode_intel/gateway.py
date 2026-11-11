@@ -8,10 +8,11 @@ import inspect
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
-from contextvars import copy_context
+from contextvars import ContextVar, copy_context
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+from threading import Event, Lock
 
 from filelock import FileLock
 from mcp import types
@@ -30,6 +31,38 @@ from attocode_intel.project_dir import cache_folder
 from attocode_intel.query_ranking import hit_evidence, next_search_top_k
 from attocode_intel.request_context import RequestContext, bind_request, resolve_workspace
 from attocode_intel.search_evidence import hydrate_selected_sources, search_snippet
+
+_operation_cancellation = ContextVar("intel_operation_cancellation", default=None)
+
+
+class _OperationCancellation:
+    """One caller's cancellation, forwarded only to its precision coroutine."""
+
+    def __init__(self):
+        self.requested = Event()
+        self._lock = Lock()
+        self._target = None
+
+    def cancel(self):
+        with self._lock:
+            if self.requested.is_set():
+                return
+            self.requested.set()
+            if self._target is not None:
+                loop, task = self._target
+                with contextlib.suppress(RuntimeError):
+                    loop.call_soon_threadsafe(task.cancel)
+
+    async def run(self, operation, *args):
+        with self._lock:
+            if self.requested.is_set():
+                raise asyncio.CancelledError
+            self._target = (asyncio.get_running_loop(), asyncio.current_task())
+        try:
+            return await operation(*args)
+        finally:
+            with self._lock:
+                self._target = None
 
 
 class OperationGateway:
@@ -324,26 +357,38 @@ class OperationGateway:
                 ),
                 self.watch_debounce,
             )
-        try:
-            timings["enqueued_at"] = time.monotonic()
-            return await asyncio.get_running_loop().run_in_executor(
-                self._workers[key],
-                copy_context().run,
-                self._execute_sync,
-                context,
-                name,
-                args,
-                compact,
-                timings,
-            )
-        finally:
+        cancellation = _OperationCancellation()
+        worker_context = copy_context()
+        worker_context.run(_operation_cancellation.set, cancellation)
+
+        def execute():
+            if not cancellation.requested.is_set():
+                return worker_context.run(self._execute_sync, context, name, args, compact, timings)
+
+        def completed(future):
+            # Cancellation of the awaiting caller must not mark a running worker idle.
+            # Keep the executor future alive until its actual operation has finished.
+            if future is not None and not future.cancelled():
+                future.exception()  # Also retrieve exceptions after a caller has left.
             if key in self._active:
                 self._active[key] -= 1
-            if context.source == "local" and not self._closed and key in self._workers:
-                # Each call starts the search warm-up after its own work, so that this call
-                # is not slower and a later search finds ready indexes.
+            if (context.source == "local" and not self._closed and key in self._workers
+                    and not cancellation.requested.is_set()):
                 with contextlib.suppress(RuntimeError):
                     self._workers[key].submit(self._warm_search, context)
+
+        timings["enqueued_at"] = time.monotonic()
+        try:
+            future = asyncio.get_running_loop().run_in_executor(self._workers[key], execute)
+        except BaseException:
+            completed(None)
+            raise
+        future.add_done_callback(completed)
+        try:
+            return await asyncio.shield(future)
+        except asyncio.CancelledError:
+            cancellation.cancel()
+            raise
 
     @staticmethod
     def _check_write_budget(context, budget):
@@ -448,8 +493,12 @@ class OperationGateway:
                     session = context.stores.setdefault("precision", PrecisionSession(service))
                     runner = context.stores.get("async_runner") or context.stores.setdefault("async_runner", asyncio.Runner())
                     before = time.monotonic()
-                    precision_result = runner.run(session.enrich(args.get("symbol_name", args.get("symbol", "")),
-                                                                  args.get("file_path"), args.get("line")), context=copy_context())
+                    selection = (args.get("symbol_name", args.get("symbol", "")),
+                                 args.get("file_path"), args.get("line"))
+                    cancellation = _operation_cancellation.get()
+                    enrichment = (cancellation.run(session.enrich, *selection) if cancellation
+                                  else session.enrich(*selection))
+                    precision_result = runner.run(enrichment, context=copy_context())
                     timings["precision"] = round((time.monotonic() - before) * 1000, 2)
                 payload = None
                 before = time.monotonic()
