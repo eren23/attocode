@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_rust_gateway_boundary.py"
+  ],
+  "cases": [
+    "test_rust_gateway_boundary::test_public_cancellation_releases_workspace_worker[initialize]",
+    "test_rust_gateway_boundary::test_public_cancellation_releases_workspace_worker[definition]",
+    "test_rust_gateway_boundary::test_retry_boundary_is_one_second[below-initialize]",
+    "test_rust_gateway_boundary::test_retry_boundary_is_one_second[below-definition]",
+    "test_rust_gateway_boundary::test_retry_boundary_is_one_second[equal-initialize]",
+    "test_rust_gateway_boundary::test_retry_boundary_is_one_second[equal-definition]",
+    "test_rust_gateway_boundary::test_retry_boundary_is_one_second[above-initialize]",
+    "test_rust_gateway_boundary::test_retry_boundary_is_one_second[above-definition]",
+    "test_rust_gateway_boundary::test_uncancelled_public_call_retains_verified_evidence"
+  ],
+  "failures": {
+    "test_rust_gateway_boundary::test_public_cancellation_releases_workspace_worker[initialize]": {
+      "message": "REGRESSION: public cancellation leaves precision running on the workspace worker",
+      "properties": {
+        "qualified_input": "true",
+        "public_entrypoint": "execute_mcp",
+        "blocked_phase": "initialize"
+      }
+    },
+    "test_rust_gateway_boundary::test_public_cancellation_releases_workspace_worker[definition]": {
+      "message": "REGRESSION: public cancellation leaves precision running on the workspace worker",
+      "properties": {
+        "qualified_input": "true",
+        "public_entrypoint": "execute_mcp",
+        "blocked_phase": "definition"
+      }
+    }
+  }
+}
