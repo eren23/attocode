@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_http_cancellation.py"
+  ],
+  "cases": [
+    "test_http_cancellation::test_http_cancel_reaches_precision[initialize]",
+    "test_http_cancellation::test_http_cancel_reaches_precision[definition]",
+    "test_http_cancellation::test_http_default_behavior_remains_bounded[default_off]",
+    "test_http_cancellation::test_http_default_behavior_remains_bounded[missing_context]"
+  ],
+  "failures": {
+    "test_http_cancellation::test_http_cancel_reaches_precision[initialize]": {
+      "message": "REGRESSION: HTTP cancellation does not reach the active precision worker",
+      "properties": {
+        "qualified_input": "true",
+        "entrypoint": "http",
+        "blocked_phase": "initialize"
+      }
+    },
+    "test_http_cancellation::test_http_cancel_reaches_precision[definition]": {
+      "message": "REGRESSION: HTTP cancellation does not reach the active precision worker",
+      "properties": {
+        "qualified_input": "true",
+        "entrypoint": "http",
+        "blocked_phase": "definition"
+      }
+    }
+  }
+}
