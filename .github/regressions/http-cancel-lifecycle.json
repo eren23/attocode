@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_http_cancel_lifecycle.py"
+  ],
+  "cases": [
+    "test_http_cancel_lifecycle::test_normal_http_notification_teardown_does_not_crash",
+    "test_http_cancel_lifecycle::test_closed_original_input_does_not_cancel_active_sdk_handler",
+    "test_http_cancel_lifecycle::test_exception_value_is_forwarded_to_original_server"
+  ],
+  "failures": {
+    "test_http_cancel_lifecycle::test_normal_http_notification_teardown_does_not_crash": {
+      "message": "REGRESSION: normal HTTP notification teardown crashes the SDK relay",
+      "properties": {
+        "authenticated_http": "true",
+        "normal_notification_accepted": "true"
+      }
+    },
+    "test_http_cancel_lifecycle::test_closed_original_input_does_not_cancel_active_sdk_handler": {
+      "message": "REGRESSION: normal input closure cancels an active SDK handler",
+      "properties": {
+        "sdk_handler_active": "true",
+        "original_input_closed": "true",
+        "registered": "true"
+      }
+    },
+    "test_http_cancel_lifecycle::test_exception_value_is_forwarded_to_original_server": {
+      "message": "REGRESSION: SDK exception stream values are not forwarded unchanged",
+      "properties": {
+        "exception_value_sent": "true"
+      }
+    }
+  }
+}
