@@ -23,6 +23,7 @@ def main():
     sequence = 0
     processes = []
     callbacks = {}
+    registry = None
 
     def record(kind, **data):
         nonlocal sequence
@@ -109,12 +110,20 @@ def main():
                        state=state(service, context.stores.get('precision')))
 
     gateway.OperationGateway._execute_sync = observed_execute
+    execute_mcp = gateway.OperationGateway.execute_mcp
+
+    @wraps(execute_mcp)
+    async def observed_mcp(self, name, arguments):
+        record('gateway_called', request_id=request_id(), operation=name)
+        return await execute_mcp(self, name, arguments)
+
+    gateway.OperationGateway.execute_mcp = observed_mcp
     close = gateway.OperationGateway.close
 
     @wraps(close)
     async def observed_close(self):
         await close(self)
-        record('gateway_closed', processes=[{'pid': p.pid, 'returncode': p.returncode}
+        record('gateway_closed', cancellation_entries=len(registry) if registry is not None else None, processes=[{'pid': p.pid, 'returncode': p.returncode}
                                             for p in processes])
 
     gateway.OperationGateway.close = observed_close
@@ -141,6 +150,11 @@ def main():
     from attocode_intel.config import CodeIntelConfig
 
     app = create_app(CodeIntelConfig(project_dir=root, api_key=FIXTURE_KEY))
+    registry = getattr(app.state.mcp_transport.manager.app, 'registry', None)
+    for name in ('mcp_transport.py', 'mcp_cancellation.py'):
+        path = Path(__file__).resolve().parents[1] / 'src/attocode_intel/api' / name
+        if path.exists():
+            record('transport_source', name=name, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
     # Real JWT verification, authored config; gateway/lifespan remain local so
     # these transport tests do not claim database membership authorization.
     from attocode_intel.api import auth, deps

@@ -208,6 +208,7 @@ async def _actor(tmp_path, request, record_property, mode, phase):
         assert actor.process is not None and actor.process.returncode in (0, -signal.SIGTERM)
         closed = [row for row in _rows(actor.journal) if row['kind'] == 'gateway_closed']
         assert closed and all(p['returncode'] is not None for p in closed[-1]['processes'])
+        assert closed[-1].get('cancellation_entries') in (None, 0)
 
 
 def _payload(result):
