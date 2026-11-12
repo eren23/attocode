@@ -43,6 +43,12 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.34 corrects gateway cancellation and workspace-worker ownership, and
+adds optional authenticated HTTP tool-call cancellation. HTTP cancellation stays
+off by default and requires a per-client UUID4 context and one server process or
+context affinity. See the [release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.34.md)
+for setup, verification and remaining limits.
+
 Version 0.1.33 makes remote-settings saves atomic and private, preserves old
 config bytes on failed writes, and refuses symlink redirects or invalid and
 oversized data. The existing Perl roots and TOML values survive successful
@@ -203,7 +209,7 @@ For one installation for all repositories, use `init --global`. A global server 
 
 [Self-hosting and migration](https://github.com/eren23/attocode/blob/main/docs/intelligence.md) covers PostgreSQL, Redis, workers, authentication, and the dashboard. The service serves native Streamable HTTP MCP at `/mcp/`. The dashboard provides connection snippets and knowledge editing.
 
-In unreleased source builds (not published 0.1.33), opt-in explicit HTTP cancellation is available with `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated server and a random UUID4 `X-Attocode-Cancellation-Id` header shared by the original call and its cancellation notification. The credential, workspace and profile must match; use one HTTP worker or context affinity. It is off by default. [Cancellation setup and limits](https://github.com/eren23/attocode/blob/main/docs/intelligence.md#optional-http-cancellation) cover clients without the header, process restarts and synchronous work.
+From 0.1.34 (not available in 0.1.33), opt-in explicit HTTP cancellation is available with `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated server and a random UUID4 `X-Attocode-Cancellation-Id` header shared by the original call and its cancellation notification. The credential, workspace and profile must match; use one HTTP worker or context affinity. It is off by default. [Cancellation setup and limits](https://github.com/eren23/attocode/blob/main/docs/intelligence.md#optional-http-cancellation) cover clients without the header, process restarts and synchronous work.
 
 ```sh
 attocode-code-intel init --client all --server https://intel.example.com --repo REPOSITORY_UUID

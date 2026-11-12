@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.34] - 2026-11-12
+
 ### Added
 
 - Authenticated HTTP servers can opt into explicit MCP cancellation with

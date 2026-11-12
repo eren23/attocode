@@ -60,7 +60,7 @@ Snapshot directories are currently retained until operator cleanup. Monitor the 
 
 ## Optional HTTP cancellation
 
-Available in unreleased source builds; published 0.1.33 does not include this feature.
+Available from 0.1.34; 0.1.33 does not include this feature.
 
 HTTP MCP stays stateless. Enable `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated
 server to route an explicit cancellation notification to an active tool call. This is
