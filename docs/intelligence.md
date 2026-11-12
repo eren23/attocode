@@ -60,6 +60,8 @@ Snapshot directories are currently retained until operator cleanup. Monitor the 
 
 ## Optional HTTP cancellation
 
+Available in unreleased source builds; published 0.1.33 does not include this feature.
+
 HTTP MCP stays stateless. Enable `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated
 server to route an explicit cancellation notification to an active tool call. This is
 off by default and requires service authentication or a configured `ATTOCODE_API_KEY`.
@@ -81,7 +83,7 @@ Example notification:
 
 Only tool calls participate in routing; other MCP methods keep their ordinary behavior.
 Clients without that header retain ordinary stateless behavior. An invalid supplied
-context receives400 after authentication. Unknown or completed IDs have no effect;
+context receives 400 after authentication. Unknown or completed IDs have no effect;
 a duplicate active ID in one context gets a JSON-RPC error. The pinned SDK may
 return a cancellation error for the original call, which clients should ignore.
 
@@ -89,7 +91,7 @@ Routing is local to one server process: run one HTTP worker or provide affinity 
 the cancellation context. There is no cross-process registry or delivery guarantee
 after a process restart. Disconnecting a client is separate from explicit cancellation.
 Cancellation does not undo completed writes or interrupt arbitrary synchronous work;
-existing precision deadlines still apply. Limits of256 live cancellable requests and32
+existing precision deadlines still apply. Limits of 256 live cancellable requests and 32
 per credential/workspace/profile bound routing state; they are not server-wide quotas.
 
 ## Knowledge and migration

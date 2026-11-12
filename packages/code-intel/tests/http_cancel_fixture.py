@@ -210,10 +210,12 @@ async def _actor(tmp_path, request, record_property, mode, phase):
         closed = [row for row in _rows(actor.journal) if row['kind'] == 'gateway_closed']
         assert closed and all(p['returncode'] is not None for p in closed[-1]['processes'])
         assert closed[-1].get('cancellation_entries') in (None, 0)
+        crashes = (actor.evidence / 'server.stderr').read_text().count('Stateless session crashed')
+        record_property('sdk_crash_count', crashes)
+        assert crashes == 0, 'SDK session crashed during owned HTTP fixture'
+
 
 
 def _payload(result):
     assert not result.get('isError'), result
     return json.loads(result['content'][0]['text'])
-
-

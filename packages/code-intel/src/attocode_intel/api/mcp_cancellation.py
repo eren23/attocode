@@ -143,7 +143,17 @@ class CancellationServer:
 
         async def inbound():
             async with to_sdk:
-                async for message in read_stream:
+                while True:
+                    try:
+                        message = await read_stream.receive()
+                    except (anyio.EndOfStream, anyio.ClosedResourceError):
+                        # The HTTP transport closes this endpoint on ordinary
+                        # notification completion. Live entry clones retain the
+                        # SDK input until its response or server cleanup.
+                        return
+                    if isinstance(message, Exception):
+                        await to_sdk.send(message)
+                        continue
                     root = message.message.root
                     if isinstance(root, types.JSONRPCNotification) and root.method == 'notifications/cancelled':
                         await self.registry.route(owner, message)
