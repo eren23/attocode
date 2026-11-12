@@ -67,7 +67,13 @@ off by default and requires service authentication or a configured `ATTOCODE_API
 Generate a random UUID4 for each client instance and send it as
 `X-Attocode-Cancellation-Id` on both the tool-call POST and cancellation POST.
 Use the same credential, workspace and profile headers on both. The notification
-uses the original JSON-RPC ID, preserving its string or integer type:
+uses the original JSON-RPC ID, preserving its string or integer type. Do not reuse
+an ID within that cancellation context. Generate a new UUID4 if the client resets
+its ID counter; a delayed notification cannot distinguish requests that reused an
+ID in the same context. Credential or permission changes also separate routing:
+new authority does not cancel a call started under the previous authority.
+
+Example notification:
 
 ```json
 {"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"inspect-42"}}
