@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Authenticated HTTP servers can opt into explicit MCP cancellation with
+  `ATTOCODE_MCP_HTTP_CANCEL=1` and a per-client UUID4 cancellation-context header.
+  Routing is bounded and local to one process, with credential, workspace,
+  profile and typed request-ID isolation. Stateless defaults stay unchanged.
+
 ### Fixed
 
 - Cancelling a gateway navigation request now reaches its selected-symbol

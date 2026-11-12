@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_http_cancel_activation.py"
+  ],
+  "cases": [
+    "test_http_cancel_activation::test_cancellation_waits_for_sdk_handler_activation"
+  ],
+  "failures": {
+    "test_http_cancel_activation::test_cancellation_waits_for_sdk_handler_activation": {
+      "message": "REGRESSION: cancellation reaches SDK before its request handler is active",
+      "properties": {
+        "entry_registered": "true",
+        "sdk_handler_active": "false"
+      }
+    }
+  }
+}

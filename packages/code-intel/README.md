@@ -203,6 +203,8 @@ For one installation for all repositories, use `init --global`. A global server 
 
 [Self-hosting and migration](https://github.com/eren23/attocode/blob/main/docs/intelligence.md) covers PostgreSQL, Redis, workers, authentication, and the dashboard. The service serves native Streamable HTTP MCP at `/mcp/`. The dashboard provides connection snippets and knowledge editing.
 
+In unreleased source builds (not published 0.1.33), opt-in explicit HTTP cancellation is available with `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated server and a random UUID4 `X-Attocode-Cancellation-Id` header shared by the original call and its cancellation notification. The credential, workspace and profile must match; use one HTTP worker or context affinity. It is off by default. [Cancellation setup and limits](https://github.com/eren23/attocode/blob/main/docs/intelligence.md#optional-http-cancellation) cover clients without the header, process restarts and synchronous work.
+
 ```sh
 attocode-code-intel init --client all --server https://intel.example.com --repo REPOSITORY_UUID
 attocode-code-intel doctor --client codex --remote

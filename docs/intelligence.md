@@ -58,6 +58,42 @@ Remote configuration uses the separate `attocode-code-intel-remote` entry. `X-At
 
 Snapshot directories are currently retained until operator cleanup. Monitor the repository volume on servers analyzing many revisions. Stop the service before pruning detached worktrees; use Git worktree commands so Git metadata stays consistent. This is a self-hosted product foundation; billing, managed hosting, and automatic storage quotas are outside this release.
 
+## Optional HTTP cancellation
+
+Available in unreleased source builds; published 0.1.33 does not include this feature.
+
+HTTP MCP stays stateless. Enable `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated
+server to route an explicit cancellation notification to an active tool call. This is
+off by default and requires service authentication or a configured `ATTOCODE_API_KEY`.
+
+Generate a random UUID4 for each client instance and send it as
+`X-Attocode-Cancellation-Id` on both the tool-call POST and cancellation POST.
+Use the same credential, workspace and profile headers on both. The notification
+uses the original JSON-RPC ID, preserving its string or integer type. Do not reuse
+an ID within that cancellation context. Generate a new UUID4 if the client resets
+its ID counter; a delayed notification cannot distinguish requests that reused an
+ID in the same context. Credential or permission changes also separate routing:
+new authority does not cancel a call started under the previous authority.
+
+Example notification:
+
+```json
+{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"inspect-42"}}
+```
+
+Only tool calls participate in routing; other MCP methods keep their ordinary behavior.
+Clients without that header retain ordinary stateless behavior. An invalid supplied
+context receives 400 after authentication. Unknown or completed IDs have no effect;
+a duplicate active ID in one context gets a JSON-RPC error. The pinned SDK may
+return a cancellation error for the original call, which clients should ignore.
+
+Routing is local to one server process: run one HTTP worker or provide affinity for
+the cancellation context. There is no cross-process registry or delivery guarantee
+after a process restart. Disconnecting a client is separate from explicit cancellation.
+Cancellation does not undo completed writes or interrupt arbitrary synchronous work;
+existing precision deadlines still apply. Limits of 256 live cancellable requests and 32
+per credential/workspace/profile bound routing state; they are not server-wide quotas.
+
 ## Knowledge and migration
 
 Existing local learnings and ADR SQLite databases remain usable. Different local agents use the same `.attocode` stores, with serialized operations and file locks. Team learnings and ADRs use PostgreSQL `knowledge_entries` (migration 020), with repository identity on every query, author, status, source commit, and file anchors. Changed/deleted anchors mark an entry stale without deleting it. Remote bootstrap recalls relevant shared learnings.

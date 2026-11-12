@@ -749,7 +749,7 @@ class OperationGateway:
             )
 
 
-def create_mcp_server(gateway: OperationGateway) -> Server:
+def create_mcp_server(gateway: OperationGateway, *, on_tool_start=None) -> Server:
     from attocode_intel import __version__
 
     server = Server("attocode-code-intel", version=__version__, instructions=gateway.instructions)
@@ -760,6 +760,8 @@ def create_mcp_server(gateway: OperationGateway) -> Server:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict):
+        if on_tool_start is not None:
+            on_tool_start(server.request_context.request_id)
         # Advertised roots are advisory, never a substitute for remote authorization.
         if not gateway.resolver and not gateway.project and not arguments.get("workspace"):
             session = server.request_context.session

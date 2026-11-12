@@ -54,7 +54,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
-      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all --extra service
       - name: Validate contract and select fixed profile
         id: contract
         run: uv run --no-sync python packages/code-intel/scripts/check_expected_regression.py --contract "$CONTRACT" --profile >> "$GITHUB_OUTPUT"
