@@ -7,7 +7,12 @@ import os
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.responses import JSONResponse
 
-from attocode_intel.api.mcp_cancellation import CancellationServer, current_owner, owner_for
+from attocode_intel.api.mcp_cancellation import (
+    CancellationRegistry,
+    CancellationServer,
+    current_owner,
+    owner_for,
+)
 from attocode_intel.gateway import OperationGateway, create_mcp_server
 from attocode_intel.remote import RemoteResolver, remote_identity, remote_profile, remote_workspace
 
@@ -25,9 +30,15 @@ class MCPTransport:
             watch=os.environ.get("ATTOCODE_INTEL_WATCH", "1") != "0",
             watch_debounce=int(os.environ.get("ATTOCODE_INTEL_WATCH_DEBOUNCE", "500")),
         )
-        server = create_mcp_server(self.gateway)
         if self.cancellation_enabled:
-            server = CancellationServer(server)
+            registry = CancellationRegistry()
+            server = create_mcp_server(
+                self.gateway,
+                on_tool_start=lambda identity: registry.activate(current_owner.get(), identity),
+            )
+            server = CancellationServer(server, registry)
+        else:
+            server = create_mcp_server(self.gateway)
         self.manager = StreamableHTTPSessionManager(server, json_response=True, stateless=True)
 
     async def __call__(self, scope, receive, send):

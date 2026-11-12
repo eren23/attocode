@@ -298,14 +298,16 @@ def test_team_repository_sources_cannot_select_server_files(monkeypatch):
     validate_remote_source(clone_url="git@example.com:team/repo.git")
 
 
+@pytest.mark.parametrize("http_cancel", [False, True])
 async def test_native_http_auth_profiles_resources_and_legacy_knowledge(
-    team, monkeypatch, tmp_path
+    team, monkeypatch, tmp_path, http_cancel
 ):
     import httpx
     from attocode_intel.api.app import create_app
     from attocode_intel.api.auth.jwt import create_access_token
     from attocode_intel.config import CodeIntelConfig
 
+    monkeypatch.setenv("ATTOCODE_MCP_HTTP_CANCEL", "1" if http_cancel else "0")
     config = CodeIntelConfig(
         database_url="postgresql+asyncpg://unused",
         secret_key="test-signing-key-for-native-http",
@@ -319,6 +321,7 @@ async def test_native_http_auth_profiles_resources_and_legacy_knowledge(
         "Authorization": "Bearer " + create_access_token(a.user_id, a.org_id),
         "X-Attocode-Workspace": str(ra.id),
         "X-Attocode-Profile": "daily",
+        "X-Attocode-Cancellation-Id": str(uuid.uuid4()),
         "Accept": "application/json, text/event-stream",
     }
 
@@ -347,19 +350,19 @@ async def test_native_http_auth_profiles_resources_and_legacy_knowledge(
             }
             assert (await client.post("/mcp/", json=body)).status_code == 401
             assert (await client.post("/mcp/", json=body, headers=headers)).status_code == 200
-            body.update(method="tools/list", params={})
+            body.update(id=2, method="tools/list", params={})
             tools = (await client.post("/mcp/", json=body, headers=headers)).json()["result"][
                 "tools"
             ]
             assert "analyze" not in {tool["name"] for tool in tools}
             body.update(
-                method="tools/call", params={"name": "symbols", "arguments": {"path": "helper.py"}}
+                id=3, method="tools/call", params={"name": "symbols", "arguments": {"path": "helper.py"}}
             )
             result = (await client.post("/mcp/", json=body, headers=headers)).json()["result"]
             assert not result.get("isError"), result
             assert "alpha_only" in result["content"][0]["text"]
             body.update(
-                method="resources/read",
+                id=4, method="resources/read",
                 params={"uri": f"attocode://project/helper.py?workspace={rb.id}"},
             )
             denied = (await client.post("/mcp/", json=body, headers=headers)).json()

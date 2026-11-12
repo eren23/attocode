@@ -61,7 +61,7 @@ Snapshot directories are currently retained until operator cleanup. Monitor the 
 ## Optional HTTP cancellation
 
 HTTP MCP stays stateless. Enable `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated
-server to route an explicit cancellation notification to an active call. This is
+server to route an explicit cancellation notification to an active tool call. This is
 off by default and requires service authentication or a configured `ATTOCODE_API_KEY`.
 
 Generate a random UUID4 for each client instance and send it as
@@ -79,6 +79,7 @@ Example notification:
 {"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"inspect-42"}}
 ```
 
+Only tool calls participate in routing; other MCP methods keep their ordinary behavior.
 Clients without that header retain ordinary stateless behavior. An invalid supplied
 context receives400 after authentication. Unknown or completed IDs have no effect;
 a duplicate active ID in one context gets a JSON-RPC error. The pinned SDK may

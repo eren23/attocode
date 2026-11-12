@@ -47,6 +47,9 @@ class RegistrationError(ValueError):
 class _Entry:
     stream: object
     forwarded: anyio.Event = field(default_factory=anyio.Event)
+    started: anyio.Event = field(default_factory=anyio.Event)
+    routing: bool = False
+    sent: bool = False
     finished: bool = False
     senders: set = field(default_factory=set)
 
@@ -72,12 +75,18 @@ class CancellationRegistry:
         self._entries[key] = entry
         return entry
 
+    def activate(self, owner, identity):
+        # Called from the tool handler, after the SDK enters its cancel scope.
+        if entry := self._entries.get((owner, type(identity), identity)):
+            entry.started.set()
+
     def complete(self, owner, identity, entry):
         key = owner, type(identity), identity
         if self._entries.get(key) is entry:
             del self._entries[key]
         entry.finished = True
         entry.forwarded.set()
+        entry.started.set()
         entry.stream.close()
         # Wake senders blocked on an original session that has stopped reading.
         for scope in tuple(entry.senders):
@@ -88,31 +97,38 @@ class CancellationRegistry:
         if type(identity) not in (str, int):
             return
         entry = self._entries.get((owner, type(identity), identity))
-        if entry is None:
+        if entry is None or entry.routing or entry.sent:
             return
-        await entry.forwarded.wait()
-        if entry.finished:
-            return
+        # Claim before any await: duplicates cannot add forwarding waiters.
+        entry.routing = True
         try:
-            stream = entry.stream.clone()
-        except anyio.ClosedResourceError:
-            return
-        with stream, anyio.CancelScope() as scope:
-            entry.senders.add(scope)
+            await entry.forwarded.wait()
+            await entry.started.wait()
+            if entry.finished:
+                return
             try:
-                await stream.send(message)
-            except (anyio.ClosedResourceError, anyio.BrokenResourceError):
-                pass
-            finally:
-                entry.senders.discard(scope)
+                stream = entry.stream.clone()
+            except anyio.ClosedResourceError:
+                return
+            with stream, anyio.CancelScope() as scope:
+                entry.senders.add(scope)
+                try:
+                    await stream.send(message)
+                    entry.sent = True
+                except (anyio.ClosedResourceError, anyio.BrokenResourceError):
+                    pass
+                finally:
+                    entry.senders.discard(scope)
+        finally:
+            entry.routing = False
 
 
 class CancellationServer:
     """Relay public SDK streams while preserving actual server execution."""
 
-    def __init__(self, server):
+    def __init__(self, server, registry=None):
         self.server = server
-        self.registry = CancellationRegistry()
+        self.registry = registry if registry is not None else CancellationRegistry()
 
     def create_initialization_options(self, *args, **kwargs):
         return self.server.create_initialization_options(*args, **kwargs)
@@ -132,7 +148,7 @@ class CancellationServer:
                     if isinstance(root, types.JSONRPCNotification) and root.method == 'notifications/cancelled':
                         await self.registry.route(owner, message)
                     entry = None
-                    if isinstance(root, types.JSONRPCRequest) and root.method != 'initialize':
+                    if isinstance(root, types.JSONRPCRequest) and root.method == 'tools/call':
                         try:
                             entry = self.registry.register(owner, root.id, to_sdk)
                         except RegistrationError as error:

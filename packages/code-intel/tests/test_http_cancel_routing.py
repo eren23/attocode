@@ -93,6 +93,7 @@ async def test_early_cancel_waits_for_initial_request_forwarding():
     send, receive = anyio.create_memory_object_stream(0)
     async with send, receive:
         entry = registry.register(owner, 'target', send)
+        registry.activate(owner, 'target')
         message = _message('target')
         task = asyncio.create_task(registry.route(owner, message))
         try:
@@ -119,6 +120,7 @@ async def test_completion_wakes_waiting_or_blocked_cancel_sender(before_forward)
     send, receive = anyio.create_memory_object_stream(0)
     async with send, receive:
         entry = registry.register(owner, 'target', send)
+        registry.activate(owner, 'target')
         if not before_forward:
             entry.forwarded.set()
         task = asyncio.create_task(registry.route(owner, _message('target')))
@@ -238,3 +240,38 @@ async def test_transport_resets_routing_context_on_dispatch_failure(tmp_path, mo
         assert current_owner.get() is None and remote_identity.get() is None
     finally:
         await transport.gateway.close()
+
+
+async def test_cancelled_undelivered_sender_can_be_retried():
+    from attocode_intel.api.mcp_cancellation import CancellationRegistry
+
+    registry = CancellationRegistry()
+    owner = ('principal', '', 'daily', CLIENT_ID)
+    send, receive = anyio.create_memory_object_stream(0)
+    async with send, receive:
+        entry = registry.register(owner, 'target', send)
+        entry.forwarded.set()
+        registry.activate(owner, 'target')
+        message = _message('target')
+        first = asyncio.create_task(registry.route(owner, message))
+        retry = None
+        try:
+            await asyncio.sleep(0)
+            assert not first.done()
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            assert not entry.sent
+            retry = asyncio.create_task(registry.route(owner, message))
+            assert await asyncio.wait_for(receive.receive(), 1) is message
+            await asyncio.wait_for(retry, 1)
+            await asyncio.wait_for(registry.route(owner, message), 1)
+            with pytest.raises(anyio.WouldBlock):
+                receive.receive_nowait()
+        finally:
+            registry.complete(owner, 'target', entry)
+            first.cancel()
+            if retry is not None:
+                retry.cancel()
+            await asyncio.gather(first, *([retry] if retry is not None else []), return_exceptions=True)
+    assert len(registry) == 0
