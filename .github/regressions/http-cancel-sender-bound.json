@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_http_cancel_sender_bound.py"
+  ],
+  "cases": [
+    "test_http_cancel_sender_bound::test_duplicate_cancellation_retains_one_pending_sender"
+  ],
+  "failures": {
+    "test_http_cancel_sender_bound::test_duplicate_cancellation_retains_one_pending_sender": {
+      "message": "REGRESSION: duplicate cancellation notifications retain multiple pending senders",
+      "properties": {
+        "entry_registered": "true",
+        "initial_request_forwarded": "false",
+        "duplicate_notifications": "6"
+      }
+    }
+  }
+}

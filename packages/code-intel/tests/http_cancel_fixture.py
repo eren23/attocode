@@ -120,11 +120,12 @@ class _Actor:
         assert not prepared.get('isError')
 
     async def send(self, message, *, valid_auth=True):
-        self.record('client_to_server', {'rpc': message, 'identity': self.identity, 'headers': dict(self.headers)})
-        key = self.tokens[self.identity] if valid_auth else 'authored-invalid-fixture-token'
-        response = await self.client.post('/mcp/', json=message, headers={
-            'Accept': 'application/json, text/event-stream',
-            'Authorization': 'Bearer ' + key, 'MCP-Protocol-Version': '2025-11-25', **self.headers})
+        self.record('client_to_server', {'rpc': message, 'identity': self.identity if valid_auth else 'unauthenticated', 'headers': dict(self.headers)})
+        headers = {'Accept': 'application/json, text/event-stream',
+                   'MCP-Protocol-Version': '2025-11-25', **self.headers}
+        if valid_auth:
+            headers['Authorization'] = 'Bearer ' + self.tokens[self.identity]
+        response = await self.client.post('/mcp/', json=message, headers=headers)
         self.record('server_to_client', {'http_status': response.status_code,
                                        'body': base64.b64encode(response.content).decode()})
         return response
