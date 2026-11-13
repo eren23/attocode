@@ -94,11 +94,13 @@ Cancellation does not undo completed writes or interrupt arbitrary synchronous w
 existing precision deadlines still apply. Limits of 256 live cancellable requests and 32
 per credential/workspace/profile bound routing state; they are not server-wide quotas.
 
-### Opt-in client cancellation bridge (unreleased)
+<a id="opt-in-client-cancellation-bridge-unreleased"></a>
 
-The source checkout adds an optional stdio-to-HTTP bridge; this client bridge is
-not included in the published 0.1.34 package. Install the checkout before using it.
-Existing remote configurations still use native HTTP by default.
+### Opt-in client cancellation bridge
+
+Available from 0.1.35; 0.1.34 does not include this client bridge. It is an optional
+stdio-to-HTTP connection for authenticated remote servers. Existing remote
+configurations still use native HTTP by default.
 
 ```sh
 attocode-code-intel init --client codex --server https://your-server.example \

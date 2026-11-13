@@ -43,6 +43,14 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.35 adds an optional stdio-to-HTTP client bridge that manages a live
+cancellation context and forwards tool cancellation using the actual upstream
+SDK request ID. `init --http-cancellation` configures the bridge with a named token
+environment variable. Authentication and the server's cancellation opt-in are
+still required; notification enqueueing is best effort. See the
+[release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.35.md)
+for setup, verification and transport limits.
+
 Version 0.1.34 corrects gateway cancellation and workspace-worker ownership, and
 adds optional authenticated HTTP tool-call cancellation. HTTP cancellation stays
 off by default and requires a per-client UUID4 context and one server process or
@@ -211,11 +219,11 @@ For one installation for all repositories, use `init --global`. A global server 
 
 From 0.1.34 (not available in 0.1.33), opt-in explicit HTTP cancellation is available with `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated server and a random UUID4 `X-Attocode-Cancellation-Id` header shared by the original call and its cancellation notification. The credential, workspace and profile must match; use one HTTP worker or context affinity. It is off by default. [Cancellation setup and limits](https://github.com/eren23/attocode/blob/main/docs/intelligence.md#optional-http-cancellation) cover clients without the header, process restarts and synchronous work.
 
-The unreleased source checkout also adds `init --http-cancellation` for an opt-in
-stdio bridge that owns the client context and forwards tool cancellation using
-the actual HTTP request ID. This client bridge is not in published 0.1.34;
-existing remote configurations remain native HTTP by default. See
-[client bridge setup and limits](https://github.com/eren23/attocode/blob/main/docs/intelligence.md#opt-in-client-cancellation-bridge-unreleased).
+From 0.1.35, `init --http-cancellation` configures an opt-in stdio bridge that owns
+the client context and forwards tool cancellation using the actual HTTP request
+ID. This client bridge is not in 0.1.34; existing remote configurations remain
+native HTTP by default. See
+[client bridge setup and limits](https://github.com/eren23/attocode/blob/main/docs/intelligence.md#opt-in-client-cancellation-bridge).
 
 
 ```sh
