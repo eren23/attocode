@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.35] - 2026-11-13
+
+### Added
+
 - Add an opt-in stdio-to-HTTP client bridge with per-session cancellation context
   and SDK request-ID correlation. `init --http-cancellation` configures the bridge;
   existing direct HTTP defaults stay unchanged. Remote stdio doctor probes use
