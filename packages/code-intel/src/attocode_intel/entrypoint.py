@@ -13,6 +13,7 @@ import time
 COMMANDS = """commands:
   init                Add the server to Codex, Claude Code or Cursor (--client)
   doctor              Start the configured server and check that it answers
+  mcp-proxy           Bridge stdio to authenticated remote HTTP (opt-in cancellation)
   install <target>    Add the server to another client, for example vscode or zed
   share               Send a learning to a team server
   query <text>        Search the code
@@ -48,6 +49,23 @@ def exit_when_client_exits(interval: float = 5.0) -> None:
 def main(argv=None):
     from attocode_intel.catalog import PROFILES
     args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] == "mcp-proxy":
+        parser = argparse.ArgumentParser(prog="attocode-code-intel mcp-proxy")
+        parser.add_argument("--url", required=True)
+        parser.add_argument("--token-env", default="ATTOCODE_API_KEY")
+        parser.add_argument("--workspace", default="")
+        parser.add_argument("--profile", choices=["daily", "full"], default="daily")
+        opts = parser.parse_args(args[1:])
+        from attocode_intel.http_proxy import run_proxy
+
+        exit_when_client_exits()
+        try:
+            asyncio.run(run_proxy(opts.url, token_env=opts.token_env,
+                                  workspace=opts.workspace, profile=opts.profile))
+        except Exception:
+            # HTTP/SDK errors can include endpoint or response data. Never echo them.
+            raise SystemExit("HTTP proxy failed; check the endpoint, token environment and server configuration") from None
+        return
     if args and args[0] == "share":
         from attocode_intel.sharing import share
 
@@ -68,6 +86,8 @@ def main(argv=None):
             "--remote", action="store_true", help="Doctor/remove: select the remote integration"
         )
         parser.add_argument("--token-env", default="ATTOCODE_API_KEY")
+        parser.add_argument("--http-cancellation", action="store_true",
+                            help="Init: use the opt-in stdio-to-HTTP cancellation bridge")
         opts = parser.parse_args(args)
         from attocode_intel.onboarding import configure_client, diagnose
 
@@ -86,6 +106,7 @@ def main(argv=None):
                         server=opts.server,
                         token_env=opts.token_env,
                         repo=opts.repo or ("remote" if opts.remote else ""),
+                        http_cancellation=opts.http_cancellation,
                     )
                 else:
                     result = asyncio.run(

@@ -94,6 +94,43 @@ Cancellation does not undo completed writes or interrupt arbitrary synchronous w
 existing precision deadlines still apply. Limits of 256 live cancellable requests and 32
 per credential/workspace/profile bound routing state; they are not server-wide quotas.
 
+### Opt-in client cancellation bridge (unreleased)
+
+The source checkout adds an optional stdio-to-HTTP bridge; this client bridge is
+not included in the published 0.1.34 package. Install the checkout before using it.
+Existing remote configurations still use native HTTP by default.
+
+```sh
+attocode-code-intel init --client codex --server https://your-server.example \
+  --repo YOUR_REPOSITORY_ID --token-env ATTOCODE_API_KEY --http-cancellation --dry-run
+```
+
+Remove `--dry-run` to write the configuration, then restart the host's MCP server.
+Claude Code and Cursor use the same flag with their respective `--client` value.
+Set the named token variable in the host environment; config stores its name,
+not its value. Codex forwards that variable to the stdio child through `env_vars`.
+The server still requires authentication and `ATTOCODE_MCP_HTTP_CANCEL=1`, plus
+one worker or affinity for the cancellation context.
+
+The bridge owns a fresh UUID4 for each live upstream SDK session. It forwards
+stdio cancellation of an active `tools/call` using the SDK's actual HTTP request
+ID, preserving the credential, workspace and profile. Local and HTTP IDs may
+differ. It makes one best-effort notification attempt with a one-second send
+budget, then preserves caller cancellation. Delivery can race request registration
+or fail; this is no acknowledgement or cancellation-latency guarantee. Existing
+precision deadlines, cooperative cancellation and write limitations still apply.
+
+The bridge forwards tools list/call, resource list/templates/read and prompt
+list/get when the upstream advertises those groups. It preserves typed payloads,
+metadata, cursors, structured content and errors. It does not relay sampling,
+elicitation, tasks, subscriptions, change notifications or progress. Disconnects,
+process restarts and cross-worker delivery have no new guarantee.
+
+For an existing bridge entry, `doctor --client codex --remote` starts a new probe
+connection; it cannot verify the host's already-running MCP session. Use
+`init --client codex --remote --remove` to remove the owned entry and restore any
+previous entry, subject to the existing edited-configuration check.
+
 ## Knowledge and migration
 
 Existing local learnings and ADR SQLite databases remain usable. Different local agents use the same `.attocode` stores, with serialized operations and file locks. Team learnings and ADRs use PostgreSQL `knowledge_entries` (migration 020), with repository identity on every query, author, status, source commit, and file anchors. Changed/deleted anchors mark an entry stale without deleting it. Remote bootstrap recalls relevant shared learnings.

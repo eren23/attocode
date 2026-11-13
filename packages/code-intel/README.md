@@ -211,6 +211,13 @@ For one installation for all repositories, use `init --global`. A global server 
 
 From 0.1.34 (not available in 0.1.33), opt-in explicit HTTP cancellation is available with `ATTOCODE_MCP_HTTP_CANCEL=1` on an authenticated server and a random UUID4 `X-Attocode-Cancellation-Id` header shared by the original call and its cancellation notification. The credential, workspace and profile must match; use one HTTP worker or context affinity. It is off by default. [Cancellation setup and limits](https://github.com/eren23/attocode/blob/main/docs/intelligence.md#optional-http-cancellation) cover clients without the header, process restarts and synchronous work.
 
+The unreleased source checkout also adds `init --http-cancellation` for an opt-in
+stdio bridge that owns the client context and forwards tool cancellation using
+the actual HTTP request ID. This client bridge is not in published 0.1.34;
+existing remote configurations remain native HTTP by default. See
+[client bridge setup and limits](https://github.com/eren23/attocode/blob/main/docs/intelligence.md#opt-in-client-cancellation-bridge-unreleased).
+
+
 ```sh
 attocode-code-intel init --client all --server https://intel.example.com --repo REPOSITORY_UUID
 attocode-code-intel doctor --client codex --remote
