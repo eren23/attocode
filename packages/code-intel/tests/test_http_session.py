@@ -30,6 +30,9 @@ class Peer:
         if method == 'initialize':
             result = {'protocolVersion': '2025-11-25', 'capabilities': {'tools': {}},
                       'serverInfo': {'name': 'owned-http-peer', 'version': '7.6.5'}}
+        elif method == 'tools/list':
+            result = {'tools': [{'name': name, 'inputSchema': {'type': 'object'}}
+                                for name in ['a', 'b', 'later', 'error']]}
         elif method == 'tools/call':
             name = rpc['params']['name']
             if name == 'error':
