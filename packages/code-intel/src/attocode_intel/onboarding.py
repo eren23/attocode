@@ -87,6 +87,7 @@ def configure_client(
     server="",
     token_env="ATTOCODE_API_KEY",
     repo="",
+    http_cancellation=False,
 ):
     if profile not in PROFILES:
         raise ValueError("profile must be daily, full or lean")
@@ -94,6 +95,13 @@ def configure_client(
         raise ValueError("lean is local-only; remote profiles are daily or full")
     if repo and not server and not remove:
         raise ValueError("Remote installation requires --server; use --remote only with doctor or --remove")
+    if http_cancellation and not remove:
+        if not server:
+            raise ValueError("HTTP cancellation requires --server")
+        from attocode_intel.http_proxy import validate_proxy_options
+
+        # Validate before any other URL parser can include raw input in an error.
+        validate_proxy_options(server, token_env)
     root = Path(project).resolve()
     config, guidance, key = client_paths(client, root, global_scope)
     entry_name = REMOTE_NAME if server or repo else NAME
@@ -132,20 +140,34 @@ def configure_client(
             raise ValueError("Server must be an HTTP(S) URL without embedded credentials")
         endpoint = server.rstrip("/")
         entry = {"url": endpoint + ("/" if endpoint.endswith("/mcp") else "/mcp/")}
-        if client == "claude":
-            entry["type"] = "http"
-        if client == "codex":
-            entry["bearer_token_env_var"] = token_env
+        if http_cancellation:
+            executable = Path(sys.executable).parent / NAME
+            command = str(executable) if executable.is_file() else None
+            entry = {
+                "command": command or sys.executable,
+                "args": ([] if command else ["-m", "attocode_intel.entrypoint"])
+                + ["mcp-proxy", "--url", entry["url"], "--token-env", token_env,
+                   "--workspace", repo, "--profile", profile],
+            }
+            if client == "codex":
+                entry["env_vars"] = [token_env]
+            if client == "cursor":
+                entry["type"] = "stdio"
         else:
-            env_ref = "${" + token_env + "}" if client == "claude" else "${env:" + token_env + "}"
-            entry["headers"] = {"Authorization": "Bearer " + env_ref}
-        if repo:
+            if client == "claude":
+                entry["type"] = "http"
+            if client == "codex":
+                entry["bearer_token_env_var"] = token_env
+            else:
+                env_ref = "${" + token_env + "}" if client == "claude" else "${env:" + token_env + "}"
+                entry["headers"] = {"Authorization": "Bearer " + env_ref}
+            if repo:
+                entry.setdefault("http_headers" if client == "codex" else "headers", {})[
+                    "X-Attocode-Workspace"
+                ] = repo
             entry.setdefault("http_headers" if client == "codex" else "headers", {})[
-                "X-Attocode-Workspace"
-            ] = repo
-        entry.setdefault("http_headers" if client == "codex" else "headers", {})[
-            "X-Attocode-Profile"
-        ] = profile
+                "X-Attocode-Profile"
+            ] = profile
         previous = state.get(entry_name, {}).get("previous", servers.get(entry_name))
         state[entry_name] = {"previous": previous, "installed": entry}
         servers[entry_name] = entry
@@ -221,7 +243,7 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
             initialization = await session.initialize()
             catalog = await session.list_tools()
             result = await session.call_tool(
-                "capabilities", {"max_tokens": 16000, **({"workspace": str(root)} if "url" not in entry else {})}
+                "capabilities", {"max_tokens": 16000, **({"workspace": str(root)} if not remote and "url" not in entry else {})}
             )
             if result.isError:
                 raise RuntimeError(result.content)
@@ -229,7 +251,7 @@ async def diagnose(client, project=".", *, global_scope=False, remote=False):
             if payload is None:
                 payload = json.loads(next(item.text for item in result.content if item.type == "text"))
             metadata = payload.get("metadata", {})
-            if "url" not in entry and metadata.get("workspace") != str(root):
+            if not remote and "url" not in entry and metadata.get("workspace") != str(root):
                 raise RuntimeError("Server selected a different workspace")
             probe_name = "project_summary" if any(t.name == "project_summary" for t in catalog.tools) else "bootstrap"
             query = await session.call_tool(

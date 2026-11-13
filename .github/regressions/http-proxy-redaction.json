@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": ["packages/code-intel/tests/test_http_proxy_edges.py"],
+  "cases": [
+    "test_http_proxy_edges::test_opt_in_init_redacts_parser_failure",
+    "test_http_proxy_edges::test_cancel_before_start_does_not_send_an_unsent_tool_call",
+    "test_http_proxy_edges::test_repeated_cancel_during_enqueue_preserves_first_cancellation"
+  ],
+  "failures": {
+    "test_http_proxy_edges::test_opt_in_init_redacts_parser_failure": {
+      "message": "REGRESSION: Proxy initialization leaks rejected URL credentials",
+      "properties": {"qualified_input": "true", "entrypoint": "init_cli_opt_in"}
+    }
+  }
+}
