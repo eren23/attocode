@@ -77,7 +77,7 @@ async def test_proxy_normal_protocol_forwarding(tmp_path, monkeypatch, request, 
     monkeypatch.setenv('ATTOCODE_MCP_HTTP_CANCEL', '1')
     async with (
         _actor(tmp_path, request, record_property, 'http', 'definition') as actor,
-        proxy(actor) as (_, session),
+        proxy(actor) as (owned, session),
     ):
         tools = await session.list_tools()
         assert any(t.name == 'capabilities' for t in tools.tools)
@@ -86,7 +86,17 @@ async def test_proxy_normal_protocol_forwarding(tmp_path, monkeypatch, request, 
         assert (await session.list_resource_templates()).resourceTemplates
         contents = await session.read_resource('attocode://guidelines')
         assert contents.contents and contents.contents[0].mimeType == 'text/plain'
-        assert (await session.list_prompts()).prompts
+        upstream = await actor.rpc('proxy-capability-oracle', 'initialize', {
+            'protocolVersion': '2025-11-25', 'capabilities': {},
+            'clientInfo': {'name': 'owned-capability-control', 'version': '1'}})
+        supports_prompts = 'prompts' in upstream['result']['capabilities']
+        assert (owned.initialization.capabilities.prompts is not None) == supports_prompts
+        if supports_prompts:
+            await session.list_prompts()
+        else:
+            with pytest.raises(McpError) as missing:
+                await session.list_prompts()
+            assert missing.value.error.code == -32601
         assert (await session.call_tool('not-a-real-operation', {})).isError
 
 

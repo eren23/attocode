@@ -66,15 +66,17 @@ async def baseline():
         initialized = await upstream.initialize()
         server = Server('owned-sdk-bridge-baseline', version=initialized.serverInfo.version,
                         instructions=initialized.instructions)
-        for request_type, result_type in [
-            (types.ListToolsRequest, types.ListToolsResult),
-            (types.CallToolRequest, types.CallToolResult),
-            (types.ListResourcesRequest, types.ListResourcesResult),
-            (types.ListResourceTemplatesRequest, types.ListResourceTemplatesResult),
-            (types.ReadResourceRequest, types.ReadResourceResult),
-            (types.ListPromptsRequest, types.ListPromptsResult),
-            (types.GetPromptRequest, types.GetPromptResult),
+        for capability, request_type, result_type in [
+            ('tools', types.ListToolsRequest, types.ListToolsResult),
+            ('tools', types.CallToolRequest, types.CallToolResult),
+            ('resources', types.ListResourcesRequest, types.ListResourcesResult),
+            ('resources', types.ListResourceTemplatesRequest, types.ListResourceTemplatesResult),
+            ('resources', types.ReadResourceRequest, types.ReadResourceResult),
+            ('prompts', types.ListPromptsRequest, types.ListPromptsResult),
+            ('prompts', types.GetPromptRequest, types.GetPromptResult),
         ]:
+            if getattr(initialized.capabilities, capability) is None:
+                continue
             async def forward(request, result_type=result_type):
                 return types.ServerResult(await upstream.send_request(
                     types.ClientRequest.model_validate(request.model_dump(

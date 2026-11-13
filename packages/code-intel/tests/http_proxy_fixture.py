@@ -105,7 +105,7 @@ async def proxy(actor):
             try:
                 async with ClientSession(reader, Writer(owned)) as session:
                     async with asyncio.timeout(15):
-                        await session.initialize()
+                        owned.initialization = await session.initialize()
                     try:
                         yield owned, session
                     except BaseException as exc:
