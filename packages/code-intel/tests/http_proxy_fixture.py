@@ -101,10 +101,26 @@ async def proxy(actor):
         sender, reader = anyio.create_memory_object_stream(0)
         async with sender, reader:
             owned.pump = asyncio.create_task(owned.read(sender))
-            async with ClientSession(reader, Writer(owned)) as session:
-                async with asyncio.timeout(15):
-                    await session.initialize()
-                yield owned, session
+            original = None
+            try:
+                async with ClientSession(reader, Writer(owned)) as session:
+                    async with asyncio.timeout(15):
+                        await session.initialize()
+                    try:
+                        yield owned, session
+                    except BaseException as exc:
+                        original = exc
+                        raise
+            except BaseExceptionGroup as group:
+                def leaves(error):
+                    if isinstance(error, BaseExceptionGroup):
+                        return [leaf for nested in error.exceptions for leaf in leaves(nested)]
+                    return [error]
+                # Preserve only the exact assertion supplied by the test body. SDK
+                # errors or any additional cleanup failure keep their original group.
+                if isinstance(original, AssertionError) and leaves(group) == [original]:
+                    raise original from group
+                raise
     finally:
         await owned.close()
         assert not owned.forced and owned.process.returncode == 0

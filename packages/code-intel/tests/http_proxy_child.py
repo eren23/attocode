@@ -77,7 +77,8 @@ async def baseline():
         ]:
             async def forward(request, result_type=result_type):
                 return types.ServerResult(await upstream.send_request(
-                    types.ClientRequest(request), result_type))
+                    types.ClientRequest.model_validate(request.model_dump(
+                        by_alias=True, exclude_none=True, exclude={'id', 'jsonrpc'})), result_type))
             server.request_handlers[request_type] = forward
         async with stdio_server() as (read, write):
             await server.run(read, write, server.create_initialization_options())
