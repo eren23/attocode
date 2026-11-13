@@ -128,7 +128,7 @@ async def test_context_rotates_and_caller_cannot_supply_it(peer):
 
 
 @pytest.mark.parametrize('failure', ['blocked', 'closed'])
-async def test_notification_failure_preserves_original_cancellation(peer, monkeypatch, failure):
+async def test_enqueue_failure_preserves_original_cancellation(peer, monkeypatch, failure):
     from attocode_intel._http_session import http_session
     from mcp import ClientSession
 

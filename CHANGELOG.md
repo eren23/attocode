@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and SDK request-ID correlation. `init --http-cancellation` configures the bridge;
   existing direct HTTP defaults stay unchanged. Remote stdio doctor probes use
   the server workspace. The server cancellation flag remains off by default;
-  notification delivery is best effort with a bounded send attempt.
+  notification enqueueing is best effort with a one-second budget. HTTP delivery
+  keeps SDK timeouts and transport-failure behavior.
 
 ## [Intelligence 0.1.34] - 2026-11-12
 

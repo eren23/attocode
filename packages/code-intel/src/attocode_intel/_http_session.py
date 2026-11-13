@@ -56,7 +56,8 @@ class _CancellationSession(ClientSession):
                                               metadata, progress_callback)
         except anyio.get_cancelled_exc_class():
             if ticket.request_id is not None:
-                # One bounded, best-effort attempt; no sender task survives this call.
+                # Bound enqueueing only; the SDK owns subsequent HTTP I/O.
+                # This wrapper spawns no extra background sender.
                 with anyio.move_on_after(1, shield=True):
                     try:
                         await self.send_notification(types.ClientNotification(types.CancelledNotification(

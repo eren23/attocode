@@ -1,6 +1,5 @@
 """Public request/result forwarding, opt-in configuration and real doctor contracts."""
 import json
-import sys
 
 import pytest
 from mcp import types
@@ -118,10 +117,7 @@ async def test_remote_stdio_doctor_uses_remote_workspace(tmp_path, monkeypatch, 
         project = tmp_path / 'different client project'
         project.mkdir()
         monkeypatch.setenv('OWNED_DOCTOR_TOKEN', actor.tokens['alice'])
-        # Ensure the subprocess imports this immutable checkout, not an installed global tool.
-        executable = tmp_path / 'owned python'
-        executable.symlink_to(sys.executable)
-        monkeypatch.setattr(sys, 'executable', str(executable))
+        # Keep the configured executable in this checkout's uv environment.
         configure_client('codex', project, server=str(actor.client.base_url), repo=str(actor.root),
                          token_env='OWNED_DOCTOR_TOKEN', http_cancellation=True)
         result = await diagnose('codex', project, remote=True)

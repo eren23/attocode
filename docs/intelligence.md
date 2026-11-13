@@ -115,9 +115,11 @@ one worker or affinity for the cancellation context.
 The bridge owns a fresh UUID4 for each live upstream SDK session. It forwards
 stdio cancellation of an active `tools/call` using the SDK's actual HTTP request
 ID, preserving the credential, workspace and profile. Local and HTTP IDs may
-differ. It makes one best-effort notification attempt with a one-second send
-budget, then preserves caller cancellation. Delivery can race request registration
-or fail; this is no acknowledgement or cancellation-latency guarantee. Existing
+differ. It makes one best-effort notification enqueue attempt with a one-second
+budget, then preserves caller cancellation. The SDK owns the subsequent HTTP POST
+and keeps its normal HTTP timeouts. A delayed notification can block later writes,
+and a transport failure can close the upstream session and bridge. Delivery can
+race request registration or fail; there is no acknowledgement or cancellation-latency guarantee. Existing
 precision deadlines, cooperative cancellation and write limitations still apply.
 
 The bridge forwards tools list/call, resource list/templates/read and prompt

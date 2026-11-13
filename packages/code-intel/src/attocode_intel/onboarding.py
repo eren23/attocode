@@ -95,8 +95,13 @@ def configure_client(
         raise ValueError("lean is local-only; remote profiles are daily or full")
     if repo and not server and not remove:
         raise ValueError("Remote installation requires --server; use --remote only with doctor or --remove")
-    if http_cancellation and not remove and not server:
-        raise ValueError("HTTP cancellation requires --server")
+    if http_cancellation and not remove:
+        if not server:
+            raise ValueError("HTTP cancellation requires --server")
+        from attocode_intel.http_proxy import validate_proxy_options
+
+        # Validate before any other URL parser can include raw input in an error.
+        validate_proxy_options(server, token_env)
     root = Path(project).resolve()
     config, guidance, key = client_paths(client, root, global_scope)
     entry_name = REMOTE_NAME if server or repo else NAME
@@ -136,9 +141,6 @@ def configure_client(
         endpoint = server.rstrip("/")
         entry = {"url": endpoint + ("/" if endpoint.endswith("/mcp") else "/mcp/")}
         if http_cancellation:
-            from attocode_intel.http_proxy import validate_proxy_options
-
-            validate_proxy_options(server, token_env)
             executable = Path(sys.executable).parent / NAME
             command = str(executable) if executable.is_file() else None
             entry = {
