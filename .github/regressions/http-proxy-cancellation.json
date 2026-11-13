@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_http_proxy_cancellation.py"
+  ],
+  "cases": [
+    "test_http_proxy_cancellation::test_stdio_cancel_reaches_http_worker[initialize]",
+    "test_http_proxy_cancellation::test_stdio_cancel_reaches_http_worker[definition]",
+    "test_http_proxy_cancellation::test_proxy_normal_protocol_forwarding",
+    "test_http_proxy_cancellation::test_direct_http_configuration_stays_default[codex]",
+    "test_http_proxy_cancellation::test_direct_http_configuration_stays_default[claude]",
+    "test_http_proxy_cancellation::test_direct_http_configuration_stays_default[cursor]"
+  ],
+  "failures": {
+    "test_http_proxy_cancellation::test_stdio_cancel_reaches_http_worker[initialize]": {
+      "message": "REGRESSION: stdio client cancellation is not forwarded to the active HTTP call",
+      "properties": {
+        "qualified_input": "true",
+        "entrypoint": "stdio_http_proxy",
+        "blocked_phase": "initialize",
+        "distinct_rpc_ids": "true"
+      }
+    },
+    "test_http_proxy_cancellation::test_stdio_cancel_reaches_http_worker[definition]": {
+      "message": "REGRESSION: stdio client cancellation is not forwarded to the active HTTP call",
+      "properties": {
+        "qualified_input": "true",
+        "entrypoint": "stdio_http_proxy",
+        "blocked_phase": "definition",
+        "distinct_rpc_ids": "true"
+      }
+    }
+  }
+}
