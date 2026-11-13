@@ -5,8 +5,10 @@ import subprocess
 import sys
 
 import pytest
+import test_http_session
 from mcp import ClientSession, types
-from test_http_session import peer as peer
+
+peer = test_http_session.peer
 
 
 def test_opt_in_init_redacts_parser_failure(tmp_path, record_property):
@@ -20,7 +22,7 @@ def test_opt_in_init_redacts_parser_failure(tmp_path, record_property):
     assert result.returncode == 1 and not result.stdout
     record_property('qualified_input', 'true')
     record_property('entrypoint', 'init_cli_opt_in')
-    assert 'AUTHORED_MARKER' not in result.stderr, 'Proxy initialization leaks rejected URL credentials'
+    assert 'AUTHORED_MARKER' not in result.stderr, 'REGRESSION: Proxy initialization leaks rejected URL credentials'
 
 
 async def test_cancel_before_start_does_not_send_an_unsent_tool_call(peer):

@@ -9,7 +9,7 @@
   ],
   "failures": {
     "test_http_proxy_edges::test_opt_in_init_redacts_parser_failure": {
-      "message": "Proxy initialization leaks rejected URL credentials",
+      "message": "REGRESSION: Proxy initialization leaks rejected URL credentials",
       "properties": {"qualified_input": "true", "entrypoint": "init_cli_opt_in"}
     }
   }
