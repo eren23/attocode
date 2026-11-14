@@ -474,6 +474,14 @@ class CodeIntelService:
 
     def _rank_search_results(self, query: str, results: list, top_k: int,
                              file_filter: str = "") -> tuple[list, dict]:
+        """Bind display identity only after all ranking and selection have finished."""
+        from attocode_intel.search_evidence import bind_selected_source_identities
+
+        selected, ranking = self._rank_search_candidates(query, results, top_k, file_filter)
+        return bind_selected_source_identities(self._project_dir, selected), ranking
+
+    def _rank_search_candidates(self, query: str, results: list, top_k: int,
+                                file_filter: str = "") -> tuple[list, dict]:
         """Optional local model order with a complete deterministic fallback."""
         limited = results[:top_k]
         ranking = {"method": "source_aware_deterministic", "returned_count": len(limited),

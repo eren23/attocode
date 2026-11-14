@@ -4,9 +4,11 @@ import json
 from dataclasses import asdict
 
 import pytest
-
 from attocode_intel._internal.integrations.context import embeddings
-from attocode_intel._internal.integrations.context.semantic_search import SemanticSearchManager, SemanticSearchResult
+from attocode_intel._internal.integrations.context.semantic_search import (
+    SemanticSearchManager,
+    SemanticSearchResult,
+)
 from attocode_intel.gateway import OperationGateway
 from attocode_intel.search_evidence import source_body
 from attocode_intel.service import CodeIntelService

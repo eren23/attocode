@@ -70,6 +70,69 @@ def search_snippet(result, query: str, max_chars: int) -> dict:
     return snippet_window(source_body(result), query, max_chars, result.start_line or None)
 
 
+def bind_selected_source_identities(root_dir: str, results: list) -> list:
+    """Correct selected class labels after ranking, without changing rank inputs.
+
+    The body index's legacy owner can cover several classes. Rebind only when
+    current source proves the whole displayed window; crossing/ambiguous windows
+    are file evidence. Unavailable or mismatching source retains its old evidence.
+    This independent validation reads at most eight files / two MB, one MB/file.
+    """
+    from attocode_intel._internal.integrations.context.codebase_ast import parse_file
+
+    root = Path(root_dir).resolve()
+    sources = {}
+    remaining = 2_000_000
+    bound = []
+    for hit in results:
+        bound.append(hit)
+        if hit.chunk_type != 'class' or not hit.start_line:
+            continue
+        try:
+            path = (root / hit.file_path).resolve()
+            if not path.is_relative_to(root):
+                continue
+            if path not in sources:
+                if len(sources) >= 8 or remaining <= 0:
+                    continue
+                sources[path] = None
+                before = path.stat()
+                cap = min(1_000_000, remaining)
+                if before.st_size > cap:
+                    continue
+                with path.open('rb') as stream:
+                    raw = stream.read(cap + 1)
+                remaining -= len(raw)
+                after = path.stat()
+                if len(raw) > cap or (before.st_mtime_ns, before.st_ctime_ns, before.st_size) != (
+                        after.st_mtime_ns, after.st_ctime_ns, after.st_size):
+                    continue
+                content = raw.decode('utf-8')
+                sources[path] = (content.splitlines(), parse_file(str(path), content).classes)
+            if sources[path] is None:
+                continue
+            lines, classes = sources[path]
+            if not 1 <= hit.start_line <= hit.end_line <= len(lines):
+                continue
+            shown = source_body(hit).splitlines()
+            actual = lines[hit.start_line - 1:hit.end_line]
+            # Index windows may end part-way through their final source line.
+            if (not shown or len(shown) != len(actual) or shown[:-1] != actual[:-1]
+                    or not actual[-1].startswith(shown[-1])):
+                continue
+            matches = [c for c in classes
+                       if c.start_line <= hit.start_line <= hit.end_line <= c.end_line]
+            if matches:
+                width = min(c.end_line - c.start_line for c in matches)
+                matches = [c for c in matches if c.end_line - c.start_line == width]
+            kind, name = ('class', matches[0].name) if len(matches) == 1 else ('file', Path(hit.file_path).name)
+            if (kind, name) != (hit.chunk_type, hit.name):
+                bound[-1] = replace(hit, chunk_type=kind, name=name)
+        except (OSError, UnicodeError, ValueError):
+            continue
+    return bound
+
+
 def hydrate_selected_sources(root_dir: str, results: list) -> list:
     """Attach current source to selected metadata hits without reranking.
 
