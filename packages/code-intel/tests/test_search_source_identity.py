@@ -37,7 +37,7 @@ def located(path, body, first, last, *, name='Wrong', kind='class', score=.75):
     return SemanticSearchResult(path, kind, name, f'{path}:{first}-{last}\n{body}', score, first, last)
 
 
-@pytest.mark.parametrize('case', ['contained', 'crossing', 'nested', 'module', 'partial-line', 'valid', 'function'])
+@pytest.mark.parametrize('case', ['contained', 'crossing', 'nested', 'module', 'partial-line', 'trailing-blank', 'valid', 'function'])
 def test_selected_class_identity(tmp_path, record_property, case):
     source, first, last, name, kind = SOURCE, 1, 2, 'Wrong', 'class'
     expected = ('class', 'First')
@@ -49,6 +49,8 @@ def test_selected_class_identity(tmp_path, record_property, case):
     elif case == 'module':
         source, first, last = 'MODULE = 1\nclass First:\n    value = 2\n', 1, 1
         expected = ('file', 'sample.py')
+    elif case == 'trailing-blank':
+        last, expected = 3, ('file', 'sample.py')
     elif case == 'valid':
         name = 'First'
     elif case == 'function':
