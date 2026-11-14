@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": [
+    "packages/code-intel/tests/test_search_source_identity.py"
+  ],
+  "cases": [
+    "test_search_source_identity::test_selected_class_identity[contained]",
+    "test_search_source_identity::test_selected_class_identity[crossing]",
+    "test_search_source_identity::test_selected_class_identity[nested]",
+    "test_search_source_identity::test_selected_class_identity[module]",
+    "test_search_source_identity::test_selected_class_identity[partial-line]",
+    "test_search_source_identity::test_selected_class_identity[valid]",
+    "test_search_source_identity::test_selected_class_identity[function]",
+    "test_search_source_identity::test_real_index_window_keeps_rank_and_source",
+    "test_search_source_identity::test_selected_order_scores_and_top_k_are_unchanged",
+    "test_search_source_identity::test_same_size_current_source_mismatch_does_not_rebind",
+    "test_search_source_identity::test_unavailable_source_is_not_relabelled[missing]",
+    "test_search_source_identity::test_unavailable_source_is_not_relabelled[escaping]",
+    "test_search_source_identity::test_unavailable_source_is_not_relabelled[oversized]",
+    "test_search_source_identity::test_unavailable_source_is_not_relabelled[invalid-range]",
+    "test_search_source_identity::test_unavailable_source_is_not_relabelled[nonutf8]",
+    "test_search_source_identity::test_source_identity_validation_is_bounded[files]",
+    "test_search_source_identity::test_source_identity_validation_is_bounded[bytes]",
+    "test_search_source_identity::test_public_delivery_uses_whole_window_identity[service-keyword]",
+    "test_search_source_identity::test_public_delivery_uses_whole_window_identity[service-auto]",
+    "test_search_source_identity::test_public_delivery_uses_whole_window_identity[gateway-plain]",
+    "test_search_source_identity::test_public_delivery_uses_whole_window_identity[gateway-compact]",
+    "test_search_source_identity::test_selected_class_identity[trailing-blank]"
+  ],
+  "failures": {
+    "test_search_source_identity::test_selected_class_identity[trailing-blank]": {
+      "message": "REGRESSION: selected source identity disagrees with verified class span",
+      "properties": {
+        "qualified_input": "true"
+      }
+    }
+  }
+}
