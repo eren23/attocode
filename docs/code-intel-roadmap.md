@@ -2,7 +2,7 @@
 
 ## Current state — 2026-11-14
 
-This checkout targets `attocode-code-intel` **0.1.35**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.36**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
@@ -28,7 +28,7 @@ authorize another broad run or cloud rental.
 
 | Record | Delivered or diagnosed behavior | Completion evidence / limits |
 | --- | --- | --- |
-| Unreleased source-identity correction | Bind selected class-window display labels to verified current source after ranking; crossing or ambiguous class windows display file evidence | [Synthetic causal proof](https://github.com/eren23/attocode/actions/runs/43627551722) precedes the correction. Input candidates, retrieval/cache identities, source windows, order and scores remain unchanged. Source validation is bounded; unavailable or mismatching source retains its prior evidence. This is a presentation correctness fix, not a relevance or speed claim. |
+| 0.1.36 source-identity correction | Bind selected class-window display labels to verified current source after ranking; crossing or ambiguous class windows display file evidence | [Release notes](intelligence-0.1.36.md) and [synthetic causal proof](https://github.com/eren23/attocode/actions/runs/43627551722). Input candidates, retrieval/cache identities, source windows, order and scores remain unchanged. Source validation is bounded; unavailable or mismatching source retains its prior evidence. This is a presentation correctness fix, not a relevance or speed claim. |
 | 0.1.35 optional HTTP client bridge | Opt-in stdio-to-HTTP bridge forwards host tool-call cancellation using the upstream SDK's actual request ID and a session-owned UUID4 context | [Release notes](intelligence-0.1.35.md): typed capability-aware forwarding, token-environment-name configuration and a new-connection doctor probe. One-second notification enqueue budget only; SDK transport failures can close the bridge. Server opt-in/authentication/affinity remain required. Actual host UI acceptance and restart delivery are not established. |
 | 0.1.34 gateway and HTTP cancellation | Forward cancelled navigation requests to their precision coroutine; retain workspace ownership until the worker finishes; authenticate opt-in HTTP tools/call cancellation | [Release notes](intelligence-0.1.34.md) and [gateway causal proof](https://github.com/eren23/attocode/actions/runs/43074360816). Actual stdio cancellation, larger Rust deadline/partial/later-retry witnesses and real SDK HTTP cancellation are bounded proofs. Rust five-second/other two-second precision and one-second retry budgets stay unchanged; no total-request or universal disconnect SLA. |
 | 0.1.33 remote-settings persistence | Preserve prior config on failed data writes/publication; anchor writes and publish private files atomically | [Maintenance notes](intelligence-0.1.33.md) and [current contract](intelligence-perl-roots.md): causal failure proofs, 26 new product cases and 32 installed-wheel macOS checks. Single-writer POSIX, refusal and concurrency/power-loss limits remain explicit. Publication verification upgrades actual 0.1.32. |

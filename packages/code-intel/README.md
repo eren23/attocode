@@ -43,6 +43,14 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.36 corrects selected class-source search labels after ranking. A
+verified window uses its unique innermost containing class; a window crossing
+class boundaries displays file identity. Order, scores and source windows remain
+unchanged. Validation is bounded, and unavailable or mismatching source retains
+its prior evidence. See the
+[release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.36.md)
+for the scope and upgrade instructions.
+
 Version 0.1.35 adds an optional stdio-to-HTTP client bridge that manages a live
 cancellation context and forwards tool cancellation using the actual upstream
 SDK request ID. `init --http-cancellation` configures the bridge with a named token
