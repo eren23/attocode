@@ -19,6 +19,14 @@ The server accepts `--project`, `--profile daily|full`, `--no-watch`, `--watch-d
 
 ## Daily workflow and result contract
 
+From 0.1.36, selected local class-source search windows receive a bounded
+identity check after ranking. A verified whole window uses its unique innermost
+containing class; crossing or ambiguous class windows display file identity.
+Order, scores, source text and window coordinates are preserved. Unavailable,
+mismatching or budget-excluded source retains its previous evidence. This does
+not change retrieval or establish a search-quality or speed gain. See the
+[0.1.36 release notes](intelligence-0.1.36.md).
+
 1. Bootstrap with the current task and a token budget. Check source, revision, coverage, and truncation.
 2. Locate definitions using `search_symbols` and keyword or semantic search. Inspect references, dependencies, and relevant context.
 3. Before changing shared code, inspect impact and test suggestions. Review explicitly selected files to avoid treating an empty Git diff as a review.

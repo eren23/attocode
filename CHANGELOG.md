@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.36] - 2026-11-14
+
+### Fixed
+
+- Selected class-source search windows now use a verified containing class name,
+  or file identity when a window crosses class boundaries. Current-source
+  validation happens after ranking and preserves order, scores and source
+  windows, including a final blank indexed line. Unavailable or mismatching
+  source retains its prior evidence; retrieval and cache identities are unchanged.
+
 ## [Intelligence 0.1.35] - 2026-11-13
 
 ### Added
