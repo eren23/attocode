@@ -114,7 +114,7 @@ def bind_selected_source_identities(root_dir: str, results: list) -> list:
             lines, classes = sources[path]
             if not 1 <= hit.start_line <= hit.end_line <= len(lines):
                 continue
-            shown = source_body(hit).splitlines()
+            shown = source_body(hit).split('\n')
             actual = lines[hit.start_line - 1:hit.end_line]
             # Index windows may end part-way through their final source line.
             if (not shown or len(shown) != len(actual) or shown[:-1] != actual[:-1]
