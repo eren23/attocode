@@ -205,3 +205,60 @@ async def test_none_prefilter_retains_existing_full_scan(tmp_path, record_proper
         monkeypatch.setattr(type(manager(gateway)), '_trigram_prefilter', lambda self, terms: None)
         after = await search(gateway, 'manifestneedle')
         assert contains_source(after, path.name)
+
+
+def test_cache_builder_stops_path_metadata_after_close(tmp_path, monkeypatch, record_property):
+    from types import SimpleNamespace
+
+    from attocode_intel._internal.integrations.context import semantic_search as module
+
+    names = ['firstmanifest.toml', 'secondmanifest.toml']
+    for name in names:
+        (tmp_path / name).write_text(SOURCE)
+    context = SimpleNamespace(
+        _ensure_fresh=lambda: None,
+        _files=[SimpleNamespace(path=str(tmp_path / name), relative_path=name,
+                                is_test=False, importance=0.5) for name in names],
+    )
+    warm = SemanticSearchManager(str(tmp_path))
+    try:
+        warm._build_keyword_index(context)
+        assert warm._kw_index_built
+    finally:
+        warm.close()
+    mgr = SemanticSearchManager(str(tmp_path))
+    original_load = SemanticSearchManager._load_kw_cache
+    original_tokenize = module._tokenize
+    tokenized = []
+    loaded = []
+
+    def load(self, current_files):
+        result = original_load(self, current_files)
+        if self is mgr:
+            assert result is not None and not result[1]
+            assert {doc.file_path for doc in result[0] if doc.chunk_type == 'file'} == set(names)
+            assert len(result[0]) == 2
+            loaded.extend(result[0])
+        return result
+
+    def tokenize(text):
+        if text in names:
+            tokenized.append(text)
+            if len(tokenized) == 1:
+                mgr.close()
+                assert mgr._closed
+        return original_tokenize(text)
+
+    monkeypatch.setattr(SemanticSearchManager, '_load_kw_cache', load)
+    monkeypatch.setattr(module, '_tokenize', tokenize)
+    try:
+        assert not mgr._kw_docs and not mgr._kw_path_terms and not mgr._kw_index_built
+        mgr._build_keyword_index(context)
+        assert loaded and mgr._closed
+        record_property('cache_input_qualified', 'true')
+        record_property('path_tokenizations_after_close', str(len(tokenized) - 1))
+        assert tokenized == [loaded[0].file_path], 'REGRESSION:path metadata construction continues after close'
+        assert not mgr._kw_docs and not mgr._kw_path_terms and not mgr._kw_index_built
+    finally:
+        mgr.close()
+        record_property('owned_manager_closed', str(mgr._closed).lower())

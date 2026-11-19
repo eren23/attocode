@@ -1,0 +1,76 @@
+name: Keyword path construction close RED witness
+on:
+  push:
+    branches: [regression/keyword-prefilter-close]
+permissions:
+  contents: read
+concurrency:
+  group: keyword-path-close-red
+  cancel-in-progress: false
+jobs:
+  expected-red:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      QUALITY_ALLOW_DOWNLOADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Configure owned grammar cache
+        run: echo "QUALITY_GRAMMAR_CACHE=$RUNNER_TEMP/keyword-path-grammars" >> "$GITHUB_ENV"
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Qualify expected RED without a product patch
+        run: |
+          mkdir -p results
+          uv run --no-sync python - <<'PY'
+          import ast, hashlib, json, os, subprocess, sys, xml.etree.ElementTree as ET
+          from pathlib import Path
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          pack.download(['python', 'toml'])
+          bootstrap='import os,sys; import tree_sitter_language_pack as p; p.configure(cache_dir=os.environ["QUALITY_GRAMMAR_CACHE"]); import pytest; raise SystemExit(pytest.main(sys.argv[1:]))'
+          args=[sys.executable,'-c',bootstrap,'-c','packages/code-intel/pyproject.toml',
+                '--confcutdir=packages/code-intel/tests','-q','--junitxml=results/red.xml',
+                'packages/code-intel/tests/test_keyword_prefilter_soundness.py']
+          with Path('results/red.log').open('w') as stream:
+              result=subprocess.run(args,stdout=stream,stderr=subprocess.STDOUT)
+          rows=ET.parse('results/red.xml').getroot().findall('.//testcase')
+          failed=[row for row in rows if row.find('failure') is not None]
+          errors=[row for row in rows if row.find('error') is not None]
+          assert result.returncode==1 and len(rows)==12 and len(failed)==1 and not errors
+          assert not any(row.find('skipped') is not None for row in rows)
+          row=failed[0]
+          assert row.get('name')=='test_cache_builder_stops_path_metadata_after_close'
+          assert 'REGRESSION:path metadata construction continues after close' in ET.tostring(row.find('failure'),encoding='unicode')
+          props={item.get('name'):item.get('value') for item in row.findall('./properties/property')}
+          assert props.get('cache_input_qualified')=='true' and props.get('owned_manager_closed')=='true'
+          assert props.get('path_tokenizations_after_close')=='1'
+          source='packages/code-intel/src/attocode_intel/_internal/integrations/context/semantic_search.py'
+          before=subprocess.check_output(['git','show','fe2aea8e5f7077bbae3c77f3073490f465e8cf11:'+source])
+          assert Path(source).read_bytes()==before
+          Path('results/red-admission.json').write_text(json.dumps({
+              'status':'qualified-red','head':os.environ['GITHUB_SHA'],
+              'run':os.environ['GITHUB_RUN_ID'],'attempt':os.environ['GITHUB_RUN_ATTEMPT'],
+              'testcases':12,'qualified_failures':1,'passing_controls':11,
+              'source_equal_fe2_candidate':True,
+              'source_sha256':hashlib.sha256(before).hexdigest(),
+              'owned_manager_closed':True},indent=2)+'\n')
+          print(Path('results/red-admission.json').read_text())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: keyword-prefilter-close-red-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 14
