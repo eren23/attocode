@@ -78,6 +78,11 @@ class Observer:
                 with observer.lock:
                     row["callback_called"] = True
                 future = callback()
+                if future is None:
+                    with observer.lock:
+                        row.update(done=True, no_worker=True,
+                                   closing=observer.gateways[str(root)]._closed)
+                    return future
 
                 def completed(result):
                     try:
@@ -112,7 +117,7 @@ class Observer:
                 (root / ".audit-ready").write_text(str(time.monotonic()))
             rows = [row for row in self.copy_rows() if row["root"] == str(root)
                     and row["delivered_at"] >= after and row["done"]
-                    and any(Path(path).name in paths for _, path in row["events"])]
+                    and any(path in paths for _, path in row["events"])]
             if rows:
                 return rows
             await asyncio.sleep(0.15)
@@ -132,7 +137,9 @@ async def check_public(gateway, expected_stage, expected_path):
         expected = {expected_path} if stage == expected_stage else set()
         response = await public(gateway, "search_symbols", {"name": SYMBOLS[stage]})
         text = response.content[0].text
-        actual = {path for path in PATHS if path in text}
+        definitions, _ = json.JSONDecoder().raw_decode(text[text.index("["):])
+        actual = {row["file_path"] for row in definitions
+                  if row["name"] == SYMBOLS[stage] and row["file_path"] in PATHS}
         rows.append({"operation": "search_symbols", "query": SYMBOLS[stage], "raw": text,
                      "expected": sorted(expected), "actual": sorted(actual), "pass": actual == expected})
         response = await public(gateway, "fast_search", {"pattern": token, "explain": True})
@@ -150,7 +157,10 @@ async def check_public(gateway, expected_stage, expected_path):
                      "expected": sorted(expected), "actual": sorted(actual), "pass": actual == expected})
     response = await public(gateway, "search_symbols", {"name": "stable_probe"})
     text = response.content[0].text
-    rows.append({"operation": "stable_symbol_control", "raw": text, "pass": "control.py" in text})
+    definitions, _ = json.JSONDecoder().raw_decode(text[text.index("["):])
+    rows.append({"operation": "stable_symbol_control", "raw": text,
+                 "pass": any(row["name"] == "stable_probe" and row["file_path"] == "control.py"
+                             for row in definitions)})
     response = await public(gateway, "fast_search", {"pattern": "stablefreshneedle"})
     text = response.content[0].text
     rows.append({"operation": "stable_content_control", "raw": text,
@@ -184,13 +194,14 @@ async def audit_route(root, watch, observer, route):
     try:
         await public(gateway, "symbols", {"path": "watched.py"})
         baseline = await check_public(gateway, "initial", "watched.py")
+        route["baseline"] = {"source": snapshot(root), "public": baseline}
         assert all(row["pass"] for row in baseline), baseline
         index = next(iter(gateway._stores.values()))["trigrams"]
         assert index.is_ready(), "baseline requires a real ready trigram index"
-        route["baseline"] = {"source": snapshot(root), "public": baseline, "trigram_ready": True}
+        route["baseline"]["trigram_ready"] = True
         if watch:
             watcher = next(iter(gateway._stores.values()))["watcher"]
-            canary = await observer.observed(root, {".audit-ready"}, time.monotonic(), canary=True)
+            canary = await observer.observed(root, {str(root / ".audit-ready")}, time.monotonic(), canary=True)
             assert canary and all(not row.get("error") and not row.get("observation_error") for row in canary), canary
             route["registration"] = canary
         route["qualified"] = True
@@ -214,13 +225,32 @@ async def audit_route(root, watch, observer, route):
                 git(root, "switch", "audit-a")
             stage = {"mutation": mutation, "expected_stage": expected_stage, "expected_path": expected_path,
                      "source": snapshot(root), "before": before}
+            expected_source = {"control.py": 'def stable_probe():\n    return "stablefreshneedle"\n'}
+            if expected_path:
+                expected_source[expected_path] = source(expected_stage)
+            stage["public_qualified"] = {
+                name: item["text"] for name, item in stage["source"]["files"].items()
+            } == expected_source
+            stage["expected_manifest"] = {
+                path.name: [stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size]
+                for path in root.glob("*.py") for stat in [path.stat()]
+            }
             route["stages"].append(stage)
             if watch:
-                stage["watcher"] = await observer.observed(root, PATHS, started)
+                stage["watched_paths"] = sorted(str(root / name) for name in PATHS)
+                stage["watcher"] = await observer.observed(root, set(stage["watched_paths"]), started)
+                stage["watcher_qualified"] = any(
+                    row["callback_called"] and not row.get("no_worker")
+                    and not row.get("error") and not row.get("observation_error")
+                    and row["state"]["generation"] > before["generation"]
+                    and row["state"]["manifest"] == stage["expected_manifest"]
+                    for row in stage["watcher"]
+                )
             stage["before_public"] = tracker_state(gateway)
             stage["public"] = await check_public(gateway, expected_stage, expected_path)
             stage["after_public"] = tracker_state(gateway)
     finally:
+        watcher = next(iter(gateway._stores.values()), {}).get("watcher")
         workers = list(gateway._workers.values())
         await gateway.close()
         route["cleanup"] = {"gateway_closed": gateway._closed, "stores_empty": not gateway._stores,
@@ -253,12 +283,17 @@ async def run(output):
     report["tracked_source_unchanged"] = not git(repo, "diff", "HEAD", "--")
     report["qualified_failures"] = [
         {"watch": route.get("watch"), "mutation": stage["mutation"], "operation": row["operation"],
-         "query": row.get("query"), "expected": row.get("expected"), "actual": row.get("actual")}
+         "query": row.get("query"), "expected": row.get("expected"), "actual": row.get("actual"),
+         "watcher_qualified": stage.get("watcher_qualified")}
         for route in report["routes"] if route["qualified"] for stage in route["stages"]
-        for row in stage.get("public", []) if not row["pass"]]
+        if stage["public_qualified"] for row in stage.get("public", []) if not row["pass"]]
     report["complete"] = (not report["harness_errors"] and report["fixtures_removed"]
                           and report["tracked_source_unchanged"] and all(
-                              all(route["cleanup"].values()) for route in report["routes"]))
+                              route["qualified"] and len(route["stages"]) == 5
+                              and all(route["cleanup"].values())
+                              and all(stage["public_qualified"] and (not route["watch"] or stage["watcher_qualified"])
+                                      for stage in route["stages"])
+                              for route in report["routes"]))
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps({key: report[key] for key in ("complete", "qualified_failures", "harness_errors")}, indent=2))
     return 0 if report["complete"] and not report["qualified_failures"] else 1
