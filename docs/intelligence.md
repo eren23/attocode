@@ -19,6 +19,14 @@ The server accepts `--project`, `--profile daily|full`, `--no-watch`, `--watch-d
 
 ## Daily workflow and result contract
 
+From 0.1.37, a query normalized to one keyword token of at least three
+characters retains existing file-level path candidates after a `fast_search`
+content index is ready. Filename and directory tokens need not appear in raw
+contents. File filters and scoring still apply; symbol/body, multi-token and
+short-token policies are unchanged. The derived map is rebuilt during guarded
+keyword generation/cache reload without changing persisted formats. See the
+[0.1.37 release notes](intelligence-0.1.37.md).
+
 From 0.1.36, selected local class-source search windows receive a bounded
 identity check after ranking. A verified whole window uses its unique innermost
 containing class; crossing or ambiguous class windows display file identity.

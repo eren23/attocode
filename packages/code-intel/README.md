@@ -43,6 +43,13 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.37 preserves existing file-path candidates for one normalized
+keyword token of at least three characters after content-trigram indexing.
+Filename/directory tokens need not appear in file contents. File scoping and
+scoring still apply; other query policies and persisted formats are unchanged.
+See the [0.1.37 release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.37.md)
+for the scope, verification limits and upgrade instructions.
+
 Version 0.1.36 corrects selected class-source search labels after ranking. A
 verified window uses its unique innermost containing class; a window crossing
 class boundaries displays file identity. Order, scores and source windows remain
