@@ -94,7 +94,7 @@ def _get_security_scanner() -> SecurityScanner:
     return _security_scanner
 
 
-def _get_trigram_index() -> TrigramIndex | None:
+def _get_trigram_index(*, rebuild_dirty: bool = False) -> TrigramIndex | None:
     """Lazily initialize the trigram index (thread-safe).
 
     Loads an existing index from disk if available. Returns None
@@ -103,6 +103,21 @@ def _get_trigram_index() -> TrigramIndex | None:
     from attocode_intel.request_context import current_request, scoped_store
     if (request := current_request.get()) is not None:
         if request.stores.get("trigrams_dirty"):
+            if rebuild_dirty:
+                from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
+
+                index = None
+                try:
+                    index = TrigramIndex(index_dir=os.path.join(request.project_dir, ".attocode", "index"))
+                    index.build(request.project_dir)
+                    if index.is_ready():
+                        request.stores["trigrams"] = index
+                        request.stores["trigrams_dirty"] = False
+                        return index
+                except Exception:
+                    pass  # Optional acceleration failed; retain the dirty guard.
+                if index is not None:
+                    index.close()
             return None
         def build(root):
             import os
@@ -115,7 +130,6 @@ def _get_trigram_index() -> TrigramIndex | None:
             return None
         return scoped_store("trigrams", build)
     global _trigram_index
-    import os
     index_dir = os.path.realpath(os.path.join(_get_project_dir(), ".attocode", "index"))
     with _trigram_index_lock:
         # The legacy direct-call path can select a different project between calls.
@@ -306,15 +320,28 @@ def dataflow_scan(
     return format_report(report)
 
 
-def _fallback_search_files(root, project_dir):
-    """Keep a dirty-index scan within the same file scope as its snapshot."""
-    from pathlib import Path
-
+def _dirty_trigram_scan(pattern, case_insensitive):
     from attocode_intel.request_context import current_request
 
     request = current_request.get()
-    if request is not None and request.stores.get("trigrams_dirty"):
-        from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex, _is_likely_binary
+    if request is None or not request.stores.get("trigrams_dirty"):
+        return False
+    from attocode_intel._internal.integrations.context.trigram_regex import (
+        extract_required_trigrams,
+    )
+
+    return bool(extract_required_trigrams(pattern, case_insensitive=case_insensitive))
+
+
+def _fallback_search_files(root, project_dir, pattern, case_insensitive):
+    """Keep a dirty-index scan within the same file scope as its snapshot."""
+    from pathlib import Path
+
+    if _dirty_trigram_scan(pattern, case_insensitive):
+        from attocode_intel._internal.integrations.context.trigram_index import (
+            TrigramIndex,
+            _is_likely_binary,
+        )
 
         project = Path(project_dir)
         files = []
@@ -462,7 +489,7 @@ def fast_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        files = _fallback_search_files(root, project_dir)
+        files = _fallback_search_files(root, project_dir, pattern, case_insensitive)
 
     matches: list[str] = []
     for file in files:
@@ -557,7 +584,7 @@ def regex_search(
 
     # Try trigram pre-filtering
     selectivity_threshold = 0.10
-    trigram_idx = _get_trigram_index()
+    trigram_idx = _get_trigram_index(rebuild_dirty=True)
     candidates: list[str] | None = None
     used_index = False
 
@@ -574,7 +601,7 @@ def regex_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        files = _fallback_search_files(root, project_dir)
+        files = _fallback_search_files(root, project_dir, pattern, case_insensitive)
 
     matches: list[str] = []
     for file in files:
@@ -663,7 +690,7 @@ def frecency_search(
         return f"Error: Invalid regex pattern: {e}"
 
     # Get trigram candidates
-    trigram_idx = _get_trigram_index()
+    trigram_idx = _get_trigram_index(rebuild_dirty=True)
     candidates: list[str] | None = None
     index_status = "no index"
 
@@ -687,11 +714,8 @@ def frecency_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        all_files = _fallback_search_files(root, project_dir)
-        from attocode_intel.request_context import current_request
-
-        request = current_request.get()
-        if request is not None and request.stores.get("trigrams_dirty"):
+        all_files = _fallback_search_files(root, project_dir, pattern, case_insensitive)
+        if _dirty_trigram_scan(pattern, case_insensitive):
             # This replaces a ready snapshot, whose candidate branch does not
             # apply IgnoreManager. Keep that scope during the temporary scan.
             files = all_files

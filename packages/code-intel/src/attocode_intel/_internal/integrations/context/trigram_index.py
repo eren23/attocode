@@ -21,6 +21,7 @@ import logging
 import mmap
 import os
 import sqlite3
+import stat
 import struct
 import threading
 import time
@@ -448,7 +449,8 @@ class TrigramIndex:
                 if fname.startswith("."):
                     continue
                 try:
-                    if fpath.stat().st_size > _MAX_FILE_SIZE:
+                    identity = fpath.stat()
+                    if not stat.S_ISREG(identity.st_mode) or identity.st_size > _MAX_FILE_SIZE:
                         continue
                 except OSError:
                     continue
