@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve existing file-path matches for a single keyword after content-trigram
+  indexing, including filenames such as `pyproject.toml` that need not appear in
+  their own contents. Keep file filters, symbol/body matching, multi-token policy
+  and scoring weights unchanged. Reconstruct path metadata on cache reload.
+
 ## [Intelligence 0.1.36] - 2026-11-14
 
 ### Fixed
