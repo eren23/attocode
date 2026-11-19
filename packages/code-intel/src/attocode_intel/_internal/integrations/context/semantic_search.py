@@ -2186,7 +2186,7 @@ class SemanticSearchManager:
                     and path_term in self._kw_path_terms.get(d.file_path, ()))
             ]
             logger.debug(
-                "Trigram pre-filter: %d/%d docs from %d candidate files",
+                "Trigram pre-filter: %d/%d docs from %d raw content candidate files",
                 len(docs_to_score), len(self._kw_docs), len(candidate_files),
             )
         else:
@@ -2774,6 +2774,10 @@ class SemanticSearchManager:
                             ))
                 count("keyword.files_completed")
 
+        # Reconstruct path metadata from cached and newly parsed file docs in
+        # the cancellation-aware pass. Share existing term-key strings, but
+        # exclude imported modules and symbols that are not path tokens.
+        path_terms: dict[str, tuple[str, ...]] = {}
         # Build document frequencies (always recomputed from full doc list)
         with measure('keyword.frequencies'):
             df: dict[str, int] = {}
@@ -2782,18 +2786,15 @@ class SemanticSearchManager:
                     return
                 for term in doc.term_freqs:
                     df[term] = df.get(term, 0) + 1
+                if doc.chunk_type == "file":
+                    tokens = set(_tokenize(doc.file_path))
+                    path_terms[doc.file_path] = tuple(term for term in doc.term_freqs if term in tokens)
 
             total_len = sum(doc.doc_len for doc in docs)
             avg_dl = total_len / len(docs) if docs else 1.0
 
-        # Reconstruct from both cached and newly parsed file documents. Reuse
-        # their term-key strings, but admit only independently verified path
-        # tokens: file docs also contain imported modules and symbol names.
-        path_terms: dict[str, tuple[str, ...]] = {}
-        for doc in docs:
-            if doc.chunk_type == "file":
-                tokens = set(_tokenize(doc.file_path))
-                path_terms[doc.file_path] = tuple(term for term in doc.term_freqs if term in tokens)
+        if self._closed:
+            return
         self._kw_docs = docs
         self._kw_path_terms = path_terms
         self._kw_df = df
