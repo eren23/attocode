@@ -94,14 +94,31 @@ def _get_security_scanner() -> SecurityScanner:
     return _security_scanner
 
 
-def _get_trigram_index() -> TrigramIndex | None:
+def _get_trigram_index(*, rebuild_dirty: bool = False) -> TrigramIndex | None:
     """Lazily initialize the trigram index (thread-safe).
 
     Loads an existing index from disk if available. Returns None
     if no index has been built yet.
     """
     from attocode_intel.request_context import current_request, scoped_store
-    if current_request.get() is not None:
+    if (request := current_request.get()) is not None:
+        if request.stores.get("trigrams_dirty"):
+            if rebuild_dirty:
+                from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
+
+                index = None
+                try:
+                    index = TrigramIndex(index_dir=os.path.join(request.project_dir, ".attocode", "index"))
+                    index.build(request.project_dir)
+                    if index.is_ready():
+                        request.stores["trigrams"] = index
+                        request.stores["trigrams_dirty"] = False
+                        return index
+                except Exception:
+                    pass  # Optional acceleration failed; retain the dirty guard.
+                if index is not None:
+                    index.close()
+            return None
         def build(root):
             import os
 
@@ -113,7 +130,6 @@ def _get_trigram_index() -> TrigramIndex | None:
             return None
         return scoped_store("trigrams", build)
     global _trigram_index
-    import os
     index_dir = os.path.realpath(os.path.join(_get_project_dir(), ".attocode", "index"))
     with _trigram_index_lock:
         # The legacy direct-call path can select a different project between calls.
@@ -304,6 +320,46 @@ def dataflow_scan(
     return format_report(report)
 
 
+def _dirty_trigram_scan(pattern, case_insensitive):
+    from attocode_intel.request_context import current_request
+
+    request = current_request.get()
+    if request is None or not request.stores.get("trigrams_dirty"):
+        return False
+    from attocode_intel._internal.integrations.context.trigram_regex import (
+        extract_required_trigrams,
+    )
+
+    return bool(extract_required_trigrams(pattern, case_insensitive=case_insensitive))
+
+
+def _fallback_search_files(root, project_dir, pattern, case_insensitive):
+    """Keep a dirty-index scan within the same file scope as its snapshot."""
+    from pathlib import Path
+
+    if _dirty_trigram_scan(pattern, case_insensitive):
+        from attocode_intel._internal.integrations.context.trigram_index import (
+            TrigramIndex,
+            _is_likely_binary,
+        )
+
+        project = Path(project_dir)
+        files = []
+        for relative in TrigramIndex._enumerate_files(project):
+            path = project / relative
+            if not path.is_relative_to(root):
+                continue
+            try:
+                with path.open("rb") as stream:
+                    if _is_likely_binary(stream.read(8192)):
+                        continue
+            except OSError:
+                continue
+            files.append(path)
+        return sorted(files)
+    return sorted(root.rglob("*"))
+
+
 @mcp.tool()
 @pin_stamped
 def fast_search(
@@ -389,6 +445,8 @@ def fast_search(
             from attocode_intel.request_context import current_request
             if (request := current_request.get()) is not None:
                 request.stores["trigrams"] = idx
+                if idx.is_ready():
+                    request.stores["trigrams_dirty"] = False
             else:
                 global _trigram_index
                 _trigram_index = idx
@@ -431,7 +489,7 @@ def fast_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        files = sorted(root.rglob("*"))
+        files = _fallback_search_files(root, project_dir, pattern, case_insensitive)
 
     matches: list[str] = []
     for file in files:
@@ -526,7 +584,7 @@ def regex_search(
 
     # Try trigram pre-filtering
     selectivity_threshold = 0.10
-    trigram_idx = _get_trigram_index()
+    trigram_idx = _get_trigram_index(rebuild_dirty=True)
     candidates: list[str] | None = None
     used_index = False
 
@@ -543,7 +601,7 @@ def regex_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        files = sorted(root.rglob("*"))
+        files = _fallback_search_files(root, project_dir, pattern, case_insensitive)
 
     matches: list[str] = []
     for file in files:
@@ -632,7 +690,7 @@ def frecency_search(
         return f"Error: Invalid regex pattern: {e}"
 
     # Get trigram candidates
-    trigram_idx = _get_trigram_index()
+    trigram_idx = _get_trigram_index(rebuild_dirty=True)
     candidates: list[str] | None = None
     index_status = "no index"
 
@@ -656,26 +714,31 @@ def frecency_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        all_files = sorted(root.rglob("*"))
-        try:
-            from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
+        all_files = _fallback_search_files(root, project_dir, pattern, case_insensitive)
+        if _dirty_trigram_scan(pattern, case_insensitive):
+            # This replaces a ready snapshot, whose candidate branch does not
+            # apply IgnoreManager. Keep that scope during the temporary scan.
+            files = all_files
+        else:
+            try:
+                from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
 
-            ignore_mgr = IgnoreManager(root=Path(project_dir))
-            files = [
-                f
-                for f in all_files
-                if f.is_file()
-                and not f.name.startswith(".")
-                and not ignore_mgr.is_ignored(
-                    str(f.relative_to(Path(project_dir)))
-                )
-            ]
-        except (ImportError, ValueError):
-            files = [
-                f
-                for f in all_files
-                if f.is_file() and not f.name.startswith(".")
-            ]
+                ignore_mgr = IgnoreManager(root=Path(project_dir))
+                files = [
+                    f
+                    for f in all_files
+                    if f.is_file()
+                    and not f.name.startswith(".")
+                    and not ignore_mgr.is_ignored(
+                        str(f.relative_to(Path(project_dir)))
+                    )
+                ]
+            except (ImportError, ValueError):
+                files = [
+                    f
+                    for f in all_files
+                    if f.is_file() and not f.name.startswith(".")
+                ]
 
     # Phase 1: Collect candidate file paths
     candidate_paths: list[Path] = []
