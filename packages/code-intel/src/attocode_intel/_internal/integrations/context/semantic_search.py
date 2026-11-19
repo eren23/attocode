@@ -399,6 +399,7 @@ class SemanticSearchManager:
     _reindex_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _reindex_worker_started: bool = field(default=False, repr=False)
     _kw_docs: list[_KeywordDoc] = field(default_factory=list, repr=False)
+    _kw_path_terms: dict[str, tuple[str, ...]] = field(default_factory=dict, repr=False)
     _go_kw_certified: set[str] = field(default_factory=set, repr=False)
     _kw_df: dict[str, int] = field(default_factory=dict, repr=False)
     _kw_avg_dl: float = field(default=0.0, repr=False)
@@ -2175,8 +2176,14 @@ class SemanticSearchManager:
         # Trigram pre-filter: narrow to files containing query terms
         candidate_files = self._trigram_prefilter(query_tokens)
         if candidate_files is not None:
+            # Content postings cannot disprove a file's path metadata. Keep
+            # this exception to one filterable token and file-level documents;
+            # symbol, body and multi-term candidate policy stays unchanged.
+            path_term = query_tokens[0] if len(query_tokens) == 1 and len(query_tokens[0]) >= 3 else ""
             docs_to_score = [
                 d for d in self._kw_docs if d.file_path in candidate_files
+                or (path_term and d.chunk_type == "file"
+                    and path_term in self._kw_path_terms.get(d.file_path, ()))
             ]
             logger.debug(
                 "Trigram pre-filter: %d/%d docs from %d candidate files",
@@ -2779,7 +2786,16 @@ class SemanticSearchManager:
             total_len = sum(doc.doc_len for doc in docs)
             avg_dl = total_len / len(docs) if docs else 1.0
 
+        # Reconstruct from both cached and newly parsed file documents. Reuse
+        # their term-key strings, but admit only independently verified path
+        # tokens: file docs also contain imported modules and symbol names.
+        path_terms: dict[str, tuple[str, ...]] = {}
+        for doc in docs:
+            if doc.chunk_type == "file":
+                tokens = set(_tokenize(doc.file_path))
+                path_terms[doc.file_path] = tuple(term for term in doc.term_freqs if term in tokens)
         self._kw_docs = docs
+        self._kw_path_terms = path_terms
         self._kw_df = df
         self._kw_avg_dl = avg_dl
         # Keyword queries can run while persistence/body indexing continues.
