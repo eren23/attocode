@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from contextlib import ExitStack
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import patch
@@ -80,6 +81,7 @@ async def run_case(case: dict, parent: Path, out: Path, state: dict) -> dict:
     before = tracked(root)
     save(folder / 'tracked-before.json', before)
     gateway = OperationGateway(str(root), 'full', watch=False)
+    instrumentation = ExitStack()
     records = []
     current = {'arm': 'setup', 'events': []}
     try:
@@ -99,31 +101,38 @@ async def run_case(case: dict, parent: Path, out: Path, state: dict) -> dict:
         target_docs = [asdict(doc) for doc in manager._kw_docs if doc.file_path == TARGET]
         save(folder / 'keyword-target-before.json', target_docs)
         assert any(doc['term_freqs'].get(QUERY, 0) > 0 for doc in target_docs)
-        keyword = manager._keyword_search
-        body = manager._body_search
-        prefilter = manager._trigram_prefilter
+        manager_type = type(manager)
+        keyword = manager_type._keyword_search
+        body = manager_type._body_search
+        prefilter = manager_type._trigram_prefilter
 
-        def capture_keyword(*args, **kwargs):
-            results = keyword(*args, **kwargs)
-            current['events'].append({'stage': 'keyword', 'query': args[0],
-                                      'results': [asdict(row) for row in results]})
+        def capture_keyword(instance, *args, **kwargs):
+            results = keyword(instance, *args, **kwargs)
+            if instance is manager:
+                current['events'].append({'stage': 'keyword', 'query': args[0],
+                                          'results': [asdict(row) for row in results]})
             return results
 
-        def capture_body(*args, **kwargs):
-            results = body(*args, **kwargs)
-            current['events'].append({'stage': 'body', 'terms': args[0],
-                                      'results': [asdict(row) for row in results]})
+        def capture_body(instance, *args, **kwargs):
+            results = body(instance, *args, **kwargs)
+            if instance is manager:
+                current['events'].append({'stage': 'body', 'terms': args[0],
+                                          'results': [asdict(row) for row in results]})
             return results
 
-        def capture_prefilter(tokens):
-            results = prefilter(tokens)
-            current['events'].append({'stage': 'prefilter', 'tokens': tokens,
-                                      'candidates': None if results is None else sorted(results)})
+        def capture_prefilter(instance, tokens):
+            results = prefilter(instance, tokens)
+            if instance is manager:
+                current['events'].append({'stage': 'prefilter', 'tokens': tokens,
+                                          'candidates': None if results is None else sorted(results)})
             return results
 
-        manager._keyword_search = capture_keyword
-        manager._body_search = capture_body
-        manager._trigram_prefilter = capture_prefilter
+        def bypass_prefilter(instance, tokens):
+            return None if instance is manager else prefilter(instance, tokens)
+
+        instrumentation.enter_context(patch.object(manager_type, '_keyword_search', capture_keyword))
+        instrumentation.enter_context(patch.object(manager_type, '_body_search', capture_body))
+        instrumentation.enter_context(patch.object(manager_type, '_trigram_prefilter', capture_prefilter))
 
         async def primary(arm: str) -> dict:
             current.update(arm=arm, events=[])
@@ -167,7 +176,7 @@ async def run_case(case: dict, parent: Path, out: Path, state: dict) -> dict:
         index = manager._get_trigram_index()
         assert index is not None and index.is_ready()
         baseline = await primary('ready_index_baseline')
-        with patch.object(manager, '_trigram_prefilter', return_value=None):
+        with patch.object(manager_type, '_trigram_prefilter', bypass_prefilter):
             bypass = await primary('ready_index_filter_bypass')
         assert index.is_ready()
         post = tracked(root)
@@ -187,6 +196,7 @@ async def run_case(case: dict, parent: Path, out: Path, state: dict) -> dict:
                 'body_unchanged': True, 'tracked_source_unchanged': True,
                 'actionable_primary_recovery': recovered, 'stage_records': records}
     finally:
+        instrumentation.close()
         await gateway.close()
 
 
