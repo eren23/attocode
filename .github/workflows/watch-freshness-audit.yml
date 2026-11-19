@@ -1,0 +1,66 @@
+name: Frozen local watcher freshness audit
+on:
+  push:
+    branches: [diagnose/watch-freshness]
+permissions:
+  contents: read
+concurrency:
+  group: frozen-watch-freshness
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_NL_EMBEDDING_MODE: 'none'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Configure owned grammar cache
+        run: echo "QUALITY_GRAMMAR_CACHE=$RUNNER_TEMP/watch-freshness-grammars" >> "$GITHUB_ENV"
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Download fixture grammars
+        run: |
+          uv run --no-sync python - <<'PY'
+          import os
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          pack.download(['python', 'javascript', 'typescript', 'tsx', 'toml'])
+          PY
+      - name: Existing focused freshness controls
+        run: |
+          mkdir -p results
+          uv run --no-sync python - <<'PY' > results/controls.log 2>&1
+          import os
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          import pytest
+          raise SystemExit(pytest.main(['-c', 'packages/code-intel/pyproject.toml', '--confcutdir=packages/code-intel/tests', '-q', '--junitxml=results/controls.xml', 'packages/code-intel/tests/test_edit_restart.py', 'packages/code-intel/tests/test_index_reuse.py::test_scan_reuses_filters_but_detects_immediate_changes', 'packages/code-intel/tests/test_product.py::test_concurrent_workspaces_and_freshness', 'packages/code-intel/tests/test_keyword_prefilter_soundness.py']))
+          PY
+      - name: One real-event synthetic audit
+        if: always()
+        run: |
+          uv run --no-sync python - <<'PY' > results/audit.log 2>&1
+          import os, runpy, sys
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          sys.argv=['eval.quality.watch_freshness_audit', '--output', 'results/audit']
+          runpy.run_module('eval.quality.watch_freshness_audit', run_name='__main__')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watch-freshness-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 14
