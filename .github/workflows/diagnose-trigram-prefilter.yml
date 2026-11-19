@@ -1,0 +1,61 @@
+name: Diagnose trigram first page
+on:
+  push:
+    branches: [diagnose/trigram-first-page]
+permissions:
+  contents: read
+concurrency:
+  group: diagnose-trigram-first-page
+  cancel-in-progress: false
+jobs:
+  frozen-diagnostic:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      PYTHONHASHSEED: '0'
+      QUALITY_ALLOW_DOWNLOADS: '1'
+      QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/trigram-grammars
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Unchanged local-search and trigram controls
+        run: |
+          mkdir -p '${{ runner.temp }}/trigram-controls'
+          uv run --no-sync python - <<'PY'
+          import os
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          pack.download(['python', 'toml'])
+          import pytest
+          raise SystemExit(pytest.main([
+              '-c','packages/code-intel/pyproject.toml',
+              '--confcutdir=packages/code-intel/tests','-q',
+              '--junitxml='+os.environ['RUNNER_TEMP']+'/trigram-controls/controls.xml',
+              'packages/code-intel/tests/unit/integrations/context/test_trigram_index.py',
+              'packages/code-intel/tests/unit/integrations/context/test_trigram_regex.py',
+              'packages/code-intel/tests/test_search_evidence.py',
+              'packages/code-intel/tests/test_query_ranking.py',
+          ]))
+          PY
+      - name: Frozen two-repository public first-page diagnostic
+        run: uv run --no-sync python -m eval.quality.trigram_prefilter_diagnostic --out '${{ runner.temp }}/trigram-evidence'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trigram-first-page-original
+          path: |
+            ${{ runner.temp }}/trigram-controls/
+            ${{ runner.temp }}/trigram-evidence/
+          if-no-files-found: error
+          retention-days: 14
