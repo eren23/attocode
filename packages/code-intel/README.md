@@ -43,6 +43,14 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.38 refreshes stale trigram snapshots after tracked live-session
+source changes. Content searches rebuild before choosing their search mode;
+semantic prefilters refuse old snapshots. Never-indexed behavior is preserved,
+and enumeration skips nonregular entries. A failed optional rebuild uses a
+conservative fallback whose threshold-sensitive scope may be narrower. See the
+[0.1.38 release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.38.md)
+for verification and limits.
+
 Version 0.1.37 preserves existing file-path candidates for one normalized
 keyword token of at least three characters after content-trigram indexing.
 Filename/directory tokens need not appear in file contents. File scoping and
