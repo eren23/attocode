@@ -20,7 +20,6 @@ jobs:
       TRANSFORMERS_OFFLINE: '1'
       PYTHONHASHSEED: '0'
       QUALITY_ALLOW_DOWNLOADS: '1'
-      QUALITY_GRAMMAR_CACHE: ${{ runner.temp }}/trigram-grammars
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,6 +27,8 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
+      - name: Configure owned grammar cache
+        run: echo "QUALITY_GRAMMAR_CACHE=$RUNNER_TEMP/trigram-grammars" >> "$GITHUB_ENV"
       - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
       - name: Unchanged local-search and trigram controls
         run: |
