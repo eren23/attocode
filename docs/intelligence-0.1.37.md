@@ -29,7 +29,8 @@ policies, scores, file caps and fallback behavior keep their existing rules.
 The derived path map is reconstructed from both cached and newly parsed file
 documents. Its values share existing term-key strings, and construction checks
 for closure during the pass and before publication. There is no new persisted
-cache format or migration, and no per-query path tokenization or source read.
+cache format or migration. The map adds no per-query path tokenization or
+source read.
 
 ## Verification and limits
 

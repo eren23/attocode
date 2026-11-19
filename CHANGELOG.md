@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Preserve existing file-path matches for one normalized keyword token of at
-  least three characters after content-trigram indexing, including filenames such as `pyproject.toml` that need not appear in
-  their own contents. Keep file filters, symbol/body matching, multi-token policy
+  least three characters after content-trigram indexing, including filenames
+  such as `pyproject.toml` that need not appear in their own contents. Keep file filters, symbol/body matching, multi-token policy
   and scoring weights unchanged. Reconstruct path metadata on cache reload,
   and stop its construction when the search manager closes.
 
