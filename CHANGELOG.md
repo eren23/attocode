@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.38] - 2026-11-19
+
+### Fixed
+
+- Refresh stale trigram search snapshots after tracked live-session source edits,
+  renames, deletions and Git branch switches. Content searches rebuild before
+  choosing indexed, short-query or selectivity-threshold behavior; semantic
+  prefilters refuse stale reloads. Preserve never-indexed behavior and skip
+  nonregular entries during index enumeration. If an optional rebuild fails,
+  extractable-trigram queries conservatively scan index-eligible regular text;
+  threshold-sensitive searches may have narrower scope until a rebuild succeeds.
+
 ## [Intelligence 0.1.37] - 2026-11-19
 
 ### Fixed

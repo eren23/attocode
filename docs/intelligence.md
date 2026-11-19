@@ -19,6 +19,14 @@ The server accepts `--project`, `--profile daily|full`, `--no-watch`, `--watch-d
 
 ## Daily workflow and result contract
 
+From 0.1.38, tracked source changes in a live gateway session invalidate
+previously ready trigram snapshots. Content searches rebuild before choosing
+indexed or full-scan behavior; semantic prefilters refuse stale reloads.
+Never-indexed behavior is preserved. If rebuilding fails, extractable-trigram
+queries scan index-eligible regular text, so threshold-sensitive scope can narrow
+until a rebuild succeeds. Tracking retains its existing file eligibility and
+size boundaries. See the [0.1.38 release notes](intelligence-0.1.38.md).
+
 From 0.1.37, a query normalized to one keyword token of at least three
 characters retains existing file-level path candidates after a `fast_search`
 content index is ready. Filename and directory tokens need not appear in raw

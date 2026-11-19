@@ -2,7 +2,7 @@
 
 ## Current state — 2026-11-19
 
-This checkout targets `attocode-code-intel` **0.1.37**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.38**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
@@ -17,7 +17,7 @@ rejected experiments and consumed questions remain closed.
 
 | Order | Next discriminating check | Acceptance / stopping gate |
 | --- | --- | --- |
-| 1. First-page evidence | The 0.1.37 path-metadata correction is complete. Distinguish another causal mechanism from known preview, growth, proximity and owner-credit hypotheses before authoring a candidate. Keep consumed cases as known controls; the numeric-retention candidate is closed after failing its required identity gate. | Prospectively audit task/target overlap and require actionable misses in two repositories attributable to a distinct, untested mechanism. Freeze no-loss/latency and development/holdout gates separately. No replay or retuning of rejected candidates. |
+| 1. First-page evidence | The 0.1.38 tracked-session freshness and 0.1.37 path-metadata corrections are complete. Distinguish another causal mechanism from known preview, growth, proximity and owner-credit hypotheses before authoring a candidate. Keep consumed cases as known controls; the numeric-retention candidate is closed after failing its required identity gate. | Prospectively audit task/target overlap and require actionable misses in two repositories attributable to a distinct, untested mechanism. Freeze no-loss/latency and development/holdout gates separately. No replay or retuning of rejected candidates. |
 | 2. Host and restart boundaries | Native-host UI acceptance of the optional HTTP bridge and cross-process/restart delivery remain separate scopes. A remote bridge check requires an existing authenticated remote server; local stdio does not exercise that path. | Preserve existing opt-in/authentication/affinity requirements and cooperative cancellation limits. Do not infer host UI acceptance, universal disconnect handling, restart delivery or a total-request latency SLA from the completed SDK transport witnesses. |
 
 Cockroach performance work remains deferred pending a new matched scope. Its
@@ -28,6 +28,7 @@ authorize another broad run or cloud rental.
 
 | Record | Delivered or diagnosed behavior | Completion evidence / limits |
 | --- | --- | --- |
+| 0.1.38 live trigram freshness | Refuse stale snapshots after tracked live-session source changes and rebuild before choosing the content-search mode | [Release notes](intelligence-0.1.38.md): 22 maintained cases, real Linux watcher/stat controls and 132 synthetic public responses. Failed rebuilds may narrow threshold-sensitive fallback scope; no restart-delivery, macOS watcher or performance guarantee. |
 | 0.1.37 file-path keyword candidates | Preserve existing single-token file-path matches after raw-content indexing | [Release notes](intelligence-0.1.37.md): twelve regressions, guarded cache reconstruction and one bounded warm synthetic cost gate. File scoping/scoring and other query/cache policies are unchanged; development cases are consumed, with no broad relevance or cold/real-repository speed claim. |
 | 0.1.36 source-identity correction | Bind selected class-window display labels to verified current source after ranking; crossing or ambiguous class windows display file evidence | [Release notes](intelligence-0.1.36.md) and [synthetic causal proof](https://github.com/eren23/attocode/actions/runs/43627551722). Input candidates, retrieval/cache identities, source windows, order and scores remain unchanged. Source validation is bounded; unavailable or mismatching source retains its prior evidence. This is a presentation correctness fix, not a relevance or speed claim. |
 | 0.1.35 optional HTTP client bridge | Opt-in stdio-to-HTTP bridge forwards host tool-call cancellation using the upstream SDK's actual request ID and a session-owned UUID4 context | [Release notes](intelligence-0.1.35.md): typed capability-aware forwarding, token-environment-name configuration and a new-connection doctor probe. One-second notification enqueue budget only; SDK transport failures can close the bridge. Server opt-in/authentication/affinity remain required. Actual host UI acceptance and restart delivery are not established. |
