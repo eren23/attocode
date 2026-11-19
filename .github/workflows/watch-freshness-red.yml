@@ -1,0 +1,65 @@
+name: Live trigram freshness regression RED
+on:
+  push:
+    branches: [diagnose/watch-freshness-red]
+permissions:
+  contents: read
+concurrency:
+  group: watch-freshness-red
+  cancel-in-progress: false
+jobs:
+  red:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_NL_EMBEDDING_MODE: 'none'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Configure owned grammar cache
+        run: echo "QUALITY_GRAMMAR_CACHE=$RUNNER_TEMP/watch-freshness-red-grammars" >> "$GITHUB_ENV"
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Download fixture grammar
+        run: |
+          uv run --no-sync python - <<'PY'
+          import os
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          pack.download(['python'])
+          PY
+      - name: Require ten qualified regression failures and three unchanged controls
+        run: |
+          mkdir -p results
+          uv run --no-sync python - <<'PY' > results/red.log 2>&1
+          import json, os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          import pytest
+          code=pytest.main(['-c','packages/code-intel/pyproject.toml','--confcutdir=packages/code-intel/tests','-q','--junitxml=results/red.xml','packages/code-intel/tests/test_trigram_freshness.py','packages/code-intel/tests/test_trigram_workspace.py'])
+          root=ET.parse('results/red.xml').getroot()
+          cases=list(root.iter('testcase'))
+          failed=[case for case in cases if case.find('failure') is not None]
+          summary={'pytest_exit':int(code),'tests':len(cases),'failures':len(failed),'errors':len(list(root.iter('error'))),'skips':len(list(root.iter('skipped'))),'failure_names':[case.attrib['name'] for case in failed]}
+          Path('results/red-admission.json').write_text(json.dumps(summary,indent=2)+'\n')
+          assert int(code)==1 and len(cases)==13 and len(failed)==10, summary
+          assert not summary['errors'] and not summary['skips'],summary
+          assert all('REGRESSION:live source excluded by stale trigram snapshot' in (case.find('failure').text or '') for case in failed),summary
+          assert all(any(prop.attrib=={'name':'qualified_input','value':'true'} for prop in case.iter('property')) for case in failed),summary
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watch-freshness-red-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 14
