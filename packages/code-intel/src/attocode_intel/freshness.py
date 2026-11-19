@@ -115,8 +115,13 @@ class FreshnessTracker:
         if source_changed and request:
             # Both readers must refuse the old persisted snapshot until a
             # successful fast_search rebuild, even before AST initialization.
-            request.stores["trigrams_dirty"] = True
-            if trigrams := request.stores.get("trigrams"):
+            trigrams = request.stores.get("trigrams")
+            semantic_trigrams = getattr(service._semantic_search, "_trigram_index", None)
+            if ((trigrams is not None and trigrams.is_ready())
+                    or (semantic_trigrams is not None and semantic_trigrams.is_ready())
+                    or (Path(self.root) / ".attocode" / "index" / "trigrams.lookup").is_file()):
+                request.stores["trigrams_dirty"] = True
+            if trigrams is not None:
                 trigrams.close()
         if changed and request and (precision := request.stores.get("precision")):
             precision.invalidate(changed)
