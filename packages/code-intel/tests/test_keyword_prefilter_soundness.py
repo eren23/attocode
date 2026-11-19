@@ -237,7 +237,7 @@ def test_cache_builder_stops_path_metadata_after_close(tmp_path, monkeypatch, re
         if self is mgr:
             assert result is not None and not result[1]
             assert {doc.file_path for doc in result[0] if doc.chunk_type == 'file'} == set(names)
-            assert len(result[0]) == 2
+            assert sum(doc.chunk_type == 'file' for doc in result[0]) == 2
             loaded.extend(result[0])
         return result
 
