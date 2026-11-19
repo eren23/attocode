@@ -1,0 +1,70 @@
+name: Keyword path prefilter frozen cost gate
+on:
+  push:
+    branches: [diagnose/keyword-prefilter-cost]
+permissions:
+  contents: read
+concurrency:
+  group: keyword-path-prefilter-cost
+  cancel-in-progress: false
+jobs:
+  frozen-cost:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_NL_EMBEDDING_MODE: 'none'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      QUALITY_ALLOW_DOWNLOADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - name: Configure owned grammar cache
+        run: echo "QUALITY_GRAMMAR_CACHE=$RUNNER_TEMP/keyword-cost-grammars" >> "$GITHUB_ENV"
+      - run: uv sync --locked --package attocode-code-intel --extra dev --extra tree-sitter-all
+      - name: Download only fixture grammars
+        run: |
+          uv run --no-sync python - <<'PY'
+          import os
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          pack.download(['python', 'toml'])
+          PY
+      - name: Qualified regression GREEN at exact candidate source
+        run: |
+          mkdir -p results
+          uv run --no-sync python - <<'PY'
+          import os, subprocess, sys
+          from pathlib import Path
+          bootstrap='import os,sys; import tree_sitter_language_pack as p; p.configure(cache_dir=os.environ["QUALITY_GRAMMAR_CACHE"]); import pytest; raise SystemExit(pytest.main(sys.argv[1:]))'
+          with Path('results/green.log').open('w') as stream:
+              subprocess.run([sys.executable, '-c', bootstrap, '-c', 'packages/code-intel/pyproject.toml',
+                              '--confcutdir=packages/code-intel/tests', '-q', '--junitxml=results/green.xml',
+                              'packages/code-intel/tests/test_keyword_prefilter_soundness.py'],
+                             stdout=stream, stderr=subprocess.STDOUT, check=True)
+          PY
+      - name: One frozen synthetic ready-index comparison
+        run: |
+          uv run --no-sync python - <<'PY'
+          import os, runpy, sys
+          import tree_sitter_language_pack as pack
+          pack.configure(cache_dir=os.environ['QUALITY_GRAMMAR_CACHE'])
+          sys.argv=['eval.quality.keyword_prefilter_cost', '--candidate',
+                    'c7d35199714cff9487317e869b24b6a85c543626', '--output', 'results/cost']
+          runpy.run_module('eval.quality.keyword_prefilter_cost', run_name='__main__')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: keyword-prefilter-cost-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 14
