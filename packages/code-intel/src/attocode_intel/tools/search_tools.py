@@ -101,7 +101,9 @@ def _get_trigram_index() -> TrigramIndex | None:
     if no index has been built yet.
     """
     from attocode_intel.request_context import current_request, scoped_store
-    if current_request.get() is not None:
+    if (request := current_request.get()) is not None:
+        if request.stores.get("trigrams_dirty"):
+            return None
         def build(root):
             import os
 
@@ -304,6 +306,22 @@ def dataflow_scan(
     return format_report(report)
 
 
+def _fallback_search_files(root, project_dir):
+    """Keep a dirty-index scan within the same file scope as its snapshot."""
+    from pathlib import Path
+
+    from attocode_intel.request_context import current_request
+
+    request = current_request.get()
+    if request is not None and request.stores.get("trigrams_dirty"):
+        from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
+
+        project = Path(project_dir)
+        return sorted(path for relative in TrigramIndex._enumerate_files(project)
+                      if (path := project / relative).is_relative_to(root))
+    return sorted(root.rglob("*"))
+
+
 @mcp.tool()
 @pin_stamped
 def fast_search(
@@ -389,6 +407,8 @@ def fast_search(
             from attocode_intel.request_context import current_request
             if (request := current_request.get()) is not None:
                 request.stores["trigrams"] = idx
+                if idx.is_ready():
+                    request.stores["trigrams_dirty"] = False
             else:
                 global _trigram_index
                 _trigram_index = idx
@@ -431,7 +451,7 @@ def fast_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        files = sorted(root.rglob("*"))
+        files = _fallback_search_files(root, project_dir)
 
     matches: list[str] = []
     for file in files:
@@ -543,7 +563,7 @@ def regex_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        files = sorted(root.rglob("*"))
+        files = _fallback_search_files(root, project_dir)
 
     matches: list[str] = []
     for file in files:
@@ -656,7 +676,7 @@ def frecency_search(
     if candidates is not None:
         files = sorted(root / c for c in candidates)
     else:
-        all_files = sorted(root.rglob("*"))
+        all_files = _fallback_search_files(root, project_dir)
         try:
             from attocode_intel._internal.integrations.utilities.ignore import IgnoreManager
 

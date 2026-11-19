@@ -2103,6 +2103,11 @@ class SemanticSearchManager:
 
     def _get_trigram_index(self) -> Any | None:
         """Get a loaded TrigramIndex instance, or None if unavailable."""
+        from attocode_intel.request_context import current_request
+
+        request = current_request.get()
+        if request is not None and request.stores.get("trigrams_dirty"):
+            return None
         if self._trigram_index is not None:
             return self._trigram_index
         try:

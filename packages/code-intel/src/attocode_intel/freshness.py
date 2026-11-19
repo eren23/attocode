@@ -94,7 +94,7 @@ class FreshnessTracker:
         policy = tuple(sorted(set(load_perl_module_roots(self.root))))
         manifest = self.scan_manifest()
         previous = self.manifest
-        if previous is None or service._ast_service is None:
+        if previous is None:
             self.manifest = manifest
             self._perl_policy = policy
             return
@@ -112,10 +112,24 @@ class FreshnessTracker:
         self.generation += 1
         from attocode_intel.request_context import current_request
         request = current_request.get()
+        if source_changed and request:
+            # Both readers must refuse the old persisted snapshot until a
+            # successful fast_search rebuild, even before AST initialization.
+            request.stores["trigrams_dirty"] = True
+            if trigrams := request.stores.get("trigrams"):
+                trigrams.close()
         if changed and request and (precision := request.stores.get("precision")):
             precision.invalidate(changed)
         if request:
             request.stores.pop("reference_pages", None)
+        for path in source_changed:
+            if service._semantic_search:
+                service._semantic_search.handle_file_change(str(Path(self.root) / path), removed=path not in manifest)
+                service._semantic_search._kw_index_built = False
+        if service._ast_service is None:
+            self.manifest = manifest
+            self._perl_policy = policy
+            return
         ast = service._ast_service
         if not ast.repair_changed_files(expected_manifest=manifest):
             ast.stop_hydration()
@@ -153,10 +167,6 @@ class FreshnessTracker:
                     ast._index.persist_files(changed & ast._ast_cache.keys())
             if ast._hydration_state and ast._hydration_state.phase != "ready":
                 ast.start_hydration()
-        for path in source_changed:
-            if service._semantic_search:
-                service._semantic_search.handle_file_change(str(Path(self.root) / path), removed=path not in manifest)
-                service._semantic_search._kw_index_built = False
         self.manifest = manifest
         self._perl_policy = policy
 
