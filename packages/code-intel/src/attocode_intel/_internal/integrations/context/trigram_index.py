@@ -44,6 +44,10 @@ def _file_identity(info: os.stat_result) -> FileIdentity:
 def _source_fingerprint(files: dict[str, FileIdentity]) -> str:
     return hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
+
+def _file_map_digest(rows: list[tuple[int, str]]) -> str:
+    return hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest()
+
 # ---------------------------------------------------------------------------
 # QueryResult (explain mode)
 # ---------------------------------------------------------------------------
@@ -198,9 +202,10 @@ class TrigramIndex:
         project_path = Path(project_dir).resolve()
 
         with self._lock:
+            self._ready = False
+            self._close_mmap()
             # Phase 1: enumerate candidate files
-            file_states = self._enumerate_file_states(project_path)
-            stable_inputs = True
+            file_states = self._enumerate_file_states(project_path, strict=True)
 
             # Phase 2: build inverted index
             file_map: dict[str, int] = {}           # rel_path -> file_id
@@ -210,14 +215,10 @@ class TrigramIndex:
 
             for file_id, (rel_path, identity) in enumerate(file_states.items()):
                 abs_path = project_path / rel_path
-                try:
-                    raw = abs_path.read_bytes()
-                    info = abs_path.stat()
-                except OSError:
-                    stable_inputs = False
-                    continue
+                raw = abs_path.read_bytes()
+                info = abs_path.stat()
                 if _file_identity(info) != identity or len(raw) != info.st_size:
-                    stable_inputs = False
+                    raise OSError(f"Trigram input changed while indexing: {rel_path}")
                 if _is_likely_binary(raw):
                     continue
 
@@ -235,12 +236,10 @@ class TrigramIndex:
 
             # Phase 4: persist file map to SQLite
             self._init_db()
-            proof = (_source_fingerprint(file_states), *artifact_digests) if stable_inputs else None
+            proof = (_source_fingerprint(file_states), *artifact_digests)
             self._save_file_map(file_map, content_hashes, mtimes, proof)
 
             # Phase 5: load the freshly built index into mmap
-            self._ready = False
-            self._close_mmap()
             success = self._load_unlocked()
 
         elapsed_ms = int((time.monotonic() - t0) * 1000)
@@ -457,10 +456,14 @@ class TrigramIndex:
         return list(TrigramIndex._enumerate_file_states(project_path))
 
     @staticmethod
-    def _enumerate_file_states(project_path: Path) -> dict[str, FileIdentity]:
+    def _enumerate_file_states(project_path: Path, *, strict: bool = False) -> dict[str, FileIdentity]:
         """Collect identities before content filtering, including binary inputs."""
+        def walk_error(error: OSError) -> None:
+            if strict:
+                raise error
+
         result: dict[str, FileIdentity] = {}
-        for root, dirs, files in os.walk(project_path):
+        for root, dirs, files in os.walk(project_path, onerror=walk_error):
             dirs[:] = sorted(
                 d for d in dirs
                 if d not in _SKIP_DIRS and not d.startswith(".")
@@ -475,7 +478,14 @@ class TrigramIndex:
                     identity = fpath.stat()
                     if not stat.S_ISREG(identity.st_mode) or identity.st_size > _MAX_FILE_SIZE:
                         continue
+                except FileNotFoundError:
+                    # A stable dangling symlink has never been an index input.
+                    if strict and not fpath.is_symlink():
+                        raise
+                    continue
                 except OSError:
+                    if strict:
+                        raise
                     continue
                 try:
                     rel = str(fpath.relative_to(project_path))
@@ -564,13 +574,13 @@ class TrigramIndex:
                 if project_path is not None:
                     conn.execute("BEGIN")
                     proof = conn.execute(
-                        "SELECT source_digest, lookup_digest, postings_digest "
+                        "SELECT source_digest, lookup_digest, postings_digest, file_map_digest "
                         "FROM trigram_snapshot WHERE id = 1"
                     ).fetchone()
                     if proof is None:
                         return False
                 rows = conn.execute(
-                    "SELECT file_id, path FROM trigram_files"
+                    "SELECT file_id, path FROM trigram_files ORDER BY file_id"
                 ).fetchall()
             finally:
                 conn.close()
@@ -579,7 +589,12 @@ class TrigramIndex:
             return False
         if project_path is not None:
             assert proof is not None
-            if proof[0] != _source_fingerprint(self._enumerate_file_states(project_path)):
+            try:
+                current = self._enumerate_file_states(project_path, strict=True)
+                map_digest = _file_map_digest(rows)
+            except (OSError, TypeError):
+                return False
+            if proof[0] != _source_fingerprint(current) or proof[3] != map_digest:
                 return False
 
         id_to_path: dict[int, str] = {}
@@ -809,7 +824,8 @@ class TrigramIndex:
                     id              INTEGER PRIMARY KEY CHECK (id = 1),
                     source_digest   TEXT NOT NULL,
                     lookup_digest   TEXT NOT NULL,
-                    postings_digest TEXT NOT NULL
+                    postings_digest TEXT NOT NULL,
+                    file_map_digest TEXT NOT NULL
                 )
             """)
             conn.commit()
@@ -821,11 +837,12 @@ class TrigramIndex:
         file_map: dict[str, int],
         content_hashes: dict[str, str],
         mtimes: dict[str, float],
-        proof: tuple[str, str, str] | None,
+        proof: tuple[str, str, str],
     ) -> None:
         """Persist the file-ID map to SQLite, replacing all previous rows."""
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
         try:
+            rows = sorted((fid, path) for path, fid in file_map.items())
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("DELETE FROM trigram_files")
@@ -833,13 +850,12 @@ class TrigramIndex:
                 "INSERT INTO trigram_files (file_id, path, content_hash, mtime) "
                 "VALUES (?, ?, ?, ?)",
                 [
-                    (fid, rp, content_hashes.get(rp, ""), mtimes.get(rp, 0.0))
-                    for rp, fid in file_map.items()
+                    (fid, rp, content_hashes[rp], mtimes[rp])
+                    for fid, rp in rows
                 ],
             )
             conn.execute("DELETE FROM trigram_snapshot")
-            if proof is not None:
-                conn.execute("INSERT INTO trigram_snapshot VALUES (1, ?, ?, ?)", proof)
+            conn.execute("INSERT INTO trigram_snapshot VALUES (1, ?, ?, ?, ?)", (*proof, _file_map_digest(rows)))
             conn.commit()
         finally:
             conn.close()

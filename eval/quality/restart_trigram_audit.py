@@ -198,7 +198,7 @@ async def main(output):
     output.mkdir(parents=True, exist_ok=True)
     report = {
         "wheel_version": version("attocode-code-intel"),
-        "product_head": git(Path.cwd(), "rev-parse", "HEAD^"),
+        "product_head": git(Path.cwd(), "rev-parse", "HEAD"),
         "diagnostic_head": git(Path.cwd(), "rev-parse", "HEAD"),
         "cases": [],
         "harness_errors": [],
