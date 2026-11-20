@@ -1,0 +1,54 @@
+name: First content searches after 0.1.38 restart
+on:
+  push:
+    branches: [diagnose/restart-trigram-freshness-0138]
+permissions:
+  contents: read
+jobs:
+  restart-freshness:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_NL_EMBEDDING_MODE: 'none'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      RELEASE_COMMIT: 8df329e774862db065aaaf4c5089c93d331f47f0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - name: Install exact published wheel with locked dependencies
+        shell: bash
+        run: |
+          mkdir -p results
+          test "$(git rev-parse HEAD^)" = "$RELEASE_COMMIT"
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- packages/code-intel pyproject.toml uv.lock
+          uv sync --locked --no-dev --package attocode-code-intel --no-install-package attocode-code-intel
+          wheel="$RUNNER_TEMP/attocode_code_intel-0.1.38-py3-none-any.whl"
+          curl --fail --silent --show-error --location --max-time 60 'https://github.com/eren23/attocode/releases/download/intel-v0.1.38/attocode_code_intel-0.1.38-py3-none-any.whl' --output "$wheel"
+          printf '%s  %s\n' d6a15ac499a71df5bce2ec7bc415ce88f4637b1cc74c5a05a0dbcd798a2ee932 "$wheel" | sha256sum -c
+          uv pip install --python .venv/bin/python --no-deps "$wheel"
+          .venv/bin/attocode-code-intel --version > results/version.txt
+          grep -Fx 'attocode-code-intel 0.1.38' results/version.txt
+          {
+            git rev-parse HEAD HEAD^{tree} "$RELEASE_COMMIT" "$RELEASE_COMMIT^{tree}"
+            sha256sum uv.lock eval/quality/restart_trigram_audit.py "$wheel"
+          } > results/source.txt
+      - name: Observe separate fresh stdio processes
+        run: .venv/bin/python eval/quality/restart_trigram_audit.py results > results/audit.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: restart-trigram-freshness-0138-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 14
