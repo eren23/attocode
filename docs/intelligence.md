@@ -19,6 +19,13 @@ The server accepts `--project`, `--profile daily|full`, `--no-watch`, `--watch-d
 
 ## Daily workflow and result contract
 
+From 0.1.39, saved raw trigram indexes are checked before first reuse after a
+quiescent restart. Eligible source changes, old caches or mismatching index/map
+proofs cause a rebuild. Verified unchanged caches remain reusable. Incomplete
+replacements cannot be certified; persistent rebuild failures retain the existing
+selective fallback scope. See the [0.1.39 release notes](intelligence-0.1.39.md)
+for verification and limits.
+
 From 0.1.38, tracked source changes in a live gateway session invalidate
 previously ready trigram snapshots. Content searches rebuild before choosing
 indexed or full-scan behavior; semantic prefilters refuse stale reloads.

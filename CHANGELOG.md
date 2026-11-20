@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.39] - 2026-11-20
+
+### Fixed
+
+- Validate saved raw trigram indexes before reuse after a quiescent restart.
+  Offline tracked edits and branch switches trigger a rebuild on the first raw
+  search. Check eligible paths and file identities, both index artifacts and the
+  saved file map. Rebuild old or unverifiable snapshots, and avoid certifying
+  incomplete replacements. Verified unchanged caches remain reusable. Ordinary
+  cold builds retain best-effort behavior, and persistent replacement failures
+  retain the existing selective fallback scope.
+
 ## [Intelligence 0.1.38] - 2026-11-19
 
 ### Fixed
