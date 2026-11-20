@@ -1,0 +1,39 @@
+name: Raw restart freshness regressions
+on:
+  push:
+    branches: [fix/restart-trigram-freshness]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_NL_EMBEDDING_MODE: 'none'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Run targeted tests
+        run: |
+          mkdir -p results
+          uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml \
+            --confcutdir=packages/code-intel/tests -q --junitxml=results/regression.xml \
+            packages/code-intel/tests/test_trigram_restart_freshness.py \
+            packages/code-intel/tests/test_trigram_freshness{,_scope,_edges,_modes}.py \
+            packages/code-intel/tests/test_trigram_workspace.py \
+            packages/code-intel/tests/test_keyword_prefilter_soundness.py > results/pytest.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: restart-trigram-regressions-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 14
