@@ -102,35 +102,42 @@ def _get_trigram_index(*, rebuild_dirty: bool = False) -> TrigramIndex | None:
     """
     from attocode_intel.request_context import current_request, scoped_store
     if (request := current_request.get()) is not None:
-        if request.stores.get("trigrams_dirty"):
-            if rebuild_dirty:
-                from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
-
-                index = None
-                try:
-                    index = TrigramIndex(index_dir=os.path.join(request.project_dir, ".attocode", "index"))
-                    index.build(request.project_dir)
-                    if index.is_ready():
-                        request.stores["trigrams"] = index
-                        request.stores["trigrams_dirty"] = False
-                        return index
-                except Exception:
-                    pass  # Optional acceleration failed; retain the dirty guard.
-                if index is not None:
-                    index.close()
-            return None
-        def build(root):
-            import os
-
+        def load_saved(root):
             from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
-            index = TrigramIndex(index_dir=os.path.join(root, ".attocode", "index"))
-            if index.load():
+
+            index_dir = os.path.join(root, ".attocode", "index")
+            if not os.path.isfile(os.path.join(index_dir, "trigrams.lookup")):
+                return None
+            index = TrigramIndex(index_dir=index_dir)
+            if index.load(project_dir=root):
                 return index
             index.close()
+            request.stores["trigrams_dirty"] = True
             return None
-        return scoped_store("trigrams", build)
+
+        if not request.stores.get("trigrams_dirty"):
+            index = scoped_store("trigrams", load_saved)
+            if not request.stores.get("trigrams_dirty"):
+                return index
+        if rebuild_dirty:
+            from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
+
+            index = None
+            try:
+                index = TrigramIndex(index_dir=os.path.join(request.project_dir, ".attocode", "index"))
+                index.build(request.project_dir)
+                if index.is_ready():
+                    request.stores["trigrams"] = index
+                    request.stores["trigrams_dirty"] = False
+                    return index
+            except Exception:
+                pass  # Optional acceleration failed; retain the dirty guard.
+            if index is not None:
+                index.close()
+        return None
     global _trigram_index
-    index_dir = os.path.realpath(os.path.join(_get_project_dir(), ".attocode", "index"))
+    project_dir = _get_project_dir()
+    index_dir = os.path.realpath(os.path.join(project_dir, ".attocode", "index"))
     with _trigram_index_lock:
         # The legacy direct-call path can select a different project between calls.
         cached_dir = getattr(_trigram_index, "index_dir", None)
@@ -141,7 +148,7 @@ def _get_trigram_index(*, rebuild_dirty: bool = False) -> TrigramIndex | None:
             from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
             idx = TrigramIndex(index_dir=index_dir)
             try:
-                if idx.load():
+                if idx.load(project_dir=project_dir):
                     _trigram_index = idx
                 else:
                     idx.close()

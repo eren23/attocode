@@ -1,11 +1,13 @@
 """A new raw search session must qualify the persisted trigram snapshot."""
 
 import os
+import sqlite3
 import subprocess
-from pathlib import Path
+from contextlib import closing
 
 import pytest
 from attocode_intel.gateway import OperationGateway
+from attocode_intel.tools import search_tools
 
 OLD = "amberfreshneedle"
 NEW = "jadefreshneedle"
@@ -78,3 +80,45 @@ async def test_unchanged_reopen_reuses_valid_index(tmp_path):
     reopened = await first_search(tmp_path, OLD)
     assert f"{ROOT}:1:" in reopened and "built index" not in reopened
     assert [(path.stat().st_ino, path.stat().st_mtime_ns, path.read_bytes()) for path in index_files] == before
+
+
+async def test_old_index_without_source_proof_rebuilds(tmp_path):
+    target = tmp_path / ROOT
+    target.write_text(f'VALUE = "{OLD}"\n')
+    assert "built index" in await first_search(tmp_path, OLD)
+    with closing(sqlite3.connect(tmp_path / ".attocode" / "index" / "trigrams.db")) as conn, conn:
+        conn.execute("DROP TABLE IF EXISTS trigram_snapshot")
+    target.write_text(f'VALUE = "{NEW}"\n')
+    reopened = await first_search(tmp_path, NEW)
+    assert f"{ROOT}:1:" in reopened and "built index" in reopened
+    assert "built index" not in await first_search(tmp_path, NEW)
+
+
+async def test_mixed_saved_index_files_are_not_reused(tmp_path):
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / ROOT).write_text(f'VALUE = "{OLD}"\n')
+    (second / ROOT).write_text(f'VALUE = "{NEW}"\n')
+    assert "built index" in await first_search(first, OLD)
+    assert "built index" in await first_search(second, NEW)
+    # The binary files were replaced, but SQLite still describes the old generation.
+    for name in ("trigrams.lookup", "trigrams.postings"):
+        path = ".attocode/index/" + name
+        (first / path).write_bytes((second / path).read_bytes())
+    reopened = await first_search(first, OLD)
+    assert f"{ROOT}:1:" in reopened and "built index" in reopened
+
+
+async def test_direct_regex_reopen_rejects_a_stale_saved_index(tmp_path, monkeypatch):
+    target = tmp_path / ROOT
+    target.write_text(f'VALUE = "{OLD}"\n')
+    assert "built index" in await first_search(tmp_path, OLD)
+    target.write_text(f'VALUE = "{NEW}"\n')
+    monkeypatch.setattr(search_tools, "_trigram_index", None)
+    monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+    try:
+        assert f"{ROOT}:1:" in search_tools.regex_search(NEW)
+    finally:
+        if search_tools._trigram_index is not None:
+            search_tools._trigram_index.close()

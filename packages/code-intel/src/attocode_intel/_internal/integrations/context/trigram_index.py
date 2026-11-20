@@ -17,6 +17,8 @@ File-ID mapping: SQLite table in .attocode/index/trigrams.db
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import mmap
 import os
@@ -31,6 +33,16 @@ from pathlib import Path
 from typing import Any, Literal, overload
 
 logger = logging.getLogger(__name__)
+
+FileIdentity = tuple[int, int, int, int, int]
+
+
+def _file_identity(info: os.stat_result) -> FileIdentity:
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def _source_fingerprint(files: dict[str, FileIdentity]) -> str:
+    return hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 # ---------------------------------------------------------------------------
 # QueryResult (explain mode)
@@ -187,7 +199,8 @@ class TrigramIndex:
 
         with self._lock:
             # Phase 1: enumerate candidate files
-            file_paths = self._enumerate_files(project_path)
+            file_states = self._enumerate_file_states(project_path)
+            stable_inputs = True
 
             # Phase 2: build inverted index
             file_map: dict[str, int] = {}           # rel_path -> file_id
@@ -195,20 +208,21 @@ class TrigramIndex:
             content_hashes: dict[str, str] = {}
             mtimes: dict[str, float] = {}
 
-            for file_id, rel_path in enumerate(file_paths):
+            for file_id, (rel_path, identity) in enumerate(file_states.items()):
                 abs_path = project_path / rel_path
                 try:
                     raw = abs_path.read_bytes()
+                    info = abs_path.stat()
                 except OSError:
+                    stable_inputs = False
                     continue
+                if _file_identity(info) != identity or len(raw) != info.st_size:
+                    stable_inputs = False
                 if _is_likely_binary(raw):
                     continue
 
                 file_map[rel_path] = file_id
-                try:
-                    mtimes[rel_path] = abs_path.stat().st_mtime
-                except OSError:
-                    mtimes[rel_path] = 0.0
+                mtimes[rel_path] = info.st_mtime
                 content_hashes[rel_path] = format(zlib.crc32(raw) & 0xFFFFFFFF, "08x")
 
                 for h in _extract_trigrams_from_bytes(raw):
@@ -217,11 +231,12 @@ class TrigramIndex:
                     postings[h].append(file_id)
 
             # Phase 3: write index files atomically
-            self._write_index(postings, file_map)
+            artifact_digests = self._write_index(postings, file_map)
 
             # Phase 4: persist file map to SQLite
             self._init_db()
-            self._save_file_map(file_map, content_hashes, mtimes)
+            proof = (_source_fingerprint(file_states), *artifact_digests) if stable_inputs else None
+            self._save_file_map(file_map, content_hashes, mtimes, proof)
 
             # Phase 5: load the freshly built index into mmap
             self._ready = False
@@ -247,16 +262,19 @@ class TrigramIndex:
             "loaded": success,
         }
 
-    def load(self) -> bool:
+    def load(self, *, project_dir: str | None = None) -> bool:
         """Load an existing index from disk into memory-mapped buffers.
 
         Returns True if the index was loaded and is ready for queries.
         Returns False if files are missing, corrupt, or version-mismatched.
+        Raw search callers pass `project_dir` to require that the saved index
+        matches the current source identities and both persisted artifact bytes.
         """
         with self._lock:
             self._ready = False
             self._close_mmap()
-            return self._load_unlocked()
+            project_path = Path(project_dir).resolve() if project_dir is not None else None
+            return self._load_unlocked(project_path)
 
     @overload
     def query(
@@ -436,7 +454,12 @@ class TrigramIndex:
     @staticmethod
     def _enumerate_files(project_path: Path) -> list[str]:
         """Walk *project_path* and return relative paths of indexable files."""
-        result: list[str] = []
+        return list(TrigramIndex._enumerate_file_states(project_path))
+
+    @staticmethod
+    def _enumerate_file_states(project_path: Path) -> dict[str, FileIdentity]:
+        """Collect identities before content filtering, including binary inputs."""
+        result: dict[str, FileIdentity] = {}
         for root, dirs, files in os.walk(project_path):
             dirs[:] = sorted(
                 d for d in dirs
@@ -458,7 +481,7 @@ class TrigramIndex:
                     rel = str(fpath.relative_to(project_path))
                 except ValueError:
                     rel = str(fpath)
-                result.append(rel)
+                result[rel] = _file_identity(identity)
         return result
 
     # ------------------------------------------------------------------
@@ -469,8 +492,8 @@ class TrigramIndex:
         self,
         postings: dict[int, list[int]],
         file_map: dict[str, int],
-    ) -> None:
-        """Atomically write lookup and postings binary files."""
+    ) -> tuple[str, str]:
+        """Atomically replace each binary file and return its digest."""
         sorted_hashes = sorted(postings.keys())
         n_entries = len(sorted_hashes)
 
@@ -520,22 +543,32 @@ class TrigramIndex:
                 except OSError:
                     pass
             raise
+        return hashlib.sha256(lookup_blob).hexdigest(), hashlib.sha256(postings_blob).hexdigest()
 
     # ------------------------------------------------------------------
     # Internal: loading
     # ------------------------------------------------------------------
 
-    def _load_unlocked(self) -> bool:
+    def _load_unlocked(self, project_path: Path | None = None) -> bool:
         """Load index files. Caller must hold _lock."""
         for path in (self._lookup_path, self._postings_path, self._db_path):
             if not os.path.exists(path):
                 return False
 
-        # Load file-ID mapping from SQLite
+        # Read the file map and its proof from the same SQLite snapshot.
+        proof = None
         try:
             conn = sqlite3.connect(self._db_path, check_same_thread=False)
             try:
                 conn.execute("PRAGMA journal_mode=WAL")
+                if project_path is not None:
+                    conn.execute("BEGIN")
+                    proof = conn.execute(
+                        "SELECT source_digest, lookup_digest, postings_digest "
+                        "FROM trigram_snapshot WHERE id = 1"
+                    ).fetchone()
+                    if proof is None:
+                        return False
                 rows = conn.execute(
                     "SELECT file_id, path FROM trigram_files"
                 ).fetchall()
@@ -544,6 +577,10 @@ class TrigramIndex:
         except sqlite3.Error as exc:
             logger.debug("trigram_index: DB read failed: %s", exc)
             return False
+        if project_path is not None:
+            assert proof is not None
+            if proof[0] != _source_fingerprint(self._enumerate_file_states(project_path)):
+                return False
 
         id_to_path: dict[int, str] = {}
         path_to_id: dict[str, int] = {}
@@ -604,6 +641,17 @@ class TrigramIndex:
                 os.close(lookup_fd)
                 logger.debug("trigram_index: mmap postings failed: %s", exc)
                 return False
+
+        if proof is not None and (
+            hashlib.sha256(lookup_mm).hexdigest() != proof[1]
+            or hashlib.sha256(postings_mm if postings_mm is not None else b"").hexdigest() != proof[2]
+        ):
+            lookup_mm.close()
+            os.close(lookup_fd)
+            if postings_mm is not None:
+                postings_mm.close()
+                os.close(postings_fd)
+            return False
 
         # Commit
         self._close_mmap()
@@ -756,6 +804,14 @@ class TrigramIndex:
                 "CREATE INDEX IF NOT EXISTS ix_trigram_files_path "
                 "ON trigram_files(path)"
             )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS trigram_snapshot (
+                    id              INTEGER PRIMARY KEY CHECK (id = 1),
+                    source_digest   TEXT NOT NULL,
+                    lookup_digest   TEXT NOT NULL,
+                    postings_digest TEXT NOT NULL
+                )
+            """)
             conn.commit()
         finally:
             conn.close()
@@ -765,6 +821,7 @@ class TrigramIndex:
         file_map: dict[str, int],
         content_hashes: dict[str, str],
         mtimes: dict[str, float],
+        proof: tuple[str, str, str] | None,
     ) -> None:
         """Persist the file-ID map to SQLite, replacing all previous rows."""
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -780,6 +837,9 @@ class TrigramIndex:
                     for rp, fid in file_map.items()
                 ],
             )
+            conn.execute("DELETE FROM trigram_snapshot")
+            if proof is not None:
+                conn.execute("INSERT INTO trigram_snapshot VALUES (1, ?, ?, ?)", proof)
             conn.commit()
         finally:
             conn.close()

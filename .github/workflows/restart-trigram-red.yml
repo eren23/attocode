@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
@@ -29,7 +30,14 @@ jobs:
             packages/code-intel/tests/test_trigram_restart_freshness.py \
             packages/code-intel/tests/test_trigram_freshness{,_scope,_edges,_modes}.py \
             packages/code-intel/tests/test_trigram_workspace.py \
+            packages/code-intel/tests/unit/integrations/context/test_trigram_index.py \
             packages/code-intel/tests/test_keyword_prefilter_soundness.py > results/pytest.log 2>&1
+      - name: Verify first calls from the candidate wheel
+        run: |
+          uv build --package attocode-code-intel --wheel
+          uv pip install --python .venv/bin/python --no-deps --reinstall-package attocode-code-intel dist/attocode_code_intel-0.1.38-py3-none-any.whl
+          sha256sum dist/attocode_code_intel-0.1.38-py3-none-any.whl > results/candidate-wheel.sha256
+          .venv/bin/python eval/quality/restart_trigram_audit.py results > results/stdio.log 2>&1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
