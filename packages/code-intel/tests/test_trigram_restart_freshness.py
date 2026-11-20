@@ -175,3 +175,21 @@ async def test_saved_file_map_from_another_generation_is_rejected(tmp_path):
         conn.execute("UPDATE trigram_files SET path = 'moved/target.py'")
     reopened = await first_search(tmp_path, NEW)
     assert f"src/{ROOT}:1:" in reopened and "built index" in reopened
+
+
+async def test_cold_build_skips_unreadable_input_without_widening_scope(tmp_path, monkeypatch):
+    (tmp_path / ROOT).write_text(f'VALUE = "{NEW}"\n')
+    unreadable = tmp_path / "unreadable.py"
+    unreadable.write_text("VALUE = 1\n")
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / ".hidden" / "out_of_scope.py").write_text(f'VALUE = "{NEW}"\n')
+    real_read = Path.read_bytes
+
+    def cannot_read(path):
+        if path == unreadable:
+            raise PermissionError("fixture file is unavailable")
+        return real_read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", cannot_read)
+    text = await first_search(tmp_path, NEW)
+    assert f"{ROOT}:1:" in text and "out_of_scope.py" not in text
