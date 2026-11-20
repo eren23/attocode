@@ -4,6 +4,7 @@ import os
 import sqlite3
 import subprocess
 from contextlib import closing
+from pathlib import Path
 
 import pytest
 from attocode_intel.gateway import OperationGateway
@@ -113,12 +114,64 @@ async def test_mixed_saved_index_files_are_not_reused(tmp_path):
 async def test_direct_regex_reopen_rejects_a_stale_saved_index(tmp_path, monkeypatch):
     target = tmp_path / ROOT
     target.write_text(f'VALUE = "{OLD}"\n')
+    for i in range(12):
+        (tmp_path / f"control{i}.py").write_text("VALUE = 1\n")
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / ".hidden" / "out_of_scope.py").write_text(f'VALUE = "{NEW}"\n')
     assert "built index" in await first_search(tmp_path, OLD)
     target.write_text(f'VALUE = "{NEW}"\n')
     monkeypatch.setattr(search_tools, "_trigram_index", None)
     monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
     try:
-        assert f"{ROOT}:1:" in search_tools.regex_search(NEW)
+        for _ in range(2):
+            result = search_tools.regex_search(NEW)
+            assert f"{ROOT}:1:" in result and "trigram-indexed" in result
+            assert "out_of_scope.py" not in result
     finally:
         if search_tools._trigram_index is not None:
             search_tools._trigram_index.close()
+
+
+async def test_failed_restart_rebuild_preserves_fallback_and_retries(tmp_path, monkeypatch):
+    target = tmp_path / ROOT
+    target.write_text(f'VALUE = "{OLD}"\n')
+    assert "built index" in await first_search(tmp_path, OLD)
+    target.write_text(f'VALUE = "{NEW}"\n')
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / ".hidden" / "out_of_scope.py").write_text(f'VALUE = "{NEW}"\n')
+    real_read = Path.read_bytes
+    failed = False
+
+    def fail_once(path):
+        nonlocal failed
+        if path == target and not failed:
+            failed = True
+            raise OSError("transient fixture read failure")
+        return real_read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_once)
+    gateway = OperationGateway(str(tmp_path), profile="full", watch=False)
+    try:
+        args = {"pattern": NEW, "explain": True}
+        fallback = (await gateway.execute("fast_search", args)).content[0].text
+        assert failed and f"{ROOT}:1:" in fallback
+        assert "index-build-failed" in fallback and "out_of_scope.py" not in fallback
+        rebuilt = (await gateway.execute("fast_search", args)).content[0].text
+        assert f"{ROOT}:1:" in rebuilt and "built index" in rebuilt
+    finally:
+        await gateway.close()
+
+
+async def test_saved_file_map_from_another_generation_is_rejected(tmp_path):
+    directory = tmp_path / "src"
+    directory.mkdir()
+    target = directory / ROOT
+    target.write_text(f'VALUE = "{NEW}"\n')
+    assert "built index" in await first_search(tmp_path, NEW)
+    database = tmp_path / ".attocode" / "index" / "trigrams.db"
+    # An older writer can replace the path map without touching a newer
+    # proof or changing the binary artifacts when file IDs and bytes match.
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.execute("UPDATE trigram_files SET path = 'moved/target.py'")
+    reopened = await first_search(tmp_path, NEW)
+    assert f"src/{ROOT}:1:" in reopened and "built index" in reopened
