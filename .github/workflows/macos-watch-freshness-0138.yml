@@ -1,0 +1,63 @@
+name: macOS watcher freshness on 0.1.38
+on:
+  push:
+    branches: [diagnose/macos-watch-freshness-0138]
+permissions:
+  contents: read
+jobs:
+  macos-watch:
+    if: github.run_attempt == 1
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_NL_EMBEDDING_MODE: 'none'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      RELEASE_COMMIT: 8df329e774862db065aaaf4c5089c93d331f47f0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify released source and fixture identity
+        shell: bash
+        run: |
+          mkdir -p results
+          test "$(git rev-parse HEAD^)" = "$RELEASE_COMMIT"
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- packages/code-intel pyproject.toml uv.lock
+          printf '%s  %s\n' b715c04bb65606412ff9fd065228cbf873a9534a889e90b24ddb578328ed89cb eval/quality/watch_freshness_audit.py | shasum -a 256 -c
+          {
+            git rev-parse HEAD HEAD^{tree} "$RELEASE_COMMIT" "$RELEASE_COMMIT^{tree}"
+            shasum -a 256 uv.lock eval/quality/{watch_freshness_audit,macos_watch_audit}.py
+          } > results/source.txt
+          mkdir "$RUNNER_TEMP/attocode-freshness"
+          printf 'TMPDIR=%s\n' "$(cd "$RUNNER_TEMP/attocode-freshness" && pwd -P)" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - name: Install locked dependencies
+        id: sync
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Existing freshness and workspace controls
+        run: |
+          uv run --no-sync python -m pytest -c packages/code-intel/pyproject.toml \
+            --confcutdir=packages/code-intel/tests --junitxml=results/controls.xml -q \
+            packages/code-intel/tests/test_trigram_freshness.py \
+            packages/code-intel/tests/test_trigram_freshness_scope.py \
+            packages/code-intel/tests/test_trigram_freshness_edges.py \
+            packages/code-intel/tests/test_trigram_freshness_modes.py \
+            packages/code-intel/tests/test_trigram_workspace.py > results/controls.log 2>&1
+      - name: Native watcher and stat control
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run --no-sync python -m eval.quality.macos_watch_audit results > results/audit.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-watch-freshness-0138-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 14
