@@ -31,7 +31,7 @@ def _call_fast_search(proj: Path, idx: TrigramIndex, **kwargs) -> str:
 
     with (
         patch.object(st, "_get_project_dir", return_value=str(proj)),
-        patch.object(st, "_get_trigram_index", return_value=idx),
+        patch.object(st, "_raw_trigram_state", return_value=(idx, False)),
     ):
         return st.fast_search(**kwargs)
 
@@ -94,12 +94,12 @@ class TestFastSearchBuildFailure:
         from attocode_intel.tools import search_tools as st
 
         proj = _create_project(tmp_path, {"a.py": "hello world\n"})
-        # No index built, _get_trigram_index returns None → triggers auto-build
+        # No index built, so the raw lookup requests an initial build.
         # Patch TrigramIndex at the source module so the lazy import inside
         # fast_search picks it up.
         with (
             patch.object(st, "_get_project_dir", return_value=str(proj)),
-            patch.object(st, "_get_trigram_index", return_value=None),
+            patch.object(st, "_raw_trigram_state", return_value=(None, False)),
             patch(
                 "attocode_intel._internal.integrations.context.trigram_index.TrigramIndex",
                 side_effect=RuntimeError("boom"),

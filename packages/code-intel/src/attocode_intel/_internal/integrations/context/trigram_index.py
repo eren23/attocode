@@ -188,11 +188,14 @@ class TrigramIndex:
     # Public API
     # ------------------------------------------------------------------
 
-    def build(self, project_dir: str) -> dict[str, Any]:
+    def build(self, project_dir: str, *, require_complete: bool = False) -> dict[str, Any]:
         """Build the trigram index by walking *project_dir*.
 
         Writes lookup and postings files atomically (write .tmp, os.replace).
         Stores the file-ID mapping in SQLite.
+        A stale-index replacement sets `require_complete` to avoid publishing
+        an incomplete snapshot. A best-effort first build can still serve
+        its current results but cannot certify them for a later process.
 
         Returns:
             dict with keys: files_indexed, trigrams_count,
@@ -205,7 +208,14 @@ class TrigramIndex:
             self._ready = False
             self._close_mmap()
             # Phase 1: enumerate candidate files
-            file_states = self._enumerate_file_states(project_path, strict=True)
+            complete = True
+            try:
+                file_states = self._enumerate_file_states(project_path, strict=True)
+            except OSError:
+                if require_complete:
+                    raise
+                file_states = self._enumerate_file_states(project_path)
+                complete = False
 
             # Phase 2: build inverted index
             file_map: dict[str, int] = {}           # rel_path -> file_id
@@ -215,10 +225,18 @@ class TrigramIndex:
 
             for file_id, (rel_path, identity) in enumerate(file_states.items()):
                 abs_path = project_path / rel_path
-                raw = abs_path.read_bytes()
-                info = abs_path.stat()
+                try:
+                    raw = abs_path.read_bytes()
+                    info = abs_path.stat()
+                except OSError:
+                    if require_complete:
+                        raise
+                    complete = False
+                    continue
                 if _file_identity(info) != identity or len(raw) != info.st_size:
-                    raise OSError(f"Trigram input changed while indexing: {rel_path}")
+                    if require_complete:
+                        raise OSError(f"Trigram input changed while indexing: {rel_path}")
+                    complete = False
                 if _is_likely_binary(raw):
                     continue
 
@@ -236,7 +254,7 @@ class TrigramIndex:
 
             # Phase 4: persist file map to SQLite
             self._init_db()
-            proof = (_source_fingerprint(file_states), *artifact_digests)
+            proof = (_source_fingerprint(file_states), *artifact_digests) if complete else None
             self._save_file_map(file_map, content_hashes, mtimes, proof)
 
             # Phase 5: load the freshly built index into mmap
@@ -837,7 +855,7 @@ class TrigramIndex:
         file_map: dict[str, int],
         content_hashes: dict[str, str],
         mtimes: dict[str, float],
-        proof: tuple[str, str, str],
+        proof: tuple[str, str, str] | None,
     ) -> None:
         """Persist the file-ID map to SQLite, replacing all previous rows."""
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -855,7 +873,8 @@ class TrigramIndex:
                 ],
             )
             conn.execute("DELETE FROM trigram_snapshot")
-            conn.execute("INSERT INTO trigram_snapshot VALUES (1, ?, ?, ?, ?)", (*proof, _file_map_digest(rows)))
+            if proof is not None:
+                conn.execute("INSERT INTO trigram_snapshot VALUES (1, ?, ?, ?, ?)", (*proof, _file_map_digest(rows)))
             conn.commit()
         finally:
             conn.close()

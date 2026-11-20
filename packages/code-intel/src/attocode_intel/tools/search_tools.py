@@ -100,7 +100,7 @@ def _rebuild_trigram_index(project_dir: str, index_dir: str) -> TrigramIndex | N
     index = None
     try:
         index = TrigramIndex(index_dir=index_dir)
-        index.build(project_dir)
+        index.build(project_dir, require_complete=True)
         if index.is_ready():
             return index
     except Exception:
@@ -463,7 +463,7 @@ def fast_search(
             from attocode_intel._internal.integrations.context.trigram_index import TrigramIndex
             index_dir = os.path.join(project_dir, ".attocode", "index")
             idx = TrigramIndex(index_dir=index_dir)
-            stats = idx.build(project_dir)
+            stats = idx.build(project_dir, require_complete=dirty)
             if idx.is_ready():
                 dirty = False
             from attocode_intel.request_context import current_request

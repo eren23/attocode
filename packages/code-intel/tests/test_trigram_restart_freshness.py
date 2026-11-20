@@ -192,4 +192,6 @@ async def test_cold_build_skips_unreadable_input_without_widening_scope(tmp_path
 
     monkeypatch.setattr(Path, "read_bytes", cannot_read)
     text = await first_search(tmp_path, NEW)
-    assert f"{ROOT}:1:" in text and "out_of_scope.py" not in text
+    assert f"{ROOT}:1:" in text and "out_of_scope.py" not in text and "built index" in text
+    monkeypatch.setattr(Path, "read_bytes", real_read)
+    assert "built index" in await first_search(tmp_path, NEW)
