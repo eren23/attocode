@@ -43,6 +43,14 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.39 validates saved raw trigram indexes before reuse after a quiescent
+restart. Offline tracked changes trigger a rebuild on the first raw search;
+verified unchanged caches remain reusable. Old or mismatching cache proofs
+rebuild, and incomplete replacements cannot be certified. Persistent rebuild
+failures retain the existing selective fallback scope. See the
+[0.1.39 release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.39.md)
+for verification and upgrade instructions.
+
 Version 0.1.38 refreshes stale trigram snapshots after tracked live-session
 source changes. Content searches rebuild before choosing their search mode;
 semantic prefilters refuse old snapshots. Never-indexed behavior is preserved,
