@@ -1,0 +1,75 @@
+name: Body raw row-cap qualification on 0.1.39
+on:
+  push:
+    branches: [diagnose/body-row-cap-0139]
+permissions:
+  contents: read
+jobs:
+  body-row-cap:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_NL_EMBEDDING_MODE: 'none'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      PYTHONPATH: ''
+      PYTHONNOUSERSITE: '1'
+      RELEASE_COMMIT: ed74f9a6f2190186e2e59a4435860ed7a4a9fd7d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Bind released source and owned temporary root
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          git rev-parse HEAD HEAD^{tree} "$RELEASE_COMMIT" "$RELEASE_COMMIT^{tree}" > results/source.txt
+          test "$(git rev-parse HEAD^)" = "$RELEASE_COMMIT"
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- packages/code-intel pyproject.toml uv.lock
+          sha256sum uv.lock eval/quality/body_row_audit.py eval/quality/body_row_identity.py >> results/source.txt
+          mkdir "$RUNNER_TEMP/attocode-body-row-cap-0139"
+          printf 'TMPDIR=%s\n' "$RUNNER_TEMP/attocode-body-row-cap-0139" >> "$GITHUB_ENV"
+          printf 'UV_CACHE_DIR=%s\n' "$RUNNER_TEMP/attocode-body-row-cap-0139-cache" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - name: Install frozen dependencies
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Install and verify the actual published wheel
+        id: install
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python eval/quality/body_row_identity.py download results > results/package-download.log 2>&1
+          uv pip install --python .venv/bin/python --no-deps --reinstall-package attocode-code-intel results/attocode_code_intel-0.1.39-py3-none-any.whl
+          .venv/bin/python eval/quality/body_row_identity.py before results > results/identity-before.log 2>&1
+      - name: Maintained candidate identity and delivery controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -m pytest -c packages/code-intel/pyproject.toml \
+            --confcutdir=packages/code-intel/tests -o pythonpath= -q --junitxml=results/controls.xml \
+            packages/code-intel/tests/test_chunk_identity.py \
+            packages/code-intel/tests/test_query_ranking.py \
+            packages/code-intel/tests/test_search_budget_repair.py \
+            packages/code-intel/tests/unit/integrations/context/test_semantic_search.py::TestSourceBodyCandidates > results/controls.log 2>&1
+      - name: Frozen synthetic raw-prefix and first-response observation
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: .venv/bin/python eval/quality/body_row_audit.py results/observation > results/observation.log 2>&1
+      - name: Verify installed files and source after the observation
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: .venv/bin/python eval/quality/body_row_identity.py after results > results/identity-after.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: body-row-cap-0139-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
