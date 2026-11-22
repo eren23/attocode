@@ -1,0 +1,82 @@
+name: Body row-limit two-repository eligibility
+on:
+  push:
+    branches:
+      - diagnose/body-row-eligibility-controls-0139
+      - diagnose/body-row-eligibility-controls-v2-0139
+      - diagnose/body-row-eligibility-real-0139
+permissions:
+  contents: read
+jobs:
+  qualify:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ATTOCODE_LOCAL_ONLY: '1'
+      ATTOCODE_INTEL_PRECISION: 'off'
+      ATTOCODE_INTEL_RANKING_PROVIDER: 'off'
+      ATTOCODE_NL_EMBEDDING_MODE: 'none'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      PYTHONPATH: ''
+      PYTHONNOUSERSITE: '1'
+      RELEASE_COMMIT: ed74f9a6f2190186e2e59a4435860ed7a4a9fd7d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Bind source and owned runner paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir results
+          git rev-parse HEAD HEAD^{tree} "$RELEASE_COMMIT" "$RELEASE_COMMIT^{tree}" > results/source.txt
+          test "$(git rev-parse HEAD^)" = "$RELEASE_COMMIT"
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- packages/code-intel uv.lock eval/matrix eval/quality/runner.py eval/quality/corpus.py eval/quality/sources.py eval/quality/fixture_identity.py eval/quality/corpus_capture.py eval/quality/experiment_evidence.py eval/quality/mcp_search.py
+          sha256sum uv.lock eval/quality/body_row_eligibility{,_identity}.py eval/quality/body_row_{questions,protocol,controls}.json eval/quality/body_row_control_gate.py eval/quality/test_body_row_eligibility.py >> results/source.txt
+          mkdir "$RUNNER_TEMP/attocode-row-eligibility-0139"
+          printf 'TMPDIR=%s\n' "$RUNNER_TEMP/attocode-row-eligibility-0139" >> "$GITHUB_ENV"
+          printf 'UV_CACHE_DIR=%s\n' "$RUNNER_TEMP/attocode-row-eligibility-0139-cache" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - name: Install frozen dependencies
+        run: uv sync --locked --package attocode-code-intel --extra dev
+      - name: Install and verify actual published 0.1.39
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python eval/quality/body_row_eligibility_identity.py download results > results/package-download.log 2>&1
+          uv pip install --python .venv/bin/python --no-deps --reinstall-package attocode-code-intel results/attocode_code_intel-0.1.39-py3-none-any.whl
+          .venv/bin/python eval/quality/body_row_eligibility_identity.py before results > results/identity-before.log 2>&1
+      - name: Frozen maintained and prospective operator controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY_ELIGIBILITY_CONTROL_EVIDENCE="$PWD/results/operator-control" PYTHONPATH="$PWD" .venv/bin/python -m pytest --rootdir=. -c packages/code-intel/pyproject.toml \
+            --confcutdir=packages/code-intel/tests -o pythonpath= -q --junitxml=results/controls.xml \
+            packages/code-intel/tests/test_chunk_identity.py \
+            packages/code-intel/tests/test_query_ranking.py \
+            packages/code-intel/tests/test_search_budget_repair.py \
+            packages/code-intel/tests/unit/integrations/context/test_semantic_search.py::TestSourceBodyCandidates \
+            packages/code-intel/tests/test_experiment_evidence.py \
+            packages/code-intel/tests/test_corpus_capture.py \
+            packages/code-intel/tests/test_quality_runner.py \
+            eval/quality/test_body_row_eligibility.py > results/controls.log 2>&1
+          .venv/bin/python eval/quality/body_row_control_gate.py results/controls.xml eval/quality/body_row_controls.json results/control-admission.json
+      - name: Sole real baseline diagnostic after all controls pass
+        if: ${{ success() && github.ref == 'refs/heads/diagnose/body-row-eligibility-real-0139' }}
+        run: .venv/bin/python eval/quality/body_row_eligibility.py results/eligibility > results/eligibility.log 2>&1
+      - name: Verify installed files and source afterward
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python eval/quality/body_row_eligibility_identity.py after results > results/identity-after.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: body-row-eligibility-original
+          path: results/
+          if-no-files-found: error
+          retention-days: 30

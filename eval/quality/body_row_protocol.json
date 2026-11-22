@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "engine_commit": "ed74f9a6f2190186e2e59a4435860ed7a4a9fd7d",
+  "engine_version": "0.1.39",
+  "primary": {
+    "top_k": 10,
+    "max_tokens": 2000
+  },
+  "deep": {
+    "top_k": 24,
+    "max_tokens": 8000
+  },
+  "scoped": {
+    "top_k": 5,
+    "max_tokens": 4000
+  },
+  "mode": "auto",
+  "profile": "daily",
+  "watch": false,
+  "cases": 4,
+  "repositories": 2,
+  "global_primary_barrier": true,
+  "role_order": [
+    "primary-all",
+    "deep-and-scoped-per-case"
+  ],
+  "limits": {
+    "payload_seconds": 900,
+    "aggregate_rss_bytes": 2147483648,
+    "owned_disk_bytes": 2147483648,
+    "evidence_bytes": 67108864,
+    "outer_minutes": 30,
+    "discovery_files_per_repo": 10000,
+    "sql_enumeration_rows": 2048
+  },
+  "eligibility": {
+    "minimum_actionable_misses": 2,
+    "minimum_repositories": 2,
+    "complete_ready_untruncated_inventory": true,
+    "scope_guard_effect_recovery": true,
+    "original_raw_limit_saturated": true,
+    "original_producer_underfilled": true,
+    "actual_per_file_cap_rejections": true,
+    "expanded_exact_prefix": true,
+    "unchanged_owner_first_per_file8_original_topk": true,
+    "target_window_admitted_within_original_output_count": true,
+    "no_keyword_or_whole_file_target_rescue": true,
+    "primary_correct_method_pointer_excludes_miss": true,
+    "equivalent_or_collective_primary_evidence_counts": true,
+    "ambiguous_or_beyond2048_unattributed": true,
+    "claim": "actionable misses accompanied by necessary upstream exclusion, not top10 counterfactual rescue",
+    "same_post_prefix_admitted_row_identity": true,
+    "original_body_target_file_absent": true,
+    "complete_current_discovery_keyword_body_inventory": true
+  },
+  "retry": "one true run; durable role issue before request; failed roles consumed; no task replacement/tuning/scored retry",
+  "reserved_holdout": "24 remain unopened and unissued",
+  "providers": "hosted/localrankers/embeddings/precision off",
+  "post_outcome": "No automatic candidate/holdout/merge/release; preserve negative/incomplete or propose separate acceptance design."
+}

@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "engine_commit": "ed74f9a6f2190186e2e59a4435860ed7a4a9fd7d",
+  "engine_version": "0.1.39",
+  "classification": "independent source-exposed baseline diagnosis; no quality or candidate claim",
+  "repositories": [
+    {
+      "id": "pytest",
+      "repo": "pytest-dev/pytest",
+      "commit": "718929265449ca33040264152ba5e7022e766a52",
+      "tree": "736b8f95b0d2a1713641bbbb2023ca75ea5d43e3"
+    },
+    {
+      "id": "sklearn",
+      "repo": "scikit-learn/scikit-learn",
+      "commit": "21626d67d47889da8d19f3dd2a819a0cf527f27f",
+      "tree": "7f9cd58fc737c7955ea09e44d84771308f6f4f7f"
+    }
+  ],
+  "cases": [
+    {
+      "id": "pytest-01",
+      "query": "Where are passing tests' temporary directories removed?",
+      "task_description": "A developer wants to change per-test temporary-directory retention without losing directories for failed test calls. Locate the fixture teardown decision that removes the supplied test directory when only failures are retained. Identify the policy guard, the stored call-outcome condition including its missing-entry default, and the deletion behavior. This concerns an individual test directory, rather than the session base directory.",
+      "why_actionable": "The location is the implementation decision a developer must edit to change retention of per-test artifacts. A fixture definition, option declaration, report-recording hook, or session-wide cleanup alone does not show this guard and deletion effect.",
+      "repository": "pytest-dev/pytest",
+      "commit": "718929265449ca33040264152ba5e7022e766a52",
+      "tree": "736b8f95b0d2a1713641bbbb2023ca75ea5d43e3",
+      "target": {
+        "file": "src/_pytest/tmpdir.py",
+        "symbol": "tmp_path",
+        "start_line": 342,
+        "end_line": 363,
+        "decision_start_line": 355,
+        "decision_end_line": 361
+      },
+      "accepted_equivalent_implementation_locations": [],
+      "answer_contract": {
+        "required_location": "The post-yield teardown in src/_pytest/tmpdir.py::tmp_path, specifically lines 355-361.",
+        "required_guard": "Read tmp_path_factory._retention_policy and the test node stash; enter deletion only when policy == \"failed\" and result_dict.get(\"call\", True) is truthy. An absent call entry therefore uses True.",
+        "required_effect": "Call rmtree(path, ignore_errors=True) for the individual fixture directory; deletion is best effort.",
+        "negative_cases": "A different retention policy or a false stored call outcome does not enter this deletion branch.",
+        "insufficient_answers": [
+          "Only the fixture docstring or definition line.",
+          "Only pytest_runtest_makereport, which records outcomes.",
+          "Only pytest_sessionfinish, which operates on the session base directory."
+        ],
+        "scope_limit": "This is the teardown decision from static source. It is not a claim that filesystem removal always succeeds or that an absent call report proves a fully passing test."
+      },
+      "source_proof_ranges": [
+        {
+          "file": "src/_pytest/tmpdir.py",
+          "start_line": 355,
+          "end_line": 358,
+          "exact_text": "    policy = tmp_path_factory._retention_policy\n    result_dict = request.node.stash[tmppath_result_key]\n\n    if policy == \"failed\" and result_dict.get(\"call\", True):\n",
+          "source_sha256": "eeadf271a625a613cf5ec78be6791e912ba8925aa0fd6e15f559dec832db0275",
+          "Git_blob_sha": "3e68606f82924868d5ad8593d2d418278a0879d1",
+          "bytes": 15361,
+          "proof_characters": 167,
+          "proof_utf8_bytes": 167
+        },
+        {
+          "file": "src/_pytest/tmpdir.py",
+          "start_line": 361,
+          "end_line": 361,
+          "exact_text": "        rmtree(path, ignore_errors=True)\n",
+          "source_sha256": "eeadf271a625a613cf5ec78be6791e912ba8925aa0fd6e15f559dec832db0275",
+          "Git_blob_sha": "3e68606f82924868d5ad8593d2d418278a0879d1",
+          "bytes": 15361,
+          "proof_characters": 41,
+          "proof_utf8_bytes": 41
+        }
+      ],
+      "proof_bundle_characters": 208,
+      "proof_budget_exception": null,
+      "repo_id": "pytest",
+      "evidence": [
+        {
+          "file": "src/_pytest/tmpdir.py",
+          "start_line": 355,
+          "end_line": 358,
+          "quote": "    policy = tmp_path_factory._retention_policy\n    result_dict = request.node.stash[tmppath_result_key]\n\n    if policy == \"failed\" and result_dict.get(\"call\", True):",
+          "source_sha256": "eeadf271a625a613cf5ec78be6791e912ba8925aa0fd6e15f559dec832db0275",
+          "git_blob": "3e68606f82924868d5ad8593d2d418278a0879d1",
+          "bytes": 15361
+        },
+        {
+          "file": "src/_pytest/tmpdir.py",
+          "start_line": 361,
+          "end_line": 361,
+          "quote": "        rmtree(path, ignore_errors=True)",
+          "source_sha256": "eeadf271a625a613cf5ec78be6791e912ba8925aa0fd6e15f559dec832db0275",
+          "git_blob": "3e68606f82924868d5ad8593d2d418278a0879d1",
+          "bytes": 15361
+        }
+      ]
+    },
+    {
+      "id": "pytest-02",
+      "query": "Where does reaching the failure limit trigger stopping?",
+      "task_description": "A developer wants to adjust when a run requests termination after reaching its configured failure limit. Locate report handling that qualifies a failure, increments the accumulated failure count, reads the configured limit, and sets the session stop reason when the count reaches or exceeds a nonzero limit. Distinguish this assignment from the later loop code that consumes the stop state.",
+      "why_actionable": "The requested branch controls which reports count toward the limit and when the session requests failure termination. It is the implementation a developer would inspect before changing early-stop policy; an option declaration or downstream loop check omits that decision.",
+      "repository": "pytest-dev/pytest",
+      "commit": "718929265449ca33040264152ba5e7022e766a52",
+      "tree": "736b8f95b0d2a1713641bbbb2023ca75ea5d43e3",
+      "target": {
+        "file": "src/_pytest/main.py",
+        "symbol": "Session.pytest_runtest_logreport",
+        "start_line": 701,
+        "end_line": 706,
+        "decision_start_line": 702,
+        "decision_end_line": 706
+      },
+      "accepted_equivalent_implementation_locations": [
+        {
+          "file": "src/_pytest/main.py",
+          "symbol": "Session.pytest_collectreport",
+          "start_line": 708,
+          "end_line": 708,
+          "condition": "This name is an alias to the same implementation. An answer using the alias must still identify the shared decision body at lines 702-706; the alias line alone is insufficient."
+        }
+      ],
+      "answer_contract": {
+        "required_location": "Session.pytest_runtest_logreport in src/_pytest/main.py, lines 702-706.",
+        "required_guard": "The report must have report.failed truthy and lack the wasxfail attribute. After incrementing self.testsfailed and reading self.config.getvalue(\"maxfail\"), the configured limit must be truthy and self.testsfailed >= maxfail.",
+        "required_effect": "Assign self.shouldfail to the formatted stopping-after-failures message using the accumulated count.",
+        "negative_cases": "A report outside the outer eligibility guard does not increment or set the state through this branch. A false/zero limit or count below the limit does not set self.shouldfail through the inner branch.",
+        "insufficient_answers": [
+          "Only the maxfail option declaration.",
+          "Only a later loop check or raise consuming session.shouldfail.",
+          "Only the pytest_collectreport alias without its shared body."
+        ],
+        "scope_limit": "The identified function records the stop request. The contract does not claim this assignment itself exits the test loop immediately."
+      },
+      "source_proof_ranges": [
+        {
+          "file": "src/_pytest/main.py",
+          "start_line": 702,
+          "end_line": 706,
+          "exact_text": "        if report.failed and not hasattr(report, \"wasxfail\"):\n            self.testsfailed += 1\n            maxfail = self.config.getvalue(\"maxfail\")\n            if maxfail and self.testsfailed >= maxfail:\n                self.shouldfail = f\"stopping after {self.testsfailed} failures\"\n",
+          "source_sha256": "e30aebb8ee741d2cc085012dee508c1a592697d4282acd00d161a01ba8e8c308",
+          "Git_blob_sha": "d43a68b4679d4119f4b02d51b378164551823ce5",
+          "bytes": 44147,
+          "proof_characters": 286,
+          "proof_utf8_bytes": 286
+        }
+      ],
+      "proof_bundle_characters": 286,
+      "proof_budget_exception": "The complete causal sequence is 286 characters: outer report eligibility, count increment, configured-limit read, threshold guard, and stop-state assignment. Keeping all five statements makes the guard/effect self-contained. A 220-character excerpt would have to omit relevant assignments or control-flow context, so the full contiguous range is retained.",
+      "repo_id": "pytest",
+      "evidence": [
+        {
+          "file": "src/_pytest/main.py",
+          "start_line": 702,
+          "end_line": 706,
+          "quote": "        if report.failed and not hasattr(report, \"wasxfail\"):\n            self.testsfailed += 1\n            maxfail = self.config.getvalue(\"maxfail\")\n            if maxfail and self.testsfailed >= maxfail:\n                self.shouldfail = f\"stopping after {self.testsfailed} failures\"",
+          "source_sha256": "e30aebb8ee741d2cc085012dee508c1a592697d4282acd00d161a01ba8e8c308",
+          "git_blob": "d43a68b4679d4119f4b02d51b378164551823ce5",
+          "bytes": 44147
+        }
+      ]
+    },
+    {
+      "id": "sklearn-01",
+      "query": "How are dropped singleton one-hot categories reconstructed?",
+      "task_description": "Locate the reverse-conversion implementation for a one-hot categorical feature that had exactly one category during fitting and had that category dropped. Its encoded block has zero surviving columns. Identify the guard and assignment that reconstruct the original category for every sample without trying to select an active encoded column.",
+      "why_actionable": "A developer diagnosing a wrong reverse conversion for a constant categorical feature, or changing how dropped singleton features are reconstructed, needs this branch rather than the general decoding path.",
+      "repository": "scikit-learn/scikit-learn",
+      "commit": "21626d67d47889da8d19f3dd2a819a0cf527f27f",
+      "tree": "7f9cd58fc737c7955ea09e44d84771308f6f4f7f",
+      "target": {
+        "file": "sklearn/preprocessing/_encoders.py",
+        "symbol": "OneHotEncoder.inverse_transform",
+        "start_line": 1087,
+        "end_line": 1204,
+        "required_focus_start_line": 1151,
+        "required_focus_end_line": 1154
+      },
+      "accepted_equivalent_implementation_locations": [],
+      "answer_contract": {
+        "required_location": "The n_categories == 0 branch inside OneHotEncoder.inverse_transform, specifically lines 1151-1154 of sklearn/preprocessing/_encoders.py at the pinned commit.",
+        "guard": "After dropped categories are removed for the current feature, the surviving category count is zero. In the singleton-drop case, the feature contributes no encoded columns.",
+        "effect": "Assign the original dropped category self.categories_[i][self._drop_idx_after_grouping[i]] to every row of the reconstructed feature X_tr[:, i]. The encoded-column offset advances by zero and the loop continues before the argmax decoding path.",
+        "scope": "This is the zero-width feature case, not the all-zero row behavior of a nonempty encoded block.",
+        "sufficient_answer": "Name the implementation location and explain both the zero-surviving-category guard and the all-rows dropped-category assignment. A definition, docstring, transform-only implementation, or generic all-zero handling alone is insufficient."
+      },
+      "source_proof_ranges": [
+        {
+          "file": "sklearn/preprocessing/_encoders.py",
+          "start_line": 1151,
+          "end_line": 1154,
+          "exact_text": "            if n_categories == 0:\n                X_tr[:, i] = self.categories_[i][self._drop_idx_after_grouping[i]]\n                j += n_categories\n                continue\n",
+          "source_sha256": "8370dfa1de5d667aca21e5c2de8327c468cd67622b9a2cd36b0282042f272e0c",
+          "Git_blob_sha": "1228559347b27d09d4f802bf490d857564036ac0",
+          "bytes": 68061,
+          "source_url": "https://github.com/scikit-learn/scikit-learn/blob/21626d67d47889da8d19f3dd2a819a0cf527f27f/sklearn/preprocessing/_encoders.py#L1151-L1154",
+          "local_source_file": "preprocessing_encoders.py"
+        }
+      ],
+      "proof_bundle_character_limit": 220,
+      "proof_bundle_explanation": "The contiguous block captures the complete branch guard, category assignment, offset update, and early continuation; the retained full source establishes the surrounding feature loop and dropped-category removal.",
+      "query_word_count": 7,
+      "proof_bundle_characters": 176,
+      "repo_id": "sklearn",
+      "evidence": [
+        {
+          "file": "sklearn/preprocessing/_encoders.py",
+          "start_line": 1151,
+          "end_line": 1154,
+          "quote": "            if n_categories == 0:\n                X_tr[:, i] = self.categories_[i][self._drop_idx_after_grouping[i]]\n                j += n_categories\n                continue",
+          "source_sha256": "8370dfa1de5d667aca21e5c2de8327c468cd67622b9a2cd36b0282042f272e0c",
+          "git_blob": "1228559347b27d09d4f802bf490d857564036ac0",
+          "bytes": 68061
+        }
+      ]
+    },
+    {
+      "id": "sklearn-02",
+      "query": "Why are empty feature means set to zero?",
+      "task_description": "Locate the dense numeric imputation fitting implementation that chooses the learned statistic for a feature containing no observed training values when the mean strategy is selected. Identify how the keep-empty-features option decides between zero and a missing statistic.",
+      "why_actionable": "A developer diagnosing why an entirely missing numeric feature learns a zero fill value, or changing the empty-feature mean policy, needs the conditional assignment in dense mean fitting.",
+      "repository": "scikit-learn/scikit-learn",
+      "commit": "21626d67d47889da8d19f3dd2a819a0cf527f27f",
+      "tree": "7f9cd58fc737c7955ea09e44d84771308f6f4f7f",
+      "target": {
+        "file": "sklearn/impute/_base.py",
+        "symbol": "SimpleImputer._dense_fit",
+        "start_line": 519,
+        "end_line": 589,
+        "required_focus_start_line": 527,
+        "required_focus_end_line": 531
+      },
+      "accepted_equivalent_implementation_locations": [],
+      "answer_contract": {
+        "required_location": "The mean-strategy branch inside SimpleImputer._dense_fit, including the masked mean computation at lines 527-528 and the conditional assignment at line 531 of sklearn/impute/_base.py at the pinned commit.",
+        "guard": "The fitting strategy is mean, and a feature mean is masked because no values were observed for that feature.",
+        "effect": "At masked mean positions, set the learned statistic to zero when self.keep_empty_features is true, and to np.nan otherwise. These are learned fitting statistics; no claim about every later transformation path is required.",
+        "scope": "Dense fitting with the mean strategy. The median branch, sparse fitting path, and final missing-value replacement are different locations.",
+        "sufficient_answer": "Name the dense mean fitting implementation and explain the masked-column selection plus the zero-versus-NaN choice controlled by the keep-empty option. A parameter description or a statement that imputation fills missing values is insufficient."
+      },
+      "source_proof_ranges": [
+        {
+          "file": "sklearn/impute/_base.py",
+          "start_line": 527,
+          "end_line": 528,
+          "exact_text": "        if strategy == \"mean\":\n            mean_masked = np.ma.mean(masked_X, axis=0)\n",
+          "source_sha256": "d79c3e15da4867b9df162ad75096e49b5eb61e32574b4c4b719ec0245e18a4e1",
+          "Git_blob_sha": "de68d1309beb3d5e1d8c4ac8e180a986a09d0022",
+          "bytes": 42499,
+          "source_url": "https://github.com/scikit-learn/scikit-learn/blob/21626d67d47889da8d19f3dd2a819a0cf527f27f/sklearn/impute/_base.py#L527-L528",
+          "local_source_file": "impute_base.py"
+        },
+        {
+          "file": "sklearn/impute/_base.py",
+          "start_line": 531,
+          "end_line": 531,
+          "exact_text": "            mean[np.ma.getmask(mean_masked)] = 0 if self.keep_empty_features else np.nan\n",
+          "source_sha256": "d79c3e15da4867b9df162ad75096e49b5eb61e32574b4c4b719ec0245e18a4e1",
+          "Git_blob_sha": "de68d1309beb3d5e1d8c4ac8e180a986a09d0022",
+          "bytes": 42499,
+          "source_url": "https://github.com/scikit-learn/scikit-learn/blob/21626d67d47889da8d19f3dd2a819a0cf527f27f/sklearn/impute/_base.py#L531-L531",
+          "local_source_file": "impute_base.py"
+        }
+      ],
+      "proof_bundle_character_limit": 220,
+      "proof_bundle_explanation": "The first contiguous range fixes the mean-strategy guard and columnwise masked mean; the second gives the full masked-position assignment with both outcomes. The retained full source shows construction of masked_X from missing_mask and the returned mean array.",
+      "query_word_count": 8,
+      "proof_bundle_characters": 175,
+      "repo_id": "sklearn",
+      "evidence": [
+        {
+          "file": "sklearn/impute/_base.py",
+          "start_line": 527,
+          "end_line": 528,
+          "quote": "        if strategy == \"mean\":\n            mean_masked = np.ma.mean(masked_X, axis=0)",
+          "source_sha256": "d79c3e15da4867b9df162ad75096e49b5eb61e32574b4c4b719ec0245e18a4e1",
+          "git_blob": "de68d1309beb3d5e1d8c4ac8e180a986a09d0022",
+          "bytes": 42499
+        },
+        {
+          "file": "sklearn/impute/_base.py",
+          "start_line": 531,
+          "end_line": 531,
+          "quote": "            mean[np.ma.getmask(mean_masked)] = 0 if self.keep_empty_features else np.nan",
+          "source_sha256": "d79c3e15da4867b9df162ad75096e49b5eb61e32574b4c4b719ec0245e18a4e1",
+          "git_blob": "de68d1309beb3d5e1d8c4ac8e180a986a09d0022",
+          "bytes": 42499
+        }
+      ]
+    }
+  ]
+}
