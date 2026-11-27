@@ -378,7 +378,7 @@ async def test_real_stdio_protocol(tmp_path):
             guidelines = await session.read_resource("attocode://guidelines")
             assert "bootstrap" in guidelines.contents[0].text
             templates = await session.list_resource_templates()
-            assert len(templates.resourceTemplates) == 3
+            assert len(templates.resourceTemplates) == 2
             resource = await session.read_resource("attocode://project/helper.py")
             assert "protocol_symbol" in resource.contents[0].text
 

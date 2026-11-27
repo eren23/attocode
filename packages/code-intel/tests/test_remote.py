@@ -379,6 +379,24 @@ async def test_native_http_auth_profiles_resources_and_legacy_knowledge(
             )
             assert response.status_code == 200, response.text
             assert response.json()["data"][0]["description"] == "Shared across transports"
+            for index, profile in enumerate(("daily", "full")):
+                profile_headers = {**headers, "X-Attocode-Profile": profile}
+                body.update(id=10 + index * 3, method="resources/templates/list", params={})
+                response = await client.post("/mcp/", json=body, headers=profile_headers)
+                templates = response.json()["result"]["resourceTemplates"]
+                assert [item["uriTemplate"] for item in templates] == [
+                    "attocode://project/{path}{?workspace,revision}",
+                    "attocode://symbols/{name}{?workspace,revision}",
+                    "attocode://learnings{?workspace,revision}",
+                ]
+                body.update(id=11 + index * 3, method="resources/read",
+                            params={"uri": "attocode://learnings"})
+                response = await client.post("/mcp/", json=body, headers=profile_headers)
+                assert "Shared across transports" in response.json()["result"]["contents"][0]["text"]
+                body.update(id=12 + index * 3, method="resources/read",
+                            params={"uri": f"attocode://learnings?workspace={rb.id}"})
+                denied = (await client.post("/mcp/", json=body, headers=profile_headers)).json()
+                assert "error" in denied, denied
             response = await client.post(
                 "/api/v2/operations/symbols",
                 headers=headers,

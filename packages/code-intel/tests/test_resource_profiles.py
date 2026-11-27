@@ -25,10 +25,13 @@ async def resource_session(tmp_path, profile):
         env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src"),
              "ATTOCODE_INTEL_PRECISION": "off"},
     )
-    async with asyncio.timeout(30), stdio_client(params) as streams:
-        async with ClientSession(*streams) as session:
-            await session.initialize()
-            yield session
+    async with (
+        asyncio.timeout(30),
+        stdio_client(params) as streams,
+        ClientSession(*streams) as session,
+    ):
+        await session.initialize()
+        yield session
 
 
 @pytest.mark.parametrize("profile", ["daily", "full", "lean"])
