@@ -796,19 +796,23 @@ def create_mcp_server(gateway: OperationGateway, *, on_tool_start=None) -> Serve
 
     @server.list_resource_templates()
     async def list_resource_templates():
+        advertised = {tool.name for tool in gateway.catalog(mcp=True)}
         return [
             types.ResourceTemplate(uriTemplate=template, name=name, mimeType="text/plain")
-            for template, name in (
+            for template, name, operation in (
                 (
                     "attocode://project/{path}{?workspace,revision}",
                     "File analysis in a selected workspace",
+                    "symbols",
                 ),
                 (
                     "attocode://symbols/{name}{?workspace,revision}",
                     "Symbol references in a selected workspace",
+                    "cross_references",
                 ),
-                ("attocode://learnings{?workspace,revision}", "Repository knowledge"),
+                ("attocode://learnings{?workspace,revision}", "Repository knowledge", "list_learnings"),
             )
+            if operation in advertised
         ]
 
     @server.read_resource()

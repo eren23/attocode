@@ -60,6 +60,8 @@ not change retrieval or establish a search-quality or speed gain. See the
 
 MCP tools and `POST /api/v2/operations/{tool}` use the same catalog, validation, workspace resolver, and operation gateway. `workspace` is a local root or a remote repository UUID; `revision` selects a remote branch/commit. Resources under `attocode://project/`, `attocode://symbols/`, and `attocode://learnings` accept workspace/revision query parameters and use the same authorization path.
 
+MCP advertises a resource template only when the selected profile includes its backing tool. Local daily exposes project and symbol templates. Local lean exposes only the guidelines resource. Local full and remote daily/full retain all three templates. The guidelines resource remains available in every profile.
+
 The daily profile is intentionally small. The full catalog preserves advanced local analysis, rules, history, reproducibility, and maintenance tools. Remote catalogs omit operations that modify snapshot files, local configuration, or local artifacts. Read operations for snapshots and pins remain available; create/restore/overlay workflows run locally. Python rule plugins are loaded only for local workspaces. `capabilities` lists tools available for the selected transport and profile.
 
 ## Self-host the team service
