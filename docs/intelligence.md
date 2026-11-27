@@ -19,6 +19,12 @@ The server accepts `--project`, `--profile daily|full`, `--no-watch`, `--watch-d
 
 ## Daily workflow and result contract
 
+From 0.1.40, stdio and native HTTP resource discovery follow the active tool
+profile. Local daily retains project and symbol templates. Local lean exposes
+only guidelines. Full and remote daily/full retain all three templates. Direct
+reads still enforce profile availability and repository authorization. See the
+[0.1.40 release notes](intelligence-0.1.40.md).
+
 From 0.1.39, saved raw trigram indexes are checked before first reuse after a
 quiescent restart. Eligible source changes, old caches or mismatching index/map
 proofs cause a rebuild. Verified unchanged caches remain reusable. Incomplete

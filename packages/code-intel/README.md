@@ -43,6 +43,13 @@ To use the latest source, install from a clone of this repository: `uv tool inst
 
 ## What your agent gets
 
+Version 0.1.40 advertises MCP resource templates only when the selected profile
+includes their backing tools. Local daily retains project and symbol templates.
+Local lean retains the guidelines resource. Full and remote daily/full retain
+all three templates. See the
+[0.1.40 release notes](https://github.com/eren23/attocode/blob/main/docs/intelligence-0.1.40.md)
+for verification and upgrade instructions.
+
 Version 0.1.39 validates saved raw trigram indexes before reuse after a quiescent
 restart. Offline tracked changes trigger a rebuild on the first raw search;
 verified unchanged caches remain reusable. Old or mismatching cache proofs

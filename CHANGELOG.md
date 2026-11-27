@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Intelligence 0.1.40] - 2026-11-27
+
+### Fixed
+
+- Advertise MCP resource templates only when their backing operations belong to
+  the active tool profile. Local daily retains project and symbol templates.
+  Local lean advertises no templates. Full and remote daily/full retain all three.
+  Guidelines remain available. Direct resource reads retain profile and
+  repository authorization checks.
+
 ## [Intelligence 0.1.39] - 2026-11-20
 
 ### Fixed

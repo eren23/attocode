@@ -1,8 +1,8 @@
 # Code Intelligence Roadmap
 
-## Current state — 2026-11-20
+## Current state — 2026-11-27
 
-This checkout targets `attocode-code-intel` **0.1.39**. The root agent was
+This checkout targets `attocode-code-intel` **0.1.40**. The root agent was
 retired on 2026-10-16 (PR #222) and is preserved at the `agent-archive-2026-10-16`
 tag. Read the [workstream](intelligence-workstream.md) for release and experiment
 evidence, the [quality guide](intelligence-quality.md) for bounded checks, and the
@@ -28,6 +28,7 @@ authorize another broad run or cloud rental.
 
 | Record | Delivered or diagnosed behavior | Completion evidence / limits |
 | --- | --- | --- |
+| 0.1.40 resource profile parity | Advertise only templates whose backing operations belong to the active MCP catalog | [Release notes](intelligence-0.1.40.md): seven stdio cases and authenticated remote controls. Direct reads retain profile and repository checks. No discovery-latency or broad transport claim. |
 | 0.1.39 saved trigram restart freshness | Validate saved raw indexes before first reuse after a quiescent reopen, rebuilding changed or unverifiable snapshots | [Release notes](intelligence-0.1.39.md): twelve maintained cases and a bounded no-watch stdio restart witness. Unchanged-cache reuse and ordinary cold behavior are preserved; persistent rebuild failures retain selective fallback scope. No concurrent-mutation or broad latency guarantee. |
 | 0.1.38 live trigram freshness | Refuse stale snapshots after tracked live-session source changes and rebuild before choosing the content-search mode | [Release notes](intelligence-0.1.38.md): 22 maintained cases, real Linux watcher/stat controls and 132 synthetic public responses. Failed rebuilds may narrow threshold-sensitive fallback scope; no restart-delivery, macOS watcher or performance guarantee. |
 | 0.1.37 file-path keyword candidates | Preserve existing single-token file-path matches after raw-content indexing | [Release notes](intelligence-0.1.37.md): twelve regressions, guarded cache reconstruction and one bounded warm synthetic cost gate. File scoping/scoring and other query/cache policies are unchanged; development cases are consumed, with no broad relevance or cold/real-repository speed claim. |
