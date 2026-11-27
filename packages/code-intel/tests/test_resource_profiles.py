@@ -63,19 +63,19 @@ async def test_advertised_resources_are_readable(tmp_path, profile, record_prope
                 unreadable.append(uri)
             else:
                 assert expected_text in resource.contents[0].text
-        record_property("profile", profile)
-        record_property("guidelines_read", "true")
-        record_property("unreadable_resources", ",".join(sorted(unreadable)))
-        assert not unreadable, "REGRESSION: profile advertises unreadable resource templates"
-        expected = {
-            "daily": ["attocode://project/{path}{?workspace,revision}",
-                      "attocode://symbols/{name}{?workspace,revision}"],
-            "full": ["attocode://project/{path}{?workspace,revision}",
-                     "attocode://symbols/{name}{?workspace,revision}",
-                     "attocode://learnings{?workspace,revision}"],
-            "lean": [],
-        }
-        assert templates == expected[profile]
+    record_property("profile", profile)
+    record_property("guidelines_read", "true")
+    record_property("unreadable_resources", ",".join(sorted(unreadable)))
+    assert not unreadable, "REGRESSION: profile advertises unreadable resource templates"
+    expected = {
+        "daily": ["attocode://project/{path}{?workspace,revision}",
+                  "attocode://symbols/{name}{?workspace,revision}"],
+        "full": ["attocode://project/{path}{?workspace,revision}",
+                 "attocode://symbols/{name}{?workspace,revision}",
+                 "attocode://learnings{?workspace,revision}"],
+        "lean": [],
+    }
+    assert templates == expected[profile]
 
 
 @pytest.mark.parametrize("profile,uri,reason", [
