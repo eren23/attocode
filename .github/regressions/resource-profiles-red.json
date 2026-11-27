@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "profile": "unit",
+  "paths": ["packages/code-intel/tests/test_resource_profiles.py"],
+  "cases": [
+    "test_resource_profiles::test_advertised_resources_are_readable[daily]",
+    "test_resource_profiles::test_advertised_resources_are_readable[full]",
+    "test_resource_profiles::test_advertised_resources_are_readable[lean]",
+    "test_resource_profiles::test_excluded_resources_stay_unavailable[daily-knowledge]",
+    "test_resource_profiles::test_excluded_resources_stay_unavailable[lean-project]",
+    "test_resource_profiles::test_excluded_resources_stay_unavailable[lean-symbols]",
+    "test_resource_profiles::test_excluded_resources_stay_unavailable[lean-knowledge]"
+  ],
+  "failures": {
+    "test_resource_profiles::test_advertised_resources_are_readable[daily]": {
+      "message": "REGRESSION: profile advertises unreadable resource templates",
+      "properties": {
+        "profile": "daily", "guidelines_read": "true",
+        "unreadable_resources": "attocode://learnings"
+      }
+    },
+    "test_resource_profiles::test_advertised_resources_are_readable[lean]": {
+      "message": "REGRESSION: profile advertises unreadable resource templates",
+      "properties": {
+        "profile": "lean", "guidelines_read": "true",
+        "unreadable_resources": "attocode://learnings,attocode://project/helper.py,attocode://symbols/resource_helper"
+      }
+    }
+  }
+}
